@@ -4,23 +4,18 @@ use std::{
 };
 
 use educe::Educe;
-use parking_lot::RwLock;
 use lpc_rs_function_support::program_function::ProgramFunction;
+use parking_lot::RwLock;
 use ustr::Ustr;
 
-use crate::{
-    interpreter::process::Process,
-};
+use crate::interpreter::process::Process;
 
 /// Different ways to store a function address, for handling at runtime.
 #[derive(Educe, Clone)]
 #[educe(Debug)]
 pub enum FunctionAddress {
     /// The function being called is located in an object.
-    Local(
-        Arc<RwLock<Process>>,
-        Arc<ProgramFunction>,
-    ),
+    Local(Arc<RwLock<Process>>, Arc<ProgramFunction>),
 
     /// The receiver isn't known until called (i.e. the `&->foo()` syntax)
     Dynamic(Ustr),

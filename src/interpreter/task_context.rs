@@ -1,6 +1,5 @@
 use std::{path::PathBuf, sync::Arc};
 
-
 use derive_builder::Builder;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
@@ -10,11 +9,10 @@ use tokio::sync::mpsc::Sender;
 
 use crate::{
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcRefBank,
-        lpc_ref::LpcRef, memory::Memory, object_space::ObjectSpace, process::Process,
-        program::Program, vm::vm_op::VmOp,
+        call_outs::CallOuts, gc::gc_bank::GcRefBank, lpc_ref::LpcRef, memory::Memory,
+        object_space::ObjectSpace, process::Process, program::Program, vm::vm_op::VmOp,
     },
-    util::{get_simul_efuns},
+    util::get_simul_efuns,
 };
 
 /// A struct to carry context during the evaluation of a single [`Task`]
@@ -134,14 +132,8 @@ impl TaskContext {
     /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
     /// then insert it into the object space.
     #[inline]
-    pub fn insert_clone(
-        &self,
-        program: Arc<Program>,
-    ) -> Arc<RwLock<Process>> {
-        ObjectSpace::insert_clone(
-            &self.object_space,
-            program,
-        )
+    pub fn insert_clone(&self, program: Arc<Program>) -> Arc<RwLock<Process>> {
+        ObjectSpace::insert_clone(&self.object_space, program)
     }
 
     /// Get the in-game directory of the current process.

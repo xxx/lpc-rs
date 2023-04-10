@@ -22,10 +22,7 @@ pub struct DeclNode {
 }
 
 impl AstNodeTrait for DeclNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_decl(self)
     }
 }

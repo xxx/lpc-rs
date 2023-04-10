@@ -11,9 +11,7 @@ use crate::{
 };
 
 /// `call_out`, an efun for calling a function at some future point in time
-pub async fn call_out<const N: usize>(
-    context: &mut EfunContext<'_, N>,
-    ) -> Result<()> {
+pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let func_ref = context.resolve_local_register(1_usize);
 
     // Some validations
@@ -89,11 +87,10 @@ fn to_millis(x: LpcFloat) -> Duration {
 mod tests {
 
     use std::sync::Arc;
-    use parking_lot::RwLock;
 
     use lpc_rs_utils::config::Config;
+    use parking_lot::RwLock;
 
-    
     use crate::{
         interpreter::{
             call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
@@ -125,7 +122,8 @@ mod tests {
             RwLock::new(GcBank::default()),
             call_outs,
             tx,
-        ).await;
+        )
+        .await;
 
         assert_eq!(
             result.unwrap_err().to_string(),

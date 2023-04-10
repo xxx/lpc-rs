@@ -45,10 +45,7 @@ impl SpannedNode for TernaryNode {
 }
 
 impl AstNodeTrait for TernaryNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_ternary(self)
     }
 }

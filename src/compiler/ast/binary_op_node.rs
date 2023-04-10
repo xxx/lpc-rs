@@ -118,10 +118,7 @@ impl SpannedNode for BinaryOpNode {
 }
 
 impl AstNodeTrait for BinaryOpNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-    ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_binary_op(self)
     }
 }

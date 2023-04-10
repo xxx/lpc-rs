@@ -1,6 +1,4 @@
-use std::{
-    fmt::{Debug, Display, Formatter},
-};
+use std::fmt::{Debug, Display, Formatter};
 
 use bit_set::BitSet;
 use delegate::delegate;
@@ -8,12 +6,10 @@ use if_chain::if_chain;
 use indexmap::IndexMap;
 use tracing::{instrument, trace};
 
-use crate::{
-    interpreter::{
-        gc::{mark::Mark, unique_id::UniqueId},
-        lpc_ref::{HashedLpcRef, LpcRef},
-        lpc_value::LpcValue,
-    },
+use crate::interpreter::{
+    gc::{mark::Mark, unique_id::UniqueId},
+    lpc_ref::{HashedLpcRef, LpcRef},
+    lpc_value::LpcValue,
 };
 
 /// A newtype wrapper for a map of [`HashedLpcRef`]s to [`LpcRef`]s,
@@ -107,11 +103,7 @@ impl Debug for LpcMapping {
 
 impl Mark for LpcMapping {
     #[instrument(skip(self))]
-    fn mark(
-        &self,
-        marked: &mut BitSet,
-        processed: &mut BitSet,
-    ) -> lpc_rs_errors::Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
         trace!("marking mapping");
 
         if !processed.insert(*self.unique_id.as_ref()) {
@@ -145,10 +137,9 @@ impl PartialEq<IndexMap<HashedLpcRef, LpcRef>> for LpcMapping {
 
 #[cfg(test)]
 mod tests {
-    use parking_lot::RwLock;
-
     use factori::create;
     use lpc_rs_core::register::Register;
+    use parking_lot::RwLock;
     use shared_arena::SharedArena;
 
     use super::*;
@@ -156,7 +147,6 @@ mod tests {
 
     #[test]
     fn test_mark() {
-
         let pool = SharedArena::with_capacity(5);
 
         let ptr = create!(FunctionPtr, upvalue_ptrs: vec![Register(4), Register(33)]);
@@ -174,9 +164,7 @@ mod tests {
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
 
-        mapping
-            .mark(&mut marked, &mut processed)
-            .unwrap();
+        mapping.mark(&mut marked, &mut processed).unwrap();
 
         let mut marked_expected = BitSet::new();
         marked_expected.extend([4_usize, 33_usize, 666_usize].into_iter());

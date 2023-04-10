@@ -33,10 +33,7 @@ impl SpannedNode for IntNode {
 }
 
 impl AstNodeTrait for IntNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_int(self)
     }
 }

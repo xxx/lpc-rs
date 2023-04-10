@@ -160,7 +160,6 @@ mod tests {
 
         #[test]
         fn test_sets_up_the_data() {
-
             let mut walker = walker();
 
             let mut node = InheritNode {
@@ -177,7 +176,6 @@ mod tests {
 
         #[test]
         fn test_disallows_duplicate_namespace() {
-
             let mut walker = walker();
 
             walker
@@ -201,7 +199,6 @@ mod tests {
 
         #[test]
         fn test_disallows_no_inherit_pragma() {
-
             let mut walker = walker();
 
             let mut node = InheritNode {
@@ -220,7 +217,6 @@ mod tests {
 
         #[test]
         fn test_disallows_efun_namespace() {
-
             let mut walker = walker();
 
             let mut node = InheritNode {

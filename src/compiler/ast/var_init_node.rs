@@ -80,10 +80,7 @@ impl SpannedNode for VarInitNode {
 }
 
 impl AstNodeTrait for VarInitNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_var_init(self)
     }
 }

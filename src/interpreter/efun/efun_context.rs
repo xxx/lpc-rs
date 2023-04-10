@@ -4,8 +4,8 @@ use delegate::delegate;
 use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_utils::config::Config;
-use tokio::sync::mpsc::Sender;
 use parking_lot::RwLock;
+use tokio::sync::mpsc::Sender;
 
 use crate::interpreter::{
     call_frame::CallFrame, call_outs::CallOuts, call_stack::CallStack, gc::gc_bank::GcRefBank,
@@ -124,10 +124,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Resolve any RegisterVariant
     #[inline]
-    pub fn resolve_register_variant(
-        &self,
-        variant: RegisterVariant,
-    ) -> Result<Cow<LpcRef>> {
+    pub fn resolve_register_variant(&self, variant: RegisterVariant) -> Result<Cow<LpcRef>> {
         get_location(self.stack, variant)
     }
 

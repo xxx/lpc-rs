@@ -59,10 +59,7 @@ impl SpannedNode for UnaryOpNode {
 }
 
 impl AstNodeTrait for UnaryOpNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_unary_op(self)
     }
 }

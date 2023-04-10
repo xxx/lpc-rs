@@ -69,10 +69,7 @@ impl SpannedNode for CallNode {
 }
 
 impl AstNodeTrait for CallNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_call(self)
     }
 }

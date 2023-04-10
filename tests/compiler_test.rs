@@ -70,7 +70,6 @@ async fn test_inheritance() {
 
 #[tokio::test]
 async fn test_dynamic_receiver() {
-
     let code = indoc! { r##"
         void create() {
             function f = &->tacos();
@@ -94,7 +93,6 @@ async fn test_dynamic_receiver() {
 
 #[tokio::test]
 async fn test_duffs_device() {
-
     let code = indoc! { r##"
         int *copy(int *array, int count) {
             int n = (count + 7) / 8, idx = 0;
@@ -151,7 +149,6 @@ async fn test_duffs_device() {
 
 #[tokio::test]
 async fn test_closures() {
-
     let code = indoc! { r##"
         function f = (:
             function f = &->tacos(,);
@@ -176,18 +173,13 @@ async fn test_closures() {
 
     assert_eq!(borrowed.globals.len(), 2);
     assert_eq!(
-        borrowed
-            .globals
-            .last()
-            .unwrap()
-            .to_string(),
+        borrowed.globals.last().unwrap().to_string(),
         r##""I'll take 4 tacos with crema on the side, por favor.""##.to_string()
     );
 }
 
 #[tokio::test]
 async fn test_multi_dimensional_arrays() {
-
     let code = indoc! { r##"
         int *a = ({ 1, 2, 3, 4, 5, 6, 7, 8 });
         mixed *b = ({ 9, 10, 11, 12, 13, ({ "14a", "14b", "14c" }), 15, 16 });
@@ -232,7 +224,6 @@ async fn test_multi_dimensional_arrays() {
 
 #[tokio::test]
 async fn test_positional_vars_into_argv() {
-
     let code = indoc! { r##"
         void create() {
             function f = (: [...] $2 :);
@@ -329,7 +320,8 @@ async fn test_calls_simul_efuns() {
         .unwrap();
 
     let mut vm = Vm::new(config);
-    vm.initialize_simul_efuns().await
+    vm.initialize_simul_efuns()
+        .await
         .expect("no simul efuns?")
         .expect("init error");
 

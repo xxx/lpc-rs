@@ -6,9 +6,7 @@ use crate::interpreter::{
 };
 
 /// `query_call_out`, an efun for returning information about a single call out.
-pub async fn query_call_out<const N: usize>(
-    context: &mut EfunContext<'_, N>,
-    ) -> Result<()> {
+pub async fn query_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let LpcRef::Int(idx) = context.resolve_local_register(1_usize) else {
         return Err(context.runtime_bug("non-int call out ID sent to `remove_call_out`"));
     };
@@ -20,12 +18,8 @@ pub async fn query_call_out<const N: usize>(
     }
 
     let result = match context.call_outs().read().get(idx as usize) {
-        Some(call_out) => {
-            call_out_array_ref(context, call_out)?
-        }
-        None => {
-            LpcRef::Int(0)
-        }
+        Some(call_out) => call_out_array_ref(context, call_out)?,
+        None => LpcRef::Int(0),
     };
 
     context.return_efun_result(result);
@@ -75,8 +69,8 @@ mod tests {
     use std::sync::Arc;
 
     use if_chain::if_chain;
-    use parking_lot::RwLock;
     use lpc_rs_utils::config::Config;
+    use parking_lot::RwLock;
 
     use super::*;
     use crate::{

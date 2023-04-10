@@ -1,5 +1,5 @@
-use shared_arena::{SharedArena};
 use parking_lot::RwLock;
+use shared_arena::SharedArena;
 
 use crate::{
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue},

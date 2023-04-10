@@ -149,9 +149,7 @@ impl SemanticCheckWalker {
         }
 
         // Further checks require access to the function prototype for error messaging
-        let proto_opt = self
-            .context
-            .lookup_function_complete(&name, namespace);
+        let proto_opt = self.context.lookup_function_complete(&name, namespace);
 
         let mut errors = vec![];
 
@@ -232,10 +230,7 @@ impl ContextHolder for SemanticCheckWalker {
 }
 
 impl TreeWalker for SemanticCheckWalker {
-    fn visit_assignment(
-        &mut self,
-        node: &mut AssignmentNode,
-            ) -> Result<()> {
+    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
         node.lhs.visit(self)?;
         node.rhs.visit(self)?;
 
@@ -260,10 +255,7 @@ impl TreeWalker for SemanticCheckWalker {
         }
     }
 
-    fn visit_binary_op(
-        &mut self,
-        node: &mut BinaryOpNode,
-            ) -> Result<()> {
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
         node.l.visit(self)?;
         node.r.visit(self)?;
 
@@ -325,10 +317,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_continue(
-        &mut self,
-        node: &mut ContinueNode,
-            ) -> Result<()> {
+    fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
         if !self.can_continue() {
             let e = LpcError::new("invalid `continue`.".to_string()).with_span(node.span);
             self.context.errors.push(e);
@@ -414,15 +403,12 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_function_def(
-        &mut self,
-        node: &mut FunctionDefNode,
-            ) -> Result<()> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         is_keyword(node.name)?;
 
-        let proto_opt =
-            self.context
-                .lookup_function_complete(node.name, &CallNamespace::default());
+        let proto_opt = self
+            .context
+            .lookup_function_complete(node.name, &CallNamespace::default());
         if let Some(function_like) = proto_opt {
             let prototype = function_like.as_ref();
             if prototype.flags.nomask() {
@@ -452,13 +438,10 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_function_ptr(
-        &mut self,
-        node: &mut FunctionPtrNode,
-            ) -> Result<()> {
-        let proto_opt =
-            self.context
-                .lookup_function_complete(node.name, &CallNamespace::default());
+    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
+        let proto_opt = self
+            .context
+            .lookup_function_complete(node.name, &CallNamespace::default());
 
         if let Some(function_like) = proto_opt {
             let prototype = function_like.as_ref();
@@ -821,12 +804,7 @@ mod tests {
 
         let context = apply_walker!(ScopeWalker, program, context, false);
         let context = apply_walker!(DefaultParamsWalker, program, context, false);
-        Ok(apply_walker!(
-            SemanticCheckWalker,
-            program,
-            context,
-            false
-        ))
+        Ok(apply_walker!(SemanticCheckWalker, program, context, false))
     }
 
     mod test_visit_assignment {
@@ -835,7 +813,6 @@ mod tests {
 
         #[test]
         fn validates_both_sides() -> Result<()> {
-
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(456)),
@@ -859,7 +836,6 @@ mod tests {
 
         #[test]
         fn always_allows_0() -> Result<()> {
-
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(0)),
@@ -883,7 +859,6 @@ mod tests {
 
         #[test]
         fn disallows_differing_types() {
-
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(123)),
@@ -907,7 +882,6 @@ mod tests {
 
         #[test]
         fn allows_mixed() {
-
             let mut init_node = VarInitNode {
                 type_: LpcType::Mixed(false),
                 name: ustr("foo"),
@@ -947,7 +921,6 @@ mod tests {
 
         #[test]
         fn allows_array_items() {
-
             let mut init_node = VarInitNode {
                 type_: LpcType::Int(false),
                 name: ustr("foo"),
@@ -992,7 +965,6 @@ mod tests {
 
         #[test]
         fn allows_array_ranges() {
-
             let mut init_node = VarInitNode {
                 type_: LpcType::Int(true),
                 name: ustr("foo"),
@@ -1046,7 +1018,6 @@ mod tests {
 
         #[test]
         fn validates_both_sides() -> Result<()> {
-
             let mut node = ExpressionNode::from(BinaryOpNode {
                 l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 r: Box::new(ExpressionNode::from(456)),
@@ -1069,7 +1040,6 @@ mod tests {
 
         #[test]
         fn disallows_differing_types() {
-
             let mut node = ExpressionNode::from(BinaryOpNode {
                 l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 r: Box::new(ExpressionNode::from(123)),
@@ -1096,7 +1066,6 @@ mod tests {
 
         #[test]
         fn disallows_outside_of_loop_or_switch() {
-
             let code = "void create() { break; }";
             let context = walk_code(code).expect("failed to parse?");
 
@@ -1106,7 +1075,6 @@ mod tests {
 
         #[test]
         fn allows_in_while_loop() {
-
             let code = r#"
                 void create() {
                     int i;
@@ -1125,7 +1093,6 @@ mod tests {
 
         #[test]
         fn allows_in_for_loop() {
-
             let code = r#"
                 void create() {
                     for(int i = 0; i < 10; i += 1) {
@@ -1141,7 +1108,6 @@ mod tests {
 
         #[test]
         fn allows_in_do_while_loop() {
-
             let code = r#"
                 void create() {
                     int i;
@@ -1160,7 +1126,6 @@ mod tests {
 
         #[test]
         fn allows_in_switch() {
-
             let code = r#"
                 void create() {
                     int i = 5;
@@ -1191,7 +1156,6 @@ mod tests {
 
         #[test]
         fn allows_known_functions() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("known"))
@@ -1224,7 +1188,6 @@ mod tests {
 
         #[test]
         fn allows_local_private_functions() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("known"))
@@ -1258,7 +1221,6 @@ mod tests {
 
         #[test]
         fn allows_known_inherited_functions() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("known"))
@@ -1292,7 +1254,6 @@ mod tests {
 
         #[test]
         fn allows_parent_namespaced_inherited_functions() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("known"), namespace: CallNamespace::Parent),
@@ -1326,7 +1287,6 @@ mod tests {
 
         #[test]
         fn disallows_private_parent_namespaced_inherited_functions() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("known"), namespace: CallNamespace::Parent),
@@ -1365,7 +1325,6 @@ mod tests {
 
         #[test]
         fn allows_named_namespaced_inherited_functions() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain:
@@ -1403,8 +1362,6 @@ mod tests {
 
         #[test]
         fn allows_efun_namespaced_functions() {
-
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain:
@@ -1421,7 +1378,6 @@ mod tests {
 
         #[test]
         fn disallows_private_named_namespaced_inherited_functions() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain:
@@ -1464,7 +1420,6 @@ mod tests {
 
         #[test]
         fn disallows_unknown_named_namespaced_inherited_functions() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain:
@@ -1503,7 +1458,6 @@ mod tests {
 
         #[test]
         fn disallows_private_inherited_functions() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("known")),
@@ -1542,7 +1496,6 @@ mod tests {
 
         #[test]
         fn allows_known_efuns() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("dump")),
@@ -1558,7 +1511,6 @@ mod tests {
 
         #[test]
         fn allows_function_pointers() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_function_pointer")),
@@ -1582,7 +1534,6 @@ mod tests {
 
         #[test]
         fn allows_mixed_function_pointers() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_mixed_function_pointer")),
@@ -1606,7 +1557,6 @@ mod tests {
 
         #[test]
         fn disallows_pointers_to_non_functions() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_non_function_pointer")),
@@ -1634,7 +1584,6 @@ mod tests {
 
         #[test]
         fn disallows_unknown_functions() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("unknown")),
@@ -1648,7 +1597,6 @@ mod tests {
 
         #[test]
         fn disallows_incorrect_function_arity() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("dump")),
@@ -1662,7 +1610,6 @@ mod tests {
 
         #[test]
         fn handles_ellipsis_argument_arity() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("call_other")),
@@ -1684,8 +1631,6 @@ mod tests {
 
         #[test]
         fn handles_varargs_argument_arity() {
-
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_function")),
@@ -1731,7 +1676,6 @@ mod tests {
 
         #[test]
         fn understands_argument_defaults() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_func")),
@@ -1770,7 +1714,6 @@ mod tests {
 
         #[test]
         fn disallows_invalid_arg_types() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_func")),
@@ -1805,7 +1748,6 @@ mod tests {
 
         #[test]
         fn allows_0() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_func")),
@@ -1840,7 +1782,6 @@ mod tests {
 
         #[test]
         fn allows_bad_data_with_call_other() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain:
@@ -1856,7 +1797,6 @@ mod tests {
 
         #[test]
         fn disallows_non_local_namespace_with_call_other() {
-
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain:
@@ -1884,7 +1824,6 @@ mod tests {
 
         #[test]
         fn allows_array_collections() {
-
             let code = indoc! { r#"
                 void create() {
                     int *a = ({ 1, 2, 3 });
@@ -1900,7 +1839,6 @@ mod tests {
 
         #[test]
         fn allows_mapping_collections() {
-
             let code = indoc! { r#"
                 void create() {
                     mapping a = ([ "a": 1, "b": 2, "c": 3 ]);
@@ -1916,7 +1854,6 @@ mod tests {
 
         #[test]
         fn allows_strings() {
-
             let code = indoc! { r#"
                 void create() {
                     string s = "hello, world!";
@@ -1932,7 +1869,6 @@ mod tests {
 
         #[test]
         fn disallows_invalid_collections() {
-
             let code = indoc! { r#"
                 void create() {
                     int a = 0;
@@ -1970,7 +1906,6 @@ mod tests {
 
         #[test]
         fn handles_scopes() {
-
             let _global = VarInitNode {
                 type_: LpcType::Int(false),
                 name: ustr("a"),
@@ -2046,7 +1981,6 @@ mod tests {
 
         #[test]
         fn disallows_keyword_name() {
-
             let mut node = FunctionDefNode {
                 return_type: LpcType::Void,
                 name: ustr("while"),
@@ -2068,7 +2002,6 @@ mod tests {
 
         #[test]
         fn disallows_redefining_nomask_function() {
-
             let mut node = FunctionDefNode {
                 return_type: LpcType::Void,
                 name: ustr("duplicate"),
@@ -2123,7 +2056,6 @@ mod tests {
 
         #[test]
         fn allows_local_private_functions() {
-
             let mut node = ExpressionNode::from(FunctionPtrNode {
                 receiver: None,
                 arguments: None,
@@ -2159,7 +2091,6 @@ mod tests {
 
         #[test]
         fn disallows_private_inherited_functions() {
-
             let mut node = ExpressionNode::from(FunctionPtrNode {
                 receiver: None,
                 arguments: None,
@@ -2200,7 +2131,6 @@ mod tests {
 
         #[test]
         fn allows_known_efuns() {
-
             let mut node = ExpressionNode::from(FunctionPtrNode {
                 receiver: None,
                 arguments: Some(vec![Some(ExpressionNode::from(IntNode::new(12)))]),
@@ -2221,7 +2151,6 @@ mod tests {
 
         #[test]
         fn disallows_case_outside_of_switch() {
-
             let code = "void create() { case 12: 1; }";
             let context = walk_code(code).expect("failed to parse?");
 
@@ -2231,7 +2160,6 @@ mod tests {
 
         #[test]
         fn disallows_default_outside_of_switch() {
-
             let code = "void create() { default: 1; }";
             let context = walk_code(code).expect("failed to parse?");
 
@@ -2241,7 +2169,6 @@ mod tests {
 
         #[test]
         fn allows_in_switch() {
-
             let code = r#"
                 void create() {
                     int i = 5;
@@ -2263,7 +2190,6 @@ mod tests {
 
         #[test]
         fn checks_its_body() {
-
             let mut node = ProgramNode {
                 inherits: vec![],
                 body: vec![AstNode::from(VarInitNode {
@@ -2291,7 +2217,6 @@ mod tests {
 
         #[test]
         fn allows_ints() {
-
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(Some(ExpressionNode::Var(VarNode::new("foo")))),
                 r: Box::new(Some(ExpressionNode::from(456))),
@@ -2315,7 +2240,6 @@ mod tests {
 
         #[test]
         fn disallows_non_ints() {
-
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(Some(ExpressionNode::Var(VarNode::new("foo")))),
                 r: Box::new(Some(ExpressionNode::from(456))),
@@ -2339,7 +2263,6 @@ mod tests {
 
         #[test]
         fn allows_start_blank() {
-
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(None),
                 r: Box::new(Some(ExpressionNode::from(456))),
@@ -2355,7 +2278,6 @@ mod tests {
 
         #[test]
         fn allows_end_blank() {
-
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(Some(ExpressionNode::from(456))),
                 r: Box::new(None),
@@ -2371,7 +2293,6 @@ mod tests {
 
         #[test]
         fn allows_both_blank() {
-
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(None),
                 r: Box::new(None),
@@ -2391,7 +2312,6 @@ mod tests {
 
         #[test]
         fn test_visit_return() {
-
             let mut void_node = ReturnNode {
                 value: None, // indicates a Void return value.
                 span: None,
@@ -2449,7 +2369,6 @@ mod tests {
 
         #[test]
         fn allows_0() {
-
             let mut node = ReturnNode {
                 value: Some(ExpressionNode::from(0)),
                 span: None,
@@ -2479,7 +2398,6 @@ mod tests {
 
         #[test]
         fn allows_mixed() {
-
             let mut node = ReturnNode {
                 value: Some(ExpressionNode::from(123)),
                 span: None,
@@ -2502,7 +2420,6 @@ mod tests {
 
         #[test]
         fn allows_return_of_differing_type_within_closure() {
-
             let function_def = create!(
                 FunctionDefNode,
                 return_type: LpcType::Float(false),
@@ -2539,7 +2456,6 @@ mod tests {
 
             #[test]
             fn works_allows_valid() {
-
                 let mut node = ExpressionNode::from(UnaryOpNode {
                     expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                     op: UnaryOperation::Negate,
@@ -2554,7 +2470,6 @@ mod tests {
 
             #[test]
             fn disallows_invalid() {
-
                 let mut node = ExpressionNode::from(UnaryOpNode {
                     expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                     op: UnaryOperation::Negate,
@@ -2573,7 +2488,6 @@ mod tests {
 
             #[test]
             fn allows_vars() {
-
                 let mut node = ExpressionNode::from(UnaryOpNode {
                     expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                     op: UnaryOperation::Inc,
@@ -2588,7 +2502,6 @@ mod tests {
 
             #[test]
             fn disallows_literals() {
-
                 let mut node = ExpressionNode::from(UnaryOpNode {
                     expr: Box::new(ExpressionNode::from(1)),
                     op: UnaryOperation::Inc,
@@ -2612,7 +2525,6 @@ mod tests {
 
             #[test]
             fn allows_vars() {
-
                 let mut node = ExpressionNode::from(UnaryOpNode {
                     expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                     op: UnaryOperation::Dec,
@@ -2627,7 +2539,6 @@ mod tests {
 
             #[test]
             fn disallows_literals() {
-
                 let mut node = ExpressionNode::from(UnaryOpNode {
                     expr: Box::new(ExpressionNode::from(1)),
                     op: UnaryOperation::Dec,
@@ -2652,7 +2563,6 @@ mod tests {
 
         #[test]
         fn disallows_closure_arg_vars_outside_of_closures() {
-
             let mut node = create!(VarNode,name: ustr("$2"));
 
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
@@ -2672,7 +2582,6 @@ mod tests {
 
         #[test]
         fn disallows_closure_arg_vars_beyond_limit() {
-
             let mut node = create!(VarNode,name: ustr("$65"));
 
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
@@ -2701,7 +2610,6 @@ mod tests {
 
         #[test]
         fn validates_both_sides() {
-
             let mut node = VarInitNode {
                 name: ustr("foo"),
                 type_: LpcType::Int(false),
@@ -2721,7 +2629,6 @@ mod tests {
 
         #[test]
         fn always_allows_0() {
-
             let mut node = VarInitNode {
                 type_: LpcType::String(false),
                 name: ustr("foo"),
@@ -2741,7 +2648,6 @@ mod tests {
 
         #[test]
         fn disallows_differing_types() {
-
             let mut node = VarInitNode {
                 type_: LpcType::String(false),
                 name: ustr("foo"),
@@ -2767,7 +2673,6 @@ mod tests {
 
         #[test]
         fn disallows_keyword_name() {
-
             let mut node = VarInitNode {
                 type_: LpcType::String(false),
                 name: ustr("switch"),
@@ -2791,7 +2696,6 @@ mod tests {
 
         #[test]
         fn disallows_argv_in_ellipsis_function() {
-
             let mut node = VarInitNode {
                 type_: LpcType::Mixed(true),
                 name: ustr("argv"),
@@ -2828,7 +2732,6 @@ mod tests {
 
         #[test]
         fn allows_argv_in_non_ellipsis_function() {
-
             let mut node = VarInitNode {
                 type_: LpcType::Mixed(true),
                 name: ustr("argv"),
@@ -2863,7 +2766,6 @@ mod tests {
 
         #[test]
         fn disallows_differing_types() {
-
             let mut node = ExpressionNode::from(TernaryNode {
                 condition: Box::new(ExpressionNode::from(1)),
                 body: Box::new(ExpressionNode::from(1)),

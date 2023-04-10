@@ -31,10 +31,7 @@ impl LabeledStatementNode {
 }
 
 impl AstNodeTrait for LabeledStatementNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         self.label.visit(tree_walker)?;
         self.node.visit(tree_walker)
     }

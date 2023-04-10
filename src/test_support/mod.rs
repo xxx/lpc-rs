@@ -1,8 +1,8 @@
 use std::sync::Arc;
-use parking_lot::RwLock;
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
+use parking_lot::RwLock;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -67,14 +67,10 @@ fn compile_simul_efuns(config: &Arc<Config>) -> Program {
         "/",
         &*config.lib_dir,
     );
-    compiler
-        .compile_in_game_file(&path, None)
-        .unwrap()
+    compiler.compile_in_game_file(&path, None).unwrap()
 }
 
-pub fn compile_prog(
-    code: &str,
-    ) -> (Program, Arc<Config>, Arc<RwLock<Process>>) {
+pub fn compile_prog(code: &str) -> (Program, Arc<Config>, Arc<RwLock<Process>>) {
     let config = Arc::new(test_config());
     let simul_efuns = compile_simul_efuns(&config);
     let se_proc = Arc::new(RwLock::new(Process::new(simul_efuns)));

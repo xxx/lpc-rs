@@ -1,23 +1,19 @@
 use lpc_rs_errors::{LpcError, Result};
 
-use crate::{interpreter::efun::efun_context::EfunContext};
+use crate::interpreter::efun::efun_context::EfunContext;
 
 /// `throw`, intentionally throw an error. Can be caught by `catch`.
-pub async fn throw<const N: usize>(
-    context: &mut EfunContext<'_, N>,
-    ) -> Result<()> {
+pub async fn throw<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg = context.resolve_local_register(1_usize);
 
-    return Err(LpcError::new(arg.to_string())
-        .with_span(context.frame().current_debug_span()));
+    return Err(LpcError::new(arg.to_string()).with_span(context.frame().current_debug_span()));
 }
 
 #[cfg(test)]
 mod tests {
-    use parking_lot::RwLock;
     use lpc_rs_utils::config::Config;
+    use parking_lot::RwLock;
 
-    
     use crate::{
         interpreter::{
             call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
@@ -44,7 +40,8 @@ mod tests {
             RwLock::new(GcBank::default()),
             RwLock::new(CallOuts::new(tx.clone())),
             tx,
-        ).await;
+        )
+        .await;
 
         assert_eq!(result.unwrap_err().to_string(), "\"foo bar baz error!\"");
     }

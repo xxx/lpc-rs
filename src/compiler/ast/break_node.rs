@@ -30,10 +30,7 @@ impl SpannedNode for BreakNode {
 }
 
 impl AstNodeTrait for BreakNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_break(self)
     }
 }

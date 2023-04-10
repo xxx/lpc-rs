@@ -38,10 +38,7 @@ impl SpannedNode for FunctionDefNode {
 }
 
 impl AstNodeTrait for FunctionDefNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_function_def(self)
     }
 }

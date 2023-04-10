@@ -115,11 +115,7 @@ impl Display for Process {
 }
 
 impl Mark for Process {
-    fn mark(
-        &self,
-        marked: &mut BitSet,
-        processed: &mut BitSet,
-    ) -> lpc_rs_errors::Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
         self.globals.mark(marked, processed)?;
         Ok(())
     }
@@ -127,9 +123,9 @@ impl Mark for Process {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc};
-    use parking_lot::RwLock;
+    use std::sync::Arc;
 
+    use parking_lot::RwLock;
     use shared_arena::SharedArena;
 
     use super::*;
@@ -174,9 +170,7 @@ mod tests {
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
-        process
-            .mark(&mut marked, &mut processed)
-            .unwrap();
+        process.mark(&mut marked, &mut processed).unwrap();
 
         assert!(processed.contains(*array_id.as_ref()));
     }

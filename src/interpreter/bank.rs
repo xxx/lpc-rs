@@ -92,11 +92,7 @@ impl<T> Mark for Bank<T>
 where
     T: Mark,
 {
-    fn mark(
-        &self,
-        marked: &mut BitSet,
-        processed: &mut BitSet,
-    ) -> lpc_rs_errors::Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
         for register in self.registers.iter() {
             register.mark(marked, processed)?;
         }

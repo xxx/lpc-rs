@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use clap::Parser;
-use parking_lot::RwLock;
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
@@ -12,6 +11,7 @@ use lpc_rs::{
 };
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::ConfigBuilder;
+use parking_lot::RwLock;
 use ustr::ustr;
 
 #[derive(Parser, Debug)]
@@ -68,7 +68,9 @@ async fn main() {
                 upvalues,
                 call_outs,
                 tx,
-            ).await {
+            )
+            .await
+            {
                 e.emit_diagnostics();
             }
         }

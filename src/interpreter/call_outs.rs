@@ -4,12 +4,10 @@ use bit_set::BitSet;
 use chrono::{DateTime, Duration, Utc};
 use delegate::delegate;
 use educe::Educe;
-use parking_lot::RwLock;
 use lpc_rs_errors::Result;
+use parking_lot::RwLock;
 use stable_vec::StableVec;
-use tokio::sync::mpsc::Sender;
-use tokio::task::JoinHandle;
-use tokio::time::{Instant};
+use tokio::{sync::mpsc::Sender, task::JoinHandle, time::Instant};
 
 use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, process::Process, vm::vm_op::VmOp};
 
@@ -74,11 +72,7 @@ impl CallOut {
 }
 
 impl Mark for CallOut {
-    fn mark(
-        &self,
-        marked: &mut BitSet,
-        processed: &mut BitSet,
-    ) -> Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
         self.func_ref.mark(marked, processed)
     }
 }
@@ -165,10 +159,7 @@ impl CallOuts {
             };
 
             let handle = tokio::spawn(async move {
-                let mut i = tokio::time::interval_at(
-                    start,
-                    repeat.unwrap().to_std().unwrap(),
-                );
+                let mut i = tokio::time::interval_at(start, repeat.unwrap().to_std().unwrap());
 
                 loop {
                     i.tick().await;
@@ -190,11 +181,7 @@ impl CallOuts {
 }
 
 impl Mark for CallOuts {
-    fn mark(
-        &self,
-        marked: &mut BitSet,
-        processed: &mut BitSet,
-    ) -> Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
         for (_idx, call_out) in &self.queue {
             call_out.mark(marked, processed)?;
         }

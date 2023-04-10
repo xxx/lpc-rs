@@ -5,18 +5,16 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use parking_lot::RwLock;
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
+use parking_lot::RwLock;
 
-use crate::{
-    interpreter::{
-        function_type::function_ptr::FunctionPtr,
-        lpc_array::LpcArray,
-        lpc_mapping::LpcMapping,
-        lpc_ref::{HashedLpcRef, LpcRef},
-        lpc_string::LpcString,
-        process::Process,
-    },
+use crate::interpreter::{
+    function_type::function_ptr::FunctionPtr,
+    lpc_array::LpcArray,
+    lpc_mapping::LpcMapping,
+    lpc_ref::{HashedLpcRef, LpcRef},
+    lpc_string::LpcString,
+    process::Process,
 };
 
 /// An actual LPC value. These are stored in memory, and as constants.

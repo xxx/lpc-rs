@@ -117,11 +117,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
 }
 
 impl<const STACKSIZE: usize> Mark for CallStack<STACKSIZE> {
-    fn mark(
-        &self,
-        marked: &mut BitSet,
-        processed: &mut BitSet,
-    ) -> Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
         for frame in self.stack.iter() {
             frame.mark(marked, processed)?
         }

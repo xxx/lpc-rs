@@ -2,15 +2,14 @@ use std::{
     error::Error,
     fmt::{Debug, Display, Formatter},
     fs::OpenOptions,
+    hash::{Hash, Hasher},
     result,
 };
-use std::hash::{Hash, Hasher};
 
 use codespan_reporting::{
-    diagnostic::{Diagnostic, Label},
+    diagnostic::{Diagnostic, Label, LabelStyle},
     term::termcolor::{ColorChoice, StandardStream, WriteColor},
 };
-use codespan_reporting::diagnostic::LabelStyle;
 use derive_builder::UninitializedFieldError;
 use itertools::Itertools;
 use lalrpop_util::ParseError as LalrpopParseError;
@@ -296,7 +295,8 @@ impl Hash for LpcError {
             match l.style {
                 LabelStyle::Primary => 0,
                 LabelStyle::Secondary => 1,
-            }.hash(state);
+            }
+            .hash(state);
             l.file_id.hash(state);
             l.range.hash(state);
             l.message.hash(state);

@@ -3,9 +3,7 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue};
 
 /// `papplyv`, an efun to partially apply a function to arguments taken from an array
-pub async fn papplyv<const N: usize>(
-    context: &mut EfunContext<'_, N>,
-    ) -> Result<()> {
+pub async fn papplyv<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let LpcRef::Function(f) = context.resolve_local_register(1_usize) else {
         return Err(context.runtime_error("non-function argument sent to `papplyv`"));
     };
@@ -36,9 +34,9 @@ pub async fn papplyv<const N: usize>(
 mod tests {
 
     use std::sync::Arc;
-    use parking_lot::RwLock;
 
     use lpc_rs_utils::config::Config;
+    use parking_lot::RwLock;
 
     use super::*;
     use crate::{
@@ -68,7 +66,8 @@ mod tests {
             RwLock::new(GcBank::default()),
             call_outs,
             tx,
-        ).await;
+        )
+        .await;
 
         let b = result.unwrap();
         let r = b.result().unwrap();

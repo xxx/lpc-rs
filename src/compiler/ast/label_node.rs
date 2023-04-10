@@ -50,10 +50,7 @@ impl SpannedNode for LabelNode {
 }
 
 impl AstNodeTrait for LabelNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_label(self)
     }
 }

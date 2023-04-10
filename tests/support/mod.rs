@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use parking_lot::RwLock;
 
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -11,6 +10,7 @@ use lpc_rs::{
 };
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
+use parking_lot::RwLock;
 
 #[macro_export]
 macro_rules! assert_regex {
@@ -35,11 +35,7 @@ pub fn test_config() -> Config {
     test_config_builder().build().unwrap()
 }
 
-pub fn compile_prog_custom<P>(
-    code: &str,
-    path: P,
-    config: Config,
-    ) -> Program
+pub fn compile_prog_custom<P>(code: &str, path: P, config: Config) -> Program
 where
     P: Into<LpcPath>,
 {
@@ -49,11 +45,7 @@ where
         .expect("Failed to compile.")
 }
 
-pub async fn run_prog_custom<P>(
-    code: &str,
-    path: P,
-    config: Config,
-    ) -> Task<MAX_CALL_STACK_SIZE>
+pub async fn run_prog_custom<P>(code: &str, path: P, config: Config) -> Task<MAX_CALL_STACK_SIZE>
 where
     P: Into<LpcPath>,
 {

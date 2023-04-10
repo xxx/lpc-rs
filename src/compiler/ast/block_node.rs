@@ -28,10 +28,7 @@ impl BlockNode {
 }
 
 impl AstNodeTrait for BlockNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_block(self)
     }
 }

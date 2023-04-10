@@ -114,10 +114,7 @@ impl TreeWalker for FunctionPrototypeWalker {
         Ok(())
     }
 
-    fn visit_function_def(
-        &mut self,
-        node: &mut FunctionDefNode,
-            ) -> Result<()> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         // Store the prototype now, to allow for forward references.
         let num_args = node.parameters.len();
         let num_default_args = node.parameters.iter().filter(|p| p.value.is_some()).count();
@@ -198,7 +195,6 @@ mod tests {
 
     #[test]
     fn function_def_stores_the_prototype() {
-
         let mut walker = FunctionPrototypeWalker::default();
         let mut node = FunctionDefNode {
             return_type: LpcType::Mixed(false),
@@ -235,7 +231,6 @@ mod tests {
 
     #[test]
     fn closure_stores_the_prototype() {
-
         let mut walker = FunctionPrototypeWalker::default();
         let mut node = ClosureNode {
             name: "closure-123".into(),

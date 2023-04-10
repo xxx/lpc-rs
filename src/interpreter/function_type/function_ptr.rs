@@ -5,17 +5,15 @@ use std::{
 
 use bit_set::BitSet;
 use itertools::Itertools;
-use parking_lot::RwLock;
 use lpc_rs_core::register::Register;
+use parking_lot::RwLock;
 use tracing::{instrument, trace};
 
-use crate::{
-    interpreter::{
-        function_type::function_address::FunctionAddress,
-        gc::{mark::Mark, unique_id::UniqueId},
-        lpc_ref::LpcRef,
-        process::Process,
-    },
+use crate::interpreter::{
+    function_type::function_address::FunctionAddress,
+    gc::{mark::Mark, unique_id::UniqueId},
+    lpc_ref::LpcRef,
+    process::Process,
 };
 
 /// A pointer to a function, created with the `&` syntax.
@@ -85,11 +83,7 @@ impl FunctionPtr {
 
 impl Mark for FunctionPtr {
     #[instrument(skip(self))]
-    fn mark(
-        &self,
-        marked: &mut BitSet,
-        processed: &mut BitSet,
-    ) -> lpc_rs_errors::Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
         trace!("marking function ptr");
 
         if !processed.insert(*self.unique_id.as_ref()) {
@@ -143,7 +137,6 @@ mod tests {
 
     #[test]
     fn test_mark() {
-
         let mut ptr = create!(
             FunctionPtr,
             owner: Arc::downgrade(&Arc::new(RwLock::new(Process::default()))),

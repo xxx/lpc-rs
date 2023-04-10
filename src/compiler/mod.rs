@@ -10,11 +10,11 @@ use codegen::{
 use compilation_context::CompilationContext;
 use derive_builder::Builder;
 use educe::Educe;
-use parking_lot::RwLock;
 use lexer::{Spanned, Token, TokenVecWrapper};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{span::Span, LpcError, LpcErrorSeverity, Result};
 use lpc_rs_utils::{config::Config, read_lpc_file};
+use parking_lot::RwLock;
 use preprocessor::Preprocessor;
 use tracing::instrument;
 use ustr::ustr;
@@ -96,8 +96,8 @@ impl Compiler {
     /// # Examples
     /// ```
     /// use lpc_rs::compiler::Compiler;
-    ///     ///
-    /// let prog =  Compiler::default()
+    /// ///
+    /// let prog = Compiler::default()
     ///     .compile_file("tests/fixtures/code/example.c")
     ///     .expect("Unable to compile.");
     /// ```
@@ -139,11 +139,7 @@ impl Compiler {
 
     /// Intended for in-game use to be able to compile a file with relative pathname handling
     #[instrument(skip(self))]
-    pub fn compile_in_game_file(
-        &self,
-        path: &LpcPath,
-        span: Option<Span>,
-            ) -> Result<Program> {
+    pub fn compile_in_game_file(&self, path: &LpcPath, span: Option<Span>) -> Result<Program> {
         self.config.validate_in_game_path(path, span)?;
 
         self.compile_file(path)
@@ -208,7 +204,7 @@ impl Compiler {
     /// # Examples
     /// ```
     /// use lpc_rs::compiler::Compiler;
-    ///     ///
+    /// ///
     /// let code = r#"
     ///     int j = 123;
     ///
@@ -223,11 +219,7 @@ impl Compiler {
     ///     .expect("Failed to compile.");
     /// ```
     #[instrument(skip_all)]
-    pub fn compile_string<T, U>(
-        &self,
-        path: T,
-        code: U,
-            ) -> Result<Program>
+    pub fn compile_string<T, U>(&self, path: T, code: U) -> Result<Program>
     where
         T: Into<LpcPath>,
         U: AsRef<str>,
@@ -254,13 +246,7 @@ impl Compiler {
         // let _ = program.visit(&mut printer);
 
         let context = apply_walker!(InheritanceWalker, program_node, context, true);
-        let context = apply_walker!(
-            FunctionPrototypeWalker,
-            program_node,
-            context,
-           
-            false
-        );
+        let context = apply_walker!(FunctionPrototypeWalker, program_node, context, false);
         let context = apply_walker!(ScopeWalker, program_node, context, false);
         let context = apply_walker!(DefaultParamsWalker, program_node, context, false);
         let context = apply_walker!(SemanticCheckWalker, program_node, context, true);
@@ -337,9 +323,7 @@ mod tests {
         fn tries_dot_c() {
             let compiler = Compiler::default();
 
-            assert!(compiler
-                .compile_file("tests/fixtures/code/example")
-                .is_ok());
+            assert!(compiler.compile_file("tests/fixtures/code/example").is_ok());
         }
     }
 
@@ -350,7 +334,7 @@ mod tests {
 
         #[test]
         fn disallows_going_outside_the_root() {
-                        let config: Arc<Config> = ConfigBuilder::default()
+            let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests")
                 .build()
                 .unwrap()
@@ -383,7 +367,7 @@ mod tests {
 
         #[test]
         fn uses_auto_inherit_if_specified() {
-                        let config: Arc<Config> = ConfigBuilder::default()
+            let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests/fixtures/code")
                 .auto_inherit_file("/std/auto.c")
                 .build()
@@ -395,9 +379,7 @@ mod tests {
 
                 string foo = auto_inherited();
             "#;
-            let prog = compiler
-                .compile_string("my_file.c", code)
-                .unwrap();
+            let prog = compiler.compile_string("my_file.c", code).unwrap();
             println!("{:?}", prog.functions.keys().collect::<Vec<_>>());
             let inherited = prog
                 .functions
@@ -412,7 +394,7 @@ mod tests {
 
         #[test]
         fn skips_auto_inherit_if_not_specified() {
-                        let config: Arc<Config> = ConfigBuilder::default()
+            let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests/fixtures/code")
                 .build()
                 .unwrap()
@@ -423,9 +405,7 @@ mod tests {
 
                 string foo = auto_inherited();
             "#;
-            let err = compiler
-                .compile_string("my_file.c", code)
-                .unwrap_err();
+            let err = compiler.compile_string("my_file.c", code).unwrap_err();
             assert_eq!(
                 &err.to_string(),
                 "call to unknown function `auto_inherited`"

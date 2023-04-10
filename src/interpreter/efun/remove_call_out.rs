@@ -4,9 +4,7 @@ use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// `remove_call_out`, an efun for removing a call out.
 /// This will cancel both upcoming and repeating call outs.
-pub async fn remove_call_out<const N: usize>(
-    context: &mut EfunContext<'_, N>,
-    ) -> Result<()> {
+pub async fn remove_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let LpcRef::Int(idx) = context.resolve_local_register(1_usize) else {
         return Err(context.runtime_bug("non-int call out ID sent to `remove_call_out`"));
     };
@@ -41,11 +39,10 @@ pub async fn remove_call_out<const N: usize>(
 mod tests {
 
     use std::sync::Arc;
-    use parking_lot::RwLock;
 
     use lpc_rs_utils::config::Config;
+    use parking_lot::RwLock;
 
-    
     use crate::{
         interpreter::{
             call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
@@ -79,7 +76,8 @@ mod tests {
             RwLock::new(GcBank::default()),
             call_outs.clone(),
             tx,
-        ).await;
+        )
+        .await;
 
         assert!(result.is_ok());
         assert!(call_outs.read().is_empty());

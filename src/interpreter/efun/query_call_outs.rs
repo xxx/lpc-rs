@@ -9,9 +9,7 @@ use crate::interpreter::{
 };
 
 /// `query_call_outs`, an efun for returning information about all call outs in a specific object
-pub async fn query_call_outs<const N: usize>(
-    context: &mut EfunContext<'_, N>,
-    ) -> Result<()> {
+pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let owner = match context.resolve_local_register(1_usize) {
         LpcRef::Object(object) => {
             let LpcValue::Object(process) = &*object.read() else {
@@ -48,8 +46,8 @@ pub async fn query_call_outs<const N: usize>(
 mod tests {
 
     use if_chain::if_chain;
-    use parking_lot::RwLock;
     use lpc_rs_utils::config::Config;
+    use parking_lot::RwLock;
 
     use super::*;
     use crate::{

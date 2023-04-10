@@ -236,10 +236,7 @@ pub fn check_binary_operation_types(
 ///
 /// * `node` - The node we're checking to see if it's being used incorrectly
 /// * `context` - The current [`CompilationContext`]
-pub fn check_unary_operation_types(
-    node: &UnaryOpNode,
-    context: &CompilationContext,
-) -> Result<()> {
+pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationContext) -> Result<()> {
     let expr_type = node_type(&node.expr, context)?;
 
     let create_error = |expected| {
@@ -302,10 +299,7 @@ fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType
 ///
 /// # Returns
 /// The `LpcType` of the passed node.
-pub fn node_type(
-    node: &ExpressionNode,
-    context: &CompilationContext,
-) -> Result<LpcType> {
+pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<LpcType> {
     match node {
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => node_type(lhs, context),
         ExpressionNode::Call(call_node) => {
@@ -362,10 +356,9 @@ pub fn node_type(
                 match context.lookup_var(name) {
                     Some(sym) => Ok(sym.type_),
                     None => {
-                        if context.contains_function_complete(
-                            name.as_str(),
-                            &CallNamespace::default(),
-                        ) {
+                        if context
+                            .contains_function_complete(name.as_str(), &CallNamespace::default())
+                        {
                             Ok(LpcType::Function(false))
                         } else {
                             Err(LpcError::new(format!("undefined symbol {name}")).with_span(*span))
@@ -400,19 +393,13 @@ pub fn node_type(
                 *op,
             ))
         }
-        ExpressionNode::UnaryOp(UnaryOpNode { expr, .. }) => {
-            Ok(node_type(expr, context)?)
-        }
+        ExpressionNode::UnaryOp(UnaryOpNode { expr, .. }) => Ok(node_type(expr, context)?),
         ExpressionNode::Array(node) => {
             if node.value.is_empty() {
                 return Ok(LpcType::Mixed(true));
             }
 
-            let res: Result<Vec<_>> = node
-                .value
-                .iter()
-                .map(|i| node_type(i, context))
-                .collect();
+            let res: Result<Vec<_>> = node.value.iter().map(|i| node_type(i, context)).collect();
 
             let value_types = match res {
                 Ok(x) => x,
@@ -427,9 +414,7 @@ pub fn node_type(
                 Ok(LpcType::Mixed(true))
             }
         }
-        ExpressionNode::Ternary(TernaryNode { body, .. }) => {
-            Ok(node_type(body, context)?)
-        }
+        ExpressionNode::Ternary(TernaryNode { body, .. }) => Ok(node_type(body, context)?),
         ExpressionNode::Mapping(_) => Ok(LpcType::Mapping(false)),
         ExpressionNode::FunctionPtr(_) => Ok(LpcType::Function(false)),
     }
@@ -551,7 +536,6 @@ mod tests {
             right_node: ExpressionNode,
             context: &CompilationContext,
         ) -> Result<()> {
-
             let node = BinaryOpNode {
                 l: Box::new(left_node),
                 r: Box::new(right_node),
@@ -1613,7 +1597,6 @@ mod tests {
             expr_node: ExpressionNode,
             context: &CompilationContext,
         ) -> Result<()> {
-
             let node = UnaryOpNode {
                 expr: Box::new(expr_node),
                 op,
@@ -1817,22 +1800,17 @@ mod tests {
 
             #[test]
             fn empty_array_is_mixed() {
-
                 let node = ExpressionNode::Array(ArrayNode {
                     value: vec![],
                     span: None,
                 });
                 let context = CompilationContext::default();
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::Mixed(true)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(true));
             }
 
             #[test]
             fn array_all_same_is_that() {
-
                 let context = CompilationContext::default();
 
                 let node = ExpressionNode::from(vec![
@@ -1842,15 +1820,11 @@ mod tests {
                     ExpressionNode::from(8238),
                 ]);
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::Int(true)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Int(true));
             }
 
             #[test]
             fn array_any_array_is_mixed() {
-
                 let context = CompilationContext::default();
 
                 let node = ExpressionNode::from(vec![
@@ -1859,15 +1833,11 @@ mod tests {
                     ExpressionNode::from(vec![ExpressionNode::from(-123)]),
                 ]);
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::Mixed(true)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(true));
             }
 
             #[test]
             fn int_op_string_is_string() {
-
                 let context = CompilationContext::default();
 
                 let node = ExpressionNode::BinaryOp(BinaryOpNode {
@@ -1877,15 +1847,11 @@ mod tests {
                     span: None,
                 });
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::String(false)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::String(false));
             }
 
             #[test]
             fn string_op_int_is_string() {
-
                 let context = CompilationContext::default();
 
                 let node = ExpressionNode::BinaryOp(BinaryOpNode {
@@ -1895,15 +1861,11 @@ mod tests {
                     span: None,
                 });
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::String(false)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::String(false));
             }
 
             #[test]
             fn comma_expression_is_last_item() {
-
                 let context = CompilationContext::default();
 
                 let node = ExpressionNode::CommaExpression(CommaExpressionNode {
@@ -1911,15 +1873,11 @@ mod tests {
                     span: None,
                 });
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::String(false)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::String(false));
             }
 
             #[test]
             fn call_falls_back_to_efun_check() {
-
                 let context = CompilationContext::default();
 
                 let node = ExpressionNode::Call(create!(
@@ -1928,15 +1886,11 @@ mod tests {
                     arguments: vec![ExpressionNode::from("foo/bar.c")],
                 ));
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::Object(false)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Object(false));
             }
 
             #[test]
             fn call_uses_namespace_to_get_correct_function() {
-
                 let mut context = CompilationContext::default();
 
                 let proto = FunctionPrototypeBuilder::default()
@@ -1956,15 +1910,11 @@ mod tests {
                     arguments: vec![ExpressionNode::from("foo/bar.c")],
                 ));
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::Object(false)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Object(false));
             }
 
             #[test]
             fn chained_call_is_mixed() {
-
                 let context = CompilationContext::default();
 
                 let node = create!(
@@ -1989,7 +1939,6 @@ mod tests {
 
             #[test]
             fn closure_uses_return_type() {
-
                 let context = CompilationContext::default();
 
                 let node = ExpressionNode::Closure(ClosureNode {
@@ -2002,10 +1951,7 @@ mod tests {
                     scope_id: None,
                 });
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::Mapping(true)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mapping(true));
             }
         }
 
@@ -2015,7 +1961,6 @@ mod tests {
 
             #[test]
             fn test_index_array_returns_singular_of_left_type() {
-
                 let mut scope_tree = ScopeTree::default();
                 let id = scope_tree.push_new();
                 let scope = scope_tree.get_mut(id).unwrap();
@@ -2046,15 +1991,11 @@ mod tests {
                     ..Default::default()
                 };
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::Int(false)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Int(false));
             }
 
             #[test]
             fn test_index_array_with_range() {
-
                 let left = ExpressionNode::from(vec![1, 2, 3, 4, 5]);
                 let right = ExpressionNode::Range(RangeNode {
                     l: Box::new(Some(ExpressionNode::from(1))),
@@ -2074,7 +2015,6 @@ mod tests {
 
             #[test]
             fn test_index_mapping_is_mixed() {
-
                 let mut scope_tree = ScopeTree::default();
                 let id = scope_tree.push_new();
                 let scope = scope_tree.get_mut(id).unwrap();
@@ -2105,10 +2045,7 @@ mod tests {
                     ..Default::default()
                 };
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::Mixed(false)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(false));
             }
         }
 
@@ -2119,8 +2056,6 @@ mod tests {
 
             #[test]
             fn is_return_type_for_normal_functions() {
-
-
                 let node = ExpressionNode::Call(create!(
                     CallNode,
                     chain: create!(CallChain, name: ustr("this_object")),
@@ -2128,15 +2063,11 @@ mod tests {
 
                 let context = CompilationContext::default();
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::Object(false)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Object(false));
             }
 
             #[test]
             fn is_mixed_for_call_other() {
-
                 let node = ExpressionNode::Call(create!(
                     CallNode,
                     chain:
@@ -2145,15 +2076,11 @@ mod tests {
 
                 let context = CompilationContext::default();
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::Mixed(false)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(false));
             }
 
             #[test]
             fn is_mixed_for_function_pointers() {
-
                 let mut scope_tree = ScopeTree::default();
                 let id = scope_tree.push_new();
                 let scope = scope_tree.get_mut(id).unwrap();
@@ -2173,10 +2100,7 @@ mod tests {
                     ..Default::default()
                 };
 
-                assert_eq!(
-                    node_type(&node, &context).unwrap(),
-                    LpcType::Mixed(false)
-                );
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(false));
             }
         }
     }

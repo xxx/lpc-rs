@@ -51,7 +51,9 @@ use crate::compiler::{
 ///     .parse(&mut CompilationContext::default(), lexer)
 ///     .unwrap();
 /// let mut walker = TreePrinter::new();
-/// walker.visit_program(&mut program_node).expect("error walking the tree");
+/// walker
+///     .visit_program(&mut program_node)
+///     .expect("error walking the tree");
 /// ```
 #[derive(Debug)]
 pub struct TreePrinter {
@@ -87,10 +89,7 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_binary_op(
-        &mut self,
-        node: &mut BinaryOpNode,
-            ) -> Result<()> {
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
         self.println_indented("Binary Op");
         self.indent += 2;
         self.println_indented(&format!("operation: {:?}", node.op));
@@ -156,10 +155,7 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_comma_expression(
-        &mut self,
-        node: &mut CommaExpressionNode,
-            ) -> Result<()> {
+    fn visit_comma_expression(&mut self, node: &mut CommaExpressionNode) -> Result<()> {
         self.println_indented("Comma Expression");
         self.indent += 2;
         for expr in &mut node.value {
@@ -258,10 +254,7 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_function_def(
-        &mut self,
-        node: &mut FunctionDefNode,
-            ) -> Result<()> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         self.println_indented("Function Def");
         self.indent += 2;
         self.println_indented(&format!("name: {}", node.name));
@@ -282,10 +275,7 @@ impl TreeWalker for TreePrinter {
         Ok(())
     }
 
-    fn visit_function_ptr(
-        &mut self,
-        node: &mut FunctionPtrNode,
-            ) -> Result<()> {
+    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
         self.println_indented("Function Ptr");
         self.indent += 2;
 

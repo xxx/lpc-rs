@@ -2,7 +2,6 @@ use std::{collections::HashMap, sync::Arc};
 
 use derive_builder::Builder;
 use indexmap::IndexMap;
-use parking_lot::RwLock;
 use lpc_rs_core::{
     call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN,
 };
@@ -12,6 +11,7 @@ use lpc_rs_function_support::{
     program_function::ProgramFunction, symbol::Symbol,
 };
 use lpc_rs_utils::config::Config;
+use parking_lot::RwLock;
 use string_interner::StringInterner;
 use ustr::Ustr;
 
@@ -208,11 +208,7 @@ impl CompilationContext {
 
     /// Convenience function to check if a function is available anywhere that
     /// I am allowed access.
-    pub fn contains_function_complete(
-        &self,
-        name: &str,
-        namespace: &CallNamespace,
-    ) -> bool {
+    pub fn contains_function_complete(&self, name: &str, namespace: &CallNamespace) -> bool {
         if !self.valid_namespace(namespace) {
             return false;
         }
@@ -478,10 +474,7 @@ mod tests {
         assert_eq!(
             // efun namespace
             context
-                .lookup_function_complete(
-                    "this_object",
-                    &CallNamespace::Named("efun".into()),
-                )
+                .lookup_function_complete("this_object", &CallNamespace::Named("efun".into()),)
                 .unwrap()
                 .prototype(),
             EFUN_PROTOTYPES.get("this_object").unwrap()
@@ -490,10 +483,7 @@ mod tests {
         assert_eq!(
             // specifically-named namespace
             context
-                .lookup_function_complete(
-                    "foo",
-                    &CallNamespace::Named("my_named_inherit".into()),
-                )
+                .lookup_function_complete("foo", &CallNamespace::Named("my_named_inherit".into()),)
                 .unwrap()
                 .prototype(),
             &named_overridden.prototype
@@ -510,10 +500,8 @@ mod tests {
 
         assert_eq!(
             // unknown namespace
-            context.lookup_function_complete(
-                "this_object",
-                &CallNamespace::Named("blargh".into()),
-            ),
+            context
+                .lookup_function_complete("this_object", &CallNamespace::Named("blargh".into()),),
             None
         );
 
@@ -660,10 +648,8 @@ mod tests {
 
         assert_eq!(
             // efun namespace
-            context.contains_function_complete(
-                "this_object",
-                &CallNamespace::Named("efun".into()),
-            ),
+            context
+                .contains_function_complete("this_object", &CallNamespace::Named("efun".into()),),
             true
         );
 
@@ -687,10 +673,8 @@ mod tests {
 
         assert_eq!(
             // unknown namespace
-            context.contains_function_complete(
-                "this_object",
-                &CallNamespace::Named("blargh".into()),
-            ),
+            context
+                .contains_function_complete("this_object", &CallNamespace::Named("blargh".into()),),
             false
         );
 

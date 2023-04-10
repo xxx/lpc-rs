@@ -13,6 +13,7 @@ pub(crate) mod remove_call_out;
 pub(crate) mod this_object;
 pub(crate) mod throw;
 
+use futures::future::BoxFuture;
 use indexmap::IndexMap;
 use lpc_rs_core::{
     function_arity::{FunctionArity, FunctionArityBuilder},
@@ -26,13 +27,12 @@ use lpc_rs_function_support::function_prototype::{
 };
 use once_cell::sync::Lazy;
 
-use futures::future::BoxFuture;
-
 use crate::interpreter::efun::efun_context::EfunContext;
 
 /// Signature for Efuns
 pub type Efun<const N: usize> = fn(&mut EfunContext<N>) -> Result<()>;
-pub type AsyncEfun<const N: usize> = Box<dyn Send + Sync + for<'a> Fn(&'a mut EfunContext<N>) -> BoxFuture<'a, Result<()>>>;
+pub type AsyncEfun<const N: usize> =
+    Box<dyn Send + Sync + for<'a> Fn(&'a mut EfunContext<N>) -> BoxFuture<'a, Result<()>>>;
 
 pub const CALL_OUT: &str = "call_out";
 pub const CALL_OTHER: &str = "call_other";
@@ -88,8 +88,6 @@ pub async fn call_efun<const STACKSIZE: usize>(
         _ => Err(efun_context.runtime_error(format!("Unknown efun: {}", efun_name))),
     }
 }
-
-
 
 /// Global static mapping of all efun names to their prototype.
 /// [`Instruction::CallEfun`](lpc_rs_asm::instruction::Instruction::CallEfun) indexes into this map,

@@ -11,8 +11,6 @@ use lpc_rs::{
 use lpc_rs_utils::config::Config;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-
-
     let code = r#"
         int fib(int n) {
             if (n < 2) {

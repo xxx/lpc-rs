@@ -252,10 +252,7 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
-    fn visit_function_def(
-        &mut self,
-        node: &mut FunctionDefNode,
-            ) -> Result<()> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
         self.context.scopes.insert_function(&node.name, &scope_id);
 
@@ -434,7 +431,6 @@ mod tests {
 
         #[test]
         fn sets_up_argv_for_ellipsis() {
-
             let mut walker = ScopeWalker::default();
             let mut node = create!(
                 ClosureNode,
@@ -467,7 +463,6 @@ mod tests {
 
         #[test]
         fn sets_up_argv_for_ellipsis() {
-
             let mut walker = ScopeWalker::default();
             let mut node = FunctionDefNode {
                 return_type: LpcType::Void,
@@ -528,7 +523,6 @@ mod tests {
 
         #[test]
         fn sets_error_for_var_redefinition_in_same_scope() {
-
             let (mut walker, mut node) = setup();
 
             let _ = walker.visit_var_init(&mut node);
@@ -538,7 +532,6 @@ mod tests {
 
         #[test]
         fn does_not_error_for_var_shadow_in_different_scope() {
-
             let (mut walker, mut node) = setup();
 
             walker.context.scopes.push_new();
@@ -550,7 +543,6 @@ mod tests {
 
         #[test]
         fn inserts_the_symbol() {
-
             let (mut walker, mut node) = setup();
 
             walker.context.scopes.push_new();
@@ -588,7 +580,6 @@ mod tests {
 
         #[test]
         fn sets_global_flag() {
-
             let (mut walker, mut node) = setup();
 
             walker.insert_symbol(Symbol {
@@ -608,7 +599,6 @@ mod tests {
 
         #[test]
         fn pushes_error_for_undefined_vars() {
-
             let (mut walker, mut node) = setup();
 
             let _ = walker.visit_var(&mut node);
@@ -621,7 +611,6 @@ mod tests {
 
         #[test]
         fn allows_closure_positional_arg_vars() {
-
             let mut walker = ScopeWalker::default();
             let mut node = create!(VarNode, name: ustr("$7"));
 
@@ -633,7 +622,6 @@ mod tests {
 
         #[test]
         fn errors_if_accessing_private_variable_defined_elsewhere() {
-
             let (mut walker, mut node) = setup();
 
             let mut inherited = Program::default();
@@ -662,7 +650,6 @@ mod tests {
 
         #[test]
         fn allows_accessing_in_file_private_variable() {
-
             let (mut walker, mut node) = setup();
 
             let sym = Symbol {
@@ -684,7 +671,6 @@ mod tests {
 
         #[test]
         fn upvalues_variables() {
-
             let mut walker = ScopeWalker::default();
             let _local_scope = walker.context.scopes.push_new(); // push a non-global scope
 

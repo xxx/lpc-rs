@@ -1,6 +1,6 @@
 use std::{
     fmt::{Debug, Display, Formatter},
-    hash::{Hash},
+    hash::Hash,
     ops::{Deref, Index, IndexMut, Range, RangeInclusive},
 };
 
@@ -9,12 +9,10 @@ use delegate::delegate;
 use if_chain::if_chain;
 use tracing::{instrument, trace};
 
-use crate::{
-    interpreter::{
-        gc::{mark::Mark, unique_id::UniqueId},
-        lpc_ref::LpcRef,
-        lpc_value::LpcValue,
-    },
+use crate::interpreter::{
+    gc::{mark::Mark, unique_id::UniqueId},
+    lpc_ref::LpcRef,
+    lpc_value::LpcValue,
 };
 
 /// A newtype wrapper for an array of [`LpcRef`]s, with a [`UniqueId`] for GC
@@ -90,11 +88,7 @@ impl Display for LpcArray {
 
 impl Mark for LpcArray {
     #[instrument(skip(self))]
-    fn mark(
-        &self,
-        marked: &mut BitSet,
-        processed: &mut BitSet,
-    ) -> lpc_rs_errors::Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
         trace!("marking array");
 
         if !processed.insert(*self.unique_id.as_ref()) {
@@ -185,10 +179,9 @@ impl PartialEq<Vec<LpcRef>> for LpcArray {
 
 #[cfg(test)]
 mod tests {
-    use parking_lot::RwLock;
-
     use factori::create;
     use lpc_rs_core::register::Register;
+    use parking_lot::RwLock;
     use shared_arena::SharedArena;
 
     use super::*;
@@ -196,7 +189,6 @@ mod tests {
 
     #[test]
     fn test_mark() {
-
         let pool = SharedArena::with_capacity(5);
 
         let ptr = create!(FunctionPtr, upvalue_ptrs: vec![Register(4), Register(33)]);

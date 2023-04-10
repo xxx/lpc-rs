@@ -35,10 +35,7 @@ impl WhileNode {
 }
 
 impl AstNodeTrait for WhileNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_while(self)
     }
 }

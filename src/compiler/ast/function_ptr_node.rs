@@ -50,10 +50,7 @@ impl SpannedNode for FunctionPtrNode {
 }
 
 impl AstNodeTrait for FunctionPtrNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_function_ptr(self)
     }
 }

@@ -151,9 +151,9 @@ pub async fn dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
 mod tests {
 
     use std::sync::Arc;
-    use parking_lot::RwLock;
 
     use lpc_rs_utils::config::Config;
+    use parking_lot::RwLock;
 
     use crate::{
         compiler::Compiler,
@@ -172,7 +172,6 @@ mod tests {
 
     #[tokio::test]
     async fn does_not_crash_on_recursive_structures() {
-
         // arrays
         let code = r##"
             void create() {
@@ -192,7 +191,8 @@ mod tests {
             RwLock::new(GcBank::default()),
             Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
             tx.clone(),
-        ).await;
+        )
+        .await;
 
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -217,7 +217,8 @@ mod tests {
             RwLock::new(GcBank::default()),
             Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
             tx,
-        ).await;
+        )
+        .await;
 
         assert_eq!(
             result.unwrap_err().to_string(),

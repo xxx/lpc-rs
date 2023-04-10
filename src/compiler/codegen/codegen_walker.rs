@@ -422,12 +422,7 @@ impl CodegenWalker {
     /// instructions, allowing choice between a numeric (i.e. held in
     /// registers) and mixed (i.e. tracked via references) Switching on the
     /// instructions lets us avoid some value lookups at runtime.
-    fn choose_num_or_mixed<F, G>(
-        &self,
-        node: &BinaryOpNode,
-        a: F,
-        b: G,
-    ) -> Instruction
+    fn choose_num_or_mixed<F, G>(&self, node: &BinaryOpNode, a: F, b: G) -> Instruction
     where
         F: Fn() -> Instruction,
         G: Fn() -> Instruction,
@@ -486,11 +481,7 @@ impl CodegenWalker {
     /// `reference` - The [`Register`] holding the reference to the ref we're
     /// taking a slice from. `node` - A reference to the [`RangeNode`] that
     /// holds the range of the slice we're taking.
-    fn emit_range(
-        &mut self,
-        reference: RegisterVariant,
-        node: &mut RangeNode,
-            ) -> Result<()> {
+    fn emit_range(&mut self, reference: RegisterVariant, node: &mut RangeNode) -> Result<()> {
         let first_index = if let Some(expr) = &mut *node.l {
             expr.visit(self)?;
             self.current_result
@@ -776,7 +767,7 @@ impl CodegenWalker {
         declared_arg_locations: &[RegisterVariant],
         span: Option<Span>,
         populate_defaults_index: Address,
-            ) -> Result<()> {
+    ) -> Result<()> {
         let mut default_init_addresses = vec![];
 
         for (idx, parameter) in parameters.iter_mut().enumerate() {
@@ -947,10 +938,7 @@ impl CodegenWalker {
         };
 
         // Take care of the result after the call returns.
-        if let Some(func) = self
-            .context
-            .lookup_function_complete(name, namespace)
-        {
+        if let Some(func) = self.context.lookup_function_complete(name, namespace) {
             if func.as_ref().return_type == LpcType::Void {
                 self.current_result = Register(0).as_local();
             } else {
@@ -1051,10 +1039,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_assignment(
-        &mut self,
-        node: &mut AssignmentNode,
-            ) -> Result<()> {
+    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
         node.rhs.visit(self)?;
         let rhs_result = self.current_result;
         let lhs = &mut *node.lhs;
@@ -1100,10 +1085,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_binary_op(
-        &mut self,
-        node: &mut BinaryOpNode,
-            ) -> Result<()> {
+    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
         node.l.visit(self)?;
         let reg_left = self.current_result;
 
@@ -1195,8 +1177,7 @@ impl TreeWalker for CodegenWalker {
         let reg_result = self.register_counter.next().unwrap().as_local();
         self.current_result = reg_result;
 
-        let instruction =
-            self.choose_op_instruction(node, reg_left, reg_right, reg_result);
+        let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result);
         push_instruction!(self, instruction, node.span);
 
         Ok(())
@@ -1379,10 +1360,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_continue(
-        &mut self,
-        node: &mut ContinueNode,
-            ) -> Result<()> {
+    fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
         if let Some(JumpTarget {
             continue_target, ..
         }) = self.jump_targets.last()
@@ -1583,10 +1561,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_function_def(
-        &mut self,
-        node: &mut FunctionDefNode,
-            ) -> Result<()> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         // Note we don't look to inherited files at all for this -
         // We're generating code for a function defined _in this object_
         let prototype = match self.context.function_prototypes.get(&*node.name) {
@@ -1690,10 +1665,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_function_ptr(
-        &mut self,
-        node: &mut FunctionPtrNode,
-            ) -> Result<()> {
+    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
         let mut applied_arguments = vec![];
         if let Some(args) = &mut node.arguments {
             for argument in args {
@@ -1866,10 +1838,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_program(
-        &mut self,
-        program: &mut ProgramNode,
-            ) -> Result<()> {
+    fn visit_program(&mut self, program: &mut ProgramNode) -> Result<()> {
         self.context.scopes.goto_root();
         self.setup_init();
         self.backpatch_maps.push(HashMap::new());
@@ -2377,11 +2346,11 @@ mod tests {
 
     use claim::assert_some;
     use factori::create;
-    use parking_lot::RwLock;
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloat};
     use lpc_rs_errors::{span::Span, LpcErrorSeverity, Result};
     use lpc_rs_utils::config::ConfigBuilder;
+    use parking_lot::RwLock;
 
     use super::*;
     use crate::{
@@ -2493,11 +2462,7 @@ mod tests {
 
     fn generate_init_instructions(prog: &str) -> Vec<Instruction> {
         // walker_init_instructions(&mut walk_prog(prog))
-        walk_prog(prog)
-            .initializer
-            .unwrap()
-            .instructions
-            .clone()
+        walk_prog(prog).initializer.unwrap().instructions.clone()
     }
 
     fn find_function<'a, K>(
@@ -2509,7 +2474,6 @@ mod tests {
 
     #[test]
     fn test_visit_array_populates_the_instructions() {
-
         let mut walker = default_walker();
 
         let mut arr = ArrayNode::new(vec![
@@ -2542,7 +2506,6 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions_for_globals() {
-
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
@@ -2582,7 +2545,6 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions_for_locals() {
-
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let local_id = context.scopes.push_new();
@@ -2619,7 +2581,6 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions_for_array_items() {
-
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let local_id = context.scopes.push_new();
@@ -2671,7 +2632,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_ints() {
-
             let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
@@ -2709,7 +2669,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_floats() {
-
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut sym = Symbol::new("foo", LpcType::Float(false));
@@ -2758,7 +2717,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_strings() {
-
             let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
@@ -2796,7 +2754,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_arrays() {
-
             let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
@@ -2829,7 +2786,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_indexes() {
-
             let context = CompilationContext::default();
             let mut walker = CodegenWalker::new(context);
 
@@ -2860,7 +2816,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_slices() {
-
             let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
@@ -2896,7 +2851,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_andand_expressions() {
-
             let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
@@ -2927,7 +2881,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_oror_expressions() {
-
             let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
@@ -2961,7 +2914,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_function_composition() {
-
             let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
@@ -3018,7 +2970,6 @@ mod tests {
 
         #[test]
         fn breaks_out_of_while_loops() {
-
             let code = r#"
                 void create() {
                     int i;
@@ -3079,7 +3030,6 @@ mod tests {
 
         #[test]
         fn breaks_out_of_for_loops() {
-
             let code = r#"
                 void create() {
                     for (int i = 0; i < 10; i += 1) {
@@ -3150,8 +3100,6 @@ mod tests {
 
         #[test]
         fn breaks_out_of_do_while_loops() {
-
-
             let code = r#"
                 void create() {
                     int i;
@@ -3211,7 +3159,6 @@ mod tests {
 
         #[test]
         fn breaks_out_of_switch_statements() {
-
             let code = r#"
                 void create() {
                     int i = 666;
@@ -3307,7 +3254,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_local_calls() {
-
             let mut walker = default_walker();
             let call = "mixed m = local_function(4 - 5);";
             let mut node = get_call_node(call, &mut walker.context);
@@ -3326,7 +3272,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_efuns() {
-
             let mut walker = default_walker();
             let call = "mixed m = dump(4 - 5);";
             let mut node = get_call_node(call, &mut walker.context);
@@ -3345,7 +3290,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_simul_efuns() {
-
             let mut walker = default_walker();
             let call = "mixed m = simul_efun(4 - 5);";
             let mut node = get_call_node(call, &mut walker.context);
@@ -3364,7 +3308,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_call_other() {
-
             let check = |code: &str, expected: &[Instruction]| {
                 let wrapped = format!("void create() {{ {}; }}", code);
                 let (prog, _, _) = compile_prog(&wrapped);
@@ -3418,7 +3361,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_sizeof() {
-
             let check = |code: &str, expected: &[Instruction]| {
                 let wrapped = format!("void create() {{ {}; }}", code);
                 let (prog, _, _) = compile_prog(&wrapped);
@@ -3450,7 +3392,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_catch() {
-
             let call = "void create() { catch(12 / 0); }";
             let (prog, _, _) = compile_prog(call);
             let instructions = &find_function(&prog.functions, "create")
@@ -3475,7 +3416,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_function_pointers() {
-
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("marfin")
@@ -3524,7 +3464,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_global_function_pointers() {
-
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("marfin")
@@ -3566,7 +3505,6 @@ mod tests {
 
         #[test]
         fn copies_non_void_call_results() {
-
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("marfin")
@@ -3602,7 +3540,6 @@ mod tests {
 
         #[test]
         fn does_not_copy_void_call_results() {
-
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("void_thing")
@@ -3634,7 +3571,6 @@ mod tests {
 
         #[test]
         fn copies_non_void_efun_results() {
-
             let mut walker = default_walker();
             let call = r#"mixed m = clone_object("/foo.c");"#;
             let mut node = get_call_node(call, &mut walker.context);
@@ -3657,7 +3593,6 @@ mod tests {
 
         #[test]
         fn does_not_copy_void_efun_results() {
-
             let mut walker = default_walker();
             let call = r#"mixed m = dump("lkajsdflkajsdf");"#;
             let mut node = get_call_node(call, &mut walker.context);
@@ -3676,7 +3611,6 @@ mod tests {
 
         #[test]
         fn handles_ellipsis_functions() {
-
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_func")
@@ -3715,7 +3649,6 @@ mod tests {
         #[test]
         fn handles_chained_calls() {
             let call = "mixed m = papplyv(dump, ({ \"foo\", 25 }))();";
-
 
             // do a stupid dance to get the efuns into the context
             let walker = default_walker();
@@ -3769,7 +3702,6 @@ mod tests {
 
         #[test]
         fn test_visit_block_populates_instructions() {
-
             let block = "void marf() { { int a = '🏯'; dump(a); } }";
             let mut prog_node = lpc_parser::ProgramParser::new()
                 .parse(&mut CompilationContext::default(), LexWrapper::new(block))
@@ -3805,7 +3737,6 @@ mod tests {
 
     #[test]
     fn test_visit_comma_expression_populates_the_instructions() {
-
         let mut walker = default_walker();
 
         let mut expr = CommaExpressionNode::new(vec![
@@ -3875,7 +3806,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions() {
-
             let mut walker = compile("function f = (: dump(4 + 5 + $1) :);");
 
             assert_eq!(
@@ -3897,7 +3827,6 @@ mod tests {
 
         #[test]
         fn handles_ellipses() {
-
             let mut walker = compile("function f = (: [int i, ...] argv :);");
 
             assert_eq!(
@@ -3915,10 +3844,8 @@ mod tests {
 
         #[test]
         fn populates_the_default_arguments() {
-
-            let mut walker = compile(
-                "function f = (: [int i, int j = 666, float d = 3.54] i * j :);",
-            );
+            let mut walker =
+                compile("function f = (: [int i, int j = 666, float d = 3.54] i * j :);");
 
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),
@@ -3953,7 +3880,6 @@ mod tests {
 
         #[test]
         fn sets_the_correct_upvalue_information() {
-
             let code = indoc! {r##"
                 int g = 42;
 
@@ -3999,7 +3925,6 @@ mod tests {
 
         #[test]
         fn continues_while_loops() {
-
             let code = r#"
                 void create() {
                     int i;
@@ -4060,7 +3985,6 @@ mod tests {
 
         #[test]
         fn continues_for_loops() {
-
             let code = r#"
                 void create() {
                     for (int i = 0; i < 10; i += 1) {
@@ -4131,7 +4055,6 @@ mod tests {
 
         #[test]
         fn continues_do_while_loops() {
-
             let code = r#"
                 void create() {
                     int i;
@@ -4192,7 +4115,6 @@ mod tests {
 
     #[test]
     fn test_decl_sets_scope_and_instructions() {
-
         let call = "int foo = 1, *bar = ({ 56 });";
         let mut prog_node: ProgramNode = lpc_parser::ProgramParser::new()
             .parse(&mut CompilationContext::default(), LexWrapper::new(call))
@@ -4267,7 +4189,6 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions() {
-
             let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
@@ -4314,8 +4235,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions() {
-
-
             let var = VarNode {
                 name: ustr("i"),
                 span: None,
@@ -4393,7 +4312,6 @@ mod tests {
         use super::*;
 
         fn assert_compiles_to(code: &str, expected: Vec<Instruction>) {
-
             let mut prototype_walker = FunctionPrototypeWalker::default();
 
             let mut prog_node: ProgramNode = lpc_parser::ProgramParser::new()
@@ -4498,8 +4416,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_efuns() {
-
-
             let mut node = FunctionPtrNode {
                 receiver: None,
                 name: ustr("dump"),
@@ -4524,8 +4440,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions_for_simul_efuns() {
-
-
             let mut node = FunctionPtrNode {
                 receiver: None,
                 name: ustr("simul_efun"),
@@ -4556,8 +4470,6 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions() {
-
-
             let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
@@ -4610,7 +4522,6 @@ mod tests {
 
     #[test]
     fn test_visit_int_populates_the_instructions() {
-
         let mut walker = default_walker();
 
         let mut tree = IntNode::new(666);
@@ -4635,7 +4546,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions() {
-
             let prog = "
                 void create() {
                     1 + 3 - 5;
@@ -4671,7 +4581,6 @@ mod tests {
 
         #[test]
         fn initializes_the_globals() {
-
             let prog = r#"
                 int j = 123;
                 string q = "cool";
@@ -4701,7 +4610,6 @@ mod tests {
 
         #[test]
         fn calls_create_if_create_is_defined() {
-
             let prog = r#"
                 int q = 666;
                 int marf() {
@@ -4730,7 +4638,6 @@ mod tests {
 
         #[test]
         fn tracks_global_registers_over_multiple_sections() {
-
             let prog = r#"
                 int q = 666;
                 int marf() {
@@ -4761,7 +4668,6 @@ mod tests {
 
     #[test]
     fn visit_return_populates_the_instructions() {
-
         let mut walker = default_walker();
 
         let mut node = ReturnNode::new(Some(ExpressionNode::from(IntNode::new(666))));
@@ -4791,7 +4697,6 @@ mod tests {
 
     #[test]
     fn test_visit_string_populates_the_instructions() {
-
         let mut walker = default_walker();
         let mut node = StringNode::new("marf");
         let mut node2 = StringNode::new("tacos");
@@ -4815,8 +4720,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions() {
-
-
             let code = r#"
                 void create() {
                     switch(666) {
@@ -4888,8 +4791,6 @@ mod tests {
 
         #[test]
         fn populates_the_instructions() {
-
-
             let mut node = TernaryNode {
                 condition: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::from(2)),
@@ -4954,7 +4855,6 @@ mod tests {
 
             #[test]
             fn populates_instructions() {
-
                 let mut walker = setup(UnaryOperation::Negate, false);
 
                 let expected = vec![
@@ -4976,7 +4876,6 @@ mod tests {
 
             #[test]
             fn populates_instructions_for_pre() {
-
                 let mut walker = setup(UnaryOperation::Inc, false);
 
                 let expected = vec![
@@ -4989,7 +4888,6 @@ mod tests {
 
             #[test]
             fn populates_instructions_for_post() {
-
                 let mut walker = setup(UnaryOperation::Inc, true);
 
                 let expected = vec![
@@ -5010,7 +4908,6 @@ mod tests {
 
             #[test]
             fn populates_instructions_for_pre() {
-
                 let mut walker = setup(UnaryOperation::Dec, false);
 
                 let expected = vec![
@@ -5023,7 +4920,6 @@ mod tests {
 
             #[test]
             fn populates_instructions_for_post() {
-
                 let mut walker = setup(UnaryOperation::Dec, true);
 
                 let expected = vec![
@@ -5044,7 +4940,6 @@ mod tests {
 
             #[test]
             fn populates_instructions() {
-
                 let mut walker = setup(UnaryOperation::Bang, false);
 
                 let expected = vec![
@@ -5064,7 +4959,6 @@ mod tests {
 
             #[test]
             fn populates_instructions() {
-
                 let mut walker = setup(UnaryOperation::BitwiseNot, false);
 
                 let expected = vec![
@@ -5088,8 +4982,6 @@ mod tests {
 
         #[test]
         fn test_visit_var_loads_the_var_and_sets_the_result_for_globals() {
-
-
             let mut context = CompilationContext::default();
             context.scopes.push_new();
 
@@ -5125,7 +5017,6 @@ mod tests {
 
         #[test]
         fn test_visit_var_sets_the_result_for_locals() {
-
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
@@ -5163,7 +5054,6 @@ mod tests {
 
         #[test]
         fn test_closure_positional_arguments() {
-
             let code = indoc! { r##"
                 function maker() {
                     return (: [int i] dump("i", $1); (: i :) :);
@@ -5234,11 +5124,7 @@ mod tests {
             let _ = walker.visit_var_init(&mut node);
         }
 
-        fn setup_literal(
-            type_: LpcType,
-            value: ExpressionNode,
-            walker: &mut CodegenWalker,
-                    ) {
+        fn setup_literal(type_: LpcType, value: ExpressionNode, walker: &mut CodegenWalker) {
             let mut node = VarInitNode {
                 type_,
                 name: ustr("muffins"),
@@ -5256,7 +5142,6 @@ mod tests {
 
         #[test]
         fn test_does_not_copy_mapping_literals() {
-
             let mut walker = setup();
             let pairs = vec![(ExpressionNode::from("foo"), ExpressionNode::from("bar"))];
             setup_literal(
@@ -5280,7 +5165,6 @@ mod tests {
 
         #[test]
         fn test_copies_mapping_vars() {
-
             let mut walker = setup();
             setup_var(LpcType::Mapping(false), &mut walker);
 
@@ -5295,7 +5179,6 @@ mod tests {
 
         #[test]
         fn test_does_not_copy_int_literals() {
-
             let mut walker = setup();
             setup_literal(
                 LpcType::Int(false),
@@ -5311,7 +5194,6 @@ mod tests {
 
         #[test]
         fn test_copies_int_vars() {
-
             let mut walker = setup();
             setup_var(LpcType::Int(false), &mut walker);
 
@@ -5326,7 +5208,6 @@ mod tests {
 
         #[test]
         fn test_does_not_copy_float_literals() {
-
             let mut walker = setup();
             setup_literal(
                 LpcType::Float(false),
@@ -5345,7 +5226,6 @@ mod tests {
 
         #[test]
         fn test_copies_float_vars() {
-
             let mut walker = setup();
             setup_var(LpcType::Float(false), &mut walker);
 
@@ -5360,7 +5240,6 @@ mod tests {
 
         #[test]
         fn test_does_not_copy_string_literals() {
-
             let mut walker = setup();
             setup_literal(
                 LpcType::Int(true),
@@ -5376,7 +5255,6 @@ mod tests {
 
         #[test]
         fn test_copies_string_vars() {
-
             let mut walker = setup();
             setup_var(LpcType::String(false), &mut walker);
 
@@ -5391,7 +5269,6 @@ mod tests {
 
         #[test]
         fn test_does_not_copy_array_literals() {
-
             let mut walker = setup();
             setup_literal(
                 LpcType::Int(true),
@@ -5412,7 +5289,6 @@ mod tests {
 
         #[test]
         fn test_copies_array_vars() {
-
             let mut walker = setup();
             setup_var(LpcType::Int(true), &mut walker);
 
@@ -5427,7 +5303,6 @@ mod tests {
 
         #[test]
         fn copies_calls() {
-
             let mut walker = setup();
 
             let mut node = VarInitNode {
@@ -5465,7 +5340,6 @@ mod tests {
 
         #[test]
         fn sets_up_globals() {
-
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
@@ -5543,7 +5417,6 @@ mod tests {
 
         #[test]
         fn sets_up_upvalues_when_initialized_to_upvalued_var() {
-
             let mut context = CompilationContext::default();
             context.scopes.push_new(); // push a global scope
             context.scopes.push_new(); // push a local scope
@@ -5576,7 +5449,6 @@ mod tests {
 
         #[test]
         fn sets_up_upvalues_when_initialized_to_upvalued_value() {
-
             let mut context = CompilationContext::default();
             context.scopes.push_new(); // push a global scope
             context.scopes.push_new(); // push a local scope
@@ -5607,7 +5479,6 @@ mod tests {
 
         #[test]
         fn test_populates_the_instructions() {
-
             let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
@@ -5654,8 +5525,6 @@ mod tests {
 
         #[test]
         fn sets_num_globals() {
-
-
             let code = r##"
                 int i = 123, j;
                 mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
@@ -5663,15 +5532,12 @@ mod tests {
                 string b;
             "##;
 
-            let program = walk_prog(code)
-                .into_program()
-                .expect("failed to compile");
+            let program = walk_prog(code).into_program().expect("failed to compile");
             assert_eq!(program.num_globals, 5)
         }
 
         #[test]
         fn sets_num_init_registers() {
-
             let code = r##"
                 int i = 123, j;
                 mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
@@ -5679,15 +5545,12 @@ mod tests {
                 string b;
             "##;
 
-            let program = walk_prog(code)
-                .into_program()
-                .expect("failed to compile");
+            let program = walk_prog(code).into_program().expect("failed to compile");
             assert_eq!(program.num_init_registers, 4)
         }
 
         #[test]
         fn reserves_enough_global_registers_when_create_returns_non_void() {
-
             let code = r##"
                 int create() {
                     dump("sup dawg");
@@ -5696,15 +5559,12 @@ mod tests {
                 }
             "##;
 
-            let program = walk_prog(code)
-                .into_program()
-                .expect("failed to compile");
+            let program = walk_prog(code).into_program().expect("failed to compile");
             assert_eq!(program.num_init_registers, 1)
         }
 
         #[test]
         fn sets_strings_on_functions() {
-
             let code = r##"
                 int create() {
                     dump("sup dawg");
@@ -5713,9 +5573,7 @@ mod tests {
                 }
             "##;
 
-            let program = walk_prog(code)
-                .into_program()
-                .expect("failed to compile");
+            let program = walk_prog(code).into_program().expect("failed to compile");
             assert_eq!(program.functions.len(), 1);
             assert_eq!(
                 &program
@@ -5737,7 +5595,6 @@ mod tests {
 
     #[test]
     fn tracks_inherited_globals_for_init() {
-
         let code = r##"
             inherit "/parent";
             int i = 123, j;
@@ -5745,9 +5602,7 @@ mod tests {
             string b;
         "##;
 
-        let program = walk_prog(code)
-            .into_program()
-            .expect("failed to compile");
+        let program = walk_prog(code).into_program().expect("failed to compile");
         let init = program.initializer.unwrap();
 
         assert_eq!(program.num_globals, 9);
@@ -5756,7 +5611,6 @@ mod tests {
 
     #[test]
     fn test_combine_inits() {
-
         let init_prototype = FunctionPrototypeBuilder::default()
             .name(INIT_PROGRAM)
             .filename(LpcPath::InGame("/grandparent.c".into()))

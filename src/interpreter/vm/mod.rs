@@ -2,11 +2,11 @@ use std::{path::Path, sync::Arc};
 
 use bit_set::BitSet;
 use if_chain::if_chain;
-use parking_lot::RwLock;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
+use parking_lot::RwLock;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{instrument, trace};
 use vm_op::VmOp;
@@ -29,11 +29,11 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        task::{Task},
+        task::Task,
         task_context::TaskContext,
     },
     try_extract_value,
-    util::{get_simul_efuns},
+    util::get_simul_efuns,
 };
 
 pub mod vm_op;
@@ -131,7 +131,7 @@ impl Vm {
                     }
                 }
             }
-        };
+        }
 
         Ok(())
     }
@@ -264,8 +264,7 @@ impl Vm {
     pub fn gc(&mut self) -> Result<()> {
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
-        self.mark(&mut marked, &mut processed)
-            .unwrap();
+        self.mark(&mut marked, &mut processed).unwrap();
 
         trace!("Marked {} objects", marked.len());
 
@@ -276,13 +275,10 @@ impl Vm {
     async fn initialize_file(&mut self, filename: &LpcPath) -> Result<TaskContext> {
         debug_assert!(matches!(filename, &LpcPath::InGame(_)));
 
-        let program = self.with_compiler(|compiler| {
-            compiler.compile_in_game_file(filename, None)
-        })?;
+        let program =
+            self.with_compiler(|compiler| compiler.compile_in_game_file(filename, None))?;
 
-        self.create_and_initialize_task(program)
-        .await
-        .map_err(|e| {
+        self.create_and_initialize_task(program).await.map_err(|e| {
             e.emit_diagnostics();
             e
         })
@@ -307,7 +303,7 @@ impl Vm {
     /// ```
     /// use lpc_rs::interpreter::{lpc_ref::LpcRef, vm::Vm};
     /// use lpc_rs_utils::config::Config;
-    ///     ///
+    /// ///
     /// let mut vm = Vm::new(Config::default());
     /// let ctx = vm.initialize_string("int x = 5;", "test.c").unwrap();
     ///
@@ -327,12 +323,10 @@ impl Vm {
 
         let prog = self.with_compiler(|compiler| compiler.compile_string(lpc_path, code))?;
 
-        self.create_and_initialize_task(prog)
-            .await
-            .map_err(|e| {
-                e.emit_diagnostics();
-                e
-            })
+        self.create_and_initialize_task(prog).await.map_err(|e| {
+            e.emit_diagnostics();
+            e
+        })
     }
 
     /// Run a callback with a new, initialized [`Compiler`].
@@ -371,19 +365,11 @@ impl Vm {
 
 impl Mark for Vm {
     #[instrument(skip(self))]
-    fn mark(
-        &self,
-        marked: &mut BitSet,
-        processed: &mut BitSet,
-    ) -> Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
         // TODO: mark all tasks
-        self.object_space
-            .read()
-            .mark(marked, processed)?;
+        self.object_space.read().mark(marked, processed)?;
 
-        self.call_outs
-            .read()
-            .mark(marked, processed)
+        self.call_outs.read().mark(marked, processed)
     }
 }
 

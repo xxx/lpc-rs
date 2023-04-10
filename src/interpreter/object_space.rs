@@ -4,12 +4,10 @@ use bit_set::BitSet;
 use delegate::delegate;
 use educe::Educe;
 use itertools::Itertools;
-use parking_lot::RwLock;
 use lpc_rs_utils::config::Config;
+use parking_lot::RwLock;
 
-use crate::{
-    interpreter::{gc::mark::Mark, process::Process, program::Program},
-};
+use crate::interpreter::{gc::mark::Mark, process::Process, program::Program};
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
 /// and cloned objects. In other words, this is the map that `find_object()`
@@ -154,11 +152,7 @@ impl Default for ObjectSpace {
 
 impl Mark for ObjectSpace {
     #[inline]
-    fn mark(
-        &self,
-        marked: &mut BitSet,
-        processed: &mut BitSet,
-    ) -> lpc_rs_errors::Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
         for process in self.processes.values() {
             process.read().mark(marked, processed)?;
         }
@@ -169,7 +163,7 @@ impl Mark for ObjectSpace {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc};
+    use std::sync::Arc;
 
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;

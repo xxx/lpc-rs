@@ -1,7 +1,11 @@
 pub mod task_id;
 pub mod task_state;
 
-use std::{borrow::Cow, fmt::{Debug, Display}, sync::Arc};
+use std::{
+    borrow::Cow,
+    fmt::{Debug, Display},
+    sync::Arc,
+};
 
 use async_recursion::async_recursion;
 use bit_set::BitSet;
@@ -12,7 +16,6 @@ use hash_hasher::HashBuildHasher;
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use parking_lot::RwLock;
 use lpc_rs_asm::{address::Address, instruction::Instruction};
 use lpc_rs_core::{
     function_receiver::FunctionReceiver,
@@ -23,6 +26,7 @@ use lpc_rs_core::{
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
+use parking_lot::RwLock;
 use string_interner::{DefaultSymbol, Symbol};
 use tokio::sync::mpsc::Sender;
 use tracing::{instrument, trace, warn};
@@ -34,7 +38,7 @@ use crate::{
         call_frame::CallFrame,
         call_outs::CallOuts,
         call_stack::CallStack,
-        efun::{efun_context::EfunContext, EFUN_PROTOTYPES},
+        efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
         lpc_ref::{LpcRef, NULL},
@@ -50,7 +54,6 @@ use crate::{
     },
     try_extract_value,
 };
-use crate::interpreter::efun::call_efun;
 
 // this is just to shut clippy up
 type ProcessFunctionPair = (Arc<RwLock<Process>>, Arc<ProgramFunction>);
@@ -423,12 +426,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.handle_aconst(location)?;
             }
             Instruction::And(r1, r2, r3) => {
-                self.binary_operation(
-                    r1,
-                    r2,
-                    r3,
-                    |x, y| x.bitand(y),
-                )?;
+                self.binary_operation(r1, r2, r3, |x, y| x.bitand(y))?;
             }
             Instruction::BitwiseNot(r1, r2) => {
                 let frame = self.stack.current_frame().unwrap();
@@ -502,8 +500,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 apply_in_location(&mut self.stack, r1, |x| x.dec())?;
             }
             Instruction::EqEq(r1, r2, r3) => {
-                let out =
-                    (get_loc!(self, r1)? == get_loc!(self, r2)?) as LpcInt;
+                let out = (get_loc!(self, r1)? == get_loc!(self, r2)?) as LpcInt;
 
                 set_loc!(self, r3, LpcRef::Int(out))?;
             }
@@ -523,19 +520,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Gte(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y)?;
             }
-            Instruction::IAdd(r1, r2, r3) => {
-                match get_loc!(self, r1)?.add(&*get_loc!(self, r2)?) {
-                    Ok(result) => {
-                        let out = self.context.memory().value_to_ref(result);
+            Instruction::IAdd(r1, r2, r3) => match get_loc!(self, r1)?.add(&*get_loc!(self, r2)?) {
+                Ok(result) => {
+                    let out = self.context.memory().value_to_ref(result);
 
-                        set_loc!(self, r3, out)?;
-                    }
-                    Err(e) => {
-                        let frame = self.stack.current_frame()?;
-                        return Err(e.with_span(frame.current_debug_span()));
-                    }
+                    set_loc!(self, r3, out)?;
                 }
-            }
+                Err(e) => {
+                    let frame = self.stack.current_frame()?;
+                    return Err(e.with_span(frame.current_debug_span()));
+                }
+            },
             Instruction::IConst(r, i) => {
                 set_loc!(self, r, LpcRef::Int(i))?;
             }
@@ -545,61 +540,37 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::IConst1(r) => {
                 set_loc!(self, r, LpcRef::Int(1))?;
             }
-            Instruction::IDiv(r1, r2, r3) => {
-                match get_loc!(self, r1)?.div(&*get_loc!(self, r2)?) {
-                    Ok(result) => set_loc!(
-                        self,
-                        r3,
-                        self.context.memory().value_to_ref(result)
-                    )?,
-                    Err(e) => {
-                        let frame = self.stack.current_frame()?;
-                        return Err(e.with_span(frame.current_debug_span()));
-                    }
+            Instruction::IDiv(r1, r2, r3) => match get_loc!(self, r1)?.div(&*get_loc!(self, r2)?) {
+                Ok(result) => set_loc!(self, r3, self.context.memory().value_to_ref(result))?,
+                Err(e) => {
+                    let frame = self.stack.current_frame()?;
+                    return Err(e.with_span(frame.current_debug_span()));
                 }
-            }
-            Instruction::IMod(r1, r2, r3) => {
-                match get_loc!(self, r1)?.rem(&*get_loc!(self, r2)?) {
-                    Ok(result) => set_loc!(
-                        self,
-                        r3,
-                        self.context.memory().value_to_ref(result)
-                    )?,
-                    Err(e) => {
-                        let frame = self.stack.current_frame()?;
-                        return Err(e.with_span(frame.current_debug_span()));
-                    }
+            },
+            Instruction::IMod(r1, r2, r3) => match get_loc!(self, r1)?.rem(&*get_loc!(self, r2)?) {
+                Ok(result) => set_loc!(self, r3, self.context.memory().value_to_ref(result))?,
+                Err(e) => {
+                    let frame = self.stack.current_frame()?;
+                    return Err(e.with_span(frame.current_debug_span()));
                 }
-            }
-            Instruction::IMul(r1, r2, r3) => {
-                match get_loc!(self, r1)?.mul(&*get_loc!(self, r2)?) {
-                    Ok(result) => set_loc!(
-                        self,
-                        r3,
-                        self.context.memory().value_to_ref(result)
-                    )?,
-                    Err(e) => {
-                        let frame = self.stack.current_frame()?;
-                        return Err(e.with_span(frame.current_debug_span()));
-                    }
+            },
+            Instruction::IMul(r1, r2, r3) => match get_loc!(self, r1)?.mul(&*get_loc!(self, r2)?) {
+                Ok(result) => set_loc!(self, r3, self.context.memory().value_to_ref(result))?,
+                Err(e) => {
+                    let frame = self.stack.current_frame()?;
+                    return Err(e.with_span(frame.current_debug_span()));
                 }
-            }
+            },
             Instruction::Inc(r1) => {
                 apply_in_location(&mut self.stack, r1, |x| x.inc())?;
             }
-            Instruction::ISub(r1, r2, r3) => {
-                match get_loc!(self, r1)?.sub(&*get_loc!(self, r2)?) {
-                    Ok(result) => set_loc!(
-                        self,
-                        r3,
-                        self.context.memory().value_to_ref(result)
-                    )?,
-                    Err(e) => {
-                        let frame = self.stack.current_frame()?;
-                        return Err(e.with_span(frame.current_debug_span()));
-                    }
+            Instruction::ISub(r1, r2, r3) => match get_loc!(self, r1)?.sub(&*get_loc!(self, r2)?) {
+                Ok(result) => set_loc!(self, r3, self.context.memory().value_to_ref(result))?,
+                Err(e) => {
+                    let frame = self.stack.current_frame()?;
+                    return Err(e.with_span(frame.current_debug_span()));
                 }
-            }
+            },
             Instruction::Jmp(address) => {
                 let frame = self.stack.current_frame_mut()?;
                 frame.set_pc(address);
@@ -646,9 +617,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 for chunk in &self.array_items.iter().copied().chunks(2) {
                     let (key, value) = chunk.into_iter().collect_tuple().unwrap();
                     register_map.insert(
-                        get_loc!(self, key)?
-                            .into_owned()
-                            .into_hashed(),
+                        get_loc!(self, key)?.into_owned().into_hashed(),
                         get_loc!(self, value)?.into_owned(),
                     );
                 }
@@ -683,8 +652,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 set_loc!(self, r2, matched)?;
             }
             Instruction::NotEq(r1, r2, r3) => {
-                let out =
-                    (get_loc!(self, r1)? != get_loc!(self, r2)?) as LpcInt;
+                let out = (get_loc!(self, r1)? != get_loc!(self, r2)?) as LpcInt;
 
                 set_loc!(self, r3, LpcRef::Int(out))?;
             }
@@ -701,9 +669,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         let ellipsis_vars = &arg_locations[num_args..];
                         ellipsis_vars
                             .iter()
-                            .map(|x| {
-                                get_location_in_frame(frame, *x).map(|v| v.into_owned())
-                            })
+                            .map(|x| get_location_in_frame(frame, *x).map(|v| v.into_owned()))
                             .collect::<Result<Vec<_>>>()?
                     }
                 };
@@ -899,12 +865,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.binary_operation(r1, r2, r3, |x, y| x.shr(y))?;
             }
             Instruction::Xor(r1, r2, r3) => {
-                self.binary_operation(
-                    r1,
-                    r2,
-                    r3,
-                    |x, y| x.bitxor(y),
-                )?;
+                self.binary_operation(r1, r2, r3, |x, y| x.bitxor(y))?;
             }
         }
 
@@ -913,10 +874,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
-    fn handle_aconst(
-        &mut self,
-        location: RegisterVariant,
-    ) -> Result<()> {
+    fn handle_aconst(&mut self, location: RegisterVariant) -> Result<()> {
         let items = &self.array_items;
         let vars = items
             .iter()
@@ -1026,10 +984,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
-    async fn handle_call_fp(
-        &mut self,
-        location: RegisterVariant,
-    ) -> Result<()> {
+    async fn handle_call_fp(&mut self, location: RegisterVariant) -> Result<()> {
         let num_args = self.args.len();
         let func = {
             let lpc_ref = &*get_loc!(self, location)?;
@@ -1037,10 +992,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             if let LpcRef::Function(func) = lpc_ref {
                 func.clone() // this is a cheap clone
             } else {
-                return Err(self.runtime_error(format!(
-                    "callfp instruction on non-function: {}",
-                    lpc_ref
-                )));
+                return Err(
+                    self.runtime_error(format!("callfp instruction on non-function: {}", lpc_ref))
+                );
             }
         };
 
@@ -1113,12 +1067,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 &prototype.name,
             )?;
 
-            trace!(
-                "Copying argument {} ({}) to {}",
-                i,
-                r,
-                loc
-            );
+            trace!("Copying argument {} ({}) to {}", i, r, loc);
 
             new_frame.arg_locations.push(loc);
             new_frame.set_location(loc, r);
@@ -1269,10 +1218,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
-    async fn prepare_and_call_efun<S>(
-        &mut self,
-        name: S,
-    ) -> Result<()>
+    async fn prepare_and_call_efun<S>(&mut self, name: S) -> Result<()>
     where
         S: AsRef<str>,
     {
@@ -1313,10 +1259,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let pool_ref = if let LpcRef::String(r) = name_ref {
                 r
             } else {
-                let str = format!(
-                    "Invalid name passed to `call_other`: {}",
-                    name_ref
-                );
+                let str = format!("Invalid name passed to `call_other`: {}", name_ref);
                 return Err(self.runtime_error(str));
             };
 
@@ -1326,10 +1269,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 try_extract_value!(*borrowed, LpcValue::String).clone()
             };
 
-            trace!(
-                "Calling call_other: {}->{function_name}",
-                receiver_ref
-            );
+            trace!("Calling call_other: {}->{function_name}", receiver_ref);
 
             // An inner helper function to actually calculate the result, for easy re-use
             // when using `call_other` with arrays and mappings.
@@ -1341,7 +1281,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 task_context: &TaskContext,
             ) -> Result<LpcRef>
             where
-                T: AsRef<str> + Send
+                T: AsRef<str> + Send,
             {
                 let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
                     receiver_ref,
@@ -1408,20 +1348,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let fname = Arc::new(function_name.clone());
                     let args = Arc::new(args);
 
-                    let futures = array
-                        .iter()
-                        .cloned()
-                        .map(|lpc_ref| {
-                            let fname = fname.clone();
-                            let args = args.clone();
-                            let ctx = &self.context;
+                    let futures = array.iter().cloned().map(|lpc_ref| {
+                        let fname = fname.clone();
+                        let args = args.clone();
+                        let ctx = &self.context;
 
-                            async move {
-                                resolve_result(&lpc_ref, fname.as_ref(), args.as_ref(), ctx)
-                                    .await
-                                    .unwrap_or(NULL)
-                            }
-                        });
+                        async move {
+                            resolve_result(&lpc_ref, fname.as_ref(), args.as_ref(), ctx)
+                                .await
+                                .unwrap_or(NULL)
+                        }
+                    });
 
                     let array_value = join_all(futures).await.into();
                     self.context.memory().value_to_ref(array_value)
@@ -1436,27 +1373,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let function_name = Arc::new(function_name.clone());
                     let args = Arc::new(args);
 
-                    let futures = map
-                        .iter()
-                        .map(|(key_ref, value_ref)| {
-                            let function_name = function_name.clone();
-                            let args = args.clone();
-                            let ctx = &self.context;
+                    let futures = map.iter().map(|(key_ref, value_ref)| {
+                        let function_name = function_name.clone();
+                        let args = args.clone();
+                        let ctx = &self.context;
 
-                            async move {
-                                (
-                                    key_ref.clone(),
-                                    resolve_result(
-                                        value_ref,
-                                        &*function_name,
-                                        &args,
-                                        ctx,
-                                    )
-                                        .await
-                                        .unwrap_or(NULL),
-                                )
-                            }
-                        });
+                        async move {
+                            (
+                                key_ref.clone(),
+                                resolve_result(value_ref, &*function_name, &args, ctx)
+                                    .await
+                                    .unwrap_or(NULL),
+                            )
+                        }
+                    });
 
                     let with_results = join_all(futures)
                         .await
@@ -1710,10 +1640,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 Ok(())
             }
-            x => Err(self.runtime_error(format!(
-                "Invalid attempt to take index of `{}`",
-                x
-            ))),
+            x => Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x))),
         }
     }
 
@@ -1737,10 +1664,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let index = match lpc_ref {
                         LpcRef::Int(i) => *i,
                         _ => {
-                            return Err(self.runtime_error(format!(
-                                "Invalid index type: {}",
-                                lpc_ref
-                            )))
+                            return Err(
+                                self.runtime_error(format!("Invalid index type: {}", lpc_ref))
+                            )
                         }
                     };
 
@@ -1751,10 +1677,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 }
                 x => {
-                    return Err(self.runtime_error(format!(
-                        "Invalid attempt to take index of `{}`",
-                        x
-                    )))
+                    return Err(
+                        self.runtime_error(format!("Invalid attempt to take index of `{}`", x))
+                    )
                 }
             }
         };
@@ -1764,11 +1689,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
-    fn handle_sconst(
-        &mut self,
-        location: RegisterVariant,
-        index: usize,
-    ) -> Result<()> {
+    fn handle_sconst(&mut self, location: RegisterVariant, index: usize) -> Result<()> {
         let function_strings = self.stack.current_frame()?.function.strings.get();
         const MSG: &str = "the `strings` reference was never assigned to the function.";
         debug_assert!(function_strings.is_some(), "{}", MSG); // This is very bad if it happens.
@@ -1842,10 +1763,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 Ok(())
             }
-            x => Err(self.runtime_error(format!(
-                "Invalid attempt to take index of `{}`",
-                x
-            ))),
+            x => Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x))),
         }
     }
 
@@ -1856,7 +1774,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         context: &TaskContext,
     ) -> Option<Arc<RwLock<Process>>>
     where
-        T: AsRef<str>
+        T: AsRef<str>,
     {
         let process = match receiver_ref {
             LpcRef::String(s) => {
@@ -2042,11 +1960,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 }
 
 impl<const STACKSIZE: usize> Mark for Task<STACKSIZE> {
-    fn mark(
-        &self,
-        marked: &mut BitSet,
-        processed: &mut BitSet,
-    ) -> Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
         self.stack.mark(marked, processed)
     }
 }
@@ -2061,7 +1975,6 @@ mod tests {
 
     use indoc::indoc;
     use lpc_rs_core::{LpcFloat, LpcInt};
-    
     use tokio::sync::mpsc;
 
     use super::*;
@@ -2132,10 +2045,7 @@ mod tests {
                 LpcRef::Array(x) => {
                     let xb = x.read();
                     let a = extract_value!(&*xb, LpcValue::Array);
-                    let array = a
-                        .iter()
-                        .map(BareVal::from_lpc_ref)
-                        .collect::<Vec<_>>();
+                    let array = a.iter().map(BareVal::from_lpc_ref).collect::<Vec<_>>();
                     BareVal::Array(array)
                 }
                 LpcRef::Mapping(x) => {
@@ -2143,12 +2053,7 @@ mod tests {
                     let m = extract_value!(&*xb, LpcValue::Mapping);
                     let mapping = m
                         .iter()
-                        .map(|(k, v)| {
-                            (
-                                BareVal::from_lpc_ref(&k.value),
-                                BareVal::from_lpc_ref(v),
-                            )
-                        })
+                        .map(|(k, v)| (BareVal::from_lpc_ref(&k.value), BareVal::from_lpc_ref(v)))
                         .collect::<HashMap<_, _>>();
                     BareVal::Mapping(mapping)
                 }
@@ -2392,16 +2297,14 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let ctx = task.context;
 
                 let proc = ctx.process();
                 let borrowed = proc.read();
                 let values = borrowed.global_variable_values();
-                String("my public_function".into())
-                    .assert_equal(values.get("mine").unwrap());
-                String("/std/object public".into())
-                    .assert_equal(values.get("parents").unwrap());
+                String("my public_function".into()).assert_equal(values.get("mine").unwrap());
+                String("/std/object public".into()).assert_equal(values.get("parents").unwrap());
             }
 
             #[tokio::test]
@@ -2416,19 +2319,14 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let ctx = task.context;
 
                 let proc = ctx.process();
                 let borrowed = proc.read();
                 let values = borrowed.global_variable_values();
-                assert!(
-                    String("file_name_override".into())
-                        == (*values.get("this_one").unwrap())
-                );
-                assert!(
-                    String("/std/object#0".into()) == (*values.get("efun_one").unwrap())
-                );
+                assert!(String("file_name_override".into()) == (*values.get("this_one").unwrap()));
+                assert!(String("/std/object#0".into()) == (*values.get("efun_one").unwrap()));
             }
 
             #[tokio::test]
@@ -2438,7 +2336,7 @@ mod tests {
                     string this_one = simul_efun("marf");
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let ctx = task.context;
 
                 let proc = ctx.process();
@@ -2599,7 +2497,8 @@ mod tests {
             }
 
             #[tokio::test]
-            async fn stores_the_value_for_partial_applications_with_default_arguments_and_ellipsis() {
+            async fn stores_the_value_for_partial_applications_with_default_arguments_and_ellipsis()
+            {
                 let code = indoc! { r##"
                     function q = &tacos(, "adding some!", , 666, 123);
                     int a = q(42, 4, "should be in argv");
@@ -2611,7 +2510,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -2713,7 +2612,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(4), Function("tacos".into(), vec![]), Int(4), Int(4)];
@@ -2749,7 +2648,8 @@ mod tests {
                     vm_upvalues.clone(),
                     call_outs.clone(),
                     tx.clone(),
-                ).await;
+                )
+                .await;
 
                 assert_eq!(
                     result.unwrap_err().to_string(),
@@ -2779,7 +2679,8 @@ mod tests {
                     vm_upvalues.clone(),
                     call_outs.clone(),
                     tx.clone(),
-                ).await;
+                )
+                .await;
 
                 assert_eq!(
                     result.unwrap_err().to_string(),
@@ -2809,7 +2710,8 @@ mod tests {
                     vm_upvalues,
                     call_outs,
                     tx,
-                ).await;
+                )
+                .await;
 
                 assert_ok!(result);
             }
@@ -3068,7 +2970,7 @@ mod tests {
                     float π = 4.13;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Float(4.13.into())];
@@ -3163,7 +3065,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3190,7 +3092,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3213,7 +3115,7 @@ mod tests {
                     mixed s = 1200 > 1200;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3244,7 +3146,7 @@ mod tests {
                     mixed s = 1200 >= 1200;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3275,7 +3177,7 @@ mod tests {
                     int s = q + r;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3299,7 +3201,7 @@ mod tests {
                     mixed q = 666;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(666)];
@@ -3317,7 +3219,7 @@ mod tests {
                     mixed q = 0;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(0)];
@@ -3335,7 +3237,7 @@ mod tests {
                     mixed q = 1;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(1)];
@@ -3355,7 +3257,7 @@ mod tests {
                     mixed s = q / r;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3377,7 +3279,7 @@ mod tests {
                     mixed s = q / r;
                 "##};
 
-                                let (program, _, _) = compile_prog(code);
+                let (program, _, _) = compile_prog(code);
                 let (tx, _rx) = mpsc::channel(128);
                 let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
@@ -3389,7 +3291,8 @@ mod tests {
                     Arc::new(RwLock::new(GcBank::default())),
                     call_outs,
                     tx,
-                ).await;
+                )
+                .await;
 
                 assert_eq!(
                     r.unwrap_err().to_string(),
@@ -3409,7 +3312,7 @@ mod tests {
                     mixed s = q % r;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3431,7 +3334,7 @@ mod tests {
                     mixed s = q % r;
                 "##};
 
-                                let vm_upvalues = RwLock::new(GcBank::default());
+                let vm_upvalues = RwLock::new(GcBank::default());
                 let (program, _, _) = compile_prog(code);
                 let (tx, _rx) = mpsc::channel(128);
                 let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
@@ -3444,7 +3347,8 @@ mod tests {
                     Arc::new(vm_upvalues),
                     call_outs,
                     tx,
-                ).await;
+                )
+                .await;
 
                 assert_eq!(
                     r.unwrap_err().to_string(),
@@ -3464,7 +3368,7 @@ mod tests {
                     int s = q * r;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(32), Int(-48), Int(-1536)];
@@ -3501,7 +3405,7 @@ mod tests {
                     int k = ++j;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let ctx = task.context;
 
                 let expected = vec![Int(1), Int(1)];
@@ -3546,7 +3450,7 @@ mod tests {
                     int k = j++;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let ctx = task.context;
 
                 let expected = vec![Int(6), Int(5)];
@@ -3572,7 +3476,7 @@ mod tests {
                     int s = q - r;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(14), Int(16), Int(-2)];
@@ -3665,7 +3569,7 @@ mod tests {
                             int j = i > 12 ? 10 : 1000;
                         "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3692,7 +3596,7 @@ mod tests {
                     int j = i[1];
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3720,7 +3624,7 @@ mod tests {
                     mixed s = 1200 < 1200;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3751,7 +3655,7 @@ mod tests {
                     mixed s = 1200 <= 1200;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3783,7 +3687,7 @@ mod tests {
                     ]);
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let mut hashmap = HashMap::new();
@@ -3814,7 +3718,7 @@ mod tests {
                     mixed c = a + b;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3839,7 +3743,7 @@ mod tests {
                     mixed c = a * b;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3863,7 +3767,7 @@ mod tests {
                     mixed b = a - ({ 1 });
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3896,7 +3800,7 @@ mod tests {
                     string f = !"asdf";
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -3930,7 +3834,7 @@ mod tests {
                     mixed b = 0 | a;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(31), Int(0), Int(31)];
@@ -3950,7 +3854,7 @@ mod tests {
                     mixed c = b || a;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(123), Int(123), Int(0), Int(0), Int(123)];
@@ -4018,7 +3922,7 @@ mod tests {
                     }
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let ctx = task.context;
                 Array(vec![]).assert_equal(ctx.result().unwrap());
             }
@@ -4074,7 +3978,7 @@ mod tests {
                     mixed a = ({ 1, 2, 3 })[1..];
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -4102,7 +4006,7 @@ mod tests {
                     mixed b = a;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(4)];
@@ -4120,7 +4024,7 @@ mod tests {
                     int create() { return 666; }
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -4142,7 +4046,7 @@ mod tests {
                     mixed b = 0 << a;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(790080), Int(0), Int(0)];
@@ -4161,7 +4065,7 @@ mod tests {
                     mixed b = 0 >> a;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(192), Int(0), Int(0)];
@@ -4188,7 +4092,7 @@ mod tests {
                     int a = sizeof(({ 1, 2, 3 }));
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![
@@ -4209,7 +4113,7 @@ mod tests {
                     int a = sizeof(([ "a": 1, 'b': 2, 3: ({ 4, 5, 6 }), 0: 0 ]));
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let mut mapping = HashMap::new();
@@ -4275,7 +4179,7 @@ mod tests {
                     ..Default::default()
                 };
 
-                                let vm_upvalues = RwLock::new(GcBank::default());
+                let vm_upvalues = RwLock::new(GcBank::default());
                 let object_space = ObjectSpace::default();
                 let (tx, _rx) = mpsc::channel(128);
                 let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
@@ -4341,7 +4245,7 @@ mod tests {
                     string foo = "lolwut";
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), String("lolwut".into())];
@@ -4360,7 +4264,7 @@ mod tests {
                     mixed b = 0 ^ a;
                 "##};
 
-                                let task = run_prog(code).await;
+                let task = run_prog(code).await;
                 let registers = task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), Int(20), Int(0), Int(20)];
@@ -4383,7 +4287,7 @@ mod tests {
                 }
             "##};
 
-                        let vm_upvalues = RwLock::new(GcBank::default());
+            let vm_upvalues = RwLock::new(GcBank::default());
             let (program, _, _) = compile_prog(code);
             let (tx, _rx) = mpsc::channel(128);
             let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
@@ -4396,7 +4300,8 @@ mod tests {
                 vm_upvalues,
                 call_outs,
                 tx,
-            ).await;
+            )
+            .await;
 
             assert_eq!(r.unwrap_err().to_string(), "stack overflow");
         }
@@ -4448,7 +4353,7 @@ mod tests {
                 int k = inc();
             "##};
 
-                        let task = run_prog(code).await;
+            let task = run_prog(code).await;
             let registers = task.popped_frame.unwrap().registers;
 
             let expected = vec![
@@ -4482,7 +4387,7 @@ mod tests {
         where
             T: Into<BareVal> + Clone,
         {
-                        let mut task = run_prog(code).await;
+            let mut task = run_prog(code).await;
 
             let snapshot = &mut task.snapshots.pop().unwrap();
             snapshot.pop(); // pop off the init frame
@@ -4498,14 +4403,9 @@ mod tests {
                     .filter(|v| &v.name == k)
                     .collect::<Vec<_>>();
                 assert!(
-                    found
-                        .iter()
-                        .any(|local| v.equal_to_lpc_ref(&local.value)),
+                    found.iter().any(|local| v.equal_to_lpc_ref(&local.value)),
                     "key: {k}, value: {v}, found: {:?}",
-                    found
-                        .iter()
-                        .map(|v| &v.value)
-                        .collect::<Vec<_>>()
+                    found.iter().map(|v| &v.value).collect::<Vec<_>>()
                 );
                 // assert_eq!(&v, frame_vars.get(*k).unwrap(), "key: {}", k);
             }
@@ -4515,7 +4415,7 @@ mod tests {
         where
             T: Into<BareVal> + Clone,
         {
-                        let mut task = run_prog(code).await;
+            let mut task = run_prog(code).await;
 
             let snapshot = &mut task.snapshots.pop().unwrap();
             snapshot.pop(); // pop off the init frame
@@ -4544,7 +4444,7 @@ mod tests {
         where
             T: Into<Register> + Copy,
         {
-                        let mut task = run_prog(code).await;
+            let mut task = run_prog(code).await;
 
             let snapshot = &mut task.snapshots.pop().unwrap();
             snapshot.pop(); // pop off the init frame
@@ -4847,10 +4747,7 @@ mod tests {
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
             task.mark(&mut marked, &mut processed).unwrap();
-            ctx.upvalues()
-                .write()
-                .keyless_sweep(&marked)
-                .unwrap();
+            ctx.upvalues().write().keyless_sweep(&marked).unwrap();
 
             assert!(ctx.upvalues().read().is_empty());
         }

@@ -35,10 +35,7 @@ impl DoWhileNode {
 }
 
 impl AstNodeTrait for DoWhileNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_do_while(self)
     }
 }

@@ -7,20 +7,18 @@ use std::{
 use bit_set::BitSet;
 use derive_builder::Builder;
 use educe::Educe;
-use parking_lot::RwLock;
 use lpc_rs_asm::{address::Address, instruction::Instruction};
 use lpc_rs_core::register::{Register, RegisterVariant};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
+use parking_lot::RwLock;
 use tracing::{instrument, trace};
 
-use crate::{
-    interpreter::{
-        bank::RefBank,
-        gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
-        lpc_ref::{LpcRef, NULL},
-        process::Process,
-    },
+use crate::interpreter::{
+    bank::RefBank,
+    gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
+    lpc_ref::{LpcRef, NULL},
+    process::Process,
 };
 
 /// A representation of a local variable name and value.
@@ -101,7 +99,7 @@ impl CallFrame {
         called_with_num_args: usize,
         upvalue_ptrs: Option<&Vec<Register>>,
         vm_upvalues: Arc<RwLock<GcRefBank>>,
-            ) -> Self
+    ) -> Self
     where
         P: Into<Arc<RwLock<Process>>>,
     {
@@ -149,7 +147,7 @@ impl CallFrame {
         arg_capacity: usize,
         upvalue_ptrs: Option<&Vec<Register>>,
         vm_upvalues: Arc<RwLock<GcRefBank>>,
-            ) -> Self
+    ) -> Self
     where
         P: Into<Arc<RwLock<Process>>>,
     {
@@ -193,11 +191,7 @@ impl CallFrame {
 
     /// Assign an [`LpcRef`] to a specific location, based on the [`RegisterVariant`]
     #[inline]
-    pub fn set_location(
-        &mut self,
-        location: RegisterVariant,
-        lpc_ref: LpcRef,
-            ) {
+    pub fn set_location(&mut self, location: RegisterVariant, lpc_ref: LpcRef) {
         match location {
             RegisterVariant::Local(reg) => {
                 self.registers[reg] = lpc_ref;
@@ -316,11 +310,7 @@ impl CallFrame {
 
 impl Mark for CallFrame {
     #[instrument(skip(self))]
-    fn mark(
-        &self,
-        marked: &mut BitSet,
-        processed: &mut BitSet,
-    ) -> Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
         trace!("marking call frame {}", self.unique_id);
         if !processed.insert(*self.unique_id.as_ref()) {
             return Ok(());
@@ -359,7 +349,6 @@ mod tests {
 
     #[test]
     fn new_sets_up_registers() {
-
         let process = Process::default();
 
         let prototype = FunctionPrototypeBuilder::default()
@@ -390,7 +379,6 @@ mod tests {
 
         #[test]
         fn sets_up_registers_if_greater_max_is_passed() {
-
             let process = Process::default();
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -419,7 +407,6 @@ mod tests {
 
         #[test]
         fn sets_up_registers_if_lesser_max_is_passed() {
-
             let process = Process::default();
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -453,7 +440,6 @@ mod tests {
 
         #[test]
         fn populates_upvalues() {
-
             let process = Process::default();
 
             let prototype = FunctionPrototypeBuilder::default()
@@ -512,13 +498,7 @@ mod tests {
             pf.local_variables.extend([a, b, c]);
             pf.num_upvalues = 3;
 
-            let frame = CallFrame::new(
-                frame.process,
-                Arc::new(pf),
-                0,
-                None,
-                vm_upvalues,
-            );
+            let frame = CallFrame::new(frame.process, Arc::new(pf), 0, None, vm_upvalues);
             assert_eq!(
                 frame.upvalue_ptrs,
                 vec![Register(2), Register(3), Register(4)]
@@ -532,7 +512,6 @@ mod tests {
 
         #[test]
         fn test_mark() {
-
             let process = Process::default();
 
             let prototype = FunctionPrototypeBuilder::default()

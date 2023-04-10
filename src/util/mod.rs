@@ -1,11 +1,14 @@
-use std::{sync::Arc};
-use parking_lot::RwLock;
+use std::sync::Arc;
 
 use lpc_rs_utils::config::Config;
+use parking_lot::RwLock;
 
 use crate::interpreter::{object_space::ObjectSpace, process::Process};
 
-pub fn get_simul_efuns(config: &Config, object_space: &ObjectSpace) -> Option<Arc<RwLock<Process>>> {
+pub fn get_simul_efuns(
+    config: &Config,
+    object_space: &ObjectSpace,
+) -> Option<Arc<RwLock<Process>>> {
     config.simul_efun_file.as_deref().and_then(|f| {
         let file = f.strip_suffix(".c").unwrap_or(f);
         object_space.lookup(file).cloned()

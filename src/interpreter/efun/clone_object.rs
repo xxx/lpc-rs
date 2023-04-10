@@ -1,8 +1,8 @@
 use std::sync::Arc;
-use parking_lot::RwLock;
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result};
+use parking_lot::RwLock;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -17,12 +17,8 @@ use crate::{
 async fn load_master<const N: usize>(
     context: &mut EfunContext<'_, N>,
     path: &str,
-    ) -> Result<Arc<RwLock<Process>>> {
-    let full_path = LpcPath::new_in_game(
-        path,
-        context.in_game_cwd(),
-        &*context.config().lib_dir,
-    );
+) -> Result<Arc<RwLock<Process>>> {
+    let full_path = LpcPath::new_in_game(path, context.in_game_cwd(), &*context.config().lib_dir);
     let path_str: &str = full_path.as_ref();
 
     match context.lookup_process(path_str) {
@@ -32,8 +28,7 @@ async fn load_master<const N: usize>(
                 .config(context.config())
                 .build()?;
 
-            match compiler.compile_in_game_file(&full_path, context.current_debug_span())
-            {
+            match compiler.compile_in_game_file(&full_path, context.current_debug_span()) {
                 Ok(prog) => {
                     let Some(prog_function) = prog.initializer.clone() else {
                         return Err(LpcError::new("Init function not found on master?"));
@@ -58,9 +53,7 @@ async fn load_master<const N: usize>(
 }
 
 /// `clone_object`, the efun for creating new object instances.
-pub async fn clone_object<const N: usize>(
-    context: &mut EfunContext<'_, N>,
-    ) -> Result<()> {
+pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg = context.resolve_local_register(1_usize);
 
     if let LpcRef::String(s) = arg {
@@ -121,11 +114,10 @@ mod tests {
         assert_regex,
         interpreter::{
             call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
-            program::Program, task_context::TaskContext,
+            program::Program, task_context::TaskContext, vm::vm_op::VmOp,
         },
         test_support::compile_prog,
     };
-    use crate::interpreter::vm::vm_op::VmOp;
 
     fn task_context_fixture(
         program: Program,
@@ -158,12 +150,12 @@ mod tests {
         let context = task_context_fixture(program, config, tx);
 
         let mut task = Task::<10>::new(context.clone());
-        task.eval(func.clone(), &[]).await
+        task.eval(func.clone(), &[])
+            .await
             .expect("first task failed");
 
         let mut task = Task::<10>::new(context);
-        task.eval(func, &[]).await
-            .expect("second task failed");
+        task.eval(func, &[]).await.expect("second task failed");
 
         // procs are /example, /example#0, /example#1
         assert_eq!(task.context.object_space().read().len(), 3);

@@ -128,7 +128,7 @@ impl<'a> Program {
     ///     compilation_context::CompilationContext,
     ///     Compiler,
     /// };
-    ///     ///
+    /// ///
     /// let code = r#"
     ///     void foo() {
     ///         dump("sup?");
@@ -181,7 +181,6 @@ mod tests {
 
     #[test]
     fn test_serialization_and_deserialization() {
-
         let content = r#"
             int *foo = ({ 1, 2, 3, 4, 234 });
             void create() {
@@ -190,9 +189,7 @@ mod tests {
             }
         "#;
         let compiler = Compiler::default();
-        let prog = compiler
-            .compile_string("foo.c", content)
-            .unwrap();
+        let prog = compiler.compile_string("foo.c", content).unwrap();
 
         let msgpack = prog.to_msgpack();
 

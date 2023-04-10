@@ -36,10 +36,7 @@ impl SpannedNode for ReturnNode {
 }
 
 impl AstNodeTrait for ReturnNode {
-    fn visit(
-        &mut self,
-        tree_walker: &mut impl TreeWalker,
-            ) -> Result<()> {
+    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
         tree_walker.visit_return(self)
     }
 }

@@ -50,10 +50,7 @@ impl TreeWalker for DefaultParamsWalker {
         Ok(())
     }
 
-    fn visit_function_def(
-        &mut self,
-        node: &mut FunctionDefNode,
-            ) -> Result<()> {
+    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         self.insert_params(&*node.name, &node.parameters);
 
         Ok(())
@@ -74,7 +71,6 @@ mod tests {
 
     #[test]
     fn test_visit_closure_populates_the_functions() {
-
         let context = CompilationContext::default();
         let mut walker = DefaultParamsWalker::new(context);
 
@@ -111,7 +107,6 @@ mod tests {
 
     #[test]
     fn test_visit_function_def_populates_the_functions() {
-
         let context = CompilationContext::default();
         let mut walker = DefaultParamsWalker::new(context);
 
