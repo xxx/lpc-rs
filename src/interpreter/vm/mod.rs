@@ -10,6 +10,7 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{instrument, trace};
 use vm_op::VmOp;
+use tokio::signal;
 
 use crate::{
     compile_time_config::{MAX_CALL_STACK_SIZE, VM_CHANNEL_CAPACITY},
@@ -115,6 +116,11 @@ impl Vm {
     pub async fn run(&mut self) -> Result<()> {
         loop {
             tokio::select! {
+                _ = signal::ctrl_c() => {
+                    // SIGINT on Linux
+                    println!("Ctrl-C received, shutting down");
+                    break;
+                }
                 Some(op) = self.rx.recv() => {
                     match op {
                         VmOp::PrioritizeCallOut(idx) => {
