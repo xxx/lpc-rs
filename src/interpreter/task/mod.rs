@@ -87,10 +87,10 @@ pub fn get_location<const N: usize>(
 /// Resolve any type RegisterVariant into an LpcRef, for the passed frame
 #[instrument(skip(frame))]
 #[inline]
-pub fn get_location_in_frame<'a>(
-    frame: &'a CallFrame,
+pub fn get_location_in_frame(
+    frame: &CallFrame,
     location: RegisterVariant,
-) -> Result<Cow<'a, LpcRef>> {
+) -> Result<Cow<LpcRef>> {
     match location {
         RegisterVariant::Local(reg) => {
             let registers = &frame.registers;
@@ -2327,8 +2327,8 @@ mod tests {
                 let proc = ctx.process();
                 let borrowed = proc.read();
                 let values = borrowed.global_variable_values();
-                assert!(String("file_name_override".into()) == (*values.get("this_one").unwrap()));
-                assert!(String("/std/object#0".into()) == (*values.get("efun_one").unwrap()));
+                assert_eq!(String("file_name_override".into()), *values.get("this_one").unwrap());
+                assert_eq!(String("/std/object#0".into()), *values.get("efun_one").unwrap());
             }
 
             #[tokio::test]
