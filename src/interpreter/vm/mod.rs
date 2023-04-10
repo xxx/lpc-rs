@@ -118,6 +118,7 @@ impl Vm {
     pub async fn run(&mut self) -> Result<()> {
         loop {
             tokio::select! {
+                biased; // we want signal handlers checked first, always.
                 _ = signal::ctrl_c() => {
                     // SIGINT on Linux
                     println!("Ctrl-C received, shutting down");
