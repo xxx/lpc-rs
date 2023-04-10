@@ -153,7 +153,7 @@ mod tests {
     }
 
     mod test_visit_inherit {
-        use claim::assert_ok;
+        use claims::assert_ok;
         use ustr::ustr;
 
         use super::*;

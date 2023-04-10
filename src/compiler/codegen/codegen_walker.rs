@@ -2344,7 +2344,7 @@ impl Default for CodegenWalker {
 mod tests {
     use std::{collections::VecDeque, rc::Rc, sync::Arc};
 
-    use claim::assert_some;
+    use claims::assert_some;
     use factori::create;
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloat};

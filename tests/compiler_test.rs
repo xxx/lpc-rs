@@ -2,7 +2,7 @@ mod support;
 
 use std::sync::Arc;
 
-use claim::assert_err;
+use claims::assert_err;
 use if_chain::if_chain;
 use indoc::indoc;
 use lpc_rs::{

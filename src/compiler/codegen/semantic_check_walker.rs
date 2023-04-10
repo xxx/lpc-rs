@@ -747,7 +747,7 @@ mod tests {
         sync::Arc,
     };
 
-    use claim::*;
+    use claims::*;
     use factori::create;
     use indoc::indoc;
     use lpc_rs_core::{

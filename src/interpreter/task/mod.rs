@@ -2393,7 +2393,7 @@ mod tests {
         }
 
         mod test_call_fp {
-            use claim::assert_ok;
+            use claims::assert_ok;
             use tokio::sync::mpsc;
 
             use super::*;

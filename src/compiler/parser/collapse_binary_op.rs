@@ -328,7 +328,7 @@ fn non_collapse(
 
 #[cfg(test)]
 mod tests {
-    use claim::*;
+    use claims::*;
 
     use super::*;
 

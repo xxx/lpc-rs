@@ -1,4 +1,4 @@
-use claim::assert_ok;
+use claims::assert_ok;
 use if_chain::if_chain;
 use indoc::indoc;
 use lpc_rs::{

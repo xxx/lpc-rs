@@ -586,7 +586,7 @@ impl Eq for HashedLpcRef {}
 
 #[cfg(test)]
 mod tests {
-    use claim::assert_err;
+    use claims::assert_err;
     use factori::create;
     use shared_arena::SharedArena;
 

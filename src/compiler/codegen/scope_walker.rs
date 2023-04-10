@@ -417,7 +417,7 @@ impl Default for ScopeWalker {
 
 #[cfg(test)]
 mod tests {
-    use claim::assert_ok;
+    use claims::assert_ok;
     use factori::create;
     use ustr::ustr;
 

@@ -57,7 +57,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use claim::*;
+    use claims::*;
 
     use super::*;
 

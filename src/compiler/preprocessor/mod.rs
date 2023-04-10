@@ -1275,7 +1275,7 @@ mod tests {
     }
 
     mod test_defines {
-        use claim::assert_matches;
+        use claims::assert_matches;
 
         use super::*;
 
