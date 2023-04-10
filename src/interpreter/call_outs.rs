@@ -4,6 +4,7 @@ use bit_set::BitSet;
 use chrono::{DateTime, Duration, Utc};
 use delegate::delegate;
 use educe::Educe;
+use if_chain::if_chain;
 use lpc_rs_errors::Result;
 use parking_lot::RwLock;
 use stable_vec::StableVec;
@@ -17,6 +18,7 @@ use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, process::Process, vm::
 pub struct CallOut {
     /// The process where `call_out` was called from.
     #[educe(Debug(ignore))]
+    // TODO: make this Weak, and drop the call out if it's gone.
     process: Arc<RwLock<Process>>,
 
     /// The reference to the function that will be run.
@@ -138,43 +140,47 @@ impl CallOuts {
         let index = self.queue.next_push_index();
         let tx = self.tx.clone();
 
-        if repeat.is_none() || repeat.unwrap().is_zero() {
-            let handle = tokio::spawn(async move {
-                tokio::time::sleep(delay.to_std().unwrap()).await;
-                let _ = tx.send(VmOp::PrioritizeCallOut(index)).await;
-            });
+        if_chain! {
+            if let Some(repeat) = repeat;
+            if !repeat.is_zero();
+            then {
+                let start = if delay.num_milliseconds() <= 0 {
+                    Instant::now()
+                } else {
+                    Instant::now() + delay.to_std().unwrap()
+                };
 
-            self.queue.push(CallOut {
-                process,
-                func_ref,
-                repeat_duration: None,
-                next_run: Utc::now() + delay,
-                _handle: handle,
-            });
-        } else {
-            let start = if delay.num_milliseconds() <= 0 {
-                Instant::now()
+                let handle = tokio::spawn(async move {
+                    let mut i = tokio::time::interval_at(start, repeat.to_std().unwrap());
+
+                    loop {
+                        i.tick().await;
+                        let _ = tx.send(VmOp::PrioritizeCallOut(index)).await;
+                    }
+                });
+
+                self.queue.push(CallOut {
+                    process,
+                    func_ref,
+                    repeat_duration: Some(repeat),
+                    next_run: Utc::now() + delay,
+                    _handle: handle,
+                });
             } else {
-                Instant::now() + delay.to_std().unwrap()
-            };
-
-            let handle = tokio::spawn(async move {
-                let mut i = tokio::time::interval_at(start, repeat.unwrap().to_std().unwrap());
-
-                loop {
-                    i.tick().await;
+                let handle = tokio::spawn(async move {
+                    tokio::time::sleep(delay.to_std().unwrap()).await;
                     let _ = tx.send(VmOp::PrioritizeCallOut(index)).await;
-                }
-            });
+                });
 
-            self.queue.push(CallOut {
-                process,
-                func_ref,
-                repeat_duration: repeat,
-                next_run: Utc::now() + delay,
-                _handle: handle,
-            });
-        };
+                self.queue.push(CallOut {
+                    process,
+                    func_ref,
+                    repeat_duration: None,
+                    next_run: Utc::now() + delay,
+                    _handle: handle,
+                });
+            }
+        }
 
         Ok(index)
     }
