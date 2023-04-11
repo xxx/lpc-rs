@@ -312,7 +312,7 @@ impl Vm {
     /// # tokio_test::block_on(async {
     /// use lpc_rs::interpreter::{lpc_ref::LpcRef, vm::Vm};
     /// use lpc_rs_utils::config::Config;
-    /// ///
+    ///
     /// let mut vm = Vm::new(Config::default());
     /// let ctx = vm.initialize_string("int x = 5;", "test.c").await.unwrap();
     ///
