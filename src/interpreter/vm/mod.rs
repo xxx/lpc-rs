@@ -309,17 +309,19 @@ impl Vm {
     /// # Examples
     ///
     /// ```
+    /// # tokio_test::block_on(async {
     /// use lpc_rs::interpreter::{lpc_ref::LpcRef, vm::Vm};
     /// use lpc_rs_utils::config::Config;
     /// ///
     /// let mut vm = Vm::new(Config::default());
-    /// let ctx = vm.initialize_string("int x = 5;", "test.c").unwrap();
+    /// let ctx = vm.initialize_string("int x = 5;", "test.c").await.unwrap();
     ///
     /// assert_eq!(
-    ///     ctx.process().ro(&vm.cell_key).globals.registers[0],
+    ///     ctx.process().read().globals.registers[0],
     ///     LpcRef::Int(5)
     /// );
-    /// assert!(vm.object_space.ro(&vm.cell_key).lookup("/test").is_some());
+    /// assert!(vm.object_space.read().lookup("/test").is_some());
+    /// # })
     /// ```
     pub async fn initialize_string<P, S>(&mut self, code: S, filename: P) -> Result<TaskContext>
     where
