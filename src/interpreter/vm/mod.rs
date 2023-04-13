@@ -13,6 +13,7 @@ use tokio::{
 };
 use tracing::{instrument, trace};
 use vm_op::VmOp;
+use flume::Sender as FlumeSender;
 
 use crate::{
     compile_time_config::{MAX_CALL_STACK_SIZE, VM_CHANNEL_CAPACITY},
@@ -38,6 +39,9 @@ use crate::{
     try_extract_value,
     util::get_simul_efuns,
 };
+use crate::telnet::connection_broker::ConnectionBroker;
+use crate::telnet::ops::BrokerOp;
+use crate::telnet::Telnet;
 
 pub mod vm_op;
 
@@ -59,11 +63,17 @@ pub struct Vm {
     /// Enqueued call outs
     call_outs: Arc<RwLock<CallOuts>>,
 
+    /// The connection broker, which handles all of the network connections
+    connection_broker: ConnectionBroker,
+
     /// The channel used to send [`VmOp`]s to this [`Vm`]
     tx: Sender<VmOp>,
 
     /// The channel used to receive [`VmOp`]s from other locations
     rx: Receiver<VmOp>,
+
+    /// The channel used to send [`BrokerOp`]s to the connection broker
+    broker_tx: FlumeSender<BrokerOp>
 }
 
 impl Vm {
@@ -74,15 +84,20 @@ impl Vm {
     {
         let object_space = ObjectSpace::default();
         let (tx, rx) = tokio::sync::mpsc::channel(VM_CHANNEL_CAPACITY);
+        let (broker_tx, broker_rx) = flume::bounded(VM_CHANNEL_CAPACITY);
         let call_outs = RwLock::new(CallOuts::new(tx.clone()));
+        let telnet = Telnet::new(broker_tx.clone());
+
         Self {
             object_space: Arc::new(RwLock::new(object_space)),
             memory: Arc::new(Memory::default()),
             config: config.into(),
             upvalues: Arc::new(RwLock::new(GcBank::default())),
             call_outs: Arc::new(call_outs),
+            connection_broker: ConnectionBroker::new(tx.clone(), broker_rx, telnet),
             rx,
             tx,
+            broker_tx
         }
     }
 
@@ -93,6 +108,8 @@ impl Vm {
     pub async fn boot(&mut self) -> Result<()> {
         self.bootstrap().await?;
 
+
+        self.connection_broker.run().await;
         self.run().await
     }
 
@@ -136,6 +153,9 @@ impl Vm {
                         VmOp::TaskError(_task_id, error) => {
                             error.emit_diagnostics();
                         },
+                        VmOp::Connected(connection) => {
+                            println!("Vm connected: {:?}", connection);
+                        }
                     }
                 }
             }

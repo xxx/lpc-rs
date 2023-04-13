@@ -142,7 +142,7 @@ impl CallOuts {
 
         if_chain! {
             if let Some(repeat) = repeat;
-            if !repeat.is_zero();
+            if repeat.num_milliseconds() > 0;
             then {
                 let start = if delay.num_milliseconds() <= 0 {
                     Instant::now()
