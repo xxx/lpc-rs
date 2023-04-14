@@ -20,6 +20,9 @@ pub struct Config {
     #[builder(setter(into, strip_option), default = "None")]
     pub auto_inherit_file: Option<Ustr>,
 
+    #[builder(setter(into), default = "ustr(\"0.0.0.0\")")]
+    pub bind_address: Ustr,
+
     #[builder(setter(into, strip_option), default = "Some(ustr(\"STDOUT\"))")]
     pub log_file: Option<Ustr>,
 
@@ -63,56 +66,71 @@ impl ConfigBuilder {
 
         let env = std::env::vars()
             .map(|(k, v)| {
-                let key = k.trim_start_matches("LPC_");
-                let key = key.to_uppercase();
+                let key = k.to_uppercase();
 
                 (key, v)
             })
-            .collect::<HashMap<String, String>>();
+            .collect::<HashMap<_, _>>();
 
         let s = Self {
             auto_include_file: env
-                .get("AUTO_INCLUDE_FILE")
+                .get("LPC_AUTO_INCLUDE_FILE")
+                .or_else(|| env.get("AUTO_INCLUDE_FILE"))
                 .map(|x| Some(ustr(x)))
                 .or(self.auto_include_file),
             auto_inherit_file: env
-                .get("AUTO_INHERIT_FILE")
+                .get("LPC_AUTO_INHERIT_FILE")
+                .or_else(|| env.get("AUTO_INHERIT_FILE"))
                 .map(|x| Some(ustr(x)))
                 .or(self.auto_inherit_file),
+            bind_address: env
+                .get("LPC_BIND_ADDRESS")
+                .or_else(|| env.get("BIND_ADDRESS"))
+                .map(|x| ustr(x))
+                .or(self.bind_address),
             log_file: env
-                .get("LOG_FILE")
+                .get("LPC_LOG_FILE")
+                .or_else(|| env.get("LOG_FILE"))
                 .map(|x| Some(ustr(x)))
                 .or(self.log_file),
             log_level: env
-                .get("LOG_LEVEL")
+                .get("LPC_LOG_LEVEL")
+                .or_else(|| env.get("LOG_LEVEL"))
                 .map(|x| Some(x.parse::<tracing::Level>().unwrap()))
                 .or(self.log_level),
             lib_dir: env
-                .get("LIB_DIR")
+                .get("LPC_LIB_DIR")
+                .or_else(|| env.get("LIB_DIR"))
                 .and_then(|x| canonicalized_path(x).ok())
                 .or(self.lib_dir),
             master_object: env
-                .get("MASTER_OBJECT")
+                .get("LPC_MASTER_OBJECT")
+                .or_else(|| env.get("MASTER_OBJECT"))
                 .map(|x| ustr(x))
                 .or(self.master_object),
             max_inherit_depth: env
-                .get("MAX_INHERIT_DEPTH")
+                .get("LPC_MAX_INHERIT_DEPTH")
+                .or_else(|| env.get("MAX_INHERIT_DEPTH"))
                 .map(|x| x.parse::<usize>().unwrap())
                 .or(self.max_inherit_depth),
             max_task_instructions: env
-                .get("MAX_TASK_INSTRUCTIONS")
+                .get("LPC_MAX_TASK_INSTRUCTIONS")
+                .or_else(|| env.get("MAX_TASK_INSTRUCTIONS"))
                 .map(|x| Some(x.parse::<usize>().unwrap()))
                 .or(self.max_task_instructions),
             port: env
-                .get("PORT")
+                .get("LPC_PORT")
+                .or_else(|| env.get("PORT"))
                 .map(|x| x.parse::<u16>().unwrap())
                 .or(self.port),
             simul_efun_file: env
-                .get("SIMUL_EFUN_FILE")
+                .get("LPC_SIMUL_EFUN_FILE")
+                .or_else(|| env.get("SIMUL_EFUN_FILE"))
                 .map(|x| Some(ustr(x)))
                 .or(self.simul_efun_file),
             system_include_dirs: env
-                .get("SYSTEM_INCLUDE_DIRS")
+                .get("LPC_SYSTEM_INCLUDE_DIRS")
+                .or_else(|| env.get("SYSTEM_INCLUDE_DIRS"))
                 .map(|x| x.split(':').map(|x| x.into()).collect::<Vec<_>>())
                 .or_else(|| self.system_include_dirs.clone()),
         };

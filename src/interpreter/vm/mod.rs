@@ -107,8 +107,7 @@ impl Vm {
     pub async fn boot(&mut self) -> Result<()> {
         self.bootstrap().await?;
 
-        let address = format!("127.0.0.1:{}", self.config.port);
-        // let address = "127.0.0.1:6969";
+        let address = format!("{}:{}", self.config.bind_address, self.config.port);
         self.connection_broker.run(address).await;
         self.run().await
     }
