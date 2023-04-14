@@ -21,10 +21,10 @@ pub struct Config {
     pub auto_inherit_file: Option<Ustr>,
 
     #[builder(setter(into, strip_option), default = "Some(ustr(\"STDOUT\"))")]
-    pub driver_log_file: Option<Ustr>,
+    pub log_file: Option<Ustr>,
 
     #[builder(setter(strip_option), default = "None")]
-    pub driver_log_level: Option<tracing::Level>,
+    pub log_level: Option<tracing::Level>,
 
     #[builder(setter(custom), default = "ustr(\"\")")]
     pub lib_dir: Ustr,
@@ -79,14 +79,14 @@ impl ConfigBuilder {
                 .get("AUTO_INHERIT_FILE")
                 .map(|x| Some(ustr(x)))
                 .or(self.auto_inherit_file),
-            driver_log_file: env
-                .get("DRIVER_LOG_FILE")
+            log_file: env
+                .get("LOG_FILE")
                 .map(|x| Some(ustr(x)))
-                .or(self.driver_log_file),
-            driver_log_level: env
-                .get("DRIVER_LOG_LEVEL")
+                .or(self.log_file),
+            log_level: env
+                .get("LOG_LEVEL")
                 .map(|x| Some(x.parse::<tracing::Level>().unwrap()))
-                .or(self.driver_log_level),
+                .or(self.log_level),
             lib_dir: env
                 .get("LIB_DIR")
                 .and_then(|x| canonicalized_path(x).ok())

@@ -32,6 +32,8 @@ async fn main() {
         }
     };
 
+    println!("config: {:#?}", config);
+
     init_tracing_subscriber(&config);
 
     let mut vm = Vm::new(config);
@@ -44,8 +46,8 @@ async fn main() {
 
 fn init_tracing_subscriber(config: &Config) {
     if_chain! {
-        if let Some(level) = config.driver_log_level;
-        if let Some(file) = &config.driver_log_file;
+        if let Some(level) = config.log_level;
+        if let Some(file) = &config.log_file;
         then {
             match file.as_str() {
                 "STDOUT" => {
@@ -58,11 +60,11 @@ fn init_tracing_subscriber(config: &Config) {
                     )
                     .expect("setting tracing default failed");
                 }
-                _ => {
+                s => {
                     tracing::subscriber::set_global_default(
                         tracing_subscriber::fmt()
                             .with_max_level(level)
-                            .with_writer(std::fs::File::create(file.as_str()).unwrap())
+                            .with_writer(std::fs::File::create(s).unwrap())
                             .finish(),
                     )
                     .expect("setting tracing default failed");
