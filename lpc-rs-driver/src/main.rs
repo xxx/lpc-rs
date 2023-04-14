@@ -24,7 +24,7 @@ async fn main() {
     let config_override = args.config;
 
     let built = ConfigBuilder::default()
-        .path(config_override.map(|s| ustr(&s)))
+        .load_env(config_override)
         .build();
 
     let config = match built {

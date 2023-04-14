@@ -12,7 +12,6 @@ use lpc_rs::{
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::ConfigBuilder;
 use parking_lot::RwLock;
-use ustr::ustr;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -20,10 +19,6 @@ struct Args {
     /// The file to compile and execute
     #[clap(value_parser, value_name = "FILE", value_hint = clap::ValueHint::DirPath)]
     filename: String,
-
-    /// The directory to use as LIB_DIR for includes, etc.
-    #[clap(default_value_t = String::from("."), short, long, value_parser, value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
-    lib_dir: String,
 
     /// Use a specific configuration file
     #[clap(short, long, value_parser)]
@@ -34,11 +29,8 @@ struct Args {
 async fn main() {
     let args = Args::parse();
 
-    let config_override = args.config;
-
     let config = ConfigBuilder::default()
-        .path(config_override.map(|s| ustr(&s)))
-        .lib_dir(args.lib_dir)
+        .load_env(args.config)
         .build()
         .unwrap();
 

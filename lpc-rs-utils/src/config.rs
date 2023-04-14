@@ -1,95 +1,124 @@
 use std::{borrow::Cow, path::Path, str::FromStr};
+use std::collections::HashMap;
+use std::io::BufRead;
 
 use derive_builder::Builder;
 use fs_err as fs;
-use if_chain::if_chain;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{span::Span, LpcError, Result};
-use toml::{value::Index, Value};
+use tracing::{info, warn};
 use ustr::{ustr, Ustr};
 
-const DEFAULT_CONFIG_FILE: &str = "./config.toml";
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
-
-const AUTO_INCLUDE_FILE: &[&str] = &["lpc-rs", "auto_include_file"];
-const AUTO_INHERIT_FILE: &[&str] = &["lpc-rs", "auto_inherit_file"];
-const LIB_DIR: &[&str] = &["lpc-rs", "lib_dir"];
-const MAX_INHERIT_DEPTH: &[&str] = &["lpc-rs", "max_inherit_depth"];
-const MAX_TASK_INSTRUCTIONS: &[&str] = &["lpc-rs", "max_task_instructions"];
-const SIMUL_EFUN_FILE: &[&str] = &["lpc-rs", "simul_efun_file"];
-const SYSTEM_INCLUDE_DIRS: &[&str] = &["lpc-rs", "system_include_dirs"];
-
-const MASTER_OBJECT: &[&str] = &["driver", "master_object"];
-const DRIVER_LOG_LEVEL: &[&str] = &["driver", "log_level"];
-const DRIVER_LOG_FILE: &[&str] = &["driver", "log_file"];
 
 /// The main struct that handles runtime use configurations.
 #[derive(Debug, Builder)]
-#[builder(build_fn(name = "real_build", error = "lpc_rs_errors::LpcError"))]
+#[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
 #[readonly::make]
 pub struct Config {
-    #[builder(default = "None")]
-    #[allow(dead_code)]
-    config: Option<Value>,
-
-    #[builder(setter(into), default = "None")]
-    #[allow(dead_code)]
-    pub path: Option<Ustr>,
-
-    #[builder(setter(into, strip_option), default = "self.get_auto_include_file()")]
+    #[builder(setter(into, strip_option), default = "None")]
     pub auto_include_file: Option<Ustr>,
 
-    #[builder(setter(into, strip_option), default = "self.get_auto_inherit_file()")]
+    #[builder(setter(into, strip_option), default = "None")]
     pub auto_inherit_file: Option<Ustr>,
 
-    #[builder(setter(into, strip_option), default = "self.get_driver_log_file()")]
+    #[builder(setter(into, strip_option), default = "Some(ustr(\"STDOUT\"))")]
     pub driver_log_file: Option<Ustr>,
 
-    #[builder(setter(strip_option), default = "self.get_driver_log_level()")]
+    #[builder(setter(strip_option), default = "None")]
     pub driver_log_level: Option<tracing::Level>,
 
-    #[builder(setter(custom), default = "self.get_lib_dir()?")]
+    #[builder(setter(custom), default = "ustr(\"\")")]
     pub lib_dir: Ustr,
 
-    #[builder(default = "self.get_master_object()?")]
+    #[builder(default = "ustr(\"/secure/master.c\")")]
     pub master_object: Ustr,
 
-    #[builder(default = "self.get_max_inherit_depth()?")]
+    #[builder(default = "DEFAULT_MAX_INHERIT_DEPTH")]
     pub max_inherit_depth: usize,
 
     #[builder(
         setter(into, strip_option),
-        default = "self.get_max_task_instructions()"
+        default = "Some(100000)"
     )]
     pub max_task_instructions: Option<usize>,
 
-    #[builder(setter(into, strip_option), default = "self.get_simul_efun_file()")]
+    #[builder(setter(into, strip_option), default = "None")]
     pub simul_efun_file: Option<Ustr>,
 
-    #[builder(setter(custom), default = "self.get_system_include_dirs()?")]
+    #[builder(setter(custom), default = "vec![ustr(\"/sys\")]")]
     pub system_include_dirs: Vec<Ustr>,
+
+    #[builder(default = "2496")]
+    pub port: u16,
 }
 
 impl ConfigBuilder {
-    pub fn build(&mut self) -> Result<Config> {
-        let config_str = match &self.path {
-            Some(Some(path)) => fs::read_to_string(path.as_str())?,
-            Some(None) => fs::read_to_string(DEFAULT_CONFIG_FILE)?,
-            _ => "".into(),
+    /// Set config values from a `dotenv` file. If `env_path` is `None`, the default `.env` is used.
+    pub fn load_env<P>(&mut self, env_path: Option<P>) -> &mut Self
+    where
+        P: AsRef<Path>
+    {
+        let _ = match env_path {
+            Some(p) => {
+                dotenvy::from_filename(p).map_err(|e| info!(".env not loaded: {}", e.to_string()))
+            }
+            None => {
+                dotenvy::dotenv().map_err(|e| info!(".env not loaded: {}", e.to_string()))
+            }
         };
 
-        // If there's no config at all, we'll fall back to the fields populated by
-        // Config::default()
-        if !config_str.is_empty() {
-            match config_str.parse::<Value>() {
-                Ok(config) => {
-                    self.config(Some(config));
-                }
-                Err(e) => return Err(LpcError::new(e.to_string())),
-            }
-        }
+        let env = std::env::vars()
+            .map(|(k, v)| {
+                let key = k.trim_start_matches("LPC_");
+                let key = key.to_uppercase();
 
-        self.real_build()
+                (key, v)
+            })
+            .collect::<HashMap<String, String>>();
+
+        let s = Self {
+            auto_include_file: env.get("AUTO_INCLUDE_FILE")
+                .map(|x| Some(ustr(x)))
+                .or_else(|| self.auto_include_file.clone()),
+            auto_inherit_file: env.get("AUTO_INHERIT_FILE")
+                .map(|x| Some(ustr(x)))
+                .or_else(|| self.auto_inherit_file.clone()),
+            driver_log_file: env.get("DRIVER_LOG_FILE")
+                .map(|x| Some(ustr(x)))
+                .or_else(|| self.driver_log_file.clone()),
+            driver_log_level: env.get("DRIVER_LOG_LEVEL")
+                .map(|x| Some(x.parse::<tracing::Level>().unwrap()))
+                .or_else(|| self.driver_log_level.clone()),
+            lib_dir: env.get("LIB_DIR")
+                .map(|x| canonicalized_path(x).ok())
+                .flatten()
+                .or_else(|| self.lib_dir.clone()),
+            master_object: env.get("MASTER_OBJECT")
+                .map(|x| ustr(x))
+                .or_else(|| self.master_object.clone()),
+            max_inherit_depth: env.get("MAX_INHERIT_DEPTH")
+                .map(|x| x.parse::<usize>().unwrap())
+                .or_else(|| self.max_inherit_depth.clone()),
+            max_task_instructions: env.get("MAX_TASK_INSTRUCTIONS")
+                .map(|x| Some(x.parse::<usize>().unwrap()))
+                .or_else(|| self.max_task_instructions.clone()),
+            port: env.get("PORT")
+                .map(|x| x.parse::<u16>().unwrap())
+                .or_else(|| self.port.clone()),
+            simul_efun_file: env.get("SIMUL_EFUN_FILE")
+                .map(|x| Some(ustr(x)))
+                .or_else(|| self.simul_efun_file.clone()),
+            system_include_dirs: env.get("SYSTEM_INCLUDE_DIRS")
+                .map(|x| x.split(":").map(|x| x.into()).collect::<Vec<_>>())
+                .or_else(|| self.system_include_dirs.clone()),
+        };
+
+        let mut new = self;
+
+        *new = s;
+
+        new
     }
 
     pub fn lib_dir<S>(&mut self, lib_dir: S) -> &mut Self
@@ -101,7 +130,7 @@ impl ConfigBuilder {
             Ok(x) => x,
             Err(e) => {
                 let path = canonicalized_path(".").unwrap();
-                eprintln!(
+                warn!(
                     "Unable to get canonical path for `lib_dir`: {e}. Using `{path}` instead."
                 );
                 path
@@ -113,7 +142,7 @@ impl ConfigBuilder {
         new
     }
 
-    /// Get the system include directories. These are in-game directories.
+    /// Set the system include directories. These are in-game directories.
     pub fn system_include_dirs<T>(&mut self, dirs: Vec<T>) -> &mut Self
     where
         T: Into<Ustr>,
@@ -121,165 +150,6 @@ impl ConfigBuilder {
         let mut new = self;
         new.system_include_dirs = Some(dirs.into_iter().map(Into::into).collect());
         new
-    }
-
-    fn get_simul_efun_file(&self) -> Option<Ustr> {
-        let Some(Some(binding)) = &self.config else {
-            return Config::default().simul_efun_file;
-        };
-
-        let dug = dig(binding, SIMUL_EFUN_FILE);
-        dug.and_then(|x| x.as_str()).map(Ustr::from)
-    }
-
-    fn get_driver_log_file(&self) -> Option<Ustr> {
-        let Some(Some(binding)) = &self.config else {
-            return Config::default().driver_log_file;
-        };
-
-        let dug = dig(binding, DRIVER_LOG_FILE);
-        dug.and_then(|x| x.as_str()).map(Ustr::from)
-    }
-
-    fn get_driver_log_level(&self) -> Option<tracing::Level> {
-        let Some(Some(binding)) = &self.config else {
-            return Config::default().driver_log_level;
-        };
-
-        let dug = dig(binding, DRIVER_LOG_LEVEL);
-        dug.and_then(|x| x.as_str())
-            .and_then(|x| tracing::Level::from_str(x).ok())
-    }
-
-    fn get_system_include_dirs(&self) -> Result<Vec<Ustr>> {
-        let Some(Some(binding)) = &self.config else {
-            return Ok(Config::default().system_include_dirs);
-        };
-
-        let system_include_dirs = match dig(binding, SYSTEM_INCLUDE_DIRS) {
-            Some(v) => match v.as_array() {
-                Some(arr) => arr
-                    .iter()
-                    .filter_map(|x| x.as_str())
-                    .map(Ustr::from)
-                    .collect(),
-                None => {
-                    return Err(LpcError::new(format!(
-                        "Expected array for system_include_dirs, found {v}"
-                    )))
-                }
-            },
-            None => vec![],
-        };
-
-        Ok(system_include_dirs)
-    }
-
-    fn get_lib_dir(&self) -> Result<Ustr> {
-        let Some(Some(binding)) = &self.config else {
-            return Ok(Config::default().lib_dir);
-        };
-
-        let dug = dig(binding, LIB_DIR);
-        let non_canon = match dug {
-            Some(x) => String::from(x.as_str().unwrap_or(".")),
-            None => {
-                eprintln!("No configuration for `lib_dir` found. Using \".\" instead.");
-                String::from(".")
-            }
-        };
-        let lib_dir = canonicalized_path(non_canon)?;
-
-        Ok(lib_dir)
-    }
-
-    fn get_master_object(&self) -> Result<Ustr> {
-        let Some(Some(binding)) = &self.config else {
-            return Ok(Config::default().master_object);
-        };
-
-        let dug = dig(binding, MASTER_OBJECT);
-        let master_object = match dug {
-            Some(x) => match x.as_str() {
-                Some(s) => Ustr::from(s),
-                None => {
-                    return Err(LpcError::new(
-                        "Invalid configuration for `master_object` found. Cannot continue.",
-                    ));
-                }
-            },
-            None => {
-                return Err(LpcError::new(
-                    "No configuration for `master_object` found. Cannot continue.",
-                ));
-            }
-        };
-
-        Ok(master_object)
-    }
-
-    fn get_max_inherit_depth(&self) -> Result<usize> {
-        let Some(Some(binding)) = &self.config else {
-            return Ok(Config::default().max_inherit_depth);
-        };
-
-        let dug = dig(binding, MAX_INHERIT_DEPTH);
-        let max_inherit_depth = match dug {
-            Some(x) => match x.as_integer() {
-                Some(0) => DEFAULT_MAX_INHERIT_DEPTH,
-                Some(y) => {
-                    if y < 1 {
-                        return Err(LpcError::new("max_inherit_depth must be greater than 0"));
-                    } else {
-                        y as usize
-                    }
-                }
-                None => {
-                    return Err(LpcError::new(
-                        "max_inherit_depth must be a positive integer",
-                    ))
-                }
-            },
-            None => DEFAULT_MAX_INHERIT_DEPTH,
-        };
-
-        Ok(max_inherit_depth)
-    }
-
-    fn get_max_task_instructions(&self) -> Option<usize> {
-        let Some(Some(binding)) = &self.config else {
-            return Config::default().max_task_instructions;
-        };
-
-        let dug = dig(binding, MAX_TASK_INSTRUCTIONS);
-        if_chain! {
-            if let Some(x) = dug;
-            if let Some(y) = x.as_integer();
-            if y >= 0;
-            then {
-                Some(y as usize)
-            } else {
-                None
-            }
-        }
-    }
-
-    fn get_auto_include_file(&self) -> Option<Ustr> {
-        let Some(Some(binding)) = &self.config else {
-            return Config::default().auto_include_file;
-        };
-
-        let dug = dig(binding, AUTO_INCLUDE_FILE);
-        dug.and_then(|x| x.as_str()).map(Ustr::from)
-    }
-
-    fn get_auto_inherit_file(&self) -> Option<Ustr> {
-        let Some(Some(binding)) = &self.config else {
-            return Config::default().auto_inherit_file;
-        };
-
-        let dug = dig(binding, AUTO_INHERIT_FILE);
-        dug.and_then(|x| x.as_str()).map(Ustr::from)
     }
 }
 
@@ -306,41 +176,9 @@ impl Config {
 }
 
 impl Default for Config {
-    // The bare-bones default Config, used if there is no config file at all found.
     fn default() -> Self {
-        Self {
-            config: None,
-            path: None,
-            lib_dir: ustr(""),
-            system_include_dirs: vec![ustr("/sys")],
-            master_object: ustr("/secure/master.c"),
-            max_task_instructions: Some(100000),
-            max_inherit_depth: DEFAULT_MAX_INHERIT_DEPTH,
-            driver_log_level: None,
-            driver_log_file: Some(ustr("STDOUT")),
-            simul_efun_file: None,
-            auto_include_file: None,
-            auto_inherit_file: None,
-        }
+        ConfigBuilder::default().build().unwrap()
     }
-}
-
-fn dig<'a, I>(toml: &'a Value, path: &'_ [I]) -> Option<&'a Value>
-where
-    I: Index,
-{
-    let mut result = toml;
-
-    for index in path {
-        match result.get(index) {
-            Some(x) => {
-                result = x;
-            }
-            None => return None,
-        }
-    }
-
-    Some(result)
 }
 
 fn canonicalized_path<P>(path: P) -> Result<Ustr>
@@ -356,34 +194,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    mod test_dig {
-        use super::*;
-
-        #[test]
-        fn test_dig() {
-            let toml = r#"
-                [foo]
-                bar = "baz"
-            "#;
-            let toml = toml::from_str(toml).unwrap();
-            let path = ["foo", "bar"];
-            let result = dig(&toml, &path);
-            assert_eq!(result.unwrap().as_str().unwrap(), "baz");
-        }
-
-        #[test]
-        fn test_dig_missing() {
-            let toml = r#"
-                [foo]
-                bar = "baz"
-            "#;
-            let toml = toml::from_str(toml).unwrap();
-            let path = ["foo", "baz"];
-            let result = dig(&toml, &path);
-            assert_eq!(result, None);
-        }
-    }
 
     mod test_validate_in_game_path {
         use super::*;
@@ -406,17 +216,5 @@ mod tests {
         //     println!("result: {:?}", result);
         //     assert_eq!(result.unwrap_err().to_string(), "foo");
         // }
-    }
-
-    #[test]
-    fn test_dig() {
-        let toml = r#"
-            [foo]
-            bar = "baz"
-        "#;
-        let toml = toml::from_str(toml).unwrap();
-        let path = ["foo", "bar"];
-        let result = dig(&toml, &path);
-        assert_eq!(result.unwrap().as_str().unwrap(), "baz");
     }
 }
