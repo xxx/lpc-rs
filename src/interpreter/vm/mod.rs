@@ -12,7 +12,7 @@ use tokio::{
     signal,
     sync::mpsc::{Receiver, Sender},
 };
-use tracing::{instrument, trace};
+use tracing::{info, instrument, trace};
 use vm_op::VmOp;
 
 use crate::{
@@ -137,7 +137,7 @@ impl Vm {
                 biased; // we want signal handlers checked first, always.
                 _ = signal::ctrl_c() => {
                     // SIGINT on Linux
-                    println!("Ctrl-C received, shutting down");
+                    info!("Ctrl-C received... shutting down");
                     break;
                 }
                 Some(op) = self.rx.recv() => {
@@ -153,7 +153,7 @@ impl Vm {
                             error.emit_diagnostics();
                         },
                         VmOp::Connected(connection) => {
-                            println!("Vm connected: {:?}", connection);
+                            info!("Vm connected: {:?}", connection);
                         }
                     }
                 }
