@@ -1,7 +1,6 @@
 use lpc_rs_errors::LpcError;
 
-use crate::interpreter::task::task_id::TaskId;
-use crate::telnet::connection_broker::{Connection};
+use crate::{interpreter::task::task_id::TaskId, telnet::connection_broker::Connection};
 
 /// Operations that can be communicated to the [`Vm`](crate::interpreter::vm::Vm) remotely.
 #[derive(Debug, PartialEq)]

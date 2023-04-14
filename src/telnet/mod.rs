@@ -1,22 +1,27 @@
 pub mod connection_broker;
 pub mod ops;
 
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU32, Ordering};
-use futures::{SinkExt, StreamExt};
-use futures::stream::SplitSink;
-use nectar::TelnetCodec;
-use nectar::event::TelnetEvent;
-use once_cell::sync::OnceCell;
-use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use flume::Sender as FlumeSender;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
-use tokio_util::codec::{Decoder, Framed};
-use tracing::{error, info, warn, trace};
-use crate::telnet::connection_broker::{Connection, ConnectionId};
-use crate::telnet::ops::{BrokerOp, ConnectionOp};
+use std::{
+    net::SocketAddr,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
+use flume::Sender as FlumeSender;
+use futures::{stream::SplitSink, SinkExt, StreamExt};
+use nectar::{event::TelnetEvent, TelnetCodec};
+use once_cell::sync::OnceCell;
+use tokio::{
+    net::{TcpListener, TcpStream, ToSocketAddrs},
+    sync::mpsc,
+    task::JoinHandle,
+};
+use tokio_util::codec::{Decoder, Framed};
+use tracing::{error, info, trace, warn};
+
+use crate::telnet::{
+    connection_broker::{Connection, ConnectionId},
+    ops::{BrokerOp, ConnectionOp},
+};
 
 /// The incoming connection handler. Once established, connections are handled by [`ConnectionManager`].
 #[derive(Debug)]
@@ -55,11 +60,14 @@ impl Telnet {
                 Err(e) => {
                     error!("Failed to bind to port: {}", e);
                     std::process::exit(1); // TODO: this should send a message to the vm. VmOp::FatalError?
-                    // return;
+                                           // return;
                 }
             };
 
-            info!("Listening for connections on {}", listener.local_addr().unwrap());
+            info!(
+                "Listening for connections on {}",
+                listener.local_addr().unwrap()
+            );
 
             loop {
                 while let Ok((stream, remote_ip)) = listener.accept().await {
@@ -135,14 +143,19 @@ impl Telnet {
         });
     }
 
-    async fn handle_input_event(msg: TelnetEvent, sink: &mut SplitSink<Framed<TcpStream, TelnetCodec>, TelnetEvent>) {
+    async fn handle_input_event(
+        msg: TelnetEvent,
+        sink: &mut SplitSink<Framed<TcpStream, TelnetCodec>, TelnetEvent>,
+    ) {
         match msg {
             TelnetEvent::Character(char) => {
                 println!("Received character: {}", char);
             }
             TelnetEvent::Message(msg) => {
                 println!("Received message: {}", msg);
-                let _ = sink.send(TelnetEvent::Message("Hello, world!".to_string())).await;
+                let _ = sink
+                    .send(TelnetEvent::Message("Hello, world!".to_string()))
+                    .await;
             }
             TelnetEvent::Do(option) => {
                 println!("Received DO: {:?}", option);

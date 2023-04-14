@@ -1,6 +1,4 @@
-use std::{borrow::Cow, path::Path};
-use std::collections::HashMap;
-use std::io::BufRead;
+use std::{borrow::Cow, collections::HashMap, io::BufRead, path::Path};
 
 use derive_builder::Builder;
 use fs_err as fs;
@@ -37,10 +35,7 @@ pub struct Config {
     #[builder(default = "DEFAULT_MAX_INHERIT_DEPTH")]
     pub max_inherit_depth: usize,
 
-    #[builder(
-        setter(into, strip_option),
-        default = "Some(100000)"
-    )]
+    #[builder(setter(into, strip_option), default = "Some(100000)")]
     pub max_task_instructions: Option<usize>,
 
     #[builder(setter(into, strip_option), default = "None")]
@@ -57,15 +52,13 @@ impl ConfigBuilder {
     /// Set config values from a `dotenv` file. If `env_path` is `None`, the default `.env` is used.
     pub fn load_env<P>(&mut self, env_path: Option<P>) -> &mut Self
     where
-        P: AsRef<Path>
+        P: AsRef<Path>,
     {
         let _ = match env_path {
             Some(p) => {
                 dotenvy::from_filename(p).map_err(|e| info!(".env not loaded: {}", e.to_string()))
             }
-            None => {
-                dotenvy::dotenv().map_err(|e| info!(".env not loaded: {}", e.to_string()))
-            }
+            None => dotenvy::dotenv().map_err(|e| info!(".env not loaded: {}", e.to_string())),
         };
 
         let env = std::env::vars()
@@ -78,37 +71,48 @@ impl ConfigBuilder {
             .collect::<HashMap<String, String>>();
 
         let s = Self {
-            auto_include_file: env.get("AUTO_INCLUDE_FILE")
+            auto_include_file: env
+                .get("AUTO_INCLUDE_FILE")
                 .map(|x| Some(ustr(x)))
                 .or(self.auto_include_file),
-            auto_inherit_file: env.get("AUTO_INHERIT_FILE")
+            auto_inherit_file: env
+                .get("AUTO_INHERIT_FILE")
                 .map(|x| Some(ustr(x)))
                 .or(self.auto_inherit_file),
-            driver_log_file: env.get("DRIVER_LOG_FILE")
+            driver_log_file: env
+                .get("DRIVER_LOG_FILE")
                 .map(|x| Some(ustr(x)))
                 .or(self.driver_log_file),
-            driver_log_level: env.get("DRIVER_LOG_LEVEL")
+            driver_log_level: env
+                .get("DRIVER_LOG_LEVEL")
                 .map(|x| Some(x.parse::<tracing::Level>().unwrap()))
                 .or(self.driver_log_level),
-            lib_dir: env.get("LIB_DIR")
+            lib_dir: env
+                .get("LIB_DIR")
                 .and_then(|x| canonicalized_path(x).ok())
                 .or(self.lib_dir),
-            master_object: env.get("MASTER_OBJECT")
+            master_object: env
+                .get("MASTER_OBJECT")
                 .map(|x| ustr(x))
                 .or(self.master_object),
-            max_inherit_depth: env.get("MAX_INHERIT_DEPTH")
+            max_inherit_depth: env
+                .get("MAX_INHERIT_DEPTH")
                 .map(|x| x.parse::<usize>().unwrap())
                 .or(self.max_inherit_depth),
-            max_task_instructions: env.get("MAX_TASK_INSTRUCTIONS")
+            max_task_instructions: env
+                .get("MAX_TASK_INSTRUCTIONS")
                 .map(|x| Some(x.parse::<usize>().unwrap()))
                 .or(self.max_task_instructions),
-            port: env.get("PORT")
+            port: env
+                .get("PORT")
                 .map(|x| x.parse::<u16>().unwrap())
                 .or(self.port),
-            simul_efun_file: env.get("SIMUL_EFUN_FILE")
+            simul_efun_file: env
+                .get("SIMUL_EFUN_FILE")
                 .map(|x| Some(ustr(x)))
                 .or(self.simul_efun_file),
-            system_include_dirs: env.get("SYSTEM_INCLUDE_DIRS")
+            system_include_dirs: env
+                .get("SYSTEM_INCLUDE_DIRS")
                 .map(|x| x.split(':').map(|x| x.into()).collect::<Vec<_>>())
                 .or_else(|| self.system_include_dirs.clone()),
         };
@@ -129,9 +133,7 @@ impl ConfigBuilder {
             Ok(x) => x,
             Err(e) => {
                 let path = canonicalized_path(".").unwrap();
-                warn!(
-                    "Unable to get canonical path for `lib_dir`: {e}. Using `{path}` instead."
-                );
+                warn!("Unable to get canonical path for `lib_dir`: {e}. Using `{path}` instead.");
                 path
             }
         };

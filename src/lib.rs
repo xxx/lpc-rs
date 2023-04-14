@@ -3,7 +3,6 @@ extern crate core;
 use lalrpop_util::lalrpop_mod;
 
 #[warn(clippy::disallowed_types)]
-
 pub mod compile_time_config;
 pub mod compiler;
 pub mod interpreter;

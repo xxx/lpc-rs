@@ -1,6 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use bit_set::BitSet;
+use flume::Sender as FlumeSender;
 use if_chain::if_chain;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result};
@@ -13,7 +14,6 @@ use tokio::{
 };
 use tracing::{instrument, trace};
 use vm_op::VmOp;
-use flume::Sender as FlumeSender;
 
 use crate::{
     compile_time_config::{MAX_CALL_STACK_SIZE, VM_CHANNEL_CAPACITY},
@@ -36,12 +36,10 @@ use crate::{
         task::Task,
         task_context::TaskContext,
     },
+    telnet::{connection_broker::ConnectionBroker, ops::BrokerOp, Telnet},
     try_extract_value,
     util::get_simul_efuns,
 };
-use crate::telnet::connection_broker::ConnectionBroker;
-use crate::telnet::ops::BrokerOp;
-use crate::telnet::Telnet;
 
 pub mod vm_op;
 
@@ -73,7 +71,7 @@ pub struct Vm {
     rx: Receiver<VmOp>,
 
     /// The channel used to send [`BrokerOp`]s to the connection broker
-    broker_tx: FlumeSender<BrokerOp>
+    broker_tx: FlumeSender<BrokerOp>,
 }
 
 impl Vm {
@@ -97,7 +95,7 @@ impl Vm {
             connection_broker: ConnectionBroker::new(tx.clone(), broker_rx, telnet),
             rx,
             tx,
-            broker_tx
+            broker_tx,
         }
     }
 

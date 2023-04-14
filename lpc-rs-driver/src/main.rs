@@ -3,7 +3,6 @@ use if_chain::if_chain;
 use lpc_rs::interpreter::vm::Vm;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 
-
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
@@ -23,9 +22,7 @@ async fn main() {
 
     let config_override = args.config;
 
-    let built = ConfigBuilder::default()
-        .load_env(config_override)
-        .build();
+    let built = ConfigBuilder::default().load_env(config_override).build();
 
     let config = match built {
         Ok(c) => c,

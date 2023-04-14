@@ -1,13 +1,17 @@
-use std::net::{SocketAddr};
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
+
 use dashmap::DashMap;
-use tokio::sync::mpsc::Sender;
 use flume::Receiver as FlumeReceiver;
-use tokio::net::ToSocketAddrs;
+use tokio::{net::ToSocketAddrs, sync::mpsc::Sender};
 use tracing::{error, info};
-use crate::interpreter::vm::vm_op::VmOp;
-use crate::telnet::ops::{BrokerOp, ConnectionOp};
-use crate::telnet::Telnet;
+
+use crate::{
+    interpreter::vm::vm_op::VmOp,
+    telnet::{
+        ops::{BrokerOp, ConnectionOp},
+        Telnet,
+    },
+};
 
 /// The ID of a connection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -20,7 +24,7 @@ pub struct Connection {
     pub id: ConnectionId,
 
     /// The address of the client.
-    pub address: SocketAddr
+    pub address: SocketAddr,
 }
 
 /// Manages all the outgoing connections to users.
@@ -42,7 +46,12 @@ pub struct ConnectionBroker {
 impl ConnectionBroker {
     /// Creates a new [`ConnectionBroker`].
     pub fn new(vm_tx: Sender<VmOp>, rx: FlumeReceiver<BrokerOp>, telnet: Telnet) -> Self {
-        Self { connections: Arc::new(DashMap::new()), telnet, vm_tx, rx }
+        Self {
+            connections: Arc::new(DashMap::new()),
+            telnet,
+            vm_tx,
+            rx,
+        }
     }
 
     /// Starts the connection broker.
@@ -94,7 +103,10 @@ impl ConnectionBroker {
 
     /// Removes a connection from the manager.
     #[inline]
-    pub fn remove_connection(&self, id: ConnectionId) -> Option<(ConnectionId, Sender<ConnectionOp>)> {
+    pub fn remove_connection(
+        &self,
+        id: ConnectionId,
+    ) -> Option<(ConnectionId, Sender<ConnectionOp>)> {
         self.connections.remove(&id)
     }
 }
@@ -116,7 +128,10 @@ mod tests {
         //
         // BrokerOp::NewConnection
         //
-        let connection = Connection { id: ConnectionId(1), address: SocketAddr::from(([127, 0, 0, 1], 1234)) };
+        let connection = Connection {
+            id: ConnectionId(1),
+            address: SocketAddr::from(([127, 0, 0, 1], 1234)),
+        };
         let op = BrokerOp::NewConnection(connection.clone(), connection_tx);
         tx.send_async(op).await.unwrap();
 
@@ -137,6 +152,9 @@ mod tests {
             panic!("Failed to receive message");
         };
 
-        assert_eq!(connection_op, ConnectionOp::SendMessage("Welcome to the MUD!".to_string()));
+        assert_eq!(
+            connection_op,
+            ConnectionOp::SendMessage("Welcome to the MUD!".to_string())
+        );
     }
 }
