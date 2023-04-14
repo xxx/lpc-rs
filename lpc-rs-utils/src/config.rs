@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, io::BufRead, path::Path};
+use std::{borrow::Cow, collections::HashMap, path::Path};
 
 use derive_builder::Builder;
 use fs_err as fs;
