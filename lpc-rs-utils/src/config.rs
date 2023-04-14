@@ -1,4 +1,4 @@
-use std::{borrow::Cow, path::Path, str::FromStr};
+use std::{borrow::Cow, path::Path};
 use std::collections::HashMap;
 use std::io::BufRead;
 
@@ -80,41 +80,40 @@ impl ConfigBuilder {
         let s = Self {
             auto_include_file: env.get("AUTO_INCLUDE_FILE")
                 .map(|x| Some(ustr(x)))
-                .or_else(|| self.auto_include_file.clone()),
+                .or(self.auto_include_file),
             auto_inherit_file: env.get("AUTO_INHERIT_FILE")
                 .map(|x| Some(ustr(x)))
-                .or_else(|| self.auto_inherit_file.clone()),
+                .or(self.auto_inherit_file),
             driver_log_file: env.get("DRIVER_LOG_FILE")
                 .map(|x| Some(ustr(x)))
-                .or_else(|| self.driver_log_file.clone()),
+                .or(self.driver_log_file),
             driver_log_level: env.get("DRIVER_LOG_LEVEL")
                 .map(|x| Some(x.parse::<tracing::Level>().unwrap()))
-                .or_else(|| self.driver_log_level.clone()),
+                .or(self.driver_log_level),
             lib_dir: env.get("LIB_DIR")
-                .map(|x| canonicalized_path(x).ok())
-                .flatten()
-                .or_else(|| self.lib_dir.clone()),
+                .and_then(|x| canonicalized_path(x).ok())
+                .or(self.lib_dir),
             master_object: env.get("MASTER_OBJECT")
                 .map(|x| ustr(x))
-                .or_else(|| self.master_object.clone()),
+                .or(self.master_object),
             max_inherit_depth: env.get("MAX_INHERIT_DEPTH")
                 .map(|x| x.parse::<usize>().unwrap())
-                .or_else(|| self.max_inherit_depth.clone()),
+                .or(self.max_inherit_depth),
             max_task_instructions: env.get("MAX_TASK_INSTRUCTIONS")
                 .map(|x| Some(x.parse::<usize>().unwrap()))
-                .or_else(|| self.max_task_instructions.clone()),
+                .or(self.max_task_instructions),
             port: env.get("PORT")
                 .map(|x| x.parse::<u16>().unwrap())
-                .or_else(|| self.port.clone()),
+                .or(self.port),
             simul_efun_file: env.get("SIMUL_EFUN_FILE")
                 .map(|x| Some(ustr(x)))
-                .or_else(|| self.simul_efun_file.clone()),
+                .or(self.simul_efun_file),
             system_include_dirs: env.get("SYSTEM_INCLUDE_DIRS")
-                .map(|x| x.split(":").map(|x| x.into()).collect::<Vec<_>>())
+                .map(|x| x.split(':').map(|x| x.into()).collect::<Vec<_>>())
                 .or_else(|| self.system_include_dirs.clone()),
         };
 
-        let mut new = self;
+        let new = self;
 
         *new = s;
 

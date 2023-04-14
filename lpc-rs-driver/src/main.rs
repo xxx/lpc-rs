@@ -2,7 +2,7 @@ use clap::Parser;
 use if_chain::if_chain;
 use lpc_rs::interpreter::vm::Vm;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
-use ustr::ustr;
+
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
