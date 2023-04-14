@@ -104,12 +104,14 @@ impl Vm {
     /// The main initialization method for the VM.
     ///
     /// This method will load the master object and simul_efun file, add
-    /// the master object to the object space, and then start the main loop.
+    /// the master object to the object space, start networking,
+    /// and then start the main loop.
     pub async fn boot(&mut self) -> Result<()> {
         self.bootstrap().await?;
 
-
-        self.connection_broker.run().await;
+        // let address = format!("127.0.0.1:{}", self.config.port);
+        let address = "127.0.0.1:6969";
+        self.connection_broker.run(address).await;
         self.run().await
     }
 

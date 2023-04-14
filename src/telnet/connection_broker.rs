@@ -1,8 +1,9 @@
-use std::net::SocketAddr;
+use std::net::{SocketAddr};
 use std::sync::Arc;
 use dashmap::DashMap;
 use tokio::sync::mpsc::Sender;
 use flume::Receiver as FlumeReceiver;
+use tokio::net::ToSocketAddrs;
 use tracing::{error, info};
 use crate::interpreter::vm::vm_op::VmOp;
 use crate::telnet::ops::{BrokerOp, ConnectionOp};
@@ -46,9 +47,12 @@ impl ConnectionBroker {
 
     /// Starts the connection broker.
     /// This will also start the telnet server.
-    pub async fn run(&mut self) {
+    pub async fn run<A>(&mut self, listen_address: A)
+    where
+        A: ToSocketAddrs + Send + 'static,
+    {
         info!("Starting connection broker");
-        self.telnet.run().await;
+        self.telnet.run(listen_address).await;
 
         self.main_loop();
     }
@@ -107,7 +111,7 @@ mod tests {
         let telnet = Telnet::new(tx.clone());
         let mut broker = ConnectionBroker::new(vm_tx, rx, telnet);
 
-        broker.run().await;
+        broker.run("127.0.0.1:6666").await;
 
         //
         // BrokerOp::NewConnection

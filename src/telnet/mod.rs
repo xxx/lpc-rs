@@ -8,7 +8,7 @@ use futures::stream::SplitSink;
 use nectar::TelnetCodec;
 use nectar::event::TelnetEvent;
 use once_cell::sync::OnceCell;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use flume::Sender as FlumeSender;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -39,7 +39,10 @@ impl Telnet {
     }
 
     /// Starts the telnet server.
-    pub async fn run(&self) {
+    pub async fn run<A>(&self, address: A)
+    where
+        A: ToSocketAddrs + Send + 'static,
+    {
         if self.handle.get().is_some() {
             return;
         }
@@ -49,7 +52,7 @@ impl Telnet {
         let broker_tx = self.broker_tx.clone();
 
         let handle = tokio::spawn(async move {
-            let listener = match TcpListener::bind("127.0.0.1:6969").await {
+            let listener = match TcpListener::bind(address).await {
                 Ok(listener) => listener,
                 Err(e) => {
                     error!("Failed to bind to port: {}", e);
