@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 use dashmap::DashMap;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::Sender;
 use flume::Receiver as FlumeReceiver;
 use tracing::{error, info};
 use crate::interpreter::vm::vm_op::VmOp;
@@ -13,7 +13,7 @@ use crate::telnet::Telnet;
 pub struct ConnectionId(pub u32);
 
 /// A connection from a user
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Connection {
     /// The ID of the connection.
     pub id: ConnectionId,
@@ -65,21 +65,22 @@ impl ConnectionBroker {
                         BrokerOp::NewConnection(connection, tx) => {
                             connections.insert(connection.id, tx);
                             let Ok(_) = vm_tx.send(VmOp::Connected(connection)).await else {
-                                error!("Failed to send NewConnection to VM");
+                                error!("Failed to send VmOp::NewConnection");
                                 continue;
                             };
                         }
                         BrokerOp::SendMessage(msg, connection_id) => {
-                            connections.get(&connection_id).map(|tx| {
-                                let tx = tx.clone();
+                            let Some(connection_tx) = connections.get(&connection_id) else {
+                                error!("Failed to find connection with ID {}", connection_id.0);
+                                continue;
+                            };
 
-                                async move {
-                                    let Ok(_) = tx.send(ConnectionOp::SendMessage(msg)).await else {
-                                        error!("Failed to send ConnectionOp::SendMessage");
-                                        return;
-                                    };
-                                }
-                            });
+                            let tx = connection_tx.clone();
+
+                            let Ok(_) = tx.send(ConnectionOp::SendMessage(msg)).await else {
+                                error!("Failed to send ConnectionOp::SendMessage");
+                                return;
+                            };
                         }
                     }
                 }
@@ -91,5 +92,47 @@ impl ConnectionBroker {
     #[inline]
     pub fn remove_connection(&self, id: ConnectionId) -> Option<(ConnectionId, Sender<ConnectionOp>)> {
         self.connections.remove(&id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_connection_broker() {
+        let (tx, rx) = flume::bounded(10);
+        let (vm_tx, mut vm_rx) = tokio::sync::mpsc::channel(10);
+        let (connection_tx, mut connection_rx) = tokio::sync::mpsc::channel(10);
+        let telnet = Telnet::new(tx.clone());
+        let mut broker = ConnectionBroker::new(vm_tx, rx, telnet);
+
+        broker.run().await;
+
+        //
+        // BrokerOp::NewConnection
+        //
+        let connection = Connection { id: ConnectionId(1), address: SocketAddr::from(([127, 0, 0, 1], 1234)) };
+        let op = BrokerOp::NewConnection(connection.clone(), connection_tx);
+        tx.send_async(op).await.unwrap();
+
+        let Some(vm_op) = vm_rx.recv().await else {
+            panic!("Failed to receive message");
+        };
+
+        assert_eq!(vm_op, VmOp::Connected(connection));
+        assert!(broker.connections.contains_key(&ConnectionId(1)));
+
+        //
+        // BrokerOp::SendMessage
+        //
+        let op = BrokerOp::SendMessage("Welcome to the MUD!".to_string(), ConnectionId(1));
+        tx.send_async(op).await.unwrap();
+
+        let Some(connection_op) = connection_rx.recv().await else {
+            panic!("Failed to receive message");
+        };
+
+        assert_eq!(connection_op, ConnectionOp::SendMessage("Welcome to the MUD!".to_string()));
     }
 }

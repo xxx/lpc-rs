@@ -12,7 +12,7 @@ pub enum BrokerOp {
 }
 
 /// Operations that can be performed on outgoing connections
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ConnectionOp {
     /// Send a message to the user
     SendMessage(String),

@@ -50,24 +50,6 @@ pub const SIZEOF: &str = "sizeof";
 pub const THIS_OBJECT: &str = "this_object";
 pub const THROW: &str = "throw";
 
-// /// A blanket to get a compile-time constant map of efuns regardless of stack size.
-// pub trait HasEfuns<const STACKSIZE: usize> {
-//     const EFUNS: phf::Map<&'static str, AsyncEfun<STACKSIZE>> = phf_map! {
-//         "call_out" => call_out::call_out as Efun<STACKSIZE>,
-//         "clone_object" => clone_object::clone_object,
-//         "compose" => compose::compose as Efun<STACKSIZE>,
-//         "debug" => debug::debug as Efun<STACKSIZE>,
-//         "dump" => dump::dump as Efun<STACKSIZE>,
-//         "file_name" => file_name::file_name as Efun<STACKSIZE>,
-//         "papplyv" => papplyv::papplyv as Efun<STACKSIZE>,
-//         "query_call_out" => query_call_out::query_call_out as Efun<STACKSIZE>,
-//         "query_call_outs" => query_call_outs::query_call_outs as Efun<STACKSIZE>,
-//         "remove_call_out" => remove_call_out::remove_call_out as Efun<STACKSIZE>,
-//         "this_object" => this_object::this_object as Efun<STACKSIZE>,
-//         "throw" => throw::throw as Efun<STACKSIZE>,
-//     };
-// }
-
 pub async fn call_efun<const STACKSIZE: usize>(
     efun_name: &str,
     efun_context: &mut EfunContext<'_, STACKSIZE>,

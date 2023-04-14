@@ -2,6 +2,7 @@ pub mod connection_broker;
 pub mod ops;
 
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU32, Ordering};
 use futures::{SinkExt, StreamExt};
 use futures::stream::SplitSink;
 use nectar::TelnetCodec;
@@ -9,11 +10,13 @@ use nectar::event::TelnetEvent;
 use once_cell::sync::OnceCell;
 use tokio::net::{TcpListener, TcpStream};
 use flume::Sender as FlumeSender;
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::codec::{Decoder, Framed};
-use tracing::{error, info, warn};
+use tracing::{error, info, warn, trace};
 use crate::telnet::connection_broker::{Connection, ConnectionId};
 use crate::telnet::ops::{BrokerOp, ConnectionOp};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 /// The incoming connection handler. Once established, connections are handled by [`ConnectionManager`].
 #[derive(Debug)]
@@ -67,10 +70,10 @@ impl Telnet {
         let _ = self.handle.set(handle);
     }
 
-    /// Start the main loop for a single user's connection. Handles send and receives.
+    /// Start the main loop for a single user's connection. Handles sends and receives.
     fn new_connection(stream: TcpStream, remote_ip: SocketAddr, broker_tx: FlumeSender<BrokerOp>) {
         // connection ID 0 is reserved for system use
-        static CONNECTION_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+        static CONNECTION_ID: AtomicU32 = AtomicU32::new(1);
 
         tokio::spawn(async move {
             let codec = TelnetCodec::new(4096);
@@ -80,15 +83,17 @@ impl Telnet {
 
             // TODO: login / auth
 
-            let (tx, mut rx) = tokio::sync::mpsc::channel::<ConnectionOp>(128);
+            let (tx, mut rx) = mpsc::channel::<ConnectionOp>(128);
 
-            let connection_id = ConnectionId(CONNECTION_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
+            let connection_id = ConnectionId(CONNECTION_ID.fetch_add(1, Ordering::Relaxed));
             let connection = Connection {
                 id: connection_id,
                 address: remote_ip,
             };
 
             let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection, tx)).await else {
+                let msg = TelnetEvent::Message("The server is currently unable to accept new connections. Please try again shortly.".to_string());
+                let _ = sink.send(msg).await;
                 error!(?connection_id, "Failed to send BrokerOp::NewConnection. Dropping connection.");
                 return;
             };
@@ -96,10 +101,11 @@ impl Telnet {
             loop {
                 tokio::select! {
                     send_to_user = rx.recv() => {
-                        info!("Received message from VM: {:?}", send_to_user);
+                        trace!("Received message from VM: {:?}", send_to_user);
+
                         match send_to_user {
                             Some(ConnectionOp::SendMessage(msg)) => {
-                                sink.send(TelnetEvent::Message(msg)).await.unwrap();
+                                let _ = sink.send(TelnetEvent::Message(msg)).await;
                             },
                             None => {
                                 info!("Broker closed the channel for {}. Closing connection.", &remote_ip);
@@ -113,7 +119,7 @@ impl Telnet {
                                 Self::handle_input_event(msg, &mut sink).await;
                             }
                             Some(Err(e)) => {
-                                warn!("Error: {:?}", e);
+                                warn!("User input error: {:?}", e);
                             }
                             None => {
                                 info!("Connection closed from {}", &remote_ip);
@@ -133,7 +139,7 @@ impl Telnet {
             }
             TelnetEvent::Message(msg) => {
                 println!("Received message: {}", msg);
-                sink.send(TelnetEvent::Message("Hello, world!".to_string())).await.unwrap();
+                let _ = sink.send(TelnetEvent::Message("Hello, world!".to_string())).await;
             }
             TelnetEvent::Do(option) => {
                 println!("Received DO: {:?}", option);
@@ -159,8 +165,22 @@ impl Telnet {
         }
     }
 
-    /// Stops the telnet server.
+    /// Stops the telnet server. This will disable new connections.
     pub fn shutdown(&mut self) {
+        info!("Shutting down telnet server");
         self.handle.take();
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//
+//     #[tokio::test]
+//     async fn test_connection_loop() {
+//         let (tx, _rx) = flume::unbounded();
+//
+//
+//
+//     }
+// }

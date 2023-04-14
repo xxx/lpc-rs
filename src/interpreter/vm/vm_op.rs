@@ -4,7 +4,7 @@ use crate::interpreter::task::task_id::TaskId;
 use crate::telnet::connection_broker::{Connection};
 
 /// Operations that can be communicated to the [`Vm`](crate::interpreter::vm::Vm) remotely.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum VmOp {
     /// A new connection has been established.
     Connected(Connection),
