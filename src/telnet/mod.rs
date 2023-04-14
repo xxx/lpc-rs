@@ -47,8 +47,6 @@ impl Telnet {
             return;
         }
 
-        info!("Starting telnet server");
-
         let broker_tx = self.broker_tx.clone();
 
         let handle = tokio::spawn(async move {
@@ -60,6 +58,8 @@ impl Telnet {
                     // return;
                 }
             };
+
+            info!("Listening for connections on {}", listener.local_addr().unwrap());
 
             loop {
                 while let Ok((stream, remote_ip)) = listener.accept().await {
