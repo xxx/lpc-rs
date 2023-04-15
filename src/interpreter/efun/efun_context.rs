@@ -165,6 +165,15 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.task_context.insert_process(process);
     }
 
+    ///Remove the passed [`Process`] from the object space
+    #[inline]
+    pub fn remove_process<P>(&self, process: P)
+    where
+        P: Into<Arc<RwLock<Process>>>,
+    {
+        self.task_context.remove_process(process);
+    }
+
     /// Return a clone of the current stack, for snapshotting
     #[cfg(test)]
     pub fn clone_stack(&self) -> CallStack<N> {

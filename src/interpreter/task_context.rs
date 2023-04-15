@@ -150,6 +150,15 @@ impl TaskContext {
         ObjectSpace::insert_process(&self.object_space, process)
     }
 
+    /// Remove the passed [`Process`] from the object space.
+    #[inline]
+    pub fn remove_process<P>(&self, process: P)
+    where
+        P: Into<Arc<RwLock<Process>>>,
+    {
+        ObjectSpace::remove_process(&self.object_space, process)
+    }
+
     /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
     /// then insert it into the object space.
     #[inline]

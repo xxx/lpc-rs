@@ -4,6 +4,7 @@ pub(crate) mod call_out;
 pub(crate) mod clone_object;
 pub(crate) mod compose;
 pub(crate) mod debug;
+pub(crate) mod destruct;
 pub(crate) mod dump;
 pub(crate) mod file_name;
 pub(crate) mod find_object;
@@ -41,6 +42,7 @@ pub const CATCH: &str = "catch";
 pub const CLONE_OBJECT: &str = "clone_object";
 pub const COMPOSE: &str = "compose";
 pub const DEBUG: &str = "debug";
+pub const DESTRUCT: &str = "destruct";
 pub const DUMP: &str = "dump";
 pub const FILE_NAME: &str = "file_name";
 pub const FIND_OBJECT: &str = "find_object";
@@ -61,6 +63,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
         CLONE_OBJECT => clone_object::clone_object(efun_context).await,
         COMPOSE => compose::compose(efun_context).await,
         DEBUG => debug::debug(efun_context).await,
+        DESTRUCT => destruct::destruct(efun_context).await,
         DUMP => dump::dump(efun_context).await,
         FILE_NAME => file_name::file_name(efun_context).await,
         FIND_OBJECT => find_object::find_object(efun_context).await,
@@ -184,6 +187,19 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::String(false), LpcType::Mixed(false)])
             .build()
             .expect("failed to build debug"),
+    );
+
+    m.insert(
+        DESTRUCT,
+        FunctionPrototypeBuilder::default()
+            .name(DESTRUCT)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Void)
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Object(false) | LpcType::Object(true)])
+            .build()
+            .expect("failed to build destruct"),
     );
 
     m.insert(

@@ -110,6 +110,20 @@ impl ObjectSpace {
         space.insert_process_directly(name, process);
     }
 
+    pub fn remove_process<P>(space_cell: &Arc<RwLock<Self>>, process: P)
+    where
+        P: Into<Arc<RwLock<Process>>>,
+    {
+        let process = process.into();
+        let name = {
+            let space = space_cell.read();
+            space.prepare_filename(&process.read())
+        };
+
+        let mut space = space_cell.write();
+        space.processes.remove(&name);
+    }
+
     fn prepare_filename(&self, process: &Process) -> String {
         let name = process.localized_filename(&self.config.lib_dir);
         let name = name

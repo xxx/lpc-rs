@@ -48,7 +48,6 @@ macro_rules! value_to_ref {
 }
 
 /// A more dangerous version of [`try_extract_value`], that panics instead.
-/// Only intended for use in this file (and tests may use it at-will)
 #[macro_export]
 macro_rules! extract_value {
     ( $x:expr, $y:path ) => {
