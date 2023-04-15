@@ -85,7 +85,6 @@ fn to_millis(x: LpcFloat) -> Duration {
 
 #[cfg(test)]
 mod tests {
-
     use std::sync::Arc;
 
     use lpc_rs_utils::config::Config;
@@ -98,6 +97,8 @@ mod tests {
         },
         test_support::compile_prog,
     };
+    use crate::interpreter::task::task_id::TaskId;
+    use crate::interpreter::vm::vm_op::VmOp;
 
     #[tokio::test]
     async fn test_disallows_dynamic_receiver() {
@@ -131,38 +132,37 @@ mod tests {
         );
     }
 
-    #[test]
-    #[should_panic]
-    fn test_enqueues_task() {
-        todo!("fix this up for tokio");
-        //
-        // let code = r##"
-        //     void create() {
-        //         call_out(&call_out_test(), 0.001);
-        //     }
-        //
-        //     void call_out_test() {
-        //         dump("foobar");
-        //     }
-        // "##;
-        //
-        // let (tx, rx) = tokio::sync::mpsc::channel(128);
-        // let (program, _, _) = compile_prog(code);
-        // let call_outs = Rc::new(RwLock::new(CallOuts::new(tx.clone())));
-        // let result = Task::<5>::initialize_program(
-        //     program,
-        //     Config::default(),
-        //     RwLock::new(ObjectSpace::default()),
-        //     Memory::default(),
-        //     RwLock::new(GcBank::default()),
-        //     call_outs,
-        //     tx,
-        //     &mut cell_key,
-        // );
-        //
-        // assert!(result.is_ok());
-        //
-        // let msg = rx.recv().unwrap();
-        // assert_eq!(msg, VmOp::PrioritizeCallOut(0));
+    #[tokio::test]
+    async fn test_enqueues_task() {
+        let code = r##"
+            void create() {
+                call_out(&call_out_test(), 0.001);
+            }
+
+            void call_out_test() {
+                dump("foobar");
+            }
+        "##;
+
+        let (tx, mut rx) = tokio::sync::mpsc::channel(128);
+        let (program, _, _) = compile_prog(code);
+        let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
+        let result = Task::<5>::initialize_program(
+            program,
+            Config::default(),
+            RwLock::new(ObjectSpace::default()),
+            Memory::default(),
+            RwLock::new(GcBank::default()),
+            call_outs,
+            tx,
+        ).await;
+
+        assert!(result.is_ok());
+
+        let msg = rx.recv().await.unwrap();
+        assert_eq!(msg, VmOp::TaskComplete(TaskId(1)));
+
+        let msg = rx.recv().await.unwrap();
+        assert_eq!(msg, VmOp::PrioritizeCallOut(0));
     }
 }

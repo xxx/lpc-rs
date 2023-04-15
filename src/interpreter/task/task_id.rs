@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// A unique ID, suitable for uniquely identifying an object that contains
 /// references that could be garbage-collected.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct TaskId(usize);
+pub struct TaskId(pub usize);
 
 impl TaskId {
     /// Create a new [`TaskId`].
