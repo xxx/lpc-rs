@@ -1,7 +1,9 @@
 use lpc_rs_errors::{LpcError, Result};
 
-use crate::{interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue}, try_extract_value};
-
+use crate::{
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
+    try_extract_value,
+};
 
 /// `destruct`, an efun for deleting objects from the [`ObjectSpace`]
 pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -11,7 +13,7 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         | LpcRef::Int(_)
         | LpcRef::String(_)
         | LpcRef::Mapping(_)
-        | LpcRef::Function(_) => {},
+        | LpcRef::Function(_) => {}
         LpcRef::Array(arr) => {
             let arr = arr.read();
             let LpcValue::Array(arr) = &*arr else {
@@ -49,14 +51,17 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use parking_lot::RwLock;
+
     use lpc_rs_utils::config::Config;
-    use crate::interpreter::call_outs::CallOuts;
-    use crate::interpreter::gc::gc_bank::GcBank;
-    use crate::interpreter::memory::Memory;
-    use crate::interpreter::object_space::ObjectSpace;
-    use crate::interpreter::task::Task;
-    use crate::test_support::compile_prog;
+    use parking_lot::RwLock;
+
+    use crate::{
+        interpreter::{
+            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
+            task::Task,
+        },
+        test_support::compile_prog,
+    };
 
     #[tokio::test]
     async fn test_destruct() {
@@ -80,8 +85,8 @@ mod tests {
             call_outs,
             tx,
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         assert!(result.context.object_space.read().is_empty());
     }
