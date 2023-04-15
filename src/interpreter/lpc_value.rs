@@ -5,7 +5,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use lpc_rs_core::{BaseFloat, LpcFloatInner, LpcIntInner};
+use lpc_rs_core::{BaseFloat, LpcIntInner};
 use parking_lot::RwLock;
 
 use crate::interpreter::{

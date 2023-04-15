@@ -12,8 +12,8 @@ impl LpcInt {
 
     delegate! {
         to self.0 {
-            pub fn wrapping_add(self, #[into] rhs: LpcIntInner) -> LpcIntInner;
-            pub fn wrapping_sub(self, #[into] rhs: LpcIntInner) -> LpcIntInner;
+            pub fn wrapping_add(self, rhs: LpcIntInner) -> LpcIntInner;
+            pub fn wrapping_sub(self, rhs: LpcIntInner) -> LpcIntInner;
         }
     }
 }

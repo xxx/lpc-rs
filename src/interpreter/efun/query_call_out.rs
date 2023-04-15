@@ -5,7 +5,7 @@ use crate::interpreter::{
     lpc_value::LpcValue,
 };
 use crate::interpreter::lpc_ref::NULL;
-use crate::interpreter::lpc_int::LpcInt;
+
 
 /// `query_call_out`, an efun for returning information about a single call out.
 pub async fn query_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -79,6 +79,7 @@ mod tests {
         interpreter::{
             call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
             task::Task,
+            lpc_int::LpcInt,
         },
         test_support::compile_prog,
     };
