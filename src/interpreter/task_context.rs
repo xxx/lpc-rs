@@ -137,8 +137,6 @@ impl TaskContext {
     where
         T: AsRef<str>,
     {
-        println!("Looking up process: {}", path.as_ref());
-        println!("Object space: {:#?}", self.object_space.read());
         self.object_space.read().lookup(path).cloned()
     }
 

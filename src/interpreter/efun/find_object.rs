@@ -35,8 +35,6 @@ pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         }
     };
 
-    println!("find_object: {:?}", result);
-
     context.return_efun_result(result);
 
     Ok(())
