@@ -1,7 +1,7 @@
 use lpc_rs_errors::{LpcError, Result};
 
 use crate::{interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue}, try_extract_value};
-use crate::interpreter::object_space::ObjectSpace;
+
 
 /// `destruct`, an efun for deleting objects from the [`ObjectSpace`]
 pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -54,9 +54,9 @@ mod tests {
     use crate::interpreter::call_outs::CallOuts;
     use crate::interpreter::gc::gc_bank::GcBank;
     use crate::interpreter::memory::Memory;
+    use crate::interpreter::object_space::ObjectSpace;
     use crate::interpreter::task::Task;
     use crate::test_support::compile_prog;
-    use super::*;
 
     #[tokio::test]
     async fn test_destruct() {
