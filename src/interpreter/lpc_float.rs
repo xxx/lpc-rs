@@ -1,6 +1,8 @@
 use std::fmt::{Display, Formatter};
-use serde::{Deserialize, Serialize};
+
 use lpc_rs_core::{BaseFloat, LpcFloatInner};
+use serde::{Deserialize, Serialize};
+
 use crate::interpreter::lpc_int::LpcInt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

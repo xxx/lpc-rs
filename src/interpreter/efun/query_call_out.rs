@@ -1,11 +1,12 @@
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    call_outs::CallOut, efun::efun_context::EfunContext, lpc_array::LpcArray, lpc_ref::LpcRef,
+    call_outs::CallOut,
+    efun::efun_context::EfunContext,
+    lpc_array::LpcArray,
+    lpc_ref::{LpcRef, NULL},
     lpc_value::LpcValue,
 };
-use crate::interpreter::lpc_ref::NULL;
-
 
 /// `query_call_out`, an efun for returning information about a single call out.
 pub async fn query_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -50,7 +51,8 @@ pub fn call_out_array_ref<const N: usize>(
         call_out
             .time_remaining()
             .map(|duration| duration.num_milliseconds())
-            .unwrap_or(0).into(),
+            .unwrap_or(0)
+            .into(),
     ));
 
     // push the number of milliseconds between repeats
@@ -58,7 +60,8 @@ pub fn call_out_array_ref<const N: usize>(
         call_out
             .repeat_duration()
             .map(|duration| duration.num_milliseconds())
-            .unwrap_or(0).into(),
+            .unwrap_or(0)
+            .into(),
     ));
 
     let result = context.value_to_ref(LpcValue::Array(LpcArray::new(arr)));
@@ -77,9 +80,8 @@ mod tests {
     use super::*;
     use crate::{
         interpreter::{
-            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
-            task::Task,
-            lpc_int::LpcInt,
+            call_outs::CallOuts, gc::gc_bank::GcBank, lpc_int::LpcInt, memory::Memory,
+            object_space::ObjectSpace, task::Task,
         },
         test_support::compile_prog,
     };

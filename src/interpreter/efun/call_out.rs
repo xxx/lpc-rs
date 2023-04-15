@@ -7,11 +7,10 @@ use lpc_rs_errors::{LpcError, Result};
 use crate::{
     interpreter::{
         efun::efun_context::EfunContext, function_type::function_address::FunctionAddress,
-        lpc_ref::LpcRef, lpc_value::LpcValue,
+        lpc_int::LpcInt, lpc_ref::LpcRef, lpc_value::LpcValue,
     },
     try_extract_value,
 };
-use crate::interpreter::lpc_int::LpcInt;
 
 /// `call_out`, an efun for calling a function at some future point in time
 pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {

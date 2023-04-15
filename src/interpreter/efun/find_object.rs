@@ -139,9 +139,6 @@ mod tests {
         let mut task = Task::<10>::new(context.clone());
         task.eval(func.clone(), &[]).await.expect("task failed");
 
-        assert_eq!(
-            task.result().unwrap(),
-            &NULL
-        );
+        assert_eq!(task.result().unwrap(), &NULL);
     }
 }

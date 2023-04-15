@@ -11,13 +11,13 @@ use parking_lot::RwLock;
 use crate::interpreter::{
     function_type::function_ptr::FunctionPtr,
     lpc_array::LpcArray,
+    lpc_float::LpcFloat,
+    lpc_int::LpcInt,
     lpc_mapping::LpcMapping,
     lpc_ref::{HashedLpcRef, LpcRef},
     lpc_string::LpcString,
     process::Process,
 };
-use crate::interpreter::lpc_float::LpcFloat;
-use crate::interpreter::lpc_int::LpcInt;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.

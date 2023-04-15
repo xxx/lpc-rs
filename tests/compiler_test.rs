@@ -8,9 +8,8 @@ use indoc::indoc;
 use lpc_rs::{
     compiler::{Compiler, CompilerBuilder},
     extract_value,
-    interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue, vm::Vm},
+    interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, lpc_value::LpcValue, vm::Vm},
 };
-use lpc_rs::interpreter::lpc_int::LpcInt;
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 

@@ -41,6 +41,7 @@ use crate::{
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
+        lpc_int::LpcInt,
         lpc_ref::{LpcRef, NULL},
         lpc_string::LpcString,
         lpc_value::LpcValue,
@@ -54,7 +55,6 @@ use crate::{
     },
     try_extract_value,
 };
-use crate::interpreter::lpc_int::LpcInt;
 
 // this is just to shut clippy up
 type ProcessFunctionPair = (Weak<RwLock<Process>>, Arc<ProgramFunction>);
@@ -743,7 +743,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             let index2 = &*get_location(stack, r3)?;
 
                             if let (LpcRef::Int(start), LpcRef::Int(end)) = (&index1, &index2) {
-                                let (real_start, real_end) = resolve_range(start.0, end.0, vec.len());
+                                let (real_start, real_end) =
+                                    resolve_range(start.0, end.0, vec.len());
 
                                 if real_start <= real_end {
                                     let slice = &vec[real_start..=real_end];
@@ -1634,7 +1635,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let vec = try_extract_value!(*value, LpcValue::Array);
 
                 if let LpcRef::Int(i) = lpc_ref {
-                    let idx = if i.0 >= 0 { i.0 } else { vec.len() as LpcIntInner + i.0 };
+                    let idx = if i.0 >= 0 {
+                        i.0
+                    } else {
+                        vec.len() as LpcIntInner + i.0
+                    };
 
                     if idx >= 0 {
                         if let Some(v) = vec.get(idx as usize) {

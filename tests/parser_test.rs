@@ -25,7 +25,8 @@ use lpc_rs::{
     lpc_parser,
 };
 use lpc_rs_core::{
-    global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility, LpcFloatInner, LpcIntInner,
+    global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility, LpcFloatInner,
+    LpcIntInner,
 };
 use lpc_rs_errors::{span::Span, Result};
 use ustr::ustr;

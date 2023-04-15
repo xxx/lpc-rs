@@ -17,11 +17,9 @@ use tracing::{instrument, trace};
 
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
-    interpreter::{gc::mark::Mark, lpc_value::LpcValue},
+    interpreter::{gc::mark::Mark, lpc_float::LpcFloat, lpc_int::LpcInt, lpc_value::LpcValue},
     try_extract_value,
 };
-use crate::interpreter::lpc_float::LpcFloat;
-use crate::interpreter::lpc_int::{LpcInt};
 
 pub const NULL: LpcRef = LpcRef::Int(LpcInt(0));
 
@@ -240,10 +238,12 @@ impl LpcRef {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_sub(y.0).into())),
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float((x.0 - y.0).into())),
-            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float((x.0 - y.0 as BaseFloat).into())),
-            (LpcRef::Int(x), LpcRef::Float(y)) => {
-                Ok(LpcValue::Float(LpcFloat::from(LpcFloatInner::from(x.0 as BaseFloat) - y.0)))
+            (LpcRef::Float(x), LpcRef::Int(y)) => {
+                Ok(LpcValue::Float((x.0 - y.0 as BaseFloat).into()))
             }
+            (LpcRef::Int(x), LpcRef::Float(y)) => Ok(LpcValue::Float(LpcFloat::from(
+                LpcFloatInner::from(x.0 as BaseFloat) - y.0,
+            ))),
             (LpcRef::Array(vec), LpcRef::Array(vec2)) => {
                 let new_vec = try_extract_value!(*vec.read(), LpcValue::Array).clone();
                 let removed_vec = try_extract_value!(*vec2.read(), LpcValue::Array).clone();
@@ -262,10 +262,12 @@ impl LpcRef {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.0.wrapping_mul(y.0).into())),
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float((x.0 * y.0).into())),
-            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float((x.0 * y.0 as BaseFloat).into())),
-            (LpcRef::Int(x), LpcRef::Float(y)) => {
-                Ok(LpcValue::Float((LpcFloatInner::from(x.0 as BaseFloat) * y.0).into()))
+            (LpcRef::Float(x), LpcRef::Int(y)) => {
+                Ok(LpcValue::Float((x.0 * y.0 as BaseFloat).into()))
             }
+            (LpcRef::Int(x), LpcRef::Float(y)) => Ok(LpcValue::Float(
+                (LpcFloatInner::from(x.0 as BaseFloat) * y.0).into(),
+            )),
             (LpcRef::String(x), LpcRef::Int(y)) => {
                 let b = x.read();
                 let string = try_extract_value!(*b, LpcValue::String);
@@ -311,7 +313,9 @@ impl LpcRef {
                 if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(LpcFloat(LpcFloatInner::from(x.0 as BaseFloat) / y.0)))
+                    Ok(LpcValue::Float(LpcFloat(
+                        LpcFloatInner::from(x.0 as BaseFloat) / y.0,
+                    )))
                 }
             }
             _ => Err(self.to_error(BinaryOperation::Div, rhs)),
@@ -345,7 +349,9 @@ impl LpcRef {
                 if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Remainder division by zero"))
                 } else {
-                    Ok(LpcValue::Float(LpcFloat(LpcFloatInner::from(x.0 as BaseFloat) % y.0)))
+                    Ok(LpcValue::Float(LpcFloat(
+                        LpcFloatInner::from(x.0 as BaseFloat) % y.0,
+                    )))
                 }
             }
             _ => Err(self.to_error(BinaryOperation::Mod, rhs)),
@@ -384,7 +390,9 @@ impl LpcRef {
                     modulo as u32
                 };
 
-                Ok(LpcValue::Int(LpcInt(x.0.checked_shl(shift_by).unwrap_or(0))))
+                Ok(LpcValue::Int(LpcInt(
+                    x.0.checked_shl(shift_by).unwrap_or(0),
+                )))
             }
             _ => Err(self.to_error(BinaryOperation::Shl, rhs)),
         }
@@ -401,7 +409,9 @@ impl LpcRef {
                     modulo as u32
                 };
 
-                Ok(LpcValue::Int(LpcInt(x.0.checked_shr(shift_by).unwrap_or(0))))
+                Ok(LpcValue::Int(LpcInt(
+                    x.0.checked_shr(shift_by).unwrap_or(0),
+                )))
             }
             _ => Err(self.to_error(BinaryOperation::Shr, rhs)),
         }

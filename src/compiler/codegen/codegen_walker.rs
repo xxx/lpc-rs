@@ -2698,7 +2698,10 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
-                FConst(RegisterVariant::Local(Register(1)), LpcFloatInner::from(123.45)),
+                FConst(
+                    RegisterVariant::Local(Register(1)),
+                    LpcFloatInner::from(123.45),
+                ),
                 IConst(RegisterVariant::Local(Register(2)), 456),
                 IMul(
                     RegisterVariant::Local(Register(1)),
