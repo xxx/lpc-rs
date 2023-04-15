@@ -54,6 +54,7 @@ use crate::{
     },
     try_extract_value,
 };
+use crate::interpreter::lpc_int::LpcInt;
 
 // this is just to shut clippy up
 type ProcessFunctionPair = (Weak<RwLock<Process>>, Arc<ProgramFunction>);
@@ -501,10 +502,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::EqEq(r1, r2, r3) => {
                 let out = (get_loc!(self, r1)? == get_loc!(self, r2)?) as LpcIntInner;
 
-                set_loc!(self, r3, LpcRef::Int(out))?;
+                set_loc!(self, r3, LpcRef::Int(out.into()))?;
             }
             Instruction::FConst(r, f) => {
-                set_loc!(self, r, LpcRef::Float(f))?;
+                set_loc!(self, r, LpcRef::Float(f.into()))?;
             }
             Instruction::FunctionPtrConst {
                 location,
@@ -531,13 +532,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             },
             Instruction::IConst(r, i) => {
-                set_loc!(self, r, LpcRef::Int(i))?;
+                set_loc!(self, r, LpcRef::Int(i.into()))?;
             }
             Instruction::IConst0(r) => {
-                set_loc!(self, r, LpcRef::Int(0))?;
+                set_loc!(self, r, NULL)?;
             }
             Instruction::IConst1(r) => {
-                set_loc!(self, r, LpcRef::Int(1))?;
+                set_loc!(self, r, LpcRef::Int(1.into()))?;
             }
             Instruction::IDiv(r1, r2, r3) => match get_loc!(self, r1)?.div(&*get_loc!(self, r2)?) {
                 Ok(result) => set_loc!(self, r3, self.context.memory().value_to_ref(result))?,
@@ -578,7 +579,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let v = &*get_loc!(self, r1)?;
 
                 // TODO: re-decide of 0.0 floats should match here and with Jz
-                if v != &LpcRef::Int(0) && v != &LpcRef::Float(Total::from(0.0)) {
+                if v != &NULL && v != &LpcRef::Float(Total::from(0.0).into()) {
                     let frame = self.stack.current_frame_mut()?;
                     frame.set_pc(address);
                 }
@@ -586,7 +587,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Jz(r1, address) => {
                 let v = &*get_loc!(self, r1)?;
 
-                if v == &LpcRef::Int(0) || v == &LpcRef::Float(Total::from(0.0)) {
+                if v == &NULL || v == &LpcRef::Float(Total::from(0.0).into()) {
                     let frame = self.stack.current_frame_mut()?;
                     frame.set_pc(address);
                 }
@@ -636,8 +637,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::Not(r1, r2) => {
                 let matched = match &*get_loc!(self, r1)? {
-                    LpcRef::Int(x) => LpcRef::Int((*x == 0) as LpcIntInner),
-                    LpcRef::Float(x) => LpcRef::Int((*x == 0.0) as LpcIntInner),
+                    LpcRef::Int(x) => LpcRef::Int(LpcInt((*x == 0) as LpcIntInner)),
+                    LpcRef::Float(x) => LpcRef::Int(LpcInt((*x == 0.0) as LpcIntInner)),
 
                     // These rest always have a value at runtime.
                     // Any null / undefined values would be LpcRef::Ints, handled above.
@@ -645,7 +646,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     | LpcRef::Array(_)
                     | LpcRef::Mapping(_)
                     | LpcRef::Object(_)
-                    | LpcRef::Function(_) => LpcRef::Int(0),
+                    | LpcRef::Function(_) => NULL,
                 };
 
                 set_loc!(self, r2, matched)?;
@@ -653,7 +654,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::NotEq(r1, r2, r3) => {
                 let out = (get_loc!(self, r1)? != get_loc!(self, r2)?) as LpcIntInner;
 
-                set_loc!(self, r3, LpcRef::Int(out))?;
+                set_loc!(self, r3, LpcRef::Int(LpcInt(out)))?;
             }
             Instruction::Or(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| x.bitor(y))?;
@@ -742,7 +743,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             let index2 = &*get_location(stack, r3)?;
 
                             if let (LpcRef::Int(start), LpcRef::Int(end)) = (&index1, &index2) {
-                                let (real_start, real_end) = resolve_range(*start, *end, vec.len());
+                                let (real_start, real_end) = resolve_range(start.0, end.0, vec.len());
 
                                 if real_start <= real_end {
                                     let slice = &vec[real_start..=real_end];
@@ -773,7 +774,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                             if let (LpcRef::Int(start), LpcRef::Int(end)) = (&index1, &index2) {
                                 let (real_start, real_end) =
-                                    resolve_range(*start, *end, string.len());
+                                    resolve_range(start.0, end.0, string.len());
 
                                 if real_start <= real_end {
                                     let len = real_end - real_start + 1;
@@ -1633,7 +1634,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let vec = try_extract_value!(*value, LpcValue::Array);
 
                 if let LpcRef::Int(i) = lpc_ref {
-                    let idx = if i >= 0 { i } else { vec.len() as LpcIntInner + i };
+                    let idx = if i.0 >= 0 { i.0 } else { vec.len() as LpcIntInner + i.0 };
 
                     if idx >= 0 {
                         if let Some(v) = vec.get(idx as usize) {
@@ -1655,20 +1656,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let string = try_extract_value!(*value, LpcValue::String).to_str();
 
                 if let LpcRef::Int(i) = lpc_ref {
-                    let idx = if i >= 0 {
-                        i
+                    let idx = if i.0 >= 0 {
+                        i.0
                     } else {
-                        string.len() as LpcIntInner + i
+                        string.len() as LpcIntInner + i.0
                     };
 
                     if idx >= 0 {
                         if let Some(v) = string.chars().nth(idx as usize) {
-                            set_loc!(self, destination, LpcRef::Int(v as i64))?;
+                            set_loc!(self, destination, LpcRef::Int(LpcInt(v as LpcIntInner)))?;
                         } else {
-                            set_loc!(self, destination, LpcRef::Int(0))?;
+                            set_loc!(self, destination, NULL)?;
                         }
                     } else {
-                        set_loc!(self, destination, LpcRef::Int(0))?;
+                        set_loc!(self, destination, NULL)?;
                     }
                 } else {
                     return Err(self.runtime_error(format!(
@@ -1716,7 +1717,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let map = try_extract_value!(*value, LpcValue::Mapping);
 
                     let index = match lpc_ref {
-                        LpcRef::Int(i) => *i,
+                        LpcRef::Int(i) => i.0,
                         _ => {
                             return Err(
                                 self.runtime_error(format!("Invalid index type: {}", lpc_ref))
@@ -1772,7 +1773,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ) -> Result<()> {
         let mut container = get_loc!(self, container_loc)?.into_owned();
         let index = &*get_loc!(self, index_loc)?;
-        let array_idx = if let LpcRef::Int(i) = index { *i } else { 0 };
+        let array_idx = if let LpcRef::Int(i) = index { i.0 } else { 0 };
 
         match container {
             LpcRef::Array(vec_ref) => {
@@ -1951,7 +1952,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let out = operation(ref1, ref2) as LpcIntInner;
 
-        set_loc!(self, r3, LpcRef::Int(out))
+        set_loc!(self, r3, LpcRef::Int(LpcInt(out)))
     }
 
     /// convenience helper to generate runtime errors
@@ -2093,8 +2094,8 @@ mod tests {
     impl BareVal {
         pub fn from_lpc_ref(lpc_ref: &LpcRef) -> Self {
             match lpc_ref {
-                LpcRef::Float(x) => BareVal::Float(*x),
-                LpcRef::Int(x) => BareVal::Int(*x),
+                LpcRef::Float(x) => BareVal::Float(x.0),
+                LpcRef::Int(x) => BareVal::Int(x.0),
                 LpcRef::String(x) => {
                     let xb = x.read();
                     let s = extract_value!(&*xb, LpcValue::String);

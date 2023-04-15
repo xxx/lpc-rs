@@ -9,7 +9,7 @@ pub async fn remove_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -
         return Err(context.runtime_bug("non-int call out ID sent to `remove_call_out`"));
     };
 
-    if idx < 0 {
+    if idx.0 < 0 {
         return Err(context.runtime_error(format!(
             "invalid call out ID `{idx}` sent to `remove_call_out`"
         )));
@@ -17,7 +17,7 @@ pub async fn remove_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -
 
     let removed = {
         let mut call_outs = context.call_outs().write();
-        call_outs.remove(idx as usize)
+        call_outs.remove(idx.0 as usize)
     };
 
     let ret = removed
@@ -29,7 +29,7 @@ pub async fn remove_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -
         })
         .unwrap_or(-1);
 
-    let result = LpcRef::Int(ret);
+    let result = LpcRef::Int(ret.into());
     context.return_efun_result(result);
 
     Ok(())

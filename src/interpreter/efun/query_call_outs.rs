@@ -7,6 +7,7 @@ use crate::interpreter::{
     lpc_ref::LpcRef,
     lpc_value::LpcValue,
 };
+use crate::interpreter::lpc_int::LpcInt;
 
 /// `query_call_outs`, an efun for returning information about all call outs in a specific object
 pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -17,7 +18,7 @@ pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -
             };
             process.upgrade()
         }
-        LpcRef::Int(0) => Some(context.frame().process.clone()),
+        LpcRef::Int(LpcInt(0)) => Some(context.frame().process.clone()),
         _ => return Err(context.runtime_error("non-object sent to `query_call_outs`")),
     };
 
@@ -116,7 +117,7 @@ mod tests {
                             assert!(matches!(call_out[0], LpcRef::Object(_)));
                             assert!(matches!(call_out[1], LpcRef::Function(_)));
                             assert!(matches!(call_out[2], LpcRef::Int(_)));
-                            assert_eq!(call_out[3], LpcRef::Int(0));
+                            assert_eq!(call_out[3], LpcRef::Int(0.into()));
                         }
                         else {
                             panic!("inner is not an array");

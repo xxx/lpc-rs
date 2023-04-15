@@ -139,8 +139,9 @@ mod tests {
         let mut task = Task::<10>::new(context.clone());
         task.eval(func.clone(), &[]).await.expect("task failed");
 
-        let LpcRef::Int(0) = task.result().unwrap() else {
-            panic!("expected 0");
-        };
+        assert_eq!(
+            task.result().unwrap(),
+            &NULL
+        );
     }
 }

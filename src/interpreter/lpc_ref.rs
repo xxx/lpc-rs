@@ -20,8 +20,10 @@ use crate::{
     interpreter::{gc::mark::Mark, lpc_value::LpcValue},
     try_extract_value,
 };
+use crate::interpreter::lpc_float::LpcFloat;
+use crate::interpreter::lpc_int::{LpcInt};
 
-pub const NULL: LpcRef = LpcRef::Int(0);
+pub const NULL: LpcRef = LpcRef::Int(LpcInt(0));
 
 /// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
 ///
@@ -63,8 +65,8 @@ macro_rules! extract_value {
 /// This type is intended to be cheap to clone.
 #[derive(Clone)]
 pub enum LpcRef {
-    Float(LpcFloatInner),
-    Int(LpcIntInner),
+    Float(LpcFloat),
+    Int(LpcInt),
 
     /// Reference type, and stores a reference-counting pointer to the actual
     /// value
@@ -122,7 +124,7 @@ impl LpcRef {
     pub fn inc(&mut self) -> Result<()> {
         match self {
             LpcRef::Int(ref mut x) => {
-                *x = x.wrapping_add(1);
+                *x = x.wrapping_add(1).into();
 
                 Ok(())
             }
@@ -135,7 +137,7 @@ impl LpcRef {
     pub fn dec(&mut self) -> Result<()> {
         match self {
             LpcRef::Int(ref mut x) => {
-                *x = x.wrapping_sub(1);
+                *x = x.wrapping_sub(1).into();
                 Ok(())
             }
             _ => Err(LpcError::new(
@@ -177,13 +179,13 @@ impl LpcRef {
     pub fn add(&self, rhs: &Self) -> Result<LpcValue> {
         match self {
             LpcRef::Float(f) => match rhs {
-                LpcRef::Float(f2) => Ok(LpcValue::Float(*f + *f2)),
-                LpcRef::Int(i) => Ok(LpcValue::Float(*f + *i as BaseFloat)),
+                LpcRef::Float(f2) => Ok(LpcValue::Float((f.0 + f2.0).into())),
+                LpcRef::Int(i) => Ok(LpcValue::Float((f.0 + i.0 as BaseFloat).into())),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Int(i) => match rhs {
-                LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloatInner::from(*i as BaseFloat) + *f)),
-                LpcRef::Int(i2) => Ok(LpcValue::Int(i.wrapping_add(*i2))),
+                LpcRef::Float(f) => Ok(LpcValue::Float((LpcFloat::from(*i).0 + f.0).into())),
+                LpcRef::Int(i2) => Ok(LpcValue::Int(i.wrapping_add(i2.0).into())),
                 LpcRef::String(s) => Ok(LpcValue::String(
                     concatenate_strings(
                         i.to_string(),
@@ -236,11 +238,11 @@ impl LpcRef {
 
     pub fn sub(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_sub(*y))),
-            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x - *y)),
-            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x - *y as BaseFloat)),
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_sub(y.0).into())),
+            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float((x.0 - y.0).into())),
+            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float((x.0 - y.0 as BaseFloat).into())),
             (LpcRef::Int(x), LpcRef::Float(y)) => {
-                Ok(LpcValue::Float(LpcFloatInner::from(*x as BaseFloat) - *y))
+                Ok(LpcValue::Float(LpcFloat::from(LpcFloatInner::from(x.0 as BaseFloat) - y.0)))
             }
             (LpcRef::Array(vec), LpcRef::Array(vec2)) => {
                 let new_vec = try_extract_value!(*vec.read(), LpcValue::Array).clone();
@@ -258,24 +260,24 @@ impl LpcRef {
 
     pub fn mul(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_mul(*y))),
-            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x * *y)),
-            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x * *y as BaseFloat)),
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.0.wrapping_mul(y.0).into())),
+            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float((x.0 * y.0).into())),
+            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float((x.0 * y.0 as BaseFloat).into())),
             (LpcRef::Int(x), LpcRef::Float(y)) => {
-                Ok(LpcValue::Float(LpcFloatInner::from(*x as BaseFloat) * *y))
+                Ok(LpcValue::Float((LpcFloatInner::from(x.0 as BaseFloat) * y.0).into()))
             }
             (LpcRef::String(x), LpcRef::Int(y)) => {
                 let b = x.read();
                 let string = try_extract_value!(*b, LpcValue::String);
                 Ok(LpcValue::String(
-                    string::repeat_string(string.to_str(), *y)?.into(),
+                    string::repeat_string(string.to_str(), y.0)?.into(),
                 ))
             }
             (LpcRef::Int(x), LpcRef::String(y)) => {
                 let b = y.read();
                 let string = try_extract_value!(*b, LpcValue::String);
                 Ok(LpcValue::String(
-                    string::repeat_string(string.to_str(), *x)?.into(),
+                    string::repeat_string(string.to_str(), x.0)?.into(),
                 ))
             }
             _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
@@ -285,31 +287,31 @@ impl LpcRef {
     pub fn div(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
-                if y == &0 {
+                if y.0 == 0 {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Int(x.wrapping_div(*y)))
+                    Ok(LpcValue::Int(LpcInt(x.0.wrapping_div(y.0))))
                 }
             }
             (LpcRef::Float(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(*x / *y))
+                    Ok(LpcValue::Float(LpcFloat(x.0 / y.0)))
                 }
             }
             (LpcRef::Float(x), LpcRef::Int(y)) => {
-                if y == &0 {
+                if y.0 == 0 {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(*x / *y as BaseFloat))
+                    Ok(LpcValue::Float(LpcFloat(x.0 / y.0 as BaseFloat)))
                 }
             }
             (LpcRef::Int(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(LpcFloatInner::from(*x as BaseFloat) / *y))
+                    Ok(LpcValue::Float(LpcFloat(LpcFloatInner::from(x.0 as BaseFloat) / y.0)))
                 }
             }
             _ => Err(self.to_error(BinaryOperation::Div, rhs)),
@@ -319,31 +321,31 @@ impl LpcRef {
     pub fn rem(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
-                if y == &0 {
+                if y.0 == 0 {
                     Err(LpcError::new("Runtime Error: Remainder division by zero"))
                 } else {
-                    Ok(LpcValue::Int(x.wrapping_rem(*y)))
+                    Ok(LpcValue::Int(LpcInt(x.0.wrapping_rem(y.0))))
                 }
             }
             (LpcRef::Float(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(*x % *y))
+                    Ok(LpcValue::Float(LpcFloat(x.0 % y.0)))
                 }
             }
             (LpcRef::Float(x), LpcRef::Int(y)) => {
-                if y == &0 {
+                if y.0 == 0 {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(*x % *y as BaseFloat))
+                    Ok(LpcValue::Float(LpcFloat(x.0 % y.0 as BaseFloat)))
                 }
             }
             (LpcRef::Int(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Remainder division by zero"))
                 } else {
-                    Ok(LpcValue::Float(LpcFloatInner::from(*x as BaseFloat) % *y))
+                    Ok(LpcValue::Float(LpcFloat(LpcFloatInner::from(x.0 as BaseFloat) % y.0)))
                 }
             }
             _ => Err(self.to_error(BinaryOperation::Mod, rhs)),
@@ -352,21 +354,21 @@ impl LpcRef {
 
     pub fn bitand(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x & *y)),
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(LpcInt(x.0 & y.0))),
             _ => Err(self.to_error(BinaryOperation::And, rhs)),
         }
     }
 
     pub fn bitor(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x | *y)),
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(LpcInt(x.0 | y.0))),
             _ => Err(self.to_error(BinaryOperation::Or, rhs)),
         }
     }
 
     pub fn bitxor(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(*x ^ *y)),
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(LpcInt(x.0 ^ y.0))),
             _ => Err(self.to_error(BinaryOperation::Xor, rhs)),
         }
     }
@@ -374,7 +376,7 @@ impl LpcRef {
     pub fn shl(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
-                let modulo: LpcIntInner = y % (LpcIntInner::BITS as LpcIntInner);
+                let modulo: LpcIntInner = y.0 % (LpcIntInner::BITS as LpcIntInner);
 
                 let shift_by: u32 = if modulo < 0 {
                     LpcIntInner::BITS - (modulo.unsigned_abs() as u32)
@@ -382,7 +384,7 @@ impl LpcRef {
                     modulo as u32
                 };
 
-                Ok(LpcValue::Int(x.checked_shl(shift_by).unwrap_or(0)))
+                Ok(LpcValue::Int(LpcInt(x.0.checked_shl(shift_by).unwrap_or(0))))
             }
             _ => Err(self.to_error(BinaryOperation::Shl, rhs)),
         }
@@ -391,7 +393,7 @@ impl LpcRef {
     pub fn shr(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
-                let modulo: LpcIntInner = y % (LpcIntInner::BITS as LpcIntInner);
+                let modulo: LpcIntInner = y.0 % (LpcIntInner::BITS as LpcIntInner);
 
                 let shift_by: u32 = if modulo < 0 {
                     LpcIntInner::BITS - (modulo.unsigned_abs() as u32)
@@ -399,7 +401,7 @@ impl LpcRef {
                     modulo as u32
                 };
 
-                Ok(LpcValue::Int(x.checked_shr(shift_by).unwrap_or(0)))
+                Ok(LpcValue::Int(LpcInt(x.0.checked_shr(shift_by).unwrap_or(0))))
             }
             _ => Err(self.to_error(BinaryOperation::Shr, rhs)),
         }
@@ -408,7 +410,7 @@ impl LpcRef {
     /// Impl _bitwise_ Not for ints, (i.e. the unary `~` operator)
     pub fn bitnot(&self) -> Result<LpcValue> {
         match &self {
-            LpcRef::Int(x) => Ok(LpcValue::Int(!*x)),
+            LpcRef::Int(x) => Ok(LpcValue::Int(LpcInt(!x.0))),
             _ => Err(self.to_unary_op_error(UnaryOperation::BitwiseNot)),
         }
     }
@@ -444,14 +446,14 @@ impl Mark for LpcRef {
 impl From<BaseFloat> for LpcRef {
     #[inline]
     fn from(f: BaseFloat) -> Self {
-        Self::Float(LpcFloatInner::from(f))
+        Self::Float(LpcFloat::from(f))
     }
 }
 
 impl From<LpcIntInner> for LpcRef {
     #[inline]
     fn from(i: LpcIntInner) -> Self {
-        Self::Int(i)
+        Self::Int(LpcInt::from(i))
     }
 }
 
@@ -601,8 +603,8 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let int1 = LpcRef::Int(123);
-            let int2 = LpcRef::Int(456);
+            let int1 = LpcRef::from(123);
+            let int2 = LpcRef::from(456);
             let result = int1.add(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 579)
@@ -613,8 +615,8 @@ mod tests {
 
         #[test]
         fn int_int_overflow_wraps() {
-            let int1 = LpcRef::Int(LpcIntInner::MAX);
-            let int2 = LpcRef::Int(1);
+            let int1 = LpcRef::from(LpcIntInner::MAX);
+            let int2 = LpcRef::from(1);
             let result = int1.add(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, LpcIntInner::MIN)
@@ -640,7 +642,7 @@ mod tests {
         fn string_int() {
             let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("foo".into()), pool);
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
             let result = string.add(&int);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foo123"))
@@ -653,7 +655,7 @@ mod tests {
         fn int_string() {
             let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("foo".into()), pool);
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
             let result = int.add(&string);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("123foo"))
@@ -665,7 +667,7 @@ mod tests {
         #[test]
         fn float_int() {
             let float = LpcRef::from(666.66);
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
             let result = float.add(&int);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 789.66)
@@ -677,14 +679,14 @@ mod tests {
         #[test]
         fn float_int_overflow_does_not_panic() {
             let float = LpcRef::from(BaseFloat::MAX);
-            let int = LpcRef::Int(1);
+            let int = LpcRef::from(1);
             assert!((float.add(&int)).is_ok());
         }
 
         #[test]
         fn int_float() {
             let float = LpcRef::from(666.66);
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
             let result = int.add(&float);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 789.66)
@@ -695,7 +697,7 @@ mod tests {
 
         #[test]
         fn int_float_overflow_does_not_panic() {
-            let int = LpcRef::Int(LpcIntInner::MAX);
+            let int = LpcRef::Int(LpcInt(LpcIntInner::MAX));
             let float = LpcRef::from(1.0);
             assert!((int.add(&float)).is_ok());
         }
@@ -703,8 +705,8 @@ mod tests {
         #[test]
         fn array_array() {
             let pool = SharedArena::with_capacity(20);
-            let array = LpcValue::from(vec![LpcRef::Int(123)]);
-            let array2 = LpcValue::from(vec![LpcRef::Int(4433)]);
+            let array = LpcValue::from(vec![LpcRef::from(123)]);
+            let array2 = LpcValue::from(vec![LpcRef::from(4433)]);
             let result = value_to_ref!(array.clone(), pool).add(&value_to_ref!(array2, pool));
 
             match &result {
@@ -715,7 +717,7 @@ mod tests {
                     ); // ensure the addition makes a fully new copy
 
                     if let LpcValue::Array(a) = v {
-                        assert_eq!(a, &vec![LpcRef::Int(123), LpcRef::Int(4433)]);
+                        assert_eq!(a, &vec![LpcRef::from(123), LpcRef::from(4433)]);
                     } else {
                         panic!("no match")
                     }
@@ -786,7 +788,7 @@ mod tests {
         #[test]
         fn add_mismatched() {
             let pool = SharedArena::with_capacity(5);
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
             let array = value_to_ref!(LpcValue::Array(LpcArray::new(vec![])), pool);
             let result = int.add(&array);
 
@@ -799,8 +801,8 @@ mod tests {
 
         #[test]
         fn int_int_underflow_does_not_panic() {
-            let int = LpcRef::Int(LpcIntInner::MIN);
-            let int2 = LpcRef::Int(1);
+            let int = LpcRef::Int(LpcInt(LpcIntInner::MIN));
+            let int2 = LpcRef::from(1);
             let result = int.sub(&int2);
             assert!(result.is_ok());
         }
@@ -808,7 +810,7 @@ mod tests {
         #[test]
         fn float_int() {
             let float = LpcRef::from(666.66);
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
             let result = float.sub(&int);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 543.66)
@@ -820,7 +822,7 @@ mod tests {
         #[test]
         fn float_int_underflow_does_not_panic() {
             let float = LpcRef::from(BaseFloat::MIN);
-            let int = LpcRef::Int(LpcIntInner::MAX);
+            let int = LpcRef::Int(LpcInt::MAX);
             let result = float.sub(&int);
             assert!(result.is_ok());
         }
@@ -828,7 +830,7 @@ mod tests {
         #[test]
         fn int_float() {
             let float = LpcRef::from(666.66);
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
             let result = int.sub(&float);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, -543.66)
@@ -839,7 +841,7 @@ mod tests {
 
         #[test]
         fn int_float_underflow_does_not_panic() {
-            let int = LpcRef::Int(LpcIntInner::MIN);
+            let int = LpcRef::Int(LpcInt::MIN);
             let float = LpcRef::from(1.0);
             let result = int.sub(&float);
             assert!(result.is_ok());
@@ -848,7 +850,7 @@ mod tests {
         #[test]
         fn array_array() {
             let pool = SharedArena::with_capacity(10);
-            let to_ref = LpcRef::Int;
+            let to_ref = |i| LpcRef::Int(LpcInt(i));
             let v1 = vec![1, 2, 3, 4, 5, 2, 4, 4, 4]
                 .into_iter()
                 .map(to_ref)
@@ -873,8 +875,8 @@ mod tests {
 
         #[test]
         fn int_int_overflow_does_not_panic() {
-            let int = LpcRef::Int(LpcIntInner::MAX);
-            let int2 = LpcRef::Int(2);
+            let int = LpcRef::Int(LpcInt::MAX);
+            let int2 = LpcRef::from(2);
             let result = int.mul(&int2);
             assert!(result.is_ok());
         }
@@ -883,7 +885,7 @@ mod tests {
         fn string_int() {
             let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("foo".into()), pool);
-            let int = LpcRef::Int(4);
+            let int = LpcRef::from(4);
             let result = string.mul(&int);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foofoofoofoo"))
@@ -896,7 +898,7 @@ mod tests {
         fn int_string() {
             let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("foo".into()), pool);
-            let int = LpcRef::Int(4);
+            let int = LpcRef::from(4);
             let result = int.mul(&string);
             if let Ok(LpcValue::String(x)) = result {
                 assert_eq!(x, String::from("foofoofoofoo"))
@@ -909,7 +911,7 @@ mod tests {
         fn string_int_overflow_does_not_panic() {
             let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("1234567890abcdef".into()), pool);
-            let int = LpcRef::Int(LpcIntInner::MAX);
+            let int = LpcRef::Int(LpcInt::MAX);
             let result = string.mul(&int);
             assert_err!(result.clone());
             assert_eq!(
@@ -921,7 +923,7 @@ mod tests {
         #[test]
         fn float_int() {
             let float = LpcRef::from(666.66);
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
             let result = float.mul(&int);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 81999.18)
@@ -933,7 +935,7 @@ mod tests {
         #[test]
         fn float_int_overflow_does_not_panic() {
             let float = LpcRef::from(BaseFloat::MAX);
-            let int = LpcRef::Int(2);
+            let int = LpcRef::from(2);
             let result = float.mul(&int);
             assert!(result.is_ok());
         }
@@ -941,7 +943,7 @@ mod tests {
         #[test]
         fn int_float() {
             let float = LpcRef::from(666.66);
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
             let result = int.mul(&float);
             if let Ok(LpcValue::Float(x)) = result {
                 assert_eq!(x, 81999.18)
@@ -952,7 +954,7 @@ mod tests {
 
         #[test]
         fn int_float_overflow_does_not_panic() {
-            let int = LpcRef::Int(LpcIntInner::MAX);
+            let int = LpcRef::Int(LpcInt::MAX);
             let float = LpcRef::from(200.0);
             let result = int.mul(&float);
             assert!(result.is_ok());
@@ -964,8 +966,8 @@ mod tests {
 
         #[test]
         fn int_int_overflow_does_not_panic() {
-            let int = LpcRef::Int(-1);
-            let int2 = LpcRef::Int(LpcIntInner::MAX);
+            let int = LpcRef::Int(LpcInt(-1));
+            let int2 = LpcRef::Int(LpcInt::MAX);
             let result = int.div(&int2);
             assert!(result.is_ok());
         }
@@ -973,7 +975,7 @@ mod tests {
         #[test]
         fn float_int() {
             let float = LpcRef::from(666.66);
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
             let result = float.div(&int);
 
             if let Ok(LpcValue::Float(x)) = result {
@@ -987,7 +989,7 @@ mod tests {
         fn float_int_overflow_does_not_panic() {
             // I'm not sure it's possible to cause an overflow here?
             let float = LpcRef::from(-1.0);
-            let int = LpcRef::Int(LpcIntInner::MAX);
+            let int = LpcRef::Int(LpcInt::MAX);
             let result = float.div(&int);
 
             assert!(result.is_ok());
@@ -996,7 +998,7 @@ mod tests {
         #[test]
         fn int_float() {
             let float = LpcRef::from(666.66);
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
             let result = int.div(&float);
 
             if let Ok(LpcValue::Float(x)) = result {
@@ -1008,7 +1010,7 @@ mod tests {
 
         #[test]
         fn int_float_overflow_does_not_panic() {
-            let int = LpcRef::Int(-1);
+            let int = LpcRef::Int(LpcInt(-1));
             let float = LpcRef::from(BaseFloat::MAX);
             let result = int.div(&float);
 
@@ -1017,7 +1019,7 @@ mod tests {
 
         #[test]
         fn div_by_zero() {
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
 
             assert!((int.div(&NULL)).is_err());
         }
@@ -1028,8 +1030,8 @@ mod tests {
 
         #[test]
         fn int_int_overflow_does_not_panic() {
-            let int = LpcRef::Int(-1);
-            let int2 = LpcRef::Int(LpcIntInner::MAX);
+            let int = LpcRef::Int(LpcInt(-1));
+            let int2 = LpcRef::Int(LpcInt::MAX);
             let result = int.rem(&int2);
             assert!(result.is_ok());
         }
@@ -1037,7 +1039,7 @@ mod tests {
         #[test]
         fn float_int() {
             let float = LpcRef::from(666.66);
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
             let result = float.rem(&int);
 
             if let Ok(LpcValue::Float(x)) = result {
@@ -1051,7 +1053,7 @@ mod tests {
         fn float_int_overflow_does_not_panic() {
             // I'm not sure it's possible to cause an overflow here?
             let float = LpcRef::from(-1.0);
-            let int = LpcRef::Int(LpcIntInner::MAX);
+            let int = LpcRef::Int(LpcInt::MAX);
             let result = float.rem(&int);
 
             assert!(result.is_ok());
@@ -1060,7 +1062,7 @@ mod tests {
         #[test]
         fn int_float() {
             let float = LpcRef::from(666.66);
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
             let result = int.rem(&float);
 
             if let Ok(LpcValue::Float(x)) = result {
@@ -1072,7 +1074,7 @@ mod tests {
 
         #[test]
         fn int_float_overflow_does_not_panic() {
-            let int = LpcRef::Int(-1);
+            let int = LpcRef::Int(LpcInt(-1));
             let float = LpcRef::from(BaseFloat::MAX);
             let result = int.rem(&float);
 
@@ -1081,7 +1083,7 @@ mod tests {
 
         #[test]
         fn div_by_zero() {
-            let int = LpcRef::Int(123);
+            let int = LpcRef::from(123);
 
             assert!((int.rem(&NULL)).is_err());
         }
@@ -1092,8 +1094,8 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let int = LpcRef::Int(8);
-            let int2 = LpcRef::Int(15);
+            let int = LpcRef::from(8);
+            let int2 = LpcRef::from(15);
             let result = int.bitand(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 8)
@@ -1108,8 +1110,8 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let int = LpcRef::Int(7);
-            let int2 = LpcRef::Int(16);
+            let int = LpcRef::from(7);
+            let int2 = LpcRef::from(16);
             let result = int.bitor(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 23)
@@ -1124,8 +1126,8 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let int = LpcRef::Int(7);
-            let int2 = LpcRef::Int(15);
+            let int = LpcRef::from(7);
+            let int2 = LpcRef::from(15);
             let result = int.bitxor(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 8)
@@ -1140,8 +1142,8 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let int = LpcRef::Int(12345);
-            let int2 = LpcRef::Int(6);
+            let int = LpcRef::from(12345);
+            let int2 = LpcRef::from(6);
             let result = int.shl(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 790_080)
@@ -1156,8 +1158,8 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let int = LpcRef::Int(12345);
-            let int2 = LpcRef::Int(6);
+            let int = LpcRef::from(12345);
+            let int2 = LpcRef::from(6);
             let result = int.shr(&int2);
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, 192)
@@ -1172,7 +1174,7 @@ mod tests {
 
         #[test]
         fn int_int() {
-            let int = LpcRef::Int(12345);
+            let int = LpcRef::from(12345);
             let result = int.bitnot();
             if let Ok(LpcValue::Int(x)) = result {
                 assert_eq!(x, -12346) // one's complement
@@ -1187,16 +1189,16 @@ mod tests {
 
         #[test]
         fn increments_ints() {
-            let mut int = LpcRef::Int(123);
+            let mut int = LpcRef::from(123);
             let _ = int.inc();
-            assert_eq!(int, LpcRef::Int(124))
+            assert_eq!(int, LpcRef::from(124))
         }
 
         #[test]
         fn wraps_on_max() {
-            let mut int = LpcRef::Int(LpcIntInner::MAX);
+            let mut int = LpcRef::Int(LpcInt::MAX);
             let _ = int.inc();
-            assert_eq!(int, LpcRef::Int(LpcIntInner::MIN))
+            assert_eq!(int, LpcRef::Int(LpcInt::MIN))
         }
 
         #[test]
@@ -1212,16 +1214,16 @@ mod tests {
 
         #[test]
         fn decrements_ints() {
-            let mut int = LpcRef::Int(123);
+            let mut int = LpcRef::from(123);
             let _ = int.dec();
-            assert_eq!(int, LpcRef::Int(122))
+            assert_eq!(int, LpcRef::from(122))
         }
 
         #[test]
         fn wraps_on_min() {
-            let mut int = LpcRef::Int(LpcIntInner::MIN);
+            let mut int = LpcRef::Int(LpcInt::MIN);
             let _ = int.dec();
-            assert_eq!(int, LpcRef::Int(LpcIntInner::MAX))
+            assert_eq!(int, LpcRef::Int(LpcInt::MAX))
         }
 
         #[test]
@@ -1241,7 +1243,7 @@ mod tests {
         #[test]
         fn test_array() {
             let pool = SharedArena::with_capacity(5);
-            let array = LpcArray::new(vec![LpcRef::Int(1), LpcRef::Int(2), LpcRef::Int(3)]);
+            let array = LpcArray::new(vec![LpcRef::from(1), LpcRef::from(2), LpcRef::from(3)]);
             let array_id = array.unique_id;
             let array = value_to_ref!(LpcValue::Array(array), pool);
 

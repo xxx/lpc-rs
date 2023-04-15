@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use chrono::Duration;
-use lpc_rs_core::LpcFloatInner;
+use lpc_rs_core::{LpcFloatInner, LpcIntInner};
 use lpc_rs_errors::{LpcError, Result};
 
 use crate::{
@@ -11,6 +11,7 @@ use crate::{
     },
     try_extract_value,
 };
+use crate::interpreter::lpc_int::LpcInt;
 
 /// `call_out`, an efun for calling a function at some future point in time
 pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -32,8 +33,8 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
 
     let duration_ref = context.resolve_local_register(2_usize);
     let duration = match duration_ref {
-        LpcRef::Int(x) => Duration::seconds(x),
-        LpcRef::Float(x) => to_millis(x),
+        LpcRef::Int(x) => Duration::seconds(x.0),
+        LpcRef::Float(x) => to_millis(x.0),
         _ => return Err(context.runtime_error("invalid duration sent to `call_out`")),
     };
 
@@ -41,17 +42,17 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     let repeat = if let Some(repeat_ref) = repeat_ref {
         match repeat_ref {
             LpcRef::Int(x) => {
-                if x <= 0 {
+                if x.0 <= 0 {
                     None
                 } else {
-                    Some(Duration::seconds(x))
+                    Some(Duration::seconds(x.0))
                 }
             }
             LpcRef::Float(x) => {
-                if x <= 0.0 {
+                if x.0 <= 0.0 {
                     None
                 } else {
-                    Some(to_millis(x))
+                    Some(to_millis(x.0))
                 }
             }
             _ => return Err(context.runtime_error("invalid repeat sent to `call_out`")),
@@ -67,7 +68,7 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     };
 
     // TODO: limit the max number of call outs so we don't overflow this
-    let result = LpcRef::Int(index as i64);
+    let result = LpcRef::Int(LpcInt(index as LpcIntInner));
     context.return_efun_result(result);
 
     Ok(())

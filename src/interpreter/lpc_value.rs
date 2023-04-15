@@ -16,13 +16,15 @@ use crate::interpreter::{
     lpc_string::LpcString,
     process::Process,
 };
+use crate::interpreter::lpc_float::LpcFloat;
+use crate::interpreter::lpc_int::LpcInt;
 
 /// An actual LPC value. These are stored in memory, and as constants.
 /// They are only used in the interpreter.
 #[derive(Debug, Clone)]
 pub enum LpcValue {
-    Float(LpcFloatInner),
-    Int(LpcIntInner),
+    Float(LpcFloat),
+    Int(LpcInt),
     String(LpcString),
     Array(LpcArray),
     Mapping(LpcMapping),
@@ -96,13 +98,13 @@ impl Display for LpcValue {
 
 impl From<LpcIntInner> for LpcValue {
     fn from(i: LpcIntInner) -> Self {
-        Self::Int(i)
+        Self::Int(LpcInt::from(i))
     }
 }
 
 impl From<BaseFloat> for LpcValue {
     fn from(f: BaseFloat) -> Self {
-        Self::Float(LpcFloatInner::from(f))
+        Self::Float(LpcFloat::from(f))
     }
 }
 

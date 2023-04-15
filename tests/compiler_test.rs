@@ -10,6 +10,7 @@ use lpc_rs::{
     extract_value,
     interpreter::{lpc_ref::LpcRef, lpc_value::LpcValue, vm::Vm},
 };
+use lpc_rs::interpreter::lpc_int::LpcInt;
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 
@@ -131,14 +132,14 @@ async fn test_duffs_device() {
             assert_eq!(
                 arr,
                 &[
-                    LpcRef::Int(0),
-                    LpcRef::Int(2),
-                    LpcRef::Int(3),
-                    LpcRef::Int(4),
-                    LpcRef::Int(5),
-                    LpcRef::Int(6),
-                    LpcRef::Int(7),
-                    LpcRef::Int(0),
+                    LpcRef::Int(LpcInt(0)),
+                    LpcRef::Int(LpcInt(2)),
+                    LpcRef::Int(LpcInt(3)),
+                    LpcRef::Int(LpcInt(4)),
+                    LpcRef::Int(LpcInt(5)),
+                    LpcRef::Int(LpcInt(6)),
+                    LpcRef::Int(LpcInt(7)),
+                    LpcRef::Int(LpcInt(0)),
                 ].to_vec()
             );
         } else {
@@ -233,7 +234,7 @@ async fn test_positional_vars_into_argv() {
 
     let task = run_prog(code).await;
     let ctx = task.context;
-    assert_eq!(&LpcRef::Int(777), ctx.result().unwrap());
+    assert_eq!(&LpcRef::Int(LpcInt(777)), ctx.result().unwrap());
 }
 
 #[tokio::test]

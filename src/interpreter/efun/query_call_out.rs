@@ -4,6 +4,8 @@ use crate::interpreter::{
     call_outs::CallOut, efun::efun_context::EfunContext, lpc_array::LpcArray, lpc_ref::LpcRef,
     lpc_value::LpcValue,
 };
+use crate::interpreter::lpc_ref::NULL;
+use crate::interpreter::lpc_int::LpcInt;
 
 /// `query_call_out`, an efun for returning information about a single call out.
 pub async fn query_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -11,15 +13,15 @@ pub async fn query_call_out<const N: usize>(context: &mut EfunContext<'_, N>) ->
         return Err(context.runtime_bug("non-int call out ID sent to `remove_call_out`"));
     };
 
-    if idx < 0 {
+    if idx.0 < 0 {
         return Err(context.runtime_error(format!(
             "invalid call out ID `{idx}` sent to `remove_call_out`"
         )));
     }
 
-    let result = match context.call_outs().read().get(idx as usize) {
+    let result = match context.call_outs().read().get(idx.0 as usize) {
         Some(call_out) => call_out_array_ref(context, call_out)?,
-        None => LpcRef::Int(0),
+        None => NULL,
     };
 
     context.return_efun_result(result);
@@ -48,7 +50,7 @@ pub fn call_out_array_ref<const N: usize>(
         call_out
             .time_remaining()
             .map(|duration| duration.num_milliseconds())
-            .unwrap_or(0),
+            .unwrap_or(0).into(),
     ));
 
     // push the number of milliseconds between repeats
@@ -56,7 +58,7 @@ pub fn call_out_array_ref<const N: usize>(
         call_out
             .repeat_duration()
             .map(|duration| duration.num_milliseconds())
-            .unwrap_or(0),
+            .unwrap_or(0).into(),
     ));
 
     let result = context.value_to_ref(LpcValue::Array(LpcArray::new(arr)));
@@ -122,7 +124,7 @@ mod tests {
                 assert!(matches!(array[0], LpcRef::Object(_)));
                 assert!(matches!(array[1], LpcRef::Function(_)));
                 assert!(matches!(array[2], LpcRef::Int(_)));
-                assert_eq!(array[3], LpcRef::Int(0));
+                assert_eq!(array[3], LpcRef::Int(LpcInt(0)));
             }
             else {
                 panic!("result is not an array");
