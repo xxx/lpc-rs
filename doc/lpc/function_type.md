@@ -2,7 +2,7 @@
 
 Let's differentiate between functions that you write in your LPC code,
 and variables of the `function` type, which, really, are pointers to functions. This
-document is talking about the latter (the former can be found in anatomy_of_a_program.md).
+document is about the latter (the former can be found in anatomy_of_a_program.md).
 
 We take the position that functions are really just pieces of code that you can
 call with arguments, and return a value, maybe with a receiver in context.
