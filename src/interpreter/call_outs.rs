@@ -1,4 +1,4 @@
-use std::sync::{Arc, Weak};
+use std::sync::{Weak};
 
 use bit_set::BitSet;
 use chrono::{DateTime, Duration, Utc};

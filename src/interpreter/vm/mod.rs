@@ -203,7 +203,7 @@ impl Vm {
                 match ptr.address {
                     FunctionAddress::Local(ref proc, ref function) => {
                         if let Some(proc) = proc.upgrade() {
-                            (proc.clone(), function.clone(), args)
+                            (proc, function.clone(), args)
                         } else {
                             trace!("attempted to prioritize a function pointer to a dead process");
                             self.call_outs.write().remove(idx);
