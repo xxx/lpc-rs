@@ -4,9 +4,8 @@ pub mod task_state;
 use std::{
     borrow::Cow,
     fmt::{Debug, Display},
-    sync::Arc,
+    sync::{Arc, Weak},
 };
-use std::sync::Weak;
 
 use async_recursion::async_recursion;
 use bit_set::BitSet;

@@ -112,7 +112,16 @@ mod tests {
             panic!("expected object");
         };
 
-        assert_eq!(obj.upgrade().unwrap().read().program.filename.to_str().unwrap(), "/example");
+        assert_eq!(
+            obj.upgrade()
+                .unwrap()
+                .read()
+                .program
+                .filename
+                .to_str()
+                .unwrap(),
+            "/example"
+        );
     }
 
     #[tokio::test]

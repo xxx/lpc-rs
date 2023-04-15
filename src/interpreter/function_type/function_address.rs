@@ -1,8 +1,7 @@
 use std::{
     fmt::{Display, Formatter},
-    sync::Arc,
+    sync::{Arc, Weak},
 };
-use std::sync::Weak;
 
 use educe::Educe;
 use lpc_rs_function_support::program_function::ProgramFunction;

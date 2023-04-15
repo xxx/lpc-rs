@@ -1,9 +1,8 @@
 use std::{
     fmt,
     fmt::{Display, Formatter},
-    sync::Arc,
+    sync::{Arc, Weak},
 };
-use std::sync::Weak;
 
 use indexmap::IndexMap;
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
@@ -89,7 +88,7 @@ impl Display for LpcValue {
                 } else {
                     write!(f, "< destructed >")
                 }
-            },
+            }
             LpcValue::Function(x) => write!(f, "{x}"),
         }
     }
@@ -181,7 +180,7 @@ impl PartialEq for LpcValue {
             (LpcValue::Object(x), LpcValue::Object(y)) => {
                 // If both objects are destructed, they are equal (to 0, technically).
                 Weak::ptr_eq(x, y)
-            },
+            }
             _ => false,
         }
     }
