@@ -38,7 +38,7 @@ pub type BaseFloat = f64;
 
 /// Abstracted type for in-game `float`s. The wrapper is to handle hashing,
 /// ordering, etc.
-pub type LpcFloat = Total<BaseFloat>;
+pub type LpcFloatInner = Total<BaseFloat>;
 
 pub type ScopeId = NodeId;
 

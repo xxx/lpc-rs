@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
-use lpc_rs_core::LpcFloat as CoreFloat;
+use lpc_rs_core::LpcFloatInner as CoreFloat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct LpcFloat(pub CoreFloat);

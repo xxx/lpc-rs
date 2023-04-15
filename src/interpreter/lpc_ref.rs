@@ -8,7 +8,7 @@ use std::{
 };
 
 use bit_set::BitSet;
-use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloat, LpcIntInner};
+use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloatInner, LpcIntInner};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
 use parking_lot::RwLock;
@@ -63,7 +63,7 @@ macro_rules! extract_value {
 /// This type is intended to be cheap to clone.
 #[derive(Clone)]
 pub enum LpcRef {
-    Float(LpcFloat),
+    Float(LpcFloatInner),
     Int(LpcIntInner),
 
     /// Reference type, and stores a reference-counting pointer to the actual
@@ -182,7 +182,7 @@ impl LpcRef {
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Int(i) => match rhs {
-                LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloat::from(*i as BaseFloat) + *f)),
+                LpcRef::Float(f) => Ok(LpcValue::Float(LpcFloatInner::from(*i as BaseFloat) + *f)),
                 LpcRef::Int(i2) => Ok(LpcValue::Int(i.wrapping_add(*i2))),
                 LpcRef::String(s) => Ok(LpcValue::String(
                     concatenate_strings(
@@ -240,7 +240,7 @@ impl LpcRef {
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x - *y)),
             (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x - *y as BaseFloat)),
             (LpcRef::Int(x), LpcRef::Float(y)) => {
-                Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) - *y))
+                Ok(LpcValue::Float(LpcFloatInner::from(*x as BaseFloat) - *y))
             }
             (LpcRef::Array(vec), LpcRef::Array(vec2)) => {
                 let new_vec = try_extract_value!(*vec.read(), LpcValue::Array).clone();
@@ -262,7 +262,7 @@ impl LpcRef {
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float(*x * *y)),
             (LpcRef::Float(x), LpcRef::Int(y)) => Ok(LpcValue::Float(*x * *y as BaseFloat)),
             (LpcRef::Int(x), LpcRef::Float(y)) => {
-                Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) * *y))
+                Ok(LpcValue::Float(LpcFloatInner::from(*x as BaseFloat) * *y))
             }
             (LpcRef::String(x), LpcRef::Int(y)) => {
                 let b = x.read();
@@ -292,7 +292,7 @@ impl LpcRef {
                 }
             }
             (LpcRef::Float(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                if (*y - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
                     Ok(LpcValue::Float(*x / *y))
@@ -306,10 +306,10 @@ impl LpcRef {
                 }
             }
             (LpcRef::Int(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                if (*y - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) / *y))
+                    Ok(LpcValue::Float(LpcFloatInner::from(*x as BaseFloat) / *y))
                 }
             }
             _ => Err(self.to_error(BinaryOperation::Div, rhs)),
@@ -326,7 +326,7 @@ impl LpcRef {
                 }
             }
             (LpcRef::Float(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                if (*y - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
                     Ok(LpcValue::Float(*x % *y))
@@ -340,10 +340,10 @@ impl LpcRef {
                 }
             }
             (LpcRef::Int(x), LpcRef::Float(y)) => {
-                if (*y - LpcFloat::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
+                if (*y - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Remainder division by zero"))
                 } else {
-                    Ok(LpcValue::Float(LpcFloat::from(*x as BaseFloat) % *y))
+                    Ok(LpcValue::Float(LpcFloatInner::from(*x as BaseFloat) % *y))
                 }
             }
             _ => Err(self.to_error(BinaryOperation::Mod, rhs)),
@@ -444,7 +444,7 @@ impl Mark for LpcRef {
 impl From<BaseFloat> for LpcRef {
     #[inline]
     fn from(f: BaseFloat) -> Self {
-        Self::Float(LpcFloat::from(f))
+        Self::Float(LpcFloatInner::from(f))
     }
 }
 

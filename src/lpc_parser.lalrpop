@@ -45,7 +45,7 @@ use lpc_rs_errors::span::{Span, combine_spans};
 use crate::compiler::lexer::Token;
 use lpc_rs_errors::LpcError;
 use crate::compiler::lexer::logos_token::{StringToken, IntToken, FloatToken};
-use lpc_rs_core::LpcFloat;
+use lpc_rs_core::LpcFloatInner;
 use crate::compiler::compilation_context::CompilationContext;
 use lpc_rs_core::function_flags::FunctionFlags;
 use lpc_rs_core::global_var_flags::GlobalVarFlags;
@@ -1075,7 +1075,7 @@ Int: ExpressionNode = {
 Float: ExpressionNode = <f:"FloatLiteral"> => {
     ExpressionNode::Float(
         FloatNode {
-            value: LpcFloat::from(f.1),
+            value: LpcFloatInner::from(f.1),
             span: Some(f.0)
         }
     )

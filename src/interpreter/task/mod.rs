@@ -2032,7 +2032,7 @@ mod tests {
     };
 
     use indoc::indoc;
-    use lpc_rs_core::{LpcFloat, LpcIntInner};
+    use lpc_rs_core::{LpcFloatInner, LpcIntInner};
     use tokio::sync::mpsc;
 
     use super::*;
@@ -2083,7 +2083,7 @@ mod tests {
     enum BareVal {
         String(String),
         Int(LpcIntInner),
-        Float(LpcFloat),
+        Float(LpcFloatInner),
         Array(Vec<BareVal>),
         Mapping(HashMap<BareVal, BareVal>),
         Object(String),                         // Just the filename
@@ -2252,7 +2252,7 @@ mod tests {
                 let expected = vec![
                     Int(0),
                     Int(12),
-                    Float(LpcFloat::from(4.3)),
+                    Float(LpcFloatInner::from(4.3)),
                     String("hello".into()),
                     Int(1),
                     Int(2),
@@ -2260,7 +2260,7 @@ mod tests {
                     Array(vec![Int(1), Int(2), Int(3)]),
                     Array(vec![
                         Int(12),
-                        Float(LpcFloat::from(4.3)),
+                        Float(LpcFloatInner::from(4.3)),
                         String("hello".into()),
                         Array(vec![Int(1), Int(2), Int(3)]),
                     ]),

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use chrono::Duration;
-use lpc_rs_core::LpcFloat;
+use lpc_rs_core::LpcFloatInner;
 use lpc_rs_errors::{LpcError, Result};
 
 use crate::{
@@ -73,7 +73,7 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     Ok(())
 }
 
-fn to_millis(x: LpcFloat) -> Duration {
+fn to_millis(x: LpcFloatInner) -> Duration {
     let m = x * 1000.0;
     let millis = if m > i64::MAX as f64 {
         i64::MAX

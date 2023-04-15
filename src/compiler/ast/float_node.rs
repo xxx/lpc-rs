@@ -3,7 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use lpc_rs_core::{BaseFloat, LpcFloat};
+use lpc_rs_core::{BaseFloat, LpcFloatInner};
 use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
@@ -14,7 +14,7 @@ use crate::compiler::{
 /// A node representing a float literal
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
 pub struct FloatNode {
-    pub value: LpcFloat,
+    pub value: LpcFloatInner,
 
     /// The span of the string in the original file
     pub span: Option<Span>,
@@ -30,7 +30,7 @@ impl FloatNode {
         };
 
         Self {
-            value: LpcFloat::from(value),
+            value: LpcFloatInner::from(value),
             span: None,
         }
     }

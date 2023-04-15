@@ -2347,7 +2347,7 @@ mod tests {
     use claims::assert_some;
     use factori::create;
     use lpc_rs_asm::instruction::Instruction::*;
-    use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloat};
+    use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloatInner};
     use lpc_rs_errors::{span::Span, LpcErrorSeverity, Result};
     use lpc_rs_utils::config::ConfigBuilder;
     use parking_lot::RwLock;
@@ -2698,7 +2698,7 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node);
 
             let expected = vec![
-                FConst(RegisterVariant::Local(Register(1)), LpcFloat::from(123.45)),
+                FConst(RegisterVariant::Local(Register(1)), LpcFloatInner::from(123.45)),
                 IConst(RegisterVariant::Local(Register(2)), 456),
                 IMul(
                     RegisterVariant::Local(Register(1)),

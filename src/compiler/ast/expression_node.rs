@@ -227,7 +227,7 @@ impl From<IndexMap<ExpressionNode, ExpressionNode>> for ExpressionNode {
 #[cfg(test)]
 mod tests {
     use factori::create;
-    use lpc_rs_core::LpcFloat;
+    use lpc_rs_core::LpcFloatInner;
 
     use super::*;
     use crate::{compiler::ast::binary_op_node::BinaryOperation, test_support::factories::*};
@@ -313,7 +313,7 @@ mod tests {
         assert_eq!(
             ExpressionNode::from(f),
             ExpressionNode::Float(FloatNode {
-                value: LpcFloat::from(f),
+                value: LpcFloatInner::from(f),
                 span: None
             })
         );

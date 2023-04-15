@@ -25,7 +25,7 @@ use lpc_rs::{
     lpc_parser,
 };
 use lpc_rs_core::{
-    global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility, LpcFloat, LpcIntInner,
+    global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility, LpcFloatInner, LpcIntInner,
 };
 use lpc_rs_errors::{span::Span, Result};
 use ustr::ustr;
@@ -212,7 +212,7 @@ fn float_literal_underscores() {
     };
 
     let expected = ExpressionNode::Float(FloatNode {
-        value: LpcFloat::from(112343320000000000000000.0),
+        value: LpcFloatInner::from(112343320000000000000000.0),
         span: Some(Span {
             file_id: 0,
             l: 16,

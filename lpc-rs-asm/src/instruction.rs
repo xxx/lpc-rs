@@ -4,7 +4,7 @@ use std::{
 };
 
 use lpc_rs_core::{
-    function_receiver::FunctionReceiver, register::RegisterVariant, LpcFloat, LpcIntInner,
+    function_receiver::FunctionReceiver, register::RegisterVariant, LpcFloatInner, LpcIntInner,
 };
 use lpc_rs_errors::{LpcError, Result};
 use serde::{Deserialize, Serialize};
@@ -75,7 +75,7 @@ pub enum Instruction {
     EqEq(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Float Constant
-    FConst(RegisterVariant, LpcFloat),
+    FConst(RegisterVariant, LpcFloatInner),
 
     /// A function pointer constant. Closures are stored as function pointers as well.
     /// `location` is where the pointer will be stored
