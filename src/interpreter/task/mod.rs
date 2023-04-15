@@ -6,6 +6,7 @@ use std::{
     fmt::{Debug, Display},
     sync::Arc,
 };
+use std::sync::Weak;
 
 use async_recursion::async_recursion;
 use bit_set::BitSet;
@@ -56,7 +57,7 @@ use crate::{
 };
 
 // this is just to shut clippy up
-type ProcessFunctionPair = (Arc<RwLock<Process>>, Arc<ProgramFunction>);
+type ProcessFunctionPair = (Weak<RwLock<Process>>, Arc<ProgramFunction>);
 
 macro_rules! pop_frame {
     ($task:expr) => {{
@@ -1011,15 +1012,22 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 .iter()
                 .fold(0, |sum, arg| sum + arg.is_some() as usize);
         let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
-        let dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
+        let is_dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
         // for dynamic receivers, skip the first register of the passed args, which contains the receiver itself
-        let index = dynamic_receiver as usize;
-        let adjusted_num_args = num_args - (dynamic_receiver as usize);
+        let index = is_dynamic_receiver as usize;
+        let adjusted_num_args = num_args - (is_dynamic_receiver as usize);
 
         if let FunctionAddress::Local(receiver, pf) = &ptr.address {
+            let Some(receiver) = receiver.upgrade() else {
+                return Err(self.runtime_error(format!(
+                    "attempted to call a pointer to a function in a destructed object: {}",
+                    ptr
+                )));
+            };
+
             if !pf.public()
                 && !pf.is_closure()
-                && (ptr.call_other || !Arc::ptr_eq(&self.context.process(), receiver))
+                && (ptr.call_other || !Arc::ptr_eq(&self.context.process(), &receiver))
             {
                 return set_loc!(self, Register(0).as_local(), NULL);
             }
@@ -1027,6 +1035,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let Some((proc, function)) = self.extract_process_and_function(&ptr)? else {
             return Ok(())
+        };
+
+        let Some(proc) = proc.upgrade() else {
+            return Err(self.runtime_error(format!(
+                "attempted to call a pointer to a function in a destructed object: {}",
+                ptr
+            )));
         };
 
         let max_arg_length = std::cmp::max(adjusted_num_args, function.arity().num_args);
@@ -1149,14 +1164,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 let pair_opt = {
                     let b = lpc_ref.read();
-                    let cell = try_extract_value!(*b, LpcValue::Object);
+                    let weak_cell = try_extract_value!(*b, LpcValue::Object);
 
-                    if let Some(cell) = cell.upgrade() {
+                    if let Some(cell) = weak_cell.upgrade() {
                         let proc = cell.read();
 
                         proc.as_ref()
                             .lookup_function(name)
-                            .map(|func| (cell.clone(), func.clone()))
+                            .map(|func| (weak_cell.clone(), func.clone()))
                     } else {
                         None
                     }
@@ -1180,7 +1195,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 let frame = self.stack.current_frame()?;
 
-                (frame.process.clone(), Arc::new(pf))
+                (Arc::downgrade(&frame.process), Arc::new(pf))
             }
             FunctionAddress::SimulEfun(name) => {
                 let Some(simul_efuns) = self.context.simul_efuns() else {
@@ -1192,9 +1207,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Err(self.runtime_error(format!("call to unknown simul_efun `{name}`")));
                 };
 
-                (simul_efuns.clone(), function.clone())
+                (Arc::downgrade(&simul_efuns), function.clone())
             }
         };
+
         Ok(Some((proc, function)))
     }
 
@@ -1490,16 +1506,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     func.clone()
                 };
 
-                FunctionAddress::Local(process, func)
+                FunctionAddress::Local(Arc::downgrade(&process), func)
             }
             FunctionReceiver::Var(location) => {
                 let receiver_ref = &*get_loc!(self, location)?;
                 match receiver_ref {
                     LpcRef::Object(x) => {
                         let b = x.read();
-                        let process = try_extract_value!(*b, LpcValue::Object);
+                        let weak_process = try_extract_value!(*b, LpcValue::Object);
 
-                        let Some(process) = process.upgrade() else {
+                        let Some(process) = weak_process.upgrade() else {
                             return Err(self.runtime_error("called object is no longer available"));
                         };
 
@@ -1515,7 +1531,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                             func.clone()
                         };
-                        FunctionAddress::Local(process, func)
+                        FunctionAddress::Local(weak_process.clone(), func)
                     }
                     LpcRef::String(s) => {
                         let process = {
@@ -1545,7 +1561,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             func.clone()
                         };
 
-                        FunctionAddress::Local(process, func)
+                        FunctionAddress::Local(Arc::downgrade(&process), func)
                     }
                     _ => {
                         return Err(self.runtime_error(format!(

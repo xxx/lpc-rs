@@ -201,14 +201,23 @@ impl Vm {
                 }).collect::<Vec<_>>();
 
                 match ptr.address {
-                    FunctionAddress::Local(ref proc, ref function) => (proc.clone(), function.clone(), args),
+                    FunctionAddress::Local(ref proc, ref function) => {
+                        if let Some(proc) = proc.upgrade() {
+                            (proc.clone(), function.clone(), args)
+                        } else {
+                            trace!("attempted to prioritize a function pointer to a dead process");
+                            self.call_outs.write().remove(idx);
+                            return Ok(false);
+                        }
+                    },
                     FunctionAddress::Dynamic(_) => {
-                        return Err(LpcError::new(
-                            "function with dynamic receiver passed to call_out".to_string(),
-                        ));
+                        trace!("attempted to prioritize a dynamic receiver passed to call_out");
+                        self.call_outs.write().remove(idx);
+                        return Ok(false);
                     },
                     FunctionAddress::SimulEfun(name) => {
                         let Some(simul_efuns) = get_simul_efuns(&self.config, &self.object_space.read()) else {
+                            self.call_outs.write().remove(idx);
                             return Err(LpcError::new_bug(
                                 "function pointer to simul_efun passed, but no simul_efuns?".to_string(),
                             ));
@@ -216,6 +225,7 @@ impl Vm {
 
                         let b = simul_efuns.read();
                         let Some(function) = b.program.lookup_function(name) else {
+                            self.call_outs.write().remove(idx);
                             return Err(LpcError::new(format!("call to unknown simul_efun `{name}`")));
                         };
 
@@ -231,6 +241,7 @@ impl Vm {
                 }
             }
             else {
+                self.call_outs.write().remove(idx);
                 return Err(LpcError::new("invalid function sent to `call_out`"));
             }
         };

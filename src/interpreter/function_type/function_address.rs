@@ -2,6 +2,7 @@ use std::{
     fmt::{Display, Formatter},
     sync::Arc,
 };
+use std::sync::Weak;
 
 use educe::Educe;
 use lpc_rs_function_support::program_function::ProgramFunction;
@@ -15,7 +16,7 @@ use crate::interpreter::process::Process;
 #[educe(Debug)]
 pub enum FunctionAddress {
     /// The function being called is located in an object.
-    Local(Arc<RwLock<Process>>, Arc<ProgramFunction>),
+    Local(Weak<RwLock<Process>>, Arc<ProgramFunction>),
 
     /// The receiver isn't known until called (i.e. the `&->foo()` syntax)
     Dynamic(Ustr),
@@ -59,7 +60,11 @@ impl Display for FunctionAddress {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             FunctionAddress::Local(owner, x) => {
-                write!(f, "{}::{}", owner.read(), x)
+                if let Some(owner) = owner.upgrade() {
+                    write!(f, "{}::{}", owner.read(), x)
+                } else {
+                    write!(f, "<destructed>::{}", x)
+                }
             }
             FunctionAddress::Dynamic(x) => write!(f, "dynamic::{x}"),
             FunctionAddress::Efun(x) => write!(f, "efun::{x}"),

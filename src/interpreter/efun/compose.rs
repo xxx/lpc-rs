@@ -109,7 +109,7 @@ pub async fn compose<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
 
     let ptr = FunctionPtr {
         owner: Arc::downgrade(&context.frame().process),
-        address: FunctionAddress::Local(context.frame().process.clone(), pf),
+        address: FunctionAddress::Local(Arc::downgrade(&context.frame().process), pf),
         partial_args: vec![Some(a), Some(b)],
         call_other: false,
         upvalue_ptrs: vec![],
