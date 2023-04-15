@@ -92,13 +92,15 @@ mod tests {
 
     use crate::{
         interpreter::{
-            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
-            task::Task,
+            call_outs::CallOuts,
+            gc::gc_bank::GcBank,
+            memory::Memory,
+            object_space::ObjectSpace,
+            task::{task_id::TaskId, Task},
+            vm::vm_op::VmOp,
         },
         test_support::compile_prog,
     };
-    use crate::interpreter::task::task_id::TaskId;
-    use crate::interpreter::vm::vm_op::VmOp;
 
     #[tokio::test]
     async fn test_disallows_dynamic_receiver() {
@@ -155,7 +157,8 @@ mod tests {
             RwLock::new(GcBank::default()),
             call_outs,
             tx,
-        ).await;
+        )
+        .await;
 
         assert!(result.is_ok());
 

@@ -183,7 +183,9 @@ impl Telnet {
     /// Stops the telnet server. This will disable new connections.
     pub fn shutdown(&mut self) {
         info!("Shutting down telnet server");
-        if let Some(h) = self.handle.take() { h.abort() }
+        if let Some(h) = self.handle.take() {
+            h.abort()
+        }
     }
 }
 
