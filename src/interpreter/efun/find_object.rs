@@ -1,13 +1,13 @@
-
-
-
 use lpc_rs_errors::{LpcError, Result};
 
 use crate::{
-    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
+    interpreter::{
+        efun::efun_context::EfunContext,
+        lpc_ref::{LpcRef, NULL},
+        lpc_value::LpcValue,
+    },
     try_extract_value,
 };
-use crate::interpreter::lpc_ref::NULL;
 
 /// `find_object`, an efun for finding and returning an object from the [`ObjectSpace`]
 /// from its path and clone number.
@@ -30,7 +30,7 @@ pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
                     let val = LpcValue::from(proc);
                     context.value_to_ref(val)
                 }
-                None => NULL
+                None => NULL,
             }
         }
     };
@@ -44,23 +44,28 @@ pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path};
-    use std::sync::Arc;
+    use std::{path::Path, sync::Arc};
+
     use indoc::indoc;
-    use parking_lot::RwLock;
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::Config;
-    use crate::interpreter::call_outs::CallOuts;
-    use crate::interpreter::gc::gc_bank::GcBank;
-    use crate::interpreter::memory::Memory;
-    use crate::interpreter::object_space::ObjectSpace;
-    use crate::interpreter::process::Process;
-    use crate::interpreter::program::{Program, ProgramBuilder};
-    use crate::interpreter::task::Task;
-    use crate::interpreter::task_context::TaskContext;
-    use crate::interpreter::vm::vm_op::VmOp;
-    use crate::test_support::compile_prog;
+    use parking_lot::RwLock;
+
     use super::*;
+    use crate::{
+        interpreter::{
+            call_outs::CallOuts,
+            gc::gc_bank::GcBank,
+            memory::Memory,
+            object_space::ObjectSpace,
+            process::Process,
+            program::{Program, ProgramBuilder},
+            task::Task,
+            task_context::TaskContext,
+            vm::vm_op::VmOp,
+        },
+        test_support::compile_prog,
+    };
 
     fn task_context_fixture(
         program: Program,
@@ -99,9 +104,7 @@ mod tests {
         ObjectSpace::insert_process(&context.object_space, RwLock::new(proc));
 
         let mut task = Task::<10>::new(context.clone());
-        task.eval(func.clone(), &[])
-            .await
-            .expect("task failed");
+        task.eval(func.clone(), &[]).await.expect("task failed");
 
         let LpcRef::Object(obj) = task.result().unwrap() else {
             panic!("expected object");
@@ -127,9 +130,7 @@ mod tests {
         let context = task_context_fixture(program, config, tx);
 
         let mut task = Task::<10>::new(context.clone());
-        task.eval(func.clone(), &[])
-            .await
-            .expect("task failed");
+        task.eval(func.clone(), &[]).await.expect("task failed");
 
         let LpcRef::Int(0) = task.result().unwrap() else {
             panic!("expected 0");
