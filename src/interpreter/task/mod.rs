@@ -1503,8 +1503,35 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         };
                         FunctionAddress::Local(process, func)
                     }
-                    LpcRef::String(_) => {
-                        todo!("strings need to be supported as receivers for function pointers")
+                    LpcRef::String(s) => {
+                        let process = {
+                            let b = s.read();
+                            let path = try_extract_value!(*b, LpcValue::String);
+
+                            let Some(process) = self.context.lookup_process(path.as_ref()) else {
+                                return Err(self.runtime_error(format!(
+                                    "Unable to find object `{}`.",
+                                    path
+                                )));
+                            };
+
+                            process
+                        };
+
+                        let func = {
+                            let borrowed_proc = process.read();
+                            let Some(func) = borrowed_proc.as_ref().lookup_function(func_name) else {
+                                return Err(self.runtime_error(format!(
+                                    "Unable to find function `{}` in remote process `{}`.",
+                                    func_name,
+                                    process.read().filename()
+                                )));
+                            };
+
+                            func.clone()
+                        };
+
+                        FunctionAddress::Local(process, func)
                     }
                     _ => {
                         return Err(self.runtime_error(format!(
@@ -1531,9 +1558,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             address,
             partial_args,
             call_other,
-            // Function pointers inherit the creating funfction's upvalues
+            // Function pointers inherit the creating function's upvalues
             upvalue_ptrs: frame.upvalue_ptrs.clone(),
-            // upvalue_ptrs: self.capture_environment()?,
             unique_id: UniqueId::new(),
         };
 
@@ -3050,6 +3076,28 @@ mod tests {
                 let expected = vec![
                     Object("/my_file".into()),
                     Object("/my_file".into()),
+                    Function("tacco".to_string(), vec![]),
+                ];
+
+                BareVal::assert_vec_equal(&expected, &registers);
+            }
+
+            #[tokio::test]
+            async fn stores_the_value_for_call_other_string_receiver() {
+                let code = indoc! { r##"
+                    function f = &("/my_file")->tacco();
+
+                    void tacco() {
+                        dump("tacco!");
+                    }
+                "##};
+
+                let task = run_prog(code).await;
+                let registers = task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    String("/my_file".into()),
                     Function("tacco".to_string(), vec![]),
                 ];
 
