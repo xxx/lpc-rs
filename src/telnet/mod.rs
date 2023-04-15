@@ -26,8 +26,7 @@ use crate::telnet::{
 /// The incoming connection handler. Once established, connections are handled by [`ConnectionManager`].
 #[derive(Debug)]
 pub struct Telnet {
-    /// The handle to the main connection handler task. Dropping it will stop listening
-    /// for new connections.
+    /// The handle to the main connection handler task.
     handle: OnceCell<JoinHandle<()>>,
 
     /// The channel to send operations to the [`ConnectionBroker`](connection_broker::ConnectionBroker).
@@ -184,7 +183,7 @@ impl Telnet {
     /// Stops the telnet server. This will disable new connections.
     pub fn shutdown(&mut self) {
         info!("Shutting down telnet server");
-        self.handle.take();
+        self.handle.take().map(|h| h.abort());
     }
 }
 
