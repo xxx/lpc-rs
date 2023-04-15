@@ -31,7 +31,7 @@ pub const INIT_PROGRAM: &str = "init-program";
 pub const EFUN: &str = "efun";
 
 /// Abstracted type to use as in-game `int`s
-pub type LpcInt = i64;
+pub type LpcIntInner = i64;
 
 /// The base float-type that in-game `float`s are backed by
 pub type BaseFloat = f64;

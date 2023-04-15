@@ -5,7 +5,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
+use lpc_rs_core::{BaseFloat, LpcFloat, LpcIntInner};
 use parking_lot::RwLock;
 
 use crate::interpreter::{
@@ -22,7 +22,7 @@ use crate::interpreter::{
 #[derive(Debug, Clone)]
 pub enum LpcValue {
     Float(LpcFloat),
-    Int(LpcInt),
+    Int(LpcIntInner),
     String(LpcString),
     Array(LpcArray),
     Mapping(LpcMapping),
@@ -94,8 +94,8 @@ impl Display for LpcValue {
     }
 }
 
-impl From<LpcInt> for LpcValue {
-    fn from(i: LpcInt) -> Self {
+impl From<LpcIntInner> for LpcValue {
+    fn from(i: LpcIntInner) -> Self {
         Self::Int(i)
     }
 }

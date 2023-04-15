@@ -6,7 +6,7 @@ use lpc_rs_core::{
     convert_escapes,
     lpc_path::LpcPath,
     pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
-    LpcInt,
+    LpcIntInner,
 };
 use lpc_rs_errors::{format_expected, lazy_files::FILE_CACHE, span::Span, LpcError, Result};
 use lpc_rs_utils::read_lpc_file;
@@ -739,7 +739,7 @@ impl Preprocessor {
 
     /// Resolve a [`PreprocessorNode`] to an Int if possible.
     #[instrument(skip(self, expr))]
-    fn resolve_int(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<LpcInt> {
+    fn resolve_int(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<LpcIntInner> {
         match expr {
             PreprocessorNode::Var(x) => {
                 if let Some(val) = self.defines.get(x) {
@@ -762,8 +762,8 @@ impl Preprocessor {
                 match op {
                     BinaryOperation::Add => Ok(li + ri),
                     BinaryOperation::Sub => Ok(li - ri),
-                    BinaryOperation::AndAnd => Ok(((li != 0) && (ri != 0)) as LpcInt),
-                    BinaryOperation::OrOr => Ok(((li != 0) || (ri != 0)) as LpcInt),
+                    BinaryOperation::AndAnd => Ok(((li != 0) && (ri != 0)) as LpcIntInner),
+                    BinaryOperation::OrOr => Ok(((li != 0) || (ri != 0)) as LpcIntInner),
 
                     operation => Err(LpcError::new(format!(
                         "unknown binary operation `{operation}` in expression `{expr}`"

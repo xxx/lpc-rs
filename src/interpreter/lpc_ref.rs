@@ -8,7 +8,7 @@ use std::{
 };
 
 use bit_set::BitSet;
-use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloat, LpcInt};
+use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloat, LpcIntInner};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
 use parking_lot::RwLock;
@@ -64,7 +64,7 @@ macro_rules! extract_value {
 #[derive(Clone)]
 pub enum LpcRef {
     Float(LpcFloat),
-    Int(LpcInt),
+    Int(LpcIntInner),
 
     /// Reference type, and stores a reference-counting pointer to the actual
     /// value
@@ -374,10 +374,10 @@ impl LpcRef {
     pub fn shl(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
-                let modulo: LpcInt = y % (LpcInt::BITS as LpcInt);
+                let modulo: LpcIntInner = y % (LpcIntInner::BITS as LpcIntInner);
 
                 let shift_by: u32 = if modulo < 0 {
-                    LpcInt::BITS - (modulo.unsigned_abs() as u32)
+                    LpcIntInner::BITS - (modulo.unsigned_abs() as u32)
                 } else {
                     modulo as u32
                 };
@@ -391,10 +391,10 @@ impl LpcRef {
     pub fn shr(&self, rhs: &Self) -> Result<LpcValue> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
-                let modulo: LpcInt = y % (LpcInt::BITS as LpcInt);
+                let modulo: LpcIntInner = y % (LpcIntInner::BITS as LpcIntInner);
 
                 let shift_by: u32 = if modulo < 0 {
-                    LpcInt::BITS - (modulo.unsigned_abs() as u32)
+                    LpcIntInner::BITS - (modulo.unsigned_abs() as u32)
                 } else {
                     modulo as u32
                 };
@@ -448,9 +448,9 @@ impl From<BaseFloat> for LpcRef {
     }
 }
 
-impl From<LpcInt> for LpcRef {
+impl From<LpcIntInner> for LpcRef {
     #[inline]
-    fn from(i: LpcInt) -> Self {
+    fn from(i: LpcIntInner) -> Self {
         Self::Int(i)
     }
 }
@@ -613,11 +613,11 @@ mod tests {
 
         #[test]
         fn int_int_overflow_wraps() {
-            let int1 = LpcRef::Int(LpcInt::MAX);
+            let int1 = LpcRef::Int(LpcIntInner::MAX);
             let int2 = LpcRef::Int(1);
             let result = int1.add(&int2);
             if let Ok(LpcValue::Int(x)) = result {
-                assert_eq!(x, LpcInt::MIN)
+                assert_eq!(x, LpcIntInner::MIN)
             } else {
                 panic!("no match")
             }
@@ -695,7 +695,7 @@ mod tests {
 
         #[test]
         fn int_float_overflow_does_not_panic() {
-            let int = LpcRef::Int(LpcInt::MAX);
+            let int = LpcRef::Int(LpcIntInner::MAX);
             let float = LpcRef::from(1.0);
             assert!((int.add(&float)).is_ok());
         }
@@ -799,7 +799,7 @@ mod tests {
 
         #[test]
         fn int_int_underflow_does_not_panic() {
-            let int = LpcRef::Int(LpcInt::MIN);
+            let int = LpcRef::Int(LpcIntInner::MIN);
             let int2 = LpcRef::Int(1);
             let result = int.sub(&int2);
             assert!(result.is_ok());
@@ -820,7 +820,7 @@ mod tests {
         #[test]
         fn float_int_underflow_does_not_panic() {
             let float = LpcRef::from(BaseFloat::MIN);
-            let int = LpcRef::Int(LpcInt::MAX);
+            let int = LpcRef::Int(LpcIntInner::MAX);
             let result = float.sub(&int);
             assert!(result.is_ok());
         }
@@ -839,7 +839,7 @@ mod tests {
 
         #[test]
         fn int_float_underflow_does_not_panic() {
-            let int = LpcRef::Int(LpcInt::MIN);
+            let int = LpcRef::Int(LpcIntInner::MIN);
             let float = LpcRef::from(1.0);
             let result = int.sub(&float);
             assert!(result.is_ok());
@@ -873,7 +873,7 @@ mod tests {
 
         #[test]
         fn int_int_overflow_does_not_panic() {
-            let int = LpcRef::Int(LpcInt::MAX);
+            let int = LpcRef::Int(LpcIntInner::MAX);
             let int2 = LpcRef::Int(2);
             let result = int.mul(&int2);
             assert!(result.is_ok());
@@ -909,7 +909,7 @@ mod tests {
         fn string_int_overflow_does_not_panic() {
             let pool = SharedArena::with_capacity(5);
             let string = value_to_ref!(LpcValue::String("1234567890abcdef".into()), pool);
-            let int = LpcRef::Int(LpcInt::MAX);
+            let int = LpcRef::Int(LpcIntInner::MAX);
             let result = string.mul(&int);
             assert_err!(result.clone());
             assert_eq!(
@@ -952,7 +952,7 @@ mod tests {
 
         #[test]
         fn int_float_overflow_does_not_panic() {
-            let int = LpcRef::Int(LpcInt::MAX);
+            let int = LpcRef::Int(LpcIntInner::MAX);
             let float = LpcRef::from(200.0);
             let result = int.mul(&float);
             assert!(result.is_ok());
@@ -965,7 +965,7 @@ mod tests {
         #[test]
         fn int_int_overflow_does_not_panic() {
             let int = LpcRef::Int(-1);
-            let int2 = LpcRef::Int(LpcInt::MAX);
+            let int2 = LpcRef::Int(LpcIntInner::MAX);
             let result = int.div(&int2);
             assert!(result.is_ok());
         }
@@ -987,7 +987,7 @@ mod tests {
         fn float_int_overflow_does_not_panic() {
             // I'm not sure it's possible to cause an overflow here?
             let float = LpcRef::from(-1.0);
-            let int = LpcRef::Int(LpcInt::MAX);
+            let int = LpcRef::Int(LpcIntInner::MAX);
             let result = float.div(&int);
 
             assert!(result.is_ok());
@@ -1029,7 +1029,7 @@ mod tests {
         #[test]
         fn int_int_overflow_does_not_panic() {
             let int = LpcRef::Int(-1);
-            let int2 = LpcRef::Int(LpcInt::MAX);
+            let int2 = LpcRef::Int(LpcIntInner::MAX);
             let result = int.rem(&int2);
             assert!(result.is_ok());
         }
@@ -1051,7 +1051,7 @@ mod tests {
         fn float_int_overflow_does_not_panic() {
             // I'm not sure it's possible to cause an overflow here?
             let float = LpcRef::from(-1.0);
-            let int = LpcRef::Int(LpcInt::MAX);
+            let int = LpcRef::Int(LpcIntInner::MAX);
             let result = float.rem(&int);
 
             assert!(result.is_ok());
@@ -1194,9 +1194,9 @@ mod tests {
 
         #[test]
         fn wraps_on_max() {
-            let mut int = LpcRef::Int(LpcInt::MAX);
+            let mut int = LpcRef::Int(LpcIntInner::MAX);
             let _ = int.inc();
-            assert_eq!(int, LpcRef::Int(LpcInt::MIN))
+            assert_eq!(int, LpcRef::Int(LpcIntInner::MIN))
         }
 
         #[test]
@@ -1219,9 +1219,9 @@ mod tests {
 
         #[test]
         fn wraps_on_min() {
-            let mut int = LpcRef::Int(LpcInt::MIN);
+            let mut int = LpcRef::Int(LpcIntInner::MIN);
             let _ = int.dec();
-            assert_eq!(int, LpcRef::Int(LpcInt::MAX))
+            assert_eq!(int, LpcRef::Int(LpcIntInner::MAX))
         }
 
         #[test]

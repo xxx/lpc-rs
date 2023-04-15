@@ -21,7 +21,7 @@ use lpc_rs_core::{
     function_receiver::FunctionReceiver,
     lpc_type::LpcType,
     register::{Register, RegisterVariant},
-    LpcInt,
+    LpcIntInner,
 };
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
@@ -499,7 +499,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 apply_in_location(&mut self.stack, r1, |x| x.dec())?;
             }
             Instruction::EqEq(r1, r2, r3) => {
-                let out = (get_loc!(self, r1)? == get_loc!(self, r2)?) as LpcInt;
+                let out = (get_loc!(self, r1)? == get_loc!(self, r2)?) as LpcIntInner;
 
                 set_loc!(self, r3, LpcRef::Int(out))?;
             }
@@ -636,8 +636,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::Not(r1, r2) => {
                 let matched = match &*get_loc!(self, r1)? {
-                    LpcRef::Int(x) => LpcRef::Int((*x == 0) as LpcInt),
-                    LpcRef::Float(x) => LpcRef::Int((*x == 0.0) as LpcInt),
+                    LpcRef::Int(x) => LpcRef::Int((*x == 0) as LpcIntInner),
+                    LpcRef::Float(x) => LpcRef::Int((*x == 0.0) as LpcIntInner),
 
                     // These rest always have a value at runtime.
                     // Any null / undefined values would be LpcRef::Ints, handled above.
@@ -651,7 +651,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 set_loc!(self, r2, matched)?;
             }
             Instruction::NotEq(r1, r2, r3) => {
-                let out = (get_loc!(self, r1)? != get_loc!(self, r2)?) as LpcInt;
+                let out = (get_loc!(self, r1)? != get_loc!(self, r2)?) as LpcIntInner;
 
                 set_loc!(self, r3, LpcRef::Int(out))?;
             }
@@ -701,12 +701,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 // r4 = r1[r2..r3]
 
                 let resolve_range = |start: i64, end: i64, len: usize| -> (usize, usize) {
-                    let to_idx = |i: LpcInt| {
+                    let to_idx = |i: LpcIntInner| {
                         // We handle the potential overflow just below.
                         if i >= 0 {
                             i as usize
                         } else {
-                            (len as LpcInt + i) as usize
+                            (len as LpcIntInner + i) as usize
                         }
                     };
                     let real_start = to_idx(start);
@@ -827,19 +827,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         let borrowed = x.read();
                         let vec = try_extract_value!(*borrowed, LpcValue::Array);
 
-                        LpcValue::from(vec.len() as LpcInt)
+                        LpcValue::from(vec.len() as LpcIntInner)
                     }
                     LpcRef::Mapping(x) => {
                         let borrowed = x.read();
                         let map = try_extract_value!(*borrowed, LpcValue::Mapping);
 
-                        LpcValue::from(map.len() as LpcInt)
+                        LpcValue::from(map.len() as LpcIntInner)
                     }
                     LpcRef::String(x) => {
                         let borrowed = x.read();
                         let string = try_extract_value!(*borrowed, LpcValue::String);
 
-                        LpcValue::from(string.len() as LpcInt)
+                        LpcValue::from(string.len() as LpcIntInner)
                     }
                     LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Object(_) | LpcRef::Function(_) => {
                         LpcValue::from(0)
@@ -1633,7 +1633,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let vec = try_extract_value!(*value, LpcValue::Array);
 
                 if let LpcRef::Int(i) = lpc_ref {
-                    let idx = if i >= 0 { i } else { vec.len() as LpcInt + i };
+                    let idx = if i >= 0 { i } else { vec.len() as LpcIntInner + i };
 
                     if idx >= 0 {
                         if let Some(v) = vec.get(idx as usize) {
@@ -1658,7 +1658,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let idx = if i >= 0 {
                         i
                     } else {
-                        string.len() as LpcInt + i
+                        string.len() as LpcIntInner + i
                     };
 
                     if idx >= 0 {
@@ -1790,7 +1790,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let idx = if array_idx >= 0 {
                     array_idx
                 } else {
-                    len as LpcInt + array_idx
+                    len as LpcIntInner + array_idx
                 };
 
                 if idx >= 0 && (idx as usize) < len {
@@ -1949,7 +1949,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let ref1 = &*get_location(&self.stack, r1)?;
         let ref2 = &*get_location(&self.stack, r2)?;
 
-        let out = operation(ref1, ref2) as LpcInt;
+        let out = operation(ref1, ref2) as LpcIntInner;
 
         set_loc!(self, r3, LpcRef::Int(out))
     }
@@ -2032,7 +2032,7 @@ mod tests {
     };
 
     use indoc::indoc;
-    use lpc_rs_core::{LpcFloat, LpcInt};
+    use lpc_rs_core::{LpcFloat, LpcIntInner};
     use tokio::sync::mpsc;
 
     use super::*;
@@ -2082,7 +2082,7 @@ mod tests {
     #[derive(Debug, Eq, Clone)]
     enum BareVal {
         String(String),
-        Int(LpcInt),
+        Int(LpcIntInner),
         Float(LpcFloat),
         Array(Vec<BareVal>),
         Mapping(HashMap<BareVal, BareVal>),

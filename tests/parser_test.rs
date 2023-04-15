@@ -25,13 +25,13 @@ use lpc_rs::{
     lpc_parser,
 };
 use lpc_rs_core::{
-    global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility, LpcFloat, LpcInt,
+    global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility, LpcFloat, LpcIntInner,
 };
 use lpc_rs_errors::{span::Span, Result};
 use ustr::ustr;
 
 // just a helper for a very common pattern
-fn assert_int(value: LpcInt, expr: &str) {
+fn assert_int(value: LpcIntInner, expr: &str) {
     let code = format!("void create() {{ {}; }}", expr);
     let lexer = LexWrapper::new(&code);
     let prog_node: ProgramNode = lpc_parser::ProgramParser::new()
@@ -507,7 +507,7 @@ fn partial_application_argument_lists() {
 
     let program = parse_prog(prog).expect("Failed to parse");
 
-    let get_args = |node: &AstNode| -> Option<Vec<Option<LpcInt>>> {
+    let get_args = |node: &AstNode| -> Option<Vec<Option<LpcIntInner>>> {
         if_chain! {
             if let AstNode::Decl(
                 DeclNode {

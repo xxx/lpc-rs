@@ -1,5 +1,5 @@
 use lalrpop_util::ParseError;
-use lpc_rs_core::LpcInt;
+use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::{span::Span, LpcError};
 use lpc_rs_utils::{string, string::concatenate_strings};
 
@@ -298,7 +298,7 @@ fn collapse_shr(
 /// handle string * int and int * string
 fn collapse_repeat_string(
     string: String,
-    amount: LpcInt,
+    amount: LpcIntInner,
     span: Span,
 ) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
     let value =
@@ -497,7 +497,7 @@ mod tests {
     #[test]
     fn test_handles_mul_string_int_overflow() {
         let node1 = ExpressionNode::from("hello");
-        let node2 = ExpressionNode::from(LpcInt::MAX);
+        let node2 = ExpressionNode::from(LpcIntInner::MAX);
         let op = BinaryOperation::Mul;
         let span = Span::new(0, 0..1);
 

@@ -3,7 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use lpc_rs_core::LpcInt;
+use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
@@ -14,14 +14,14 @@ use crate::compiler::{
 /// A node representing an integer literal
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
 pub struct IntNode {
-    pub value: LpcInt,
+    pub value: LpcIntInner,
 
     /// The span of the string in the original file
     pub span: Option<Span>,
 }
 
 impl IntNode {
-    pub fn new(value: LpcInt) -> Self {
+    pub fn new(value: LpcIntInner) -> Self {
         Self { value, span: None }
     }
 }

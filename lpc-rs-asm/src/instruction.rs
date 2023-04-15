@@ -4,7 +4,7 @@ use std::{
 };
 
 use lpc_rs_core::{
-    function_receiver::FunctionReceiver, register::RegisterVariant, LpcFloat, LpcInt,
+    function_receiver::FunctionReceiver, register::RegisterVariant, LpcFloat, LpcIntInner,
 };
 use lpc_rs_errors::{LpcError, Result};
 use serde::{Deserialize, Serialize};
@@ -97,7 +97,7 @@ pub enum Instruction {
     IAdd(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Integer constant
-    IConst(RegisterVariant, LpcInt),
+    IConst(RegisterVariant, LpcIntInner),
 
     /// Integer constant 0
     IConst0(RegisterVariant),

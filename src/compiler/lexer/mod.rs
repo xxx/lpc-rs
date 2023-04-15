@@ -5,7 +5,7 @@ use std::{
 };
 
 use logos::{Lexer, Logos};
-use lpc_rs_core::{convert_escapes, BaseFloat, LpcInt};
+use lpc_rs_core::{convert_escapes, BaseFloat, LpcIntInner};
 use lpc_rs_errors::{
     lazy_files::FileId,
     span::{HasSpan, Span},
@@ -279,7 +279,7 @@ pub enum Token {
     let span = Span::new(lex.extras.current_file_id, lex.span());
 
     match lex.slice().chars().nth(1) {
-        Some(c) => Ok(IntToken(span, c as LpcInt)),
+        Some(c) => Ok(IntToken(span, c as LpcIntInner)),
         None => {
             Err(LpcError::new(
                 format!("Unable to find the character in token `{}`? This is a WTF.", lex.slice())
@@ -290,7 +290,7 @@ pub enum Token {
     #[regex(r"[1-9][0-9_]*|0", |lex| {
         track_slice(lex);
 
-        match LpcInt::from_str(&lex.slice().replace('_', "")) {
+        match LpcIntInner::from_str(&lex.slice().replace('_', "")) {
             Ok(i) => Ok(IntToken(Span::new(lex.extras.current_file_id, lex.span()), i)),
             Err(e) => Err(e)
         }
@@ -298,7 +298,7 @@ pub enum Token {
     #[regex(r"0[xX][0-9a-fA-F][0-9a-fA-F_]*", |lex| {
         track_slice(lex);
 
-        let r = LpcInt::from_str_radix(
+        let r = LpcIntInner::from_str_radix(
             lex.slice().replace('_', "")
                 .trim_start_matches("0x")
                 .trim_start_matches("0X"),
@@ -312,7 +312,7 @@ pub enum Token {
     #[regex(r"0[oO]?[0-7][0-7_]*", |lex| {
         track_slice(lex);
 
-        let r = LpcInt::from_str_radix(
+        let r = LpcIntInner::from_str_radix(
             lex.slice().replace('_', "")
                 .trim_start_matches("0o")
                 .trim_start_matches("0O"),
@@ -326,7 +326,7 @@ pub enum Token {
     #[regex(r"0[bB][01][01_]*", |lex| {
         track_slice(lex);
 
-        let r = LpcInt::from_str_radix(
+        let r = LpcIntInner::from_str_radix(
             lex.slice().replace('_', "")
                 .trim_start_matches("0b")
                 .trim_start_matches("0B"),

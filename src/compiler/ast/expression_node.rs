@@ -4,7 +4,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use lpc_rs_core::{BaseFloat, LpcInt};
+use lpc_rs_core::{BaseFloat, LpcIntInner};
 use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
@@ -169,8 +169,8 @@ impl From<FunctionPtrNode> for ExpressionNode {
     }
 }
 
-impl From<LpcInt> for ExpressionNode {
-    fn from(value: LpcInt) -> Self {
+impl From<LpcIntInner> for ExpressionNode {
+    fn from(value: LpcIntInner) -> Self {
         Self::Int(IntNode::new(value))
     }
 }
@@ -206,8 +206,8 @@ impl From<Vec<&str>> for ExpressionNode {
     }
 }
 
-impl From<Vec<LpcInt>> for ExpressionNode {
-    fn from(vec: Vec<LpcInt>) -> Self {
+impl From<Vec<LpcIntInner>> for ExpressionNode {
+    fn from(vec: Vec<LpcIntInner>) -> Self {
         let value = vec
             .into_iter()
             .map(ExpressionNode::from)

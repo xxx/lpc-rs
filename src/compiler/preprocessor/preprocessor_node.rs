@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use lpc_rs_core::LpcInt;
+use lpc_rs_core::LpcIntInner;
 
 use crate::compiler::ast::binary_op_node::BinaryOperation;
 
@@ -8,7 +8,7 @@ use crate::compiler::ast::binary_op_node::BinaryOperation;
 #[derive(Debug, PartialEq)]
 pub enum PreprocessorNode {
     Var(String),
-    Int(LpcInt),
+    Int(LpcIntInner),
     String(String),
     /// `bool` denotes whether this is negated or not
     Defined(String, bool),

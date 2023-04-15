@@ -1,5 +1,5 @@
 use if_chain::if_chain;
-use lpc_rs_core::LpcInt;
+use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::{LpcError, Result};
 
 /// The maximum length of strings, *in bytes*
@@ -8,7 +8,7 @@ pub const MAX_STRING_LENGTH: usize = 1_073_741_824; // 1 GiB
 /// Repeat `s`, `i` times, and return a new String of it.
 ///
 /// Return an error if there is an overflow.
-pub fn repeat_string(s: &str, i: LpcInt) -> Result<String> {
+pub fn repeat_string(s: &str, i: LpcIntInner) -> Result<String> {
     if i >= 0 {
         let new_capacity = (i as usize).checked_mul(s.as_bytes().len());
         if_chain! {
@@ -73,7 +73,7 @@ mod tests {
 
         #[test]
         fn returns_err_on_overflow() {
-            let result = repeat_string("foo", LpcInt::MAX);
+            let result = repeat_string("foo", LpcIntInner::MAX);
             assert_err!(result.clone());
             assert_eq!(
                 result.unwrap_err().to_string().as_str(),

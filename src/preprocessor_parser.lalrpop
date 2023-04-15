@@ -4,7 +4,7 @@ use crate::compiler::lexer::Token;
 use lpc_rs_errors::LpcError;
 use lpc_rs_errors::span::Span;
 use crate::compiler::lexer::logos_token::{StringToken, IntToken};
-use lpc_rs_core::LpcInt;
+use lpc_rs_core::LpcIntInner;
 
 grammar;
 
@@ -133,7 +133,7 @@ pub Expression: PreprocessorNode = {
 
 Var: String = <"ID"> => <>.1;
 
-Int: LpcInt = <"IntLiteral"> => <>.1;
+Int: LpcIntInner = <"IntLiteral"> => <>.1;
 
 String: String = <"StringLiteral"> => <>.1;
 
