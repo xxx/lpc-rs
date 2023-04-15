@@ -20,12 +20,17 @@ pub async fn file_name<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         LpcRef::Object(x) => {
             let b = x.read();
             let proc = try_extract_value!(*b, LpcValue::Object);
-            let path = LpcPath::new_server(&*proc.read().filename());
 
-            LpcValue::from(String::from(
-                path.as_in_game(&*context.config().lib_dir)
-                    .to_string_lossy(),
-            ))
+            if let Some(proc) = proc.upgrade() {
+                let path = LpcPath::new_server(&*proc.read().filename());
+
+                LpcValue::from(String::from(
+                    path.as_in_game(&*context.config().lib_dir)
+                        .to_string_lossy(),
+                ))
+            } else {
+                LpcValue::from(0)
+            }
         }
     };
 

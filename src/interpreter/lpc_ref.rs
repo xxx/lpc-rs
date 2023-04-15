@@ -481,6 +481,7 @@ impl PartialEq for LpcRef {
                 extract_value!(*x.read(), LpcValue::String)
                     == extract_value!(*y.read(), LpcValue::String)
             }
+            (LpcRef::Object(x), LpcRef::Object(y)) => std::ptr::eq(&**x, &**y),
             (LpcRef::Array(x), LpcRef::Array(y)) => std::ptr::eq(&**x, &**y),
             (LpcRef::Mapping(x), LpcRef::Mapping(y)) => std::ptr::eq(&**x, &**y),
             (LpcRef::Function(x), LpcRef::Function(y)) => std::ptr::eq(&**x, &**y),

@@ -92,7 +92,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         context.set_instruction_count(task.context.instruction_count())?;
 
         // Set up the return value
-        let v = LpcValue::Object(new_clone);
+        let v = LpcValue::Object(Arc::downgrade(&new_clone));
         let result = context.value_to_ref(v);
 
         context.return_efun_result(result);

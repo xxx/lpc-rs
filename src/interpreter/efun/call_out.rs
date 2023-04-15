@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use chrono::Duration;
 use lpc_rs_core::LpcFloat;
 use lpc_rs_errors::{LpcError, Result};
@@ -58,7 +59,7 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         None
     };
 
-    let process = context.frame().process.clone();
+    let process = Arc::downgrade(&context.frame().process);
     let index = {
         let mut call_outs = context.call_outs().write();
         call_outs.schedule_task(process, func_ref, duration, repeat)?

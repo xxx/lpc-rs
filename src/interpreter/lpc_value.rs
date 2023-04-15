@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
     sync::Arc,
 };
+use std::sync::Weak;
 
 use indexmap::IndexMap;
 use lpc_rs_core::{BaseFloat, LpcFloat, LpcInt};
@@ -26,7 +27,7 @@ pub enum LpcValue {
     String(LpcString),
     Array(LpcArray),
     Mapping(LpcMapping),
-    Object(Arc<RwLock<Process>>),
+    Object(Weak<RwLock<Process>>),
     Function(FunctionPtr),
 }
 
@@ -82,7 +83,13 @@ impl Display for LpcValue {
             LpcValue::String(x) => write!(f, "\"{x}\""),
             LpcValue::Array(x) => write!(f, "{x}"),
             LpcValue::Mapping(x) => write!(f, "{x}"),
-            LpcValue::Object(x) => write!(f, "< {} >", x.read()),
+            LpcValue::Object(x) => {
+                if let Some(x) = x.upgrade() {
+                    write!(f, "< {} >", x.read())
+                } else {
+                    write!(f, "< destructed >")
+                }
+            },
             LpcValue::Function(x) => write!(f, "{x}"),
         }
     }
@@ -144,6 +151,12 @@ impl<T> From<IndexMap<HashedLpcRef, LpcRef, T>> for LpcValue {
 
 impl From<Arc<RwLock<Process>>> for LpcValue {
     fn from(o: Arc<RwLock<Process>>) -> Self {
+        Self::Object(Arc::downgrade(&o))
+    }
+}
+
+impl From<Weak<RwLock<Process>>> for LpcValue {
+    fn from(o: Weak<RwLock<Process>>) -> Self {
         Self::Object(o)
     }
 }
@@ -165,7 +178,10 @@ impl PartialEq for LpcValue {
                 x.keys().collect::<Vec<_>>() == y.keys().collect::<Vec<_>>()
                     && x.values().collect::<Vec<_>>() == y.values().collect::<Vec<_>>()
             }
-            (LpcValue::Object(x), LpcValue::Object(y)) => Arc::ptr_eq(x, y),
+            (LpcValue::Object(x), LpcValue::Object(y)) => {
+                // If both objects are destructed, they are equal (to 0, technically).
+                Weak::ptr_eq(x, y)
+            },
             _ => false,
         }
     }

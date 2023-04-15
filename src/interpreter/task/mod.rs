@@ -1150,13 +1150,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let pair_opt = {
                     let b = lpc_ref.read();
                     let cell = try_extract_value!(*b, LpcValue::Object);
-                    let proc = cell.read();
-                    proc.as_ref()
-                        .lookup_function(name)
-                        .map(|func| (cell.clone(), func.clone()))
+
+                    if let Some(cell) = cell.upgrade() {
+                        let proc = cell.read();
+
+                        proc.as_ref()
+                            .lookup_function(name)
+                            .map(|func| (cell.clone(), func.clone()))
+                    } else {
+                        None
+                    }
                 };
 
-                // short-circuit a 0 return if doing a call_other to a non-existent function
+                // short-circuit a 0 return if doing a call_other to a
+                // non-existent function, or destructed object
                 let Some(pair) = pair_opt else {
                     let frame = self.stack.current_frame_mut()?;
                     frame.registers[0] = NULL;
@@ -1292,8 +1299,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let value = LpcValue::from(pr);
                     let result = match value {
                         LpcValue::Object(receiver) => {
+                            let Some(receiver) = receiver.upgrade() else {
+                                return Ok(NULL);
+                            };
                             let new_context = task_context.clone().with_process(receiver.clone());
                             let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
+
                             // unwrap() is ok because resolve_call_other_receiver() checks
                             // for the function's presence.
                             let function = receiver
@@ -1487,7 +1498,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     LpcRef::Object(x) => {
                         let b = x.read();
                         let process = try_extract_value!(*b, LpcValue::Object);
-                        let process = process.clone();
+
+                        let Some(process) = process.upgrade() else {
+                            return Err(self.runtime_error("called object is no longer available"));
+                        };
 
                         let func = {
                             let borrowed_proc = process.read();
@@ -1818,7 +1832,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             LpcRef::Object(o) => {
                 let r = o.read();
                 if let LpcValue::Object(ref proc) = *r {
-                    proc.clone()
+                    let Some(proc) = proc.upgrade() else {
+                        return None;
+                    };
+
+                    proc
                 } else {
                     return None;
                 }
@@ -2085,8 +2103,12 @@ mod tests {
                 LpcRef::Object(x) => {
                     let xb = x.read();
                     let o = extract_value!(&*xb, LpcValue::Object);
-                    let filename = o.read().filename().into_owned();
-                    BareVal::Object(filename)
+                    if let Some(o) = o.upgrade() {
+                        let filename = o.read().filename().into_owned();
+                        BareVal::Object(filename)
+                    } else {
+                        BareVal::Int(0)
+                    }
                 }
                 LpcRef::Function(x) => {
                     let xb = x.read();

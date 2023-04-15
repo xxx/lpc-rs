@@ -38,12 +38,20 @@ fn format_ref<const N: usize>(
 
             Ok(format!("{:width$}{}", "", s, width = indent))
         }
-        LpcRef::Object(x) => Ok(format!(
-            "{:width$}{}",
-            "",
-            try_extract_value!(*x.read(), LpcValue::Object).read(),
-            width = indent
-        )),
+        LpcRef::Object(x) => {
+            let val = try_extract_value!(*x.read(), LpcValue::Object).upgrade();
+            if let Some(proc) = val {
+                Ok(format!(
+                    "{:width$}{}",
+                    "",
+                    proc.read(),
+                    width = indent
+                ))
+            } else {
+                Ok(format!("{:width$}{}", "", "NULL", width = indent))
+            }
+
+        },
         LpcRef::Function(x) => Ok(format!(
             "{:width$}{}",
             "",

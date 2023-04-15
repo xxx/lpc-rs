@@ -15,10 +15,14 @@ pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -
             let LpcValue::Object(process) = &*object.read() else {
                 return Err(context.runtime_bug("object in `query_call_outs` is not an object? This shouldn't be reachable."));
             };
-            process.clone()
+            process.upgrade()
         }
-        LpcRef::Int(0) => context.frame().process.clone(),
-        _ => return Err(context.runtime_bug("non-object sent to `query_call_outs`")),
+        LpcRef::Int(0) => Some(context.frame().process.clone()),
+        _ => return Err(context.runtime_error("non-object sent to `query_call_outs`")),
+    };
+
+    let Some(owner) = owner else {
+        return Err(context.runtime_error("object in `query_call_outs` is already destructed"));
     };
 
     let vec = context
@@ -27,8 +31,12 @@ pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -
         .queue()
         .iter()
         .filter_map(|(_idx, call_out)| {
-            if Arc::ptr_eq(call_out.process(), &owner) {
-                Some(call_out_array_ref(context, call_out).unwrap())
+            if let Some(process) = call_out.process().upgrade() {
+                if Arc::ptr_eq(&process, &owner) {
+                    Some(call_out_array_ref(context, call_out).unwrap())
+                } else {
+                    None
+                }
             } else {
                 None
             }
