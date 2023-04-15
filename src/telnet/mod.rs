@@ -23,7 +23,7 @@ use crate::telnet::{
     ops::{BrokerOp, ConnectionOp},
 };
 
-/// The incoming connection handler. Once established, connections are handled by [`ConnectionManager`].
+/// The incoming connection handler. Once established, connections are handled by [`ConnectionBroker`](connection_broker::ConnectionBroker).
 #[derive(Debug)]
 pub struct Telnet {
     /// The handle to the main connection handler task.
