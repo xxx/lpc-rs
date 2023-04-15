@@ -1305,9 +1305,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                             if function.public() {
                                 task.eval(function, args).await?;
-                                // task_context.increment_instruction_count(
-                                //     task.context.instruction_count(),
-                                // )?;
+                                task_context.increment_instruction_count(
+                                    task.context.instruction_count(),
+                                )?;
 
                                 let Some(r) = task.context.into_result() else {
                                     return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));
@@ -1323,7 +1323,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                     Ok(result)
                 } else {
-                    Err(LpcError::new("Unable to find the receiver."))
+                    Ok(NULL)
                 }
             }
 
@@ -2778,6 +2778,25 @@ mod tests {
                 let expected = vec![
                     Int(0),
                     Object("/my_file".into()),
+                    String("tacos".into()),
+                    Int(0),
+                ];
+
+                BareVal::assert_vec_equal(&expected, registers);
+            }
+
+            #[tokio::test]
+            async fn returns_0_for_unknown_receiver() {
+                let code = indoc! { r##"
+                    mixed q = "/foobarbaz"->tacos();
+                "##};
+
+                let task = run_prog(code).await;
+                let registers = &task.popped_frame.unwrap().registers;
+
+                let expected = vec![
+                    Int(0),
+                    String("/foobarbaz".into()),
                     String("tacos".into()),
                     Int(0),
                 ];
