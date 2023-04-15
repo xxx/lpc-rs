@@ -6,6 +6,7 @@ pub(crate) mod compose;
 pub(crate) mod debug;
 pub(crate) mod dump;
 pub(crate) mod file_name;
+pub(crate) mod find_object;
 pub(crate) mod papplyv;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
@@ -42,6 +43,7 @@ pub const COMPOSE: &str = "compose";
 pub const DEBUG: &str = "debug";
 pub const DUMP: &str = "dump";
 pub const FILE_NAME: &str = "file_name";
+pub const FIND_OBJECT: &str = "find_object";
 pub const PAPPLYV: &str = "papplyv";
 pub const QUERY_CALL_OUT: &str = "query_call_out";
 pub const QUERY_CALL_OUTS: &str = "query_call_outs";
@@ -61,6 +63,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
         DEBUG => debug::debug(efun_context).await,
         DUMP => dump::dump(efun_context).await,
         FILE_NAME => file_name::file_name(efun_context).await,
+        FIND_OBJECT => find_object::find_object(efun_context).await,
         PAPPLYV => papplyv::papplyv(efun_context).await,
         QUERY_CALL_OUT => query_call_out::query_call_out(efun_context).await,
         QUERY_CALL_OUTS => query_call_outs::query_call_outs(efun_context).await,
@@ -213,6 +216,19 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::Object(false)])
             .build()
             .expect("failed to build file_name"),
+    );
+
+    m.insert(
+        FIND_OBJECT,
+        FunctionPrototypeBuilder::default()
+            .name(FIND_OBJECT)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Object(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::String(false)])
+            .build()
+            .expect("failed to build find_object"),
     );
 
     m.insert(
