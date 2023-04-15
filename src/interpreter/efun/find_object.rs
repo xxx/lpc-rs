@@ -1,6 +1,6 @@
-use std::sync::Arc;
-use parking_lot::RwLock;
-use lpc_rs_core::lpc_path::LpcPath;
+
+
+
 use lpc_rs_errors::{LpcError, Result};
 
 use crate::{
@@ -45,7 +45,10 @@ pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
 #[cfg(test)]
 mod tests {
     use std::path::{Path};
+    use std::sync::Arc;
     use indoc::indoc;
+    use parking_lot::RwLock;
+    use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::Config;
     use crate::interpreter::call_outs::CallOuts;
     use crate::interpreter::gc::gc_bank::GcBank;
@@ -87,13 +90,13 @@ mod tests {
 
         let (program, config, _) = compile_prog(code);
         let func = program.initializer.clone().expect("no init found?");
-        let mut context = task_context_fixture(program, config, tx);
+        let context = task_context_fixture(program, config, tx);
         let to_find = ProgramBuilder::default()
             .filename(LpcPath::InGame(Path::new("/example").to_path_buf()))
             .build()
             .unwrap();
-        let mut proc = Process::new(to_find);
-        ObjectSpace::insert_process(&mut context.object_space, RwLock::new(proc));
+        let proc = Process::new(to_find);
+        ObjectSpace::insert_process(&context.object_space, RwLock::new(proc));
 
         let mut task = Task::<10>::new(context.clone());
         task.eval(func.clone(), &[])
@@ -121,7 +124,7 @@ mod tests {
 
         let (program, config, _) = compile_prog(code);
         let func = program.initializer.clone().expect("no init found?");
-        let mut context = task_context_fixture(program, config, tx);
+        let context = task_context_fixture(program, config, tx);
 
         let mut task = Task::<10>::new(context.clone());
         task.eval(func.clone(), &[])
