@@ -7,8 +7,8 @@ use std::{
 use bit_set::BitSet;
 use delegate::delegate;
 use if_chain::if_chain;
-use tracing::{instrument, trace};
 use thin_vec::ThinVec;
+use tracing::{instrument, trace};
 
 use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
@@ -202,8 +202,8 @@ impl IntoLpcRef for LpcArray {
 #[cfg(test)]
 mod tests {
     use factori::create;
-    use thin_vec::thin_vec;
     use lpc_rs_core::register::Register;
+    use thin_vec::thin_vec;
 
     use super::*;
     use crate::test_support::factories::*;
