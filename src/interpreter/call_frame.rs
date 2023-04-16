@@ -275,16 +275,6 @@ impl CallFrame {
         self.function.instructions.get(self.pc).copied()
     }
 
-    /// lookup a label's address by name
-    #[inline]
-    #[instrument(skip(self))]
-    pub fn lookup_label<T>(&self, label: T) -> Option<&Address>
-    where
-        T: AsRef<str> + Debug,
-    {
-        self.function.labels.get(label.as_ref())
-    }
-
     /// a convenience method to generate a runtime error
     #[inline]
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
