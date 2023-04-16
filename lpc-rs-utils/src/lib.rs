@@ -16,10 +16,9 @@ where
             // Fall back to checking the cache, for the case of code added eagerly.
             // This shouldn't be reached in normal use, but is highly useful for testing and debugging.
             let files = FILE_CACHE.read();
-            // TODO: rectify the need for calling to_string on the path
             path.as_ref()
                 .to_str()
-                .and_then(|p| files.id_for(&p.to_string()))
+                .and_then(|p| files.id_for(p))
                 .and_then(|id| files.get(id).ok().map(|file| file.source().clone()))
                 .ok_or(e)
         })

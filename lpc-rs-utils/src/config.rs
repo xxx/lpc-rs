@@ -225,7 +225,7 @@ mod tests {
             assert!(result.is_ok());
         }
 
-        // TODO: this doesn't actually fail, because the path is canonicalized before it checks.
+        // note: this doesn't actually fail, because the path is canonicalized before it checks.
         // #[test]
         // fn test_validate_in_game_path_outside_lib_dir() {
         //     let config = Config::default();

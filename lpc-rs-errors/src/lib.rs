@@ -21,7 +21,6 @@ pub mod file_stream;
 pub mod lazy_files;
 pub mod span;
 
-// TODO: replace this with Diagnostic::Severity
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LpcErrorSeverity {
     Warning,

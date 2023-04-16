@@ -154,7 +154,10 @@ where
     ///
     /// # Arguments
     /// `path` - The path of the file stored in the cache
-    pub fn id_for(&self, path: &Name) -> Option<FileId> {
+    pub fn id_for<P>(&self, path: P) -> Option<FileId>
+    where
+        P: for<'a> PartialEq<&'a Name>,
+    {
         self.paths.iter().position(|i| match i {
             LazyFile::Lazy(p) => path == p,
             LazyFile::Eager(p, _) => path == p,
