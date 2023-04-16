@@ -49,7 +49,7 @@ stable-vec = "0.4.0"
 string-interner = "0.14.0"
 thin-vec = "0.2.12"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "signal", "sync", "time"] }
-tokio-util = { version ="0.7.7", features = ["codec"] }
+tokio-util = { version = "0.7.7", features = ["codec"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.11", features = ["env-filter", "fmt"] }
 ustr = "0.9.0"
