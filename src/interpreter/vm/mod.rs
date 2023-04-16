@@ -38,6 +38,7 @@ use crate::{
     telnet::{connection_broker::ConnectionBroker, ops::BrokerOp, Telnet},
     util::get_simul_efuns,
 };
+use crate::interpreter::efun::EFUN_FUNCTIONS;
 
 pub mod vm_op;
 
@@ -229,11 +230,9 @@ impl Vm {
                         (simul_efuns.clone(), function.clone(), args)
                     },
                     FunctionAddress::Efun(name) => {
-                        let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
-                        // TODO: prototypes should be in Rcs so this clone is cheap
-                        let pf = ProgramFunction::new(prototype.clone(), 0);
+                        let pf = EFUN_FUNCTIONS.get(name.as_str()).unwrap();
 
-                        (Arc::new(RwLock::new(Process::default())), Arc::new(pf), args)
+                        (Arc::new(RwLock::new(Process::default())), pf.clone(), args)
                     }
                 }
             }

@@ -60,6 +60,7 @@ impl FunctionPtr {
     }
 
     /// Get a clone of this function pointer, with a new unique ID.
+    /// This is used partially-apply an existing function to additional arguments.
     #[inline]
     pub fn clone_with_new_id(&self) -> Self {
         Self {
@@ -105,8 +106,14 @@ impl Display for FunctionPtr {
         let mut s = String::new();
 
         s.push_str("FunctionPtr { ");
-        // TODO: get the owner printed again
-        s.push_str(&format!("owner: {}", "todo"));
+        match self.owner.upgrade() {
+            Some(owner) => {
+                s.push_str(&format!("owner: {}, ", owner.read()));
+            }
+            None => {
+                s.push_str("owner: < destructed >, ");
+            }
+        }
         s.push_str(&format!("address: {}, ", self.address));
 
         let partial_args = &self

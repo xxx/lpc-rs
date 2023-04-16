@@ -14,7 +14,6 @@ pub async fn papplyv<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
         return Err(context.runtime_error("non-array argument sent to `papplyv`"));
     };
 
-    // TODO: this clone is unnecessarily heavy
     let mut ptr = func.read().clone_with_new_id();
     ptr.partially_apply(&arr.read());
 
