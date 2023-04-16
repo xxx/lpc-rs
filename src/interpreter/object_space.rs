@@ -1,12 +1,12 @@
-use std::{collections::HashMap, fmt::Formatter, sync::Arc};
+use std::{sync::Arc};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use bit_set::BitSet;
 use dashmap::DashMap;
 use dashmap::mapref::one::Ref;
 use delegate::delegate;
-use educe::Educe;
-use itertools::Itertools;
+
+
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 
@@ -242,7 +242,7 @@ mod tests {
     #[test]
     fn test_mark() {
         let config = Config::default();
-        let mut space = ObjectSpace::new(config);
+        let space = ObjectSpace::new(config);
 
         let memory = Memory::new(5);
         let array = LpcArray::new(vec![]);
