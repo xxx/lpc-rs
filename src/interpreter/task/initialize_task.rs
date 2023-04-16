@@ -1,16 +1,15 @@
 use std::sync::Arc;
+
 use derive_builder::Builder;
+use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
-use lpc_rs_utils::config::Config;
-use crate::interpreter::call_outs::CallOuts;
-use crate::interpreter::gc::gc_bank::GcRefBank;
-use crate::interpreter::memory::Memory;
-use crate::interpreter::object_space::ObjectSpace;
-use crate::interpreter::program::Program;
-use crate::interpreter::task::Task;
-use crate::interpreter::vm::vm_op::VmOp;
-use lpc_rs_errors::{LpcError, Result};
+
+use crate::interpreter::{
+    call_outs::CallOuts, gc::gc_bank::GcRefBank, memory::Memory, object_space::ObjectSpace,
+    program::Program, task::Task, vm::vm_op::VmOp,
+};
 
 /// This struct exists solely to allow a Builder to be derived,
 /// making calls to Task::initialize_program more ergonomic.
@@ -27,7 +26,10 @@ pub struct InitializeProgram<const N: usize> {
     memory: Arc<Memory>,
     #[builder(setter(into), default = "Arc::new(RwLock::new(GcRefBank::default()))")]
     vm_upvalues: Arc<RwLock<GcRefBank>>,
-    #[builder(setter(into), default = "Arc::new(RwLock::new(CallOuts::new(self.tx.as_ref().unwrap().clone())))")]
+    #[builder(
+        setter(into),
+        default = "Arc::new(RwLock::new(CallOuts::new(self.tx.as_ref().unwrap().clone())))"
+    )]
     call_outs: Arc<RwLock<CallOuts>>,
 
     tx: Sender<VmOp>,
@@ -37,7 +39,7 @@ impl<const N: usize> InitializeProgramBuilder<N> {
     pub async fn build(&self) -> Result<Task<N>> {
         let init = match self.real_build() {
             Ok(i) => i,
-            Err(e) => return Err(LpcError::new(e.to_string()))
+            Err(e) => return Err(LpcError::new(e.to_string())),
         };
 
         Task::initialize_program(
@@ -48,6 +50,7 @@ impl<const N: usize> InitializeProgramBuilder<N> {
             init.vm_upvalues,
             init.call_outs,
             init.tx,
-        ).await
+        )
+        .await
     }
 }

@@ -40,16 +40,12 @@ mod tests {
 
     use std::sync::Arc;
 
-    
     use parking_lot::RwLock;
 
     use crate::{
-        interpreter::{
-            call_outs::CallOuts,
-        },
+        interpreter::{call_outs::CallOuts, task::initialize_task::InitializeProgramBuilder},
         test_support::compile_prog,
     };
-    use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
     #[tokio::test]
     async fn test_removes_task() {

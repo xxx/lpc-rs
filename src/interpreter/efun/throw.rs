@@ -11,13 +11,10 @@ pub async fn throw<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
 
 #[cfg(test)]
 mod tests {
-    
-    
 
     use crate::{
-        test_support::compile_prog,
+        interpreter::task::initialize_task::InitializeProgramBuilder, test_support::compile_prog,
     };
-    use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
     #[tokio::test]
     async fn test_throw() {

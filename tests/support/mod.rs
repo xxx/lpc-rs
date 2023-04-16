@@ -1,16 +1,13 @@
-
-
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
     interpreter::{
-        program::Program, task::Task,
+        program::Program,
+        task::{initialize_task::InitializeProgramBuilder, Task},
     },
 };
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
-
-use lpc_rs::interpreter::task::initialize_task::InitializeProgramBuilder;
 
 #[macro_export]
 macro_rules! assert_regex {

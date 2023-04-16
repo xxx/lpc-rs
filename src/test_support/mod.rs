@@ -13,7 +13,6 @@ use crate::{
     },
 };
 
-
 pub mod factories;
 
 /// Module for various test utilities that are shared among unit tests.

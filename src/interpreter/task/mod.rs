@@ -2397,9 +2397,9 @@ mod tests {
         mod test_call_fp {
             use claims::assert_ok;
             use tokio::sync::mpsc;
-            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
             use super::*;
+            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
             #[tokio::test]
             async fn stores_the_value() {
@@ -3291,8 +3291,8 @@ mod tests {
         }
 
         mod test_idiv {
-            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
             use super::*;
+            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
             #[tokio::test]
             async fn stores_the_value() {
@@ -3341,8 +3341,8 @@ mod tests {
         }
 
         mod test_imod {
-            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
             use super::*;
+            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
             #[tokio::test]
             async fn stores_the_value() {
@@ -4115,10 +4115,12 @@ mod tests {
             use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
             use once_cell::sync::OnceCell;
             use string_interner::StringInterner;
-            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
             use super::*;
-            use crate::test_support::test_config;
+            use crate::{
+                interpreter::task::initialize_task::InitializeProgramBuilder,
+                test_support::test_config,
+            };
 
             #[tokio::test]
             async fn stores_the_value_for_arrays() {
@@ -4303,9 +4305,9 @@ mod tests {
 
     mod test_limits {
         use lpc_rs_utils::config::ConfigBuilder;
-        use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
         use super::*;
+        use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
         #[tokio::test]
         async fn errors_on_stack_overflow() {

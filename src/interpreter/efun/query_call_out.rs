@@ -71,20 +71,13 @@ pub fn call_out_array_ref<const N: usize>(
 #[cfg(test)]
 mod tests {
 
-    
-
     use if_chain::if_chain;
-    
-    
 
     use super::*;
     use crate::{
-        interpreter::{
-            lpc_int::LpcInt,
-        },
+        interpreter::{lpc_int::LpcInt, task::initialize_task::InitializeProgramBuilder},
         test_support::compile_prog,
     };
-    use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
     #[tokio::test]
     async fn test_query_call_out() {

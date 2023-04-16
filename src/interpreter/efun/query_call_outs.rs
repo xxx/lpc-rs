@@ -51,14 +51,11 @@ pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -
 mod tests {
 
     use if_chain::if_chain;
-    
-    
 
     use super::*;
     use crate::{
-        test_support::compile_prog,
+        interpreter::task::initialize_task::InitializeProgramBuilder, test_support::compile_prog,
     };
-    use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
     #[tokio::test]
     async fn test_query_call_out() {

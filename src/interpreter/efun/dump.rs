@@ -143,18 +143,10 @@ pub async fn dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
 #[cfg(test)]
 mod tests {
 
-    
-
-    
-    
-
     use crate::{
         compiler::Compiler,
-        interpreter::{
-            program::Program,
-        },
+        interpreter::{program::Program, task::initialize_task::InitializeProgramBuilder},
     };
-    use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
     fn compile_prog(code: &str) -> Program {
         let compiler = Compiler::default();
