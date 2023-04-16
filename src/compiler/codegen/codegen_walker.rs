@@ -159,13 +159,6 @@ pub struct CodegenWalker {
     /// function or closure.
     function_upvalue_counter: RegisterCounter,
 
-    /// Number of [`Register`]s needed for global initialization.
-    /// This counter contains the total number for *all* inherited init-program
-    /// functions.
-    // TODO: this is likely a vestige of the past, and this same value should be
-    //       calculated as normal in the `init-program` function.
-    global_init_registers: usize,
-
     /// Compilation context
     context: CompilationContext,
 
@@ -200,7 +193,6 @@ impl CodegenWalker {
 
         result.global_counter.set(num_globals);
 
-        result.global_init_registers = num_init_registers + 1;
         result.register_counter.set(num_init_registers + 1);
 
         result.setup_init();
@@ -266,13 +258,6 @@ impl CodegenWalker {
             .values()
             .map(|f| (f.prototype.name.to_string(), f.clone()))
             .collect::<IndexMap<_, _>>();
-
-        // add +1 for r0, which is skipped
-        // let num_init_registers = self.global_init_registers + 1;
-        // debug_assert!(
-        //     self.initializer.is_none() ||
-        //         num_init_registers == self.initializer.unwrap().num_locals + 1
-        // );
 
         Ok(Program {
             filename: self.context.filename.clone(),
@@ -2231,8 +2216,6 @@ impl TreeWalker for CodegenWalker {
                     node.span()
                 );
 
-                self.global_init_registers = next_register.index();
-
                 next_register
             } else if upvalue {
                 let next_register = self.upvalue_counter.next().unwrap().as_upvalue();
@@ -2332,7 +2315,6 @@ impl Default for CodegenWalker {
             global_counter,
             upvalue_counter,
             function_upvalue_counter,
-            global_init_registers: 0,
             context: Default::default(),
             jump_targets: vec![],
             case_addresses: vec![],
@@ -5418,7 +5400,6 @@ mod tests {
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
             assert_eq!(walker.global_counter.number_emitted(), 2);
-            assert_eq!(walker.global_init_registers, 1);
         }
 
         #[test]
