@@ -8,6 +8,7 @@ use bit_set::BitSet;
 use delegate::delegate;
 use if_chain::if_chain;
 use tracing::{instrument, trace};
+use thin_vec::ThinVec;
 
 use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
@@ -21,16 +22,19 @@ use crate::interpreter::{
 #[derive(Default, Clone, PartialEq, Eq, Hash)]
 pub struct LpcArray {
     pub unique_id: UniqueId,
-    pub array: Vec<LpcRef>,
+    pub array: ThinVec<LpcRef>,
 }
 
 impl LpcArray {
     /// Create a new [`LpcArray`].
     #[inline]
-    pub fn new(array: Vec<LpcRef>) -> Self {
+    pub fn new<A>(array: A) -> Self
+    where
+        A: Into<ThinVec<LpcRef>>,
+    {
         Self {
             unique_id: UniqueId::new(),
-            array,
+            array: array.into(),
         }
     }
 
@@ -115,23 +119,23 @@ impl Deref for LpcArray {
 impl<'a> FromIterator<&'a LpcRef> for LpcArray {
     #[inline]
     fn from_iter<T: IntoIterator<Item = &'a LpcRef>>(iter: T) -> Self {
-        Self::new(iter.into_iter().cloned().collect())
+        Self::new(iter.into_iter().cloned().collect::<ThinVec<_>>())
     }
 }
 
 impl FromIterator<LpcRef> for LpcArray {
     #[inline]
     fn from_iter<T: IntoIterator<Item = LpcRef>>(iter: T) -> Self {
-        Self::new(iter.into_iter().collect())
+        Self::new(iter.into_iter().collect::<ThinVec<_>>())
     }
 }
 
 impl IntoIterator for LpcArray {
     type Item = LpcRef;
-    type IntoIter = std::vec::IntoIter<LpcRef>;
+    type IntoIter = thin_vec::IntoIter<LpcRef>;
 
     #[inline]
-    fn into_iter(self) -> std::vec::IntoIter<LpcRef> {
+    fn into_iter(self) -> thin_vec::IntoIter<LpcRef> {
         self.array.into_iter()
     }
 }
@@ -198,6 +202,7 @@ impl IntoLpcRef for LpcArray {
 #[cfg(test)]
 mod tests {
     use factori::create;
+    use thin_vec::thin_vec;
     use lpc_rs_core::register::Register;
 
     use super::*;
@@ -212,7 +217,7 @@ mod tests {
 
         let function_ref = ptr.into_lpc_ref(&memory);
 
-        let array = LpcArray::new(vec![function_ref]);
+        let array = LpcArray::new(thin_vec![function_ref]);
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();

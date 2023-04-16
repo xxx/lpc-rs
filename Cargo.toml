@@ -47,6 +47,7 @@ shared_arena = "0.8.4"
 slab = "0.4.8"
 stable-vec = "0.4.0"
 string-interner = "0.14.0"
+thin-vec = "0.2.12"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "signal", "sync", "time"] }
 tokio-util = { version ="0.7.7", features = ["codec"] }
 tracing = "0.1"
