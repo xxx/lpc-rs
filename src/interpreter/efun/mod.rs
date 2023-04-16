@@ -15,6 +15,7 @@ pub(crate) mod remove_call_out;
 pub(crate) mod this_object;
 pub(crate) mod throw;
 
+use std::sync::Arc;
 use futures::future::BoxFuture;
 use indexmap::IndexMap;
 use lpc_rs_core::{
@@ -28,6 +29,7 @@ use lpc_rs_function_support::function_prototype::{
     FunctionKind, FunctionPrototype, FunctionPrototypeBuilder,
 };
 use once_cell::sync::Lazy;
+use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::interpreter::efun::efun_context::EfunContext;
 
@@ -349,4 +351,12 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
     );
 
     m
+});
+
+/// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
+pub static EFUN_FUNCTIONS: Lazy<IndexMap<&'static str, Arc<ProgramFunction>>> = Lazy::new(|| {
+    EFUN_PROTOTYPES.iter().map(|(k, v)| {
+        let f = ProgramFunction::new(v.clone(), 0);
+        (*k, Arc::new(f))
+    }).collect()
 });

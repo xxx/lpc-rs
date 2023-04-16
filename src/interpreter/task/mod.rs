@@ -57,6 +57,7 @@ use crate::{
         vm::vm_op::VmOp,
     },
 };
+use crate::interpreter::efun::EFUN_FUNCTIONS;
 
 // this is just to shut clippy up
 type ProcessFunctionPair = (Weak<RwLock<Process>>, Arc<ProgramFunction>);
@@ -449,14 +450,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::CallEfun(name_idx) => {
                 let process = self.stack.current_frame()?.process.clone();
                 let (pf, name) = {
-                    let (name, prototype) = EFUN_PROTOTYPES.get_index(name_idx).unwrap();
-                    // TODO: get rid of this clone. The efun Functions should be cached.
-                    let pf = ProgramFunction::new(prototype.clone(), 0);
+                    let (name, pf) = EFUN_FUNCTIONS.get_index(name_idx).unwrap();
 
-                    (pf, name)
+                    (pf.clone(), name)
                 };
 
-                let new_frame = self.prepare_new_call_frame(process, pf.into())?;
+                let new_frame = self.prepare_new_call_frame(process, pf)?;
 
                 self.stack.push(new_frame)?;
 
@@ -1178,13 +1177,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             FunctionAddress::Efun(name) => {
                 // unwrap is safe because this should have been checked in an earlier step
-                let prototype = EFUN_PROTOTYPES.get(name.as_str()).unwrap();
-                // TODO: prototypes should be in Rcs so this clone is cheap
-                let pf = ProgramFunction::new(prototype.clone(), 0);
+                let pf = EFUN_FUNCTIONS.get(name.as_str()).cloned().unwrap();
 
                 let frame = self.stack.current_frame()?;
 
-                (Arc::downgrade(&frame.process), Arc::new(pf))
+                (Arc::downgrade(&frame.process), pf)
             }
             FunctionAddress::SimulEfun(name) => {
                 let Some(simul_efuns) = self.context.simul_efuns() else {
