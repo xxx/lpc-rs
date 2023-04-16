@@ -4198,7 +4198,7 @@ mod tests {
                         Sizeof(Register(1).as_local(), Register(2).as_local()),
                     ],
                     debug_spans: vec![None, None],
-                    labels: Default::default(),
+                    labels: Some(HashMap::new()),
                     local_variables: Default::default(),
                     arg_locations: Default::default(),
                     strings: OnceCell::with_value(

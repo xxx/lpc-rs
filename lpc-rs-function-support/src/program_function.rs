@@ -54,9 +54,10 @@ pub struct ProgramFunction {
     #[builder(default)]
     pub debug_spans: Vec<Option<Span>>,
 
-    /// Map of labels, to their respective addresses
-    #[builder(default)]
-    pub labels: HashMap<Label, Address>,
+    /// Map of labels, to their respective addresses.
+    /// Unused at runtime, so can be set to `None` to save space.
+    #[builder(default, setter(strip_option))]
+    pub labels: Option<HashMap<Label, Address>>,
 
     /// List of local variables declared within this function
     #[builder(default)]
@@ -103,7 +104,7 @@ impl ProgramFunction {
             num_upvalues: 0,
             instructions: vec![],
             debug_spans: vec![],
-            labels: HashMap::new(),
+            labels: Some(HashMap::new()),
             local_variables: vec![],
             arg_locations: vec![],
             strings: OnceCell::new(),
@@ -124,7 +125,9 @@ impl ProgramFunction {
     where
         T: Into<String>,
     {
-        self.labels.insert(label.into(), address);
+        if let Some(ref mut labels) = &mut self.labels {
+            labels.insert(label.into(), address);
+        }
     }
 
     /// Get a listing of this function's instructions, for use in debugging.
@@ -140,12 +143,16 @@ impl ProgramFunction {
             self.num_upvalues
         ));
 
+
         // use MultiMap as multiple labels can be at the same address
-        let labels_by_pc = self
-            .labels
-            .values()
-            .zip(self.labels.keys())
-            .collect::<MultiMap<_, _>>();
+        let labels_by_pc = self.labels.as_ref()
+            .map(|labels| {
+                labels.values()
+                    .zip(labels.keys())
+                    .collect::<MultiMap<_, _>>()
+            })
+            .unwrap_or_else(MultiMap::new);
+
 
         for (counter, instruction) in self.instructions.iter().enumerate() {
             if let Some(vec) = labels_by_pc.get_vec(&Address(counter)) {

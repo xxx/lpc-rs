@@ -219,6 +219,7 @@ impl CodegenWalker {
             .prototype(prototype)
             .instructions(new_init_instructions)
             .debug_spans(new_init_debug_spans)
+            .labels(HashMap::new())
             .build()
             .expect("Failed to build init function");
 
@@ -517,8 +518,12 @@ impl CodegenWalker {
         backpatch_map: &HashMap<Label, BitSet>,
         function: &mut ProgramFunction,
     ) -> Result<()> {
+        let Some(labels) = &function.labels else {
+            return Err(LpcError::new_bug(format!("No labels found in function `{}`", function.name())));
+        };
+
         for (label, addresses) in backpatch_map {
-            let Some(label_address) = function.labels.get(label) else {
+            let Some(label_address) = labels.get(label) else {
                 return Err(LpcError::new_bug(format!("Label `{}` not found in function `{}", label, function.name())));
             };
 
@@ -622,8 +627,7 @@ impl CodegenWalker {
         self.function_stack
             .last_mut()
             .unwrap()
-            .labels
-            .insert(label.into(), address);
+            .insert_label(label, address);
     }
 
     /// Create the combined initializer from all of my inherited-from parents.
@@ -1218,6 +1222,7 @@ impl TreeWalker for CodegenWalker {
         let num_default_args = arity.num_default_args;
 
         let func = ProgramFunction::new(prototype.clone(), 0);
+        debug_assert!(func.labels.is_some(), "labels are expected for codegen");
 
         self.function_stack.push(func);
         self.backpatch_maps.push(HashMap::new());
@@ -1568,6 +1573,7 @@ impl TreeWalker for CodegenWalker {
         let num_default_args = arity.num_default_args;
 
         let sym = ProgramFunction::new(prototype.clone(), 0);
+        debug_assert!(sym.labels.is_some(), "labels are expected for codegen");
 
         self.function_stack.push(sym);
         self.backpatch_maps.push(HashMap::new());
