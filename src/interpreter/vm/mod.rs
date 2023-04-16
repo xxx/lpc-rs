@@ -5,7 +5,6 @@ use flume::Sender as FlumeSender;
 use if_chain::if_chain;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result};
-use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::{
@@ -20,7 +19,6 @@ use crate::{
     compiler::{Compiler, CompilerBuilder},
     interpreter::{
         call_outs::CallOuts,
-        efun::EFUN_PROTOTYPES,
         function_type::function_address::FunctionAddress,
         gc::{
             gc_bank::{GcBank, GcRefBank},

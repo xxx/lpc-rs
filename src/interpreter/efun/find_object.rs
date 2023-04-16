@@ -22,7 +22,7 @@ pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         LpcRef::String(x) => {
             let path = x.read();
 
-            match context.lookup_process(path.as_ref()) {
+            match context.lookup_process(&*path) {
                 Some(proc) => {
                     drop(path);
                     Arc::downgrade(&proc).into_lpc_ref(context.memory())

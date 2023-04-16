@@ -992,69 +992,78 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        // TODO: this clone sucks.
-        let ptr = func.read().clone();
+        let (mut new_frame, is_dynamic_receiver, function_is_efun, adjusted_num_args, max_arg_length) = {
+            let ptr = func.read();
 
-        trace!("Calling function ptr: {}", ptr);
+            trace!("Calling function ptr: {}", ptr);
 
-        let partial_args = &ptr.partial_args;
-        let passed_args_count = num_args
-            + partial_args
+            // let partial_args = &ptr.partial_args;
+            let passed_args_count = num_args
+                + &ptr.partial_args
                 .iter()
                 .fold(0, |sum, arg| sum + arg.is_some() as usize);
-        let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
-        let is_dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
-        // for dynamic receivers, skip the first register of the passed args, which contains the receiver itself
-        let index = is_dynamic_receiver as usize;
-        let adjusted_num_args = num_args - (is_dynamic_receiver as usize);
+            let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
+            let is_dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
+            let is_call_other = ptr.call_other;
 
-        if let FunctionAddress::Local(receiver, pf) = &ptr.address {
-            let Some(receiver) = receiver.upgrade() else {
+            if let FunctionAddress::Local(receiver, pf) = &ptr.address {
+                let Some(receiver) = receiver.upgrade() else {
+                    return Err(self.runtime_error(format!(
+                        "attempted to call a pointer to a function in a destructed object: {}",
+                        ptr
+                    )));
+                };
+
+                if !pf.public()
+                    && !pf.is_closure()
+                    && (is_call_other || !Arc::ptr_eq(&self.context.process(), &receiver))
+                {
+                    return set_loc!(self, Register(0).as_local(), NULL);
+                }
+            }
+
+            let Some((proc, function)) = self.extract_process_and_function(&ptr)? else {
+                return Ok(())
+            };
+
+            let Some(proc) = proc.upgrade() else {
                 return Err(self.runtime_error(format!(
                     "attempted to call a pointer to a function in a destructed object: {}",
                     ptr
                 )));
             };
 
-            if !pf.public()
-                && !pf.is_closure()
-                && (ptr.call_other || !Arc::ptr_eq(&self.context.process(), &receiver))
-            {
-                return set_loc!(self, Register(0).as_local(), NULL);
-            }
-        }
+            let adjusted_num_args = num_args - (is_dynamic_receiver as usize);
 
-        let Some((proc, function)) = self.extract_process_and_function(&ptr)? else {
-            return Ok(())
+            let max_arg_length = std::cmp::max(adjusted_num_args, function.arity().num_args);
+            let max_arg_length = std::cmp::max(max_arg_length, passed_args_count);
+
+            let upvalues = if function.is_closure() {
+                Some(&ptr.upvalue_ptrs)
+            } else {
+                // Calls to pointers to static functions do not inherit upvalues,
+                // same as normal direct calls to them.
+                None
+            };
+
+            (
+                CallFrame::with_minimum_arg_capacity(
+                    proc,
+                    function.clone(),
+                    passed_args_count,
+                    max_arg_length,
+                    upvalues,
+                    self.context.upvalues().clone(),
+                ),
+                is_dynamic_receiver,
+                function_is_efun,
+                adjusted_num_args,
+                max_arg_length
+            )
         };
 
-        let Some(proc) = proc.upgrade() else {
-            return Err(self.runtime_error(format!(
-                "attempted to call a pointer to a function in a destructed object: {}",
-                ptr
-            )));
-        };
-
-        let max_arg_length = std::cmp::max(adjusted_num_args, function.arity().num_args);
-        let max_arg_length = std::cmp::max(max_arg_length, passed_args_count);
-
-        let upvalues = if function.is_closure() {
-            Some(&ptr.upvalue_ptrs)
-        } else {
-            // Calls to pointers to static functions do not inherit upvalues,
-            // same as normal direct calls to them.
-            None
-        };
-
-        let mut new_frame = CallFrame::with_minimum_arg_capacity(
-            proc,
-            function.clone(),
-            passed_args_count,
-            max_arg_length,
-            upvalues,
-            self.context.upvalues().clone(),
-        );
-
+        // for dynamic receivers, skip the first register of the passed args, which contains the receiver itself
+        let index = is_dynamic_receiver as usize;
         let from_slice = &self.args[index..(index + adjusted_num_args)];
 
         fn type_check_and_assign_location<const STACKSIZE: usize>(
@@ -1085,11 +1094,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         {
             // This read() needs to be dropped before the `await`.
             let ptr = func.read();
-            let arg_locations = match &ptr.address {
-                FunctionAddress::Local(_, func) => Cow::Borrowed(&func.arg_locations),
-                FunctionAddress::Dynamic(_) | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
-                FunctionAddress::SimulEfun(_) => Cow::Borrowed(&function.arg_locations),
-            };
+            let arg_locations = &new_frame.function.clone().arg_locations;
 
             for i in 0..max_arg_length {
                 let target_location = arg_locations.get(i).copied().unwrap_or_else(|| {
@@ -1102,7 +1107,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     next_index = r.index() + 1;
                 }
 
-                if let Some(Some(lpc_ref)) = partial_args.get(i) {
+                if let Some(Some(lpc_ref)) = ptr.partial_args.get(i) {
                     // if a partially-applied arg is present, use it
                     type_check_and_assign_location(
                         self,
@@ -1270,10 +1275,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 return Err(self.runtime_error(str));
             };
 
-            // TODO: get rid of this clone
-            let function_name = pool_ref.read().clone();
+            let function_name = pool_ref.clone();
 
-            trace!("Calling call_other: {}->{function_name}", receiver_ref);
+            trace!("Calling call_other: {}->{}", receiver_ref, function_name.read());
 
             // An inner helper function to actually calculate the result, for easy re-use
             // when using `call_other` with arrays and mappings.
@@ -1335,24 +1339,23 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 .map(|i| get_loc!(self, *i).map(|r| r.into_owned()))
                 .collect::<Result<Vec<_>>>()?;
 
+            let function_name = Arc::new(function_name.read().clone());
+
             match &receiver_ref {
                 LpcRef::String(_) | LpcRef::Object(_) => {
-                    // TODO: get rid of this clone
-                    resolve_result(receiver_ref, &function_name, &args, &self.context).await?
+                    resolve_result(receiver_ref, &*function_name, &args, &self.context).await?
                 }
                 LpcRef::Array(r) => {
-                    // TODO: get rid of this clone
-                    let array = r.read().clone();
-                    let fname = Arc::new(function_name.clone());
+                    let refs = r.read().iter().cloned().collect_vec();
                     let args = Arc::new(args);
 
-                    let futures = array.iter().cloned().map(|lpc_ref| {
-                        let fname = fname.clone();
+                    let futures = refs.iter().map(|lpc_ref| {
+                        let fname = function_name.clone();
                         let args = args.clone();
                         let ctx = &self.context;
 
                         async move {
-                            resolve_result(&lpc_ref, fname.as_ref(), args.as_ref(), ctx)
+                            resolve_result(&lpc_ref, &*fname, args.as_ref(), ctx)
                                 .await
                                 .unwrap_or(NULL)
                         }
@@ -1362,21 +1365,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     LpcArray::new(array_value).into_lpc_ref(self.context.memory())
                 }
                 LpcRef::Mapping(m) => {
-                    // TODO: get rid of this clone
-                    let map = m.read().clone();
-
-                    let function_name = Arc::new(function_name.clone());
+                    let map = m.read().iter().map(|(k,v)| (k.clone(), v.clone())).collect_vec();
                     let args = Arc::new(args);
 
                     let futures = map.iter().map(|(key_ref, value_ref)| {
-                        let function_name = function_name.clone();
+                        let fname = function_name.clone();
                         let args = args.clone();
                         let ctx = &self.context;
 
                         async move {
                             (
                                 key_ref.clone(),
-                                resolve_result(value_ref, &*function_name, &args, ctx)
+                                resolve_result(value_ref, &*fname, &args, ctx)
                                     .await
                                     .unwrap_or(NULL),
                             )
@@ -1504,7 +1504,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         let process = {
                             let path = s.read();
 
-                            let Some(process) = self.context.lookup_process(path.as_ref()) else {
+                            let Some(process) = self.context.lookup_process(&*path) else {
                                 return Err(self.runtime_error(format!(
                                     "Unable to find object `{}`.",
                                     path

@@ -132,7 +132,7 @@ impl Display for LpcString {
     }
 }
 
-impl AsRef<str> for LpcString {
+impl AsRef<str> for &LpcString {
     #[inline]
     fn as_ref(&self) -> &str {
         self.to_str()
