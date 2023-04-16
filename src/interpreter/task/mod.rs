@@ -999,7 +999,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             // let partial_args = &ptr.partial_args;
             let passed_args_count = num_args
-                + &ptr.partial_args
+                + ptr.partial_args
                 .iter()
                 .fold(0, |sum, arg| sum + arg.is_some() as usize);
             let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
@@ -1049,7 +1049,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             (
                 CallFrame::with_minimum_arg_capacity(
                     proc,
-                    function.clone(),
+                    function,
                     passed_args_count,
                     max_arg_length,
                     upvalues,
@@ -1355,7 +1355,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         let ctx = &self.context;
 
                         async move {
-                            resolve_result(&lpc_ref, &*fname, args.as_ref(), ctx)
+                            resolve_result(lpc_ref, &*fname, args.as_ref(), ctx)
                                 .await
                                 .unwrap_or(NULL)
                         }
