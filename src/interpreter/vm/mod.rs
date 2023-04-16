@@ -19,6 +19,7 @@ use crate::{
     compiler::{Compiler, CompilerBuilder},
     interpreter::{
         call_outs::CallOuts,
+        efun::EFUN_FUNCTIONS,
         function_type::function_address::FunctionAddress,
         gc::{
             gc_bank::{GcBank, GcRefBank},
@@ -36,7 +37,6 @@ use crate::{
     telnet::{connection_broker::ConnectionBroker, ops::BrokerOp, Telnet},
     util::get_simul_efuns,
 };
-use crate::interpreter::efun::EFUN_FUNCTIONS;
 
 pub mod vm_op;
 

@@ -992,16 +992,23 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        let (mut new_frame, is_dynamic_receiver, function_is_efun, adjusted_num_args, max_arg_length) = {
+        let (
+            mut new_frame,
+            is_dynamic_receiver,
+            function_is_efun,
+            adjusted_num_args,
+            max_arg_length,
+        ) = {
             let ptr = func.read();
 
             trace!("Calling function ptr: {}", ptr);
 
             // let partial_args = &ptr.partial_args;
             let passed_args_count = num_args
-                + ptr.partial_args
-                .iter()
-                .fold(0, |sum, arg| sum + arg.is_some() as usize);
+                + ptr
+                    .partial_args
+                    .iter()
+                    .fold(0, |sum, arg| sum + arg.is_some() as usize);
             let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
             let is_dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
             let is_call_other = ptr.call_other;
@@ -1058,7 +1065,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 is_dynamic_receiver,
                 function_is_efun,
                 adjusted_num_args,
-                max_arg_length
+                max_arg_length,
             )
         };
 
@@ -1277,7 +1284,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             let function_name = pool_ref.clone();
 
-            trace!("Calling call_other: {}->{}", receiver_ref, function_name.read());
+            trace!(
+                "Calling call_other: {}->{}",
+                receiver_ref,
+                function_name.read()
+            );
 
             // An inner helper function to actually calculate the result, for easy re-use
             // when using `call_other` with arrays and mappings.
@@ -1365,7 +1376,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     LpcArray::new(array_value).into_lpc_ref(self.context.memory())
                 }
                 LpcRef::Mapping(m) => {
-                    let map = m.read().iter().map(|(k,v)| (k.clone(), v.clone())).collect_vec();
+                    let map = m
+                        .read()
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect_vec();
                     let args = Arc::new(args);
 
                     let futures = map.iter().map(|(key_ref, value_ref)| {
