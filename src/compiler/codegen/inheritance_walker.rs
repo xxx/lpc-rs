@@ -110,7 +110,10 @@ impl TreeWalker for InheritanceWalker {
                 }
 
                 self.context.num_globals += program.num_globals;
-                self.context.num_init_registers += program.num_init_registers;
+                // subtract one, because r0 is for return values, but will get added
+                // for each inherited file due to the recursive nature of inheritance
+                // compilation.
+                self.context.num_init_registers += program.num_init_registers() - 1;
                 self.context.inherited_functions.extend(
                     program
                         .functions

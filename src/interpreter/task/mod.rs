@@ -4211,7 +4211,7 @@ mod tests {
                     filename: path,
                     functions: IndexMap::new(),
                     initializer: Some(initializer),
-                    num_init_registers: 2,
+                    // num_init_registers: 2,
                     ..Default::default()
                 };
 

@@ -200,8 +200,8 @@ impl CodegenWalker {
 
         result.global_counter.set(num_globals);
 
-        result.global_init_registers = num_init_registers;
-        result.register_counter.set(num_init_registers);
+        result.global_init_registers = num_init_registers + 1;
+        result.register_counter.set(num_init_registers + 1);
 
         result.setup_init();
 
@@ -265,7 +265,14 @@ impl CodegenWalker {
         let unmangled_functions = functions
             .values()
             .map(|f| (f.prototype.name.to_string(), f.clone()))
-            .collect();
+            .collect::<IndexMap<_, _>>();
+
+        // add +1 for r0, which is skipped
+        // let num_init_registers = self.global_init_registers + 1;
+        // debug_assert!(
+        //     self.initializer.is_none() ||
+        //         num_init_registers == self.initializer.unwrap().num_locals + 1
+        // );
 
         Ok(Program {
             filename: self.context.filename.clone(),
@@ -274,11 +281,7 @@ impl CodegenWalker {
             unmangled_functions,
             global_variables,
             num_globals: self.global_counter.number_emitted(),
-            // add +1 for r0, which is skipped
-            num_init_registers: self.global_init_registers + 1,
             pragmas: self.context.pragmas,
-            // inherits: self.context.inherits,
-            // inherit_names: self.context.inherit_names,
             strings,
         })
     }
@@ -692,7 +695,7 @@ impl CodegenWalker {
                     instructions.truncate(instructions.len() - 3);
                     debug_spans.truncate(debug_spans.len() - 3);
                 }
-                instructions.extend(func.instructions[range.clone()].iter().cloned());
+                instructions.extend(func.instructions[range.clone()].iter());
                 debug_spans.extend(func.debug_spans[range].iter());
             };
         for inherit in &self.context.inherits {
@@ -5549,7 +5552,8 @@ mod tests {
             "##;
 
             let program = walk_prog(code).into_program().expect("failed to compile");
-            assert_eq!(program.num_init_registers, 4)
+            assert_eq!(program.num_init_registers(), 10);
+            assert_eq!(program.initializer.unwrap().num_locals, 9)
         }
 
         #[test]
@@ -5563,7 +5567,7 @@ mod tests {
             "##;
 
             let program = walk_prog(code).into_program().expect("failed to compile");
-            assert_eq!(program.num_init_registers, 1)
+            assert_eq!(program.num_init_registers(), 2)
         }
 
         #[test]
@@ -5609,7 +5613,7 @@ mod tests {
         let init = program.initializer.unwrap();
 
         assert_eq!(program.num_globals, 9);
-        assert_eq!(init.num_locals, 6);
+        assert_eq!(init.num_locals, 7);
     }
 
     #[test]

@@ -44,10 +44,6 @@ pub struct Program {
     /// Note that this number includes inherited globals.
     pub num_globals: usize,
 
-    /// How many [`Register`](lpc_rs_core::register::Register)s are needed to
-    /// initialize this program?
-    pub num_init_registers: usize,
-
     /// Which pragmas have been set for this program?
     pub pragmas: PragmaFlags,
 
@@ -112,6 +108,15 @@ impl<'a> Program {
             None => Cow::Owned(PathBuf::from("")),
             Some(path) => Cow::Borrowed(path),
         }
+    }
+
+    /// Get the number of registers needed to initialize this program.
+    /// This number always includes 1 register for the return value
+    pub fn num_init_registers(&self) -> usize {
+        self.initializer
+            .as_ref()
+            .map(|init| init.num_locals + 1)
+            .unwrap_or(1) // 1 for the return value
     }
 
     /// Get a listing of this Program's assembly language, suitable for printing
