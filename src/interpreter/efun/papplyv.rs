@@ -28,17 +28,13 @@ pub async fn papplyv<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
 #[cfg(test)]
 mod tests {
 
-    use std::sync::Arc;
+    
 
-    use lpc_rs_utils::config::Config;
-    use parking_lot::RwLock;
+    
+    
 
     use super::*;
     use crate::{
-        interpreter::{
-            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
-            task::Task,
-        },
         test_support::compile_prog,
     };
     use crate::interpreter::task::initialize_task::InitializeProgramBuilder;

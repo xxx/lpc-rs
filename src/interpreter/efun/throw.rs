@@ -11,14 +11,10 @@ pub async fn throw<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_utils::config::Config;
-    use parking_lot::RwLock;
+    
+    
 
     use crate::{
-        interpreter::{
-            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
-            task::Task,
-        },
         test_support::compile_prog,
     };
     use crate::interpreter::task::initialize_task::InitializeProgramBuilder;

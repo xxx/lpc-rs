@@ -38,16 +38,12 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    
 
-    use lpc_rs_utils::config::Config;
-    use parking_lot::RwLock;
+    
+    
 
     use crate::{
-        interpreter::{
-            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
-            task::Task,
-        },
         test_support::compile_prog,
     };
     use crate::interpreter::task::initialize_task::InitializeProgramBuilder;

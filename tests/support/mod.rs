@@ -1,16 +1,15 @@
-use std::sync::Arc;
+
 
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
         program::Program, task::Task,
     },
 };
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
-use parking_lot::RwLock;
+
 use lpc_rs::interpreter::task::initialize_task::InitializeProgramBuilder;
 
 #[macro_export]

@@ -83,18 +83,14 @@ fn to_millis(x: LpcFloatInner) -> Duration {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    
 
-    use lpc_rs_utils::config::Config;
-    use parking_lot::RwLock;
+    
+    
 
     use crate::{
         interpreter::{
-            call_outs::CallOuts,
-            gc::gc_bank::GcBank,
-            memory::Memory,
-            object_space::ObjectSpace,
-            task::{task_id::TaskId, Task},
+            task::{task_id::TaskId},
             vm::vm_op::VmOp,
         },
         test_support::compile_prog,

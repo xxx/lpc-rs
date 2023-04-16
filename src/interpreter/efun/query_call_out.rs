@@ -71,17 +71,16 @@ pub fn call_out_array_ref<const N: usize>(
 #[cfg(test)]
 mod tests {
 
-    use std::sync::Arc;
+    
 
     use if_chain::if_chain;
-    use lpc_rs_utils::config::Config;
-    use parking_lot::RwLock;
+    
+    
 
     use super::*;
     use crate::{
         interpreter::{
-            call_outs::CallOuts, gc::gc_bank::GcBank, lpc_int::LpcInt, memory::Memory,
-            object_space::ObjectSpace, task::Task,
+            lpc_int::LpcInt,
         },
         test_support::compile_prog,
     };
