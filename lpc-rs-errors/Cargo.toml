@@ -4,10 +4,8 @@ version = "0.1.0"
 authors = ["mpd <mpd@jesters-court.net>"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-cached = "0.42.0"
+cached = "0.43.0"
 codespan-reporting = "0.11.0"
 derive_builder = "0.12.0"
 fs-err = "2.6.0"
