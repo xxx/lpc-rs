@@ -42,7 +42,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             let _ = Task::<64>::initialize_program(
                 program.clone(),
                 black_box(Config::default()),
-                RwLock::new(ObjectSpace::default()),
+                ObjectSpace::default(),
                 memory.clone(),
                 upvalues.clone(),
                 call_outs.clone(),

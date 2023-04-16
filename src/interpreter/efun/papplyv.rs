@@ -56,7 +56,7 @@ mod tests {
         let result = Task::<5>::initialize_program(
             program,
             Config::default(),
-            RwLock::new(ObjectSpace::default()),
+            ObjectSpace::default(),
             Memory::default(),
             RwLock::new(GcBank::default()),
             call_outs,

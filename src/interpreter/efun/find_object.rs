@@ -73,7 +73,7 @@ mod tests {
         TaskContext::new(
             config,
             RwLock::new(process),
-            RwLock::new(ObjectSpace::default()),
+            ObjectSpace::default(),
             Memory::new(10),
             RwLock::new(GcBank::default()),
             Arc::new(RwLock::new(CallOuts::new(tx.clone()))),

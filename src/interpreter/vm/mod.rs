@@ -45,7 +45,7 @@ pub mod vm_op;
 #[readonly::make]
 pub struct Vm {
     /// Our object space, which stores all of the system objects (masters and clones)
-    pub object_space: Arc<RwLock<ObjectSpace>>,
+    pub object_space: Arc<ObjectSpace>,
 
     /// Shared VM memory. Reference-type `LpcRef`s are allocated out of this.
     memory: Arc<Memory>,
@@ -85,7 +85,7 @@ impl Vm {
         let telnet = Telnet::new(broker_tx.clone());
 
         Self {
-            object_space: Arc::new(RwLock::new(object_space)),
+            object_space: Arc::new(object_space),
             memory: Arc::new(Memory::default()),
             config: config.into(),
             upvalues: Arc::new(RwLock::new(GcBank::default())),
@@ -213,7 +213,7 @@ impl Vm {
                         return Ok(false);
                     },
                     FunctionAddress::SimulEfun(name) => {
-                        let Some(simul_efuns) = get_simul_efuns(&self.config, &self.object_space.read()) else {
+                        let Some(simul_efuns) = get_simul_efuns(&self.config, &self.object_space) else {
                             self.call_outs.write().remove(idx);
                             return Err(LpcError::new_bug(
                                 "function pointer to simul_efun passed, but no simul_efuns?".to_string(),
@@ -336,15 +336,15 @@ impl Vm {
     /// # Examples
     ///
     /// ```
-    /// # tokio_test::block_on(async {
-    /// use lpc_rs::interpreter::{lpc_ref::LpcRef, vm::Vm};
+    /// tokio_test::block_on(async {
+    /// use lpc_rs::interpreter::{lpc_ref::LpcRef, vm::Vm, lpc_int::LpcInt};
     /// use lpc_rs_utils::config::Config;
     ///
     /// let mut vm = Vm::new(Config::default());
     /// let ctx = vm.initialize_string("int x = 5;", "test.c").await.unwrap();
     ///
-    /// assert_eq!(ctx.process().read().globals.registers[0], LpcRef::Int(5));
-    /// assert!(vm.object_space.read().lookup("/test").is_some());
+    /// assert_eq!(ctx.process().read().globals.registers[0], LpcRef::Int(LpcInt(5)));
+    /// assert!(vm.object_space.lookup("/test").is_some());
     /// # })
     /// ```
     pub async fn initialize_string<P, S>(&mut self, code: S, filename: P) -> Result<TaskContext>
@@ -368,10 +368,9 @@ impl Vm {
     where
         F: FnOnce(Compiler) -> Result<T>,
     {
-        let object_space = self.object_space.read();
         let compiler = CompilerBuilder::default()
             .config(self.config.clone())
-            .simul_efuns(get_simul_efuns(&self.config, &object_space))
+            .simul_efuns(get_simul_efuns(&self.config, &self.object_space))
             .build()?;
         f(compiler)
     }
@@ -401,7 +400,7 @@ impl Mark for Vm {
     #[instrument(skip(self))]
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
         // TODO: mark all tasks
-        self.object_space.read().mark(marked, processed)?;
+        self.object_space.mark(marked, processed)?;
 
         self.call_outs.read().mark(marked, processed)
     }
@@ -482,7 +481,7 @@ mod tests {
 
         assert_eq!(ctx1.upvalues().read().len(), 1);
 
-        vm.object_space.write().clear();
+        vm.object_space.clear();
 
         vm.gc().unwrap();
 

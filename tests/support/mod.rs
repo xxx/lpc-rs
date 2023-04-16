@@ -57,7 +57,7 @@ where
     Task::initialize_program(
         program,
         test_config(),
-        RwLock::new(ObjectSpace::default()),
+        ObjectSpace::default(),
         Memory::default(),
         upvalues,
         call_outs,

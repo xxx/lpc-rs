@@ -32,7 +32,7 @@ pub struct TaskContext {
 
     /// The global [`ObjectSpace`]
     #[builder(setter(into))]
-    pub object_space: Arc<RwLock<ObjectSpace>>,
+    pub object_space: Arc<ObjectSpace>,
 
     /// Direct pointer to the simul efuns
     #[builder(default, setter(strip_option))]
@@ -94,7 +94,7 @@ impl TaskContext {
     where
         C: Into<Arc<Config>>,
         P: Into<Arc<RwLock<Process>>>,
-        O: Into<Arc<RwLock<ObjectSpace>>>,
+        O: Into<Arc<ObjectSpace>>,
         M: Into<Arc<Memory>>,
         U: Into<Arc<RwLock<GcRefBank>>>,
         A: Into<Arc<RwLock<CallOuts>>>,
@@ -103,8 +103,7 @@ impl TaskContext {
         let object_space = object_space.into();
         let instruction_counter = InstructionCounter::new_from_config(&config);
         let simul_efuns = {
-            let space = object_space.read();
-            get_simul_efuns(&config, &space)
+            get_simul_efuns(&config, &object_space)
         };
 
         Self {
@@ -137,7 +136,7 @@ impl TaskContext {
     where
         T: AsRef<str>,
     {
-        self.object_space.read().lookup(path).cloned()
+        self.object_space.lookup(path).map(|p| p.clone())
     }
 
     /// Directly insert the passed [`Process`] into the object space, with
@@ -221,7 +220,7 @@ impl TaskContext {
 
     /// Return the [`ObjectSpace`]
     #[inline]
-    pub fn object_space(&self) -> &Arc<RwLock<ObjectSpace>> {
+    pub fn object_space(&self) -> &Arc<ObjectSpace> {
         &self.object_space
     }
 
@@ -271,7 +270,7 @@ mod tests {
             .lib_dir("./tests/fixtures/code/")
             .build()
             .unwrap();
-        let space = RwLock::new(ObjectSpace::default());
+        let space = ObjectSpace::default();
         let program = ProgramBuilder::default()
             .filename(LpcPath::new_server("./tests/fixtures/code/foo/bar/baz.c"))
             .build()

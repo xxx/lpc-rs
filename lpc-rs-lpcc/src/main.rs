@@ -55,7 +55,7 @@ async fn main() {
             if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_program(
                 program,
                 config,
-                RwLock::new(object_space),
+                object_space,
                 memory,
                 upvalues,
                 call_outs,

@@ -252,7 +252,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     where
         P: Into<Arc<Program>>,
         C: Into<Arc<Config>> + Debug,
-        O: Into<Arc<RwLock<ObjectSpace>>>,
+        O: Into<Arc<ObjectSpace>>,
         M: Into<Arc<Memory>>,
         U: Into<Arc<RwLock<GcRefBank>>>,
         A: Into<Arc<RwLock<CallOuts>>>,
@@ -2642,7 +2642,7 @@ mod tests {
                 let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
                 let (program, config, process) = compile_prog(code);
-                let space_cell = RwLock::new(object_space).into();
+                let space_cell = object_space.into();
                 ObjectSpace::insert_process(&space_cell, process);
                 let vm_upvalues = Arc::new(RwLock::new(upvalues));
 
@@ -2674,7 +2674,6 @@ mod tests {
 
                 let (program, config, process) = compile_prog(code);
                 let object_space = ObjectSpace::default();
-                let object_space = RwLock::new(object_space);
                 ObjectSpace::insert_process(&space_cell, process);
 
                 let result = Task::<10>::initialize_program(
@@ -2705,7 +2704,7 @@ mod tests {
 
                 let (program, config, process) = compile_prog(code);
                 let object_space = ObjectSpace::default();
-                let space_cell = RwLock::new(object_space).into();
+                let space_cell = object_space.into();
                 ObjectSpace::insert_process(&space_cell, process);
 
                 let result = Task::<20>::initialize_program(
@@ -3333,7 +3332,7 @@ mod tests {
                 let r = Task::<10>::initialize_program(
                     program,
                     Config::default(),
-                    RwLock::new(ObjectSpace::default()),
+                    ObjectSpace::default(),
                     Memory::default(),
                     Arc::new(RwLock::new(GcBank::default())),
                     call_outs,
@@ -3389,7 +3388,7 @@ mod tests {
                 let r = Task::<20>::initialize_program(
                     program,
                     Config::default(),
-                    RwLock::new(ObjectSpace::default()),
+                    ObjectSpace::default(),
                     Memory::default(),
                     Arc::new(vm_upvalues),
                     call_outs,
@@ -4234,7 +4233,7 @@ mod tests {
                 let task = Task::<20>::initialize_program(
                     program,
                     config,
-                    RwLock::new(object_space),
+                    object_space,
                     Memory::default(),
                     Arc::new(vm_upvalues),
                     call_outs,
@@ -4344,7 +4343,7 @@ mod tests {
             let r = Task::<20>::initialize_program(
                 program,
                 Config::default(),
-                RwLock::new(ObjectSpace::default()),
+                ObjectSpace::default(),
                 Memory::default(),
                 vm_upvalues,
                 call_outs,
@@ -4375,7 +4374,7 @@ mod tests {
             let r = Task::<20>::initialize_program(
                 program,
                 config,
-                RwLock::new(ObjectSpace::default()),
+                ObjectSpace::default(),
                 Memory::default(),
                 Arc::new(vm_upvalues),
                 call_outs,

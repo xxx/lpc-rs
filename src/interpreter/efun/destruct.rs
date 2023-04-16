@@ -67,7 +67,7 @@ mod tests {
         let result = Task::<5>::initialize_program(
             program,
             Config::default(),
-            RwLock::new(ObjectSpace::default()),
+            ObjectSpace::default(),
             Memory::default(),
             RwLock::new(GcBank::default()),
             call_outs,
@@ -76,6 +76,6 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(result.context.object_space.read().is_empty());
+        assert!(result.context.object_space.is_empty());
     }
 }

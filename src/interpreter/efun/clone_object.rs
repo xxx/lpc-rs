@@ -128,7 +128,7 @@ mod tests {
         TaskContext::new(
             config,
             RwLock::new(process),
-            RwLock::new(ObjectSpace::default()),
+            ObjectSpace::default(),
             Memory::new(10),
             RwLock::new(GcBank::default()),
             Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
@@ -157,7 +157,7 @@ mod tests {
         task.eval(func, &[]).await.expect("second task failed");
 
         // procs are /example, /example#0, /example#1
-        assert_eq!(task.context.object_space().read().len(), 3);
+        assert_eq!(task.context.object_space().len(), 3);
     }
 
     #[tokio::test]

@@ -11,7 +11,7 @@ pub fn get_simul_efuns(
 ) -> Option<Arc<RwLock<Process>>> {
     config.simul_efun_file.as_deref().and_then(|f| {
         let file = f.strip_suffix(".c").unwrap_or(f);
-        object_space.lookup(file).cloned()
+        object_space.lookup(file).map(|p| p.clone())
     })
 }
 
@@ -45,11 +45,10 @@ mod tests {
             .build()
             .unwrap();
         let proc = Process::new(prog);
-        let space_cell: Arc<RwLock<ObjectSpace>> = RwLock::new(object_space).into();
+        let space_cell: Arc<ObjectSpace> = object_space.into();
         ObjectSpace::insert_process(&space_cell, RwLock::new(proc));
 
-        let object_space = space_cell.read();
-        let simul_efuns = get_simul_efuns(&config, &object_space).unwrap();
+        let simul_efuns = get_simul_efuns(&config, &space_cell).unwrap();
         let borrowed = simul_efuns.read();
         assert_eq!(
             borrowed.as_ref().filename.to_string(),

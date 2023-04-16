@@ -179,7 +179,7 @@ mod tests {
         let result = Task::<10>::initialize_program(
             program,
             Config::default(),
-            RwLock::new(ObjectSpace::default()),
+            ObjectSpace::default(),
             Memory::default(),
             RwLock::new(GcBank::default()),
             Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
@@ -205,7 +205,7 @@ mod tests {
         let result = Task::<5>::initialize_program(
             program,
             Config::default(),
-            RwLock::new(ObjectSpace::default()),
+            ObjectSpace::default(),
             Memory::default(),
             RwLock::new(GcBank::default()),
             Arc::new(RwLock::new(CallOuts::new(tx.clone()))),

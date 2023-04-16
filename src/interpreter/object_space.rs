@@ -1,6 +1,9 @@
 use std::{collections::HashMap, fmt::Formatter, sync::Arc};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use bit_set::BitSet;
+use dashmap::DashMap;
+use dashmap::mapref::one::Ref;
 use delegate::delegate;
 use educe::Educe;
 use itertools::Itertools;
@@ -16,25 +19,16 @@ use crate::interpreter::{gc::mark::Mark, process::Process, program::Program};
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
 
-#[derive(Educe, Clone)]
-#[educe(Debug)]
+#[derive(Debug)]
 pub struct ObjectSpace {
     /// The actual mapping of "paths" to processes
-    #[educe(Debug(method = "processes_debug"))]
-    processes: HashMap<String, Arc<RwLock<Process>>>,
+    processes: DashMap<String, Arc<RwLock<Process>>>,
 
     /// How many clones have been created so far?
-    clone_count: usize,
+    clone_count: AtomicUsize,
 
     /// Our configuration
     config: Arc<Config>,
-}
-
-fn processes_debug(
-    processes: &HashMap<String, Arc<RwLock<Process>>>,
-    f: &mut Formatter<'_>,
-) -> std::fmt::Result {
-    write!(f, "{}", processes.keys().join(", "))
 }
 
 impl ObjectSpace {
@@ -47,7 +41,7 @@ impl ObjectSpace {
             pub fn is_empty(&self) -> bool;
 
             /// Clear the entire space
-            pub fn clear(&mut self);
+            pub fn clear(&self);
         }
     }
 
@@ -76,52 +70,45 @@ impl ObjectSpace {
 
     /// Insert a clone of the passed [`Program`] into the space.
     pub fn insert_clone(
-        space_cell: &Arc<RwLock<Self>>,
+        space_cell: &Arc<Self>,
         program: Arc<Program>,
     ) -> Arc<RwLock<Process>> {
-        let clone = {
-            let object_space = space_cell.read();
-            Process::new_clone(program, object_space.clone_count)
-        };
+        let count = space_cell.clone_count.fetch_add(1, Ordering::Relaxed);
 
-        let name = space_cell.read().prepare_filename(&clone);
+        let clone = Process::new_clone(program, count);
+
+        let name = space_cell.prepare_filename(&clone);
 
         let process: Arc<RwLock<Process>> = RwLock::new(clone).into();
 
-        let mut space = space_cell.write();
-        space.clone_count += 1;
-        space.insert_process_directly(name, process.clone());
+        space_cell.insert_process_directly(name, process.clone());
         process
     }
 
     /// Directly insert the passed [`Process`] into the space, with in-game
     /// local filename.
-    pub fn insert_process<P>(space_cell: &Arc<RwLock<Self>>, process: P)
+    pub fn insert_process<P>(space_cell: &Arc<Self>, process: P)
     where
         P: Into<Arc<RwLock<Process>>>,
     {
         let process = process.into();
         let name = {
-            let space = space_cell.read();
-            space.prepare_filename(&process.read())
+            space_cell.prepare_filename(&process.read())
         };
 
-        let mut space = space_cell.write();
-        space.insert_process_directly(name, process);
+        space_cell.insert_process_directly(name, process);
     }
 
-    pub fn remove_process<P>(space_cell: &Arc<RwLock<Self>>, process: P)
+    pub fn remove_process<P>(space_cell: &Arc<Self>, process: P)
     where
         P: Into<Arc<RwLock<Process>>>,
     {
         let process = process.into();
         let name = {
-            let space = space_cell.read();
-            space.prepare_filename(&process.read())
+            space_cell.prepare_filename(&process.read())
         };
 
-        let mut space = space_cell.write();
-        space.processes.remove(&name);
+        space_cell.processes.remove(&name);
     }
 
     fn prepare_filename(&self, process: &Process) -> String {
@@ -135,7 +122,7 @@ impl ObjectSpace {
     }
 
     #[inline]
-    fn insert_process_directly<P, S>(&mut self, name: S, process: P)
+    fn insert_process_directly<P, S>(&self, name: S, process: P)
     where
         P: Into<Arc<RwLock<Process>>>,
         S: Into<String>,
@@ -144,7 +131,7 @@ impl ObjectSpace {
     }
 
     /// Lookup a process from its path.
-    pub fn lookup<T>(&self, path: T) -> Option<&Arc<RwLock<Process>>>
+    pub fn lookup<T>(&self, path: T) -> Option<Ref<String, Arc<RwLock<Process>>>>
     where
         T: AsRef<str>,
     {
@@ -152,13 +139,23 @@ impl ObjectSpace {
     }
 }
 
+impl Clone for ObjectSpace {
+    fn clone(&self) -> Self {
+        Self {
+            processes: self.processes.clone(),
+            clone_count: AtomicUsize::new(self.clone_count.load(Ordering::Relaxed)),
+            config: self.config.clone(),
+        }
+    }
+}
+
 impl Default for ObjectSpace {
     fn default() -> Self {
-        let processes = HashMap::with_capacity(OBJECT_SPACE_SIZE);
+        let processes = DashMap::with_capacity(OBJECT_SPACE_SIZE);
 
         Self {
             processes,
-            clone_count: 0,
+            clone_count: AtomicUsize::new(0),
             config: Config::default().into(),
         }
     }
@@ -167,7 +164,7 @@ impl Default for ObjectSpace {
 impl Mark for ObjectSpace {
     #[inline]
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
-        for process in self.processes.values() {
+        for process in self.processes.iter() {
             process.read().mark(marked, processed)?;
         }
 
@@ -206,21 +203,20 @@ mod tests {
         let filename2: Arc<LpcPath> = Arc::new("/foo/bar/baz".into());
         prog2.filename = filename2.clone();
 
-        let object_space = RwLock::new(space).into();
+        let object_space = space.into();
 
         ObjectSpace::insert_clone(&object_space, prog.clone());
         ObjectSpace::insert_clone(&object_space, prog.clone());
         ObjectSpace::insert_clone(&object_space, prog2.into());
         ObjectSpace::insert_clone(&object_space, prog.clone());
 
-        let space = object_space.read();
-        assert_eq!(space.len(), 4);
-        assert!(space.processes.contains_key(&format!("{}#{}", filename, 0)));
-        assert!(space.processes.contains_key(&format!("{}#{}", filename, 1)));
-        assert!(space
+        assert_eq!(object_space.len(), 4);
+        assert!(object_space.processes.contains_key(&format!("{}#{}", filename, 0)));
+        assert!(object_space.processes.contains_key(&format!("{}#{}", filename, 1)));
+        assert!(object_space
             .processes
             .contains_key(&format!("{}#{}", filename2, 2)));
-        assert!(space.processes.contains_key(&format!("{}#{}", filename, 3)));
+        assert!(object_space.processes.contains_key(&format!("{}#{}", filename, 3)));
     }
 
     #[test]
@@ -236,12 +232,11 @@ mod tests {
         prog.filename = filename;
 
         let process = Process::new(prog);
-        let space_cell = RwLock::new(space).into();
+        let space_cell = space.into();
         ObjectSpace::insert_process(&space_cell, RwLock::new(process));
 
-        let space = space_cell.read();
-        assert_eq!(space.len(), 1);
-        assert!(space.processes.contains_key("/foo/bar/baz"));
+        assert_eq!(space_cell.len(), 1);
+        assert!(space_cell.processes.contains_key("/foo/bar/baz"));
     }
 
     #[test]
