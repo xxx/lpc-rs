@@ -39,7 +39,7 @@ use crate::{
         call_frame::CallFrame,
         call_outs::CallOuts,
         call_stack::CallStack,
-        efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
+        efun::{call_efun, efun_context::EfunContext},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
         into_lpc_ref::IntoLpcRef,
