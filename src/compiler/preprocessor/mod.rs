@@ -426,9 +426,6 @@ impl Preprocessor {
                                 arg.push(t)
                             }
                         }
-                        Token::Error => {
-                            return Err(LpcError::new("Invalid token").with_span(Some(span)))
-                        }
                         Token::NewLine(_) => { /* ignore */ }
                         _ => {
                             arg.push(t);

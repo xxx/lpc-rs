@@ -55,12 +55,12 @@ impl Iterator for LexWrapper<'_> {
         let span = self.lexer.span();
 
         match token {
-            Token::Error => Some(Err(LpcError::new(format!(
-                "Lex Error: Invalid Token `{}`  at {:?}",
+            Ok(t) => Some(Ok((span.start, t, span.end))),
+            Err(_) => Some(Err(LpcError::new(format!(
+                "Lex Error: Invalid Token `{}` at {:?}",
                 self.lexer.slice(),
-                span
+                span,
             )))),
-            t => Some(Ok((span.start, t, span.end))),
         }
     }
 }
@@ -92,20 +92,17 @@ impl<'a> Iterator for TokenVecWrapper<'a> {
 
         self.count += 1;
 
-        let span = token.1.span();
-
-        match &token.1 {
-            Token::Error => Some(Err(LpcError::new(format!(
-                "Lex Error: Invalid Token `{}` at {:?}",
-                token.1, span
-            )))),
-            t => Some(Ok((span.l, t.clone(), span.r))),
-        }
+        let t = &token.1;
+        let span = t.span();
+        Some(Ok((span.l, t.clone(), span.r)))
     }
 }
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(extras = LexState)]
+// Strip whitespace and comments
+#[logos(skip r"[ \t\f\v]+|//[^\n\r]*[\n\r]*|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/")]
+#[logos(skip r"\n")]
 pub enum Token {
     #[token("+", track_slice)]
     Plus(Span),
@@ -281,9 +278,10 @@ pub enum Token {
     match lex.slice().chars().nth(1) {
         Some(c) => Ok(IntToken(span, c as LpcIntInner)),
         None => {
-            Err(LpcError::new(
-                format!("Unable to find the character in token `{}`? This is a WTF.", lex.slice())
-            ).with_span(Some(span)))
+            Err(())
+            // Err(LpcError::new_bug(
+            //     format!("Unable to find the character in token `{}`? This is a WTF.", lex.slice())
+            // ).with_span(Some(span)))
         }
     }
     })]
@@ -292,7 +290,7 @@ pub enum Token {
 
         match LpcIntInner::from_str(&lex.slice().replace('_', "")) {
             Ok(i) => Ok(IntToken(Span::new(lex.extras.current_file_id, lex.span()), i)),
-            Err(e) => Err(e)
+            Err(_e) => Err(())
         }
     }, priority = 2)]
     #[regex(r"0[xX][0-9a-fA-F][0-9a-fA-F_]*", |lex| {
@@ -306,7 +304,7 @@ pub enum Token {
 
         match r {
             Ok(i) => Ok(IntToken(Span::new(lex.extras.current_file_id, lex.span()), i)),
-            Err(e) => Err(e)
+            Err(_e) => Err(())
         }
     }, priority = 2)]
     #[regex(r"0[oO]?[0-7][0-7_]*", |lex| {
@@ -320,7 +318,7 @@ pub enum Token {
 
         match r {
             Ok(i) => Ok(IntToken(Span::new(lex.extras.current_file_id, lex.span()), i)),
-            Err(e) => Err(e)
+            Err(_e) => Err(())
         }
     }, priority = 2)]
     #[regex(r"0[bB][01][01_]*", |lex| {
@@ -334,7 +332,7 @@ pub enum Token {
 
         match r {
             Ok(i) => Ok(IntToken(Span::new(lex.extras.current_file_id, lex.span()), i)),
-            Err(e) => Err(e)
+            Err(_e) => Err(())
         }
     }, priority = 2)]
     IntLiteral(IntToken),
@@ -389,18 +387,6 @@ pub enum Token {
 
     #[regex("#[^\n\\S]*pragma[^\n]*\n?", string_token)]
     Pragma(StringToken),
-
-    #[error]
-    // Strip whitespace and comments
-    #[regex(r"[ \t\f\v]+|//[^\n\r]*[\n\r]*|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", |lex| {
-        track_slice(lex);
-        logos::Skip
-    }, priority = 2)]
-    #[token("\n", |lex| {
-        track_slice(lex);
-        logos::Skip
-    })]
-    Error,
 }
 
 #[inline]
@@ -547,7 +533,6 @@ impl HasSpan for Token {
             | Token::Private(x)
             | Token::Public(x)
             | Token::Protected(x) => *x,
-            Token::Error => Span::new(0, 0..0),
         }
     }
 }
@@ -654,7 +639,6 @@ impl Token {
             | Token::Private(x)
             | Token::Public(x)
             | Token::Protected(x) => x,
-            Token::Error => return None,
         };
 
         Some(span)
@@ -779,8 +763,6 @@ impl Display for Token {
             Token::Defined(_) => "defined",
             Token::DefinedParen(_) => "defined(",
             Token::Not(_) => "not",
-
-            Token::Error => "Error token",
         };
 
         write!(f, "{out}")
