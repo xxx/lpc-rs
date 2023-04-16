@@ -32,8 +32,6 @@ async fn main() {
         }
     };
 
-    println!("config: {:#?}", config);
-
     init_tracing_subscriber(&config);
 
     let mut vm = Vm::new(config);
