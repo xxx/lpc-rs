@@ -1,12 +1,11 @@
-use std::{sync::Arc};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 
 use bit_set::BitSet;
-use dashmap::DashMap;
-use dashmap::mapref::one::Ref;
+use dashmap::{mapref::one::Ref, DashMap};
 use delegate::delegate;
-
-
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 
@@ -69,10 +68,7 @@ impl ObjectSpace {
     // }
 
     /// Insert a clone of the passed [`Program`] into the space.
-    pub fn insert_clone(
-        space_cell: &Arc<Self>,
-        program: Arc<Program>,
-    ) -> Arc<RwLock<Process>> {
+    pub fn insert_clone(space_cell: &Arc<Self>, program: Arc<Program>) -> Arc<RwLock<Process>> {
         let count = space_cell.clone_count.fetch_add(1, Ordering::Relaxed);
 
         let clone = Process::new_clone(program, count);
@@ -92,9 +88,7 @@ impl ObjectSpace {
         P: Into<Arc<RwLock<Process>>>,
     {
         let process = process.into();
-        let name = {
-            space_cell.prepare_filename(&process.read())
-        };
+        let name = { space_cell.prepare_filename(&process.read()) };
 
         space_cell.insert_process_directly(name, process);
     }
@@ -104,9 +98,7 @@ impl ObjectSpace {
         P: Into<Arc<RwLock<Process>>>,
     {
         let process = process.into();
-        let name = {
-            space_cell.prepare_filename(&process.read())
-        };
+        let name = { space_cell.prepare_filename(&process.read()) };
 
         space_cell.processes.remove(&name);
     }
@@ -211,12 +203,18 @@ mod tests {
         ObjectSpace::insert_clone(&object_space, prog.clone());
 
         assert_eq!(object_space.len(), 4);
-        assert!(object_space.processes.contains_key(&format!("{}#{}", filename, 0)));
-        assert!(object_space.processes.contains_key(&format!("{}#{}", filename, 1)));
+        assert!(object_space
+            .processes
+            .contains_key(&format!("{}#{}", filename, 0)));
+        assert!(object_space
+            .processes
+            .contains_key(&format!("{}#{}", filename, 1)));
         assert!(object_space
             .processes
             .contains_key(&format!("{}#{}", filename2, 2)));
-        assert!(object_space.processes.contains_key(&format!("{}#{}", filename, 3)));
+        assert!(object_space
+            .processes
+            .contains_key(&format!("{}#{}", filename, 3)));
     }
 
     #[test]
