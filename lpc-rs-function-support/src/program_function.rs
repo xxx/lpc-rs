@@ -143,16 +143,17 @@ impl ProgramFunction {
             self.num_upvalues
         ));
 
-
         // use MultiMap as multiple labels can be at the same address
-        let labels_by_pc = self.labels.as_ref()
+        let labels_by_pc = self
+            .labels
+            .as_ref()
             .map(|labels| {
-                labels.values()
+                labels
+                    .values()
                     .zip(labels.keys())
                     .collect::<MultiMap<_, _>>()
             })
             .unwrap_or_else(MultiMap::new);
-
 
         for (counter, instruction) in self.instructions.iter().enumerate() {
             if let Some(vec) = labels_by_pc.get_vec(&Address(counter)) {

@@ -39,7 +39,7 @@ use crate::{
         call_frame::CallFrame,
         call_outs::CallOuts,
         call_stack::CallStack,
-        efun::{call_efun, efun_context::EfunContext},
+        efun::{call_efun, efun_context::EfunContext, EFUN_FUNCTIONS},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
         into_lpc_ref::IntoLpcRef,
@@ -57,7 +57,6 @@ use crate::{
         vm::vm_op::VmOp,
     },
 };
-use crate::interpreter::efun::EFUN_FUNCTIONS;
 
 // this is just to shut clippy up
 type ProcessFunctionPair = (Weak<RwLock<Process>>, Arc<ProgramFunction>);
