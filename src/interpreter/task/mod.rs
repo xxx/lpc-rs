@@ -1003,7 +1003,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             trace!("Calling function ptr: {}", ptr);
 
-            // let partial_args = &ptr.partial_args;
             let passed_args_count = num_args
                 + ptr
                     .partial_args
