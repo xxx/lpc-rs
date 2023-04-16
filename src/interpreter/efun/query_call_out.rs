@@ -85,6 +85,7 @@ mod tests {
         },
         test_support::compile_prog,
     };
+    use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
     #[tokio::test]
     async fn test_query_call_out() {
@@ -106,18 +107,12 @@ mod tests {
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, _, _) = compile_prog(code);
-        let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
-        let task = Task::<10>::initialize_program(
-            program,
-            Config::default(),
-            ObjectSpace::default(),
-            Memory::default(),
-            RwLock::new(GcBank::default()),
-            call_outs,
-            tx,
-        )
-        .await
-        .unwrap();
+        let task = InitializeProgramBuilder::<10>::default()
+            .program(program)
+            .tx(tx)
+            .build()
+            .await
+            .unwrap();
 
         if_chain! {
             if let LpcRef::Array(array) = task.result().unwrap();

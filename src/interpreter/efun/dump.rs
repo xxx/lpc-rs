@@ -155,6 +155,7 @@ mod tests {
             program::Program, task::Task,
         },
     };
+    use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
     fn compile_prog(code: &str) -> Program {
         let compiler = Compiler::default();
@@ -176,16 +177,11 @@ mod tests {
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let program = compile_prog(code);
-        let result = Task::<10>::initialize_program(
-            program,
-            Config::default(),
-            ObjectSpace::default(),
-            Memory::default(),
-            RwLock::new(GcBank::default()),
-            Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
-            tx.clone(),
-        )
-        .await;
+        let result = InitializeProgramBuilder::<10>::default()
+            .program(program)
+            .tx(tx.clone())
+            .build()
+            .await;
 
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -202,16 +198,11 @@ mod tests {
         "##;
 
         let program = compile_prog(code);
-        let result = Task::<5>::initialize_program(
-            program,
-            Config::default(),
-            ObjectSpace::default(),
-            Memory::default(),
-            RwLock::new(GcBank::default()),
-            Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
-            tx,
-        )
-        .await;
+        let result = InitializeProgramBuilder::<5>::default()
+            .program(program)
+            .tx(tx)
+            .build()
+            .await;
 
         assert_eq!(
             result.unwrap_err().to_string(),

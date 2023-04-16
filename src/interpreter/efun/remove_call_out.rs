@@ -50,6 +50,7 @@ mod tests {
         },
         test_support::compile_prog,
     };
+    use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
     #[tokio::test]
     async fn test_removes_task() {
@@ -68,16 +69,12 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, _, _) = compile_prog(code);
         let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
-        let result = Task::<10>::initialize_program(
-            program,
-            Config::default(),
-            ObjectSpace::default(),
-            Memory::default(),
-            RwLock::new(GcBank::default()),
-            call_outs.clone(),
-            tx,
-        )
-        .await;
+        let result = InitializeProgramBuilder::<10>::default()
+            .program(program)
+            .call_outs(call_outs.clone())
+            .tx(tx)
+            .build()
+            .await;
 
         assert!(result.is_ok());
         assert!(call_outs.read().is_empty());

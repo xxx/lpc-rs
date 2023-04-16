@@ -50,6 +50,7 @@ mod tests {
         },
         test_support::compile_prog,
     };
+    use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
     #[tokio::test]
     async fn test_destruct() {
@@ -63,18 +64,12 @@ mod tests {
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, _, _) = compile_prog(code);
-        let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
-        let result = Task::<5>::initialize_program(
-            program,
-            Config::default(),
-            ObjectSpace::default(),
-            Memory::default(),
-            RwLock::new(GcBank::default()),
-            call_outs,
-            tx,
-        )
-        .await
-        .unwrap();
+        let result = InitializeProgramBuilder::<5>::default()
+            .program(program)
+            .tx(tx)
+            .build()
+            .await
+            .unwrap();
 
         assert!(result.context.object_space.is_empty());
     }

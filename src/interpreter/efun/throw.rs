@@ -21,6 +21,7 @@ mod tests {
         },
         test_support::compile_prog,
     };
+    use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
     #[tokio::test]
     async fn test_throw() {
@@ -32,16 +33,11 @@ mod tests {
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, _, _) = compile_prog(code);
-        let result = Task::<10>::initialize_program(
-            program,
-            Config::default(),
-            ObjectSpace::default(),
-            Memory::default(),
-            RwLock::new(GcBank::default()),
-            RwLock::new(CallOuts::new(tx.clone())),
-            tx,
-        )
-        .await;
+        let result = InitializeProgramBuilder::<10>::default()
+            .program(program)
+            .tx(tx)
+            .build()
+            .await;
 
         assert_eq!(result.unwrap_err().to_string(), "foo bar baz error!");
     }

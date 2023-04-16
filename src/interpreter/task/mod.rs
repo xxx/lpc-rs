@@ -1,3 +1,4 @@
+pub mod initialize_task;
 pub mod task_id;
 pub mod task_state;
 
@@ -2396,6 +2397,7 @@ mod tests {
         mod test_call_fp {
             use claims::assert_ok;
             use tokio::sync::mpsc;
+            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
             use super::*;
 
@@ -2646,16 +2648,15 @@ mod tests {
                 ObjectSpace::insert_process(&space_cell, process);
                 let vm_upvalues = Arc::new(RwLock::new(upvalues));
 
-                let result = Task::<32>::initialize_program(
-                    program,
-                    config,
-                    space_cell.clone(),
-                    Memory::default(),
-                    vm_upvalues.clone(),
-                    call_outs.clone(),
-                    tx.clone(),
-                )
-                .await;
+                let result = InitializeProgramBuilder::<32>::default()
+                    .program(program)
+                    .config(config)
+                    .object_space(space_cell.clone())
+                    .vm_upvalues(vm_upvalues.clone())
+                    .call_outs(call_outs.clone())
+                    .tx(tx.clone())
+                    .build()
+                    .await;
 
                 assert_eq!(
                     result.unwrap_err().to_string(),
@@ -2673,19 +2674,17 @@ mod tests {
                 "##};
 
                 let (program, config, process) = compile_prog(code);
-                let object_space = ObjectSpace::default();
                 ObjectSpace::insert_process(&space_cell, process);
 
-                let result = Task::<10>::initialize_program(
-                    program,
-                    config,
-                    object_space,
-                    Memory::default(),
-                    vm_upvalues.clone(),
-                    call_outs.clone(),
-                    tx.clone(),
-                )
-                .await;
+                let result = InitializeProgramBuilder::<10>::default()
+                    .program(program)
+                    .config(config)
+                    .object_space(space_cell.clone())
+                    .vm_upvalues(vm_upvalues.clone())
+                    .call_outs(call_outs.clone())
+                    .tx(tx.clone())
+                    .build()
+                    .await;
 
                 assert_eq!(
                     result.unwrap_err().to_string(),
@@ -2707,16 +2706,15 @@ mod tests {
                 let space_cell = object_space.into();
                 ObjectSpace::insert_process(&space_cell, process);
 
-                let result = Task::<20>::initialize_program(
-                    program,
-                    config,
-                    space_cell,
-                    Memory::default(),
-                    vm_upvalues,
-                    call_outs,
-                    tx,
-                )
-                .await;
+                let result = InitializeProgramBuilder::<20>::default()
+                    .program(program)
+                    .config(config)
+                    .object_space(space_cell)
+                    .vm_upvalues(vm_upvalues)
+                    .call_outs(call_outs)
+                    .tx(tx)
+                    .build()
+                    .await;
 
                 assert_ok!(result);
             }
@@ -3293,6 +3291,7 @@ mod tests {
         }
 
         mod test_idiv {
+            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
             use super::*;
 
             #[tokio::test]
@@ -3327,18 +3326,12 @@ mod tests {
 
                 let (program, _, _) = compile_prog(code);
                 let (tx, _rx) = mpsc::channel(128);
-                let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
-                let r = Task::<10>::initialize_program(
-                    program,
-                    Config::default(),
-                    ObjectSpace::default(),
-                    Memory::default(),
-                    Arc::new(RwLock::new(GcBank::default())),
-                    call_outs,
-                    tx,
-                )
-                .await;
+                let r = InitializeProgramBuilder::<10>::default()
+                    .program(program)
+                    .tx(tx)
+                    .build()
+                    .await;
 
                 assert_eq!(
                     r.unwrap_err().to_string(),
@@ -3348,6 +3341,7 @@ mod tests {
         }
 
         mod test_imod {
+            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
             use super::*;
 
             #[tokio::test]
@@ -3380,21 +3374,14 @@ mod tests {
                     mixed s = q % r;
                 "##};
 
-                let vm_upvalues = RwLock::new(GcBank::default());
                 let (program, _, _) = compile_prog(code);
                 let (tx, _rx) = mpsc::channel(128);
-                let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
-                let r = Task::<20>::initialize_program(
-                    program,
-                    Config::default(),
-                    ObjectSpace::default(),
-                    Memory::default(),
-                    Arc::new(vm_upvalues),
-                    call_outs,
-                    tx,
-                )
-                .await;
+                let r = InitializeProgramBuilder::<20>::default()
+                    .program(program)
+                    .tx(tx)
+                    .build()
+                    .await;
 
                 assert_eq!(
                     r.unwrap_err().to_string(),
@@ -4128,6 +4115,7 @@ mod tests {
             use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
             use once_cell::sync::OnceCell;
             use string_interner::StringInterner;
+            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
             use super::*;
             use crate::test_support::test_config;
@@ -4225,22 +4213,15 @@ mod tests {
                     ..Default::default()
                 };
 
-                let vm_upvalues = RwLock::new(GcBank::default());
-                let object_space = ObjectSpace::default();
                 let (tx, _rx) = mpsc::channel(128);
-                let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
-                let task = Task::<20>::initialize_program(
-                    program,
-                    config,
-                    object_space,
-                    Memory::default(),
-                    Arc::new(vm_upvalues),
-                    call_outs,
-                    tx,
-                )
-                .await
-                .expect("failed to initialize");
+                let task = InitializeProgramBuilder::<20>::default()
+                    .program(program)
+                    .config(config)
+                    .tx(tx)
+                    .build()
+                    .await
+                    .expect("failed to initialize");
 
                 let registers = &task.stack.last().unwrap().registers;
 
@@ -4322,6 +4303,7 @@ mod tests {
 
     mod test_limits {
         use lpc_rs_utils::config::ConfigBuilder;
+        use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
 
         use super::*;
 
@@ -4335,21 +4317,14 @@ mod tests {
                 }
             "##};
 
-            let vm_upvalues = RwLock::new(GcBank::default());
             let (program, _, _) = compile_prog(code);
             let (tx, _rx) = mpsc::channel(128);
-            let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
-            let r = Task::<20>::initialize_program(
-                program,
-                Config::default(),
-                ObjectSpace::default(),
-                Memory::default(),
-                vm_upvalues,
-                call_outs,
-                tx,
-            )
-            .await;
+            let r = InitializeProgramBuilder::<20>::default()
+                .program(program)
+                .tx(tx)
+                .build()
+                .await;
 
             assert_eq!(r.unwrap_err().to_string(), "stack overflow");
         }
@@ -4367,20 +4342,14 @@ mod tests {
                 .build()
                 .unwrap();
             let (program, _, _) = compile_prog(code);
-            let vm_upvalues = RwLock::new(GcBank::default());
             let (tx, _rx) = mpsc::channel(128);
-            let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
-            let r = Task::<20>::initialize_program(
-                program,
-                config,
-                ObjectSpace::default(),
-                Memory::default(),
-                Arc::new(vm_upvalues),
-                call_outs,
-                tx,
-            )
-            .await;
+            let r = InitializeProgramBuilder::<20>::default()
+                .program(program)
+                .config(config)
+                .tx(tx)
+                .build()
+                .await;
 
             assert_eq!(
                 r.unwrap_err().to_string(),

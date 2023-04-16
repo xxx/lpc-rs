@@ -11,6 +11,7 @@ use lpc_rs::{
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use parking_lot::RwLock;
+use lpc_rs::interpreter::task::initialize_task::InitializeProgramBuilder;
 
 #[macro_export]
 macro_rules! assert_regex {
@@ -49,25 +50,19 @@ pub async fn run_prog_custom<P>(code: &str, path: P, config: Config) -> Task<MAX
 where
     P: Into<LpcPath>,
 {
-    let upvalues = RwLock::new(GcBank::default());
     let (tx, _rx) = tokio::sync::mpsc::channel(128);
-    let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
     let program = compile_prog_custom(code, path, config);
 
-    Task::initialize_program(
-        program,
-        test_config(),
-        ObjectSpace::default(),
-        Memory::default(),
-        upvalues,
-        call_outs,
-        tx,
-    )
-    .await
-    .unwrap_or_else(|e| {
-        e.emit_diagnostics();
-        panic!("failed to initialize");
-    })
+    InitializeProgramBuilder::default()
+        .program(program)
+        .config(test_config())
+        .tx(tx)
+        .build()
+        .await
+        .unwrap_or_else(|e| {
+            e.emit_diagnostics();
+            panic!("failed to initialize");
+        })
 }
 
 pub async fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
