@@ -12,7 +12,9 @@ use tracing::{instrument, trace};
 use crate::interpreter::{
     function_type::function_address::FunctionAddress,
     gc::{mark::Mark, unique_id::UniqueId},
+    into_lpc_ref::IntoLpcRef,
     lpc_ref::LpcRef,
+    memory::Memory,
     process::Process,
 };
 
@@ -123,6 +125,12 @@ impl Display for FunctionPtr {
         s.push('}');
 
         write!(f, "{s}")
+    }
+}
+
+impl IntoLpcRef for FunctionPtr {
+    fn into_lpc_ref(self, memory: &Memory) -> LpcRef {
+        memory.alloc_function(self)
     }
 }
 

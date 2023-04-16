@@ -1,4 +1,7 @@
-use std::fmt::{Display, Formatter};
+use std::{
+    fmt::{Display, Formatter},
+    ops::Add,
+};
 
 use lpc_rs_core::{BaseFloat, LpcFloatInner};
 use serde::{Deserialize, Serialize};
@@ -35,5 +38,21 @@ impl From<LpcInt> for LpcFloat {
 impl PartialEq<BaseFloat> for LpcFloat {
     fn eq(&self, other: &BaseFloat) -> bool {
         self.0 == *other
+    }
+}
+
+impl Add<LpcFloat> for LpcFloat {
+    type Output = LpcFloat;
+
+    fn add(self, rhs: LpcFloat) -> Self::Output {
+        Self::Output::from(self.0 + rhs.0)
+    }
+}
+
+impl Add<LpcInt> for LpcFloat {
+    type Output = LpcFloat;
+
+    fn add(self, rhs: LpcInt) -> Self::Output {
+        Self::Output::from(self.0 + LpcFloatInner::from(rhs.0 as BaseFloat))
     }
 }

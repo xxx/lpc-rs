@@ -41,10 +41,12 @@ use crate::{
         efun::{call_efun, efun_context::EfunContext, EFUN_PROTOTYPES},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
+        into_lpc_ref::IntoLpcRef,
+        lpc_array::LpcArray,
         lpc_int::LpcInt,
+        lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
         lpc_string::LpcString,
-        lpc_value::LpcValue,
         memory::Memory,
         object_space::ObjectSpace,
         process::Process,
@@ -53,7 +55,6 @@ use crate::{
         task_context::TaskContext,
         vm::vm_op::VmOp,
     },
-    try_extract_value,
 };
 
 // this is just to shut clippy up
@@ -426,7 +427,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.handle_aconst(location)?;
             }
             Instruction::And(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.bitand(y))?;
+                self.binary_operation(r1, r2, r3, |x, y, _memory| x.bitand(y))?;
             }
             Instruction::BitwiseNot(r1, r2) => {
                 let frame = self.stack.current_frame().unwrap();
@@ -434,9 +435,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let lpc_ref = &*get_loc!(self, r1)?;
                 match lpc_ref.bitnot() {
                     Ok(result) => {
-                        let var = self.context.memory().value_to_ref(result);
-
-                        set_loc!(self, r2, var)?;
+                        set_loc!(self, r2, result)?;
                     }
                     Err(e) => {
                         return Err(e.with_span(debug_span));
@@ -520,17 +519,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Gte(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y)?;
             }
-            Instruction::IAdd(r1, r2, r3) => match get_loc!(self, r1)?.add(&*get_loc!(self, r2)?) {
-                Ok(result) => {
-                    let out = self.context.memory().value_to_ref(result);
-
-                    set_loc!(self, r3, out)?;
+            Instruction::IAdd(r1, r2, r3) => {
+                match get_loc!(self, r1)?.add(&*get_loc!(self, r2)?, &self.context.memory) {
+                    Ok(result) => {
+                        set_loc!(self, r3, result)?;
+                    }
+                    Err(e) => {
+                        let frame = self.stack.current_frame()?;
+                        return Err(e.with_span(frame.current_debug_span()));
+                    }
                 }
-                Err(e) => {
-                    let frame = self.stack.current_frame()?;
-                    return Err(e.with_span(frame.current_debug_span()));
-                }
-            },
+            }
             Instruction::IConst(r, i) => {
                 set_loc!(self, r, LpcRef::Int(i.into()))?;
             }
@@ -541,36 +540,40 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 set_loc!(self, r, LpcRef::Int(1.into()))?;
             }
             Instruction::IDiv(r1, r2, r3) => match get_loc!(self, r1)?.div(&*get_loc!(self, r2)?) {
-                Ok(result) => set_loc!(self, r3, self.context.memory().value_to_ref(result))?,
+                Ok(result) => set_loc!(self, r3, result)?,
                 Err(e) => {
                     let frame = self.stack.current_frame()?;
                     return Err(e.with_span(frame.current_debug_span()));
                 }
             },
             Instruction::IMod(r1, r2, r3) => match get_loc!(self, r1)?.rem(&*get_loc!(self, r2)?) {
-                Ok(result) => set_loc!(self, r3, self.context.memory().value_to_ref(result))?,
+                Ok(result) => set_loc!(self, r3, result)?,
                 Err(e) => {
                     let frame = self.stack.current_frame()?;
                     return Err(e.with_span(frame.current_debug_span()));
                 }
             },
-            Instruction::IMul(r1, r2, r3) => match get_loc!(self, r1)?.mul(&*get_loc!(self, r2)?) {
-                Ok(result) => set_loc!(self, r3, self.context.memory().value_to_ref(result))?,
-                Err(e) => {
-                    let frame = self.stack.current_frame()?;
-                    return Err(e.with_span(frame.current_debug_span()));
+            Instruction::IMul(r1, r2, r3) => {
+                match get_loc!(self, r1)?.mul(&*get_loc!(self, r2)?, &self.context.memory) {
+                    Ok(result) => set_loc!(self, r3, result)?,
+                    Err(e) => {
+                        let frame = self.stack.current_frame()?;
+                        return Err(e.with_span(frame.current_debug_span()));
+                    }
                 }
-            },
+            }
             Instruction::Inc(r1) => {
                 apply_in_location(&mut self.stack, r1, |x| x.inc())?;
             }
-            Instruction::ISub(r1, r2, r3) => match get_loc!(self, r1)?.sub(&*get_loc!(self, r2)?) {
-                Ok(result) => set_loc!(self, r3, self.context.memory().value_to_ref(result))?,
-                Err(e) => {
-                    let frame = self.stack.current_frame()?;
-                    return Err(e.with_span(frame.current_debug_span()));
+            Instruction::ISub(r1, r2, r3) => {
+                match get_loc!(self, r1)?.sub(&*get_loc!(self, r2)?, &self.context.memory) {
+                    Ok(result) => set_loc!(self, r3, result)?,
+                    Err(e) => {
+                        let frame = self.stack.current_frame()?;
+                        return Err(e.with_span(frame.current_debug_span()));
+                    }
                 }
-            },
+            }
             Instruction::Jmp(address) => {
                 let frame = self.stack.current_frame_mut()?;
                 frame.set_pc(address);
@@ -605,7 +608,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x <= y)?;
             }
             Instruction::MAdd(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.add(y))?;
+                self.binary_operation(r1, r2, r3, |x, y, memory| x.add(y, memory))?;
             }
             Instruction::MapConst(r) => {
                 let mut register_map = IndexMap::with_hasher(HashBuildHasher::default());
@@ -622,18 +625,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     );
                 }
 
-                let new_ref = self
-                    .context
-                    .memory()
-                    .value_to_ref(LpcValue::from(register_map));
+                let new_ref = LpcMapping::new(register_map.into_iter().collect())
+                    .into_lpc_ref(&self.context.memory);
 
                 set_loc!(self, r, new_ref)?;
             }
             Instruction::MMul(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.mul(y))?;
+                self.binary_operation(r1, r2, r3, |x, y, memory| x.mul(y, memory))?;
             }
             Instruction::MSub(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.sub(y))?;
+                self.binary_operation(r1, r2, r3, |x, y, memory| x.sub(y, memory))?;
             }
             Instruction::Not(r1, r2) => {
                 let matched = match &*get_loc!(self, r1)? {
@@ -657,7 +658,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 set_loc!(self, r3, LpcRef::Int(LpcInt(out)))?;
             }
             Instruction::Or(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.bitor(y))?;
+                self.binary_operation(r1, r2, r3, |x, y, _memory| x.bitor(y))?;
             }
             Instruction::PopulateArgv(r, num_args, _num_locals) => {
                 let frame = self.stack.current_frame()?;
@@ -674,7 +675,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 };
 
-                let new_ref = self.context.memory().value_to_ref(LpcValue::from(refs));
+                let new_ref = LpcArray::new(refs).into_lpc_ref(&self.context.memory);
 
                 set_location(&mut self.stack, r, new_ref)?;
             }
@@ -720,8 +721,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     (real_start, real_end)
                 };
 
-                let return_value = |value, memory: &Memory, stack| -> Result<()> {
-                    let new_ref = memory.value_to_ref(value);
+                let return_value = |new_ref, stack| -> Result<()> {
                     set_location(stack, r4, new_ref)?;
 
                     Ok(())
@@ -732,11 +732,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                     match lpc_ref {
                         LpcRef::Array(v_ref) => {
-                            let value = v_ref.read();
-                            let vec = try_extract_value!(*value, LpcValue::Array);
+                            let vec = v_ref.read();
 
                             if vec.is_empty() {
-                                return Ok(LpcValue::from(vec![]));
+                                return Ok(LpcArray::new(vec![]).into_lpc_ref(&self.context.memory));
                             }
 
                             let index1 = &*get_location(stack, r2)?;
@@ -750,9 +749,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     let slice = &vec[real_start..=real_end];
                                     let mut new_vec = vec![NULL; slice.len()];
                                     new_vec.clone_from_slice(slice);
-                                    Ok(LpcValue::from(new_vec))
+                                    Ok(LpcArray::new(new_vec).into_lpc_ref(&self.context.memory))
                                 } else {
-                                    Ok(LpcValue::from(vec![]))
+                                    Ok(LpcArray::new(vec![]).into_lpc_ref(&self.context.memory))
                                 }
                             } else {
                                 let frame = self.stack.current_frame()?;
@@ -763,11 +762,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             }
                         }
                         LpcRef::String(v_ref) => {
-                            let value = v_ref.read();
-                            let string = try_extract_value!(*value, LpcValue::String).to_str();
+                            let string = v_ref.read();
 
                             if string.is_empty() {
-                                return Ok(LpcValue::from(""));
+                                return Ok(LpcString::from("").into_lpc_ref(&self.context.memory));
                             }
 
                             let index1 = &*get_location(stack, r2)?;
@@ -781,9 +779,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     let len = real_end - real_start + 1;
                                     let new_string: String =
                                         string.chars().skip(real_start).take(len).collect();
-                                    Ok(LpcValue::from(new_string))
+                                    Ok(LpcString::from(new_string)
+                                        .into_lpc_ref(&self.context.memory))
                                 } else {
-                                    Ok(LpcValue::from(""))
+                                    Ok(LpcString::from("").into_lpc_ref(&self.context.memory))
                                 }
                             } else {
                                 let frame = self.stack.current_frame()?;
@@ -807,8 +806,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 };
 
-                let new_val = { get_new_value(&self.stack)? };
-                return_value(new_val, self.context.memory(), &mut self.stack)?;
+                let new_ref = get_new_value(&self.stack)?;
+                return_value(new_ref, &mut self.stack)?;
             }
             Instruction::Ret => {
                 pop_frame!(self).map(|frame| {
@@ -824,33 +823,28 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Sizeof(r1, r2) => {
                 let lpc_ref = &*get_loc!(self, r1)?;
 
-                let value = match lpc_ref {
+                let new_ref = match lpc_ref {
                     LpcRef::Array(x) => {
-                        let borrowed = x.read();
-                        let vec = try_extract_value!(*borrowed, LpcValue::Array);
+                        let vec = x.read();
 
-                        LpcValue::from(vec.len() as LpcIntInner)
+                        LpcRef::Int(LpcInt(vec.len() as LpcIntInner))
                     }
                     LpcRef::Mapping(x) => {
-                        let borrowed = x.read();
-                        let map = try_extract_value!(*borrowed, LpcValue::Mapping);
+                        let map = x.read();
 
-                        LpcValue::from(map.len() as LpcIntInner)
+                        LpcRef::Int(LpcInt(map.len() as LpcIntInner))
                     }
                     LpcRef::String(x) => {
-                        let borrowed = x.read();
-                        let string = try_extract_value!(*borrowed, LpcValue::String);
+                        let string = x.read();
 
-                        LpcValue::from(string.len() as LpcIntInner)
+                        LpcRef::Int(LpcInt(string.len() as LpcIntInner))
                     }
                     LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Object(_) | LpcRef::Function(_) => {
-                        LpcValue::from(0)
+                        NULL
                     }
                 };
 
-                let lpc_ref = self.context.memory().value_to_ref(value);
-
-                set_loc!(self, r2, lpc_ref)?;
+                set_loc!(self, r2, new_ref)?;
             }
             Instruction::Store(value_loc, container_loc, index_loc) => {
                 // r2[r3] = r1;
@@ -860,13 +854,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.handle_sconst(location, index)?;
             }
             Instruction::Shl(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.shl(y))?;
+                self.binary_operation(r1, r2, r3, |x, y, _memory| x.shl(y))?;
             }
             Instruction::Shr(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.shr(y))?;
+                self.binary_operation(r1, r2, r3, |x, y, _memory| x.shr(y))?;
             }
             Instruction::Xor(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| x.bitxor(y))?;
+                self.binary_operation(r1, r2, r3, |x, y, _memory| x.bitxor(y))?;
             }
         }
 
@@ -881,7 +875,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .iter()
             .map(|i| get_loc!(self, *i).map(|i| i.into_owned()))
             .collect::<Result<Vec<_>>>()?;
-        let new_ref = self.context.memory().value_to_ref(LpcValue::from(vars));
+        let new_ref = LpcArray::new(vars).into_lpc_ref(&self.context.memory);
 
         set_loc!(self, location, new_ref)
     }
@@ -999,11 +993,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        let ptr = {
-            let borrowed = func.read();
-            // TODO: this clone sucks.
-            try_extract_value!(*borrowed, LpcValue::Function).clone()
-        };
+        // TODO: this clone sucks.
+        let ptr = func.read().clone();
 
         trace!("Calling function ptr: {}", ptr);
 
@@ -1094,8 +1085,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let mut next_index = 1;
         {
             // This read() needs to be dropped before the `await`.
-            let b = func.read();
-            let ptr = try_extract_value!(&*b, LpcValue::Function);
+            let ptr = func.read();
             let arg_locations = match &ptr.address {
                 FunctionAddress::Local(_, func) => Cow::Borrowed(&func.arg_locations),
                 FunctionAddress::Dynamic(_) | FunctionAddress::Efun(_) => Cow::Owned(vec![]),
@@ -1164,15 +1154,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
 
                 let pair_opt = {
-                    let b = lpc_ref.read();
-                    let weak_cell = try_extract_value!(*b, LpcValue::Object);
-
-                    if let Some(cell) = weak_cell.upgrade() {
+                    if let Some(cell) = lpc_ref.upgrade() {
                         let proc = cell.read();
 
                         proc.as_ref()
                             .lookup_function(name)
-                            .map(|func| (weak_cell.clone(), func.clone()))
+                            .map(|func| ((**lpc_ref).clone(), func.clone()))
                     } else {
                         None
                     }
@@ -1286,11 +1273,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 return Err(self.runtime_error(str));
             };
 
-            let function_name = {
-                let borrowed = pool_ref.read();
-                // TODO: get rid of this clone
-                try_extract_value!(*borrowed, LpcValue::String).clone()
-            };
+            // TODO: get rid of this clone
+            let function_name = pool_ref.read().clone();
 
             trace!("Calling call_other: {}->{function_name}", receiver_ref);
 
@@ -1312,41 +1296,34 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     task_context,
                 );
 
-                if let Some(pr) = resolved {
-                    let value = LpcValue::from(pr);
-                    let result = match value {
-                        LpcValue::Object(receiver) => {
-                            let Some(receiver) = receiver.upgrade() else {
-                                return Ok(NULL);
-                            };
-                            let new_context = task_context.clone().with_process(receiver.clone());
-                            let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
+                if let Some(receiver) = resolved {
+                    // let Some(receiver) = pr.upgrade() else {
+                    //     return Ok(NULL);
+                    // };
+                    let new_context = task_context.clone().with_process(receiver.clone());
+                    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
 
-                            // unwrap() is ok because resolve_call_other_receiver() checks
-                            // for the function's presence.
-                            let function = receiver
-                                .read()
-                                .as_ref()
-                                .lookup_function(function_name.as_ref())
-                                .unwrap()
-                                .clone();
+                    // unwrap() is ok because resolve_call_other_receiver() checks
+                    // for the function's presence.
+                    let function = receiver
+                        .read()
+                        .as_ref()
+                        .lookup_function(function_name.as_ref())
+                        .unwrap()
+                        .clone();
 
-                            if function.public() {
-                                task.eval(function, args).await?;
-                                task_context.increment_instruction_count(
-                                    task.context.instruction_count(),
-                                )?;
+                    let result = if function.public() {
+                        task.eval(function, args).await?;
+                        task_context
+                            .increment_instruction_count(task.context.instruction_count())?;
 
-                                let Some(r) = task.context.into_result() else {
-                                    return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));
-                                };
+                        let Some(r) = task.context.into_result() else {
+                            return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));
+                        };
 
-                                r
-                            } else {
-                                NULL
-                            }
-                        }
-                        _ => NULL,
+                        r
+                    } else {
+                        NULL
                     };
 
                     Ok(result)
@@ -1367,11 +1344,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     resolve_result(receiver_ref, &function_name, &args, &self.context).await?
                 }
                 LpcRef::Array(r) => {
-                    let array = {
-                        let b = r.read();
-                        // TODO: get rid of this clone
-                        try_extract_value!(*b, LpcValue::Array).clone()
-                    };
+                    // TODO: get rid of this clone
+                    let array = r.read().clone();
                     let fname = Arc::new(function_name.clone());
                     let args = Arc::new(args);
 
@@ -1387,15 +1361,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         }
                     });
 
-                    let array_value = join_all(futures).await.into();
-                    self.context.memory().value_to_ref(array_value)
+                    let array_value = join_all(futures).await;
+                    LpcArray::new(array_value).into_lpc_ref(self.context.memory())
                 }
                 LpcRef::Mapping(m) => {
-                    let map = {
-                        let b = m.read();
-                        // TODO: get rid of this clone
-                        try_extract_value!(*b, LpcValue::Mapping).clone()
-                    };
+                    // TODO: get rid of this clone
+                    let map = m.read().clone();
 
                     let function_name = Arc::new(function_name.clone());
                     let args = Arc::new(args);
@@ -1418,10 +1389,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let with_results = join_all(futures)
                         .await
                         .into_iter()
-                        .collect::<IndexMap<_, _>>()
-                        .into();
+                        .collect::<IndexMap<_, _>>();
 
-                    self.context.memory().value_to_ref(with_results)
+                    LpcMapping::new(with_results.into_iter().collect())
+                        .into_lpc_ref(self.context.memory())
                 }
                 _ => {
                     return Err(self.runtime_error(format!(
@@ -1512,10 +1483,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             FunctionReceiver::Var(location) => {
                 let receiver_ref = &*get_loc!(self, location)?;
                 match receiver_ref {
-                    LpcRef::Object(x) => {
-                        let b = x.read();
-                        let weak_process = try_extract_value!(*b, LpcValue::Object);
-
+                    LpcRef::Object(weak_process) => {
                         let Some(process) = weak_process.upgrade() else {
                             return Err(self.runtime_error("called object is no longer available"));
                         };
@@ -1532,12 +1500,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                             func.clone()
                         };
-                        FunctionAddress::Local(weak_process.clone(), func)
+                        let weak_process = (**weak_process).clone();
+                        FunctionAddress::Local(weak_process, func)
                     }
                     LpcRef::String(s) => {
                         let process = {
-                            let b = s.read();
-                            let path = try_extract_value!(*b, LpcValue::String);
+                            let path = s.read();
 
                             let Some(process) = self.context.lookup_process(path.as_ref()) else {
                                 return Err(self.runtime_error(format!(
@@ -1594,7 +1562,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             unique_id: UniqueId::new(),
         };
 
-        let new_ref = self.context.memory().value_to_ref(LpcValue::from(fp));
+        let new_ref = fp.into_lpc_ref(self.context.memory());
 
         set_loc!(self, location, new_ref)
     }
@@ -1631,8 +1599,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         match container_ref {
             LpcRef::Array(vec_ref) => {
-                let value = vec_ref.read();
-                let vec = try_extract_value!(*value, LpcValue::Array);
+                let vec = vec_ref.read();
 
                 if let LpcRef::Int(i) = lpc_ref {
                     let idx = if i.0 >= 0 {
@@ -1657,8 +1624,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 Ok(())
             }
             LpcRef::String(string_ref) => {
-                let value = string_ref.read();
-                let string = try_extract_value!(*value, LpcValue::String).to_str();
+                let lock = string_ref.read();
+                let string = lock.to_str();
 
                 if let LpcRef::Int(i) = lpc_ref {
                     let idx = if i.0 >= 0 {
@@ -1687,8 +1654,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 Ok(())
             }
             LpcRef::Mapping(map_ref) => {
-                let value = map_ref.read();
-                let map = try_extract_value!(*value, LpcValue::Mapping);
+                let map = map_ref.read();
 
                 let var = if let Some(v) = map.get(&lpc_ref.into_hashed()) {
                     v.clone()
@@ -1718,8 +1684,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             match container_ref {
                 LpcRef::Mapping(map_ref) => {
-                    let value = map_ref.read();
-                    let map = try_extract_value!(*value, LpcValue::Mapping);
+                    let map = map_ref.read();
 
                     let index = match lpc_ref {
                         LpcRef::Int(i) => i.0,
@@ -1760,10 +1725,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         trace!(?lpc_string, "Storing static string");
 
-        let new_ref = self
-            .context
-            .memory()
-            .value_to_ref(LpcValue::from(lpc_string));
+        let new_ref = lpc_string.into_lpc_ref(self.context.memory());
 
         set_loc!(self, location, new_ref)
     }
@@ -1782,13 +1744,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         match container {
             LpcRef::Array(vec_ref) => {
-                let mut r = vec_ref.write();
-                let vec = match *r {
-                    LpcValue::Array(ref mut v) => v,
-                    _ => return Err(self.runtime_bug(
-                        "LpcRef with a non-Array reference as its value. This indicates a bug in the interpreter.")
-                    )
-                };
+                let mut vec = vec_ref.write();
 
                 let len = vec.len();
 
@@ -1808,13 +1764,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 Ok(())
             }
             LpcRef::Mapping(ref mut map_ref) => {
-                let mut r = map_ref.write();
-                let map = match *r {
-                    LpcValue::Mapping(ref mut m) => m,
-                    _ => return Err(self.runtime_bug(
-                        "LpcRef with a non-Mapping reference as its value. This indicates a bug in the interpreter.")
-                    )
-                };
+                let mut map = map_ref.write();
 
                 map.insert(
                     index.clone().into_hashed(),
@@ -1839,28 +1789,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let process = match receiver_ref {
             LpcRef::String(s) => {
                 let r = s.read();
-                let str = if let LpcValue::String(ref s) = *r {
-                    s
-                } else {
-                    return None;
-                };
+                let str = r.to_str();
 
                 match context.lookup_process(str) {
                     Some(proc) => proc,
                     None => return None,
                 }
             }
-            LpcRef::Object(o) => {
-                let r = o.read();
-                if let LpcValue::Object(ref proc) = *r {
-                    let Some(proc) = proc.upgrade() else {
-                        return None;
-                    };
-
-                    proc
-                } else {
+            LpcRef::Object(proc) => {
+                let Some(proc) = proc.upgrade() else {
                     return None;
-                }
+                };
+
+                proc
             }
             _ => return None,
         };
@@ -1900,8 +1841,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         // set up the catch point's return value
-        let value = LpcValue::from(error.to_string());
-        let lpc_ref = self.context.memory().value_to_ref(value);
+        let value = LpcString::from(error.to_string());
+        let lpc_ref = value.into_lpc_ref(self.context.memory());
         set_loc!(self, Register(result_index).as_local(), lpc_ref)?;
         let frame = self.stack.current_frame_mut()?;
 
@@ -1920,16 +1861,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         operation: F,
     ) -> Result<()>
     where
-        F: Fn(&LpcRef, &LpcRef) -> Result<LpcValue>,
+        F: Fn(&LpcRef, &LpcRef, &Memory) -> Result<LpcRef>,
     {
         let ref1 = &*get_location(&self.stack, r1)?;
         let ref2 = &*get_location(&self.stack, r2)?;
 
-        match operation(ref1, ref2) {
+        match operation(ref1, ref2, &self.context.memory) {
             Ok(result) => {
-                let var = self.context.memory().value_to_ref(result);
-
-                set_loc!(self, r3, var)?;
+                set_loc!(self, r3, result)?;
             }
             Err(e) => {
                 let frame = self.stack.current_frame()?;
@@ -2043,7 +1982,6 @@ mod tests {
 
     use super::*;
     use crate::{
-        extract_value,
         interpreter::gc::gc_bank::GcBank,
         test_support::{compile_prog, run_prog},
     };
@@ -2102,28 +2040,23 @@ mod tests {
                 LpcRef::Float(x) => BareVal::Float(x.0),
                 LpcRef::Int(x) => BareVal::Int(x.0),
                 LpcRef::String(x) => {
-                    let xb = x.read();
-                    let s = extract_value!(&*xb, LpcValue::String);
+                    let s = x.read();
                     BareVal::String(s.to_string())
                 }
                 LpcRef::Array(x) => {
-                    let xb = x.read();
-                    let a = extract_value!(&*xb, LpcValue::Array);
+                    let a = x.read();
                     let array = a.iter().map(BareVal::from_lpc_ref).collect::<Vec<_>>();
                     BareVal::Array(array)
                 }
                 LpcRef::Mapping(x) => {
-                    let xb = x.read();
-                    let m = extract_value!(&*xb, LpcValue::Mapping);
+                    let m = x.read();
                     let mapping = m
                         .iter()
                         .map(|(k, v)| (BareVal::from_lpc_ref(&k.value), BareVal::from_lpc_ref(v)))
                         .collect::<HashMap<_, _>>();
                     BareVal::Mapping(mapping)
                 }
-                LpcRef::Object(x) => {
-                    let xb = x.read();
-                    let o = extract_value!(&*xb, LpcValue::Object);
+                LpcRef::Object(o) => {
                     if let Some(o) = o.upgrade() {
                         let filename = o.read().filename().into_owned();
                         BareVal::Object(filename)
@@ -2132,8 +2065,7 @@ mod tests {
                     }
                 }
                 LpcRef::Function(x) => {
-                    let xb = x.read();
-                    let fp = extract_value!(&*xb, LpcValue::Function);
+                    let fp = x.read();
                     let args = fp
                         .partial_args
                         .iter()

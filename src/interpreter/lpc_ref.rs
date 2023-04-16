@@ -5,6 +5,7 @@ use std::{
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     ptr,
+    sync::Weak,
 };
 
 use bit_set::BitSet;
@@ -17,46 +18,14 @@ use tracing::{instrument, trace};
 
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
-    interpreter::{gc::mark::Mark, lpc_float::LpcFloat, lpc_int::LpcInt, lpc_value::LpcValue},
-    try_extract_value,
+    interpreter::{
+        function_type::function_ptr::FunctionPtr, gc::mark::Mark, into_lpc_ref::IntoLpcRef,
+        lpc_array::LpcArray, lpc_float::LpcFloat, lpc_int::LpcInt, lpc_mapping::LpcMapping,
+        lpc_string::LpcString, memory::Memory, process::Process,
+    },
 };
 
 pub const NULL: LpcRef = LpcRef::Int(LpcInt(0));
-
-/// Convert an LpcValue into an LpcRef, wrapping heap values as necessary
-///
-/// # Arguments
-/// `r` - The expression to be wrapped.
-/// `m` - The arena to use as the heap.
-#[macro_export]
-macro_rules! value_to_ref {
-    ($r:expr, $m:expr) => {
-        match $r {
-            LpcValue::Float(x) => LpcRef::Float(x),
-            LpcValue::Int(x) => LpcRef::Int(x),
-            LpcValue::String(x) => LpcRef::String($m.alloc_arc(RwLock::new(LpcValue::String(x)))),
-            LpcValue::Array(x) => LpcRef::Array($m.alloc_arc(RwLock::new(LpcValue::Array(x)))),
-            LpcValue::Mapping(x) => {
-                LpcRef::Mapping($m.alloc_arc(RwLock::new(LpcValue::Mapping(x))))
-            }
-            LpcValue::Object(x) => LpcRef::Object($m.alloc_arc(RwLock::new(LpcValue::Object(x)))),
-            LpcValue::Function(x) => {
-                LpcRef::Function($m.alloc_arc(RwLock::new(LpcValue::Function(x))))
-            }
-        }
-    };
-}
-
-/// A more dangerous version of [`try_extract_value`], that panics instead.
-#[macro_export]
-macro_rules! extract_value {
-    ( $x:expr, $y:path ) => {
-        match &$x {
-            $y(s) => s,
-            x => panic!("Invalid LpcValue - received `{}`. This indicates a serious bug in the interpreter.", x)
-        }
-    };
-}
 
 /// Represent a variable stored in a `Register`. Value types store the actual
 /// value. Reference types store a reference to the actual value.
@@ -68,21 +37,21 @@ pub enum LpcRef {
 
     /// Reference type, and stores a reference-counting pointer to the actual
     /// value
-    String(ArenaArc<RwLock<LpcValue>>),
+    String(ArenaArc<RwLock<LpcString>>),
 
     /// Reference type, and stores a reference-counting pointer to the actual
     /// value
-    Array(ArenaArc<RwLock<LpcValue>>),
+    Array(ArenaArc<RwLock<LpcArray>>),
 
     /// Reference type, and stores a reference-counting pointer to the actual
     /// value
-    Mapping(ArenaArc<RwLock<LpcValue>>),
+    Mapping(ArenaArc<RwLock<LpcMapping>>),
 
     /// Reference type, pointing to an LPC `object`
-    Object(ArenaArc<RwLock<LpcValue>>),
+    Object(ArenaArc<Weak<RwLock<Process>>>),
 
     /// Reference type, a function pointer or closure
-    Function(ArenaArc<RwLock<LpcValue>>),
+    Function(ArenaArc<RwLock<FunctionPtr>>),
 }
 
 impl LpcRef {
@@ -174,57 +143,50 @@ impl LpcRef {
         op(left, right)
     }
 
-    pub fn add(&self, rhs: &Self) -> Result<LpcValue> {
+    pub fn add(&self, rhs: &Self, memory: &Memory) -> Result<Self> {
         match self {
             LpcRef::Float(f) => match rhs {
-                LpcRef::Float(f2) => Ok(LpcValue::Float((f.0 + f2.0).into())),
-                LpcRef::Int(i) => Ok(LpcValue::Float((f.0 + i.0 as BaseFloat).into())),
+                LpcRef::Float(f2) => Ok(Self::from(*f + *f2)),
+                LpcRef::Int(i) => Ok(Self::from(*f + *i)),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Int(i) => match rhs {
-                LpcRef::Float(f) => Ok(LpcValue::Float((LpcFloat::from(*i).0 + f.0).into())),
-                LpcRef::Int(i2) => Ok(LpcValue::Int(i.wrapping_add(i2.0).into())),
-                LpcRef::String(s) => Ok(LpcValue::String(
-                    concatenate_strings(
-                        i.to_string(),
-                        try_extract_value!(*s.read(), LpcValue::String).to_str(),
-                    )?
-                    .into(),
-                )),
+                LpcRef::Float(f) => Ok(Self::from(*i + *f)),
+                LpcRef::Int(i2) => Ok(Self::from(*i + *i2)),
+                LpcRef::String(s) => Ok(LpcString::from(concatenate_strings(
+                    i.to_string(),
+                    s.read().to_str(),
+                )?)
+                .into_lpc_ref(memory)),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::String(s) => match rhs {
-                LpcRef::String(s2) => Ok(LpcValue::String(
-                    concatenate_strings(
-                        try_extract_value!(*s.read(), LpcValue::String).to_string(),
-                        try_extract_value!(*s2.read(), LpcValue::String).to_str(),
-                    )?
-                    .into(),
-                )),
-                LpcRef::Int(i) => Ok(LpcValue::String(
-                    concatenate_strings(
-                        try_extract_value!(*s.read(), LpcValue::String).to_string(),
-                        i.to_string(),
-                    )?
-                    .into(),
-                )),
+                LpcRef::String(s2) => Ok(LpcString::from(concatenate_strings(
+                    s.read().to_string(),
+                    s2.read().to_str(),
+                )?)
+                .into_lpc_ref(memory)),
+                LpcRef::Int(i) => Ok(LpcString::from(concatenate_strings(
+                    s.read().to_string(),
+                    i.to_string(),
+                )?)
+                .into_lpc_ref(memory)),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Array(vec) => match rhs {
                 LpcRef::Array(vec2) => {
-                    let mut new_vec = try_extract_value!(*vec.read(), LpcValue::Array).clone();
-                    let added_vec = try_extract_value!(*vec2.read(), LpcValue::Array).clone();
-                    new_vec.extend(added_vec.into_iter());
-                    Ok(LpcValue::Array(new_vec))
+                    let new_vec = vec.read();
+                    let added_vec = vec2.read();
+                    Ok((new_vec.clone() + added_vec.clone()).into_lpc_ref(memory))
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Mapping(map) => match rhs {
                 LpcRef::Mapping(map2) => {
-                    let mut new_map = try_extract_value!(*map.read(), LpcValue::Mapping).clone();
-                    let added_map = try_extract_value!(*map2.read(), LpcValue::Mapping).clone();
+                    let mut new_map = map.read().clone();
+                    let added_map = map2.read().clone();
                     new_map.extend(added_map.into_iter());
-                    Ok(LpcValue::Mapping(new_map))
+                    Ok(new_map.into_lpc_ref(memory))
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
@@ -234,86 +196,82 @@ impl LpcRef {
         }
     }
 
-    pub fn sub(&self, rhs: &Self) -> Result<LpcValue> {
+    pub fn sub(&self, rhs: &Self, memory: &Memory) -> Result<Self> {
         match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.wrapping_sub(y.0).into())),
-            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float((x.0 - y.0).into())),
-            (LpcRef::Float(x), LpcRef::Int(y)) => {
-                Ok(LpcValue::Float((x.0 - y.0 as BaseFloat).into()))
-            }
-            (LpcRef::Int(x), LpcRef::Float(y)) => Ok(LpcValue::Float(LpcFloat::from(
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(x.wrapping_sub(y.0).into())),
+            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(Self::Float((x.0 - y.0).into())),
+            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(Self::Float((x.0 - y.0 as BaseFloat).into())),
+            (LpcRef::Int(x), LpcRef::Float(y)) => Ok(Self::Float(LpcFloat::from(
                 LpcFloatInner::from(x.0 as BaseFloat) - y.0,
             ))),
             (LpcRef::Array(vec), LpcRef::Array(vec2)) => {
-                let new_vec = try_extract_value!(*vec.read(), LpcValue::Array).clone();
-                let removed_vec = try_extract_value!(*vec2.read(), LpcValue::Array).clone();
+                let new_vec = vec.read().clone();
+                let removed_vec = vec2.read().clone();
 
                 let result = new_vec
                     .into_iter()
                     .filter(|x| !removed_vec.contains(x))
-                    .collect();
-                Ok(LpcValue::Array(result))
+                    .collect::<LpcArray>();
+                Ok(result.into_lpc_ref(memory))
             }
             _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
         }
     }
 
-    pub fn mul(&self, rhs: &Self) -> Result<LpcValue> {
+    pub fn mul(&self, rhs: &Self, memory: &Memory) -> Result<Self> {
         match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(x.0.wrapping_mul(y.0).into())),
-            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(LpcValue::Float((x.0 * y.0).into())),
-            (LpcRef::Float(x), LpcRef::Int(y)) => {
-                Ok(LpcValue::Float((x.0 * y.0 as BaseFloat).into()))
-            }
-            (LpcRef::Int(x), LpcRef::Float(y)) => Ok(LpcValue::Float(
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(x.0.wrapping_mul(y.0).into())),
+            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(Self::Float((x.0 * y.0).into())),
+            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(Self::Float((x.0 * y.0 as BaseFloat).into())),
+            (LpcRef::Int(x), LpcRef::Float(y)) => Ok(Self::Float(
                 (LpcFloatInner::from(x.0 as BaseFloat) * y.0).into(),
             )),
             (LpcRef::String(x), LpcRef::Int(y)) => {
-                let b = x.read();
-                let string = try_extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(
-                    string::repeat_string(string.to_str(), y.0)?.into(),
-                ))
+                let string = x.read();
+                Ok(
+                    LpcString::from(string::repeat_string(string.to_str(), y.0)?)
+                        .into_lpc_ref(memory),
+                )
             }
             (LpcRef::Int(x), LpcRef::String(y)) => {
-                let b = y.read();
-                let string = try_extract_value!(*b, LpcValue::String);
-                Ok(LpcValue::String(
-                    string::repeat_string(string.to_str(), x.0)?.into(),
-                ))
+                let string = y.read();
+                Ok(
+                    LpcString::from(string::repeat_string(string.to_str(), x.0)?)
+                        .into_lpc_ref(memory),
+                )
             }
             _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
         }
     }
 
-    pub fn div(&self, rhs: &Self) -> Result<LpcValue> {
+    pub fn div(&self, rhs: &Self) -> Result<Self> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
                 if y.0 == 0 {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Int(LpcInt(x.0.wrapping_div(y.0))))
+                    Ok(Self::Int(LpcInt(x.0.wrapping_div(y.0))))
                 }
             }
             (LpcRef::Float(x), LpcRef::Float(y)) => {
                 if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(LpcFloat(x.0 / y.0)))
+                    Ok(Self::Float(LpcFloat(x.0 / y.0)))
                 }
             }
             (LpcRef::Float(x), LpcRef::Int(y)) => {
                 if y.0 == 0 {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(LpcFloat(x.0 / y.0 as BaseFloat)))
+                    Ok(Self::Float(LpcFloat(x.0 / y.0 as BaseFloat)))
                 }
             }
             (LpcRef::Int(x), LpcRef::Float(y)) => {
                 if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(LpcFloat(
+                    Ok(Self::Float(LpcFloat(
                         LpcFloatInner::from(x.0 as BaseFloat) / y.0,
                     )))
                 }
@@ -322,34 +280,34 @@ impl LpcRef {
         }
     }
 
-    pub fn rem(&self, rhs: &Self) -> Result<LpcValue> {
+    pub fn rem(&self, rhs: &Self) -> Result<Self> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
                 if y.0 == 0 {
                     Err(LpcError::new("Runtime Error: Remainder division by zero"))
                 } else {
-                    Ok(LpcValue::Int(LpcInt(x.0.wrapping_rem(y.0))))
+                    Ok(Self::Int(LpcInt(x.0.wrapping_rem(y.0))))
                 }
             }
             (LpcRef::Float(x), LpcRef::Float(y)) => {
                 if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(LpcFloat(x.0 % y.0)))
+                    Ok(Self::Float(LpcFloat(x.0 % y.0)))
                 }
             }
             (LpcRef::Float(x), LpcRef::Int(y)) => {
                 if y.0 == 0 {
                     Err(LpcError::new("Runtime Error: Division by zero"))
                 } else {
-                    Ok(LpcValue::Float(LpcFloat(x.0 % y.0 as BaseFloat)))
+                    Ok(Self::Float(LpcFloat(x.0 % y.0 as BaseFloat)))
                 }
             }
             (LpcRef::Int(x), LpcRef::Float(y)) => {
                 if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
                     Err(LpcError::new("Runtime Error: Remainder division by zero"))
                 } else {
-                    Ok(LpcValue::Float(LpcFloat(
+                    Ok(Self::Float(LpcFloat(
                         LpcFloatInner::from(x.0 as BaseFloat) % y.0,
                     )))
                 }
@@ -358,28 +316,28 @@ impl LpcRef {
         }
     }
 
-    pub fn bitand(&self, rhs: &Self) -> Result<LpcValue> {
+    pub fn bitand(&self, rhs: &Self) -> Result<Self> {
         match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(LpcInt(x.0 & y.0))),
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(LpcInt(x.0 & y.0))),
             _ => Err(self.to_error(BinaryOperation::And, rhs)),
         }
     }
 
-    pub fn bitor(&self, rhs: &Self) -> Result<LpcValue> {
+    pub fn bitor(&self, rhs: &Self) -> Result<Self> {
         match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(LpcInt(x.0 | y.0))),
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(LpcInt(x.0 | y.0))),
             _ => Err(self.to_error(BinaryOperation::Or, rhs)),
         }
     }
 
-    pub fn bitxor(&self, rhs: &Self) -> Result<LpcValue> {
+    pub fn bitxor(&self, rhs: &Self) -> Result<Self> {
         match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(LpcValue::Int(LpcInt(x.0 ^ y.0))),
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(LpcInt(x.0 ^ y.0))),
             _ => Err(self.to_error(BinaryOperation::Xor, rhs)),
         }
     }
 
-    pub fn shl(&self, rhs: &Self) -> Result<LpcValue> {
+    pub fn shl(&self, rhs: &Self) -> Result<Self> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
                 let modulo: LpcIntInner = y.0 % (LpcIntInner::BITS as LpcIntInner);
@@ -390,15 +348,13 @@ impl LpcRef {
                     modulo as u32
                 };
 
-                Ok(LpcValue::Int(LpcInt(
-                    x.0.checked_shl(shift_by).unwrap_or(0),
-                )))
+                Ok(Self::Int(LpcInt(x.0.checked_shl(shift_by).unwrap_or(0))))
             }
             _ => Err(self.to_error(BinaryOperation::Shl, rhs)),
         }
     }
 
-    pub fn shr(&self, rhs: &Self) -> Result<LpcValue> {
+    pub fn shr(&self, rhs: &Self) -> Result<Self> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
                 let modulo: LpcIntInner = y.0 % (LpcIntInner::BITS as LpcIntInner);
@@ -409,18 +365,16 @@ impl LpcRef {
                     modulo as u32
                 };
 
-                Ok(LpcValue::Int(LpcInt(
-                    x.0.checked_shr(shift_by).unwrap_or(0),
-                )))
+                Ok(Self::Int(LpcInt(x.0.checked_shr(shift_by).unwrap_or(0))))
             }
             _ => Err(self.to_error(BinaryOperation::Shr, rhs)),
         }
     }
 
     /// Impl _bitwise_ Not for ints, (i.e. the unary `~` operator)
-    pub fn bitnot(&self) -> Result<LpcValue> {
+    pub fn bitnot(&self) -> Result<Self> {
         match &self {
-            LpcRef::Int(x) => Ok(LpcValue::Int(LpcInt(!x.0))),
+            LpcRef::Int(x) => Ok(Self::Int(LpcInt(!x.0))),
             _ => Err(self.to_unary_op_error(UnaryOperation::BitwiseNot)),
         }
     }
@@ -435,17 +389,14 @@ impl Mark for LpcRef {
             LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::String(_) | LpcRef::Object(_) => Ok(()),
             LpcRef::Array(arr) => {
                 let arr = arr.read();
-                let arr = try_extract_value!(&*arr, LpcValue::Array);
                 arr.mark(marked, processed)
             }
             LpcRef::Mapping(map) => {
                 let map = map.read();
-                let map = try_extract_value!(&*map, LpcValue::Mapping);
                 map.mark(marked, processed)
             }
             LpcRef::Function(fun) => {
                 let fun = fun.read();
-                let fun = try_extract_value!(&*fun, LpcValue::Function);
 
                 fun.mark(marked, processed)
             }
@@ -467,13 +418,27 @@ impl From<LpcIntInner> for LpcRef {
     }
 }
 
+impl From<LpcInt> for LpcRef {
+    #[inline]
+    fn from(i: LpcInt) -> Self {
+        Self::Int(i)
+    }
+}
+
+impl From<LpcFloat> for LpcRef {
+    #[inline]
+    fn from(f: LpcFloat) -> Self {
+        Self::Float(f)
+    }
+}
+
 impl Hash for LpcRef {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
             LpcRef::Float(x) => x.hash(state),
             LpcRef::Int(x) => x.hash(state),
-            LpcRef::String(x) => extract_value!(*x.read(), LpcValue::String).hash(state),
+            LpcRef::String(x) => x.read().hash(state),
             LpcRef::Array(x) => ptr::hash(&**x, state),
             LpcRef::Mapping(x) => ptr::hash(&**x, state),
             LpcRef::Object(x) => ptr::hash(&**x, state),
@@ -488,14 +453,11 @@ impl PartialEq for LpcRef {
         match (self, other) {
             (LpcRef::Float(x), LpcRef::Float(y)) => x == y,
             (LpcRef::Int(x), LpcRef::Int(y)) => x == y,
-            (LpcRef::String(x), LpcRef::String(y)) => {
-                extract_value!(*x.read(), LpcValue::String)
-                    == extract_value!(*y.read(), LpcValue::String)
-            }
-            (LpcRef::Object(x), LpcRef::Object(y)) => std::ptr::eq(&**x, &**y),
-            (LpcRef::Array(x), LpcRef::Array(y)) => std::ptr::eq(&**x, &**y),
-            (LpcRef::Mapping(x), LpcRef::Mapping(y)) => std::ptr::eq(&**x, &**y),
-            (LpcRef::Function(x), LpcRef::Function(y)) => std::ptr::eq(&**x, &**y),
+            (LpcRef::String(x), LpcRef::String(y)) => *x.read() == *y.read(),
+            (LpcRef::Object(x), LpcRef::Object(y)) => ptr::eq(&**x, &**y),
+            (LpcRef::Array(x), LpcRef::Array(y)) => ptr::eq(&**x, &**y),
+            (LpcRef::Mapping(x), LpcRef::Mapping(y)) => ptr::eq(&**x, &**y),
+            (LpcRef::Function(x), LpcRef::Function(y)) => ptr::eq(&**x, &**y),
             _ => false,
         }
     }
@@ -510,11 +472,9 @@ impl PartialOrd for LpcRef {
             (LpcRef::Float(x), LpcRef::Float(y)) => Some(x.cmp(y)),
             (LpcRef::Int(x), LpcRef::Int(y)) => Some(x.cmp(y)),
             (LpcRef::String(x), LpcRef::String(y)) => {
-                let xb = x.read();
-                let yb = y.read();
-                let a = extract_value!(*xb, LpcValue::String);
-                let b = extract_value!(*yb, LpcValue::String);
-                Some(a.cmp(b))
+                let a = x.read();
+                let b = y.read();
+                Some(a.cmp(&*b))
             }
             _ => None,
         }
@@ -526,11 +486,20 @@ impl Display for LpcRef {
         match self {
             LpcRef::Float(x) => write!(f, "{x}"),
             LpcRef::Int(x) => write!(f, "{x}"),
-            LpcRef::String(x)
-            | LpcRef::Array(x)
-            | LpcRef::Mapping(x)
-            | LpcRef::Object(x)
-            | LpcRef::Function(x) => {
+            LpcRef::String(x) => {
+                write!(f, "{}", x.read())
+            }
+            LpcRef::Array(x) => {
+                write!(f, "{}", x.read())
+            }
+            LpcRef::Mapping(x) => {
+                write!(f, "{}", x.read())
+            }
+            LpcRef::Object(x) => match x.upgrade() {
+                Some(x) => write!(f, "{}", x.read()),
+                None => write!(f, "< destructed >"),
+            },
+            LpcRef::Function(x) => {
                 write!(f, "{}", x.read())
             }
         }
@@ -540,13 +509,22 @@ impl Display for LpcRef {
 impl Debug for LpcRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            LpcRef::Float(x) => write!(f, "{x}"),
-            LpcRef::Int(x) => write!(f, "{x}"),
-            LpcRef::String(x)
-            | LpcRef::Array(x)
-            | LpcRef::Mapping(x)
-            | LpcRef::Object(x)
-            | LpcRef::Function(x) => {
+            LpcRef::Float(x) => write!(f, "{x:?}"),
+            LpcRef::Int(x) => write!(f, "{x:?}"),
+            LpcRef::String(x) => {
+                write!(f, "{:?}", x.read())
+            }
+            LpcRef::Array(x) => {
+                write!(f, "{:?}", x.read())
+            }
+            LpcRef::Mapping(x) => {
+                write!(f, "{:?}", x.read())
+            }
+            LpcRef::Object(x) => match x.upgrade() {
+                Some(x) => write!(f, "{:?}", x.read()),
+                None => write!(f, "< destructed >"),
+            },
+            LpcRef::Function(x) => {
                 write!(f, "{:?}", x.read())
             }
         }
@@ -600,14 +578,12 @@ impl Eq for HashedLpcRef {}
 mod tests {
     use claims::assert_err;
     use factori::create;
-    use shared_arena::SharedArena;
 
     use super::*;
     use crate::{interpreter::lpc_array::LpcArray, test_support::factories::*};
 
     mod test_add {
         use indexmap::IndexMap;
-        use shared_arena::SharedArena;
 
         use super::*;
 
@@ -615,8 +591,8 @@ mod tests {
         fn int_int() {
             let int1 = LpcRef::from(123);
             let int2 = LpcRef::from(456);
-            let result = int1.add(&int2);
-            if let Ok(LpcValue::Int(x)) = result {
+            let result = int1.add(&int2, &Memory::new(5));
+            if let Ok(LpcRef::Int(x)) = result {
                 assert_eq!(x, 579)
             } else {
                 panic!("no match")
@@ -627,8 +603,8 @@ mod tests {
         fn int_int_overflow_wraps() {
             let int1 = LpcRef::from(LpcIntInner::MAX);
             let int2 = LpcRef::from(1);
-            let result = int1.add(&int2);
-            if let Ok(LpcValue::Int(x)) = result {
+            let result = int1.add(&int2, &Memory::new(5));
+            if let Ok(LpcRef::Int(x)) = result {
                 assert_eq!(x, LpcIntInner::MIN)
             } else {
                 panic!("no match")
@@ -637,12 +613,12 @@ mod tests {
 
         #[test]
         fn string_string() {
-            let pool = SharedArena::with_capacity(5);
-            let string1 = value_to_ref!(LpcValue::String("foo".into()), pool);
-            let string2 = value_to_ref!(LpcValue::String("bar".into()), pool);
-            let result = string1.add(&string2);
-            if let Ok(LpcValue::String(x)) = result {
-                assert_eq!(x, String::from("foobar"))
+            let pool = Memory::new(5);
+            let string1 = LpcString::from("foo").into_lpc_ref(&pool);
+            let string2 = LpcString::from("bar").into_lpc_ref(&pool);
+            let result = string1.add(&string2, &Memory::new(5));
+            if let Ok(LpcRef::String(x)) = result {
+                assert_eq!(*x.read(), String::from("foobar"))
             } else {
                 panic!("no match")
             }
@@ -650,12 +626,12 @@ mod tests {
 
         #[test]
         fn string_int() {
-            let pool = SharedArena::with_capacity(5);
-            let string = value_to_ref!(LpcValue::String("foo".into()), pool);
+            let pool = Memory::new(5);
+            let string = LpcString::from("foo").into_lpc_ref(&pool);
             let int = LpcRef::from(123);
-            let result = string.add(&int);
-            if let Ok(LpcValue::String(x)) = result {
-                assert_eq!(x, String::from("foo123"))
+            let result = string.add(&int, &pool);
+            if let Ok(LpcRef::String(x)) = result {
+                assert_eq!(*x.read(), String::from("foo123"))
             } else {
                 panic!("no match")
             }
@@ -663,12 +639,12 @@ mod tests {
 
         #[test]
         fn int_string() {
-            let pool = SharedArena::with_capacity(5);
-            let string = value_to_ref!(LpcValue::String("foo".into()), pool);
+            let pool = Memory::new(5);
+            let string = LpcString::from("foo").into_lpc_ref(&pool);
             let int = LpcRef::from(123);
-            let result = int.add(&string);
-            if let Ok(LpcValue::String(x)) = result {
-                assert_eq!(x, String::from("123foo"))
+            let result = int.add(&string, &Memory::new(5));
+            if let Ok(LpcRef::String(x)) = result {
+                assert_eq!(*x.read(), String::from("123foo"))
             } else {
                 panic!("no match")
             }
@@ -678,8 +654,8 @@ mod tests {
         fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = float.add(&int);
-            if let Ok(LpcValue::Float(x)) = result {
+            let result = float.add(&int, &Memory::new(5));
+            if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 789.66)
             } else {
                 panic!("no match")
@@ -690,15 +666,15 @@ mod tests {
         fn float_int_overflow_does_not_panic() {
             let float = LpcRef::from(BaseFloat::MAX);
             let int = LpcRef::from(1);
-            assert!((float.add(&int)).is_ok());
+            assert!((float.add(&int, &Memory::new(5))).is_ok());
         }
 
         #[test]
         fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = int.add(&float);
-            if let Ok(LpcValue::Float(x)) = result {
+            let result = int.add(&float, &Memory::new(5));
+            if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 789.66)
             } else {
                 panic!("no match")
@@ -709,25 +685,25 @@ mod tests {
         fn int_float_overflow_does_not_panic() {
             let int = LpcRef::Int(LpcInt(LpcIntInner::MAX));
             let float = LpcRef::from(1.0);
-            assert!((int.add(&float)).is_ok());
+            assert!((int.add(&float, &Memory::new(5))).is_ok());
         }
 
         #[test]
         fn array_array() {
-            let pool = SharedArena::with_capacity(20);
-            let array = LpcValue::from(vec![LpcRef::from(123)]);
-            let array2 = LpcValue::from(vec![LpcRef::from(4433)]);
-            let result = value_to_ref!(array.clone(), pool).add(&value_to_ref!(array2, pool));
+            let pool = Memory::new(20);
+            let array = LpcArray::new(vec![LpcRef::from(123)]);
+            let array2 = LpcArray::new(vec![LpcRef::from(4433)]);
+            let result = array
+                .clone()
+                .into_lpc_ref(&pool)
+                .add(&array2.into_lpc_ref(&pool), &pool);
 
             match &result {
                 Ok(v) => {
-                    assert_ne!(
-                        extract_value!(v, LpcValue::Array),
-                        extract_value!(array, LpcValue::Array)
-                    ); // ensure the addition makes a fully new copy
-
-                    if let LpcValue::Array(a) = v {
-                        assert_eq!(a, &vec![LpcRef::from(123), LpcRef::from(4433)]);
+                    if let LpcRef::Array(a) = v {
+                        let a = a.read();
+                        assert_ne!(&*a, &array); // ensure the addition makes a fully new copy
+                        assert_eq!(&*a, &vec![LpcRef::from(123), LpcRef::from(4433)]);
                     } else {
                         panic!("no match")
                     }
@@ -738,11 +714,11 @@ mod tests {
 
         #[test]
         fn mapping_mapping() {
-            let pool = SharedArena::with_capacity(20);
-            let key1 = value_to_ref!(LpcValue::from("key1"), pool);
-            let value1 = value_to_ref!(LpcValue::from("value1"), pool);
-            let key2 = value_to_ref!(LpcValue::from("key2"), pool);
-            let value2 = value_to_ref!(LpcValue::from(666), pool);
+            let pool = Memory::new(10);
+            let key1 = LpcString::from("key1").into_lpc_ref(&pool);
+            let value1 = LpcString::from("value1").into_lpc_ref(&pool);
+            let key2 = LpcString::from("key2").into_lpc_ref(&pool);
+            let value2 = LpcRef::from(666);
 
             let mut hash1 = IndexMap::new();
             hash1.insert(key1.clone().into_hashed(), value1.clone());
@@ -750,17 +726,17 @@ mod tests {
             let mut hash2 = IndexMap::new();
             hash2.insert(key2.clone().into_hashed(), value2.clone());
 
-            let map = value_to_ref!(LpcValue::from(hash1), pool);
-            let map2 = value_to_ref!(LpcValue::from(hash2), pool);
+            let map = LpcMapping::new(hash1).into_lpc_ref(&pool);
+            let map2 = LpcMapping::new(hash2).into_lpc_ref(&pool);
 
-            let result = map.add(&map2);
+            let result = map.add(&map2, &Memory::new(5));
 
             let mut expected = IndexMap::new();
             expected.insert(key1.into_hashed(), value1);
             expected.insert(key2.into_hashed(), value2);
 
-            if let Ok(LpcValue::Mapping(m)) = result {
-                assert_eq!(m, expected)
+            if let Ok(LpcRef::Mapping(m)) = result {
+                assert_eq!(*m.read(), expected)
             } else {
                 panic!("no match. received: {result:?}")
             }
@@ -768,11 +744,11 @@ mod tests {
 
         #[test]
         fn mapping_mapping_duplicate_keys() {
-            let pool = SharedArena::with_capacity(20);
-            let key1 = value_to_ref!(LpcValue::from("key"), pool);
-            let value1 = value_to_ref!(LpcValue::from("value1"), pool);
-            let key2 = value_to_ref!(LpcValue::from("key"), pool);
-            let value2 = value_to_ref!(LpcValue::from(666), pool);
+            let pool = Memory::new(20);
+            let key1 = LpcString::from("key").into_lpc_ref(&pool);
+            let value1 = LpcString::from("value1").into_lpc_ref(&pool);
+            let key2 = LpcString::from("key").into_lpc_ref(&pool);
+            let value2 = LpcRef::from(666);
 
             let mut hash1 = IndexMap::new();
             hash1.insert(key1.into_hashed(), value1);
@@ -780,16 +756,16 @@ mod tests {
             let mut hash2 = IndexMap::new();
             hash2.insert(key2.clone().into_hashed(), value2.clone());
 
-            let map = value_to_ref!(LpcValue::from(hash1), pool);
-            let map2 = value_to_ref!(LpcValue::from(hash2), pool);
+            let map = LpcMapping::new(hash1).into_lpc_ref(&pool);
+            let map2 = LpcMapping::new(hash2).into_lpc_ref(&pool);
 
-            let result = map.add(&map2);
+            let result = map.add(&map2, &Memory::new(5));
 
             let mut expected = IndexMap::new();
             expected.insert(key2.into_hashed(), value2);
 
-            if let Ok(LpcValue::Mapping(m)) = result {
-                assert_eq!(m, expected)
+            if let Ok(LpcRef::Mapping(m)) = result {
+                assert_eq!(*m.read(), expected)
             } else {
                 panic!("no match. received: {result:?}")
             }
@@ -797,10 +773,10 @@ mod tests {
 
         #[test]
         fn add_mismatched() {
-            let pool = SharedArena::with_capacity(5);
+            let pool = Memory::new(5);
             let int = LpcRef::from(123);
-            let array = value_to_ref!(LpcValue::Array(LpcArray::new(vec![])), pool);
-            let result = int.add(&array);
+            let array = LpcArray::new(vec![]).into_lpc_ref(&pool);
+            let result = int.add(&array, &pool);
 
             assert!(result.is_err());
         }
@@ -813,7 +789,7 @@ mod tests {
         fn int_int_underflow_does_not_panic() {
             let int = LpcRef::Int(LpcInt(LpcIntInner::MIN));
             let int2 = LpcRef::from(1);
-            let result = int.sub(&int2);
+            let result = int.sub(&int2, &Memory::new(5));
             assert!(result.is_ok());
         }
 
@@ -821,8 +797,8 @@ mod tests {
         fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = float.sub(&int);
-            if let Ok(LpcValue::Float(x)) = result {
+            let result = float.sub(&int, &Memory::new(5));
+            if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 543.66)
             } else {
                 panic!("no match")
@@ -833,7 +809,7 @@ mod tests {
         fn float_int_underflow_does_not_panic() {
             let float = LpcRef::from(BaseFloat::MIN);
             let int = LpcRef::Int(LpcInt::MAX);
-            let result = float.sub(&int);
+            let result = float.sub(&int, &Memory::new(5));
             assert!(result.is_ok());
         }
 
@@ -841,8 +817,8 @@ mod tests {
         fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = int.sub(&float);
-            if let Ok(LpcValue::Float(x)) = result {
+            let result = int.sub(&float, &Memory::new(5));
+            if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, -543.66)
             } else {
                 panic!("no match")
@@ -853,27 +829,27 @@ mod tests {
         fn int_float_underflow_does_not_panic() {
             let int = LpcRef::Int(LpcInt::MIN);
             let float = LpcRef::from(1.0);
-            let result = int.sub(&float);
+            let result = int.sub(&float, &Memory::new(5));
             assert!(result.is_ok());
         }
 
         #[test]
         fn array_array() {
-            let pool = SharedArena::with_capacity(10);
+            let pool = Memory::new(10);
             let to_ref = |i| LpcRef::Int(LpcInt(i));
             let v1 = vec![1, 2, 3, 4, 5, 2, 4, 4, 4]
                 .into_iter()
                 .map(to_ref)
                 .collect::<Vec<_>>();
             let v2 = vec![2, 4].into_iter().map(to_ref).collect::<Vec<_>>();
-            let a1 = value_to_ref!(LpcValue::from(v1), pool);
-            let a2 = value_to_ref!(LpcValue::from(v2), pool);
+            let a1 = LpcArray::new(v1).into_lpc_ref(&pool);
+            let a2 = LpcArray::new(v2).into_lpc_ref(&pool);
 
-            let result = a1.sub(&a2);
+            let result = a1.sub(&a2, &pool);
             let expected = vec![1, 3, 5].into_iter().map(to_ref).collect::<Vec<_>>();
 
-            if let Ok(LpcValue::Array(x)) = result {
-                assert_eq!(x, expected)
+            if let Ok(LpcRef::Array(x)) = result {
+                assert_eq!(*x.read(), expected)
             } else {
                 panic!("no match")
             }
@@ -885,20 +861,21 @@ mod tests {
 
         #[test]
         fn int_int_overflow_does_not_panic() {
+            let pool = Memory::new(5);
             let int = LpcRef::Int(LpcInt::MAX);
             let int2 = LpcRef::from(2);
-            let result = int.mul(&int2);
+            let result = int.mul(&int2, &pool);
             assert!(result.is_ok());
         }
 
         #[test]
         fn string_int() {
-            let pool = SharedArena::with_capacity(5);
-            let string = value_to_ref!(LpcValue::String("foo".into()), pool);
+            let pool = Memory::new(5);
+            let string = LpcString::from("foo").into_lpc_ref(&pool);
             let int = LpcRef::from(4);
-            let result = string.mul(&int);
-            if let Ok(LpcValue::String(x)) = result {
-                assert_eq!(x, String::from("foofoofoofoo"))
+            let result = string.mul(&int, &Memory::new(5));
+            if let Ok(LpcRef::String(x)) = result {
+                assert_eq!(*x.read(), String::from("foofoofoofoo"))
             } else {
                 panic!("no match")
             }
@@ -906,12 +883,12 @@ mod tests {
 
         #[test]
         fn int_string() {
-            let pool = SharedArena::with_capacity(5);
-            let string = value_to_ref!(LpcValue::String("foo".into()), pool);
+            let pool = Memory::new(5);
+            let string = LpcString::from("foo").into_lpc_ref(&pool);
             let int = LpcRef::from(4);
-            let result = int.mul(&string);
-            if let Ok(LpcValue::String(x)) = result {
-                assert_eq!(x, String::from("foofoofoofoo"))
+            let result = int.mul(&string, &Memory::new(5));
+            if let Ok(LpcRef::String(x)) = result {
+                assert_eq!(*x.read(), String::from("foofoofoofoo"))
             } else {
                 panic!("no match")
             }
@@ -919,10 +896,10 @@ mod tests {
 
         #[test]
         fn string_int_overflow_does_not_panic() {
-            let pool = SharedArena::with_capacity(5);
-            let string = value_to_ref!(LpcValue::String("1234567890abcdef".into()), pool);
+            let pool = Memory::new(5);
+            let string = LpcString::from("1234567890abcdef").into_lpc_ref(&pool);
             let int = LpcRef::Int(LpcInt::MAX);
-            let result = string.mul(&int);
+            let result = string.mul(&int, &pool);
             assert_err!(result.clone());
             assert_eq!(
                 result.unwrap_err().to_string().as_str(),
@@ -934,8 +911,8 @@ mod tests {
         fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = float.mul(&int);
-            if let Ok(LpcValue::Float(x)) = result {
+            let result = float.mul(&int, &Memory::new(5));
+            if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 81999.18)
             } else {
                 panic!("no match")
@@ -946,7 +923,7 @@ mod tests {
         fn float_int_overflow_does_not_panic() {
             let float = LpcRef::from(BaseFloat::MAX);
             let int = LpcRef::from(2);
-            let result = float.mul(&int);
+            let result = float.mul(&int, &Memory::new(5));
             assert!(result.is_ok());
         }
 
@@ -954,8 +931,8 @@ mod tests {
         fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = int.mul(&float);
-            if let Ok(LpcValue::Float(x)) = result {
+            let result = int.mul(&float, &Memory::new(5));
+            if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 81999.18)
             } else {
                 panic!("no match")
@@ -966,7 +943,7 @@ mod tests {
         fn int_float_overflow_does_not_panic() {
             let int = LpcRef::Int(LpcInt::MAX);
             let float = LpcRef::from(200.0);
-            let result = int.mul(&float);
+            let result = int.mul(&float, &Memory::new(5));
             assert!(result.is_ok());
         }
     }
@@ -988,7 +965,7 @@ mod tests {
             let int = LpcRef::from(123);
             let result = float.div(&int);
 
-            if let Ok(LpcValue::Float(x)) = result {
+            if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 5.42)
             } else {
                 panic!("no match")
@@ -1011,7 +988,7 @@ mod tests {
             let int = LpcRef::from(123);
             let result = int.div(&float);
 
-            if let Ok(LpcValue::Float(x)) = result {
+            if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 0.18450184501845018)
             } else {
                 panic!("no match")
@@ -1052,7 +1029,7 @@ mod tests {
             let int = LpcRef::from(123);
             let result = float.rem(&int);
 
-            if let Ok(LpcValue::Float(x)) = result {
+            if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 51.65999999999997)
             } else {
                 panic!("no match")
@@ -1075,7 +1052,7 @@ mod tests {
             let int = LpcRef::from(123);
             let result = int.rem(&float);
 
-            if let Ok(LpcValue::Float(x)) = result {
+            if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 123.0)
             } else {
                 panic!("no match")
@@ -1107,7 +1084,7 @@ mod tests {
             let int = LpcRef::from(8);
             let int2 = LpcRef::from(15);
             let result = int.bitand(&int2);
-            if let Ok(LpcValue::Int(x)) = result {
+            if let Ok(LpcRef::Int(x)) = result {
                 assert_eq!(x, 8)
             } else {
                 panic!("no match")
@@ -1123,7 +1100,7 @@ mod tests {
             let int = LpcRef::from(7);
             let int2 = LpcRef::from(16);
             let result = int.bitor(&int2);
-            if let Ok(LpcValue::Int(x)) = result {
+            if let Ok(LpcRef::Int(x)) = result {
                 assert_eq!(x, 23)
             } else {
                 panic!("no match")
@@ -1139,7 +1116,7 @@ mod tests {
             let int = LpcRef::from(7);
             let int2 = LpcRef::from(15);
             let result = int.bitxor(&int2);
-            if let Ok(LpcValue::Int(x)) = result {
+            if let Ok(LpcRef::Int(x)) = result {
                 assert_eq!(x, 8)
             } else {
                 panic!("no match")
@@ -1155,7 +1132,7 @@ mod tests {
             let int = LpcRef::from(12345);
             let int2 = LpcRef::from(6);
             let result = int.shl(&int2);
-            if let Ok(LpcValue::Int(x)) = result {
+            if let Ok(LpcRef::Int(x)) = result {
                 assert_eq!(x, 790_080)
             } else {
                 panic!("no match")
@@ -1171,7 +1148,7 @@ mod tests {
             let int = LpcRef::from(12345);
             let int2 = LpcRef::from(6);
             let result = int.shr(&int2);
-            if let Ok(LpcValue::Int(x)) = result {
+            if let Ok(LpcRef::Int(x)) = result {
                 assert_eq!(x, 192)
             } else {
                 panic!("no match")
@@ -1186,7 +1163,7 @@ mod tests {
         fn int_int() {
             let int = LpcRef::from(12345);
             let result = int.bitnot();
-            if let Ok(LpcValue::Int(x)) = result {
+            if let Ok(LpcRef::Int(x)) = result {
                 assert_eq!(x, -12346) // one's complement
             } else {
                 panic!("no match")
@@ -1213,8 +1190,8 @@ mod tests {
 
         #[test]
         fn fails_other_types() {
-            let pool = SharedArena::with_capacity(5);
-            let mut string = value_to_ref!(LpcValue::String("foobar".into()), pool);
+            let pool = Memory::new(5);
+            let mut string = LpcString::from("foobar").into_lpc_ref(&pool);
             assert_err!(string.inc());
         }
     }
@@ -1238,8 +1215,8 @@ mod tests {
 
         #[test]
         fn fails_other_types() {
-            let pool = SharedArena::with_capacity(5);
-            let mut string = value_to_ref!(LpcValue::String("foobar".into()), pool);
+            let pool = Memory::new(5);
+            let mut string = LpcString::from("foobar").into_lpc_ref(&pool);
             assert_err!(string.dec());
         }
     }
@@ -1252,10 +1229,10 @@ mod tests {
 
         #[test]
         fn test_array() {
-            let pool = SharedArena::with_capacity(5);
+            let pool = Memory::new(5);
             let array = LpcArray::new(vec![LpcRef::from(1), LpcRef::from(2), LpcRef::from(3)]);
             let array_id = array.unique_id;
-            let array = value_to_ref!(LpcValue::Array(array), pool);
+            let array = array.into_lpc_ref(&pool);
 
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
@@ -1267,10 +1244,10 @@ mod tests {
 
         #[test]
         fn test_mapping() {
-            let pool = SharedArena::with_capacity(5);
+            let pool = Memory::new(5);
             let mapping = LpcMapping::new(IndexMap::new());
             let mapping_id = mapping.unique_id;
-            let mapping = value_to_ref!(LpcValue::Mapping(mapping), pool);
+            let mapping = mapping.into_lpc_ref(&pool);
 
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
@@ -1282,11 +1259,11 @@ mod tests {
 
         #[test]
         fn test_function() {
-            let pool = SharedArena::with_capacity(5);
+            let pool = Memory::new(5);
 
             let ptr = create!(FunctionPtr);
             let ptr_id = ptr.unique_id;
-            let ptr = value_to_ref!(LpcValue::Function(ptr), pool);
+            let ptr = ptr.into_lpc_ref(&pool);
 
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();

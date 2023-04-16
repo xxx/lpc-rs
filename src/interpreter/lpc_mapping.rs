@@ -8,8 +8,9 @@ use tracing::{instrument, trace};
 
 use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
+    into_lpc_ref::IntoLpcRef,
     lpc_ref::{HashedLpcRef, LpcRef},
-    lpc_value::LpcValue,
+    memory::Memory,
 };
 
 /// A newtype wrapper for a map of [`HashedLpcRef`]s to [`LpcRef`]s,
@@ -57,8 +58,7 @@ where
         }
         if_chain! {
             if let LpcRef::Mapping(other) = &key.value;
-            if let LpcValue::Mapping(other) = &*other.read();
-            if other == mapping;
+            if &*other.read() == mapping;
             then {
                 result.push_str("([ this ])");
                 continue;
@@ -71,8 +71,7 @@ where
 
         if_chain! {
             if let LpcRef::Mapping(other) = &value;
-            if let LpcValue::Mapping(other) = &*other.read();
-            if other == mapping;
+            if &*other.read() == mapping;
             then {
                 result.push_str("([ this ])");
                 continue;
@@ -135,27 +134,31 @@ impl PartialEq<IndexMap<HashedLpcRef, LpcRef>> for LpcMapping {
     }
 }
 
+impl IntoLpcRef for LpcMapping {
+    fn into_lpc_ref(self, pool: &Memory) -> LpcRef {
+        pool.alloc_mapping(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use factori::create;
     use lpc_rs_core::register::Register;
-    use parking_lot::RwLock;
-    use shared_arena::SharedArena;
 
     use super::*;
-    use crate::{test_support::factories::*, value_to_ref};
+    use crate::test_support::factories::*;
 
     #[test]
     fn test_mark() {
-        let pool = SharedArena::with_capacity(5);
+        let memory = Memory::new(5);
 
         let ptr = create!(FunctionPtr, upvalue_ptrs: vec![Register(4), Register(33)]);
         let key_id = *ptr.unique_id.as_ref();
-        let key_ref = value_to_ref!(LpcValue::Function(ptr), pool);
+        let key_ref = ptr.into_lpc_ref(&memory);
 
         let ptr2 = create!(FunctionPtr, upvalue_ptrs: vec![Register(4), Register(666)]);
         let value_id = *ptr2.unique_id.as_ref();
-        let value_ref = value_to_ref!(LpcValue::Function(ptr2), pool);
+        let value_ref = ptr2.into_lpc_ref(&memory);
 
         let mut mapping = LpcMapping::new(IndexMap::new());
 

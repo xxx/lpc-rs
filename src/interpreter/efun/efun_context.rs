@@ -9,7 +9,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::interpreter::{
     call_frame::CallFrame, call_outs::CallOuts, call_stack::CallStack, gc::gc_bank::GcRefBank,
-    lpc_ref::LpcRef, lpc_value::LpcValue, memory::Memory, process::Process, program::Program,
+    into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef, memory::Memory, process::Process, program::Program,
     task::get_location, task_context::TaskContext, vm::vm_op::VmOp,
 };
 
@@ -70,11 +70,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
             /// Get access to the `tx` channel, to talk to the [`Vm`](crate::interpreter::vm::Vm)
             pub fn tx(&self) -> Sender<VmOp>;
-        }
-
-        to self.memory {
-            /// Wrap an [`LpcValue`]  with an [`LpcRef`]
-            pub fn value_to_ref(&self, value: LpcValue) -> LpcRef;
         }
     }
 
@@ -172,6 +167,13 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         P: Into<Arc<RwLock<Process>>>,
     {
         self.task_context.remove_process(process);
+    }
+
+    pub fn value_to_ref<V>(&self, value: V) -> LpcRef
+    where
+        V: IntoLpcRef,
+    {
+        self.memory().value_to_ref(value)
     }
 
     /// Return a clone of the current stack, for snapshotting

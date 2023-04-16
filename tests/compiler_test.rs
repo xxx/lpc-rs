@@ -7,8 +7,7 @@ use if_chain::if_chain;
 use indoc::indoc;
 use lpc_rs::{
     compiler::{Compiler, CompilerBuilder},
-    extract_value,
-    interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, lpc_value::LpcValue, vm::Vm},
+    interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, lpc_string::LpcString, vm::Vm},
 };
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
@@ -125,11 +124,10 @@ async fn test_duffs_device() {
 
     if_chain! {
         if let LpcRef::Array(pool_ref) = b;
-        let b = pool_ref.read();
-        if let LpcValue::Array(arr) = &*b;
+        let arr = pool_ref.read();
         then {
             assert_eq!(
-                arr,
+                &*arr,
                 &[
                     LpcRef::Int(LpcInt(0)),
                     LpcRef::Int(LpcInt(2)),
@@ -174,7 +172,7 @@ async fn test_closures() {
     assert_eq!(borrowed.globals.len(), 2);
     assert_eq!(
         borrowed.globals.last().unwrap().to_string(),
-        r##""I'll take 4 tacos with crema on the side, por favor.""##.to_string()
+        "I'll take 4 tacos with crema on the side, por favor.".to_string()
     );
 }
 
@@ -199,8 +197,7 @@ async fn test_multi_dimensional_arrays() {
     let LpcRef::Array(arr) = x_ref else {
         panic!("this shouldn't be reachable.");
     };
-    let ab = arr.read();
-    let lpc_array = extract_value!(*ab, LpcValue::Array);
+    let lpc_array = arr.read();
 
     let vals = lpc_array
         .array
@@ -213,13 +210,7 @@ async fn test_multi_dimensional_arrays() {
         })
         .collect::<Vec<_>>();
 
-    assert_eq!(
-        vals,
-        vec![
-            LpcValue::from("14b".to_string()),
-            LpcValue::from("14c".to_string())
-        ]
-    );
+    assert_eq!(vals, vec![LpcString::from("14b"), LpcString::from("14c")]);
 }
 
 #[tokio::test]
@@ -332,7 +323,7 @@ async fn test_calls_simul_efuns() {
     "## };
     let ctx = vm.initialize_string(code, "foo.c").await.unwrap();
     let val = ctx.result().unwrap();
-    assert_eq!("\"this is a simul_efun: cool!\"", val.to_string());
+    assert_eq!("this is a simul_efun: cool!", val.to_string());
 
     let code = indoc! { r##"
         string simul_efun(string s) {
@@ -345,7 +336,7 @@ async fn test_calls_simul_efuns() {
     "## };
     let ctx = vm.initialize_string(code, "foo.c").await.unwrap();
     let val = ctx.result().unwrap();
-    assert_eq!("\"local simul_efun: cool!\"", val.to_string());
+    assert_eq!("local simul_efun: cool!", val.to_string());
 
     let code = indoc! { r##"
         void create() {
@@ -355,7 +346,7 @@ async fn test_calls_simul_efuns() {
     "## };
     let ctx = vm.initialize_string(code, "foo.c").await.unwrap();
     let val = ctx.result().unwrap();
-    assert_eq!("\"this is a simul_efun: pointed!\"", val.to_string());
+    assert_eq!("this is a simul_efun: pointed!", val.to_string());
 
     let code = indoc! { r##"
         string simul_efun(string s) {
@@ -369,5 +360,5 @@ async fn test_calls_simul_efuns() {
     "## };
     let ctx = vm.initialize_string(code, "foo.c").await.unwrap();
     let val = ctx.result().unwrap();
-    assert_eq!("\"local simul_efun: pointed!\"", val.to_string());
+    assert_eq!("local simul_efun: pointed!", val.to_string());
 }

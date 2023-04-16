@@ -181,13 +181,9 @@ mod tests {
 
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
-    use shared_arena::SharedArena;
 
     use super::*;
-    use crate::{
-        interpreter::{lpc_array::LpcArray, lpc_ref::LpcRef, lpc_value::LpcValue},
-        value_to_ref,
-    };
+    use crate::interpreter::{into_lpc_ref::IntoLpcRef, lpc_array::LpcArray, memory::Memory};
 
     // #[test]
     // fn test_insert_master() {
@@ -253,10 +249,10 @@ mod tests {
         let config = Config::default();
         let mut space = ObjectSpace::new(config);
 
-        let pool = SharedArena::with_capacity(5);
+        let memory = Memory::new(5);
         let array = LpcArray::new(vec![]);
         let array_id = array.unique_id;
-        let lpc_ref = value_to_ref!(LpcValue::Array(array), pool);
+        let lpc_ref = array.into_lpc_ref(&memory);
 
         let mut process = Process::default();
         process.globals.push(lpc_ref);

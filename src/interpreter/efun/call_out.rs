@@ -4,12 +4,9 @@ use chrono::Duration;
 use lpc_rs_core::{LpcFloatInner, LpcIntInner};
 use lpc_rs_errors::{LpcError, Result};
 
-use crate::{
-    interpreter::{
-        efun::efun_context::EfunContext, function_type::function_address::FunctionAddress,
-        lpc_int::LpcInt, lpc_ref::LpcRef, lpc_value::LpcValue,
-    },
-    try_extract_value,
+use crate::interpreter::{
+    efun::efun_context::EfunContext, function_type::function_address::FunctionAddress,
+    lpc_int::LpcInt, lpc_ref::LpcRef,
 };
 
 /// `call_out`, an efun for calling a function at some future point in time
@@ -22,7 +19,6 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
             return Err(context.runtime_error("invalid function sent to `call_out`"));
         };
         let func = func.read();
-        let func = try_extract_value!(&*func, LpcValue::Function);
         if let FunctionAddress::Dynamic(_) = func.address {
             return Err(LpcError::new(
                 "cannot `call_out` to a function with a dynamic receiver",

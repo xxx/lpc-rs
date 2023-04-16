@@ -1,12 +1,11 @@
-use lpc_rs_errors::{LpcError, Result};
+use std::sync::Arc;
 
-use crate::{
-    interpreter::{
-        efun::efun_context::EfunContext,
-        lpc_ref::{LpcRef, NULL},
-        lpc_value::LpcValue,
-    },
-    try_extract_value,
+use lpc_rs_errors::Result;
+
+use crate::interpreter::{
+    efun::efun_context::EfunContext,
+    into_lpc_ref::IntoLpcRef,
+    lpc_ref::{LpcRef, NULL},
 };
 
 /// `find_object`, an efun for finding and returning an object from the [`ObjectSpace`]
@@ -21,14 +20,13 @@ pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         | LpcRef::Mapping(_)
         | LpcRef::Function(_) => NULL,
         LpcRef::String(x) => {
-            let b = x.read();
-            let path = try_extract_value!(*b, LpcValue::String);
+            let path = x.read();
 
             match context.lookup_process(path.as_ref()) {
                 Some(proc) => {
-                    drop(b);
-                    let val = LpcValue::from(proc);
-                    context.value_to_ref(val)
+                    drop(path);
+                    Arc::downgrade(&proc).into_lpc_ref(context.memory())
+                    // context.value_to_ref(proc)
                 }
                 None => NULL,
             }
@@ -105,10 +103,6 @@ mod tests {
         task.eval(func.clone(), &[]).await.expect("task failed");
 
         let LpcRef::Object(obj) = task.result().unwrap() else {
-            panic!("expected object");
-        };
-
-        let LpcValue::Object(obj) = obj.read().clone() else {
             panic!("expected object");
         };
 

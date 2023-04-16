@@ -2,10 +2,15 @@ use std::{
     cmp::Ordering,
     fmt::Display,
     hash::{Hash, Hasher},
+    ops::Add,
     sync::Arc,
 };
 
+use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_utils::string::MAX_STRING_LENGTH;
 use string_interner::{DefaultSymbol, StringInterner, Symbol};
+
+use crate::interpreter::{into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef, memory::Memory};
 
 /// An enum to differentiate between statically and dynamically created strings.
 #[derive(Debug, Clone)]
@@ -39,6 +44,12 @@ impl LpcString {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Get an iterator over the characters in the string
+    #[inline]
+    pub fn chars(&self) -> std::str::Chars {
+        self.to_str().chars()
     }
 }
 
@@ -125,5 +136,30 @@ impl AsRef<str> for LpcString {
     #[inline]
     fn as_ref(&self) -> &str {
         self.to_str()
+    }
+}
+
+impl IntoLpcRef for LpcString {
+    #[inline]
+    fn into_lpc_ref(self, memory: &Memory) -> LpcRef {
+        memory.alloc_string(self)
+    }
+}
+
+impl Add<LpcString> for LpcString {
+    type Output = Result<Self>;
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self::Output {
+        let new_capacity = self.len() + rhs.len();
+        if new_capacity <= MAX_STRING_LENGTH {
+            let mut s = String::with_capacity(self.len() + rhs.len());
+            s.push_str(self.to_str());
+            s.push_str(rhs.to_str());
+
+            Ok(Self::from(s))
+        } else {
+            Err(LpcError::new("overflow in string concatenation"))
+        }
     }
 }

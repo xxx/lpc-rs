@@ -7,11 +7,7 @@ use parking_lot::RwLock;
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
-    interpreter::{
-        efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue, process::Process,
-        task::Task,
-    },
-    try_extract_value,
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process, task::Task},
 };
 
 async fn load_master<const N: usize>(
@@ -60,8 +56,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
 
     if let LpcRef::String(s) = arg {
         let path = {
-            let r = s.read();
-            let path = try_extract_value!(*r, LpcValue::String);
+            let path = s.read();
             // TODO: is there any way to avoid this clone? Added due to async
             path.to_string()
         };
@@ -92,7 +87,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         context.set_instruction_count(task.context.instruction_count())?;
 
         // Set up the return value
-        let v = LpcValue::Object(Arc::downgrade(&new_clone));
+        let v = Arc::downgrade(&new_clone);
         let result = context.value_to_ref(v);
 
         context.return_efun_result(result);

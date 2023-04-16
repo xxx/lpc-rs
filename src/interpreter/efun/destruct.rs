@@ -1,9 +1,6 @@
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::Result;
 
-use crate::{
-    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
-    try_extract_value,
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// `destruct`, an efun for deleting objects from the [`ObjectSpace`]
 pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -16,15 +13,9 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         | LpcRef::Function(_) => {}
         LpcRef::Array(arr) => {
             let arr = arr.read();
-            let LpcValue::Array(arr) = &*arr else {
-                return Err(context.runtime_error(format!("destruct() called on non-array: {:?}", arr)));
-            };
 
             for x in arr.iter() {
-                let LpcRef::Object(ob) = x else {
-                    continue;
-                };
-                let LpcValue::Object(proc) = &*ob.read() else {
+                let LpcRef::Object(proc) = x else {
                     continue;
                 };
 
@@ -33,10 +24,7 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
                 } // else it's already destructed
             }
         }
-        LpcRef::Object(x) => {
-            let b = x.read();
-            let proc = try_extract_value!(*b, LpcValue::Object);
-
+        LpcRef::Object(proc) => {
             if let Some(proc) = proc.upgrade() {
                 context.remove_process(proc);
             } // else it's already destructed

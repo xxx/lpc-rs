@@ -4,20 +4,16 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::{efun_context::EfunContext, query_call_out::call_out_array_ref},
+    into_lpc_ref::IntoLpcRef,
+    lpc_array::LpcArray,
     lpc_int::LpcInt,
     lpc_ref::LpcRef,
-    lpc_value::LpcValue,
 };
 
 /// `query_call_outs`, an efun for returning information about all call outs in a specific object
 pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let owner = match context.resolve_local_register(1_usize) {
-        LpcRef::Object(object) => {
-            let LpcValue::Object(process) = &*object.read() else {
-                return Err(context.runtime_bug("object in `query_call_outs` is not an object? This shouldn't be reachable."));
-            };
-            process.upgrade()
-        }
+        LpcRef::Object(process) => process.upgrade(),
         LpcRef::Int(LpcInt(0)) => Some(context.frame().process.clone()),
         _ => return Err(context.runtime_error("non-object sent to `query_call_outs`")),
     };
@@ -44,7 +40,7 @@ pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -
         })
         .collect::<Vec<_>>();
 
-    let result = context.value_to_ref(LpcValue::from(vec));
+    let result = LpcArray::new(vec).into_lpc_ref(context.memory());
 
     context.return_efun_result(result);
 
@@ -61,8 +57,8 @@ mod tests {
     use super::*;
     use crate::{
         interpreter::{
-            call_outs::CallOuts, gc::gc_bank::GcBank, lpc_array::LpcArray, memory::Memory,
-            object_space::ObjectSpace, task::Task,
+            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
+            task::Task,
         },
         test_support::compile_prog,
     };
@@ -104,14 +100,14 @@ mod tests {
 
         if_chain! {
             if let LpcRef::Array(arr) = task.result().unwrap();
-            if let LpcValue::Array(LpcArray { array, ..}) = &*arr.read();
+            let array = arr.read();
             then {
                 assert_eq!(array.len(), 2);
 
-                for call_out in array {
+                for call_out in array.iter() {
                     if_chain! {
                         if let LpcRef::Array(call_out) = call_out;
-                        if let LpcValue::Array(LpcArray { array: call_out, ..}) = &*call_out.read();
+                        let call_out = call_out.read();
                         then {
                             assert_eq!(call_out.len(), 4);
                             assert!(matches!(call_out[0], LpcRef::Object(_)));

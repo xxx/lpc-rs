@@ -43,6 +43,6 @@ mod tests {
         )
         .await;
 
-        assert_eq!(result.unwrap_err().to_string(), "\"foo bar baz error!\"");
+        assert_eq!(result.unwrap_err().to_string(), "foo bar baz error!");
     }
 }

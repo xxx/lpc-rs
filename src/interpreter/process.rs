@@ -125,14 +125,8 @@ impl Mark for Process {
 mod tests {
     use std::sync::Arc;
 
-    use parking_lot::RwLock;
-    use shared_arena::SharedArena;
-
     use super::*;
-    use crate::{
-        interpreter::{lpc_array::LpcArray, lpc_value::LpcValue},
-        value_to_ref,
-    };
+    use crate::interpreter::{into_lpc_ref::IntoLpcRef, lpc_array::LpcArray, memory::Memory};
 
     #[test]
     fn test_filename() {
@@ -160,10 +154,10 @@ mod tests {
 
     #[test]
     fn test_mark() {
-        let pool = SharedArena::with_capacity(5);
+        let memory = Memory::new(5);
         let array = LpcArray::new(vec![]);
         let array_id = array.unique_id;
-        let lpc_ref = value_to_ref!(LpcValue::Array(array), &pool);
+        let lpc_ref = array.into_lpc_ref(&memory);
 
         let mut process = Process::default();
         process.globals.push(lpc_ref);

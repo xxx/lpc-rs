@@ -1,9 +1,6 @@
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::Result;
 
-use crate::{
-    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue},
-    try_extract_value,
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 const SNAPSHOT_STACK: &str = "snapshot_stack";
 
@@ -12,13 +9,14 @@ const SNAPSHOT_STACK: &str = "snapshot_stack";
 pub async fn debug<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let lpc_ref = context.resolve_local_register(1_usize);
     if let LpcRef::String(x) = lpc_ref {
-        let b = x.read();
-        let str = try_extract_value!(*b, LpcValue::String).to_str();
+        let r = x.read();
+        let str = r.to_str();
 
         match str {
             SNAPSHOT_STACK => {
                 #[cfg(test)]
                 {
+                    drop(r);
                     snapshot_stack(context)
                 }
 

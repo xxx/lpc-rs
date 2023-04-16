@@ -1,7 +1,7 @@
 use std::{
     fmt::{Debug, Display, Formatter},
     hash::Hash,
-    ops::{Deref, Index, IndexMut, Range, RangeInclusive},
+    ops::{Add, Deref, Index, IndexMut, Range, RangeInclusive},
 };
 
 use bit_set::BitSet;
@@ -11,8 +11,9 @@ use tracing::{instrument, trace};
 
 use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
+    into_lpc_ref::IntoLpcRef,
     lpc_ref::LpcRef,
-    lpc_value::LpcValue,
+    memory::Memory,
 };
 
 /// A newtype wrapper for an array of [`LpcRef`]s, with a [`UniqueId`] for GC
@@ -55,8 +56,7 @@ where
         }
         if_chain! {
             if let LpcRef::Array(other) = item;
-            if let LpcValue::Array(other) = &*other.read();
-            if other == array;
+            if &*other.read() == array;
             then {
                 result.push_str("({ self })");
                 continue;
@@ -177,24 +177,40 @@ impl PartialEq<Vec<LpcRef>> for LpcArray {
     }
 }
 
+impl Add<LpcArray> for LpcArray {
+    type Output = LpcArray;
+
+    #[inline]
+    fn add(self, rhs: LpcArray) -> Self::Output {
+        let mut array = self.array;
+        array.extend(rhs.array);
+        Self::new(array)
+    }
+}
+
+impl IntoLpcRef for LpcArray {
+    #[inline]
+    fn into_lpc_ref(self, memory: &Memory) -> LpcRef {
+        memory.alloc_array(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use factori::create;
     use lpc_rs_core::register::Register;
-    use parking_lot::RwLock;
-    use shared_arena::SharedArena;
 
     use super::*;
-    use crate::{test_support::factories::*, value_to_ref};
+    use crate::test_support::factories::*;
 
     #[test]
     fn test_mark() {
-        let pool = SharedArena::with_capacity(5);
+        let memory = Memory::new(5);
 
         let ptr = create!(FunctionPtr, upvalue_ptrs: vec![Register(4), Register(33)]);
         let ptr_id = *ptr.unique_id.as_ref();
 
-        let function_ref = value_to_ref!(LpcValue::Function(ptr), pool);
+        let function_ref = ptr.into_lpc_ref(&memory);
 
         let array = LpcArray::new(vec![function_ref]);
 

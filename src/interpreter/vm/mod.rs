@@ -28,7 +28,6 @@ use crate::{
             sweep::KeylessSweep,
         },
         lpc_ref::{LpcRef, NULL},
-        lpc_value::LpcValue,
         memory::Memory,
         object_space::ObjectSpace,
         process::Process,
@@ -37,7 +36,6 @@ use crate::{
         task_context::TaskContext,
     },
     telnet::{connection_broker::ConnectionBroker, ops::BrokerOp, Telnet},
-    try_extract_value,
     util::get_simul_efuns,
 };
 
@@ -187,8 +185,7 @@ impl Vm {
             if let LpcRef::Function(ref func) = call_out.func_ref;
             then {
                 repeating = call_out.is_repeating();
-                let b = func.read();
-                let ptr = try_extract_value!(&*b, LpcValue::Function);
+                let ptr = func.read();
 
                 // call outs don't get any additional args passed to them, so just set up the partial args.
                 // use int 0 for any that were not applied at the time the pointer was created

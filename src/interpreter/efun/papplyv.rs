@@ -1,29 +1,24 @@
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_value::LpcValue};
+use crate::interpreter::{
+    efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef,
+};
 
 /// `papplyv`, an efun to partially apply a function to arguments taken from an array
 pub async fn papplyv<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let LpcRef::Function(f) = context.resolve_local_register(1_usize) else {
-        return Err(context.runtime_error("non-function argument sent to `papplyv`"));
-    };
-    let LpcValue::Function(func) = &*f.read() else {
+    let LpcRef::Function(func) = context.resolve_local_register(1_usize) else {
         return Err(context.runtime_error("non-function argument sent to `papplyv`"));
     };
 
-    let LpcRef::Array(a) = context.resolve_local_register(2_usize) else {
-        return Err(context.runtime_error("non-array argument sent to `papplyv`"));
-    };
-    let LpcValue::Array(arr) = &*a.read() else {
+    let LpcRef::Array(arr) = context.resolve_local_register(2_usize) else {
         return Err(context.runtime_error("non-array argument sent to `papplyv`"));
     };
 
     // TODO: this clone is unnecessarily heavy
-    let mut ptr = func.clone_with_new_id();
-    ptr.partially_apply(arr);
+    let mut ptr = func.read().clone_with_new_id();
+    ptr.partially_apply(&arr.read());
 
-    let v = LpcValue::Function(ptr);
-    let result = context.value_to_ref(v);
+    let result = ptr.into_lpc_ref(context.memory());
 
     context.return_efun_result(result);
 
@@ -72,13 +67,11 @@ mod tests {
         let b = result.unwrap();
         let r = b.result().unwrap();
 
-        let LpcRef::Function(f) = r else {
+        let LpcRef::Function(func) = r else {
             panic!("expected function ref");
         };
 
-        let LpcValue::Function(func) = &*f.read() else {
-            panic!("expected function value");
-        };
+        let func = func.read();
 
         assert_eq!(func.name(), "dump");
 
@@ -87,7 +80,7 @@ mod tests {
                 .iter()
                 .map(|a| a.as_ref().unwrap().to_string())
                 .collect::<Vec<_>>(),
-            vec!["\"foo\"", "\"bar\""]
+            vec!["foo", "bar"]
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>()

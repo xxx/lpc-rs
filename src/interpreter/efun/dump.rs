@@ -1,13 +1,9 @@
 use std::fmt::Write;
 
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::Result;
 
-use crate::{
-    interpreter::{
-        efun::efun_context::EfunContext, lpc_mapping::LpcMapping, lpc_ref::LpcRef,
-        lpc_value::LpcValue,
-    },
-    try_extract_value,
+use crate::interpreter::{
+    efun::efun_context::EfunContext, lpc_mapping::LpcMapping, lpc_ref::LpcRef,
 };
 
 const MAX_RECURSION: usize = 20;
@@ -33,34 +29,26 @@ fn format_ref<const N: usize>(
         LpcRef::Float(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::Int(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::String(x) => {
-            let xb = x.read();
-            let s = try_extract_value!(*xb, LpcValue::String).to_str();
+            let s = x.read();
 
             Ok(format!("{:width$}{}", "", s, width = indent))
         }
         LpcRef::Object(x) => {
-            let val = try_extract_value!(*x.read(), LpcValue::Object).upgrade();
+            let val = x.upgrade();
             if let Some(proc) = val {
                 Ok(format!("{:width$}{}", "", proc.read(), width = indent))
             } else {
                 Ok(format!("{:width$}{}", "", "0", width = indent))
             }
         }
-        LpcRef::Function(x) => Ok(format!(
-            "{:width$}{}",
-            "",
-            try_extract_value!(*x.read(), LpcValue::Function),
-            width = indent
-        )),
+        LpcRef::Function(x) => Ok(format!("{:width$}{}", "", x.read(), width = indent)),
         LpcRef::Array(x) => {
-            let xb = x.read();
-            let arr = try_extract_value!(*xb, LpcValue::Array);
-            format_array(arr, context, indent, recurse_level + 1)
+            let arr = x.read();
+            format_array(&arr, context, indent, recurse_level + 1)
         }
         LpcRef::Mapping(x) => {
-            let xb = x.read();
-            let map = try_extract_value!(*xb, LpcValue::Mapping);
-            format_mapping(map, context, indent, recurse_level + 1)
+            let map = x.read();
+            format_mapping(&map, context, indent, recurse_level + 1)
         }
     }
 }

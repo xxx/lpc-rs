@@ -19,8 +19,8 @@ use string_interner::StringInterner;
 use crate::interpreter::{
     efun::{efun_context::EfunContext, EFUN_PROTOTYPES},
     function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
+    into_lpc_ref::IntoLpcRef,
     lpc_ref::LpcRef,
-    lpc_value::LpcValue,
 };
 
 /// The static composed function handler.
@@ -116,8 +116,7 @@ pub async fn compose<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
         unique_id: Default::default(),
     };
 
-    let value = LpcValue::Function(ptr);
-    let lpc_ref = context.value_to_ref(value);
+    let lpc_ref = ptr.into_lpc_ref(context.memory());
 
     context.return_efun_result(lpc_ref);
 

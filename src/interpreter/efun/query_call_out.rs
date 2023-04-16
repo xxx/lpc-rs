@@ -3,9 +3,9 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{
     call_outs::CallOut,
     efun::efun_context::EfunContext,
+    into_lpc_ref::IntoLpcRef,
     lpc_array::LpcArray,
     lpc_ref::{LpcRef, NULL},
-    lpc_value::LpcValue,
 };
 
 /// `query_call_out`, an efun for returning information about a single call out.
@@ -41,7 +41,7 @@ pub fn call_out_array_ref<const N: usize>(
     };
 
     // push the object that the call out was called from
-    arr.push(context.value_to_ref(LpcValue::Object(call_out.process().clone())));
+    arr.push(call_out.process().clone().into_lpc_ref(context.memory()));
 
     // push the function
     arr.push(LpcRef::Function(f.clone()));
@@ -64,7 +64,7 @@ pub fn call_out_array_ref<const N: usize>(
             .into(),
     ));
 
-    let result = context.value_to_ref(LpcValue::Array(LpcArray::new(arr)));
+    let result = LpcArray::new(arr).into_lpc_ref(context.memory());
     Ok(result)
 }
 
@@ -120,8 +120,8 @@ mod tests {
         .unwrap();
 
         if_chain! {
-            if let LpcRef::Array(arr) = task.result().unwrap();
-            if let LpcValue::Array(LpcArray { array, ..}) = &*arr.read();
+            if let LpcRef::Array(array) = task.result().unwrap();
+            let array = array.read();
             then {
                 assert_eq!(array.len(), 4);
                 assert!(matches!(array[0], LpcRef::Object(_)));
