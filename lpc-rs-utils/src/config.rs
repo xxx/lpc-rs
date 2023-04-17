@@ -38,13 +38,13 @@ pub struct Config {
     #[builder(default = "DEFAULT_MAX_INHERIT_DEPTH")]
     pub max_inherit_depth: usize,
 
-    #[builder(setter(into, strip_option), default = "Some(100000)")]
+    #[builder(setter(into, strip_option), default = "None")]
     pub max_task_instructions: Option<usize>,
 
     #[builder(setter(into, strip_option), default = "None")]
     pub simul_efun_file: Option<Ustr>,
 
-    #[builder(setter(custom), default = "vec![ustr(\"/sys\")]")]
+    #[builder(setter(custom), default = "vec![]")]
     pub system_include_dirs: Vec<Ustr>,
 
     #[builder(default = "2496")]
