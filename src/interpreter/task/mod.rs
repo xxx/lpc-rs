@@ -411,8 +411,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Ok(true);
         }
 
-        self.context.increment_instruction_count(1)?;
-
         let instruction = {
             let frame = match self.stack.current_frame_mut() {
                 Ok(x) => x,
@@ -1337,8 +1335,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                     let result = if function.public() {
                         task.eval(function, args).await?;
-                        task_context
-                            .increment_instruction_count(task.context.instruction_count())?;
 
                         let Some(r) = task.context.into_result() else {
                             return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));

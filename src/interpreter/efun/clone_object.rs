@@ -36,8 +36,6 @@ async fn load_master<const N: usize>(
                     let mut task = Task::<MAX_CALL_STACK_SIZE>::new(new_context);
                     task.eval(prog_function, &[]).await?;
 
-                    context.set_instruction_count(task.context.instruction_count())?;
-
                     Ok(process)
                 }
                 Err(e) => {
@@ -83,8 +81,6 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         let new_context = context.clone_task_context().with_process(new_clone.clone());
         let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
         task.eval(initializer, &[]).await?;
-
-        context.set_instruction_count(task.context.instruction_count())?;
 
         // Set up the return value
         let v = Arc::downgrade(&new_clone);
