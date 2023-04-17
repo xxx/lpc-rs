@@ -22,6 +22,10 @@ impl InstructionCounter {
 
     /// Increment the counter by `amount`
     pub fn increment(&self, amount: usize) -> Result<usize> {
+        if self.max_instructions == 0 {
+            return Ok(0);
+        }
+
         let old_val = self
             .count
             .fetch_add(amount, std::sync::atomic::Ordering::Relaxed);
@@ -34,6 +38,10 @@ impl InstructionCounter {
 
     /// Set the counter to `new_val`
     pub fn set(&self, new_val: usize) -> Result<usize> {
+        if self.max_instructions == 0 {
+            return Ok(0);
+        }
+
         self.eval_limit(new_val)?;
 
         self.count
@@ -45,6 +53,9 @@ impl InstructionCounter {
     /// Get the current instruction count
     #[inline]
     pub fn count(&self) -> usize {
+        if self.max_instructions == 0 {
+            return 0;
+        }
         self.count.load(std::sync::atomic::Ordering::Relaxed)
     }
 
