@@ -1,6 +1,5 @@
 use std::{path::PathBuf, sync::Arc};
 
-
 use derive_builder::Builder;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
@@ -10,9 +9,8 @@ use tokio::sync::mpsc::Sender;
 
 use crate::{
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcRefBank,
-        lpc_ref::LpcRef, memory::Memory, object_space::ObjectSpace, process::Process,
-        program::Program, vm::vm_op::VmOp,
+        call_outs::CallOuts, gc::gc_bank::GcRefBank, lpc_ref::LpcRef, memory::Memory,
+        object_space::ObjectSpace, process::Process, program::Program, vm::vm_op::VmOp,
     },
     util::get_simul_efuns,
 };

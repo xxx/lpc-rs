@@ -6,8 +6,8 @@ use std::{
     borrow::Cow,
     fmt::{Debug, Display},
     sync::{Arc, Weak},
+    time::Duration,
 };
-use std::time::Duration;
 
 use async_recursion::async_recursion;
 use bit_set::BitSet;
@@ -30,8 +30,7 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use string_interner::{DefaultSymbol, Symbol};
-use tokio::sync::mpsc::Sender;
-use tokio::time::timeout;
+use tokio::{sync::mpsc::Sender, time::timeout};
 use tracing::{instrument, trace, warn};
 use ustr::ustr;
 
@@ -282,7 +281,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let mut task = Task::new(context);
 
-        match timeout(Duration::from_millis(300),  task.eval(init_function, &[])).await {
+        match timeout(Duration::from_millis(300), task.eval(init_function, &[])).await {
             Ok(Ok(_)) => Ok(task),
             Ok(Err(e)) => Err(e),
             Err(_) => Err(LpcError::new("evaluation limit of 300ms has been reached")),
