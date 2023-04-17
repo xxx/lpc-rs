@@ -20,9 +20,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             return fib(n - 1) + fib(n - 2);
         }
 
-        void create() {
+        int create() {
             int i = fib(20);
-            dump(i);
+            return i;
         }
     "#;
 
