@@ -31,6 +31,7 @@ use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use string_interner::{DefaultSymbol, Symbol};
 use tokio::{sync::mpsc::Sender, time::timeout};
+use tokio::task::JoinHandle;
 use tracing::{instrument, trace, warn};
 use ustr::ustr;
 
@@ -281,23 +282,32 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let mut task = Task::new(context);
 
-        match timeout(Duration::from_millis(300), task.eval(init_function, &[])).await {
-            Ok(Ok(_)) => Ok(task),
-            Ok(Err(e)) => Err(e),
-            Err(_) => Err(LpcError::new("evaluation limit of 300ms has been reached")),
-        }
+        task.timed_eval(init_function, &[]).await?;
+
+        Ok(task)
     }
 
-    /// Evaluate `f` to completion, or an error
+    /// Spawn a new tokio task to evaluate `f` to completion, or an error, with timeout.
+    pub async fn spawn_eval<const N: usize>(mut task: Task<N>, f: Arc<ProgramFunction>, args: &[LpcRef]) -> JoinHandle<Result<Task<N>>> {
+        let args = args.to_vec();
+
+        tokio::spawn(async move {
+            match task.timed_eval(f, &args).await {
+                Ok(_) => Ok(task),
+                Err(e) => Err(e),
+            }
+        })
+    }
+
+    /// Evaluate `f` to completion, or an error. No timeouts are applied.
     ///
     /// # Arguments
     /// `f` - the function to call
     /// `args` - the slice of arguments to pass to the function
-    /// `task_context` the [`TaskContext`] that will be used for this evaluation
     ///
     /// # Returns
     ///
-    /// A [`Result`], with the [`TaskContext`] if successful, or an [`LpcError`] if not
+    /// `Ok(())` if successful, or an [`LpcError`] if not
     #[instrument(skip_all)]
     #[async_recursion]
     pub async fn eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef]) -> Result<()> {
@@ -306,17 +316,37 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.eval_function(process, f, args).await
     }
 
+    /// Evaluate `f` to completion, or an error, with a timeout.
+    ///
+    /// # Arguments
+    /// `f` - the function to call
+    /// `args` - the slice of arguments to pass to the function
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if successful, or an [`LpcError`] if not
+    #[instrument(skip_all)]
+    #[async_recursion]
+    pub async fn timed_eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef]) -> Result<()> {
+        let process = self.context.process();
+
+        match timeout(Duration::from_millis(300), self.eval_function(process, f, args)).await {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err(LpcError::new("evaluation limit of 300ms has been reached")),
+        }
+    }
+
     /// Evaluate `f` to completion, or an error, in the context of an arbitrary process
     ///
     /// # Arguments
     /// `process`: the process that owns the function to call.
     /// `f` - the function to call
     /// `args` - the slice of arguments to pass to the function
-    /// `task_context` the [`TaskContext`] that will be used for this evaluation
     ///
     /// # Returns
     ///
-    /// A [`Result`], with the [`TaskContext`] if successful, or an [`LpcError`] if not
+    /// `Ok(())` if successful, or an [`LpcError`] if not
     #[async_recursion]
     pub async fn eval_function(
         &mut self,
@@ -365,7 +395,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         } else {
             let mut halted = false;
 
-            let mut c = 0_usize;
+            let mut c = 0_u16;
 
             while !halted {
                 halted = match self.eval_one_instruction().await {
@@ -383,7 +413,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 // Ensure infinite loops and the like don't monopolize the runtime.
                 c += 1;
-                if c % 1000 == 0 {
+                if c == 1000 {
+                    c = 0;
                     tokio::task::yield_now().await;
                 }
             }
@@ -1317,9 +1348,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 );
 
                 if let Some(receiver) = resolved {
-                    // let Some(receiver) = pr.upgrade() else {
-                    //     return Ok(NULL);
-                    // };
                     let new_context = task_context.clone().with_process(receiver.clone());
                     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
 
@@ -1333,7 +1361,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         .clone();
 
                     let result = if function.public() {
-                        task.eval(function, args).await?;
+                        task.timed_eval(function, args).await?;
 
                         let Some(r) = task.context.into_result() else {
                             return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));

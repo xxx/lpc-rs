@@ -100,7 +100,7 @@ mod tests {
         ObjectSpace::insert_process(&context.object_space, RwLock::new(proc));
 
         let mut task = Task::<10>::new(context.clone());
-        task.eval(func.clone(), &[]).await.expect("task failed");
+        task.timed_eval(func.clone(), &[]).await.expect("task failed");
 
         let LpcRef::Object(obj) = task.result().unwrap() else {
             panic!("expected object");
@@ -131,7 +131,7 @@ mod tests {
         let context = task_context_fixture(program, config, tx);
 
         let mut task = Task::<10>::new(context.clone());
-        task.eval(func.clone(), &[]).await.expect("task failed");
+        task.timed_eval(func.clone(), &[]).await.expect("task failed");
 
         assert_eq!(task.result().unwrap(), &NULL);
     }

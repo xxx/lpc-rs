@@ -34,7 +34,7 @@ async fn load_master<const N: usize>(
 
                     let new_context = context.clone_task_context().with_process(process.clone());
                     let mut task = Task::<MAX_CALL_STACK_SIZE>::new(new_context);
-                    task.eval(prog_function, &[]).await?;
+                    task.timed_eval(prog_function, &[]).await?;
 
                     Ok(process)
                 }
@@ -80,7 +80,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
 
         let new_context = context.clone_task_context().with_process(new_clone.clone());
         let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
-        task.eval(initializer, &[]).await?;
+        task.timed_eval(initializer, &[]).await?;
 
         // Set up the return value
         let v = Arc::downgrade(&new_clone);
@@ -145,12 +145,12 @@ mod tests {
         let context = task_context_fixture(program, config, tx);
 
         let mut task = Task::<10>::new(context.clone());
-        task.eval(func.clone(), &[])
+        task.timed_eval(func.clone(), &[])
             .await
             .expect("first task failed");
 
         let mut task = Task::<10>::new(context);
-        task.eval(func, &[]).await.expect("second task failed");
+        task.timed_eval(func, &[]).await.expect("second task failed");
 
         // procs are /example, /example#0, /example#1
         assert_eq!(task.context.object_space().len(), 3);
@@ -169,7 +169,7 @@ mod tests {
         let context = task_context_fixture(program, config, tx);
         let mut task = Task::<10>::new(context);
 
-        let result = task.eval(func, &[]).await;
+        let result = task.timed_eval(func, &[]).await;
 
         assert_regex!(
             result.as_ref().unwrap_err().as_ref(),
