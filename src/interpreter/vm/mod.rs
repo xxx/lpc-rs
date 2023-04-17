@@ -4,15 +4,14 @@ use bit_set::BitSet;
 use flume::Sender as FlumeSender;
 use if_chain::if_chain;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{Result, LpcError};
+use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::{
     signal,
     sync::mpsc::{Receiver, Sender},
 };
-use tracing::{error, info, instrument, trace};
-use lpc_rs_function_support::program_function::ProgramFunction;
+use tracing::{info, instrument, trace};
 use vm_op::VmOp;
 
 use crate::{
@@ -32,13 +31,12 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        task::Task,
+        task::{task_id::TaskId, Task},
         task_context::TaskContext,
     },
     telnet::{connection_broker::ConnectionBroker, ops::BrokerOp, Telnet},
     util::get_simul_efuns,
 };
-use crate::interpreter::task::task_id::TaskId;
 
 pub mod vm_op;
 
@@ -209,24 +207,28 @@ impl Vm {
                 // call outs don't get any additional args passed to them, so just set up the partial args.
                 // use int 0 for any that were not applied at the time the pointer was created
                 // TODO: error instead of int 0?
-                let args = ptr.partial_args.iter().map(|arg| {
-                    match arg {
+                let args = ptr
+                    .partial_args
+                    .iter()
+                    .map(|arg| match arg {
                         Some(lpc_ref) => lpc_ref.clone(),
-                        None => NULL
-                    }
-                }).collect::<Vec<_>>();
+                        None => NULL,
+                    })
+                    .collect::<Vec<_>>();
 
                 match ptr.address {
                     FunctionAddress::Local(ref proc, ref function) => {
                         if let Some(proc) = proc.upgrade() {
                             Ok((proc, function.clone(), args))
                         } else {
-                            Err(LpcError::new("attempted to prioritize a function pointer to a dead process"))
+                            Err(LpcError::new(
+                                "attempted to prioritize a function pointer to a dead process",
+                            ))
                         }
-                    },
-                    FunctionAddress::Dynamic(_) => {
-                        Err(LpcError::new("attempted to prioritize a dynamic receiver passed to call_out"))
-                    },
+                    }
+                    FunctionAddress::Dynamic(_) => Err(LpcError::new(
+                        "attempted to prioritize a dynamic receiver passed to call_out",
+                    )),
                     FunctionAddress::SimulEfun(name) => {
                         match get_simul_efuns(&config, &object_space) {
                             Some(simul_efuns) => {
@@ -235,16 +237,16 @@ impl Vm {
                                     Some(function) => {
                                         Ok((simul_efuns.clone(), function.clone(), args))
                                     }
-                                    None => {
-                                        Err(LpcError::new(format!("call to unknown simul_efun `{name}`")))
-                                    }
+                                    None => Err(LpcError::new(format!(
+                                        "call to unknown simul_efun `{name}`"
+                                    ))),
                                 }
-                            },
-                            None => {
-                                Err(LpcError::new("function pointer to simul_efun passed, but no simul_efuns?"))
                             }
+                            None => Err(LpcError::new(
+                                "function pointer to simul_efun passed, but no simul_efuns?",
+                            )),
                         }
-                    },
+                    }
                     FunctionAddress::Efun(name) => {
                         let pf = EFUN_FUNCTIONS.get(name.as_str()).unwrap();
 
@@ -281,9 +283,8 @@ impl Vm {
             let mut task = Task::<MAX_CALL_STACK_SIZE>::new(task_context);
             let id = task.id;
 
-            if let Err(e) = task.timed_eval( function, &args).await {
+            if let Err(e) = task.timed_eval(function, &args).await {
                 let _ = tx.send(VmOp::TaskError(id, e)).await;
-                return;
             }
         });
     }
