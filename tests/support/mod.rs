@@ -3,7 +3,7 @@ use lpc_rs::{
     compiler::CompilerBuilder,
     interpreter::{
         program::Program,
-        task::{initialize_task::InitializeProgramBuilder, Task},
+        task::{initialize_program::InitializeProgramBuilder, Task},
     },
 };
 use lpc_rs_core::lpc_path::LpcPath;

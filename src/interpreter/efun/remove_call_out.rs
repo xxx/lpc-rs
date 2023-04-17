@@ -43,7 +43,7 @@ mod tests {
     use parking_lot::RwLock;
 
     use crate::{
-        interpreter::{call_outs::CallOuts, task::initialize_task::InitializeProgramBuilder},
+        interpreter::{call_outs::CallOuts, task::initialize_program::InitializeProgramBuilder},
         test_support::compile_prog,
     };
 

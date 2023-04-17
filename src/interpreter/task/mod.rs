@@ -1,4 +1,4 @@
-pub mod initialize_task;
+pub mod initialize_program;
 pub mod task_id;
 pub mod task_state;
 
@@ -7,6 +7,7 @@ use std::{
     fmt::{Debug, Display},
     sync::{Arc, Weak},
 };
+use std::time::Duration;
 
 use async_recursion::async_recursion;
 use bit_set::BitSet;
@@ -30,6 +31,7 @@ use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use string_interner::{DefaultSymbol, Symbol};
 use tokio::sync::mpsc::Sender;
+use tokio::time::timeout;
 use tracing::{instrument, trace, warn};
 use ustr::ustr;
 
@@ -280,9 +282,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let mut task = Task::new(context);
 
-        task.eval(init_function, &[]).await?;
-
-        Ok(task)
+        match timeout(Duration::from_millis(300),  task.eval(init_function, &[])).await {
+            Ok(Ok(_)) => Ok(task),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err(LpcError::new("evaluation limit of 300ms has been reached")),
+        }
     }
 
     /// Evaluate `f` to completion, or an error
@@ -362,6 +366,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         } else {
             let mut halted = false;
 
+            let mut c = 0_usize;
+
             while !halted {
                 halted = match self.eval_one_instruction().await {
                     Ok(x) => x,
@@ -375,6 +381,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         }
                     }
                 };
+
+                // Ensure infinite loops and the like don't monopolize the runtime.
+                c += 1;
+                if c % 1000 == 0 {
+                    tokio::task::yield_now().await;
+                }
             }
         }
 
@@ -2409,7 +2421,7 @@ mod tests {
             use tokio::sync::mpsc;
 
             use super::*;
-            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
+            use crate::interpreter::task::initialize_program::InitializeProgramBuilder;
 
             #[tokio::test]
             async fn stores_the_value() {
@@ -3302,7 +3314,7 @@ mod tests {
 
         mod test_idiv {
             use super::*;
-            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
+            use crate::interpreter::task::initialize_program::InitializeProgramBuilder;
 
             #[tokio::test]
             async fn stores_the_value() {
@@ -3352,7 +3364,7 @@ mod tests {
 
         mod test_imod {
             use super::*;
-            use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
+            use crate::interpreter::task::initialize_program::InitializeProgramBuilder;
 
             #[tokio::test]
             async fn stores_the_value() {
@@ -4128,7 +4140,7 @@ mod tests {
 
             use super::*;
             use crate::{
-                interpreter::task::initialize_task::InitializeProgramBuilder,
+                interpreter::task::initialize_program::InitializeProgramBuilder,
                 test_support::test_config,
             };
 
@@ -4317,7 +4329,7 @@ mod tests {
         use lpc_rs_utils::config::ConfigBuilder;
 
         use super::*;
-        use crate::interpreter::task::initialize_task::InitializeProgramBuilder;
+        use crate::interpreter::task::initialize_program::InitializeProgramBuilder;
 
         #[tokio::test]
         async fn errors_on_stack_overflow() {
@@ -4350,7 +4362,7 @@ mod tests {
             "##};
 
             let config = ConfigBuilder::default()
-                .max_task_instructions(10_usize)
+                .max_task_instructions(0_usize)
                 .build()
                 .unwrap();
             let (program, _, _) = compile_prog(code);
@@ -4365,7 +4377,7 @@ mod tests {
 
             assert_eq!(
                 r.unwrap_err().to_string(),
-                "evaluation limit of `10` instructions has been reached."
+                "evaluation limit of 300ms has been reached"
             );
         }
     }

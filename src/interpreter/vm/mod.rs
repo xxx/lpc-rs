@@ -266,6 +266,7 @@ impl Vm {
 
         tokio::spawn(async move {
             let id = task.id;
+            // TODO: handle too-long evals
             let r = task.resume().await;
             if r.is_err() {
                 let _ = tx.send(VmOp::TaskError(id, r.unwrap_err())).await;

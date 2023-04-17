@@ -145,7 +145,7 @@ mod tests {
 
     use crate::{
         compiler::Compiler,
-        interpreter::{program::Program, task::initialize_task::InitializeProgramBuilder},
+        interpreter::{program::Program, task::initialize_program::InitializeProgramBuilder},
     };
 
     fn compile_prog(code: &str) -> Program {

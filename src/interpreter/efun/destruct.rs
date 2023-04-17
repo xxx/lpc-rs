@@ -40,7 +40,7 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
 mod tests {
 
     use crate::{
-        interpreter::task::initialize_task::InitializeProgramBuilder, test_support::compile_prog,
+        interpreter::task::initialize_program::InitializeProgramBuilder, test_support::compile_prog,
     };
 
     #[tokio::test]

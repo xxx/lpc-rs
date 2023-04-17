@@ -86,7 +86,7 @@ mod tests {
 
     use crate::{
         interpreter::{
-            task::{initialize_task::InitializeProgramBuilder, task_id::TaskId},
+            task::{initialize_program::InitializeProgramBuilder, task_id::TaskId},
             vm::vm_op::VmOp,
         },
         test_support::compile_prog,

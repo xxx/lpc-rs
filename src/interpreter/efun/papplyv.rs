@@ -29,7 +29,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        interpreter::task::initialize_task::InitializeProgramBuilder, test_support::compile_prog,
+        interpreter::task::initialize_program::InitializeProgramBuilder, test_support::compile_prog,
     };
 
     #[tokio::test]

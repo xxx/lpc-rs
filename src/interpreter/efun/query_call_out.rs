@@ -75,7 +75,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        interpreter::{lpc_int::LpcInt, task::initialize_task::InitializeProgramBuilder},
+        interpreter::{lpc_int::LpcInt, task::initialize_program::InitializeProgramBuilder},
         test_support::compile_prog,
     };
 

@@ -20,11 +20,12 @@ pub mod factories;
 /// init() acts as a global test setup.
 #[ctor::ctor]
 fn init() {
+    // console_subscriber::init();
     tracing::subscriber::set_global_default(
         tracing_subscriber::fmt()
             .with_max_level(tracing::Level::INFO)
             .with_writer(std::io::stdout)
-            .with_env_filter("lpc_rs::interpreter::vm=trace")
+            // .with_env_filter("lpc_rs::interpreter::vm=trace")
             // .with_env_filter("lpc_rs::interpreter::task=trace,[populate_upvalues]=trace")
             .finish(),
     )
