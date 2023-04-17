@@ -8,7 +8,7 @@ use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
+        call_outs::CallOuts, gc::gc_bank::GcBank, heap::Heap, object_space::ObjectSpace,
         process::Process, program::Program, task::Task,
     },
 };
@@ -102,7 +102,7 @@ pub async fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
         program,
         config,
         object_space,
-        Memory::default(),
+        Heap::default(),
         RwLock::new(GcBank::default()),
         call_outs,
         tx,

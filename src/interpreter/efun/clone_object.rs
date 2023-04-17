@@ -9,6 +9,7 @@ use crate::{
     compiler::CompilerBuilder,
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process, task::Task},
 };
+use crate::interpreter::into_lpc_ref::IntoLpcRef;
 
 async fn load_master<const N: usize>(
     context: &mut EfunContext<'_, N>,
@@ -84,7 +85,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
 
         // Set up the return value
         let v = Arc::downgrade(&new_clone);
-        let result = context.value_to_ref(v);
+        let result = v.into_lpc_ref(&context.memory());
 
         context.return_efun_result(result);
     } else {
@@ -108,7 +109,7 @@ mod tests {
     use crate::{
         assert_regex,
         interpreter::{
-            call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
+            call_outs::CallOuts, gc::gc_bank::GcBank, heap::Heap, object_space::ObjectSpace,
             program::Program, task_context::TaskContext, vm::vm_op::VmOp,
         },
         test_support::compile_prog,
@@ -125,7 +126,7 @@ mod tests {
             config,
             RwLock::new(process),
             ObjectSpace::default(),
-            Memory::new(10),
+            Heap::new(10),
             RwLock::new(GcBank::default()),
             Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
             tx,

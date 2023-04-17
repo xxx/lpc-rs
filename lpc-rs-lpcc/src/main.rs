@@ -5,7 +5,7 @@ use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcBank, memory::Memory, object_space::ObjectSpace,
+        call_outs::CallOuts, gc::gc_bank::GcBank, heap::Heap, object_space::ObjectSpace,
         task::Task,
     },
 };
@@ -50,7 +50,7 @@ async fn main() {
 
     match compiler.compile_in_game_file(&lpc_path, None) {
         Ok(program) => {
-            let memory = Memory::default();
+            let memory = Heap::default();
             let object_space = ObjectSpace::default();
             if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_program(
                 program,

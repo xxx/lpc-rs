@@ -9,7 +9,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::{
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcRefBank, lpc_ref::LpcRef, memory::Memory,
+        call_outs::CallOuts, gc::gc_bank::GcRefBank, lpc_ref::LpcRef, heap::Heap,
         object_space::ObjectSpace, process::Process, program::Program, vm::vm_op::VmOp,
     },
     util::get_simul_efuns,
@@ -50,7 +50,7 @@ pub struct TaskContext {
 
     /// A pointer to a memory pool to allocate new values from
     #[builder(default, setter(into))]
-    pub memory: Arc<Memory>,
+    pub memory: Arc<Heap>,
 
     /// The final result of the original function that was called
     #[builder(default)]
@@ -73,7 +73,7 @@ impl TaskContext {
         C: Into<Arc<Config>>,
         P: Into<Arc<RwLock<Process>>>,
         O: Into<Arc<ObjectSpace>>,
-        M: Into<Arc<Memory>>,
+        M: Into<Arc<Heap>>,
         U: Into<Arc<RwLock<GcRefBank>>>,
         A: Into<Arc<RwLock<CallOuts>>>,
     {
@@ -198,9 +198,9 @@ impl TaskContext {
         &self.object_space
     }
 
-    /// Return the [`Memory`]
+    /// Return the [`Heap`]
     #[inline]
-    pub fn memory(&self) -> &Arc<Memory> {
+    pub fn memory(&self) -> &Arc<Heap> {
         &self.memory
     }
 
@@ -257,7 +257,7 @@ mod tests {
             config,
             RwLock::new(process),
             space,
-            Memory::default(),
+            Heap::default(),
             upvalues,
             call_outs,
             tx,

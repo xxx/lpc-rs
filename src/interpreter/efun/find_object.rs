@@ -52,7 +52,7 @@ mod tests {
         interpreter::{
             call_outs::CallOuts,
             gc::gc_bank::GcBank,
-            memory::Memory,
+            heap::Heap,
             object_space::ObjectSpace,
             process::Process,
             program::{Program, ProgramBuilder},
@@ -74,7 +74,7 @@ mod tests {
             config,
             RwLock::new(process),
             ObjectSpace::default(),
-            Memory::new(10),
+            Heap::new(10),
             RwLock::new(GcBank::default()),
             Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
             tx,

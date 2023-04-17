@@ -27,7 +27,7 @@ use crate::{
             sweep::KeylessSweep,
         },
         lpc_ref::{LpcRef, NULL},
-        memory::Memory,
+        heap::Heap,
         object_space::ObjectSpace,
         process::Process,
         program::Program,
@@ -47,7 +47,7 @@ pub struct Vm {
     pub object_space: Arc<ObjectSpace>,
 
     /// Shared VM memory. Reference-type `LpcRef`s are allocated out of this.
-    memory: Arc<Memory>,
+    memory: Arc<Heap>,
 
     /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`]s
     pub upvalues: Arc<RwLock<GcRefBank>>,
@@ -85,7 +85,7 @@ impl Vm {
 
         Self {
             object_space: Arc::new(object_space),
-            memory: Arc::new(Memory::default()),
+            memory: Arc::new(Heap::default()),
             config: config.into(),
             upvalues: Arc::new(RwLock::new(GcBank::default())),
             call_outs: Arc::new(call_outs),

@@ -9,7 +9,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::interpreter::{
     call_frame::CallFrame, call_outs::CallOuts, call_stack::CallStack, gc::gc_bank::GcRefBank,
-    into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef, memory::Memory, process::Process, program::Program,
+    into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef, heap::Heap, process::Process, program::Program,
     task::get_location, task_context::TaskContext, vm::vm_op::VmOp,
 };
 
@@ -19,7 +19,7 @@ use crate::interpreter::{
 pub struct EfunContext<'task, const N: usize> {
     stack: &'task mut CallStack<N>,
     task_context: &'task TaskContext,
-    memory: Arc<Memory>,
+    memory: Arc<Heap>,
 
     /// Allow the user to take a snapshot of the callstack, for testing and
     /// debugging
@@ -31,7 +31,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     pub fn new(
         stack: &'task mut CallStack<N>,
         task_context: &'task TaskContext,
-        memory: Arc<Memory>,
+        memory: Arc<Heap>,
     ) -> Self {
         Self {
             stack,
@@ -74,7 +74,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     }
 
     #[inline]
-    pub fn memory(&self) -> &Arc<Memory> {
+    pub fn memory(&self) -> &Arc<Heap> {
         &self.memory
     }
 
@@ -161,13 +161,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         P: Into<Arc<RwLock<Process>>>,
     {
         self.task_context.remove_process(process);
-    }
-
-    pub fn value_to_ref<V>(&self, value: V) -> LpcRef
-    where
-        V: IntoLpcRef,
-    {
-        self.memory().value_to_ref(value)
     }
 
     /// Return a clone of the current stack, for snapshotting

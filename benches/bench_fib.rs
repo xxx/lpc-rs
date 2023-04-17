@@ -4,7 +4,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use lpc_rs::{
     compiler::Compiler,
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcRefBank, memory::Memory, object_space::ObjectSpace,
+        call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, object_space::ObjectSpace,
         task::Task,
     },
 };
@@ -34,7 +34,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let upvalues = Arc::new(RwLock::new(GcRefBank::default()));
     let (tx, _rx) = tokio::sync::mpsc::channel(1024);
     let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
-    let memory = Arc::new(Memory::default());
+    let memory = Arc::new(Heap::default());
     let runtime = tokio::runtime::Runtime::new().unwrap();
 
     c.bench_function("fib 20", |b| {

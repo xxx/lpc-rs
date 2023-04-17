@@ -14,7 +14,7 @@ use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
     into_lpc_ref::IntoLpcRef,
     lpc_ref::LpcRef,
-    memory::Memory,
+    heap::Heap,
     process::Process,
 };
 
@@ -136,7 +136,7 @@ impl Display for FunctionPtr {
 }
 
 impl IntoLpcRef for FunctionPtr {
-    fn into_lpc_ref(self, memory: &Memory) -> LpcRef {
+    fn into_lpc_ref(self, memory: &Heap) -> LpcRef {
         memory.alloc_function(self)
     }
 }

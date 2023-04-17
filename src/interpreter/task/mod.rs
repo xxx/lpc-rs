@@ -49,7 +49,7 @@ use crate::{
         lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
         lpc_string::LpcString,
-        memory::Memory,
+        heap::Heap,
         object_space::ObjectSpace,
         process::Process,
         program::Program,
@@ -255,7 +255,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         P: Into<Arc<Program>>,
         C: Into<Arc<Config>> + Debug,
         O: Into<Arc<ObjectSpace>>,
-        M: Into<Arc<Memory>>,
+        M: Into<Arc<Heap>>,
         U: Into<Arc<RwLock<GcRefBank>>>,
         A: Into<Arc<RwLock<CallOuts>>>,
     {
@@ -1915,7 +1915,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         operation: F,
     ) -> Result<()>
     where
-        F: Fn(&LpcRef, &LpcRef, &Memory) -> Result<LpcRef>,
+        F: Fn(&LpcRef, &LpcRef, &Heap) -> Result<LpcRef>,
     {
         let ref1 = &*get_location(&self.stack, r1)?;
         let ref2 = &*get_location(&self.stack, r2)?;

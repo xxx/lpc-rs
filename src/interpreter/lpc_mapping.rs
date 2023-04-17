@@ -10,7 +10,7 @@ use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
     into_lpc_ref::IntoLpcRef,
     lpc_ref::{HashedLpcRef, LpcRef},
-    memory::Memory,
+    heap::Heap,
 };
 
 /// A newtype wrapper for a map of [`HashedLpcRef`]s to [`LpcRef`]s,
@@ -135,7 +135,7 @@ impl PartialEq<IndexMap<HashedLpcRef, LpcRef>> for LpcMapping {
 }
 
 impl IntoLpcRef for LpcMapping {
-    fn into_lpc_ref(self, pool: &Memory) -> LpcRef {
+    fn into_lpc_ref(self, pool: &Heap) -> LpcRef {
         pool.alloc_mapping(self)
     }
 }
@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn test_mark() {
-        let memory = Memory::new(5);
+        let memory = Heap::new(5);
 
         let ptr = create!(FunctionPtr, upvalue_ptrs: vec![Register(4), Register(33)]);
         let key_id = *ptr.unique_id.as_ref();

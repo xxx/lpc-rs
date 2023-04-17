@@ -7,7 +7,7 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
 
 use crate::interpreter::{
-    call_outs::CallOuts, gc::gc_bank::GcRefBank, memory::Memory, object_space::ObjectSpace,
+    call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, object_space::ObjectSpace,
     program::Program, task::Task, vm::vm_op::VmOp,
 };
 
@@ -22,8 +22,8 @@ pub struct InitializeProgram<const N: usize> {
     config: Arc<Config>,
     #[builder(setter(into), default = "Arc::new(ObjectSpace::default())")]
     object_space: Arc<ObjectSpace>,
-    #[builder(setter(into), default = "Arc::new(Memory::default())")]
-    memory: Arc<Memory>,
+    #[builder(setter(into), default = "Arc::new(Heap::default())")]
+    memory: Arc<Heap>,
     #[builder(setter(into), default = "Arc::new(RwLock::new(GcRefBank::default()))")]
     vm_upvalues: Arc<RwLock<GcRefBank>>,
     #[builder(

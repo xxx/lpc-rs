@@ -12,7 +12,7 @@ pub mod lpc_int;
 pub mod lpc_mapping;
 pub mod lpc_ref;
 pub mod lpc_string;
-pub mod memory;
+pub mod heap;
 pub mod object_space;
 pub mod process;
 pub mod program;

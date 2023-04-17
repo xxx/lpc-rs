@@ -10,7 +10,7 @@ use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::string::MAX_STRING_LENGTH;
 use string_interner::{DefaultSymbol, StringInterner, Symbol};
 
-use crate::interpreter::{into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef, memory::Memory};
+use crate::interpreter::{into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef, heap::Heap};
 
 /// An enum to differentiate between statically and dynamically created strings.
 #[derive(Debug, Clone)]
@@ -141,7 +141,7 @@ impl AsRef<str> for &LpcString {
 
 impl IntoLpcRef for LpcString {
     #[inline]
-    fn into_lpc_ref(self, memory: &Memory) -> LpcRef {
+    fn into_lpc_ref(self, memory: &Heap) -> LpcRef {
         memory.alloc_string(self)
     }
 }

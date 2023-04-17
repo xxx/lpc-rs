@@ -11,9 +11,9 @@ use crate::interpreter::{
 /// The initial size (in cells) of system memory
 const MEMORY_SIZE: usize = 100_000;
 
-/// Encapsulate the shared VM heap. All tasks share the same pool.
+/// Encapsulate the shared VM heap.
 #[derive(Debug)]
-pub struct Memory {
+pub struct Heap {
     /// The string arena
     string_pool: SharedArena<RwLock<LpcString>>,
 
@@ -30,8 +30,8 @@ pub struct Memory {
     function_pool: SharedArena<RwLock<FunctionPtr>>,
 }
 
-impl Memory {
-    /// Create a new [`Memory`], with `size` slots for _each_ type.
+impl Heap {
+    /// Create a new [`Heap`], with `size` slots for _each_ type.
     pub fn new(size: usize) -> Self {
         Self {
             string_pool: SharedArena::with_capacity(size),
@@ -42,46 +42,49 @@ impl Memory {
         }
     }
 
-    /// Convert a value to an [`LpcRef`]
-    pub fn value_to_ref<V>(&self, value: V) -> LpcRef
-    where
-        V: IntoLpcRef,
-    {
+    /// Allocate a new [`LpcRef`]
+    #[inline]
+    pub fn alloc<T: IntoLpcRef>(&self, value: T) -> LpcRef {
         value.into_lpc_ref(self)
     }
 
     /// Allocate a new [`LpcString`]
+    #[inline]
     pub fn alloc_string(&self, string: LpcString) -> LpcRef {
         let arc = self.string_pool.alloc_arc(RwLock::new(string));
         LpcRef::String(arc)
     }
 
     /// Allocate a new [`LpcArray`]
+    #[inline]
     pub fn alloc_array(&self, array: LpcArray) -> LpcRef {
         let arc = self.array_pool.alloc_arc(RwLock::new(array));
         LpcRef::Array(arc)
     }
 
     /// Allocate a new [`LpcMapping`]
+    #[inline]
     pub fn alloc_mapping(&self, mapping: LpcMapping) -> LpcRef {
         let arc = self.mapping_pool.alloc_arc(RwLock::new(mapping));
         LpcRef::Mapping(arc)
     }
 
     /// Allocate a new [`Process`]
+    #[inline]
     pub fn alloc_process(&self, process: Weak<RwLock<Process>>) -> LpcRef {
         let arc = self.object_pool.alloc_arc(process);
         LpcRef::Object(arc)
     }
 
     /// Allocate a new [`FunctionPtr`]
+    #[inline]
     pub fn alloc_function(&self, function: FunctionPtr) -> LpcRef {
         let ptr = self.function_pool.alloc_arc(RwLock::new(function));
         LpcRef::Function(ptr)
     }
 }
 
-impl Default for Memory {
+impl Default for Heap {
     fn default() -> Self {
         Self::new(MEMORY_SIZE / 5)
     }

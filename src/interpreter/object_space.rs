@@ -172,7 +172,7 @@ mod tests {
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
-    use crate::interpreter::{into_lpc_ref::IntoLpcRef, lpc_array::LpcArray, memory::Memory};
+    use crate::interpreter::{into_lpc_ref::IntoLpcRef, lpc_array::LpcArray, heap::Heap};
 
     // #[test]
     // fn test_insert_master() {
@@ -242,7 +242,7 @@ mod tests {
         let config = Config::default();
         let space = ObjectSpace::new(config);
 
-        let memory = Memory::new(5);
+        let memory = Heap::new(5);
         let array = LpcArray::new(vec![]);
         let array_id = array.unique_id;
         let lpc_ref = array.into_lpc_ref(&memory);
