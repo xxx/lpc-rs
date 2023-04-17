@@ -284,7 +284,12 @@ impl Vm {
             let id = task.id;
 
             if let Err(e) = task.timed_eval(function, &args).await {
-                let _ = tx.send(VmOp::TaskError(id, e)).await;
+                let _ = tx
+                    .send(VmOp::TaskError(
+                        id,
+                        e.with_stack_trace(task.stack.stack_trace()),
+                    ))
+                    .await;
             }
         });
     }
