@@ -270,7 +270,7 @@ impl Vm {
 
             let task_context = TaskContext::new(
                 config,
-                process.clone(),
+                process,
                 object_space,
                 memory,
                 upvalues,
@@ -281,14 +281,9 @@ impl Vm {
             let mut task = Task::<MAX_CALL_STACK_SIZE>::new(task_context);
             let id = task.id;
 
-            if let Err(e) = task.prepare_function_call(process, function, &args).await {
+            if let Err(e) = task.timed_eval( function, &args).await {
                 let _ = tx.send(VmOp::TaskError(id, e)).await;
                 return;
-            }
-
-            // TODO: handle too-long evals
-            if let Err(err) = task.resume().await {
-                let _ = tx.send(VmOp::TaskError(id, err)).await;
             }
         });
     }
