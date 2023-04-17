@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use delegate::delegate;
+
 use derive_builder::Builder;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
