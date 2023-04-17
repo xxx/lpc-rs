@@ -30,8 +30,7 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use string_interner::{DefaultSymbol, Symbol};
-use tokio::{sync::mpsc::Sender, time::timeout};
-use tokio::task::JoinHandle;
+use tokio::{sync::mpsc::Sender, task::JoinHandle, time::timeout};
 use tracing::{instrument, trace, warn};
 use ustr::ustr;
 
@@ -288,7 +287,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Spawn a new tokio task to evaluate `f` to completion, or an error, with timeout.
-    pub async fn spawn_eval<const N: usize>(mut task: Task<N>, f: Arc<ProgramFunction>, args: &[LpcRef]) -> JoinHandle<Result<Task<N>>> {
+    pub async fn spawn_eval<const N: usize>(
+        mut task: Task<N>,
+        f: Arc<ProgramFunction>,
+        args: &[LpcRef],
+    ) -> JoinHandle<Result<Task<N>>> {
         let args = args.to_vec();
 
         tokio::spawn(async move {
@@ -330,7 +333,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub async fn timed_eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef]) -> Result<()> {
         let process = self.context.process();
 
-        match timeout(Duration::from_millis(300), self.eval_function(process, f, args)).await {
+        match timeout(
+            Duration::from_millis(300),
+            self.eval_function(process, f, args),
+        )
+        .await
+        {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(e)) => Err(e),
             Err(_) => Err(LpcError::new("evaluation limit of 300ms has been reached")),

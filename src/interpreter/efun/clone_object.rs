@@ -150,7 +150,9 @@ mod tests {
             .expect("first task failed");
 
         let mut task = Task::<10>::new(context);
-        task.timed_eval(func, &[]).await.expect("second task failed");
+        task.timed_eval(func, &[])
+            .await
+            .expect("second task failed");
 
         // procs are /example, /example#0, /example#1
         assert_eq!(task.context.object_space().len(), 3);

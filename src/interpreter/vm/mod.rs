@@ -4,14 +4,14 @@ use bit_set::BitSet;
 use flume::Sender as FlumeSender;
 use if_chain::if_chain;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::{
     signal,
     sync::mpsc::{Receiver, Sender},
 };
-use tracing::{info, instrument, trace};
+use tracing::{error, info, instrument, trace};
 use vm_op::VmOp;
 
 use crate::{
@@ -140,7 +140,7 @@ impl Vm {
                 Some(op) = self.rx.recv() => {
                     match op {
                         VmOp::PrioritizeCallOut(idx) => {
-                            self.op_prioritize_call_out(idx).await?;
+                            self.op_prioritize_call_out(idx).await;
                         }
                         VmOp::TaskComplete(_task_id) => {
                             // println!("task {task_id} complete");
@@ -171,100 +171,110 @@ impl Vm {
     /// * `Ok(true))` - If the call out was prioritized successfully
     /// * `Ok(false)` - If the call out was not found (e.g. has been removed)
     /// * `Err(LpcError)` - If there was an error prioritizing the call out
-    async fn op_prioritize_call_out(&mut self, idx: usize) -> Result<bool> {
-        if self.call_outs.read().get(idx).is_none() {
-            return Ok(false);
-        }
-
-        let repeating: bool;
-
-        let (process, function, args) = if_chain! {
-            let b = self.call_outs.read();
-            let call_out = b.get(idx).unwrap();
-            if let LpcRef::Function(ref func) = call_out.func_ref;
-            then {
-                repeating = call_out.is_repeating();
-                let ptr = func.read();
-
-                // call outs don't get any additional args passed to them, so just set up the partial args.
-                // use int 0 for any that were not applied at the time the pointer was created
-                // TODO: error instead of int 0?
-                let args = ptr.partial_args.iter().map(|arg| {
-                    match arg {
-                        Some(lpc_ref) => lpc_ref.clone(),
-                        None => NULL
-                    }
-                }).collect::<Vec<_>>();
-
-                match ptr.address {
-                    FunctionAddress::Local(ref proc, ref function) => {
-                        if let Some(proc) = proc.upgrade() {
-                            (proc, function.clone(), args)
-                        } else {
-                            trace!("attempted to prioritize a function pointer to a dead process");
-                            self.call_outs.write().remove(idx);
-                            return Ok(false);
-                        }
-                    },
-                    FunctionAddress::Dynamic(_) => {
-                        trace!("attempted to prioritize a dynamic receiver passed to call_out");
-                        self.call_outs.write().remove(idx);
-                        return Ok(false);
-                    },
-                    FunctionAddress::SimulEfun(name) => {
-                        let Some(simul_efuns) = get_simul_efuns(&self.config, &self.object_space) else {
-                            self.call_outs.write().remove(idx);
-                            return Err(LpcError::new_bug(
-                                "function pointer to simul_efun passed, but no simul_efuns?".to_string(),
-                            ));
-                        };
-
-                        let b = simul_efuns.read();
-                        let Some(function) = b.program.lookup_function(name) else {
-                            self.call_outs.write().remove(idx);
-                            return Err(LpcError::new(format!("call to unknown simul_efun `{name}`")));
-                        };
-
-                        (simul_efuns.clone(), function.clone(), args)
-                    },
-                    FunctionAddress::Efun(name) => {
-                        let pf = EFUN_FUNCTIONS.get(name.as_str()).unwrap();
-
-                        (Arc::new(RwLock::new(Process::default())), pf.clone(), args)
-                    }
-                }
-            }
-            else {
-                self.call_outs.write().remove(idx);
-                return Err(LpcError::new("invalid function sent to `call_out`"));
-            }
-        };
-
-        {
-            let mut call_outs = self.call_outs.write();
-            if repeating {
-                call_outs.get_mut(idx).unwrap().refresh();
-            } else {
-                call_outs.remove(idx);
-            }
-        }
-
-        let task_context = TaskContext::new(
-            self.config.clone(),
-            process.clone(),
-            self.object_space.clone(),
-            self.memory.clone(),
-            self.upvalues.clone(),
-            self.call_outs.clone(),
-            self.tx.clone(),
-        );
-
-        let mut task = Task::<MAX_CALL_STACK_SIZE>::new(task_context);
-
-        task.prepare_function_call(process, function, &args).await?;
+    async fn op_prioritize_call_out(&mut self, idx: usize) {
+        let call_outs = self.call_outs.clone();
+        let config = self.config.clone();
+        let object_space = self.object_space.clone();
+        let memory = self.memory.clone();
+        let upvalues = self.upvalues.clone();
         let tx = self.tx.clone();
 
         tokio::spawn(async move {
+            if call_outs.read().get(idx).is_none() {
+                return;
+            }
+
+            let repeating: bool;
+
+            let (process, function, args) = if_chain! {
+                let b = call_outs.read();
+                let call_out = b.get(idx).unwrap();
+                if let LpcRef::Function(ref func) = call_out.func_ref;
+                then {
+                    repeating = call_out.is_repeating();
+                    let ptr = func.read();
+
+                    // call outs don't get any additional args passed to them, so just set up the partial args.
+                    // use int 0 for any that were not applied at the time the pointer was created
+                    // TODO: error instead of int 0?
+                    let args = ptr.partial_args.iter().map(|arg| {
+                        match arg {
+                            Some(lpc_ref) => lpc_ref.clone(),
+                            None => NULL
+                        }
+                    }).collect::<Vec<_>>();
+
+                    match ptr.address {
+                        FunctionAddress::Local(ref proc, ref function) => {
+                            if let Some(proc) = proc.upgrade() {
+                                (proc, function.clone(), args)
+                            } else {
+                                trace!("attempted to prioritize a function pointer to a dead process");
+                                call_outs.write().remove(idx);
+                                return;
+                            }
+                        },
+                        FunctionAddress::Dynamic(_) => {
+                            trace!("attempted to prioritize a dynamic receiver passed to call_out");
+                            call_outs.write().remove(idx);
+                            return;
+                        },
+                        FunctionAddress::SimulEfun(name) => {
+                            let Some(simul_efuns) = get_simul_efuns(&config, &object_space) else {
+                                call_outs.write().remove(idx);
+                                error!("function pointer to simul_efun passed, but no simul_efuns?");
+                                return;
+                            };
+
+                            let b = simul_efuns.read();
+                            let Some(function) = b.program.lookup_function(name) else {
+                                call_outs.write().remove(idx);
+                                error!("call to unknown simul_efun `{name}`");
+                                return;
+                            };
+
+                            (simul_efuns.clone(), function.clone(), args)
+                        },
+                        FunctionAddress::Efun(name) => {
+                            let pf = EFUN_FUNCTIONS.get(name.as_str()).unwrap();
+
+                            (Arc::new(RwLock::new(Process::default())), pf.clone(), args)
+                        }
+                    }
+                }
+                else {
+                    call_outs.write().remove(idx);
+                    error!("invalid function sent to `call_out`");
+                    return;
+                }
+            };
+
+            {
+                let mut call_outs = call_outs.write();
+                if repeating {
+                    call_outs.get_mut(idx).unwrap().refresh();
+                } else {
+                    call_outs.remove(idx);
+                }
+            }
+
+            let task_context = TaskContext::new(
+                config,
+                process.clone(),
+                object_space,
+                memory,
+                upvalues,
+                call_outs,
+                tx.clone(),
+            );
+
+            let mut task = Task::<MAX_CALL_STACK_SIZE>::new(task_context);
+
+            if let Err(e) = task.prepare_function_call(process, function, &args).await {
+                error!("error preparing call out: {}", e);
+                return;
+            }
+
             let id = task.id;
             // TODO: handle too-long evals
             let r = task.resume().await;
@@ -272,8 +282,6 @@ impl Vm {
                 let _ = tx.send(VmOp::TaskError(id, r.unwrap_err())).await;
             }
         });
-
-        Ok(true)
     }
 
     /// Initialize the simulated efuns file, if it is configured.
