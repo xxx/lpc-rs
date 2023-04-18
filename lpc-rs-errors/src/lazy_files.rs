@@ -1,6 +1,5 @@
 use std::{
     ffi::{OsStr, OsString},
-    marker::PhantomData,
     ops::Range,
     path::Path,
 };
@@ -71,7 +70,6 @@ where
     Name: AsRef<Path> + Clone + std::fmt::Display,
 {
     paths: Vec<LazyFile<Name, Source>>,
-    source: PhantomData<Source>,
 }
 
 impl<Name, Source> LazyFiles<Name, Source>
@@ -191,7 +189,6 @@ where
     fn default() -> Self {
         Self {
             paths: vec![],
-            source: PhantomData,
         }
     }
 }
