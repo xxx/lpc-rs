@@ -70,9 +70,13 @@ impl Telnet {
 
             loop {
                 while let Ok((stream, remote_ip)) = listener.accept().await {
-                    info!("New connection from {}", &remote_ip);
+                    let broker_tx = broker_tx.clone();
 
-                    Self::new_connection(stream, remote_ip, broker_tx.clone());
+                    tokio::spawn(async move {
+                        info!("New connection from {}", &remote_ip);
+
+                        Self::set_up_connection(stream, remote_ip, broker_tx).await;
+                    });
                 }
             }
         });
@@ -81,65 +85,63 @@ impl Telnet {
     }
 
     /// Start the main loop for a single user's connection. Handles sends and receives.
-    fn new_connection(stream: TcpStream, remote_ip: SocketAddr, broker_tx: FlumeSender<BrokerOp>) {
+    async fn set_up_connection(stream: TcpStream, remote_ip: SocketAddr, broker_tx: FlumeSender<BrokerOp>) {
         // connection ID 0 is reserved for system use
         static CONNECTION_ID: AtomicU32 = AtomicU32::new(1);
 
-        tokio::spawn(async move {
-            let codec = TelnetCodec::new(4096);
-            let (mut sink, mut input) = codec.framed(stream).split();
+        let codec = TelnetCodec::new(4096);
+        let (mut sink, mut input) = codec.framed(stream).split();
 
-            // negotiations
+        // negotiations
 
-            // TODO: login / auth
+        // TODO: login / auth
 
-            let (tx, mut rx) = mpsc::channel::<ConnectionOp>(128);
+        let (tx, mut rx) = mpsc::channel::<ConnectionOp>(128);
 
-            let connection_id = ConnectionId(CONNECTION_ID.fetch_add(1, Ordering::Relaxed));
-            let connection = Connection {
-                id: connection_id,
-                address: remote_ip,
-            };
+        let connection_id = ConnectionId(CONNECTION_ID.fetch_add(1, Ordering::Relaxed));
+        let connection = Connection {
+            id: connection_id,
+            address: remote_ip,
+        };
 
-            let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection, tx)).await else {
-                let msg = TelnetEvent::Message("The server is currently unable to accept new connections. Please try again shortly.".to_string());
-                let _ = sink.send(msg).await;
-                error!(?connection_id, "Failed to send BrokerOp::NewConnection. Dropping connection.");
-                return;
-            };
+        let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection, tx)).await else {
+            let msg = TelnetEvent::Message("The server is currently unable to accept new connections. Please try again shortly.".to_string());
+            let _ = sink.send(msg).await;
+            error!(?connection_id, "Failed to send BrokerOp::NewConnection. Dropping connection.");
+            return;
+        };
 
-            loop {
-                tokio::select! {
-                    send_to_user = rx.recv() => {
-                        trace!("Received message from VM: {:?}", send_to_user);
+        loop {
+            tokio::select! {
+                send_to_user = rx.recv() => {
+                    trace!("Received message from VM: {:?}", send_to_user);
 
-                        match send_to_user {
-                            Some(ConnectionOp::SendMessage(msg)) => {
-                                let _ = sink.send(TelnetEvent::Message(msg)).await;
-                            },
-                            None => {
-                                info!("Broker closed the channel for {}. Closing connection.", &remote_ip);
-                                break;
-                            }
+                    match send_to_user {
+                        Some(ConnectionOp::SendMessage(msg)) => {
+                            let _ = sink.send(TelnetEvent::Message(msg)).await;
+                        },
+                        None => {
+                            info!("Broker closed the channel for {}. Closing connection.", &remote_ip);
+                            break;
                         }
                     }
-                    received_from_user = input.next() => {
-                        match received_from_user {
-                            Some(Ok(msg)) => {
-                                Self::handle_input_event(msg, &mut sink).await;
-                            }
-                            Some(Err(e)) => {
-                                warn!("User input error: {:?}", e);
-                            }
-                            None => {
-                                info!("Connection closed from {}", &remote_ip);
-                                break;
-                            }
-                        }
-                    },
                 }
+                received_from_user = input.next() => {
+                    match received_from_user {
+                        Some(Ok(msg)) => {
+                            Self::handle_input_event(msg, &mut sink).await;
+                        }
+                        Some(Err(e)) => {
+                            warn!("User input error: {:?}", e);
+                        }
+                        None => {
+                            info!("Connection closed from {}", &remote_ip);
+                            break;
+                        }
+                    }
+                },
             }
-        });
+        }
     }
 
     async fn handle_input_event(
