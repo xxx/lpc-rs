@@ -73,7 +73,7 @@ impl Telnet {
                     let handle = tokio::spawn(async move {
                         info!("New connection from {}", &remote_ip);
 
-                        Self::set_up_connection(stream, remote_ip, spawn_broker_tx).await;
+                        Self::connection_loop(stream, remote_ip, spawn_broker_tx).await;
                     });
 
                     let Ok(_) = broker_tx.send_async(BrokerOp::NewHandle(remote_ip, handle)).await else {
@@ -89,7 +89,7 @@ impl Telnet {
 
     /// Start the main loop for a single user's connection. Handles sends and receives.
     #[instrument(skip(stream, broker_tx))]
-    async fn set_up_connection(
+    async fn connection_loop(
         stream: TcpStream,
         remote_ip: SocketAddr,
         broker_tx: FlumeSender<BrokerOp>,
