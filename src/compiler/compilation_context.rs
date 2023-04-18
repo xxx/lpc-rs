@@ -11,7 +11,7 @@ use lpc_rs_function_support::{
     program_function::ProgramFunction, symbol::Symbol,
 };
 use lpc_rs_utils::config::Config;
-use parking_lot::RwLock;
+
 use string_interner::StringInterner;
 use ustr::Ustr;
 

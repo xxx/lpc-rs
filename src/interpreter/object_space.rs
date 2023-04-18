@@ -7,7 +7,7 @@ use bit_set::BitSet;
 use dashmap::{mapref::one::Ref, DashMap};
 use delegate::delegate;
 use lpc_rs_utils::config::Config;
-use parking_lot::RwLock;
+
 
 use crate::interpreter::{gc::mark::Mark, process::Process, program::Program};
 
@@ -247,7 +247,7 @@ mod tests {
         let array_id = array.unique_id;
         let lpc_ref = array.into_lpc_ref(&memory);
 
-        let mut process = Process::default();
+        let process = Process::default();
         process.globals.write().push(lpc_ref);
 
         space.insert_process_directly("process", process);

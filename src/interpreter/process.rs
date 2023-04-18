@@ -169,7 +169,7 @@ mod tests {
         let array_id = array.unique_id;
         let lpc_ref = array.into_lpc_ref(&memory);
 
-        let mut process = Process::default();
+        let process = Process::default();
         process.globals.write().push(lpc_ref);
 
         let mut marked = BitSet::new();

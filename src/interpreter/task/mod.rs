@@ -141,7 +141,7 @@ where
         RegisterVariant::Global(reg) => {
             let frame = stack.current_frame()?;
 
-            let mut proc = &frame.process;
+            let proc = &frame.process;
             func(&mut proc.globals.write()[reg])
         }
         RegisterVariant::Upvalue(reg) => {
@@ -4429,7 +4429,7 @@ mod tests {
                 Int(0),
                 Int(1),
             ];
-            BareVal::assert_vec_equal(&expected, &*proc.globals.read());
+            BareVal::assert_vec_equal(&expected, &proc.globals.read());
         }
     }
 

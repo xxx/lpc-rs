@@ -6,7 +6,7 @@ use std::{
 use bit_set::BitSet;
 use itertools::Itertools;
 use lpc_rs_core::register::Register;
-use parking_lot::RwLock;
+
 use tracing::{instrument, trace};
 
 use crate::interpreter::{

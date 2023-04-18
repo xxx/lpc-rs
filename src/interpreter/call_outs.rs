@@ -6,7 +6,7 @@ use delegate::delegate;
 use educe::Educe;
 use if_chain::if_chain;
 use lpc_rs_errors::Result;
-use parking_lot::RwLock;
+
 use stable_vec::StableVec;
 use tokio::{sync::mpsc::Sender, task::JoinHandle, time::Instant};
 

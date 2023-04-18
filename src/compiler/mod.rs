@@ -14,7 +14,7 @@ use lexer::{Spanned, Token, TokenVecWrapper};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{span::Span, LpcError, LpcErrorSeverity, Result};
 use lpc_rs_utils::{config::Config, read_lpc_file};
-use parking_lot::RwLock;
+
 use preprocessor::Preprocessor;
 use tracing::instrument;
 use ustr::ustr;

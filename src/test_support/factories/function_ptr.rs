@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use factori::factori;
-use parking_lot::RwLock;
+
 use ustr::ustr;
 
 use crate::interpreter::{
