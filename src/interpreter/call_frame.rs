@@ -9,7 +9,7 @@ use derive_builder::Builder;
 use educe::Educe;
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::register::{Register, RegisterVariant};
-use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_errors::{span::Span, LpcError, Result, lpc_error, lpc_bug};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use parking_lot::RwLock;
 use tracing::{instrument, trace};
@@ -276,15 +276,13 @@ impl CallFrame {
     /// a convenience method to generate a runtime error
     #[inline]
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
-        LpcError::new(format!("runtime error: {}", msg.as_ref()))
-            .with_span(self.current_debug_span())
+        lpc_error!(self.current_debug_span(), "runtime error: {}", msg.as_ref())
     }
 
     /// a convenience method to generate a runtime bug
     #[inline]
     pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
-        LpcError::new_bug(format!("runtime bug: {}", msg.as_ref()))
-            .with_span(self.current_debug_span())
+        lpc_bug!(self.current_debug_span(), "runtime bug: {}", msg.as_ref())
     }
 
     /// get a string representation of the frame's current current location

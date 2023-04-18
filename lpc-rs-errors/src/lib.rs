@@ -28,6 +28,75 @@ pub enum LpcErrorSeverity {
     Bug,
 }
 
+/// A convenience helper for creating a new `LpcError`. (`Error` severity)
+#[macro_export]
+macro_rules! lpc_error {
+    ($span:expr, $msg:literal $(,)?) => {
+        $crate::LpcError::new($msg).with_span($span)
+    };
+    ($span:expr, $fmt:expr, $($arg:tt)*) => {
+        $crate::LpcError::new(format!($fmt, $($arg)*)).with_span($span)
+    };
+    ($span:expr, $err:expr $(,)?) => {
+        $crate::LpcError::new($err).with_span($span)
+    };
+    ($msg:literal $(,)?) => {
+        $crate::LpcError::new($msg)
+    };
+    ($err:expr $(,)?) => {
+        $crate::LpcError::new($err)
+    };
+    ($fmt:expr, $($arg:tt)*) => {
+        $crate::LpcError::new(format!($fmt, $($arg)*))
+    };
+}
+
+/// A convenience helper for creating a new `LpcError`. (`Warning` severity)
+#[macro_export]
+macro_rules! lpc_warning {
+    ($span:expr, $msg:literal $(,)?) => {
+        $crate::LpcError::new_warning($msg).with_span($span)
+    };
+    ($span:expr, $fmt:expr, $($arg:tt)*) => {
+        $crate::LpcError::new_warning(format!($fmt, $($arg)*)).with_span($span)
+    };
+    ($span:expr, $err:expr $(,)?) => {
+        $crate::LpcError::new_warning($err).with_span($span)
+    };
+    ($msg:literal $(,)?) => {
+        $crate::LpcError::new_warning($msg)
+    };
+    ($err:expr $(,)?) => {
+        $crate::LpcError::new_warning($err)
+    };
+    ($fmt:expr, $($arg:tt)*) => {
+        $crate::LpcError::new_warning(format!($fmt, $($arg)*))
+    };
+}
+
+/// A convenience helper for creating a new `LpcError`. (`Bug` severity)
+#[macro_export]
+macro_rules! lpc_bug {
+    ($span:expr, $msg:literal $(,)?) => {
+        $crate::LpcError::new_bug($msg).with_span($span)
+    };
+    ($span:expr, $fmt:expr, $($arg:tt)*) => {
+        $crate::LpcError::new_bug(format!($fmt, $($arg)*)).with_span($span)
+    };
+    ($span:expr, $err:expr $(,)?) => {
+        $crate::LpcError::new_bug($err).with_span($span)
+    };
+    ($msg:literal $(,)?) => {
+        $crate::LpcError::new_bug($msg)
+    };
+    ($err:expr $(,)?) => {
+        $crate::LpcError::new_bug($err)
+    };
+    ($fmt:expr, $($arg:tt)*) => {
+        $crate::LpcError::new_bug(format!($fmt, $($arg)*))
+    };
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LpcError {
     /// The main message to be printed out
