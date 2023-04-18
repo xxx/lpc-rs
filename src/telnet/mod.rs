@@ -74,12 +74,18 @@ impl Telnet {
             loop {
                 while let Ok((stream, remote_ip)) = listener.accept().await {
                     let broker_tx = broker_tx.clone();
+                    let cid = ConnectionId(connection_id);
 
-                    tokio::spawn(async move {
+                    let handle = tokio::spawn(async move {
                         info!("New connection from {}", &remote_ip);
 
-                        Self::set_up_connection(ConnectionId(connection_id), stream, remote_ip, broker_tx).await;
+                        Self::set_up_connection(cid, stream, remote_ip, broker_tx).await;
                     });
+
+                    let _ = broker_tx.send_async(BrokerOp::NewHandle(cid, handle)).await else {
+                        error!(?connection_id, "Failed to send BrokerOp::NewHandle. Dropping connection.");
+                        continue;
+                    };
                 }
 
                 connection_id += 1;
@@ -128,6 +134,7 @@ impl Telnet {
                         },
                         None => {
                             info!("Broker closed the channel for {}. Closing connection.", &remote_ip);
+                            let _ = broker_tx.send_async(BrokerOp::Disconnect(connection_id)).await;
                             break;
                         }
                     }
