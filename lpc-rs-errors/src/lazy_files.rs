@@ -187,9 +187,7 @@ where
     Name: AsRef<Path> + Clone + std::fmt::Display,
 {
     fn default() -> Self {
-        Self {
-            paths: vec![],
-        }
+        Self { paths: vec![] }
     }
 }
 

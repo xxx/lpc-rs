@@ -103,8 +103,8 @@ mod tests {
     use std::sync::Arc;
 
     use indoc::indoc;
-    use parking_lot::RwLock;
     use lpc_rs_utils::config::Config;
+    use parking_lot::RwLock;
 
     use super::*;
     use crate::{

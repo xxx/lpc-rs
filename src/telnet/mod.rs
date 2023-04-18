@@ -1,10 +1,7 @@
 pub mod connection_broker;
 pub mod ops;
 
-use std::{
-    net::SocketAddr,
-    sync::atomic::{AtomicU32, Ordering},
-};
+use std::net::SocketAddr;
 
 use flume::Sender as FlumeSender;
 use futures::{stream::SplitSink, SinkExt, StreamExt};
@@ -96,7 +93,12 @@ impl Telnet {
     }
 
     /// Start the main loop for a single user's connection. Handles sends and receives.
-    async fn set_up_connection(connection_id: ConnectionId, stream: TcpStream, remote_ip: SocketAddr, broker_tx: FlumeSender<BrokerOp>) {
+    async fn set_up_connection(
+        connection_id: ConnectionId,
+        stream: TcpStream,
+        remote_ip: SocketAddr,
+        broker_tx: FlumeSender<BrokerOp>,
+    ) {
         let codec = TelnetCodec::new(4096);
         let (mut sink, mut input) = codec.framed(stream).split();
 

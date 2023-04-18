@@ -9,7 +9,7 @@ use derive_builder::Builder;
 use educe::Educe;
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::register::{Register, RegisterVariant};
-use lpc_rs_errors::{span::Span, LpcError, Result, lpc_error, lpc_bug};
+use lpc_rs_errors::{lpc_bug, lpc_error, span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use parking_lot::RwLock;
 use tracing::{instrument, trace};

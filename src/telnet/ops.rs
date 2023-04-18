@@ -1,5 +1,4 @@
-use tokio::sync::mpsc::Sender;
-use tokio::task::JoinHandle;
+use tokio::{sync::mpsc::Sender, task::JoinHandle};
 
 use crate::telnet::connection_broker::{Connection, ConnectionId};
 

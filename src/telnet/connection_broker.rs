@@ -1,10 +1,12 @@
-use std::{net::SocketAddr, sync::Arc};
-use std::fmt::{Display, Formatter};
+use std::{
+    fmt::{Display, Formatter},
+    net::SocketAddr,
+    sync::Arc,
+};
 
 use dashmap::DashMap;
 use flume::Receiver as FlumeReceiver;
-use tokio::{net::ToSocketAddrs, sync::mpsc::Sender};
-use tokio::task::JoinHandle;
+use tokio::{net::ToSocketAddrs, sync::mpsc::Sender, task::JoinHandle};
 use tracing::{error, info, instrument, trace};
 
 use crate::{
@@ -108,7 +110,10 @@ impl ConnectionBroker {
                                     handle.abort();
                                 }
                                 None => {
-                                    error!("Failed to find handle for connection {}", connection_id.0);
+                                    error!(
+                                        "Failed to find handle for connection {}",
+                                        connection_id.0
+                                    );
                                 }
                             }
 
@@ -155,6 +160,7 @@ impl ConnectionBroker {
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
+
     use super::*;
 
     #[tokio::test]
