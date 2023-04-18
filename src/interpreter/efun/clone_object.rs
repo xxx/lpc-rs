@@ -85,7 +85,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
 
         // Set up the return value
         let v = Arc::downgrade(&new_clone);
-        let result = v.into_lpc_ref(&context.memory());
+        let result = v.into_lpc_ref(context.memory());
 
         context.return_efun_result(result);
     } else {

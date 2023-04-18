@@ -3,7 +3,8 @@ use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::{LpcError, Result};
 
 /// The maximum length of strings, *in bytes*
-pub const MAX_STRING_LENGTH: usize = 1_073_741_824; // 1 GiB
+// pub const MAX_STRING_LENGTH: usize = 1_073_741_824; // 1 GiB
+pub const MAX_STRING_LENGTH: usize = 8192;
 
 /// Repeat `s`, `i` times, and return a new String of it.
 ///

@@ -8,7 +8,7 @@ use tracing::{info, warn};
 use ustr::{ustr, Ustr};
 
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
-const DEFAULT_MAX_EXECUTION_TIME: usize = 300;
+const DEFAULT_MAX_EXECUTION_TIME: u64 = 300;
 
 /// The main struct that handles runtime use configurations.
 #[derive(Debug, Builder)]
@@ -36,7 +36,7 @@ pub struct Config {
     #[builder(default = "ustr(\"/secure/master.c\")")]
     pub master_object: Ustr,
 
-    #[builder(setter(into), default = "300")]
+    #[builder(setter(into), default = "DEFAULT_MAX_EXECUTION_TIME")]
     pub max_execution_time: u64,
 
     #[builder(default = "DEFAULT_MAX_INHERIT_DEPTH")]
