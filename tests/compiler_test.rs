@@ -61,7 +61,7 @@ async fn test_inheritance() {
     let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
-    let prog = &proc.read().program;
+    let prog = &proc.program;
 
     assert_eq!(prog.num_globals, 5);
     assert_eq!(prog.num_init_registers(), 6);
@@ -84,7 +84,7 @@ async fn test_dynamic_receiver() {
     let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
-    let prog = &proc.read().program;
+    let prog = &proc.program;
 
     assert_eq!(prog.num_globals, 0);
     assert_eq!(prog.num_init_registers(), 1);
@@ -119,8 +119,7 @@ async fn test_duffs_device() {
     let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
-    let borrowed = proc.read();
-    let b = &borrowed.globals[1];
+    let b = &proc.globals.read()[1];
 
     if_chain! {
         if let LpcRef::Array(pool_ref) = b;
@@ -167,11 +166,11 @@ async fn test_closures() {
     let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
-    let borrowed = proc.read();
+    let globals = proc.globals.read();
 
-    assert_eq!(borrowed.globals.len(), 2);
+    assert_eq!(globals.len(), 2);
     assert_eq!(
-        borrowed.globals.last().unwrap().to_string(),
+        globals.last().unwrap().to_string(),
         "I'll take 4 tacos with crema on the side, por favor.".to_string()
     );
 }
@@ -191,9 +190,9 @@ async fn test_multi_dimensional_arrays() {
 
     let task = run_prog(code).await;
     let ctx = task.context;
-    let pr = ctx.process();
-    let proc = pr.read();
-    let x_ref = proc.globals.last().unwrap();
+    let proc = ctx.process();
+    let globals = proc.globals.read();
+    let x_ref = globals.last().unwrap();
     let LpcRef::Array(arr) = x_ref else {
         panic!("this shouldn't be reachable.");
     };
@@ -291,7 +290,6 @@ async fn test_inherited_create_called_when_not_overridden() {
 
     let init = child_ctx
         .process()
-        .read()
         .program
         .initializer
         .clone()

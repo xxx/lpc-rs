@@ -12,9 +12,8 @@ use crate::interpreter::{
 
 factori!(FunctionPtr, {
     default {
-        owner = Arc::downgrade(&Arc::new(RwLock::new(Process::default()))),
+        owner = Arc::downgrade(&Arc::new(Process::default())),
         address = FunctionAddress::Efun(ustr("dump")),
-        // arity = FunctionArity::default(),
         partial_args = vec![],
         call_other = false,
         upvalue_ptrs = vec![],

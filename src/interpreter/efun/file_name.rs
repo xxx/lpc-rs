@@ -21,7 +21,7 @@ pub async fn file_name<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         | LpcRef::Function(_) => NULL,
         LpcRef::Object(proc) => {
             if let Some(proc) = proc.upgrade() {
-                let path = LpcPath::new_server(&*proc.read().filename());
+                let path = LpcPath::new_server(&*proc.filename());
 
                 let s = LpcString::from(String::from(
                     path.as_in_game(&*context.config().lib_dir)

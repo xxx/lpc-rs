@@ -26,7 +26,7 @@ pub struct TaskContext {
     /// The [`Process`] that owns the function being
     /// called in this [`Task`](crate::interpreter::task::Task).
     #[builder(setter(into))]
-    pub process: Arc<RwLock<Process>>,
+    pub process: Arc<Process>,
 
     /// The global [`ObjectSpace`]
     #[builder(setter(into))]
@@ -34,7 +34,7 @@ pub struct TaskContext {
 
     /// Direct pointer to the simul efuns
     #[builder(default, setter(strip_option))]
-    pub simul_efuns: Option<Arc<RwLock<Process>>>,
+    pub simul_efuns: Option<Arc<Process>>,
 
     /// The [`GcBank`](crate::interpreter::gc::gc_bank::GcBank) that stores all of the upvalues in
     /// the system, from the [`Vm`](crate::interpreter::vm::Vm).
@@ -71,7 +71,7 @@ impl TaskContext {
     ) -> Self
     where
         C: Into<Arc<Config>>,
-        P: Into<Arc<RwLock<Process>>>,
+        P: Into<Arc<Process>>,
         O: Into<Arc<ObjectSpace>>,
         M: Into<Arc<Heap>>,
         U: Into<Arc<RwLock<GcRefBank>>>,
@@ -97,7 +97,7 @@ impl TaskContext {
     /// Set the process for an existing TaskContext
     pub fn with_process<P>(mut self, process: P) -> Self
     where
-        P: Into<Arc<RwLock<Process>>>,
+        P: Into<Arc<Process>>,
     {
         self.process = process.into();
 
@@ -106,7 +106,7 @@ impl TaskContext {
 
     /// Lookup the process with the passed path.
     #[inline]
-    pub fn lookup_process<T>(&self, path: T) -> Option<Arc<RwLock<Process>>>
+    pub fn lookup_process<T>(&self, path: T) -> Option<Arc<Process>>
     where
         T: AsRef<str>,
     {
@@ -118,7 +118,7 @@ impl TaskContext {
     #[inline]
     pub fn insert_process<P>(&self, process: P)
     where
-        P: Into<Arc<RwLock<Process>>>,
+        P: Into<Arc<Process>>,
     {
         ObjectSpace::insert_process(&self.object_space, process)
     }
@@ -127,7 +127,7 @@ impl TaskContext {
     #[inline]
     pub fn remove_process<P>(&self, process: P)
     where
-        P: Into<Arc<RwLock<Process>>>,
+        P: Into<Arc<Process>>,
     {
         ObjectSpace::remove_process(&self.object_space, process)
     }
@@ -135,15 +135,14 @@ impl TaskContext {
     /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
     /// then insert it into the object space.
     #[inline]
-    pub fn insert_clone(&self, program: Arc<Program>) -> Arc<RwLock<Process>> {
+    pub fn insert_clone(&self, program: Arc<Program>) -> Arc<Process> {
         ObjectSpace::insert_clone(&self.object_space, program)
     }
 
     /// Get the in-game directory of the current process.
     /// This assumes an already-dedotted path
     pub fn in_game_cwd(&self) -> PathBuf {
-        let process = self.process.read();
-        let current_cwd = process.cwd();
+        let current_cwd = self.process.cwd();
 
         match current_cwd.strip_prefix(&*self.config.lib_dir) {
             Ok(x) => {
@@ -181,14 +180,14 @@ impl TaskContext {
 
     /// Return the current pointer to the simul_efuns, if any
     #[inline]
-    pub fn simul_efuns(&self) -> Option<Arc<RwLock<Process>>> {
+    pub fn simul_efuns(&self) -> Option<Arc<Process>> {
         self.simul_efuns.clone()
     }
 
     /// Return the [`Process`] that the task roots from.
     /// This *does not* change over the life of the task.
     #[inline]
-    pub fn process(&self) -> Arc<RwLock<Process>> {
+    pub fn process(&self) -> Arc<Process> {
         self.process.clone()
     }
 
@@ -255,7 +254,7 @@ mod tests {
         let call_outs = RwLock::new(CallOuts::new(tx.clone()));
         let context = TaskContext::new(
             config,
-            RwLock::new(process),
+            process,
             space,
             Heap::default(),
             upvalues,

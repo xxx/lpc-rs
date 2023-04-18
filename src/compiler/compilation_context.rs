@@ -83,7 +83,7 @@ pub struct CompilationContext {
     pub num_init_registers: usize,
 
     /// Pointer to the simul efuns
-    pub simul_efuns: Option<Arc<RwLock<Process>>>,
+    pub simul_efuns: Option<Arc<Process>>,
 
     /// The count of closures that have been defined, so we can give them unique
     /// names.
@@ -159,8 +159,8 @@ impl CompilationContext {
                     self.simul_efuns
                         .as_ref()
                         .and_then(|rc| {
-                            rc.read()
-                                .as_ref()
+                            rc
+                                .program
                                 .lookup_function(nm)
                                 .map(|f| FunctionLike::from(f.clone()))
                         })
@@ -221,7 +221,7 @@ impl CompilationContext {
             return self
                 .simul_efuns
                 .as_ref()
-                .map(|rc| rc.read().as_ref().contains_function(name))
+                .map(|rc| rc.program.contains_function(name))
                 .unwrap_or(false)
                 || EFUN_PROTOTYPES.contains_key(name);
             // return EFUN_PROTOTYPES.contains_key(name);
@@ -353,7 +353,7 @@ mod tests {
 
         context.inherit_names.insert("my_named_inherit".into(), 0);
 
-        let proc = RwLock::new(Process::new(simul_efuns));
+        let proc = Process::new(simul_efuns);
         context.simul_efuns = Some(proc.into());
         // lookup_function
 

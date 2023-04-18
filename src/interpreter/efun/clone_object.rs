@@ -16,7 +16,7 @@ use crate::{
 async fn load_master<const N: usize>(
     context: &mut EfunContext<'_, N>,
     path: &str,
-) -> Result<Arc<RwLock<Process>>> {
+) -> Result<Arc<Process>> {
     let full_path = LpcPath::new_in_game(path, context.in_game_cwd(), &*context.config().lib_dir);
     let path_str: &str = full_path.as_ref();
 
@@ -32,7 +32,7 @@ async fn load_master<const N: usize>(
                     let Some(prog_function) = prog.initializer.clone() else {
                         return Err(LpcError::new("Init function not found on master?"));
                     };
-                    let process: Arc<RwLock<Process>> = RwLock::new(Process::new(prog)).into();
+                    let process: Arc<Process> = Process::new(prog).into();
                     context.insert_process(process.clone());
 
                     let new_context = context.clone_task_context().with_process(process.clone());
@@ -65,16 +65,15 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         let master = load_master(context, &path).await?;
 
         {
-            let borrowed = master.read();
-            if borrowed.program.pragmas.no_clone() {
+            if master.program.pragmas.no_clone() {
                 return Err(context.runtime_error(format!(
                     "{} has `#pragma no_clone` enabled, and so cannot be cloned.",
-                    borrowed.program.filename
+                    master.program.filename
                 )));
             }
         }
 
-        let new_prog = master.read().program.clone();
+        let new_prog = master.program.clone();
         let Some(initializer) = new_prog.initializer.clone() else {
             return Err(LpcError::new("Init function not found on clone?"));
         };
@@ -126,7 +125,7 @@ mod tests {
 
         TaskContext::new(
             config,
-            RwLock::new(process),
+            process,
             ObjectSpace::default(),
             Heap::new(10),
             RwLock::new(GcBank::default()),

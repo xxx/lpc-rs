@@ -21,7 +21,7 @@ const OBJECT_SPACE_SIZE: usize = 100_000;
 #[derive(Debug)]
 pub struct ObjectSpace {
     /// The actual mapping of "paths" to processes
-    processes: DashMap<String, Arc<RwLock<Process>>>,
+    processes: DashMap<String, Arc<Process>>,
 
     /// How many clones have been created so far?
     clone_count: AtomicUsize,
@@ -60,22 +60,22 @@ impl ObjectSpace {
     // /// added, the new will overwrite the old in the table.
     // /// Storage keys are the in-game filename
     // pub fn insert_master(&mut self, program: Program) ->
-    // Arc<RwLock<Process>> {     let new = Process::new(program);
-    //     let process: Arc<RwLock<Process>> = RwLock::new(new).into();
+    // Arc<Process> {     let new = Process::new(program);
+    //     let process: Arc<Process> = RwLock::new(new).into();
     //     let name = self.prepare_filename(&process);
     //     self.insert_process_directly(name, process.clone());
     //     process
     // }
 
     /// Insert a clone of the passed [`Program`] into the space.
-    pub fn insert_clone(space_cell: &Arc<Self>, program: Arc<Program>) -> Arc<RwLock<Process>> {
+    pub fn insert_clone(space_cell: &Arc<Self>, program: Arc<Program>) -> Arc<Process> {
         let count = space_cell.clone_count.fetch_add(1, Ordering::Relaxed);
 
         let clone = Process::new_clone(program, count);
 
         let name = space_cell.prepare_filename(&clone);
 
-        let process: Arc<RwLock<Process>> = RwLock::new(clone).into();
+        let process: Arc<Process> = clone.into();
 
         space_cell.insert_process_directly(name, process.clone());
         process
@@ -85,20 +85,20 @@ impl ObjectSpace {
     /// local filename.
     pub fn insert_process<P>(space_cell: &Arc<Self>, process: P)
     where
-        P: Into<Arc<RwLock<Process>>>,
+        P: Into<Arc<Process>>,
     {
         let process = process.into();
-        let name = { space_cell.prepare_filename(&process.read()) };
+        let name = { space_cell.prepare_filename(&process) };
 
         space_cell.insert_process_directly(name, process);
     }
 
     pub fn remove_process<P>(space_cell: &Arc<Self>, process: P)
     where
-        P: Into<Arc<RwLock<Process>>>,
+        P: Into<Arc<Process>>,
     {
         let process = process.into();
-        let name = { space_cell.prepare_filename(&process.read()) };
+        let name = { space_cell.prepare_filename(&process) };
 
         space_cell.processes.remove(&name);
     }
@@ -116,14 +116,14 @@ impl ObjectSpace {
     #[inline]
     fn insert_process_directly<P, S>(&self, name: S, process: P)
     where
-        P: Into<Arc<RwLock<Process>>>,
+        P: Into<Arc<Process>>,
         S: Into<String>,
     {
         self.processes.insert(name.into(), process.into());
     }
 
     /// Lookup a process from its path.
-    pub fn lookup<T>(&self, path: T) -> Option<Ref<String, Arc<RwLock<Process>>>>
+    pub fn lookup<T>(&self, path: T) -> Option<Ref<String, Arc<Process>>>
     where
         T: AsRef<str>,
     {
@@ -157,7 +157,7 @@ impl Mark for ObjectSpace {
     #[inline]
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
         for process in self.processes.iter() {
-            process.read().mark(marked, processed)?;
+            process.mark(marked, processed)?;
         }
 
         Ok(())
@@ -231,7 +231,7 @@ mod tests {
 
         let process = Process::new(prog);
         let space_cell = space.into();
-        ObjectSpace::insert_process(&space_cell, RwLock::new(process));
+        ObjectSpace::insert_process(&space_cell, process);
 
         assert_eq!(space_cell.len(), 1);
         assert!(space_cell.processes.contains_key("/foo/bar/baz"));
@@ -248,9 +248,9 @@ mod tests {
         let lpc_ref = array.into_lpc_ref(&memory);
 
         let mut process = Process::default();
-        process.globals.push(lpc_ref);
+        process.globals.write().push(lpc_ref);
 
-        space.insert_process_directly("process", RwLock::new(process));
+        space.insert_process_directly("process", process);
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();

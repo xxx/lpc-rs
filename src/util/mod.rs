@@ -8,7 +8,7 @@ use crate::interpreter::{object_space::ObjectSpace, process::Process};
 pub fn get_simul_efuns(
     config: &Config,
     object_space: &ObjectSpace,
-) -> Option<Arc<RwLock<Process>>> {
+) -> Option<Arc<Process>> {
     config.simul_efun_file.as_deref().and_then(|f| {
         let file = f.strip_suffix(".c").unwrap_or(f);
         object_space.lookup(file).map(|p| p.clone())
@@ -46,12 +46,11 @@ mod tests {
             .unwrap();
         let proc = Process::new(prog);
         let space_cell: Arc<ObjectSpace> = object_space.into();
-        ObjectSpace::insert_process(&space_cell, RwLock::new(proc));
+        ObjectSpace::insert_process(&space_cell, proc);
 
         let simul_efuns = get_simul_efuns(&config, &space_cell).unwrap();
-        let borrowed = simul_efuns.read();
         assert_eq!(
-            borrowed.as_ref().filename.to_string(),
+            simul_efuns.program.filename.to_string(),
             "/secure/simul_efuns"
         );
     }

@@ -232,8 +232,7 @@ impl Vm {
                     FunctionAddress::SimulEfun(name) => {
                         match get_simul_efuns(&config, &object_space) {
                             Some(simul_efuns) => {
-                                let b = simul_efuns.read();
-                                match b.program.lookup_function(name) {
+                                match simul_efuns.program.lookup_function(name) {
                                     Some(function) => {
                                         Ok((simul_efuns.clone(), function.clone(), args))
                                     }
@@ -250,7 +249,7 @@ impl Vm {
                     FunctionAddress::Efun(name) => {
                         let pf = EFUN_FUNCTIONS.get(name.as_str()).unwrap();
 
-                        Ok((Arc::new(RwLock::new(Process::default())), pf.clone(), args))
+                        Ok((Arc::new(Process::default()), pf.clone(), args))
                     }
                 }
             };
@@ -359,7 +358,7 @@ impl Vm {
     /// let mut vm = Vm::new(Config::default());
     /// let ctx = vm.initialize_string("int x = 5;", "test.c").await.unwrap();
     ///
-    /// assert_eq!(ctx.process().read().globals.registers[0], LpcRef::Int(LpcInt(5)));
+    /// assert_eq!(ctx.process().globals.read().registers[0], LpcRef::Int(LpcInt(5)));
     /// assert!(vm.object_space.lookup("/test").is_some());
     /// # })
     /// ```

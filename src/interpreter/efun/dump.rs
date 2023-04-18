@@ -35,7 +35,7 @@ fn format_ref<const N: usize>(
         LpcRef::Object(x) => {
             let val = x.upgrade();
             if let Some(proc) = val {
-                Ok(format!("{:width$}{}", "", proc.read(), width = indent))
+                Ok(format!("{:width$}{}", "", proc, width = indent))
             } else {
                 Ok(format!("{:width$}{}", "", "0", width = indent))
             }

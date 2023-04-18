@@ -26,7 +26,7 @@ pub struct Heap {
     mapping_pool: SharedArena<RwLock<LpcMapping>>,
 
     /// The object arena
-    object_pool: SharedArena<Weak<RwLock<Process>>>,
+    object_pool: SharedArena<Weak<Process>>,
 
     /// The function arena
     function_pool: SharedArena<RwLock<FunctionPtr>>,
@@ -73,7 +73,7 @@ impl Heap {
 
     /// Allocate a new [`Process`]
     #[inline]
-    pub fn alloc_process(&self, process: Weak<RwLock<Process>>) -> LpcRef {
+    pub fn alloc_process(&self, process: Weak<Process>) -> LpcRef {
         let arc = self.object_pool.alloc_arc(process);
         LpcRef::Object(arc)
     }

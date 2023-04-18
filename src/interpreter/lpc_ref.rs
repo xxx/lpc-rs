@@ -48,7 +48,7 @@ pub enum LpcRef {
     Mapping(ArenaArc<RwLock<LpcMapping>>),
 
     /// Reference type, pointing to an LPC `object`
-    Object(ArenaArc<Weak<RwLock<Process>>>),
+    Object(ArenaArc<Weak<Process>>),
 
     /// Reference type, a function pointer or closure
     Function(ArenaArc<RwLock<FunctionPtr>>),
@@ -496,7 +496,7 @@ impl Display for LpcRef {
                 write!(f, "{}", x.read())
             }
             LpcRef::Object(x) => match x.upgrade() {
-                Some(x) => write!(f, "{}", x.read()),
+                Some(x) => write!(f, "{}", x),
                 None => write!(f, "< destructed >"),
             },
             LpcRef::Function(x) => {
@@ -521,7 +521,7 @@ impl Debug for LpcRef {
                 write!(f, "{:?}", x.read())
             }
             LpcRef::Object(x) => match x.upgrade() {
-                Some(x) => write!(f, "{:?}", x.read()),
+                Some(x) => write!(f, "{:?}", x),
                 None => write!(f, "< destructed >"),
             },
             LpcRef::Function(x) => {

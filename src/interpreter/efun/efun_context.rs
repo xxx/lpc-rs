@@ -53,7 +53,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
             /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
             /// then insert it into the object space.
-            pub fn insert_clone(&self, program: Arc<Program>) -> Arc<RwLock<Process>>;
+            pub fn insert_clone(&self, program: Arc<Program>) -> Arc<Process>;
 
             /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s upvalues (i.e. all of them)
             #[call(upvalues)]
@@ -125,7 +125,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Lookup the process with the passed path.
     #[inline]
-    pub fn lookup_process<T>(&self, path: T) -> Option<Arc<RwLock<Process>>>
+    pub fn lookup_process<T>(&self, path: T) -> Option<Arc<Process>>
     where
         T: AsRef<str>,
     {
@@ -140,7 +140,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Get a reference to the [`Process`] that contains the call to this efun
     #[inline]
-    pub fn process(&self) -> &Arc<RwLock<Process>> {
+    pub fn process(&self) -> &Arc<Process> {
         &self.frame().process
     }
 
@@ -149,7 +149,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     #[inline]
     pub fn insert_process<P>(&self, process: P)
     where
-        P: Into<Arc<RwLock<Process>>>,
+        P: Into<Arc<Process>>,
     {
         self.task_context.insert_process(process);
     }
@@ -158,7 +158,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     #[inline]
     pub fn remove_process<P>(&self, process: P)
     where
-        P: Into<Arc<RwLock<Process>>>,
+        P: Into<Arc<Process>>,
     {
         self.task_context.remove_process(process);
     }

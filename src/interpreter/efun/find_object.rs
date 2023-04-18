@@ -72,7 +72,7 @@ mod tests {
 
         TaskContext::new(
             config,
-            RwLock::new(process),
+            process,
             ObjectSpace::default(),
             Heap::new(10),
             RwLock::new(GcBank::default()),
@@ -97,7 +97,7 @@ mod tests {
             .build()
             .unwrap();
         let proc = Process::new(to_find);
-        ObjectSpace::insert_process(&context.object_space, RwLock::new(proc));
+        ObjectSpace::insert_process(&context.object_space, proc);
 
         let mut task = Task::<10>::new(context.clone());
         task.timed_eval(func.clone(), &[])
@@ -111,7 +111,6 @@ mod tests {
         assert_eq!(
             obj.upgrade()
                 .unwrap()
-                .read()
                 .program
                 .filename
                 .to_str()

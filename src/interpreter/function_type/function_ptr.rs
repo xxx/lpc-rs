@@ -24,7 +24,7 @@ pub struct FunctionPtr {
     /// The object that this pointer was declared in.
     /// *note* This is *not* necessarily the object that the function is
     ///        defined within.
-    pub owner: Weak<RwLock<Process>>,
+    pub owner: Weak<Process>,
 
     /// Address of the function, in either the receiver or owner
     pub address: FunctionAddress,
@@ -108,7 +108,7 @@ impl Display for FunctionPtr {
         s.push_str("FunctionPtr { ");
         match self.owner.upgrade() {
             Some(owner) => {
-                s.push_str(&format!("owner: {}, ", owner.read()));
+                s.push_str(&format!("owner: {}, ", owner));
             }
             None => {
                 s.push_str("owner: < destructed >, ");
@@ -154,7 +154,7 @@ mod tests {
     fn test_mark() {
         let mut ptr = create!(
             FunctionPtr,
-            owner: Arc::downgrade(&Arc::new(RwLock::new(Process::default()))),
+            owner: Arc::downgrade(&Arc::new(Process::default())),
         );
 
         ptr.upvalue_ptrs.push(Register(3));

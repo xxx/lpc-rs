@@ -8,6 +8,7 @@ use std::{
 
 use bit_set::BitSet;
 use delegate::delegate;
+use parking_lot::RwLock;
 
 use crate::interpreter::{
     bank::RefBank,
@@ -18,13 +19,13 @@ use crate::interpreter::{
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
-#[derive(PartialEq, Eq, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct Process {
     /// The [`Program`] that this process is running.
     pub program: Arc<Program>,
 
     /// The stored global variable data for this instance.
-    pub globals: RefBank,
+    pub globals: RwLock<RefBank>,
 
     /// What is the clone ID of this process? If `None`, this is a master
     /// object.
@@ -42,7 +43,7 @@ impl Process {
 
         Self {
             program,
-            globals: RefBank::new(vec![NULL; num_globals]),
+            globals: RwLock::new(RefBank::new(vec![NULL; num_globals])),
             clone_id: None,
         }
     }
@@ -54,7 +55,7 @@ impl Process {
 
         Self {
             program,
-            globals: RefBank::new(vec![NULL; num_globals]),
+            globals: RwLock::new(RefBank::new(vec![NULL; num_globals])),
             clone_id: Some(clone_id),
         }
     }
@@ -67,13 +68,13 @@ impl Process {
     }
 
     /// Get a HashMap of global variable names to their current values
-    pub fn global_variable_values(&self) -> HashMap<&str, &LpcRef> {
+    pub fn global_variable_values(&self) -> HashMap<&str, LpcRef> {
         self.program
             .global_variables
             .iter()
             .filter_map(|(k, v)| {
-                let value = &self.globals[v.location?.index()];
-                Some((k.as_str(), value))
+                let value = &self.globals.read()[v.location?.index()];
+                Some((k.as_str(), value.clone()))
             })
             .collect()
     }
@@ -100,6 +101,15 @@ impl Process {
     }
 }
 
+impl PartialEq for Process {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.program, &other.program) && self.clone_id == other.clone_id
+    }
+}
+
+impl Eq for Process {}
+
 impl AsRef<Program> for Process {
     #[inline]
     fn as_ref(&self) -> &Program {
@@ -116,7 +126,7 @@ impl Display for Process {
 
 impl Mark for Process {
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
-        self.globals.mark(marked, processed)?;
+        self.globals.read().mark(marked, processed)?;
         Ok(())
     }
 }
@@ -160,7 +170,7 @@ mod tests {
         let lpc_ref = array.into_lpc_ref(&memory);
 
         let mut process = Process::default();
-        process.globals.push(lpc_ref);
+        process.globals.write().push(lpc_ref);
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();

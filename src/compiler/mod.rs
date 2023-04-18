@@ -83,7 +83,7 @@ pub struct Compiler {
 
     /// Pointer to the simul_efuns to be used for this compilation
     #[builder(default)]
-    simul_efuns: Option<Arc<RwLock<Process>>>,
+    simul_efuns: Option<Arc<Process>>,
 }
 
 impl Compiler {

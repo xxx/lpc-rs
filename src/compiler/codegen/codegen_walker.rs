@@ -1691,9 +1691,8 @@ impl TreeWalker for CodegenWalker {
             FunctionReceiver::Local
         } else {
             if_chain! {
-                if let Some(se) = &self.context.simul_efuns;
-                let simul_efuns = se.read();
-                if simul_efuns.as_ref().contains_function(node.name.as_str());
+                if let Some(simul_efuns) = &self.context.simul_efuns;
+                if simul_efuns.program.contains_function(node.name.as_str());
                 then {
                     FunctionReceiver::SimulEfun
                 } else {
@@ -2401,7 +2400,7 @@ mod tests {
             )
             .into(),
         );
-        let process = RwLock::new(Process::new(prog));
+        let process = Process::new(prog);
         walker.context.simul_efuns = Some(process.into());
 
         walker

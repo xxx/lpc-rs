@@ -43,7 +43,7 @@ impl LocalVariable {
 pub struct CallFrame {
     /// A pointer to the process that owns the function being called
     #[builder(setter(into))]
-    pub process: Arc<RwLock<Process>>,
+    pub process: Arc<Process>,
 
     /// The function that this frame is a call to.
     #[builder(setter(into))]
@@ -101,7 +101,7 @@ impl CallFrame {
         vm_upvalues: Arc<RwLock<GcRefBank>>,
     ) -> Self
     where
-        P: Into<Arc<RwLock<Process>>>,
+        P: Into<Arc<Process>>,
     {
         // add +1 for r0 (where return value is stored)
         let reg_len = std::cmp::max(function.arity().num_args, called_with_num_args)
@@ -149,7 +149,7 @@ impl CallFrame {
         vm_upvalues: Arc<RwLock<GcRefBank>>,
     ) -> Self
     where
-        P: Into<Arc<RwLock<Process>>>,
+        P: Into<Arc<Process>>,
     {
         Self {
             registers: RefBank::initialized_for_function(&function, arg_capacity),
@@ -197,8 +197,7 @@ impl CallFrame {
                 self.registers[reg] = lpc_ref;
             }
             RegisterVariant::Global(reg) => {
-                let mut proc = self.process.write();
-                proc.globals[reg] = lpc_ref;
+                self.process.globals.write()[reg] = lpc_ref;
             }
             RegisterVariant::Upvalue(reg) => {
                 let upvalues = &self.upvalue_ptrs;
@@ -224,7 +223,7 @@ impl CallFrame {
 
                 let lpc_ref = match loc {
                     RegisterVariant::Local(reg) => self.registers[reg].clone(),
-                    RegisterVariant::Global(reg) => self.process.read().globals[reg].clone(),
+                    RegisterVariant::Global(reg) => self.process.globals.read()[reg].clone(),
                     RegisterVariant::Upvalue(ptr_reg) => {
                         let upvalues = &self.upvalue_ptrs;
                         let data_reg = upvalues[ptr_reg.index()];
@@ -270,7 +269,6 @@ impl CallFrame {
 
     /// get the current instruction
     #[inline]
-    #[instrument(skip(self))]
     pub fn instruction(&self) -> Option<Instruction> {
         self.function.instructions.get(self.pc).copied()
     }
@@ -353,7 +351,7 @@ mod tests {
         let vm_upvalues = RwLock::new(GcBank::default());
 
         let frame = CallFrame::new(
-            RwLock::new(process),
+            process,
             Arc::new(fs),
             4,
             None,
@@ -383,7 +381,7 @@ mod tests {
             let vm_upvalues = RwLock::new(GcBank::default());
 
             let frame = CallFrame::with_minimum_arg_capacity(
-                RwLock::new(process),
+                process,
                 Arc::new(fs),
                 4,
                 30,
@@ -411,7 +409,7 @@ mod tests {
             let vm_upvalues = RwLock::new(GcBank::default());
 
             let frame = CallFrame::with_minimum_arg_capacity(
-                RwLock::new(process),
+                process,
                 Arc::new(fs),
                 4,
                 2,
@@ -454,7 +452,7 @@ mod tests {
 
             let vm_upvalues = Arc::new(RwLock::new(GcBank::default()));
             let frame = CallFrame::new(
-                RwLock::new(process),
+                process,
                 Arc::new(pf),
                 0,
                 None,
@@ -515,7 +513,7 @@ mod tests {
             let vm_upvalues = RwLock::new(GcBank::<LpcRef>::default());
 
             let frame = CallFrameBuilder::default()
-                .process(RwLock::new(process))
+                .process(process)
                 .function(Arc::new(fs))
                 .vm_upvalues(vm_upvalues)
                 .upvalue_ptrs(vec![Register(2), Register(5)])

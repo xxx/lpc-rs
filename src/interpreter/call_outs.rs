@@ -18,7 +18,7 @@ use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, process::Process, vm::
 pub struct CallOut {
     /// The process where `call_out` was called from.
     #[educe(Debug(ignore))]
-    process: Weak<RwLock<Process>>,
+    process: Weak<Process>,
 
     /// The reference to the function that will be run.
     pub func_ref: LpcRef,
@@ -67,7 +67,7 @@ impl CallOut {
 
     /// Get the process that owns this call out
     #[inline]
-    pub fn process(&self) -> &Weak<RwLock<Process>> {
+    pub fn process(&self) -> &Weak<Process> {
         &self.process
     }
 }
@@ -131,7 +131,7 @@ impl CallOuts {
     /// Schedule a [`CallOut`] to be run after a given delay
     pub fn schedule_task(
         &mut self,
-        process: Weak<RwLock<Process>>,
+        process: Weak<Process>,
         func_ref: LpcRef,
         delay: Duration,
         repeat: Option<Duration>,

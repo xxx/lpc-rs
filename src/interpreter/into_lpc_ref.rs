@@ -9,7 +9,7 @@ pub trait IntoLpcRef {
     fn into_lpc_ref(self, memory: &Heap) -> LpcRef;
 }
 
-impl IntoLpcRef for Weak<RwLock<Process>> {
+impl IntoLpcRef for Weak<Process> {
     fn into_lpc_ref(self, memory: &Heap) -> LpcRef {
         memory.alloc_process(self)
     }

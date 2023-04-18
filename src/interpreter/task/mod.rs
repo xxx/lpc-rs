@@ -60,7 +60,7 @@ use crate::{
 };
 
 // this is just to shut clippy up
-type ProcessFunctionPair = (Weak<RwLock<Process>>, Arc<ProgramFunction>);
+type ProcessFunctionPair = (Weak<Process>, Arc<ProgramFunction>);
 
 macro_rules! pop_frame {
     ($task:expr) => {{
@@ -98,8 +98,8 @@ pub fn get_location_in_frame(frame: &CallFrame, location: RegisterVariant) -> Re
             Ok(Cow::Borrowed(&registers[reg]))
         }
         RegisterVariant::Global(reg) => {
-            let proc = frame.process.read();
-            Ok(Cow::Owned(proc.globals[reg].clone()))
+            let proc = &frame.process;
+            Ok(Cow::Owned(proc.globals.read()[reg].clone()))
         }
         RegisterVariant::Upvalue(upv) => {
             let upvalues = &frame.upvalue_ptrs;
@@ -141,8 +141,8 @@ where
         RegisterVariant::Global(reg) => {
             let frame = stack.current_frame()?;
 
-            let mut proc = frame.process.write();
-            func(&mut proc.globals[reg])
+            let mut proc = &frame.process;
+            func(&mut proc.globals.write()[reg])
         }
         RegisterVariant::Upvalue(reg) => {
             let frame = stack.current_frame()?;
@@ -267,7 +267,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             function.clone()
         };
-        let process: Arc<RwLock<Process>> = RwLock::new(Process::new(program)).into();
+        let process: Arc<Process> = Process::new(program).into();
         let context = TaskContext::new(
             config,
             process.clone(),
@@ -364,7 +364,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[async_recursion]
     pub async fn eval_function(
         &mut self,
-        process: Arc<RwLock<Process>>,
+        process: Arc<Process>,
         f: Arc<ProgramFunction>,
         args: &[LpcRef],
     ) -> Result<()> {
@@ -376,7 +376,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Prepare to call a function. This is intended to be used when a Task is first created and enqueued.
     pub async fn prepare_function_call(
         &mut self,
-        process: Arc<RwLock<Process>>,
+        process: Arc<Process>,
         f: Arc<ProgramFunction>,
         args: &[LpcRef],
     ) -> Result<()> {
@@ -938,14 +938,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
         let func = {
-            let borrowed = process.read();
-
-            let name = &borrowed
+            let name = process
                 .program
                 .strings
                 .resolve(Self::index_symbol(name_idx))
                 .unwrap();
-            let function = borrowed.as_ref().lookup_function(name);
+            let function = process.program.lookup_function(name);
             if let Some(func) = function {
                 func.clone()
             } else {
@@ -960,9 +958,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 if_chain! {
                     // See if there is a simul efun with this name
-                    if let Some(func) = self.context.simul_efuns();
-                    let b = func.read();
-                    if let Some(func) = b.as_ref().lookup_function(name);
+                    if let Some(se) = self.context.simul_efuns();
+                    if let Some(func) = se.program.lookup_function(name);
                     then {
                         func.clone()
                     } else {
@@ -985,7 +982,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Prepare and populate a new [`CallFrame`] for a call to a static function.
     fn prepare_new_call_frame(
         &mut self,
-        process: Arc<RwLock<Process>>,
+        process: Arc<Process>,
         func: Arc<ProgramFunction>,
     ) -> Result<CallFrame> {
         let num_args = self.args.len();
@@ -1218,10 +1215,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
 
                 let pair_opt = {
-                    if let Some(cell) = lpc_ref.upgrade() {
-                        let proc = cell.read();
+                    if let Some(proc) = lpc_ref.upgrade() {
 
-                        proc.as_ref()
+                        proc.program
                             .lookup_function(name)
                             .map(|func| ((**lpc_ref).clone(), func.clone()))
                     } else {
@@ -1252,8 +1248,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Err(self.runtime_bug("simul_efun called without simul_efuns"));
                 };
 
-                let se = simul_efuns.read();
-                let Some(function) = se.program.lookup_function(name) else {
+                let Some(function) = simul_efuns.program.lookup_function(name) else {
                     return Err(self.runtime_error(format!("call to unknown simul_efun `{name}`")));
                 };
 
@@ -1368,8 +1363,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     // unwrap() is ok because resolve_call_other_receiver() checks
                     // for the function's presence.
                     let function = receiver
-                        .read()
-                        .as_ref()
+                        .program
                         .lookup_function(function_name.as_ref())
                         .unwrap()
                         .clone();
@@ -1483,9 +1477,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         };
 
         let func = {
-            let b = simul_efuns.read();
-
-            if let Some(func) = b.as_ref().lookup_function(func_name) {
+            if let Some(func) = simul_efuns.program.lookup_function(func_name) {
                 func.clone()
             } else {
                 let msg = format!("Call to unknown function `{func_name}`");
@@ -1526,12 +1518,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let process = frame.process.clone();
 
                 let func = {
-                    let borrowed_proc = process.read();
-                    let Some(func) = borrowed_proc.as_ref().lookup_function(func_name) else {
+                    let Some(func) = process.program.lookup_function(func_name) else {
                         return Err(self.runtime_error(format!(
                             "Unable to find function `{}` in local process `{}`.",
                             func_name,
-                            process.read().filename()
+                            process.filename()
                         )));
                     };
 
@@ -1549,12 +1540,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         };
 
                         let func = {
-                            let borrowed_proc = process.read();
-                            let Some(func) = borrowed_proc.as_ref().lookup_function(func_name) else {
+                            let Some(func) = process.program.lookup_function(func_name) else {
                                 return Err(self.runtime_error(format!(
                                     "Unable to find function `{}` in remote process `{}`.",
                                     func_name,
-                                    process.read().filename()
+                                    process.filename()
                                 )));
                             };
 
@@ -1578,12 +1568,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         };
 
                         let func = {
-                            let borrowed_proc = process.read();
-                            let Some(func) = borrowed_proc.as_ref().lookup_function(func_name) else {
+                            let Some(func) = process.program.lookup_function(func_name) else {
                                 return Err(self.runtime_error(format!(
                                     "Unable to find function `{}` in remote process `{}`.",
                                     func_name,
-                                    process.read().filename()
+                                    process.filename()
                                 )));
                             };
 
@@ -1842,7 +1831,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         receiver_ref: &LpcRef,
         name: T,
         context: &TaskContext,
-    ) -> Option<Arc<RwLock<Process>>>
+    ) -> Option<Arc<Process>>
     where
         T: AsRef<str>,
     {
@@ -1868,7 +1857,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         // Only switch the process if there's actually a function to
         // call by this name on the other side.
-        if process.read().as_ref().contains_function(name) {
+        if process.program.contains_function(name) {
             Some(process)
         } else {
             None
@@ -2118,7 +2107,7 @@ mod tests {
                 }
                 LpcRef::Object(o) => {
                     if let Some(o) = o.upgrade() {
-                        let filename = o.read().filename().into_owned();
+                        let filename = o.filename().into_owned();
                         BareVal::Object(filename)
                     } else {
                         BareVal::Int(0)
@@ -2361,8 +2350,7 @@ mod tests {
                 let ctx = task.context;
 
                 let proc = ctx.process();
-                let borrowed = proc.read();
-                let values = borrowed.global_variable_values();
+                let values = proc.global_variable_values();
                 String("my public_function".into()).assert_equal(values.get("mine").unwrap());
                 String("/std/object public".into()).assert_equal(values.get("parents").unwrap());
             }
@@ -2383,15 +2371,14 @@ mod tests {
                 let ctx = task.context;
 
                 let proc = ctx.process();
-                let borrowed = proc.read();
-                let values = borrowed.global_variable_values();
+                let values = proc.global_variable_values();
                 assert_eq!(
                     String("file_name_override".into()),
-                    *values.get("this_one").unwrap()
+                    values.get("this_one").unwrap()
                 );
                 assert_eq!(
                     String("/std/object#0".into()),
-                    *values.get("efun_one").unwrap()
+                    values.get("efun_one").unwrap()
                 );
             }
 
@@ -2406,8 +2393,7 @@ mod tests {
                 let ctx = task.context;
 
                 let proc = ctx.process();
-                let borrowed = proc.read();
-                let values = borrowed.global_variable_values();
+                let values = proc.global_variable_values();
                 String("this is a simul_efun: marf".into())
                     .assert_equal(values.get("this_one").unwrap());
             }
@@ -2970,11 +2956,10 @@ mod tests {
                 let expected = vec![Int(4), Int(4)];
 
                 let proc = ctx.process();
-                let proc = proc.read();
 
                 BareVal::assert_vec_equal(
                     &expected,
-                    &proc.globals.iter().cloned().collect::<Vec<_>>(),
+                    &proc.globals.read().iter().cloned().collect::<Vec<_>>(),
                 );
             }
 
@@ -3015,11 +3000,10 @@ mod tests {
                 let expected = vec![Int(4), Int(5)];
 
                 let proc = ctx.process();
-                let proc = proc.read();
 
                 BareVal::assert_vec_equal(
                     &expected,
-                    &proc.globals.iter().cloned().collect::<Vec<_>>(),
+                    &proc.globals.read().iter().cloned().collect::<Vec<_>>(),
                 );
             }
         }
@@ -3503,11 +3487,10 @@ mod tests {
                 let expected = vec![Int(1), Int(1)];
 
                 let proc = ctx.process();
-                let proc = proc.read();
 
                 BareVal::assert_vec_equal(
                     &expected,
-                    &proc.globals.iter().cloned().collect::<Vec<_>>(),
+                    &proc.globals.read().iter().cloned().collect::<Vec<_>>(),
                 );
             }
 
@@ -3548,11 +3531,10 @@ mod tests {
                 let expected = vec![Int(6), Int(5)];
 
                 let proc = ctx.process();
-                let proc = proc.read();
 
                 BareVal::assert_vec_equal(
                     &expected,
-                    &proc.globals.iter().cloned().collect::<Vec<_>>(),
+                    &proc.globals.read().iter().cloned().collect::<Vec<_>>(),
                 );
             }
         }
@@ -4440,7 +4422,6 @@ mod tests {
             BareVal::assert_vec_equal(&expected, &registers);
 
             let proc = task.context.process();
-            let proc = proc.read();
 
             let expected = vec![
                 Int(2),
@@ -4448,7 +4429,7 @@ mod tests {
                 Int(0),
                 Int(1),
             ];
-            BareVal::assert_vec_equal(&expected, &proc.globals);
+            BareVal::assert_vec_equal(&expected, &*proc.globals.read());
         }
     }
 

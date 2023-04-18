@@ -15,7 +15,7 @@ use crate::interpreter::process::Process;
 #[educe(Debug)]
 pub enum FunctionAddress {
     /// The function being called is located in an object.
-    Local(Weak<RwLock<Process>>, Arc<ProgramFunction>),
+    Local(Weak<Process>, Arc<ProgramFunction>),
 
     /// The receiver isn't known until called (i.e. the `&->foo()` syntax)
     Dynamic(Ustr),
@@ -60,7 +60,7 @@ impl Display for FunctionAddress {
         match self {
             FunctionAddress::Local(owner, x) => {
                 if let Some(owner) = owner.upgrade() {
-                    write!(f, "{}::{}", owner.read(), x)
+                    write!(f, "{}::{}", owner, x)
                 } else {
                     write!(f, "<destructed>::{}", x)
                 }
