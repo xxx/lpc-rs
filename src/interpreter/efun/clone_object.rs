@@ -7,9 +7,11 @@ use parking_lot::RwLock;
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
-    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process, task::Task},
+    interpreter::{
+        efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef,
+        process::Process, task::Task,
+    },
 };
-use crate::interpreter::into_lpc_ref::IntoLpcRef;
 
 async fn load_master<const N: usize>(
     context: &mut EfunContext<'_, N>,

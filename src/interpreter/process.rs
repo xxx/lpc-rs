@@ -126,7 +126,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::interpreter::{into_lpc_ref::IntoLpcRef, lpc_array::LpcArray, heap::Heap};
+    use crate::interpreter::{heap::Heap, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray};
 
     #[test]
     fn test_filename() {

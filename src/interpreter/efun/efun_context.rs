@@ -8,8 +8,9 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
 
 use crate::interpreter::{
-    call_frame::CallFrame, call_outs::CallOuts, call_stack::CallStack, gc::gc_bank::GcRefBank, lpc_ref::LpcRef, heap::Heap, process::Process, program::Program,
-    task::get_location, task_context::TaskContext, vm::vm_op::VmOp,
+    call_frame::CallFrame, call_outs::CallOuts, call_stack::CallStack, gc::gc_bank::GcRefBank,
+    heap::Heap, lpc_ref::LpcRef, process::Process, program::Program, task::get_location,
+    task_context::TaskContext, vm::vm_op::VmOp,
 };
 
 /// A structure to hold various pieces of interpreter state, to be passed to

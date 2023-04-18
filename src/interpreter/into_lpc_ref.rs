@@ -2,7 +2,7 @@ use std::sync::Weak;
 
 use parking_lot::RwLock;
 
-use crate::interpreter::{lpc_ref::LpcRef, heap::Heap, process::Process};
+use crate::interpreter::{heap::Heap, lpc_ref::LpcRef, process::Process};
 
 pub trait IntoLpcRef {
     /// Consume myself and turn into an [`LpcRef`].

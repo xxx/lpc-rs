@@ -12,9 +12,9 @@ use tracing::{instrument, trace};
 use crate::interpreter::{
     function_type::function_address::FunctionAddress,
     gc::{mark::Mark, unique_id::UniqueId},
+    heap::Heap,
     into_lpc_ref::IntoLpcRef,
     lpc_ref::LpcRef,
-    heap::Heap,
     process::Process,
 };
 

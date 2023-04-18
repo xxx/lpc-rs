@@ -19,9 +19,9 @@ use tracing::{instrument, trace};
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
     interpreter::{
-        function_type::function_ptr::FunctionPtr, gc::mark::Mark, into_lpc_ref::IntoLpcRef,
-        lpc_array::LpcArray, lpc_float::LpcFloat, lpc_int::LpcInt, lpc_mapping::LpcMapping,
-        lpc_string::LpcString, heap::Heap, process::Process,
+        function_type::function_ptr::FunctionPtr, gc::mark::Mark, heap::Heap,
+        into_lpc_ref::IntoLpcRef, lpc_array::LpcArray, lpc_float::LpcFloat, lpc_int::LpcInt,
+        lpc_mapping::LpcMapping, lpc_string::LpcString, process::Process,
     },
 };
 

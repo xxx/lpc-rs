@@ -8,9 +8,9 @@ use tracing::{instrument, trace};
 
 use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
+    heap::Heap,
     into_lpc_ref::IntoLpcRef,
     lpc_ref::{HashedLpcRef, LpcRef},
-    heap::Heap,
 };
 
 /// A newtype wrapper for a map of [`HashedLpcRef`]s to [`LpcRef`]s,

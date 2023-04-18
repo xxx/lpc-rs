@@ -9,7 +9,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::{
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcRefBank, lpc_ref::LpcRef, heap::Heap,
+        call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, lpc_ref::LpcRef,
         object_space::ObjectSpace, process::Process, program::Program, vm::vm_op::VmOp,
     },
     util::get_simul_efuns,

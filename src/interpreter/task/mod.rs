@@ -43,13 +43,13 @@ use crate::{
         efun::{call_efun, efun_context::EfunContext, EFUN_FUNCTIONS},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
+        heap::Heap,
         into_lpc_ref::IntoLpcRef,
         lpc_array::LpcArray,
         lpc_int::LpcInt,
         lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
         lpc_string::LpcString,
-        heap::Heap,
         object_space::ObjectSpace,
         process::Process,
         program::Program,
@@ -4363,7 +4363,6 @@ mod tests {
     }
 
     mod test_limits {
-        
 
         use super::*;
         use crate::interpreter::task::initialize_program::InitializeProgramBuilder;

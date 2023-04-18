@@ -1,10 +1,8 @@
-use lpc_rs_errors::Result;
-use jemalloc_ctl::{stats, epoch};
+use jemalloc_ctl::{epoch, stats};
 use lpc_rs_core::LpcIntInner;
+use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext};
-use crate::interpreter::lpc_int::LpcInt;
-use crate::interpreter::lpc_ref::LpcRef;
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef};
 
 /// `query_resident_memory`, an efun for returning the number of bytes of memory in use.
 pub async fn query_resident_memory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {

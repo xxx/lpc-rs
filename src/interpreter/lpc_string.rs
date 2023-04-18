@@ -10,7 +10,7 @@ use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::string::MAX_STRING_LENGTH;
 use string_interner::{DefaultSymbol, StringInterner, Symbol};
 
-use crate::interpreter::{into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef, heap::Heap};
+use crate::interpreter::{heap::Heap, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef};
 
 /// An enum to differentiate between statically and dynamically created strings.
 #[derive(Debug, Clone)]

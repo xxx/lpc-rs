@@ -12,9 +12,9 @@ use tracing::{instrument, trace};
 
 use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
+    heap::Heap,
     into_lpc_ref::IntoLpcRef,
     lpc_ref::LpcRef,
-    heap::Heap,
 };
 
 /// A newtype wrapper for an array of [`LpcRef`]s, with a [`UniqueId`] for GC

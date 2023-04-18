@@ -5,8 +5,7 @@ use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcBank, heap::Heap, object_space::ObjectSpace,
-        task::Task,
+        call_outs::CallOuts, gc::gc_bank::GcBank, heap::Heap, object_space::ObjectSpace, task::Task,
     },
 };
 use lpc_rs_core::lpc_path::LpcPath;
