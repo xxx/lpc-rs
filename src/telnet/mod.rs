@@ -13,7 +13,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_util::codec::{Decoder, Framed};
-use tracing::{error, info, trace, warn};
+use tracing::{error, info, instrument, trace, warn};
 
 use crate::telnet::{
     connection_broker::{Connection, ConnectionId},
@@ -68,6 +68,7 @@ impl Telnet {
             // connection ID 0 is reserved for system use
             let mut connection_id: u32 = 1;
 
+            // incoming telnet connection handling loop
             loop {
                 while let Ok((stream, remote_ip)) = listener.accept().await {
                     let spawn_broker_tx = broker_tx.clone();
@@ -82,7 +83,8 @@ impl Telnet {
                     });
 
                     let Ok(_) = broker_tx.send_async(BrokerOp::NewHandle(cid, handle)).await else {
-                        warn!("Failed to send BrokerOp::NewHandle. Dropping connection.");
+                        error!("Failed to send BrokerOp::NewHandle. Dropping connection as we otherwise can't track it.");
+                        handle.abort();
                         continue;
                     };
                 }
@@ -93,6 +95,7 @@ impl Telnet {
     }
 
     /// Start the main loop for a single user's connection. Handles sends and receives.
+    #[instrument(skip(stream, broker_tx))]
     async fn set_up_connection(
         connection_id: ConnectionId,
         stream: TcpStream,
@@ -119,7 +122,8 @@ impl Telnet {
         let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection, tx)).await else {
             let msg = TelnetEvent::Message("The server is currently unable to accept new connections. Please try again shortly.".to_string());
             let _ = sink.send(msg).await;
-            error!(?connection_id, "Failed to send BrokerOp::NewConnection. Dropping connection.");
+            let _ = broker_tx.send_async(BrokerOp::Disconnect(connection_id)).await;
+            error!("Failed to send BrokerOp::NewConnection. Dropping connection.");
             return;
         };
 
@@ -131,7 +135,7 @@ impl Telnet {
                     match send_to_user {
                         Some(ConnectionOp::SendMessage(msg)) => {
                             if let Err(e) = sink.send(TelnetEvent::Message(msg)).await {
-                                error!(?connection_id, "Failed to send message to user: {}", e);
+                                error!("Failed to send message to user: {}", e);
                             }
                         },
                         None => {
@@ -150,7 +154,7 @@ impl Telnet {
                             warn!("User input error: {:?}", e);
                         }
                         None => {
-                            info!("Connection closed from {}", &remote_ip);
+                            info!("Connection closed.");
                             break;
                         }
                     }
