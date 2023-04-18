@@ -8,6 +8,7 @@ use tracing::{info, warn};
 use ustr::{ustr, Ustr};
 
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
+const DEFAULT_MAX_EXECUTION_TIME: usize = 300;
 
 /// The main struct that handles runtime use configurations.
 #[derive(Debug, Builder)]
@@ -35,11 +36,11 @@ pub struct Config {
     #[builder(default = "ustr(\"/secure/master.c\")")]
     pub master_object: Ustr,
 
+    #[builder(setter(into), default = "300")]
+    pub max_execution_time: u64,
+
     #[builder(default = "DEFAULT_MAX_INHERIT_DEPTH")]
     pub max_inherit_depth: usize,
-
-    #[builder(setter(into, strip_option), default = "None")]
-    pub max_task_instructions: Option<usize>,
 
     #[builder(setter(into, strip_option), default = "None")]
     pub simul_efun_file: Option<Ustr>,
@@ -108,16 +109,16 @@ impl ConfigBuilder {
                 .or_else(|| env.get("MASTER_OBJECT"))
                 .map(|x| ustr(x))
                 .or(self.master_object),
+            max_execution_time: env
+                .get("LPC_MAX_EXECUTION_TIME")
+                .or_else(|| env.get("MAX_EXECUTION_TIME"))
+                .map(|x| x.parse::<u64>().unwrap())
+                .or(self.max_execution_time),
             max_inherit_depth: env
                 .get("LPC_MAX_INHERIT_DEPTH")
                 .or_else(|| env.get("MAX_INHERIT_DEPTH"))
                 .map(|x| x.parse::<usize>().unwrap())
                 .or(self.max_inherit_depth),
-            max_task_instructions: env
-                .get("LPC_MAX_TASK_INSTRUCTIONS")
-                .or_else(|| env.get("MAX_TASK_INSTRUCTIONS"))
-                .map(|x| Some(x.parse::<usize>().unwrap()))
-                .or(self.max_task_instructions),
             port: env
                 .get("LPC_PORT")
                 .or_else(|| env.get("PORT"))

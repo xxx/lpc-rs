@@ -331,10 +331,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
     #[async_recursion]
     pub async fn timed_eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef]) -> Result<()> {
+        let limit = self.context.config.max_execution_time;
+
+        if limit == 0 {
+            return self.eval(f, args).await;
+        }
+
         let process = self.context.process();
 
         match timeout(
-            Duration::from_millis(300),
+            Duration::from_millis(limit),
             self.eval_function(process, f, args),
         )
         .await
@@ -4392,16 +4398,11 @@ mod tests {
                 }
             "##};
 
-            let config = ConfigBuilder::default()
-                .max_task_instructions(0_usize)
-                .build()
-                .unwrap();
             let (program, _, _) = compile_prog(code);
             let (tx, _rx) = mpsc::channel(128);
 
             let r = InitializeProgramBuilder::<20>::default()
                 .program(program)
-                .config(config)
                 .tx(tx)
                 .build()
                 .await;
