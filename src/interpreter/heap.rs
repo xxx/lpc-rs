@@ -8,8 +8,10 @@ use crate::interpreter::{
     lpc_mapping::LpcMapping, lpc_ref::LpcRef, lpc_string::LpcString, process::Process,
 };
 
-/// The initial size (in cells) of system memory
-const MEMORY_SIZE: usize = 100_000;
+/// The initial size (in cells) of system memory. This number is divided evenly
+/// between the different types. This is just the initial allocation - more will
+/// be allocated as necessary.
+const MEMORY_SIZE: usize = 5_000;
 
 /// Encapsulate the shared VM heap.
 #[derive(Debug)]
