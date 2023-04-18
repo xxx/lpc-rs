@@ -11,6 +11,7 @@ pub(crate) mod find_object;
 pub(crate) mod papplyv;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
+pub(crate) mod query_resident_memory;
 pub(crate) mod remove_call_out;
 pub(crate) mod this_object;
 pub(crate) mod throw;
@@ -52,6 +53,7 @@ pub const FIND_OBJECT: &str = "find_object";
 pub const PAPPLYV: &str = "papplyv";
 pub const QUERY_CALL_OUT: &str = "query_call_out";
 pub const QUERY_CALL_OUTS: &str = "query_call_outs";
+pub const QUERY_RESIDENT_MEMORY: &str = "query_resident_memory";
 pub const REMOVE_CALL_OUT: &str = "remove_call_out";
 pub const SIZEOF: &str = "sizeof";
 pub const THIS_OBJECT: &str = "this_object";
@@ -73,6 +75,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
         PAPPLYV => papplyv::papplyv(efun_context).await,
         QUERY_CALL_OUT => query_call_out::query_call_out(efun_context).await,
         QUERY_CALL_OUTS => query_call_outs::query_call_outs(efun_context).await,
+        QUERY_RESIDENT_MEMORY => query_resident_memory::query_resident_memory(efun_context).await,
         REMOVE_CALL_OUT => remove_call_out::remove_call_out(efun_context).await,
         THIS_OBJECT => this_object::this_object(efun_context).await,
         THROW => throw::throw(efun_context).await,
@@ -298,6 +301,19 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::Object(false)])
             .build()
             .expect("failed to build query_call_out_info"),
+    );
+
+    m.insert(
+        QUERY_RESIDENT_MEMORY,
+        FunctionPrototypeBuilder::default()
+            .name(QUERY_RESIDENT_MEMORY)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(0))
+            .arg_types(vec![])
+            .build()
+            .expect("failed to build query_resident_memory"),
     );
 
     m.insert(
