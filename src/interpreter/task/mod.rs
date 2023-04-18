@@ -347,7 +347,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(e)) => Err(e),
-            Err(_) => Err(LpcError::new("evaluation limit of 300ms has been reached")),
+            Err(_) => Err(LpcError::new(format!("evaluation limit of {limit}ms has been reached"))),
         }
     }
 

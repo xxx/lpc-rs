@@ -101,8 +101,8 @@ mod tests {
 
         #[test]
         fn returns_error_on_overflow() {
-            let s1 = repeat_string("a", 1_000_000_000).unwrap();
-            let s2 = repeat_string("b", 1_000_000_000).unwrap();
+            let s1 = repeat_string("a", 8192).unwrap();
+            let s2 = repeat_string("b", 1).unwrap();
             let result = concatenate_strings(s1, s2);
             assert_eq!(
                 result.unwrap_err().to_string().as_str(),
