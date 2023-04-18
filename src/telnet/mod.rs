@@ -73,22 +73,22 @@ impl Telnet {
 
             loop {
                 while let Ok((stream, remote_ip)) = listener.accept().await {
-                    let broker_tx = broker_tx.clone();
+                    let spawn_broker_tx = broker_tx.clone();
                     let cid = ConnectionId(connection_id);
+
+                    connection_id += 1;
 
                     let handle = tokio::spawn(async move {
                         info!("New connection from {}", &remote_ip);
 
-                        Self::set_up_connection(cid, stream, remote_ip, broker_tx).await;
+                        Self::set_up_connection(cid, stream, remote_ip, spawn_broker_tx).await;
                     });
 
-                    let _ = broker_tx.send_async(BrokerOp::NewHandle(cid, handle)).await else {
-                        error!(?connection_id, "Failed to send BrokerOp::NewHandle. Dropping connection.");
+                    let Ok(_) = broker_tx.send_async(BrokerOp::NewHandle(cid, handle)).await else {
+                        warn!("Failed to send BrokerOp::NewHandle. Dropping connection.");
                         continue;
                     };
                 }
-
-                connection_id += 1;
             }
         });
 
@@ -142,7 +142,7 @@ impl Telnet {
                 received_from_user = input.next() => {
                     match received_from_user {
                         Some(Ok(msg)) => {
-                            Self::handle_input_event(msg, &mut sink).await;
+                            Self::handle_input_event(msg, &mut sink, connection_id, &broker_tx).await;
                         }
                         Some(Err(e)) => {
                             warn!("User input error: {:?}", e);
@@ -159,7 +159,9 @@ impl Telnet {
 
     async fn handle_input_event(
         msg: TelnetEvent,
-        sink: &mut SplitSink<Framed<TcpStream, TelnetCodec>, TelnetEvent>,
+        _sink: &mut SplitSink<Framed<TcpStream, TelnetCodec>, TelnetEvent>,
+        _connection_id: ConnectionId,
+        _broker_tx: &FlumeSender<BrokerOp>,
     ) {
         match msg {
             TelnetEvent::Character(char) => {
@@ -167,9 +169,10 @@ impl Telnet {
             }
             TelnetEvent::Message(msg) => {
                 println!("Received message: {}", msg);
-                let _ = sink
-                    .send(TelnetEvent::Message("Hello, world!".to_string()))
-                    .await;
+                // let _ = sink
+                //     .send(TelnetEvent::Message("Goodbye, world!".to_string()))
+                //     .await;
+                // let _ = broker_tx.send_async(BrokerOp::Disconnect(connection_id)).await;
             }
             TelnetEvent::Do(option) => {
                 println!("Received DO: {:?}", option);
