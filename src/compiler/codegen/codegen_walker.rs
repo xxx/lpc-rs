@@ -2340,7 +2340,6 @@ mod tests {
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloatInner};
     use lpc_rs_errors::{span::Span, LpcErrorSeverity, Result};
     use lpc_rs_utils::config::ConfigBuilder;
-    
 
     use super::*;
     use crate::{

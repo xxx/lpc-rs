@@ -109,12 +109,7 @@ mod tests {
         };
 
         assert_eq!(
-            obj.upgrade()
-                .unwrap()
-                .program
-                .filename
-                .to_str()
-                .unwrap(),
+            obj.upgrade().unwrap().program.filename.to_str().unwrap(),
             "/example"
         );
     }

@@ -350,13 +350,7 @@ mod tests {
         let fs = ProgramFunction::new(prototype, 7);
         let vm_upvalues = RwLock::new(GcBank::default());
 
-        let frame = CallFrame::new(
-            process,
-            Arc::new(fs),
-            4,
-            None,
-            vm_upvalues.into(),
-        );
+        let frame = CallFrame::new(process, Arc::new(fs), 4, None, vm_upvalues.into());
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -451,13 +445,7 @@ mod tests {
             pf.num_upvalues = 2;
 
             let vm_upvalues = Arc::new(RwLock::new(GcBank::default()));
-            let frame = CallFrame::new(
-                process,
-                Arc::new(pf),
-                0,
-                None,
-                vm_upvalues.clone(),
-            );
+            let frame = CallFrame::new(process, Arc::new(pf), 0, None, vm_upvalues.clone());
 
             assert_eq!(frame.upvalue_ptrs, vec![Register(0), Register(1)]);
             assert_eq!(frame.vm_upvalues.read().len(), 2);

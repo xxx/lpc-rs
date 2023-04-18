@@ -5,7 +5,6 @@ use std::{
 
 use educe::Educe;
 use lpc_rs_function_support::program_function::ProgramFunction;
-
 use ustr::Ustr;
 
 use crate::interpreter::process::Process;

@@ -1,7 +1,5 @@
 use std::sync::Weak;
 
-
-
 use crate::interpreter::{heap::Heap, lpc_ref::LpcRef, process::Process};
 
 pub trait IntoLpcRef {

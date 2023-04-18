@@ -8,7 +8,6 @@ use dashmap::{mapref::one::Ref, DashMap};
 use delegate::delegate;
 use lpc_rs_utils::config::Config;
 
-
 use crate::interpreter::{gc::mark::Mark, process::Process, program::Program};
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master

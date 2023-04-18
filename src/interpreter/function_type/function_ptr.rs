@@ -6,7 +6,6 @@ use std::{
 use bit_set::BitSet;
 use itertools::Itertools;
 use lpc_rs_core::register::Register;
-
 use tracing::{instrument, trace};
 
 use crate::interpreter::{

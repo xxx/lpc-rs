@@ -11,7 +11,6 @@ use lpc_rs_function_support::{
     program_function::ProgramFunction, symbol::Symbol,
 };
 use lpc_rs_utils::config::Config;
-
 use string_interner::StringInterner;
 use ustr::Ustr;
 
@@ -159,8 +158,7 @@ impl CompilationContext {
                     self.simul_efuns
                         .as_ref()
                         .and_then(|rc| {
-                            rc
-                                .program
+                            rc.program
                                 .lookup_function(nm)
                                 .map(|f| FunctionLike::from(f.clone()))
                         })

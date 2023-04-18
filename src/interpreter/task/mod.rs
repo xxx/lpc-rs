@@ -347,7 +347,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(e)) => Err(e),
-            Err(_) => Err(LpcError::new(format!("evaluation limit of {limit}ms has been reached"))),
+            Err(_) => Err(LpcError::new(format!(
+                "evaluation limit of {limit}ms has been reached"
+            ))),
         }
     }
 
@@ -1216,7 +1218,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 let pair_opt = {
                     if let Some(proc) = lpc_ref.upgrade() {
-
                         proc.program
                             .lookup_function(name)
                             .map(|func| ((**lpc_ref).clone(), func.clone()))

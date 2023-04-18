@@ -288,12 +288,7 @@ async fn test_inherited_create_called_when_not_overridden() {
         })
         .unwrap();
 
-    let init = child_ctx
-        .process()
-        .program
-        .initializer
-        .clone()
-        .unwrap();
+    let init = child_ctx.process().program.initializer.clone().unwrap();
 
     let expected = vec![Instruction::Call(4), Instruction::Ret];
 
