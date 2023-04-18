@@ -1,6 +1,8 @@
+use std::net::SocketAddr;
+
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
 
-use crate::telnet::connection_broker::{Connection, ConnectionId};
+use crate::telnet::connection_broker::Connection;
 
 /// Operations that are handled by the [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker)
 #[derive(Debug)]
@@ -10,13 +12,13 @@ pub enum BrokerOp {
 
     /// Keep track of the handle for a connection, so we can drop it
     /// if necessary.
-    NewHandle(ConnectionId, JoinHandle<()>),
+    NewHandle(SocketAddr, JoinHandle<()>),
 
     /// Disconnect the specified connection
-    Disconnect(ConnectionId),
+    Disconnect(SocketAddr),
 
     /// Send a message to the specified connection
-    SendMessage(String, ConnectionId),
+    SendMessage(String, SocketAddr),
 }
 
 /// Operations that can be performed on outgoing connections

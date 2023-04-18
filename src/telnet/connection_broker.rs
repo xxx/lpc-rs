@@ -1,8 +1,4 @@
-use std::{
-    fmt::{Display, Formatter},
-    net::SocketAddr,
-    sync::Arc,
-};
+use std::{net::SocketAddr, sync::Arc};
 
 use dashmap::DashMap;
 use flume::Receiver as FlumeReceiver;
@@ -17,22 +13,9 @@ use crate::{
     },
 };
 
-/// The ID of a connection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ConnectionId(pub u32);
-
-impl Display for ConnectionId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 /// A connection from a user
 #[derive(Debug, Clone, PartialEq)]
 pub struct Connection {
-    /// The ID of the connection.
-    pub id: ConnectionId,
-
     /// The address of the client.
     pub address: SocketAddr,
 }
@@ -40,11 +23,11 @@ pub struct Connection {
 /// Manages all the outgoing connections to users.
 #[derive(Debug)]
 pub struct ConnectionBroker {
-    /// Map of connection ID with the tx channel to the connection itself
-    connections: Arc<DashMap<ConnectionId, Sender<ConnectionOp>>>,
+    /// Map of remote IP address to the tx channel of the connection itself
+    connections: Arc<DashMap<SocketAddr, Sender<ConnectionOp>>>,
 
-    /// Map of ConnectionIds to join handles, which can be dropped to disconnect the user.
-    handles: Arc<DashMap<ConnectionId, JoinHandle<()>>>,
+    /// Map of remote IP addresses to join handles, which can be dropped to disconnect the user.
+    handles: Arc<DashMap<SocketAddr, JoinHandle<()>>>,
 
     /// The channel we receive messages on.
     rx: FlumeReceiver<BrokerOp>,
@@ -93,44 +76,36 @@ impl ConnectionBroker {
                 while let Ok(op) = broker_rx.recv_async().await {
                     match op {
                         BrokerOp::NewConnection(connection, tx) => {
-                            connections.insert(connection.id, tx);
+                            connections.insert(connection.address, tx);
                             let Ok(_) = vm_tx.send(VmOp::Connected(connection)).await else {
                                 error!("Failed to send VmOp::NewConnection");
                                 continue;
                             };
                         }
-                        BrokerOp::NewHandle(connection_id, handle) => {
-                            handles.insert(connection_id, handle);
-                            trace!("Added handle for connection {}", connection_id.0);
+                        BrokerOp::NewHandle(address, handle) => {
+                            handles.insert(address, handle);
+                            trace!("Added handle for connection {}", address);
                         }
-                        BrokerOp::Disconnect(connection_id) => {
-                            match handles.remove(&connection_id) {
+                        BrokerOp::Disconnect(address) => {
+                            match handles.remove(&address) {
                                 Some((_, handle)) => {
-                                    info!("Disconnecting connection {}", connection_id.0);
+                                    info!("Disconnecting connection {}", address);
                                     handle.abort();
                                 }
                                 None => {
-                                    error!(
-                                        "Failed to find handle for connection {}",
-                                        connection_id.0
-                                    );
+                                    error!("Failed to find handle for connection from {}", address);
                                 }
                             }
 
-                            // let Ok(_) = vm_tx.send(VmOp::Disconnected(connection_id)).await else {
-                            //     error!("Failed to send VmOp::Disconnected");
-                            //     continue;
-                            // };
-
-                            if connections.remove(&connection_id).is_none() {
-                                error!("Failed to find connection with ID {}", connection_id);
+                            if connections.remove(&address).is_none() {
+                                error!("Failed to find connection with ID {}", address);
                             }
                             //
                             // return;
                         }
-                        BrokerOp::SendMessage(msg, connection_id) => {
-                            let Some(connection_tx) = connections.get(&connection_id) else {
-                                error!("Failed to find connection with ID {}", connection_id);
+                        BrokerOp::SendMessage(msg, address) => {
+                            let Some(connection_tx) = connections.get(&address) else {
+                                error!("Failed to find connection for {}", address);
                                 continue;
                             };
 
@@ -151,9 +126,9 @@ impl ConnectionBroker {
     #[inline]
     pub fn remove_connection(
         &self,
-        id: ConnectionId,
-    ) -> Option<(ConnectionId, Sender<ConnectionOp>)> {
-        self.connections.remove(&id)
+        address: SocketAddr,
+    ) -> Option<(SocketAddr, Sender<ConnectionOp>)> {
+        self.connections.remove(&address)
     }
 }
 
@@ -176,10 +151,8 @@ mod tests {
         //
         // BrokerOp::NewConnection
         //
-        let connection = Connection {
-            id: ConnectionId(1),
-            address: SocketAddr::from(([127, 0, 0, 1], 1234)),
-        };
+        let address = SocketAddr::from(([127, 0, 0, 1], 1234));
+        let connection = Connection { address };
         let op = BrokerOp::NewConnection(connection.clone(), connection_tx);
         broker_tx.send_async(op).await.unwrap();
 
@@ -188,23 +161,23 @@ mod tests {
         };
 
         assert_eq!(vm_op, VmOp::Connected(connection));
-        assert!(broker.connections.contains_key(&ConnectionId(1)));
+        assert!(broker.connections.contains_key(&address));
 
         //
         // BrokerOp::NewHandle
         //
         let handle = tokio::spawn(async {});
-        let op = BrokerOp::NewHandle(ConnectionId(1), handle);
+        let op = BrokerOp::NewHandle(address, handle);
         broker_tx.send_async(op).await.unwrap();
 
         // we need to wait for the broker to add the handle to the map
         tokio::time::sleep(Duration::from_millis(10)).await;
-        assert!(broker.handles.contains_key(&ConnectionId(1)));
+        assert!(broker.handles.contains_key(&address));
 
         //
         // BrokerOp::SendMessage
         //
-        let op = BrokerOp::SendMessage("Welcome to the MUD!".to_string(), ConnectionId(1));
+        let op = BrokerOp::SendMessage("Welcome to the MUD!".to_string(), address);
         broker_tx.send_async(op).await.unwrap();
 
         let Some(connection_op) = connection_rx.recv().await else {
@@ -219,12 +192,12 @@ mod tests {
         //
         // BrokerOp::Disconnect
         //
-        let op = BrokerOp::Disconnect(ConnectionId(1));
+        let op = BrokerOp::Disconnect(address);
         broker_tx.send_async(op).await.unwrap();
 
         // wait for broker
         tokio::time::sleep(Duration::from_millis(10)).await;
-        assert!(!broker.handles.contains_key(&ConnectionId(1)));
-        assert!(!broker.connections.contains_key(&ConnectionId(1)));
+        assert!(!broker.handles.contains_key(&address));
+        assert!(!broker.connections.contains_key(&address));
     }
 }

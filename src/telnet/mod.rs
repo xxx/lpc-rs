@@ -16,7 +16,7 @@ use tokio_util::codec::{Decoder, Framed};
 use tracing::{error, info, instrument, trace, warn};
 
 use crate::telnet::{
-    connection_broker::{Connection, ConnectionId},
+    connection_broker::Connection,
     ops::{BrokerOp, ConnectionOp},
 };
 
@@ -65,26 +65,19 @@ impl Telnet {
                 listener.local_addr().unwrap()
             );
 
-            // connection ID 0 is reserved for system use
-            let mut connection_id: u32 = 1;
-
             // incoming telnet connection handling loop
             loop {
                 while let Ok((stream, remote_ip)) = listener.accept().await {
                     let spawn_broker_tx = broker_tx.clone();
-                    let cid = ConnectionId(connection_id);
-
-                    connection_id += 1;
 
                     let handle = tokio::spawn(async move {
                         info!("New connection from {}", &remote_ip);
 
-                        Self::set_up_connection(cid, stream, remote_ip, spawn_broker_tx).await;
+                        Self::set_up_connection(stream, remote_ip, spawn_broker_tx).await;
                     });
 
-                    let Ok(_) = broker_tx.send_async(BrokerOp::NewHandle(cid, handle)).await else {
-                        error!("Failed to send BrokerOp::NewHandle. Dropping connection as we otherwise can't track it.");
-                        handle.abort();
+                    let Ok(_) = broker_tx.send_async(BrokerOp::NewHandle(remote_ip, handle)).await else {
+                        error!("Failed to send BrokerOp::NewHandle. Please consider restarting the server.");
                         continue;
                     };
                 }
@@ -97,7 +90,6 @@ impl Telnet {
     /// Start the main loop for a single user's connection. Handles sends and receives.
     #[instrument(skip(stream, broker_tx))]
     async fn set_up_connection(
-        connection_id: ConnectionId,
         stream: TcpStream,
         remote_ip: SocketAddr,
         broker_tx: FlumeSender<BrokerOp>,
@@ -114,15 +106,12 @@ impl Telnet {
 
         let (tx, mut rx) = mpsc::channel::<ConnectionOp>(128);
 
-        let connection = Connection {
-            id: connection_id,
-            address: remote_ip,
-        };
+        let connection = Connection { address: remote_ip };
 
         let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection, tx)).await else {
             let msg = TelnetEvent::Message("The server is currently unable to accept new connections. Please try again shortly.".to_string());
             let _ = sink.send(msg).await;
-            let _ = broker_tx.send_async(BrokerOp::Disconnect(connection_id)).await;
+            let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
             error!("Failed to send BrokerOp::NewConnection. Dropping connection.");
             return;
         };
@@ -140,7 +129,7 @@ impl Telnet {
                         },
                         None => {
                             info!("Broker closed the channel for {}. Closing connection.", &remote_ip);
-                            let _ = broker_tx.send_async(BrokerOp::Disconnect(connection_id)).await;
+                            let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
                             break;
                         }
                     }
@@ -148,7 +137,7 @@ impl Telnet {
                 received_from_user = input.next() => {
                     match received_from_user {
                         Some(Ok(msg)) => {
-                            Self::handle_input_event(msg, &mut sink, connection_id, &broker_tx).await;
+                            Self::handle_input_event(msg, &mut sink, remote_ip, &broker_tx).await;
                         }
                         Some(Err(e)) => {
                             warn!("User input error: {:?}", e);
@@ -166,7 +155,7 @@ impl Telnet {
     async fn handle_input_event(
         msg: TelnetEvent,
         _sink: &mut SplitSink<Framed<TcpStream, TelnetCodec>, TelnetEvent>,
-        _connection_id: ConnectionId,
+        _remote_ip: SocketAddr,
         _broker_tx: &FlumeSender<BrokerOp>,
     ) {
         match msg {
