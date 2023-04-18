@@ -1,4 +1,5 @@
 use tokio::sync::mpsc::Sender;
+use tokio::task::JoinHandle;
 
 use crate::telnet::connection_broker::{Connection, ConnectionId};
 
@@ -7,6 +8,13 @@ use crate::telnet::connection_broker::{Connection, ConnectionId};
 pub enum BrokerOp {
     /// We have received a new, authenticated connection from a user.
     NewConnection(Connection, Sender<ConnectionOp>),
+
+    /// Keep track of the handle for a connection, so we can drop it
+    /// if necessary.
+    NewHandle(ConnectionId, JoinHandle<()>),
+
+    /// Disconnect the specified connection
+    Disconnect(ConnectionId),
 
     /// Send a message to the specified connection
     SendMessage(String, ConnectionId),

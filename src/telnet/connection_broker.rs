@@ -1,9 +1,11 @@
 use std::{net::SocketAddr, sync::Arc};
+use std::fmt::{Display, Formatter};
 
 use dashmap::DashMap;
 use flume::Receiver as FlumeReceiver;
 use tokio::{net::ToSocketAddrs, sync::mpsc::Sender};
-use tracing::{error, info};
+use tokio::task::JoinHandle;
+use tracing::{error, info, instrument, trace};
 
 use crate::{
     interpreter::vm::vm_op::VmOp,
@@ -16,6 +18,12 @@ use crate::{
 /// The ID of a connection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ConnectionId(pub u32);
+
+impl Display for ConnectionId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// A connection from a user
 #[derive(Debug, Clone, PartialEq)]
@@ -33,6 +41,9 @@ pub struct ConnectionBroker {
     /// Map of connection ID with the tx channel to the connection itself
     connections: Arc<DashMap<ConnectionId, Sender<ConnectionOp>>>,
 
+    /// Map of ConnectionIds to join handles, which can be dropped to disconnect the user.
+    handles: Arc<DashMap<ConnectionId, JoinHandle<()>>>,
+
     /// The channel we receive messages on.
     rx: FlumeReceiver<BrokerOp>,
 
@@ -48,6 +59,7 @@ impl ConnectionBroker {
     pub fn new(vm_tx: Sender<VmOp>, rx: FlumeReceiver<BrokerOp>, telnet: Telnet) -> Self {
         Self {
             connections: Arc::new(DashMap::new()),
+            handles: Arc::new(DashMap::new()),
             telnet,
             vm_tx,
             rx,
@@ -66,11 +78,14 @@ impl ConnectionBroker {
         self.main_loop();
     }
 
+    /// The main loop of the connection broker.
+    /// This will listen for incoming messages from the telnet server and the VM.
+    #[instrument(skip(self))]
     fn main_loop(&self) {
         let vm_tx = self.vm_tx.clone();
         let broker_rx = self.rx.clone();
         let connections = self.connections.clone();
-
+        let handles = self.handles.clone();
         tokio::spawn(async move {
             loop {
                 while let Ok(op) = broker_rx.recv_async().await {
@@ -82,9 +97,35 @@ impl ConnectionBroker {
                                 continue;
                             };
                         }
+                        BrokerOp::NewHandle(connection_id, handle) => {
+                            handles.insert(connection_id, handle);
+                            trace!("Added handle for connection {}", connection_id.0);
+                        }
+                        BrokerOp::Disconnect(connection_id) => {
+                            match handles.remove(&connection_id) {
+                                Some((_, handle)) => {
+                                    info!("Disconnecting connection {}", connection_id.0);
+                                    handle.abort();
+                                }
+                                None => {
+                                    error!("Failed to find handle for connection {}", connection_id.0);
+                                }
+                            }
+
+                            // let Ok(_) = vm_tx.send(VmOp::Disconnected(connection_id)).await else {
+                            //     error!("Failed to send VmOp::Disconnected");
+                            //     continue;
+                            // };
+
+                            if connections.remove(&connection_id).is_none() {
+                                error!("Failed to find connection with ID {}", connection_id);
+                            }
+                            //
+                            // return;
+                        }
                         BrokerOp::SendMessage(msg, connection_id) => {
                             let Some(connection_tx) = connections.get(&connection_id) else {
-                                error!("Failed to find connection with ID {}", connection_id.0);
+                                error!("Failed to find connection with ID {}", connection_id);
                                 continue;
                             };
 
@@ -113,15 +154,16 @@ impl ConnectionBroker {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
     use super::*;
 
     #[tokio::test]
     async fn test_connection_broker() {
-        let (tx, rx) = flume::bounded(10);
+        let (broker_tx, broker_rx) = flume::bounded(10);
         let (vm_tx, mut vm_rx) = tokio::sync::mpsc::channel(10);
         let (connection_tx, mut connection_rx) = tokio::sync::mpsc::channel(10);
-        let telnet = Telnet::new(tx.clone());
-        let mut broker = ConnectionBroker::new(vm_tx, rx, telnet);
+        let telnet = Telnet::new(broker_tx.clone());
+        let mut broker = ConnectionBroker::new(vm_tx, broker_rx.clone(), telnet);
 
         broker.run("127.0.0.1:6666").await;
 
@@ -133,7 +175,7 @@ mod tests {
             address: SocketAddr::from(([127, 0, 0, 1], 1234)),
         };
         let op = BrokerOp::NewConnection(connection.clone(), connection_tx);
-        tx.send_async(op).await.unwrap();
+        broker_tx.send_async(op).await.unwrap();
 
         let Some(vm_op) = vm_rx.recv().await else {
             panic!("Failed to receive message");
@@ -143,10 +185,21 @@ mod tests {
         assert!(broker.connections.contains_key(&ConnectionId(1)));
 
         //
+        // BrokerOp::NewHandle
+        //
+        let handle = tokio::spawn(async {});
+        let op = BrokerOp::NewHandle(ConnectionId(1), handle);
+        broker_tx.send_async(op).await.unwrap();
+
+        // we need to wait for the broker to add the handle to the map
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert!(broker.handles.contains_key(&ConnectionId(1)));
+
+        //
         // BrokerOp::SendMessage
         //
         let op = BrokerOp::SendMessage("Welcome to the MUD!".to_string(), ConnectionId(1));
-        tx.send_async(op).await.unwrap();
+        broker_tx.send_async(op).await.unwrap();
 
         let Some(connection_op) = connection_rx.recv().await else {
             panic!("Failed to receive message");
@@ -156,5 +209,16 @@ mod tests {
             connection_op,
             ConnectionOp::SendMessage("Welcome to the MUD!".to_string())
         );
+
+        //
+        // BrokerOp::Disconnect
+        //
+        let op = BrokerOp::Disconnect(ConnectionId(1));
+        broker_tx.send_async(op).await.unwrap();
+
+        // wait for broker
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert!(!broker.handles.contains_key(&ConnectionId(1)));
+        assert!(!broker.connections.contains_key(&ConnectionId(1)));
     }
 }

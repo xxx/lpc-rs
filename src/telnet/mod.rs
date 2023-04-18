@@ -68,6 +68,9 @@ impl Telnet {
                 listener.local_addr().unwrap()
             );
 
+            // connection ID 0 is reserved for system use
+            let mut connection_id: u32 = 1;
+
             loop {
                 while let Ok((stream, remote_ip)) = listener.accept().await {
                     let broker_tx = broker_tx.clone();
@@ -75,9 +78,11 @@ impl Telnet {
                     tokio::spawn(async move {
                         info!("New connection from {}", &remote_ip);
 
-                        Self::set_up_connection(stream, remote_ip, broker_tx).await;
+                        Self::set_up_connection(ConnectionId(connection_id), stream, remote_ip, broker_tx).await;
                     });
                 }
+
+                connection_id += 1;
             }
         });
 
@@ -85,20 +90,19 @@ impl Telnet {
     }
 
     /// Start the main loop for a single user's connection. Handles sends and receives.
-    async fn set_up_connection(stream: TcpStream, remote_ip: SocketAddr, broker_tx: FlumeSender<BrokerOp>) {
-        // connection ID 0 is reserved for system use
-        static CONNECTION_ID: AtomicU32 = AtomicU32::new(1);
-
+    async fn set_up_connection(connection_id: ConnectionId, stream: TcpStream, remote_ip: SocketAddr, broker_tx: FlumeSender<BrokerOp>) {
         let codec = TelnetCodec::new(4096);
         let (mut sink, mut input) = codec.framed(stream).split();
 
         // negotiations
 
         // TODO: login / auth
+        // apply `connect` to the master
+        // if an object result, apply `logon` to it
+        // if an object result, it's a successful connection
 
         let (tx, mut rx) = mpsc::channel::<ConnectionOp>(128);
 
-        let connection_id = ConnectionId(CONNECTION_ID.fetch_add(1, Ordering::Relaxed));
         let connection = Connection {
             id: connection_id,
             address: remote_ip,
@@ -118,7 +122,9 @@ impl Telnet {
 
                     match send_to_user {
                         Some(ConnectionOp::SendMessage(msg)) => {
-                            let _ = sink.send(TelnetEvent::Message(msg)).await;
+                            if let Err(e) = sink.send(TelnetEvent::Message(msg)).await {
+                                error!(?connection_id, "Failed to send message to user: {}", e);
+                            }
                         },
                         None => {
                             info!("Broker closed the channel for {}. Closing connection.", &remote_ip);
