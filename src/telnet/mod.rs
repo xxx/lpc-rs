@@ -1,11 +1,15 @@
 pub mod connection_broker;
 pub mod ops;
 
+use std::collections::HashSet;
 use std::net::SocketAddr;
 
 use flume::Sender as FlumeSender;
 use futures::{stream::SplitSink, SinkExt, StreamExt};
 use nectar::{event::TelnetEvent, TelnetCodec};
+use nectar::error::TelnetError;
+use nectar::option::TelnetOption;
+use nectar::subnegotiation::SubnegotiationType;
 use once_cell::sync::OnceCell;
 use tokio::{
     net::{TcpListener, TcpStream, ToSocketAddrs},
@@ -95,9 +99,11 @@ impl Telnet {
         broker_tx: FlumeSender<BrokerOp>,
     ) {
         let codec = TelnetCodec::new(4096);
-        let (mut sink, mut input) = codec.framed(stream).split();
+        let mut framed = codec.framed(stream);
 
-        // negotiations
+        // Self::negotiations(&mut framed, remote_ip, &broker_tx).await;
+
+        let (mut sink, mut input) = framed.split();
 
         // TODO: login / auth
         // apply `connect` to the master
@@ -109,10 +115,10 @@ impl Telnet {
         let connection = Connection { address: remote_ip };
 
         let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection, tx)).await else {
+            error!("Failed to send BrokerOp::NewConnection. Dropping connection.");
             let msg = TelnetEvent::Message("The server is currently unable to accept new connections. Please try again shortly.".to_string());
             let _ = sink.send(msg).await;
             let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
-            error!("Failed to send BrokerOp::NewConnection. Dropping connection.");
             return;
         };
 
@@ -151,6 +157,48 @@ impl Telnet {
             }
         }
     }
+
+    async fn negotiations(
+        framed: &mut Framed<TcpStream, TelnetCodec>,
+        remote_ip: SocketAddr,
+        broker_tx: &FlumeSender<BrokerOp>,
+    ) {
+        // https://www.gammon.com.au/mccp/protocol.html
+        // const MCCP: TelnetOption = TelnetOption::Unknown(85);
+        // const MCCP2: TelnetOption = TelnetOption::Unknown(86);
+
+        const GMCP: TelnetOption = TelnetOption::Unknown(201);
+        let charset = TelnetOption::Unknown(42);
+        const MSSP: TelnetOption = TelnetOption::Unknown(70);
+
+        let _ = framed.send(TelnetEvent::Will(charset)).await;
+        match framed.next().await {
+            Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::Unknown(charset, data)))) => {
+                println!("CHARSET negotiation result: {:?}", data);
+                // let _ = broker_tx.send_async(BrokerOp::SetCharset(remote_ip, data)).await;
+            }
+            _ => {}
+        }
+
+        // let _ = framed.send(TelnetEvent::Will(MSSP)).await;
+        // let result = framed.next().await;
+        // println!("MSSP negotiation result: {:?}", result);
+        //
+        // let _ = framed.send(TelnetEvent::Will(GMCP)).await;
+        // let result = framed.next().await;
+        // println!("GMCP negotiation result: {:?}", result);
+
+        // let mut options = HashSet::new();
+        // conn.send_iac(TelnetEvent::Will(TelnetOption::Echo)).await?;
+
+        // Disable echo for password entry. It may seem counterintuitive that we're
+        // saying we WILL echo here, but it's really telling their client to stop its
+        // own echoing. We're lying to the client - we're not going to echo either.
+        let _ = framed.send(TelnetEvent::Will(TelnetOption::Echo)).await;
+
+
+    }
+
 
     async fn handle_input_event(
         msg: TelnetEvent,
