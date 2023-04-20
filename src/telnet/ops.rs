@@ -7,8 +7,11 @@ use crate::telnet::connection_broker::Connection;
 /// Operations that are handled by the [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker)
 #[derive(Debug)]
 pub enum BrokerOp {
-    /// We have received a new, authenticated connection from a user.
+    /// Start the login process for a connection.
     NewConnection(Connection, Sender<ConnectionOp>),
+
+    /// We have received a new, authenticated connection from a user.
+    Connected(Connection, Sender<ConnectionOp>),
 
     /// Keep track of the handle for a connection, so we can drop it
     /// if necessary.

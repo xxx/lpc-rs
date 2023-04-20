@@ -12,12 +12,32 @@ use crate::{
         Telnet,
     },
 };
+use crate::interpreter::process::Process;
 
 /// A connection from a user
 #[derive(Debug, Clone, PartialEq)]
 pub struct Connection {
     /// The address of the client.
     pub address: SocketAddr,
+
+    /// The process that this connection is attached to.
+    /// This is basically the player's in-game body object.
+    pub process: Option<Arc<Process>>
+}
+
+impl Connection {
+    /// Creates a new [`Connection`].
+    pub fn new(address: SocketAddr) -> Self {
+        Self {
+            address,
+            process: None,
+        }
+    }
+
+    /// Set the process that this connection is connected to.
+    pub fn set_process(&mut self, process: Arc<Process>) {
+        self.process = Some(process);
+    }
 }
 
 /// Manages all the outgoing connections to users.
@@ -76,9 +96,17 @@ impl ConnectionBroker {
                 while let Ok(op) = broker_rx.recv_async().await {
                     match op {
                         BrokerOp::NewConnection(connection, tx) => {
-                            connections.insert(connection.address, tx);
-                            let Ok(_) = vm_tx.send(VmOp::Connected(connection)).await else {
-                                error!("Failed to send VmOp::NewConnection");
+                            let address = connection.address;
+                            let Ok(_) = vm_tx.send(VmOp::InitiateLogin(connection, tx)).await else {
+                                error!("Failed to send VmOp::InitiateLogin for {}. Disconnecting", address);
+                                continue;
+                            };
+                        }
+                        BrokerOp::Connected(connection, tx) => {
+                            let address = connection.address;
+                            connections.insert(address, tx.clone());
+                            let Ok(_) = vm_tx.send(VmOp::Connected(connection, tx)).await else {
+                                error!("Failed to send VmOp::Connected for {}. Disconnecting", address);
                                 continue;
                             };
                         }
@@ -152,15 +180,24 @@ mod tests {
         // BrokerOp::NewConnection
         //
         let address = SocketAddr::from(([127, 0, 0, 1], 1234));
-        let connection = Connection { address };
-        let op = BrokerOp::NewConnection(connection.clone(), connection_tx);
+        let connection = Connection::new(address);
+        let op = BrokerOp::NewConnection(connection.clone(), connection_tx.clone());
         broker_tx.send_async(op).await.unwrap();
 
         let Some(vm_op) = vm_rx.recv().await else {
             panic!("Failed to receive message");
         };
 
-        assert_eq!(vm_op, VmOp::Connected(connection));
+        assert_eq!(vm_op, VmOp::InitiateLogin(connection.clone(), connection_tx.clone()));
+        // assert!(broker.connections.contains_key(&address));
+
+        //
+        // BrokerOp::Connected
+        //
+        let op = BrokerOp::Connected(connection.clone(), connection_tx.clone());
+        broker_tx.send_async(op).await.unwrap();
+        // allow the broker to handle the message
+        tokio::time::sleep(Duration::from_millis(10)).await;
         assert!(broker.connections.contains_key(&address));
 
         //
