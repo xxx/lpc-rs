@@ -1,6 +1,8 @@
+pub mod apply_function;
 pub mod initialize_program;
 pub mod task_id;
 pub mod task_state;
+pub mod task_template;
 
 use std::{
     borrow::Cow,

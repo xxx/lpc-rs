@@ -14,6 +14,7 @@ use crate::{
     },
     util::get_simul_efuns,
 };
+use crate::interpreter::task::task_template::TaskTemplate;
 
 /// A struct to carry context during the evaluation of a single [`Task`](crate::interpreter::task::Task).
 #[derive(Debug, Clone, Builder)]
@@ -79,7 +80,7 @@ impl TaskContext {
     {
         let config = config.into();
         let object_space = object_space.into();
-        let simul_efuns = { get_simul_efuns(&config, &object_space) };
+        let simul_efuns = get_simul_efuns(&config, &object_space);
 
         Self {
             config,
@@ -91,6 +92,23 @@ impl TaskContext {
             vm_upvalues: vm_upvalues.into(),
             call_outs: call_outs.into(),
             tx,
+        }
+    }
+
+    /// Create a new [`TaskContext`] from the passed [`TaskTemplate`]
+    pub fn from_template(template: TaskTemplate, process: Arc<Process>) -> Self {
+        let simul_efuns = get_simul_efuns(&template.config, &template.object_space);
+
+        Self {
+            config: template.config,
+            process,
+            object_space: template.object_space,
+            memory: template.memory,
+            result: OnceCell::new(),
+            simul_efuns,
+            vm_upvalues: template.vm_upvalues,
+            call_outs: template.call_outs,
+            tx: template.tx,
         }
     }
 
