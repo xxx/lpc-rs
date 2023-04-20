@@ -6,6 +6,7 @@ use std::sync::{
 use bit_set::BitSet;
 use dashmap::{mapref::one::Ref, DashMap};
 use delegate::delegate;
+use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::Config;
 
 use crate::interpreter::{gc::mark::Mark, process::Process, program::Program};
@@ -54,6 +55,13 @@ impl ObjectSpace {
         }
     }
 
+    /// Get a reference to the master object.
+    pub fn master_object(&self) -> Option<Ref<'_, String, Arc<Process>>> {
+        // TODO: this should not need to allocate the filename every time.
+        let filename = LpcPath::new_in_game(self.config.master_object.as_str(), "/", self.config.lib_dir.as_str());
+        self.processes.get(&Self::prepare_filename(filename.as_ref()))
+    }
+
     // /// Create a [`Process`] from a [`Program`], and add add it to the process
     // /// table. If a new program with the same filename as an existing one is
     // /// added, the new will overwrite the old in the table.
@@ -72,7 +80,7 @@ impl ObjectSpace {
 
         let clone = Process::new_clone(program, count);
 
-        let name = space_cell.prepare_filename(&clone);
+        let name = space_cell.prepare_process_filename(&clone);
 
         let process: Arc<Process> = clone.into();
 
@@ -82,34 +90,37 @@ impl ObjectSpace {
 
     /// Directly insert the passed [`Process`] into the space, with in-game
     /// local filename.
-    pub fn insert_process<P>(space_cell: &Arc<Self>, process: P)
+    pub fn insert_process<P>(object_space: &Arc<Self>, process: P)
     where
         P: Into<Arc<Process>>,
     {
         let process = process.into();
-        let name = { space_cell.prepare_filename(&process) };
+        let name = { object_space.prepare_process_filename(&process) };
 
-        space_cell.insert_process_directly(name, process);
+        object_space.insert_process_directly(name, process);
     }
 
-    pub fn remove_process<P>(space_cell: &Arc<Self>, process: P)
+    /// Remove the passed [`Process`] from the space.
+    pub fn remove_process<P>(object_space: &Arc<Self>, process: P)
     where
         P: Into<Arc<Process>>,
     {
         let process = process.into();
-        let name = { space_cell.prepare_filename(&process) };
+        let name = { object_space.prepare_process_filename(&process) };
 
-        space_cell.processes.remove(&name);
+        object_space.processes.remove(&name);
     }
 
-    fn prepare_filename(&self, process: &Process) -> String {
+    fn prepare_process_filename(&self, process: &Process) -> String {
         let name = process.localized_filename(&self.config.lib_dir);
-        let name = name
+        Self::prepare_filename(&name)
+    }
+
+    fn prepare_filename(filename: &str) -> String {
+        filename
             .strip_suffix(".c")
             .map(ToString::to_string)
-            .unwrap_or(name);
-
-        name
+            .unwrap_or(filename.to_string())
     }
 
     #[inline]
@@ -166,6 +177,7 @@ impl Mark for ObjectSpace {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use ustr::ustr;
 
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
@@ -256,5 +268,23 @@ mod tests {
         space.mark(&mut marked, &mut processed).unwrap();
 
         assert!(processed.contains(*array_id.as_ref()));
+    }
+
+    #[test]
+    fn test_master_object() {
+        let config = ConfigBuilder::default()
+            .master_object(ustr("/master.c"))
+            .lib_dir("/foo/bar")
+            .build()
+            .unwrap();
+        let space = ObjectSpace::new(config);
+
+        assert!(space.master_object().is_none());
+
+        let proc = Arc::new(Process::default());
+        space.insert_process_directly("/master", proc.clone());
+
+        let master = space.master_object();
+        assert_eq!(*master.unwrap(), proc);
     }
 }
