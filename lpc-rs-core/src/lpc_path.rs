@@ -41,6 +41,7 @@ impl LpcPath {
 
     /// Create a new in-game path.
     /// This will expand relative paths to (in-game) absolute, if necessary.
+    /// It will also strip off the `lib_dir` prefix, if it's present.
     ///
     /// # Arguments
     /// `path` - The relative path to the file
