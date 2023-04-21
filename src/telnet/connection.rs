@@ -33,9 +33,9 @@ impl Connection {
         }
     }
 
-    /// Set the process that this connection is connected to, and tag the
-    /// process with the connection.
-    /// Drops the previous connection if there was one.
+    /// Set the [`Process`] that this [`Connection`] is connected to, and tag the
+    /// [`Process`] with the [`Connection`].
+    /// Drops the previous [`Connection`] that was attached to the [`Process`] if there was one.
     pub async fn takeover_process(&mut self, process: Arc<Process>) -> Option<Connection> {
         // TODO: this smells like a race condition
         let previous = {
@@ -52,7 +52,7 @@ impl Connection {
                         .to_string(),
                 ))
                 .await;
-            let _ = prev.broker_tx.send_async(BrokerOp::Disconnect(self.address)).await;
+            let _ = prev.broker_tx.send_async(BrokerOp::Disconnect(prev.address)).await;
         }
 
         previous
