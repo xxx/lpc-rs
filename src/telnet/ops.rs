@@ -1,16 +1,16 @@
 use std::net::SocketAddr;
 
-use tokio::{sync::mpsc::Sender, task::JoinHandle};
+use tokio::task::JoinHandle;
 use crate::telnet::connection::Connection;
 
 /// Operations that are handled by the [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker)
 #[derive(Debug)]
 pub enum BrokerOp {
     /// Start the login process for a connection.
-    NewConnection(Connection, Sender<ConnectionOp>),
+    NewConnection(Connection),
 
     /// We have received a new, authenticated connection from a user.
-    Connected(Connection, Sender<ConnectionOp>),
+    Connected(Connection),
 
     /// Keep track of the handle for a connection, so we can drop it
     /// if necessary.

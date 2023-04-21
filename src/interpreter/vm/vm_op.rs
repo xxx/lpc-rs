@@ -1,20 +1,18 @@
 use lpc_rs_errors::LpcError;
-use tokio::sync::mpsc::Sender;
 
 use crate::{
     interpreter::task::task_id::TaskId,
-    telnet::{ops::ConnectionOp},
 };
 use crate::telnet::connection::Connection;
 
 /// Operations that can be communicated to the [`Vm`](crate::interpreter::vm::Vm) remotely.
 #[derive(Debug)]
 pub enum VmOp {
-    /// A user has successfully logged-in.
-    Connected(Connection, Sender<ConnectionOp>),
-
     /// Start the login process for a connection.
-    InitiateLogin(Connection, Sender<ConnectionOp>),
+    InitiateLogin(Connection),
+
+    /// A user has successfully logged-in.
+    Connected(Connection),
 
     /// Run a CallOut function, identified by its index in the [`CallOuts`](crate::interpreter::call_outs::CallOuts) list
     PrioritizeCallOut(usize),
@@ -29,8 +27,8 @@ pub enum VmOp {
 impl PartialEq for VmOp {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (VmOp::Connected(a, _), VmOp::Connected(b, _)) => a == b,
-            (VmOp::InitiateLogin(a, _), VmOp::InitiateLogin(b, _)) => a == b,
+            (VmOp::Connected(a), VmOp::Connected(b)) => a == b,
+            (VmOp::InitiateLogin(a), VmOp::InitiateLogin(b)) => a == b,
             (VmOp::PrioritizeCallOut(a), VmOp::PrioritizeCallOut(b)) => a == b,
             (VmOp::TaskComplete(a), VmOp::TaskComplete(b)) => a == b,
             (VmOp::TaskError(a, ae), VmOp::TaskError(b, be)) => a == b && ae == be,

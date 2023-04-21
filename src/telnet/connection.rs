@@ -15,8 +15,10 @@ pub struct Connection {
     /// This is basically the player's in-game body object.
     pub process: Option<Arc<Process>>,
 
-    pub connection_tx: Sender<ConnectionOp>,
+    /// The channel we use to send messages to the socket connection's thread.
+    pub tx: Sender<ConnectionOp>,
 
+    /// The channel we use to send messages to the [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker).
     pub broker_tx: FlumeSender<BrokerOp>,
 }
 
@@ -26,7 +28,7 @@ impl Connection {
         Self {
             address,
             process: None,
-            connection_tx,
+            tx: connection_tx,
             broker_tx
         }
     }
@@ -35,16 +37,16 @@ impl Connection {
     /// process with the connection.
     /// Drops the previous connection if there was one.
     pub async fn takeover_process(&mut self, process: Arc<Process>) -> Option<Connection> {
+        // TODO: this smells like a race condition
         let previous = {
             let mut lock = process.connection.write();
             std::mem::replace(&mut *lock, Some(self.clone()))
         };
-        // TODO: this smells like a race condition
         self.process = Some(process);
 
         if let Some(prev) = &previous {
             let _ = prev
-                .connection_tx
+                .tx
                 .send(ConnectionOp::SendMessage(
                     "You are being disconnected because someone else logged in as you."
                         .to_string(),

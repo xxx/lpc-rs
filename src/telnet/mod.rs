@@ -119,7 +119,7 @@ impl Telnet {
 
         let connection = Connection::new(remote_ip, connection_tx.clone(), broker_tx.clone());
 
-        let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection, connection_tx)).await else {
+        let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection)).await else {
             error!("Failed to send BrokerOp::NewConnection. Dropping connection.");
             let msg = TelnetEvent::Message("The server is currently unable to accept new connections. Please try again shortly.".to_string());
             let _ = sink.send(msg).await;

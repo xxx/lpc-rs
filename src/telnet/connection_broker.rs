@@ -68,17 +68,17 @@ impl ConnectionBroker {
             loop {
                 while let Ok(op) = broker_rx.recv_async().await {
                     match op {
-                        BrokerOp::NewConnection(connection, tx) => {
+                        BrokerOp::NewConnection(connection) => {
                             let address = connection.address;
-                            let Ok(_) = vm_tx.send(VmOp::InitiateLogin(connection, tx)).await else {
+                            let Ok(_) = vm_tx.send(VmOp::InitiateLogin(connection)).await else {
                                 error!("Failed to send VmOp::InitiateLogin for {}. Disconnecting", address);
                                 continue;
                             };
                         }
-                        BrokerOp::Connected(connection, tx) => {
+                        BrokerOp::Connected(connection) => {
                             let address = connection.address;
-                            connections.insert(address, tx.clone());
-                            let Ok(_) = vm_tx.send(VmOp::Connected(connection, tx)).await else {
+                            connections.insert(address, connection.tx.clone());
+                            let Ok(_) = vm_tx.send(VmOp::Connected(connection)).await else {
                                 error!("Failed to send VmOp::Connected for {}. Disconnecting", address);
                                 continue;
                             };
@@ -155,7 +155,7 @@ mod tests {
         //
         let address = SocketAddr::from(([127, 0, 0, 1], 1234));
         let connection = Connection::new(address, connection_tx.clone(), broker_tx.clone());
-        let op = BrokerOp::NewConnection(connection.clone(), connection_tx.clone());
+        let op = BrokerOp::NewConnection(connection.clone());
         broker_tx.send_async(op).await.unwrap();
 
         let Some(vm_op) = vm_rx.recv().await else {
@@ -164,14 +164,13 @@ mod tests {
 
         assert_eq!(
             vm_op,
-            VmOp::InitiateLogin(connection.clone(), connection_tx.clone())
+            VmOp::InitiateLogin(connection.clone())
         );
-        // assert!(broker.connections.contains_key(&address));
 
         //
         // BrokerOp::Connected
         //
-        let op = BrokerOp::Connected(connection.clone(), connection_tx.clone());
+        let op = BrokerOp::Connected(connection.clone());
         broker_tx.send_async(op).await.unwrap();
         // allow the broker to handle the message
         tokio::time::sleep(Duration::from_millis(10)).await;

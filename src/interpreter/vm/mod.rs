@@ -140,10 +140,10 @@ impl Vm {
                 }
                 Some(op) = self.rx.recv() => {
                     match op {
-                        VmOp::InitiateLogin(connection, tx) => {
-                            self.initiate_login(connection, tx).await;
+                        VmOp::InitiateLogin(connection) => {
+                            self.initiate_login(connection).await;
                         }
-                        VmOp::Connected(connection, _tx) => {
+                        VmOp::Connected(connection) => {
                             info!("Vm connected: {:?}", connection);
                         }
                         VmOp::PrioritizeCallOut(idx) => {
