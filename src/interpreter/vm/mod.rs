@@ -2,9 +2,8 @@ use std::{path::Path, sync::Arc};
 
 use bit_set::BitSet;
 use flume::Sender as FlumeSender;
-use if_chain::if_chain;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::{
@@ -19,24 +18,25 @@ use crate::{
     compiler::{Compiler, CompilerBuilder},
     interpreter::{
         call_outs::CallOuts,
-        efun::EFUN_FUNCTIONS,
-        function_type::function_address::FunctionAddress,
         gc::{
             gc_bank::{GcBank, GcRefBank},
             mark::Mark,
             sweep::KeylessSweep,
         },
         heap::Heap,
-        lpc_ref::{LpcRef, NULL},
         object_space::ObjectSpace,
-        process::Process,
         program::Program,
-        task::{task_id::TaskId, Task},
+        task::Task,
         task_context::TaskContext,
     },
     telnet::{connection_broker::ConnectionBroker, ops::BrokerOp, Telnet},
     util::get_simul_efuns,
 };
+use crate::interpreter::process::Process;
+use crate::interpreter::task::task_template::{TaskTemplate, TaskTemplateBuilder};
+
+mod initiate_login;
+mod prioritize_call_out;
 
 pub mod vm_op;
 
@@ -125,8 +125,10 @@ impl Vm {
         self.initialize_file(&master_path).await
     }
 
-    /// Run the [`Vm`]'s main loop.
+    /// Run the [`Vm`]'s main loop, which is the main event loop for the entire system.
     /// Assumes `bootstrap()` has already been called.
+    /// This runs on the main execution thread, and should never do any work itself.
+    /// Spawn a task to do anything beyond message handling, or logging.
     #[instrument(skip_all)]
     pub async fn run(&mut self) -> Result<()> {
         loop {
@@ -135,158 +137,33 @@ impl Vm {
                 _ = signal::ctrl_c() => {
                     // SIGINT on Linux
                     info!("Ctrl-C received... shutting down");
+                    // TODO: send message to broker to shut down, wait for response.
                     break;
                 }
                 Some(op) = self.rx.recv() => {
                     match op {
-                        VmOp::PrioritizeCallOut(idx) => {
-                            self.op_prioritize_call_out(idx).await;
+                        VmOp::InitiateLogin(connection, tx) => {
+                            self.initiate_login(connection, tx).await;
                         }
+                        VmOp::Connected(connection, _tx) => {
+                            info!("Vm connected: {:?}", connection);
+                        }
+                        VmOp::PrioritizeCallOut(idx) => {
+                            self.prioritize_call_out(idx).await;
+                        }
+                        VmOp::TaskError(_task_id, error) => {
+                            tokio::spawn(async move { error.emit_diagnostics() });
+                        },
                         VmOp::TaskComplete(_task_id) => {
                             // println!("task {task_id} complete");
                             // self.op_task_complete(task_id)?;
                         },
-                        VmOp::TaskError(_task_id, error) => {
-                            tokio::spawn(async move { error.emit_diagnostics() });
-                        },
-                        VmOp::Connected(connection) => {
-                            info!("Vm connected: {:?}", connection);
-                        }
                     }
                 }
             }
         }
 
         Ok(())
-    }
-
-    /// Handler for [`VmOp::PrioritizeCallOut`].
-    ///
-    /// # Arguments
-    ///
-    /// * `idx` - The index of the call out to run
-    ///
-    /// Errors are communicated directly to the [`Vm`] via it's channel.
-    async fn op_prioritize_call_out(&mut self, idx: usize) {
-        let call_outs = self.call_outs.clone();
-        let config = self.config.clone();
-        let object_space = self.object_space.clone();
-        let memory = self.memory.clone();
-        let upvalues = self.upvalues.clone();
-        let tx = self.tx.clone();
-
-        tokio::spawn(async move {
-            if call_outs.read().get(idx).is_none() {
-                return;
-            }
-
-            let repeating: bool;
-            let pair = {
-                if_chain! {
-                    let b = call_outs.read();
-                    let call_out = b.get(idx).unwrap();
-                    if let LpcRef::Function(ref func) = call_out.func_ref;
-                    then {
-                        repeating = call_out.is_repeating();
-                        Ok((func.clone(), repeating))
-                    } else {
-                        Err(LpcError::new("invalid function sent to `call_out`"))
-                    }
-                }
-            };
-
-            let Ok((ptr_lock, repeating)) = pair else {
-                call_outs.write().remove(idx);
-                let _ = tx.send(VmOp::TaskError(TaskId(0), pair.unwrap_err())).await;
-                return;
-            };
-
-            let triple = {
-                let ptr = ptr_lock.read();
-
-                // call outs don't get any additional args passed to them, so just set up the partial args.
-                // use int 0 for any that were not applied at the time the pointer was created
-                // TODO: error instead of int 0?
-                let args = ptr
-                    .partial_args
-                    .iter()
-                    .map(|arg| match arg {
-                        Some(lpc_ref) => lpc_ref.clone(),
-                        None => NULL,
-                    })
-                    .collect::<Vec<_>>();
-
-                match ptr.address {
-                    FunctionAddress::Local(ref proc, ref function) => {
-                        if let Some(proc) = proc.upgrade() {
-                            Ok((proc, function.clone(), args))
-                        } else {
-                            Err(LpcError::new(
-                                "attempted to prioritize a function pointer to a dead process",
-                            ))
-                        }
-                    }
-                    FunctionAddress::Dynamic(_) => Err(LpcError::new(
-                        "attempted to prioritize a dynamic receiver passed to call_out",
-                    )),
-                    FunctionAddress::SimulEfun(name) => {
-                        match get_simul_efuns(&config, &object_space) {
-                            Some(simul_efuns) => match simul_efuns.program.lookup_function(name) {
-                                Some(function) => Ok((simul_efuns.clone(), function.clone(), args)),
-                                None => Err(LpcError::new(format!(
-                                    "call to unknown simul_efun `{name}`"
-                                ))),
-                            },
-                            None => Err(LpcError::new(
-                                "function pointer to simul_efun passed, but no simul_efuns?",
-                            )),
-                        }
-                    }
-                    FunctionAddress::Efun(name) => {
-                        let pf = EFUN_FUNCTIONS.get(name.as_str()).unwrap();
-
-                        Ok((Arc::new(Process::default()), pf.clone(), args))
-                    }
-                }
-            };
-
-            let Ok((process, function, args)) = triple else {
-                call_outs.write().remove(idx);
-                let _ = tx.send(VmOp::TaskError(TaskId(0), triple.unwrap_err())).await;
-                return;
-            };
-
-            {
-                let mut call_outs = call_outs.write();
-                if repeating {
-                    call_outs.get_mut(idx).unwrap().refresh();
-                } else {
-                    call_outs.remove(idx);
-                }
-            }
-
-            let task_context = TaskContext::new(
-                config,
-                process,
-                object_space,
-                memory,
-                upvalues,
-                call_outs,
-                tx.clone(),
-            );
-
-            let mut task = Task::<MAX_CALL_STACK_SIZE>::new(task_context);
-            let id = task.id;
-
-            if let Err(e) = task.timed_eval(function, &args).await {
-                let _ = tx
-                    .send(VmOp::TaskError(
-                        id,
-                        e.with_stack_trace(task.stack.stack_trace()),
-                    ))
-                    .await;
-            }
-        });
     }
 
     /// Initialize the simulated efuns file, if it is configured.
@@ -404,6 +281,18 @@ impl Vm {
 
             task.context
         })
+    }
+
+    /// A convenience helper to create a populated [`TaskTemplate`]
+    pub fn new_task_template(&self) -> TaskTemplate {
+        TaskTemplate {
+            config: self.config.clone(),
+            object_space: self.object_space.clone(),
+            memory: self.memory.clone(),
+            vm_upvalues: self.upvalues.clone(),
+            call_outs: self.call_outs.clone(),
+            tx: self.tx.clone(),
+        }
     }
 }
 

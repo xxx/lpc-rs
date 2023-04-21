@@ -3,6 +3,7 @@ pub mod ops;
 
 use std::collections::HashSet;
 use std::net::SocketAddr;
+use bytes::Bytes;
 
 use flume::Sender as FlumeSender;
 use futures::{stream::SplitSink, SinkExt, StreamExt};
@@ -101,18 +102,26 @@ impl Telnet {
         let codec = TelnetCodec::new(4096);
         let mut framed = codec.framed(stream);
 
-        // Self::negotiations(&mut framed, remote_ip, &broker_tx).await;
+        Self::negotiations(&mut framed, remote_ip, &broker_tx).await;
 
-        let (mut sink, mut input) = framed.split();
+        // Disable echo for password entry. It may seem counterintuitive that we're
+        // saying we WILL echo here, but it's really telling their client to stop its
+        // own echoing. We're lying to the client - we're not going to echo either.
+        // let _ = framed.send(TelnetEvent::Will(TelnetOption::Echo)).await;
+
+
+
 
         // TODO: login / auth
         // apply `connect` to the master
         // if an object result, apply `logon` to it
         // if an object result, it's a successful connection
 
+        let (mut sink, mut input) = framed.split();
+
         let (tx, mut rx) = mpsc::channel::<ConnectionOp>(128);
 
-        let connection = Connection { address: remote_ip };
+        let connection = Connection::new(remote_ip);
 
         let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection, tx)).await else {
             error!("Failed to send BrokerOp::NewConnection. Dropping connection.");
@@ -143,6 +152,7 @@ impl Telnet {
                 received_from_user = input.next() => {
                     match received_from_user {
                         Some(Ok(msg)) => {
+                            println!("Received message from user: {:?}", msg);
                             Self::handle_input_event(msg, &mut sink, remote_ip, &broker_tx).await;
                         }
                         Some(Err(e)) => {
@@ -163,40 +173,48 @@ impl Telnet {
         remote_ip: SocketAddr,
         broker_tx: &FlumeSender<BrokerOp>,
     ) {
-        // https://www.gammon.com.au/mccp/protocol.html
-        // const MCCP: TelnetOption = TelnetOption::Unknown(85);
-        // const MCCP2: TelnetOption = TelnetOption::Unknown(86);
+        // CHARSET negotiation
+        let _ = framed.send(TelnetEvent::Will(TelnetOption::Charset)).await;
+        loop {
+            match framed.next().await {
+                // *We* send the requests, so we reject their charset suggestion.
+                // This is technically not to spec (we should only do this after we send the
+                // request ourselves, and they respond with a charset request).
+                Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetRequest(_data)))) => {
+                    let _ = framed.send(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetRejected)).await;
+                }
+                Some(Ok(TelnetEvent::Do(TelnetOption::Charset))) => {
+                    info!("matching CHARSET negotiation result: {:?}", TelnetEvent::Do(TelnetOption::Charset));
 
-        const GMCP: TelnetOption = TelnetOption::Unknown(201);
-        let charset = TelnetOption::Unknown(42);
-        const MSSP: TelnetOption = TelnetOption::Unknown(70);
-
-        let _ = framed.send(TelnetEvent::Will(charset)).await;
-        match framed.next().await {
-            Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::Unknown(charset, data)))) => {
-                println!("CHARSET negotiation result: {:?}", data);
-                // let _ = broker_tx.send_async(BrokerOp::SetCharset(remote_ip, data)).await;
+                    let _ = framed.send(
+                        TelnetEvent::Subnegotiate(SubnegotiationType::CharsetRequest(vec![Bytes::from("UTF-8")]))
+                    ).await;
+                    // let _ = broker_tx.send_async(BrokerOp::SetCharset(remote_ip, data)).await;
+                }
+                Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetAccepted(data)))) => {
+                    info!("Charset accepted: {:?}", data);
+                    break;
+                    // let _ = broker_tx.send_async(BrokerOp::SetCharset(remote_ip, data)).await;
+                }
+                Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetRejected))) => {
+                    info!("CHARSET rejected");
+                    break;
+                    // let _ = broker_tx.send_async(BrokerOp::SetCharset(remote_ip, data)).await;
+                }
+                x => {
+                    trace!("CHARSET negotiation result: {:?}", x);
+                    break;
+                }
             }
-            _ => {}
         }
 
-        // let _ = framed.send(TelnetEvent::Will(MSSP)).await;
+        // let _ = framed.send(TelnetEvent::Will(TelnetOption::MSSP)).await;
         // let result = framed.next().await;
         // println!("MSSP negotiation result: {:?}", result);
         //
         // let _ = framed.send(TelnetEvent::Will(GMCP)).await;
         // let result = framed.next().await;
         // println!("GMCP negotiation result: {:?}", result);
-
-        // let mut options = HashSet::new();
-        // conn.send_iac(TelnetEvent::Will(TelnetOption::Echo)).await?;
-
-        // Disable echo for password entry. It may seem counterintuitive that we're
-        // saying we WILL echo here, but it's really telling their client to stop its
-        // own echoing. We're lying to the client - we're not going to echo either.
-        let _ = framed.send(TelnetEvent::Will(TelnetOption::Echo)).await;
-
-
     }
 
 

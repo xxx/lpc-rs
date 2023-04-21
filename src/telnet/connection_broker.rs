@@ -34,8 +34,10 @@ impl Connection {
         }
     }
 
-    /// Set the process that this connection is connected to.
+    /// Set the process that this connection is connected to, and tag the
+    /// process with the connection.
     pub fn set_process(&mut self, process: Arc<Process>) {
+        // TODO: add connection to process
         self.process = Some(process);
     }
 }

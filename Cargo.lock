@@ -1512,6 +1512,7 @@ dependencies = [
  "auto_impl",
  "beaver",
  "bit-set",
+ "bytes",
  "chrono",
  "claims",
  "console-subscriber",
@@ -1777,8 +1778,7 @@ dependencies = [
 [[package]]
 name = "nectar"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4716e792b2c7bf6e30262a397a156928ab136fe4f5b1d96d8b224acae7e1491d"
+source = "git+https://github.com/xxx/nectar?branch=main#22d8be108b11194074028aed2e401c921edd45cf"
 dependencies = [
  "bytes",
  "tokio-util",

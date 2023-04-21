@@ -3,6 +3,7 @@ use std::sync::Weak;
 use bit_set::BitSet;
 use chrono::{DateTime, Duration, Utc};
 use delegate::delegate;
+use derive_builder::Builder;
 use educe::Educe;
 use if_chain::if_chain;
 use lpc_rs_errors::Result;
@@ -12,8 +13,9 @@ use tokio::{sync::mpsc::Sender, task::JoinHandle, time::Instant};
 use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, process::Process, vm::vm_op::VmOp};
 
 /// A single call out to a function, to be run at a later time, potentially on an interval.
-#[derive(Educe)]
+#[derive(Educe, Builder)]
 #[educe(Debug)]
+#[builder(pattern = "owned")]
 pub struct CallOut {
     /// The process where `call_out` was called from.
     #[educe(Debug(ignore))]
@@ -23,9 +25,11 @@ pub struct CallOut {
     pub func_ref: LpcRef,
 
     /// How often does this call out repeat?
+    #[builder(default, setter(strip_option))]
     repeat_duration: Option<Duration>,
 
     /// When does this call out run next?
+    #[builder(default)]
     next_run: DateTime<Utc>,
 
     /// The RAII object that determines if the callback runs, or not.
@@ -115,6 +119,9 @@ impl CallOuts {
 
             /// Remove a [`CallOut`] by its index
             pub fn remove(&mut self, index: usize) -> Option<CallOut>;
+
+            /// Push a [`CallOut`] to the end of the queue
+            pub fn push(&mut self, value: CallOut) -> usize;
         }
     }
 
@@ -157,6 +164,7 @@ impl CallOuts {
                     }
                 });
 
+                // TODO: check for race condition with 0 delay case. Maybe use OnceCell for the handle?
                 self.queue.push(CallOut {
                     process,
                     func_ref,

@@ -4,6 +4,7 @@ use std::{
 };
 
 use bit_set::BitSet;
+use derive_builder::Builder;
 use itertools::Itertools;
 use lpc_rs_core::register::Register;
 use tracing::{instrument, trace};
@@ -18,11 +19,12 @@ use crate::interpreter::{
 };
 
 /// A pointer to a function, created with the `&` syntax.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Builder)]
 pub struct FunctionPtr {
     /// The object that this pointer was declared in.
     /// *note* This is *not* necessarily the object that the function is
     ///        defined within.
+    #[builder(default)]
     pub owner: Weak<Process>,
 
     /// Address of the function, in either the receiver or owner
@@ -31,16 +33,20 @@ pub struct FunctionPtr {
     /// Arguments to be passed to the call. `None` arguments in this vector
     /// are expected to be filled at call time, in the case of pointers that
     /// are partially-applied.
+    #[builder(default)]
     pub partial_args: Vec<Option<LpcRef>>,
 
     /// Does this pointer use `call_other`?
+    #[builder(default)]
     pub call_other: bool,
 
     /// The variables that I need from the environment, at the time this
     /// [`FunctionPtr`] ss created.
+    #[builder(default)]
     pub upvalue_ptrs: Vec<Register>,
 
     /// A globally-unique ID for this function pointer, used for GC purposes.
+    #[builder(default)]
     pub unique_id: UniqueId,
 }
 
