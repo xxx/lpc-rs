@@ -52,22 +52,20 @@ impl Connection {
 
             // These assignments happen while both are mutable, which should protect from race conditions.
             // note that self_clone will not have the process set on it, but it's fine.
-            let prev = std::mem::replace(&mut *lock, Some(self_clone));
             self.process = Some(process_clone);
-
-            prev
+            std::mem::replace(&mut *lock, Some(self_clone))
         };
 
-        if let Some(prev) = &previous {
-            let _ = prev
+        if let Some(conn) = &previous {
+            let _ = conn
                 .tx
                 .send(ConnectionOp::SendMessage(
                     "You are being disconnected because someone else logged in as you.".to_string(),
                 ))
                 .await;
-            let _ = prev
+            let _ = conn
                 .broker_tx
-                .send_async(BrokerOp::Disconnect(prev.address))
+                .send_async(BrokerOp::Disconnect(conn.address))
                 .await;
         }
 
