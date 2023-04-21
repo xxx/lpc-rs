@@ -35,6 +35,10 @@ pub struct Process {
     clone_id: Option<usize>,
 
     /// The player [`Connection`] that this [`Process`] is associated with, if any.
+    /// *Note*: This connection will typically never have the [`Process`] set on it,
+    /// and should be assumed to be `None` at all times.
+    /// The [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker)
+    /// owns the [`Connection`] with the [`Process`] set on it.
     pub connection: RwLock<Option<Connection>>,
 }
 

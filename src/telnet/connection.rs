@@ -42,7 +42,8 @@ impl Connection {
 
     /// Set the [`Process`] that this [`Connection`] is connected to, and tag the
     /// [`Process`] with the [`Connection`].
-    /// Drops the previous [`Connection`] that was attached to the [`Process`] if there was one.
+    /// Drops the previous [`Connection`] that was attached to the [`Process`] if there was one.'
+    /// This is the underlying mechanism of the `exec` efun.
     pub async fn takeover_process(&mut self, process: &Arc<Process>) -> Option<Connection> {
         let previous = {
             let self_clone = self.clone();
@@ -50,6 +51,7 @@ impl Connection {
             let mut lock = process.connection.write();
 
             // These assignments happen while both are mutable, which should protect from race conditions.
+            // note that self_clone will not have the process set on it, but it's fine.
             let prev = std::mem::replace(&mut *lock, Some(self_clone));
             self.process = Some(process_clone);
 
