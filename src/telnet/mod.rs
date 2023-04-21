@@ -1,3 +1,4 @@
+pub mod connection;
 pub mod connection_broker;
 pub mod ops;
 
@@ -19,9 +20,9 @@ use tokio_util::codec::{Decoder, Framed};
 use tracing::{error, info, instrument, trace, warn};
 
 use crate::telnet::{
-    connection_broker::Connection,
     ops::{BrokerOp, ConnectionOp},
 };
+use crate::telnet::connection::Connection;
 
 /// The incoming connection handler. Once established, connections are handled by [`ConnectionBroker`](connection_broker::ConnectionBroker).
 #[derive(Debug)]
@@ -114,11 +115,11 @@ impl Telnet {
 
         let (mut sink, mut input) = framed.split();
 
-        let (tx, mut rx) = mpsc::channel::<ConnectionOp>(128);
+        let (connection_tx, mut connection_rx) = mpsc::channel::<ConnectionOp>(128);
 
-        let connection = Connection::new(remote_ip);
+        let connection = Connection::new(remote_ip, connection_tx.clone(), broker_tx.clone());
 
-        let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection, tx)).await else {
+        let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection, connection_tx)).await else {
             error!("Failed to send BrokerOp::NewConnection. Dropping connection.");
             let msg = TelnetEvent::Message("The server is currently unable to accept new connections. Please try again shortly.".to_string());
             let _ = sink.send(msg).await;
@@ -128,7 +129,7 @@ impl Telnet {
 
         loop {
             tokio::select! {
-                send_to_user = rx.recv() => {
+                send_to_user = connection_rx.recv() => {
                     trace!("Received message from VM: {:?}", send_to_user);
 
                     match send_to_user {

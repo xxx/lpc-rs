@@ -3,8 +3,9 @@ use tokio::sync::mpsc::Sender;
 
 use crate::{
     interpreter::task::task_id::TaskId,
-    telnet::{connection_broker::Connection, ops::ConnectionOp},
+    telnet::{ops::ConnectionOp},
 };
+use crate::telnet::connection::Connection;
 
 /// Operations that can be communicated to the [`Vm`](crate::interpreter::vm::Vm) remotely.
 #[derive(Debug)]

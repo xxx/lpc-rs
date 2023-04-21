@@ -4,10 +4,10 @@ use tracing::{debug, error};
 use crate::{
     interpreter::{lpc_ref::LpcRef, task::apply_function::apply_function, vm::Vm, CONNECT, LOGON},
     telnet::{
-        connection_broker::Connection,
         ops::{BrokerOp, ConnectionOp},
     },
 };
+use crate::telnet::connection::Connection;
 
 impl Vm {
     /// Start the login process for a [`Connection`]. This assumes the connection is not
@@ -57,7 +57,7 @@ impl Vm {
             };
 
             // This is the initial exec() of the player into a body.
-            connection.set_process(login_ob.clone());
+            connection.takeover_process(login_ob.clone()).await;
 
             // get the 'logon' function
             let Some(logon) = login_ob.program.unmangled_functions.get(LOGON) else {
@@ -91,12 +91,8 @@ impl Vm {
                 return;
             };
 
-            let _ = tx
-                .send(ConnectionOp::SendMessage("Yer in".to_string()))
-                .await;
-
             // At this point, the player is assumed to be fully authenticated.
-            connection.set_process(player_ob.clone());
+            connection.takeover_process(player_ob.clone());
 
             let _ = broker_tx
                 .send_async(BrokerOp::Connected(connection, tx))

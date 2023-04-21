@@ -6,40 +6,12 @@ use tokio::{net::ToSocketAddrs, sync::mpsc::Sender, task::JoinHandle};
 use tracing::{error, info, instrument, trace};
 
 use crate::{
-    interpreter::{process::Process, vm::vm_op::VmOp},
+    interpreter::vm::vm_op::VmOp,
     telnet::{
         ops::{BrokerOp, ConnectionOp},
         Telnet,
     },
 };
-
-/// A connection from a user
-#[derive(Debug, Clone, PartialEq)]
-pub struct Connection {
-    /// The address of the client.
-    pub address: SocketAddr,
-
-    /// The process that this connection is attached to.
-    /// This is basically the player's in-game body object.
-    pub process: Option<Arc<Process>>,
-}
-
-impl Connection {
-    /// Creates a new [`Connection`].
-    pub fn new(address: SocketAddr) -> Self {
-        Self {
-            address,
-            process: None,
-        }
-    }
-
-    /// Set the process that this connection is connected to, and tag the
-    /// process with the connection.
-    pub fn set_process(&mut self, process: Arc<Process>) {
-        // TODO: add connection to process
-        self.process = Some(process);
-    }
-}
 
 /// Manages all the outgoing connections to users.
 #[derive(Debug)]
@@ -164,6 +136,7 @@ impl ConnectionBroker {
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
+    use crate::telnet::connection::Connection;
 
     use super::*;
 
@@ -181,7 +154,7 @@ mod tests {
         // BrokerOp::NewConnection
         //
         let address = SocketAddr::from(([127, 0, 0, 1], 1234));
-        let connection = Connection::new(address);
+        let connection = Connection::new(address, connection_tx.clone(), broker_tx.clone());
         let op = BrokerOp::NewConnection(connection.clone(), connection_tx.clone());
         broker_tx.send_async(op).await.unwrap();
 

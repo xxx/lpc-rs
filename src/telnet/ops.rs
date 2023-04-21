@@ -1,8 +1,7 @@
 use std::net::SocketAddr;
 
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
-
-use crate::telnet::connection_broker::Connection;
+use crate::telnet::connection::Connection;
 
 /// Operations that are handled by the [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker)
 #[derive(Debug)]

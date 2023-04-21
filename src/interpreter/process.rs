@@ -16,6 +16,7 @@ use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
     program::Program,
 };
+use crate::telnet::connection::Connection;
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
@@ -30,6 +31,9 @@ pub struct Process {
     /// What is the clone ID of this process? If `None`, this is a master
     /// object.
     clone_id: Option<usize>,
+
+    /// The player [`Connection`] that this [`Process`] is associated with, if any.
+    pub connection: RwLock<Option<Connection>>,
 }
 
 impl Process {
@@ -45,6 +49,7 @@ impl Process {
             program,
             globals: RwLock::new(RefBank::new(vec![NULL; num_globals])),
             clone_id: None,
+            connection: RwLock::new(None),
         }
     }
 
@@ -57,6 +62,7 @@ impl Process {
             program,
             globals: RwLock::new(RefBank::new(vec![NULL; num_globals])),
             clone_id: Some(clone_id),
+            connection: RwLock::new(None),
         }
     }
 
