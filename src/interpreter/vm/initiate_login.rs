@@ -1,4 +1,3 @@
-use tokio::sync::mpsc::Sender;
 use tracing::{debug, error};
 
 use crate::{
@@ -8,6 +7,7 @@ use crate::{
     },
 };
 use crate::telnet::connection::Connection;
+use flume::Sender as FlumeSender;
 
 impl Vm {
     /// Start the login process for a [`Connection`]. This assumes the connection is not
@@ -18,23 +18,25 @@ impl Vm {
         let task_template = self.new_task_template();
 
         tokio::spawn(async move {
-            let connection_tx = connection.tx.clone();
             debug!("initiating login for {}", connection.address);
 
             // get the master object
             let Some(master) = object_space.master_object() else {
-                let _ = connection_tx.send(ConnectionOp::SendMessage("Fatal server error - Failed to get master object.".to_string())).await;
-                error!("Failed to get master object. Disconnecting {}", connection.address);
-                let _ = broker_tx.send_async(BrokerOp::Disconnect(connection.address)).await;
+                Self::fatal_error(
+                    connection,
+                    "Fatal server error - Failed to get master object.".to_string(),
+                    broker_tx.clone()
+                ).await;
                 return;
             };
 
             // get the 'connect' function
             let Some(connect) = master.program.unmangled_functions.get(CONNECT) else {
-                let _ = connection_tx.send(ConnectionOp::SendMessage("Fatal server error - Unable to find the `connect` function in the master object.".to_string())).await;
-                error!("Failed to find `object connect()` in the master object. Disconnecting {}", connection.address);
-                error!("note: This function needs to exist, and should return a cloned object, that is used as the initial object inhabited by the player.");
-                let _ = broker_tx.send_async(BrokerOp::Disconnect(connection.address)).await;
+                Self::fatal_error(
+                    connection,
+                    "Fatal server error - Unable to find the `connect` function in the master object.".to_string(),
+                    broker_tx.clone()
+                ).await;
                 return;
             };
 
@@ -44,16 +46,20 @@ impl Vm {
 
             // check the result
             let Ok(LpcRef::Object(maybe_login_ob)) = connect_result else {
-                let _ = connection_tx.send(ConnectionOp::SendMessage("Fatal server error - We didn't receive an object back when calling connect().".to_string())).await;
-                error!("Failed to apply `object connect()` in the master object. Disconnecting {}", connection.address);
-                let _ = broker_tx.send_async(BrokerOp::Disconnect(connection.address)).await;
+                Self::fatal_error(
+                    connection,
+                    "Fatal server error - We didn't receive an object back when calling connect().".to_string(),
+                    broker_tx.clone()
+                ).await;
                 return;
             };
 
             let Some(login_ob) = maybe_login_ob.upgrade() else {
-                let _ = connection_tx.send(ConnectionOp::SendMessage("Fatal server error - We received a destructed object back when calling connect().".to_string())).await;
-                error!("Failed to apply `object connect()` in the master object. Disconnecting {}", connection.address);
-                let _ = broker_tx.send_async(BrokerOp::Disconnect(connection.address)).await;
+                Self::fatal_error(
+                    connection,
+                    "Fatal server error - We received a destructed object back when calling connect().".to_string(),
+                    broker_tx.clone()
+                ).await;
                 return;
             };
 
@@ -62,33 +68,40 @@ impl Vm {
 
             // get the 'logon' function
             let Some(logon) = login_ob.program.unmangled_functions.get(LOGON) else {
-                let _ = connection_tx.send(ConnectionOp::SendMessage("Fatal server error - Unable to find the `logon` function in the login object.".to_string())).await;
-                error!("Failed to find `object logon()` in the login object. Disconnecting {}", connection.address);
-                error!("note: This function needs to exist, and should return a cloned object, that is used as the initial object inhabited by the player.");
-                let _ = broker_tx.send_async(BrokerOp::Disconnect(connection.address)).await;
+                Self::fatal_error(
+                    connection,
+                    "Fatal server error - Unable to find the `logon` function in the login object.".to_string(),
+                    broker_tx.clone()
+                ).await;
                 return;
             };
 
             // call logon()
             let Ok(logon_result) = apply_function(logon.clone(), &[], login_ob.clone(), task_template.clone()).await else {
-                let _ = connection_tx.send(ConnectionOp::SendMessage("Fatal server error - Something failed during logon().".to_string())).await;
-                error!("Failed to apply `object logon()` in the login object. Disconnecting {}", connection.address);
-                let _ = broker_tx.send_async(BrokerOp::Disconnect(connection.address)).await;
+                Self::fatal_error(
+                    connection,
+                    "Fatal server error - Something failed while executing logon().".to_string(),
+                    broker_tx.clone()
+                ).await;
                 return;
             };
 
             // check the result
             let LpcRef::Object(maybe_player_ob) = logon_result else {
-                let _ = connection_tx.send(ConnectionOp::SendMessage("Fatal server error - We didn't receive an object back when calling logon().".to_string())).await;
-                error!("Failed to apply `object logon()` in the login object. Disconnecting {}", connection.address);
-                let _ = broker_tx.send_async(BrokerOp::Disconnect(connection.address)).await;
+                Self::fatal_error(
+                    connection,
+                    "Fatal server error - We didn't receive an object back when calling logon().".to_string(),
+                    broker_tx.clone()
+                ).await;
                 return;
             };
 
             let Some(player_ob) = maybe_player_ob.upgrade() else {
-                let _ = connection_tx.send(ConnectionOp::SendMessage("Fatal server error - We received a destructed object back when calling logon().".to_string())).await;
-                error!("Failed to apply `object logon()` in the login object. Disconnecting {}", connection.address);
-                let _ = broker_tx.send_async(BrokerOp::Disconnect(connection.address)).await;
+                Self::fatal_error(
+                    connection,
+                    "Fatal server error - We received a destructed object back when calling logon().".to_string(),
+                    broker_tx.clone()
+                ).await;
                 return;
             };
 
@@ -99,5 +112,11 @@ impl Vm {
                 .send_async(BrokerOp::Connected(connection))
                 .await;
         });
+    }
+
+    async fn fatal_error(connection: Connection, message: String, broker_tx: FlumeSender<BrokerOp>) {
+        error!("{}", &message);
+        let _ = connection.tx.send(ConnectionOp::SendMessage(message)).await;
+        let _ = broker_tx.send_async(BrokerOp::Disconnect(connection.address)).await;
     }
 }
