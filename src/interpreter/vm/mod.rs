@@ -143,18 +143,11 @@ impl Vm {
                         VmOp::InitiateLogin(connection) => {
                             self.initiate_login(connection).await;
                         }
-                        VmOp::Connected(address) => {
-                            info!("Vm connected: {:?}", address);
-                        }
                         VmOp::PrioritizeCallOut(idx) => {
                             self.prioritize_call_out(idx).await;
                         }
                         VmOp::TaskError(_task_id, error) => {
                             tokio::spawn(async move { error.emit_diagnostics() });
-                        },
-                        VmOp::TaskComplete(_task_id) => {
-                            // println!("task {task_id} complete");
-                            // self.op_task_complete(task_id)?;
                         },
                     }
                 }

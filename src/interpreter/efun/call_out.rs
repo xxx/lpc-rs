@@ -141,9 +141,6 @@ mod tests {
         assert!(result.is_ok());
 
         let msg = rx.recv().await.unwrap();
-        assert_eq!(msg, VmOp::TaskComplete(TaskId(1)));
-
-        let msg = rx.recv().await.unwrap();
         assert_eq!(msg, VmOp::PrioritizeCallOut(0));
     }
 }

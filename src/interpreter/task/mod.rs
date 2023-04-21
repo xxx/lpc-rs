@@ -439,7 +439,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         self.state = TaskState::Complete;
-        self.context.tx.send(VmOp::TaskComplete(self.id)).await?;
         Ok(())
     }
 
