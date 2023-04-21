@@ -8,11 +8,11 @@ use tracing::{error, info, instrument, trace};
 use crate::{
     interpreter::vm::vm_op::VmOp,
     telnet::{
+        connection::Connection,
         ops::{BrokerOp, ConnectionOp},
         Telnet,
     },
 };
-use crate::telnet::connection::Connection;
 
 /// Manages all the outgoing connections to users.
 #[derive(Debug)]
@@ -125,10 +125,7 @@ impl ConnectionBroker {
 
     /// Removes a connection from the manager.
     #[inline]
-    pub fn remove_connection(
-        &self,
-        address: SocketAddr,
-    ) -> Option<(SocketAddr, Connection)> {
+    pub fn remove_connection(&self, address: SocketAddr) -> Option<(SocketAddr, Connection)> {
         self.connections.remove(&address)
     }
 }
