@@ -36,13 +36,15 @@ impl Connection {
     /// Set the [`Process`] that this [`Connection`] is connected to, and tag the
     /// [`Process`] with the [`Connection`].
     /// Drops the previous [`Connection`] that was attached to the [`Process`] if there was one.
-    pub async fn takeover_process(&mut self, process: Arc<Process>) -> Option<Connection> {
-        // TODO: this smells like a race condition
+    pub async fn takeover_process(&mut self, process: &Arc<Process>) -> Option<Connection> {
         let previous = {
             let mut lock = process.connection.write();
-            std::mem::replace(&mut *lock, Some(self.clone()))
+            // These assignments happen while both are mutable, which should protect from race conditions.
+            let prev = std::mem::replace(&mut *lock, Some(self.clone()));
+            self.process = Some(process.clone());
+
+            prev
         };
-        self.process = Some(process);
 
         if let Some(prev) = &previous {
             let _ = prev

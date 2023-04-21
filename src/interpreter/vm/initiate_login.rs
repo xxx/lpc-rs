@@ -64,7 +64,7 @@ impl Vm {
             };
 
             // This is the initial exec() of the player into a body.
-            connection.takeover_process(login_ob.clone()).await;
+            connection.takeover_process(&login_ob).await;
 
             // get the 'logon' function
             let Some(logon) = login_ob.program.unmangled_functions.get(LOGON) else {
@@ -106,7 +106,7 @@ impl Vm {
             };
 
             // At this point, the player is assumed to be fully authenticated.
-            connection.takeover_process(player_ob.clone()).await;
+            connection.takeover_process(&player_ob).await;
 
             let _ = broker_tx
                 .send_async(BrokerOp::Connected(connection))
