@@ -12,12 +12,13 @@ use crate::{
         Telnet,
     },
 };
+use crate::telnet::connection::Connection;
 
 /// Manages all the outgoing connections to users.
 #[derive(Debug)]
 pub struct ConnectionBroker {
     /// Map of remote IP address to the tx channel of the connection itself
-    connections: Arc<DashMap<SocketAddr, Sender<ConnectionOp>>>,
+    connections: Arc<DashMap<SocketAddr, Connection>>,
 
     /// Map of remote IP addresses to join handles, which can be dropped to disconnect the user.
     handles: Arc<DashMap<SocketAddr, JoinHandle<()>>>,
@@ -77,8 +78,8 @@ impl ConnectionBroker {
                         }
                         BrokerOp::Connected(connection) => {
                             let address = connection.address;
-                            connections.insert(address, connection.tx.clone());
-                            let Ok(_) = vm_tx.send(VmOp::Connected(connection)).await else {
+                            connections.insert(address, connection);
+                            let Ok(_) = vm_tx.send(VmOp::Connected(address)).await else {
                                 error!("Failed to send VmOp::Connected for {}. Disconnecting", address);
                                 continue;
                             };
@@ -105,12 +106,14 @@ impl ConnectionBroker {
                             // return;
                         }
                         BrokerOp::SendMessage(msg, address) => {
-                            let Some(connection_tx) = connections.get(&address) else {
-                                error!("Failed to find connection for {}", address);
-                                continue;
-                            };
+                            let tx = {
+                                let Some(connection) = connections.get(&address) else {
+                                    error!("Failed to find connection for {}", address);
+                                    continue;
+                                };
 
-                            let tx = connection_tx.clone();
+                                connection.tx.clone()
+                            };
 
                             let Ok(_) = tx.send(ConnectionOp::SendMessage(msg)).await else {
                                 error!("Failed to send ConnectionOp::SendMessage");
@@ -128,7 +131,7 @@ impl ConnectionBroker {
     pub fn remove_connection(
         &self,
         address: SocketAddr,
-    ) -> Option<(SocketAddr, Sender<ConnectionOp>)> {
+    ) -> Option<(SocketAddr, Connection)> {
         self.connections.remove(&address)
     }
 }

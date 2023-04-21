@@ -143,8 +143,8 @@ impl Vm {
                         VmOp::InitiateLogin(connection) => {
                             self.initiate_login(connection).await;
                         }
-                        VmOp::Connected(connection) => {
-                            info!("Vm connected: {:?}", connection);
+                        VmOp::Connected(address) => {
+                            info!("Vm connected: {:?}", address);
                         }
                         VmOp::PrioritizeCallOut(idx) => {
                             self.prioritize_call_out(idx).await;

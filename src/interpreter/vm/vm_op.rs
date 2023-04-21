@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use lpc_rs_errors::LpcError;
 
 use crate::{interpreter::task::task_id::TaskId, telnet::connection::Connection};
@@ -9,7 +10,7 @@ pub enum VmOp {
     InitiateLogin(Connection),
 
     /// A user has successfully logged-in.
-    Connected(Connection),
+    Connected(SocketAddr),
 
     /// Run a CallOut function, identified by its index in the [`CallOuts`](crate::interpreter::call_outs::CallOuts) list
     PrioritizeCallOut(usize),
