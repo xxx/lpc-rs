@@ -20,9 +20,9 @@ use tokio_util::codec::{Decoder, Framed};
 use tracing::{error, info, instrument, trace, warn};
 
 use crate::telnet::{
+    connection::Connection,
     ops::{BrokerOp, ConnectionOp},
 };
-use crate::telnet::connection::Connection;
 
 /// The incoming connection handler. Once established, connections are handled by [`ConnectionBroker`](connection_broker::ConnectionBroker).
 #[derive(Debug)]

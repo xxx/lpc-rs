@@ -1,13 +1,13 @@
+use flume::Sender as FlumeSender;
 use tracing::{debug, error};
 
 use crate::{
     interpreter::{lpc_ref::LpcRef, task::apply_function::apply_function, vm::Vm, CONNECT, LOGON},
     telnet::{
+        connection::Connection,
         ops::{BrokerOp, ConnectionOp},
     },
 };
-use crate::telnet::connection::Connection;
-use flume::Sender as FlumeSender;
 
 impl Vm {
     /// Start the login process for a [`Connection`]. This assumes the connection is not
@@ -108,15 +108,19 @@ impl Vm {
             // At this point, the player is assumed to be fully authenticated.
             connection.takeover_process(&player_ob).await;
 
-            let _ = broker_tx
-                .send_async(BrokerOp::Connected(connection))
-                .await;
+            let _ = broker_tx.send_async(BrokerOp::Connected(connection)).await;
         });
     }
 
-    async fn fatal_error(connection: Connection, message: String, broker_tx: FlumeSender<BrokerOp>) {
+    async fn fatal_error(
+        connection: Connection,
+        message: String,
+        broker_tx: FlumeSender<BrokerOp>,
+    ) {
         error!("{}", &message);
         let _ = connection.tx.send(ConnectionOp::SendMessage(message)).await;
-        let _ = broker_tx.send_async(BrokerOp::Disconnect(connection.address)).await;
+        let _ = broker_tx
+            .send_async(BrokerOp::Disconnect(connection.address))
+            .await;
     }
 }

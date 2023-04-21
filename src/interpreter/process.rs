@@ -10,13 +10,15 @@ use bit_set::BitSet;
 use delegate::delegate;
 use parking_lot::RwLock;
 
-use crate::interpreter::{
-    bank::RefBank,
-    gc::mark::Mark,
-    lpc_ref::{LpcRef, NULL},
-    program::Program,
+use crate::{
+    interpreter::{
+        bank::RefBank,
+        gc::mark::Mark,
+        lpc_ref::{LpcRef, NULL},
+        program::Program,
+    },
+    telnet::connection::Connection,
 };
-use crate::telnet::connection::Connection;
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.

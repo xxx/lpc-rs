@@ -136,9 +136,9 @@ impl ConnectionBroker {
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
-    use crate::telnet::connection::Connection;
 
     use super::*;
+    use crate::telnet::connection::Connection;
 
     #[tokio::test]
     async fn test_connection_broker() {
@@ -162,10 +162,7 @@ mod tests {
             panic!("Failed to receive message");
         };
 
-        assert_eq!(
-            vm_op,
-            VmOp::InitiateLogin(connection.clone())
-        );
+        assert_eq!(vm_op, VmOp::InitiateLogin(connection.clone()));
 
         //
         // BrokerOp::Connected

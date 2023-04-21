@@ -1,9 +1,12 @@
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
+
 use flume::Sender as FlumeSender;
 use tokio::sync::mpsc::Sender;
-use crate::interpreter::process::Process;
-use crate::telnet::ops::{BrokerOp, ConnectionOp};
+
+use crate::{
+    interpreter::process::Process,
+    telnet::ops::{BrokerOp, ConnectionOp},
+};
 
 /// A connection from a user
 #[derive(Debug, Clone)]
@@ -24,12 +27,16 @@ pub struct Connection {
 
 impl Connection {
     /// Creates a new [`Connection`].
-    pub fn new(address: SocketAddr, connection_tx: Sender<ConnectionOp>, broker_tx: FlumeSender<BrokerOp>) -> Self {
+    pub fn new(
+        address: SocketAddr,
+        connection_tx: Sender<ConnectionOp>,
+        broker_tx: FlumeSender<BrokerOp>,
+    ) -> Self {
         Self {
             address,
             process: None,
             tx: connection_tx,
-            broker_tx
+            broker_tx,
         }
     }
 
@@ -50,11 +57,13 @@ impl Connection {
             let _ = prev
                 .tx
                 .send(ConnectionOp::SendMessage(
-                    "You are being disconnected because someone else logged in as you."
-                        .to_string(),
+                    "You are being disconnected because someone else logged in as you.".to_string(),
                 ))
                 .await;
-            let _ = prev.broker_tx.send_async(BrokerOp::Disconnect(prev.address)).await;
+            let _ = prev
+                .broker_tx
+                .send_async(BrokerOp::Disconnect(prev.address))
+                .await;
         }
 
         previous
