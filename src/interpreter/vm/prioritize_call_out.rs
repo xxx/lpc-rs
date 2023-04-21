@@ -1,19 +1,22 @@
 use std::sync::Arc;
+
 use if_chain::if_chain;
-use tokio::task::JoinHandle;
 use lpc_rs_errors::LpcError;
-use crate::interpreter::efun::EFUN_FUNCTIONS;
-use crate::interpreter::function_type::function_address::FunctionAddress;
-use crate::interpreter::lpc_ref::NULL;
-use crate::interpreter::process::Process;
-use crate::interpreter::task::Task;
-use crate::interpreter::task::task_id::TaskId;
-use crate::interpreter::task_context::TaskContext;
-use crate::interpreter::vm::vm_op::VmOp;
-use crate::util::get_simul_efuns;
-use crate::interpreter::lpc_ref::LpcRef;
-use crate::compile_time_config::MAX_CALL_STACK_SIZE;
-use crate::interpreter::vm::Vm;
+use tokio::task::JoinHandle;
+
+use crate::{
+    compile_time_config::MAX_CALL_STACK_SIZE,
+    interpreter::{
+        efun::EFUN_FUNCTIONS,
+        function_type::function_address::FunctionAddress,
+        lpc_ref::{LpcRef, NULL},
+        process::Process,
+        task::{task_id::TaskId, Task},
+        task_context::TaskContext,
+        vm::{vm_op::VmOp, Vm},
+    },
+    util::get_simul_efuns,
+};
 
 impl Vm {
     /// Handler for [`VmOp::PrioritizeCallOut`].
@@ -149,12 +152,15 @@ impl Vm {
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
-    
-    use crate::interpreter::call_outs::{CallOutBuilder};
-    use crate::interpreter::function_type::function_ptr::{FunctionPtrBuilder};
-    use crate::interpreter::into_lpc_ref::IntoLpcRef;
-    use crate::test_support::test_config;
+
     use super::*;
+    use crate::{
+        interpreter::{
+            call_outs::CallOutBuilder, function_type::function_ptr::FunctionPtrBuilder,
+            into_lpc_ref::IntoLpcRef,
+        },
+        test_support::test_config,
+    };
 
     #[tokio::test]
     async fn test_prioritize_call_out() {
@@ -168,9 +174,9 @@ mod tests {
 
         let mut vm = Vm::new(test_config());
 
-        let prog = vm.with_compiler(|compiler| {
-            compiler.compile_string("/foo/bar.c", code)
-        }).unwrap();
+        let prog = vm
+            .with_compiler(|compiler| compiler.compile_string("/foo/bar.c", code))
+            .unwrap();
 
         let func = prog.lookup_function("foo").unwrap().clone();
         let proc = vm.create_and_initialize_task(prog).await.unwrap().process;
@@ -191,7 +197,7 @@ mod tests {
         let handle = vm.prioritize_call_out(idx).await;
         handle.await.unwrap();
 
-        assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from( 165));
+        assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
         assert!(vm.call_outs.read().get(idx).is_none());
     }
 }

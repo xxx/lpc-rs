@@ -10,11 +10,11 @@ use tokio::sync::mpsc::Sender;
 use crate::{
     interpreter::{
         call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, lpc_ref::LpcRef,
-        object_space::ObjectSpace, process::Process, program::Program, vm::vm_op::VmOp,
+        object_space::ObjectSpace, process::Process, program::Program,
+        task::task_template::TaskTemplate, vm::vm_op::VmOp,
     },
     util::get_simul_efuns,
 };
-use crate::interpreter::task::task_template::TaskTemplate;
 
 /// A struct to carry context during the evaluation of a single [`Task`](crate::interpreter::task::Task).
 #[derive(Debug, Clone, Builder)]

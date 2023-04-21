@@ -58,8 +58,13 @@ impl ObjectSpace {
     /// Get a reference to the master object.
     pub fn master_object(&self) -> Option<Ref<'_, String, Arc<Process>>> {
         // TODO: this should not need to allocate the filename every time.
-        let filename = LpcPath::new_in_game(self.config.master_object.as_str(), "/", self.config.lib_dir.as_str());
-        self.processes.get(&Self::prepare_filename(filename.as_ref()))
+        let filename = LpcPath::new_in_game(
+            self.config.master_object.as_str(),
+            "/",
+            self.config.lib_dir.as_str(),
+        );
+        self.processes
+            .get(&Self::prepare_filename(filename.as_ref()))
     }
 
     // /// Create a [`Process`] from a [`Program`], and add add it to the process
@@ -177,10 +182,10 @@ impl Mark for ObjectSpace {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use ustr::ustr;
 
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_utils::config::ConfigBuilder;
+    use ustr::ustr;
 
     use super::*;
     use crate::interpreter::{heap::Heap, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray};

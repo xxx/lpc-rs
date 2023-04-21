@@ -1,17 +1,13 @@
-use std::{sync::Arc};
+use std::sync::Arc;
 
 use derive_builder::Builder;
-
 use lpc_rs_utils::config::Config;
-
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
 
-use crate::{
-    interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap,
-        object_space::ObjectSpace, vm::vm_op::VmOp,
-    },
+use crate::interpreter::{
+    call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, object_space::ObjectSpace,
+    vm::vm_op::VmOp,
 };
 
 /// A struct to handle the non-changing Task state, so we can prepare it ahead of time.

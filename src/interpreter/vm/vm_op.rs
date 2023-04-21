@@ -1,8 +1,10 @@
-use tokio::sync::mpsc::Sender;
 use lpc_rs_errors::LpcError;
+use tokio::sync::mpsc::Sender;
 
-use crate::{interpreter::task::task_id::TaskId, telnet::connection_broker::Connection};
-use crate::telnet::ops::ConnectionOp;
+use crate::{
+    interpreter::task::task_id::TaskId,
+    telnet::{connection_broker::Connection, ops::ConnectionOp},
+};
 
 /// Operations that can be communicated to the [`Vm`](crate::interpreter::vm::Vm) remotely.
 #[derive(Debug)]

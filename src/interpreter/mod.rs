@@ -20,7 +20,6 @@ pub mod task;
 pub mod task_context;
 pub mod vm;
 
-
 // Applies - functions in LPC objects that are called directly by the driver at various times.
 pub const CONNECT: &str = "connect";
 pub const LOGON: &str = "logon";

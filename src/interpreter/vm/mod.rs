@@ -26,14 +26,12 @@ use crate::{
         heap::Heap,
         object_space::ObjectSpace,
         program::Program,
-        task::Task,
+        task::{task_template::TaskTemplate, Task},
         task_context::TaskContext,
     },
     telnet::{connection_broker::ConnectionBroker, ops::BrokerOp, Telnet},
     util::get_simul_efuns,
 };
-
-use crate::interpreter::task::task_template::{TaskTemplate};
 
 mod initiate_login;
 mod prioritize_call_out;

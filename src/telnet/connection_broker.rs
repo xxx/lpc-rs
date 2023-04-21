@@ -6,13 +6,12 @@ use tokio::{net::ToSocketAddrs, sync::mpsc::Sender, task::JoinHandle};
 use tracing::{error, info, instrument, trace};
 
 use crate::{
-    interpreter::vm::vm_op::VmOp,
+    interpreter::{process::Process, vm::vm_op::VmOp},
     telnet::{
         ops::{BrokerOp, ConnectionOp},
         Telnet,
     },
 };
-use crate::interpreter::process::Process;
 
 /// A connection from a user
 #[derive(Debug, Clone, PartialEq)]
@@ -22,7 +21,7 @@ pub struct Connection {
 
     /// The process that this connection is attached to.
     /// This is basically the player's in-game body object.
-    pub process: Option<Arc<Process>>
+    pub process: Option<Arc<Process>>,
 }
 
 impl Connection {
@@ -190,7 +189,10 @@ mod tests {
             panic!("Failed to receive message");
         };
 
-        assert_eq!(vm_op, VmOp::InitiateLogin(connection.clone(), connection_tx.clone()));
+        assert_eq!(
+            vm_op,
+            VmOp::InitiateLogin(connection.clone(), connection_tx.clone())
+        );
         // assert!(broker.connections.contains_key(&address));
 
         //

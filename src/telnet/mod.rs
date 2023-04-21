@@ -1,16 +1,14 @@
 pub mod connection_broker;
 pub mod ops;
 
-
 use std::net::SocketAddr;
-use bytes::Bytes;
 
+use bytes::Bytes;
 use flume::Sender as FlumeSender;
 use futures::{stream::SplitSink, SinkExt, StreamExt};
-use nectar::{event::TelnetEvent, TelnetCodec};
-
-use nectar::option::TelnetOption;
-use nectar::subnegotiation::SubnegotiationType;
+use nectar::{
+    event::TelnetEvent, option::TelnetOption, subnegotiation::SubnegotiationType, TelnetCodec,
+};
 use once_cell::sync::OnceCell;
 use tokio::{
     net::{TcpListener, TcpStream, ToSocketAddrs},
@@ -109,9 +107,6 @@ impl Telnet {
         // own echoing. We're lying to the client - we're not going to echo either.
         // let _ = framed.send(TelnetEvent::Will(TelnetOption::Echo)).await;
 
-
-
-
         // TODO: login / auth
         // apply `connect` to the master
         // if an object result, apply `logon` to it
@@ -181,14 +176,23 @@ impl Telnet {
                 // This is technically not to spec (we should only do this after we send the
                 // request ourselves, and they respond with a charset request).
                 Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetRequest(_data)))) => {
-                    let _ = framed.send(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetRejected)).await;
+                    let _ = framed
+                        .send(TelnetEvent::Subnegotiate(
+                            SubnegotiationType::CharsetRejected,
+                        ))
+                        .await;
                 }
                 Some(Ok(TelnetEvent::Do(TelnetOption::Charset))) => {
-                    info!("matching CHARSET negotiation result: {:?}", TelnetEvent::Do(TelnetOption::Charset));
+                    info!(
+                        "matching CHARSET negotiation result: {:?}",
+                        TelnetEvent::Do(TelnetOption::Charset)
+                    );
 
-                    let _ = framed.send(
-                        TelnetEvent::Subnegotiate(SubnegotiationType::CharsetRequest(vec![Bytes::from("UTF-8")]))
-                    ).await;
+                    let _ = framed
+                        .send(TelnetEvent::Subnegotiate(
+                            SubnegotiationType::CharsetRequest(vec![Bytes::from("UTF-8")]),
+                        ))
+                        .await;
                     // let _ = broker_tx.send_async(BrokerOp::SetCharset(remote_ip, data)).await;
                 }
                 Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetAccepted(data)))) => {
@@ -216,7 +220,6 @@ impl Telnet {
         // let result = framed.next().await;
         // println!("GMCP negotiation result: {:?}", result);
     }
-
 
     async fn handle_input_event(
         msg: TelnetEvent,

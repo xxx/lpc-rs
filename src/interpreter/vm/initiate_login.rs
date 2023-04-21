@@ -1,11 +1,13 @@
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, error};
-use crate::interpreter::{CONNECT, LOGON};
-use crate::interpreter::lpc_ref::LpcRef;
-use crate::interpreter::task::apply_function::apply_function;
-use crate::interpreter::vm::Vm;
-use crate::telnet::connection_broker::Connection;
-use crate::telnet::ops::{BrokerOp, ConnectionOp};
+
+use crate::{
+    interpreter::{lpc_ref::LpcRef, task::apply_function::apply_function, vm::Vm, CONNECT, LOGON},
+    telnet::{
+        connection_broker::Connection,
+        ops::{BrokerOp, ConnectionOp},
+    },
+};
 
 impl Vm {
     /// Start the login process for a [`Connection`]. This assumes the connection is not
@@ -36,7 +38,8 @@ impl Vm {
             };
 
             // call connect()
-            let connect_result = apply_function(connect.clone(), &[], master.clone(), task_template.clone()).await;
+            let connect_result =
+                apply_function(connect.clone(), &[], master.clone(), task_template.clone()).await;
 
             // check the result
             let Ok(LpcRef::Object(maybe_login_ob)) = connect_result else {
@@ -88,12 +91,16 @@ impl Vm {
                 return;
             };
 
-            let _ = tx.send(ConnectionOp::SendMessage("Yer in".to_string())).await;
+            let _ = tx
+                .send(ConnectionOp::SendMessage("Yer in".to_string()))
+                .await;
 
             // At this point, the player is assumed to be fully authenticated.
             connection.set_process(player_ob.clone());
 
-            let _ = broker_tx.send_async(BrokerOp::Connected(connection, tx)).await;
+            let _ = broker_tx
+                .send_async(BrokerOp::Connected(connection, tx))
+                .await;
         });
     }
 }
