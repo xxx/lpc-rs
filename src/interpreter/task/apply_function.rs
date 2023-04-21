@@ -52,7 +52,7 @@ mod tests {
                 return x * 10;
             }
        "};
-        let (prog, config, proc) = compile_prog(code);
+        let (prog, config, _proc) = compile_prog(code);
         let f = prog.unmangled_functions.get("my_cool_func").unwrap().clone();
         let process = Process::new(prog);
         let (tx, _rx) = tokio::sync::mpsc::channel(10);

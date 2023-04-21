@@ -1,14 +1,14 @@
 pub mod connection_broker;
 pub mod ops;
 
-use std::collections::HashSet;
+
 use std::net::SocketAddr;
 use bytes::Bytes;
 
 use flume::Sender as FlumeSender;
 use futures::{stream::SplitSink, SinkExt, StreamExt};
 use nectar::{event::TelnetEvent, TelnetCodec};
-use nectar::error::TelnetError;
+
 use nectar::option::TelnetOption;
 use nectar::subnegotiation::SubnegotiationType;
 use once_cell::sync::OnceCell;
@@ -170,8 +170,8 @@ impl Telnet {
 
     async fn negotiations(
         framed: &mut Framed<TcpStream, TelnetCodec>,
-        remote_ip: SocketAddr,
-        broker_tx: &FlumeSender<BrokerOp>,
+        _remote_ip: SocketAddr,
+        _broker_tx: &FlumeSender<BrokerOp>,
     ) {
         // CHARSET negotiation
         let _ = framed.send(TelnetEvent::Will(TelnetOption::Charset)).await;

@@ -1,18 +1,17 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{sync::Arc};
 
 use derive_builder::Builder;
-use lpc_rs_errors::{LpcError, Result};
+
 use lpc_rs_utils::config::Config;
-use once_cell::sync::OnceCell;
+
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, lpc_ref::LpcRef,
-        object_space::ObjectSpace, process::Process, program::Program, vm::vm_op::VmOp,
+        call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap,
+        object_space::ObjectSpace, vm::vm_op::VmOp,
     },
-    util::get_simul_efuns,
 };
 
 /// A struct to handle the non-changing Task state, so we can prepare it ahead of time.

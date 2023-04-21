@@ -149,9 +149,9 @@ impl Vm {
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
-    use parking_lot::RwLock;
-    use crate::interpreter::call_outs::{CallOut, CallOutBuilder};
-    use crate::interpreter::function_type::function_ptr::{FunctionPtr, FunctionPtrBuilder};
+    
+    use crate::interpreter::call_outs::{CallOutBuilder};
+    use crate::interpreter::function_type::function_ptr::{FunctionPtrBuilder};
     use crate::interpreter::into_lpc_ref::IntoLpcRef;
     use crate::test_support::test_config;
     use super::*;
@@ -188,7 +188,7 @@ mod tests {
 
         let idx = vm.call_outs.write().push(call_out);
 
-        let mut handle = vm.prioritize_call_out(idx).await;
+        let handle = vm.prioritize_call_out(idx).await;
         handle.await.unwrap();
 
         assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from( 165));
