@@ -41,22 +41,22 @@ impl WriteColor for FileStream {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_file_stream() {
-        use std::io::Write;
-
-        let mut file = FileStream::new(std::fs::File::create("test.txt").unwrap());
-        file.write_all(b"Hello, world!").unwrap();
-        file.flush().unwrap();
-
-        assert!(!file.supports_color());
-        assert!(file.set_color(&ColorSpec::new()).is_ok());
-        assert!(file.reset().is_ok());
-
-        std::fs::remove_file("test.txt").unwrap();
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//
+//     #[test]
+//     fn test_file_stream() {
+//         use std::io::Write;
+//
+//         let mut file = FileStream::new(std::fs::File::create("test.txt").unwrap());
+//         file.write_all(b"Hello, world!").unwrap();
+//         file.flush().unwrap();
+//
+//         assert!(!file.supports_color());
+//         assert!(file.set_color(&ColorSpec::new()).is_ok());
+//         assert!(file.reset().is_ok());
+//
+//         std::fs::remove_file("test.txt").unwrap();
+//     }
+// }

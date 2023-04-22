@@ -1,27 +1,17 @@
+use std::sync::Arc;
 use lpc_rs_errors::LpcError;
 
 use crate::{interpreter::task::task_id::TaskId, telnet::connection::Connection};
 
 /// Operations that can be communicated to the [`Vm`](crate::interpreter::vm::Vm) remotely.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum VmOp {
     /// Start the login process for a connection.
-    InitiateLogin(Connection),
+    InitiateLogin(Arc<Connection>),
 
     /// Run a CallOut function, identified by its index in the [`CallOuts`](crate::interpreter::call_outs::CallOuts) list
     PrioritizeCallOut(usize),
 
     /// The Task with the passed ID has failed.
     TaskError(TaskId, LpcError),
-}
-
-impl PartialEq for VmOp {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (VmOp::InitiateLogin(a), VmOp::InitiateLogin(b)) => a == b,
-            (VmOp::PrioritizeCallOut(a), VmOp::PrioritizeCallOut(b)) => a == b,
-            (VmOp::TaskError(a, ae), VmOp::TaskError(b, be)) => a == b && ae == be,
-            _ => false,
-        }
-    }
 }

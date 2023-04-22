@@ -3,6 +3,7 @@ pub mod connection_broker;
 pub mod ops;
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use bytes::Bytes;
 use flume::Sender as FlumeSender;
@@ -117,7 +118,7 @@ impl Telnet {
 
         let (connection_tx, mut connection_rx) = mpsc::channel::<ConnectionOp>(128);
 
-        let connection = Connection::new(remote_ip, connection_tx.clone(), broker_tx.clone());
+        let connection = Arc::new(Connection::new(remote_ip, connection_tx.clone(), broker_tx.clone()));
 
         let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection)).await else {
             error!("Failed to send BrokerOp::NewConnection. Dropping connection.");

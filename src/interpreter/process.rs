@@ -5,6 +5,7 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use arc_swap::{ArcSwap, ArcSwapAny, ArcSwapOption};
 
 use bit_set::BitSet;
 use delegate::delegate;
@@ -35,11 +36,9 @@ pub struct Process {
     clone_id: Option<usize>,
 
     /// The player [`Connection`] that this [`Process`] is associated with, if any.
-    /// *Note*: This connection will typically never have the [`Process`] set on it,
-    /// and should be assumed to be `None` at all times.
     /// The [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker)
     /// owns the [`Connection`] with the [`Process`] set on it.
-    pub connection: RwLock<Option<Connection>>,
+    pub connection: ArcSwapAny<Option<Arc<Connection>>>,
 }
 
 impl Process {
@@ -55,7 +54,7 @@ impl Process {
             program,
             globals: RwLock::new(RefBank::new(vec![NULL; num_globals])),
             clone_id: None,
-            connection: RwLock::new(None),
+            connection: ArcSwapAny::from(None),
         }
     }
 
@@ -68,7 +67,7 @@ impl Process {
             program,
             globals: RwLock::new(RefBank::new(vec![NULL; num_globals])),
             clone_id: Some(clone_id),
-            connection: RwLock::new(None),
+            connection: ArcSwapAny::from(None),
         }
     }
 

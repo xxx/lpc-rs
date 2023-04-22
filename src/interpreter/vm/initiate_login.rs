@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use flume::Sender as FlumeSender;
 use tracing::{debug, error};
 
@@ -12,7 +13,7 @@ use crate::{
 impl Vm {
     /// Start the login process for a [`Connection`]. This assumes the connection is not
     /// already logged in and attached to an object.
-    pub async fn initiate_login(&self, mut connection: Connection) {
+    pub async fn initiate_login(&self, mut connection: Arc<Connection>) {
         let object_space = self.object_space.clone();
         let broker_tx = self.broker_tx.clone();
         let task_template = self.new_task_template();
@@ -23,7 +24,7 @@ impl Vm {
             // get the master object
             let Some(master) = object_space.master_object() else {
                 Self::fatal_error(
-                    connection,
+                    &connection,
                     "Fatal server error - Failed to get master object.".to_string(),
                     broker_tx.clone()
                 ).await;
@@ -33,7 +34,7 @@ impl Vm {
             // get the 'connect' function
             let Some(connect) = master.program.unmangled_functions.get(CONNECT) else {
                 Self::fatal_error(
-                    connection,
+                    &connection,
                     "Fatal server error - Unable to find the `connect` function in the master object.".to_string(),
                     broker_tx.clone()
                 ).await;
@@ -47,7 +48,7 @@ impl Vm {
             // check the result
             let Ok(LpcRef::Object(maybe_login_ob)) = connect_result else {
                 Self::fatal_error(
-                    connection,
+                    &connection,
                     "Fatal server error - We didn't receive an object back when calling connect().".to_string(),
                     broker_tx.clone()
                 ).await;
@@ -56,7 +57,7 @@ impl Vm {
 
             let Some(login_ob) = maybe_login_ob.upgrade() else {
                 Self::fatal_error(
-                    connection,
+                    &connection,
                     "Fatal server error - We received a destructed object back when calling connect().".to_string(),
                     broker_tx.clone()
                 ).await;
@@ -64,12 +65,12 @@ impl Vm {
             };
 
             // This is the initial exec() of the player into a body.
-            connection.takeover_process(&login_ob).await;
+            Connection::takeover_process(connection.clone(), login_ob.clone()).await;
 
             // get the 'logon' function
             let Some(logon) = login_ob.program.unmangled_functions.get(LOGON) else {
                 Self::fatal_error(
-                    connection,
+                    &connection,
                     "Fatal server error - Unable to find the `logon` function in the login object.".to_string(),
                     broker_tx.clone()
                 ).await;
@@ -79,7 +80,7 @@ impl Vm {
             // call logon()
             let Ok(logon_result) = apply_function(logon.clone(), &[], login_ob.clone(), task_template.clone()).await else {
                 Self::fatal_error(
-                    connection,
+                    &connection,
                     "Fatal server error - Something failed while executing logon().".to_string(),
                     broker_tx.clone()
                 ).await;
@@ -89,7 +90,7 @@ impl Vm {
             // check the result
             let LpcRef::Object(maybe_player_ob) = logon_result else {
                 Self::fatal_error(
-                    connection,
+                    &connection,
                     "Fatal server error - We didn't receive an object back when calling logon().".to_string(),
                     broker_tx.clone()
                 ).await;
@@ -98,7 +99,7 @@ impl Vm {
 
             let Some(player_ob) = maybe_player_ob.upgrade() else {
                 Self::fatal_error(
-                    connection,
+                    &connection,
                     "Fatal server error - We received a destructed object back when calling logon().".to_string(),
                     broker_tx.clone()
                 ).await;
@@ -106,14 +107,14 @@ impl Vm {
             };
 
             // At this point, the player is assumed to be fully authenticated.
-            connection.takeover_process(&player_ob).await;
+            Connection::takeover_process(connection.clone(),player_ob).await;
 
             let _ = broker_tx.send_async(BrokerOp::Connected(connection)).await;
         });
     }
 
     async fn fatal_error(
-        connection: Connection,
+        connection: &Connection,
         message: String,
         broker_tx: FlumeSender<BrokerOp>,
     ) {

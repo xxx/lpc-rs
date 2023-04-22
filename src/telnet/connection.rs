@@ -1,4 +1,5 @@
 use std::{net::SocketAddr, sync::Arc};
+use arc_swap::{ArcSwapAny, ArcSwapOption};
 
 use flume::Sender as FlumeSender;
 use tokio::sync::mpsc::Sender;
@@ -9,14 +10,14 @@ use crate::{
 };
 
 /// A connection from a user
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Connection {
     /// The address of the client.
     pub address: SocketAddr,
 
     /// The process that this connection is attached to.
     /// This is basically the player's in-game body object.
-    pub process: Option<Arc<Process>>,
+    pub process: ArcSwapAny<Option<Arc<Process>>>,
 
     /// The channel we use to send messages to the socket connection's thread.
     pub tx: Sender<ConnectionOp>,
@@ -34,7 +35,7 @@ impl Connection {
     ) -> Self {
         Self {
             address,
-            process: None,
+            process: ArcSwapAny::from(None),
             tx: connection_tx,
             broker_tx,
         }
@@ -44,17 +45,13 @@ impl Connection {
     /// [`Process`] with the [`Connection`].
     /// Drops the previous [`Connection`] that was attached to the [`Process`] if there was one.'
     /// This is the underlying mechanism of the `exec` efun.
-    pub async fn takeover_process(&mut self, process: &Arc<Process>) -> Option<Connection> {
-        let previous = {
-            let self_clone = self.clone();
-            let process_clone = process.clone();
-            let mut lock = process.connection.write();
+    pub async fn takeover_process(connection: Arc<Connection>, process: Arc<Process>) -> Option<Arc<Connection>> {
+        // TODO: How to synchronize this?
+        let previous = process.connection.rcu(|_c| {
+            connection.process.rcu(|_p| { Some(process.clone()) });
 
-            // These assignments happen while both are mutable, which should protect from race conditions.
-            // note that self_clone will not have the process set on it, but it's fine.
-            self.process = Some(process_clone);
-            std::mem::replace(&mut *lock, Some(self_clone))
-        };
+            Some(connection.clone())
+        });
 
         if let Some(conn) = &previous {
             let _ = conn

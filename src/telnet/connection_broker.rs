@@ -18,7 +18,7 @@ use crate::{
 #[derive(Debug)]
 pub struct ConnectionBroker {
     /// Map of remote IP address to the tx channel of the connection itself
-    connections: Arc<DashMap<SocketAddr, Connection>>,
+    connections: Arc<DashMap<SocketAddr, Arc<Connection>>>,
 
     /// Map of remote IP addresses to join handles, which can be dropped to disconnect the user.
     handles: Arc<DashMap<SocketAddr, JoinHandle<()>>>,
@@ -125,7 +125,7 @@ impl ConnectionBroker {
 
     /// Removes a connection from the manager.
     #[inline]
-    pub fn remove_connection(&self, address: SocketAddr) -> Option<(SocketAddr, Connection)> {
+    pub fn remove_connection(&self, address: SocketAddr) -> Option<(SocketAddr, Arc<Connection>)> {
         self.connections.remove(&address)
     }
 }
@@ -151,7 +151,7 @@ mod tests {
         // BrokerOp::NewConnection
         //
         let address = SocketAddr::from(([127, 0, 0, 1], 1234));
-        let connection = Connection::new(address, connection_tx.clone(), broker_tx.clone());
+        let connection = Arc::new(Connection::new(address, connection_tx.clone(), broker_tx.clone()));
         let op = BrokerOp::NewConnection(connection.clone());
         broker_tx.send_async(op).await.unwrap();
 

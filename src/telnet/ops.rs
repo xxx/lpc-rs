@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use tokio::task::JoinHandle;
 
@@ -8,10 +9,10 @@ use crate::telnet::connection::Connection;
 #[derive(Debug)]
 pub enum BrokerOp {
     /// Start the login process for a connection.
-    NewConnection(Connection),
+    NewConnection(Arc<Connection>),
 
     /// We have received a new, authenticated connection from a user.
-    Connected(Connection),
+    Connected(Arc<Connection>),
 
     /// Keep track of the handle for a connection, so we can drop it
     /// if necessary.
