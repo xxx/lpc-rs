@@ -289,11 +289,11 @@ impl Compiler {
             Err(e) => return Err(e),
         };
 
-        println!("{}", program.filename);
-        for s in program.listing() {
-            println!("{s}");
-        }
-        println!();
+        // println!("{}", program.filename);
+        // for s in program.listing() {
+        //     println!("{s}");
+        // }
+        // println!();
 
         // let msgpack = program.to_msgpack();
         // println!("{:?}", msgpack.len());
