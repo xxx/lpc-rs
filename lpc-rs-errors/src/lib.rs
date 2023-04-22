@@ -243,7 +243,7 @@ impl LpcError {
 
     /// Emit this error's collected diagnostics
     pub fn _emit_diagnostics_to_file(&self, path: &str) {
-        let file = OpenOptions::new().write(true).create(true).open(path);
+        let file = OpenOptions::new().append(true).create(true).open(path);
 
         match file {
             Ok(file) => {
