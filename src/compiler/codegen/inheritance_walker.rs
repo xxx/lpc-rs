@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use lpc_rs_core::{lpc_path::LpcPath, EFUN};
 use lpc_rs_errors::{LpcError, Result};
 
@@ -54,8 +55,9 @@ impl ContextHolder for InheritanceWalker {
     }
 }
 
+#[async_trait]
 impl TreeWalker for InheritanceWalker {
-    fn visit_inherit(&mut self, node: &mut InheritNode) -> Result<()> {
+    async fn visit_inherit(&mut self, node: &mut InheritNode) -> Result<()> {
         self.validate(node)?;
 
         let cwd = match self.context.filename.cwd() {
@@ -76,7 +78,7 @@ impl TreeWalker for InheritanceWalker {
             .inherit_depth(depth + 1)
             .build()?;
 
-        match compiler.compile_in_game_file(&full_path, node.span) {
+        match compiler.compile_in_game_file(&full_path, node.span).await {
             Ok(program) => {
                 if program.pragmas.no_inherit() {
                     return Err(LpcError::new(format!(
@@ -161,8 +163,8 @@ mod tests {
 
         use super::*;
 
-        #[test]
-        fn test_sets_up_the_data() {
+        #[tokio::test]
+        async fn test_sets_up_the_data() {
             let mut walker = walker();
 
             let mut node = InheritNode {
@@ -171,14 +173,14 @@ mod tests {
                 span: None,
             };
 
-            let result = walker.visit_inherit(&mut node);
+            let result = walker.visit_inherit(&mut node).await;
 
             assert_ok!(result);
             assert_eq!(walker.context.inherits.len(), 1);
         }
 
-        #[test]
-        fn test_disallows_duplicate_namespace() {
+        #[tokio::test]
+        async fn test_disallows_duplicate_namespace() {
             let mut walker = walker();
 
             walker
@@ -192,7 +194,7 @@ mod tests {
                 span: None,
             };
 
-            let result = walker.visit_inherit(&mut node);
+            let result = walker.visit_inherit(&mut node).await;
 
             assert_eq!(
                 result.unwrap_err().to_string(),
@@ -200,8 +202,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn test_disallows_no_inherit_pragma() {
+        #[tokio::test]
+        async fn test_disallows_no_inherit_pragma() {
             let mut walker = walker();
 
             let mut node = InheritNode {
@@ -210,7 +212,7 @@ mod tests {
                 span: None,
             };
 
-            let result = walker.visit_inherit(&mut node);
+            let result = walker.visit_inherit(&mut node).await;
 
             assert_eq!(
                 result.unwrap_err().to_string(),
@@ -218,8 +220,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn test_disallows_efun_namespace() {
+        #[tokio::test]
+        async fn test_disallows_efun_namespace() {
             let mut walker = walker();
 
             let mut node = InheritNode {
@@ -228,7 +230,7 @@ mod tests {
                 span: None,
             };
 
-            let result = walker.visit_inherit(&mut node);
+            let result = walker.visit_inherit(&mut node).await;
 
             assert_eq!(
                 result.unwrap_err().to_string(),

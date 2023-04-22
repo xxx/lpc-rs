@@ -47,7 +47,7 @@ async fn main() {
 
     let upvalues = RwLock::new(GcBank::default());
 
-    match compiler.compile_in_game_file(&lpc_path, None) {
+    match compiler.compile_in_game_file(&lpc_path, None).await {
         Ok(program) => {
             let memory = Heap::default();
             let object_space = ObjectSpace::default();

@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use if_chain::if_chain;
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
 use lpc_rs_errors::{LpcError, Result};
@@ -106,7 +107,7 @@ impl SemanticCheckWalker {
         !self.valid_labels.is_empty() && self.valid_labels.last().unwrap().0
     }
 
-    fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
+    async fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
         let CallChain::Root { receiver, namespace, name } = &mut node.chain else {
             return Err(LpcError::new("invalid call chain").with_span(node.span));
         };
@@ -133,7 +134,7 @@ impl SemanticCheckWalker {
         }
 
         for argument in &mut node.arguments {
-            argument.visit(self)?;
+            argument.visit(self).await?;
         }
 
         let lookup = self.context.scopes.lookup(name);
@@ -208,15 +209,15 @@ impl SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_call_chain(&mut self, node: &mut CallNode) -> Result<()> {
+    async fn visit_call_chain(&mut self, node: &mut CallNode) -> Result<()> {
         let CallChain::Node(chain_node) = &mut node.chain else {
             return Err(LpcError::new("invalid call chain").with_span(node.span));
         };
 
-        chain_node.visit(self)?;
+        chain_node.visit(self).await?;
 
         for argument in &mut node.arguments {
-            argument.visit(self)?;
+            argument.visit(self).await?;
         }
 
         Ok(())
@@ -229,10 +230,11 @@ impl ContextHolder for SemanticCheckWalker {
     }
 }
 
+#[async_trait]
 impl TreeWalker for SemanticCheckWalker {
-    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
-        node.lhs.visit(self)?;
-        node.rhs.visit(self)?;
+    async fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
+        node.lhs.visit(self).await?;
+        node.rhs.visit(self).await?;
 
         let left_type = node_type(&node.lhs, &self.context)?;
         let right_type = node_type(&node.rhs, &self.context)?;
@@ -255,9 +257,9 @@ impl TreeWalker for SemanticCheckWalker {
         }
     }
 
-    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
-        node.l.visit(self)?;
-        node.r.visit(self)?;
+    async fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
+        node.l.visit(self).await?;
+        node.r.visit(self).await?;
 
         match check_binary_operation_types(node, &self.context) {
             Ok(_) => Ok(()),
@@ -268,18 +270,18 @@ impl TreeWalker for SemanticCheckWalker {
         }
     }
 
-    fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
+    async fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
         for stmt in &mut node.body {
-            stmt.visit(self)?;
+            stmt.visit(self).await?;
         }
 
         self.context.scopes.pop();
         Ok(())
     }
 
-    fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
+    async fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
         if !self.can_break() {
             let e = LpcError::new("Invalid `break`.".to_string()).with_span(node.span);
             self.context.errors.push(e);
@@ -290,25 +292,25 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
+    async fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
         match &node.chain {
-            CallChain::Root { .. } => self.visit_call_root(node),
-            CallChain::Node(_) => self.visit_call_chain(node),
+            CallChain::Root { .. } => self.visit_call_root(node).await,
+            CallChain::Node(_) => self.visit_call_chain(node).await,
         }
     }
 
-    fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+    async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
         self.closure_depth += 1;
 
         if let Some(parameters) = &mut node.parameters {
             for param in parameters {
-                param.visit(self)?;
+                param.visit(self).await?;
             }
         }
 
         for expression in &mut node.body {
-            expression.visit(self)?;
+            expression.visit(self).await?;
         }
 
         self.context.scopes.pop();
@@ -317,7 +319,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
+    async fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
         if !self.can_continue() {
             let e = LpcError::new("invalid `continue`.".to_string()).with_span(node.span);
             self.context.errors.push(e);
@@ -328,30 +330,30 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
+    async fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
         self.allow_jumps();
-        let _ = node.body.visit(self);
-        let _ = node.condition.visit(self);
+        let _ = node.body.visit(self).await;
+        let _ = node.condition.visit(self).await;
 
         self.prevent_jumps();
         Ok(())
     }
 
-    fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
+    async fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
         self.allow_jumps();
         self.context.scopes.goto(node.scope_id);
 
         if let Some(n) = &mut *node.initializer {
-            let _ = n.visit(self);
+            let _ = n.visit(self).await;
         }
         if let Some(n) = &mut node.condition {
-            let _ = n.visit(self);
+            let _ = n.visit(self).await;
         }
 
-        let _ = node.body.visit(self);
+        let _ = node.body.visit(self).await;
 
         if let Some(n) = &mut node.incrementer {
-            let _ = n.visit(self);
+            let _ = n.visit(self).await;
         }
 
         self.context.scopes.pop();
@@ -359,7 +361,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
+    async fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
         self.allow_jumps();
         self.context.scopes.goto(node.scope_id);
 
@@ -377,7 +379,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         match &mut node.initializer {
             ForEachInit::Array(ref mut init) | ForEachInit::String(ref mut init) => {
-                let _ = init.visit(self);
+                let _ = init.visit(self).await;
             }
             ForEachInit::Mapping {
                 ref mut key,
@@ -391,19 +393,19 @@ impl TreeWalker for SemanticCheckWalker {
                     self.context.errors.push(e);
                 }
 
-                let _ = key.visit(self);
-                let _ = value.visit(self);
+                let _ = key.visit(self).await;
+                let _ = value.visit(self).await;
             }
         }
-        let _ = node.collection.visit(self);
-        let _ = node.body.visit(self);
+        let _ = node.collection.visit(self).await;
+        let _ = node.body.visit(self).await;
 
         self.context.scopes.pop();
         self.prevent_jumps();
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
+    async fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         is_keyword(node.name)?;
 
         let proto_opt = self
@@ -427,18 +429,18 @@ impl TreeWalker for SemanticCheckWalker {
         self.current_function = Some(node.clone());
 
         for parameter in &mut node.parameters {
-            parameter.visit(self)?;
+            parameter.visit(self).await?;
         }
 
         for expression in &mut node.body {
-            expression.visit(self)?;
+            expression.visit(self).await?;
         }
 
         self.context.scopes.pop();
         Ok(())
     }
 
-    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
+    async fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
         let proto_opt = self
             .context
             .lookup_function_complete(node.name, &CallNamespace::default());
@@ -467,19 +469,19 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         if let Some(FunctionPtrReceiver::Static(rcvr)) = &mut node.receiver {
-            rcvr.visit(self)?;
+            rcvr.visit(self).await?;
         }
 
         if let Some(args) = &mut node.arguments {
             for argument in args.iter_mut().flatten() {
-                argument.visit(self)?;
+                argument.visit(self).await?;
             }
         }
 
         Ok(())
     }
 
-    fn visit_label(&mut self, node: &mut LabelNode) -> Result<()> {
+    async fn visit_label(&mut self, node: &mut LabelNode) -> Result<()> {
         if !self.can_use_labels() {
             let msg = if node.is_default() {
                 "invalid `default`."
@@ -492,29 +494,29 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         if let Some(expr) = &mut node.case {
-            expr.visit(self)?;
+            expr.visit(self).await?;
         }
 
         Ok(())
     }
 
-    fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()> {
+    async fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()> {
         self.context.scopes.goto_root();
 
         for expr in &mut node.body {
-            expr.visit(self)?;
+            expr.visit(self).await?;
         }
 
         Ok(())
     }
 
-    fn visit_range(&mut self, node: &mut RangeNode) -> Result<()> {
+    async fn visit_range(&mut self, node: &mut RangeNode) -> Result<()> {
         if let Some(expr) = &mut *node.l {
-            expr.visit(self)?;
+            expr.visit(self).await?;
         }
 
         if let Some(expr) = &mut *node.r {
-            expr.visit(self)?;
+            expr.visit(self).await?;
         }
 
         let left_type = if let Some(left) = &*node.l {
@@ -558,9 +560,9 @@ impl TreeWalker for SemanticCheckWalker {
         }
     }
 
-    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()> {
+    async fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()> {
         if let Some(expression) = &mut node.value {
-            expression.visit(self)?;
+            expression.visit(self).await?;
         }
 
         // closure return types are not type-checked
@@ -604,12 +606,12 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_switch(&mut self, node: &mut SwitchNode) -> Result<()> {
+    async fn visit_switch(&mut self, node: &mut SwitchNode) -> Result<()> {
         self.allow_labels();
         self.allow_breaks();
 
-        node.expression.visit(self)?;
-        node.body.visit(self)?;
+        node.expression.visit(self).await?;
+        node.body.visit(self).await?;
 
         self.prevent_jumps();
         self.prevent_labels();
@@ -617,10 +619,10 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
-        let _ = node.condition.visit(self);
-        let _ = node.body.visit(self);
-        let _ = node.else_clause.visit(self);
+    async fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
+        let _ = node.condition.visit(self).await;
+        let _ = node.body.visit(self).await;
+        let _ = node.else_clause.visit(self).await;
 
         let body_type = node_type(&node.body, &self.context)?;
         let else_type = node_type(&node.else_clause, &self.context)?;
@@ -636,8 +638,8 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
-        node.expr.visit(self)?;
+    async fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
+        node.expr.visit(self).await?;
 
         match check_unary_operation_types(node, &self.context) {
             Ok(_) => match node.op {
@@ -659,7 +661,7 @@ impl TreeWalker for SemanticCheckWalker {
         }
     }
 
-    fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
+    async fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         if node.is_closure_arg_var() {
             if self.closure_depth == 0 {
                 let e = LpcError::new(
@@ -681,7 +683,7 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
+    async fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
         is_keyword(node.name)?;
 
         if_chain! {
@@ -700,7 +702,7 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         if let Some(expression) = &mut node.value {
-            expression.visit(self)?;
+            expression.visit(self).await?;
 
             let expr_type = node_type(expression, &self.context)?;
 
@@ -728,10 +730,10 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
+    async fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
         self.allow_jumps();
-        node.condition.visit(self)?;
-        node.body.visit(self)?;
+        node.condition.visit(self).await?;
+        node.body.visit(self).await?;
 
         self.prevent_jumps();
 
@@ -793,13 +795,14 @@ mod tests {
         }
     }
 
-    fn walk_code(code: &str) -> Result<CompilationContext> {
+    async fn walk_code(code: &str) -> Result<CompilationContext> {
         let compiler = Compiler::default();
         let (mut program, context) = compiler
             .parse_string(
                 &LpcPath::new_in_game("/my_test.c", "/", "./tests/fixtures/code"),
                 code,
             )
+            .await
             .expect("failed to parse");
 
         let context = apply_walker!(ScopeWalker, program, context, false);
@@ -811,8 +814,8 @@ mod tests {
         use super::*;
         use crate::compiler::ast::binary_op_node::BinaryOperation;
 
-        #[test]
-        fn validates_both_sides() -> Result<()> {
+        #[tokio::test]
+        async fn validates_both_sides() -> Result<()> {
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(456)),
@@ -831,11 +834,11 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            node.visit(&mut walker)
+            node.visit(&mut walker).await
         }
 
-        #[test]
-        fn always_allows_0() -> Result<()> {
+        #[tokio::test]
+        async fn always_allows_0() -> Result<()> {
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(0)),
@@ -854,11 +857,11 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            node.visit(&mut walker)
+            node.visit(&mut walker).await
         }
 
-        #[test]
-        fn disallows_differing_types() {
+        #[tokio::test]
+        async fn disallows_differing_types() {
             let mut node = ExpressionNode::from(AssignmentNode {
                 lhs: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 rhs: Box::new(ExpressionNode::from(123)),
@@ -877,11 +880,11 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            assert!(node.visit(&mut walker).is_err());
+            assert!(node.visit(&mut walker).await.is_err());
         }
 
-        #[test]
-        fn allows_mixed() {
+        #[tokio::test]
+        async fn allows_mixed() {
             let mut init_node = VarInitNode {
                 type_: LpcType::Mixed(false),
                 name: ustr("foo"),
@@ -910,17 +913,17 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = init_node.visit(&mut walker);
+            let _ = init_node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
 
-            let _ = assignment_node.visit(&mut walker);
+            let _ = assignment_node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_array_items() {
+        #[tokio::test]
+        async fn allows_array_items() {
             let mut init_node = VarInitNode {
                 type_: LpcType::Int(false),
                 name: ustr("foo"),
@@ -954,17 +957,17 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = init_node.visit(&mut walker);
+            let _ = init_node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
 
-            let _ = assignment_node.visit(&mut walker);
+            let _ = assignment_node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_array_ranges() {
+        #[tokio::test]
+        async fn allows_array_ranges() {
             let mut init_node = VarInitNode {
                 type_: LpcType::Int(true),
                 name: ustr("foo"),
@@ -1002,11 +1005,11 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = init_node.visit(&mut walker);
+            let _ = init_node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
 
-            let _ = assignment_node.visit(&mut walker);
+            let _ = assignment_node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
@@ -1016,8 +1019,8 @@ mod tests {
         use super::*;
         use crate::compiler::ast::binary_op_node::BinaryOperation;
 
-        #[test]
-        fn validates_both_sides() -> Result<()> {
+        #[tokio::test]
+        async fn validates_both_sides() -> Result<()> {
             let mut node = ExpressionNode::from(BinaryOpNode {
                 l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 r: Box::new(ExpressionNode::from(456)),
@@ -1035,11 +1038,11 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            node.visit(&mut walker)
+            node.visit(&mut walker).await
         }
 
-        #[test]
-        fn disallows_differing_types() {
+        #[tokio::test]
+        async fn disallows_differing_types() {
             let mut node = ExpressionNode::from(BinaryOpNode {
                 l: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                 r: Box::new(ExpressionNode::from(123)),
@@ -1057,24 +1060,24 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            assert!(node.visit(&mut walker).is_err());
+            assert!(node.visit(&mut walker).await.is_err());
         }
     }
 
     mod test_visit_break {
         use super::*;
 
-        #[test]
-        fn disallows_outside_of_loop_or_switch() {
+        #[tokio::test]
+        async fn disallows_outside_of_loop_or_switch() {
             let code = "void create() { break; }";
-            let context = walk_code(code).expect("failed to parse?");
+            let context = walk_code(code).await.expect("failed to parse?");
 
             assert!(!context.errors.is_empty());
             assert_eq!(context.errors[0].to_string(), "Invalid `break`.");
         }
 
-        #[test]
-        fn allows_in_while_loop() {
+        #[tokio::test]
+        async fn allows_in_while_loop() {
             let code = r#"
                 void create() {
                     int i;
@@ -1086,13 +1089,13 @@ mod tests {
                         }
                     }
                 }"#;
-            let context = walk_code(code).expect("failed to parse?");
+            let context = walk_code(code).await.expect("failed to parse?");
 
             assert!(context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_in_for_loop() {
+        #[tokio::test]
+        async fn allows_in_for_loop() {
             let code = r#"
                 void create() {
                     for(int i = 0; i < 10; i += 1) {
@@ -1101,13 +1104,13 @@ mod tests {
                         }
                     }
                 }"#;
-            let context = walk_code(code).expect("failed to parse?");
+            let context = walk_code(code).await.expect("failed to parse?");
 
             assert!(context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_in_do_while_loop() {
+        #[tokio::test]
+        async fn allows_in_do_while_loop() {
             let code = r#"
                 void create() {
                     int i;
@@ -1119,13 +1122,13 @@ mod tests {
                         }
                     } while(i < 10);
                 }"#;
-            let context = walk_code(code).expect("failed to parse?");
+            let context = walk_code(code).await.expect("failed to parse?");
 
             assert!(context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_in_switch() {
+        #[tokio::test]
+        async fn allows_in_switch() {
             let code = r#"
                 void create() {
                     int i = 5;
@@ -1137,7 +1140,7 @@ mod tests {
                             dump("weeeeak");
                     }
                 }"#;
-            let context = walk_code(code).expect("failed to parse?");
+            let context = walk_code(code).await.expect("failed to parse?");
 
             assert!(context.errors.is_empty());
         }
@@ -1154,8 +1157,8 @@ mod tests {
         use super::*;
         use crate::{assert_regex, interpreter::program::Program};
 
-        #[test]
-        fn allows_known_functions() {
+        #[tokio::test]
+        async fn allows_known_functions() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("known"))
@@ -1181,13 +1184,13 @@ mod tests {
                 ..CompilationContext::default()
             };
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_local_private_functions() {
+        #[tokio::test]
+        async fn allows_local_private_functions() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("known"))
@@ -1214,13 +1217,13 @@ mod tests {
                 ..CompilationContext::default()
             };
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_known_inherited_functions() {
+        #[tokio::test]
+        async fn allows_known_inherited_functions() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("known"))
@@ -1246,14 +1249,14 @@ mod tests {
             let mut context = CompilationContext::default();
             context.inherits.push(program);
             let mut walker = SemanticCheckWalker::new(context);
-            let result = node.visit(&mut walker);
+            let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_parent_namespaced_inherited_functions() {
+        #[tokio::test]
+        async fn allows_parent_namespaced_inherited_functions() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("known"), namespace: CallNamespace::Parent),
@@ -1279,14 +1282,14 @@ mod tests {
             let mut context = CompilationContext::default();
             context.inherits.push(program);
             let mut walker = SemanticCheckWalker::new(context);
-            let result = node.visit(&mut walker);
+            let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn disallows_private_parent_namespaced_inherited_functions() {
+        #[tokio::test]
+        async fn disallows_private_parent_namespaced_inherited_functions() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("known"), namespace: CallNamespace::Parent),
@@ -1313,7 +1316,7 @@ mod tests {
             let mut context = CompilationContext::default();
             context.inherits.push(program);
             let mut walker = SemanticCheckWalker::new(context);
-            let result = node.visit(&mut walker);
+            let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
@@ -1323,8 +1326,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn allows_named_namespaced_inherited_functions() {
+        #[tokio::test]
+        async fn allows_named_namespaced_inherited_functions() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain:
@@ -1354,14 +1357,14 @@ mod tests {
                 .inherit_names
                 .insert("parent".into(), context.inherits.len() - 1);
             let mut walker = SemanticCheckWalker::new(context);
-            let result = node.visit(&mut walker);
+            let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_efun_namespaced_functions() {
+        #[tokio::test]
+        async fn allows_efun_namespaced_functions() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain:
@@ -1370,14 +1373,14 @@ mod tests {
 
             let context = CompilationContext::default();
             let mut walker = SemanticCheckWalker::new(context);
-            let result = node.visit(&mut walker);
+            let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn disallows_private_named_namespaced_inherited_functions() {
+        #[tokio::test]
+        async fn disallows_private_named_namespaced_inherited_functions() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain:
@@ -1408,7 +1411,7 @@ mod tests {
                 .inherit_names
                 .insert("parent".into(), context.inherits.len() - 1);
             let mut walker = SemanticCheckWalker::new(context);
-            let result = node.visit(&mut walker);
+            let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
@@ -1418,8 +1421,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn disallows_unknown_named_namespaced_inherited_functions() {
+        #[tokio::test]
+        async fn disallows_unknown_named_namespaced_inherited_functions() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain:
@@ -1446,7 +1449,7 @@ mod tests {
             let mut context = CompilationContext::default();
             context.inherits.push(program);
             let mut walker = SemanticCheckWalker::new(context);
-            let result = node.visit(&mut walker);
+            let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
@@ -1456,8 +1459,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn disallows_private_inherited_functions() {
+        #[tokio::test]
+        async fn disallows_private_inherited_functions() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("known")),
@@ -1484,7 +1487,7 @@ mod tests {
             let mut context = CompilationContext::default();
             context.inherits.push(program);
             let mut walker = SemanticCheckWalker::new(context);
-            let result = node.visit(&mut walker);
+            let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
@@ -1494,8 +1497,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn allows_known_efuns() {
+        #[tokio::test]
+        async fn allows_known_efuns() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("dump")),
@@ -1504,13 +1507,13 @@ mod tests {
 
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_function_pointers() {
+        #[tokio::test]
+        async fn allows_function_pointers() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_function_pointer")),
@@ -1527,13 +1530,13 @@ mod tests {
                 ..CompilationContext::default()
             };
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_mixed_function_pointers() {
+        #[tokio::test]
+        async fn allows_mixed_function_pointers() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_mixed_function_pointer")),
@@ -1550,13 +1553,13 @@ mod tests {
                 ..CompilationContext::default()
             };
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn disallows_pointers_to_non_functions() {
+        #[tokio::test]
+        async fn disallows_pointers_to_non_functions() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_non_function_pointer")),
@@ -1573,7 +1576,7 @@ mod tests {
                 ..CompilationContext::default()
             };
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(!walker.context.errors.is_empty());
             assert_eq!(
@@ -1582,8 +1585,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn disallows_unknown_functions() {
+        #[tokio::test]
+        async fn disallows_unknown_functions() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("unknown")),
@@ -1591,12 +1594,12 @@ mod tests {
 
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
             assert_eq!(walker.context.errors.len(), 1);
         }
 
-        #[test]
-        fn disallows_incorrect_function_arity() {
+        #[tokio::test]
+        async fn disallows_incorrect_function_arity() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("dump")),
@@ -1604,12 +1607,12 @@ mod tests {
 
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
             assert_eq!(walker.context.errors.len(), 1);
         }
 
-        #[test]
-        fn handles_ellipsis_argument_arity() {
+        #[tokio::test]
+        async fn handles_ellipsis_argument_arity() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("call_other")),
@@ -1625,12 +1628,12 @@ mod tests {
 
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn handles_varargs_argument_arity() {
+        #[tokio::test]
+        async fn handles_varargs_argument_arity() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_function")),
@@ -1670,12 +1673,12 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn understands_argument_defaults() {
+        #[tokio::test]
+        async fn understands_argument_defaults() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_func")),
@@ -1708,12 +1711,12 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn disallows_invalid_arg_types() {
+        #[tokio::test]
+        async fn disallows_invalid_arg_types() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_func")),
@@ -1742,12 +1745,12 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
             assert_eq!(walker.context.errors.len(), 1);
         }
 
-        #[test]
-        fn allows_0() {
+        #[tokio::test]
+        async fn allows_0() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain: create!(CallChain, name: ustr("my_func")),
@@ -1776,12 +1779,12 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_bad_data_with_call_other() {
+        #[tokio::test]
+        async fn allows_bad_data_with_call_other() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain:
@@ -1791,12 +1794,12 @@ mod tests {
 
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn disallows_non_local_namespace_with_call_other() {
+        #[tokio::test]
+        async fn disallows_non_local_namespace_with_call_other() {
             let mut node = ExpressionNode::from(create!(
                 CallNode,
                 chain:
@@ -1810,7 +1813,7 @@ mod tests {
 
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
             assert!(!walker.context.errors.is_empty());
             assert_regex!(
                 walker.context.errors[0].as_ref(),
@@ -1822,8 +1825,8 @@ mod tests {
     mod test_visit_foreach {
         use super::*;
 
-        #[test]
-        fn allows_array_collections() {
+        #[tokio::test]
+        async fn allows_array_collections() {
             let code = indoc! { r#"
                 void create() {
                     int *a = ({ 1, 2, 3 });
@@ -1832,13 +1835,13 @@ mod tests {
                     }
                 }
             "# };
-            let context = walk_code(code).expect("failed to parse?");
+            let context = walk_code(code).await.expect("failed to parse?");
 
             assert!(context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_mapping_collections() {
+        #[tokio::test]
+        async fn allows_mapping_collections() {
             let code = indoc! { r#"
                 void create() {
                     mapping a = ([ "a": 1, "b": 2, "c": 3 ]);
@@ -1847,13 +1850,13 @@ mod tests {
                     }
                 }
             "# };
-            let context = walk_code(code).expect("failed to parse?");
+            let context = walk_code(code).await.expect("failed to parse?");
 
             assert!(context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_strings() {
+        #[tokio::test]
+        async fn allows_strings() {
             let code = indoc! { r#"
                 void create() {
                     string s = "hello, world!";
@@ -1862,13 +1865,13 @@ mod tests {
                     }
                 }
             "# };
-            let context = walk_code(code).expect("failed to parse?");
+            let context = walk_code(code).await.expect("failed to parse?");
 
             assert!(context.errors.is_empty());
         }
 
-        #[test]
-        fn disallows_invalid_collections() {
+        #[tokio::test]
+        async fn disallows_invalid_collections() {
             let code = indoc! { r#"
                 void create() {
                     int a = 0;
@@ -1877,7 +1880,7 @@ mod tests {
                     }
                 }
             "# };
-            let context = walk_code(code).expect("failed to parse?");
+            let context = walk_code(code).await.expect("failed to parse?");
 
             assert_eq!(
                 context.errors[0].to_string(),
@@ -1904,8 +1907,8 @@ mod tests {
             interpreter::program::Program,
         };
 
-        #[test]
-        fn handles_scopes() {
+        #[tokio::test]
+        async fn handles_scopes() {
             let _global = VarInitNode {
                 type_: LpcType::Int(false),
                 name: ustr("a"),
@@ -1967,20 +1970,20 @@ mod tests {
 
             let context = empty_context();
             let mut scope_walker = ScopeWalker::new(context);
-            let _ = scope_walker.visit_function_def(&mut function_def1);
-            let _ = scope_walker.visit_function_def(&mut function_def2);
+            let _ = scope_walker.visit_function_def(&mut function_def1).await;
+            let _ = scope_walker.visit_function_def(&mut function_def2).await;
 
             let context = scope_walker.into_context();
             let mut walker = SemanticCheckWalker::new(context);
 
-            let _ = walker.visit_function_def(&mut function_def1);
-            let _ = walker.visit_function_def(&mut function_def2);
+            let _ = walker.visit_function_def(&mut function_def1).await;
+            let _ = walker.visit_function_def(&mut function_def2).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn disallows_keyword_name() {
+        #[tokio::test]
+        async fn disallows_keyword_name() {
             let mut node = FunctionDefNode {
                 return_type: LpcType::Void,
                 name: ustr("while"),
@@ -1991,7 +1994,7 @@ mod tests {
             };
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let result = walker.visit_function_def(&mut node);
+            let result = walker.visit_function_def(&mut node).await;
 
             if let Err(e) = result {
                 assert!(e.to_string().contains("is a keyword of the language"));
@@ -2000,8 +2003,8 @@ mod tests {
             }
         }
 
-        #[test]
-        fn disallows_redefining_nomask_function() {
+        #[tokio::test]
+        async fn disallows_redefining_nomask_function() {
             let mut node = FunctionDefNode {
                 return_type: LpcType::Void,
                 name: ustr("duplicate"),
@@ -2032,7 +2035,7 @@ mod tests {
             context.inherits.push(program);
 
             let mut walker = SemanticCheckWalker::new(context);
-            let result = walker.visit_function_def(&mut node);
+            let result = walker.visit_function_def(&mut node).await;
 
             if let Err(e) = result {
                 assert_regex!(
@@ -2054,8 +2057,8 @@ mod tests {
         use super::*;
         use crate::{assert_regex, interpreter::program::Program};
 
-        #[test]
-        fn allows_local_private_functions() {
+        #[tokio::test]
+        async fn allows_local_private_functions() {
             let mut node = ExpressionNode::from(FunctionPtrNode {
                 receiver: None,
                 arguments: None,
@@ -2084,13 +2087,13 @@ mod tests {
                 ..CompilationContext::default()
             };
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn disallows_private_inherited_functions() {
+        #[tokio::test]
+        async fn disallows_private_inherited_functions() {
             let mut node = ExpressionNode::from(FunctionPtrNode {
                 receiver: None,
                 arguments: None,
@@ -2119,7 +2122,7 @@ mod tests {
             let mut context = CompilationContext::default();
             context.inherits.push(program);
             let mut walker = SemanticCheckWalker::new(context);
-            let result = node.visit(&mut walker);
+            let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
@@ -2129,8 +2132,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn allows_known_efuns() {
+        #[tokio::test]
+        async fn allows_known_efuns() {
             let mut node = ExpressionNode::from(FunctionPtrNode {
                 receiver: None,
                 arguments: Some(vec![Some(ExpressionNode::from(IntNode::new(12)))]),
@@ -2140,7 +2143,7 @@ mod tests {
 
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
@@ -2149,26 +2152,26 @@ mod tests {
     mod test_visit_label {
         use super::*;
 
-        #[test]
-        fn disallows_case_outside_of_switch() {
+        #[tokio::test]
+        async fn disallows_case_outside_of_switch() {
             let code = "void create() { case 12: 1; }";
-            let context = walk_code(code).expect("failed to parse?");
+            let context = walk_code(code).await.expect("failed to parse?");
 
             assert!(!context.errors.is_empty());
             assert_eq!(context.errors[0].to_string(), "invalid `case` statement.");
         }
 
-        #[test]
-        fn disallows_default_outside_of_switch() {
+        #[tokio::test]
+        async fn disallows_default_outside_of_switch() {
             let code = "void create() { default: 1; }";
-            let context = walk_code(code).expect("failed to parse?");
+            let context = walk_code(code).await.expect("failed to parse?");
 
             assert!(!context.errors.is_empty());
             assert_eq!(context.errors[0].to_string(), "invalid `default`.");
         }
 
-        #[test]
-        fn allows_in_switch() {
+        #[tokio::test]
+        async fn allows_in_switch() {
             let code = r#"
                 void create() {
                     int i = 5;
@@ -2180,7 +2183,7 @@ mod tests {
                         dump("weeeeak");
                     }
                 }"#;
-            let context = walk_code(code).expect("failed to parse?");
+            let context = walk_code(code).await.expect("failed to parse?");
             assert!(context.errors.is_empty());
         }
     }
@@ -2188,8 +2191,8 @@ mod tests {
     mod test_visit_program {
         use super::*;
 
-        #[test]
-        fn checks_its_body() {
+        #[tokio::test]
+        async fn checks_its_body() {
             let mut node = ProgramNode {
                 inherits: vec![],
                 body: vec![AstNode::from(VarInitNode {
@@ -2204,7 +2207,7 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(empty_context());
-            if let Err(e) = walker.visit_program(&mut node) {
+            if let Err(e) = walker.visit_program(&mut node).await {
                 assert!(e.to_string().contains("is a keyword of the language"));
             } else {
                 panic!("did not error?");
@@ -2215,8 +2218,8 @@ mod tests {
     mod test_visit_range {
         use super::*;
 
-        #[test]
-        fn allows_ints() {
+        #[tokio::test]
+        async fn allows_ints() {
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(Some(ExpressionNode::Var(VarNode::new("foo")))),
                 r: Box::new(Some(ExpressionNode::from(456))),
@@ -2233,13 +2236,13 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn disallows_non_ints() {
+        #[tokio::test]
+        async fn disallows_non_ints() {
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(Some(ExpressionNode::Var(VarNode::new("foo")))),
                 r: Box::new(Some(ExpressionNode::from(456))),
@@ -2256,13 +2259,13 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(!walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_start_blank() {
+        #[tokio::test]
+        async fn allows_start_blank() {
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(None),
                 r: Box::new(Some(ExpressionNode::from(456))),
@@ -2271,13 +2274,13 @@ mod tests {
 
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_end_blank() {
+        #[tokio::test]
+        async fn allows_end_blank() {
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(Some(ExpressionNode::from(456))),
                 r: Box::new(None),
@@ -2286,13 +2289,13 @@ mod tests {
 
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_both_blank() {
+        #[tokio::test]
+        async fn allows_both_blank() {
             let mut node = ExpressionNode::from(RangeNode {
                 l: Box::new(None),
                 r: Box::new(None),
@@ -2301,7 +2304,7 @@ mod tests {
 
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
@@ -2310,8 +2313,8 @@ mod tests {
     mod test_visit_return {
         use super::*;
 
-        #[test]
-        fn test_visit_return() {
+        #[tokio::test]
+        async fn test_visit_return() {
             let mut void_node = ReturnNode {
                 value: None, // indicates a Void return value.
                 span: None,
@@ -2347,28 +2350,28 @@ mod tests {
 
             // return void from void function
             walker.current_function = Some(void_function_def.clone());
-            let _ = void_node.visit(&mut walker);
+            let _ = void_node.visit(&mut walker).await;
             assert!(walker.context.errors.is_empty());
 
             // return void from non-void function
             walker.current_function = Some(int_function_def);
-            let _ = void_node.visit(&mut walker);
+            let _ = void_node.visit(&mut walker).await;
             assert!(!walker.context.errors.is_empty());
 
             walker.context.errors = vec![];
 
             // return int from int function
-            let _ = int_node.visit(&mut walker);
+            let _ = int_node.visit(&mut walker).await;
             assert!(walker.context.errors.is_empty());
 
             // return int from void function
             walker.current_function = Some(void_function_def);
-            let _ = int_node.visit(&mut walker);
+            let _ = int_node.visit(&mut walker).await;
             assert!(!walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_0() {
+        #[tokio::test]
+        async fn allows_0() {
             let mut node = ReturnNode {
                 value: Some(ExpressionNode::from(0)),
                 span: None,
@@ -2391,13 +2394,13 @@ mod tests {
 
             let mut walker = SemanticCheckWalker::new(context);
             walker.current_function = Some(void_function_def);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_mixed() {
+        #[tokio::test]
+        async fn allows_mixed() {
             let mut node = ReturnNode {
                 value: Some(ExpressionNode::from(123)),
                 span: None,
@@ -2413,13 +2416,13 @@ mod tests {
 
             let mut walker = SemanticCheckWalker::new(context);
             walker.current_function = Some(function_def);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn allows_return_of_differing_type_within_closure() {
+        #[tokio::test]
+        async fn allows_return_of_differing_type_within_closure() {
             let function_def = create!(
                 FunctionDefNode,
                 return_type: LpcType::Float(false),
@@ -2435,14 +2438,14 @@ mod tests {
 
             walker.current_function = Some(function_def);
 
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
             assert!(!walker.context.errors.is_empty());
 
             walker.context.errors = vec![];
 
             walker.closure_depth += 1;
 
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
             assert!(walker.context.errors.is_empty());
         }
     }
@@ -2454,8 +2457,8 @@ mod tests {
         mod test_negate {
             use super::*;
 
-            #[test]
-            fn works_allows_valid() {
+            #[tokio::test]
+            async fn works_allows_valid() {
                 let mut node = ExpressionNode::from(UnaryOpNode {
                     expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                     op: UnaryOperation::Negate,
@@ -2465,11 +2468,11 @@ mod tests {
 
                 let context = context_with_var("foo", LpcType::Int(false));
                 let mut walker = SemanticCheckWalker::new(context);
-                assert!(node.visit(&mut walker).is_ok())
+                assert!(node.visit(&mut walker).await.is_ok())
             }
 
-            #[test]
-            fn disallows_invalid() {
+            #[tokio::test]
+            async fn disallows_invalid() {
                 let mut node = ExpressionNode::from(UnaryOpNode {
                     expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                     op: UnaryOperation::Negate,
@@ -2479,15 +2482,15 @@ mod tests {
 
                 let context = context_with_var("foo", LpcType::String(false));
                 let mut walker = SemanticCheckWalker::new(context);
-                assert!(node.visit(&mut walker).is_err());
+                assert!(node.visit(&mut walker).await.is_err());
             }
         }
 
         mod test_inc {
             use super::*;
 
-            #[test]
-            fn allows_vars() {
+            #[tokio::test]
+            async fn allows_vars() {
                 let mut node = ExpressionNode::from(UnaryOpNode {
                     expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                     op: UnaryOperation::Inc,
@@ -2497,11 +2500,11 @@ mod tests {
 
                 let context = context_with_var("foo", LpcType::Int(false));
                 let mut walker = SemanticCheckWalker::new(context);
-                assert_ok!(node.visit(&mut walker));
+                assert_ok!(node.visit(&mut walker).await);
             }
 
-            #[test]
-            fn disallows_literals() {
+            #[tokio::test]
+            async fn disallows_literals() {
                 let mut node = ExpressionNode::from(UnaryOpNode {
                     expr: Box::new(ExpressionNode::from(1)),
                     op: UnaryOperation::Inc,
@@ -2511,7 +2514,7 @@ mod tests {
 
                 let context = empty_context();
                 let mut walker = SemanticCheckWalker::new(context);
-                let result = node.visit(&mut walker);
+                let result = node.visit(&mut walker).await;
                 assert_err!(result.clone());
                 assert_eq!(
                     result.unwrap_err().to_string().as_str(),
@@ -2523,8 +2526,8 @@ mod tests {
         mod test_dec {
             use super::*;
 
-            #[test]
-            fn allows_vars() {
+            #[tokio::test]
+            async fn allows_vars() {
                 let mut node = ExpressionNode::from(UnaryOpNode {
                     expr: Box::new(ExpressionNode::Var(VarNode::new("foo"))),
                     op: UnaryOperation::Dec,
@@ -2534,11 +2537,11 @@ mod tests {
 
                 let context = context_with_var("foo", LpcType::Int(false));
                 let mut walker = SemanticCheckWalker::new(context);
-                assert_ok!(node.visit(&mut walker));
+                assert_ok!(node.visit(&mut walker).await);
             }
 
-            #[test]
-            fn disallows_literals() {
+            #[tokio::test]
+            async fn disallows_literals() {
                 let mut node = ExpressionNode::from(UnaryOpNode {
                     expr: Box::new(ExpressionNode::from(1)),
                     op: UnaryOperation::Dec,
@@ -2548,7 +2551,7 @@ mod tests {
 
                 let context = empty_context();
                 let mut walker = SemanticCheckWalker::new(context);
-                let result = node.visit(&mut walker);
+                let result = node.visit(&mut walker).await;
                 assert_err!(result.clone());
                 assert_eq!(
                     result.unwrap_err().to_string().as_str(),
@@ -2561,12 +2564,12 @@ mod tests {
     mod test_visit_var {
         use super::*;
 
-        #[test]
-        fn disallows_closure_arg_vars_outside_of_closures() {
+        #[tokio::test]
+        async fn disallows_closure_arg_vars_outside_of_closures() {
             let mut node = create!(VarNode,name: ustr("$2"));
 
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert_eq!(
                 walker.context.errors.first().unwrap().to_string().as_str(),
@@ -2575,19 +2578,19 @@ mod tests {
 
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
             walker.closure_depth = 1;
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn disallows_closure_arg_vars_beyond_limit() {
+        #[tokio::test]
+        async fn disallows_closure_arg_vars_beyond_limit() {
             let mut node = create!(VarNode,name: ustr("$65"));
 
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
             walker.closure_depth = 1;
 
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert_eq!(
                 walker.context.errors.first().unwrap().to_string().as_str(),
@@ -2598,7 +2601,7 @@ mod tests {
 
             let mut node = create!(VarNode,name: ustr("$64"));
 
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
             assert!(walker.context.errors.is_empty());
         }
     }
@@ -2608,8 +2611,8 @@ mod tests {
 
         use super::*;
 
-        #[test]
-        fn validates_both_sides() {
+        #[tokio::test]
+        async fn validates_both_sides() {
             let mut node = VarInitNode {
                 name: ustr("foo"),
                 type_: LpcType::Int(false),
@@ -2622,13 +2625,13 @@ mod tests {
 
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn always_allows_0() {
+        #[tokio::test]
+        async fn always_allows_0() {
             let mut node = VarInitNode {
                 type_: LpcType::String(false),
                 name: ustr("foo"),
@@ -2641,13 +2644,13 @@ mod tests {
 
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn disallows_differing_types() {
+        #[tokio::test]
+        async fn disallows_differing_types() {
             let mut node = VarInitNode {
                 type_: LpcType::String(false),
                 name: ustr("foo"),
@@ -2666,13 +2669,13 @@ mod tests {
             };
 
             let mut walker = SemanticCheckWalker::new(context);
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(!walker.context.errors.is_empty());
         }
 
-        #[test]
-        fn disallows_keyword_name() {
+        #[tokio::test]
+        async fn disallows_keyword_name() {
             let mut node = VarInitNode {
                 type_: LpcType::String(false),
                 name: ustr("switch"),
@@ -2685,7 +2688,7 @@ mod tests {
 
             let context = empty_context();
             let mut walker = SemanticCheckWalker::new(context);
-            let result = node.visit(&mut walker);
+            let result = node.visit(&mut walker).await;
 
             if let Err(e) = result {
                 assert!(e.to_string().contains("is a keyword of the language"));
@@ -2694,8 +2697,8 @@ mod tests {
             }
         }
 
-        #[test]
-        fn disallows_argv_in_ellipsis_function() {
+        #[tokio::test]
+        async fn disallows_argv_in_ellipsis_function() {
             let mut node = VarInitNode {
                 type_: LpcType::Mixed(true),
                 name: ustr("argv"),
@@ -2719,7 +2722,7 @@ mod tests {
                 span: None,
             });
 
-            let result = node.visit(&mut walker);
+            let result = node.visit(&mut walker).await;
 
             if let Err(e) = result {
                 assert!(e
@@ -2730,8 +2733,8 @@ mod tests {
             }
         }
 
-        #[test]
-        fn allows_argv_in_non_ellipsis_function() {
+        #[tokio::test]
+        async fn allows_argv_in_non_ellipsis_function() {
             let mut node = VarInitNode {
                 type_: LpcType::Mixed(true),
                 name: ustr("argv"),
@@ -2755,7 +2758,7 @@ mod tests {
                 span: None,
             });
 
-            let result = node.visit(&mut walker);
+            let result = node.visit(&mut walker).await;
 
             assert!(result.is_ok());
         }
@@ -2764,8 +2767,8 @@ mod tests {
     mod test_visit_ternary {
         use super::*;
 
-        #[test]
-        fn disallows_differing_types() {
+        #[tokio::test]
+        async fn disallows_differing_types() {
             let mut node = ExpressionNode::from(TernaryNode {
                 condition: Box::new(ExpressionNode::from(1)),
                 body: Box::new(ExpressionNode::from(1)),
@@ -2774,7 +2777,7 @@ mod tests {
             });
 
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
-            let _ = node.visit(&mut walker);
+            let _ = node.visit(&mut walker).await;
 
             assert!(!walker.context.errors.is_empty());
 

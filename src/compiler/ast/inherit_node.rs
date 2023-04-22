@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use async_trait::async_trait;
 use lpc_rs_errors::{span::Span, Result};
 use ustr::Ustr;
 
@@ -28,9 +29,10 @@ impl SpannedNode for InheritNode {
     }
 }
 
+#[async_trait]
 impl AstNodeTrait for InheritNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_inherit(self)
+    async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
+        tree_walker.visit_inherit(self).await
     }
 }
 

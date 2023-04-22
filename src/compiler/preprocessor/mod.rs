@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, iter::Peekable, path::Path};
 
+use async_recursion::async_recursion;
 use define::{Define, ObjectMacro};
 use lalrpop_util::ParseError as LalrpopParseError;
 use lpc_rs_core::{
@@ -172,10 +173,10 @@ impl Preprocessor {
     /// let processed = preprocessor.scan("foo.c", code);
     /// ```
     #[instrument(skip_all)]
-    pub fn scan<P, C>(&mut self, path: P, code: C) -> Result<Vec<Spanned<Token>>>
+    pub async fn scan<P, C>(&mut self, path: P, code: C) -> Result<Vec<Spanned<Token>>>
     where
         P: Into<LpcPath>,
-        C: AsRef<str>,
+        C: AsRef<str> + Send,
     {
         let mut output = vec![];
 
@@ -189,7 +190,7 @@ impl Preprocessor {
                 LpcPath::new_server(format!("{}/{}", &self.context.config.lib_dir, auto_include));
 
             if auto_include_path != lpc_path {
-                let included = self.include_local_file(&auto_include_path, None)?;
+                let included = self.include_local_file(&auto_include_path, None).await?;
 
                 for spanned in included {
                     self.append_spanned(&mut output, spanned)
@@ -197,18 +198,19 @@ impl Preprocessor {
             }
         }
 
-        self.internal_scan(&lpc_path, code, Some(output))
+        self.internal_scan(&lpc_path, code, Some(output)).await
     }
 
     /// The recursive function that takes care of scanning everything.
-    fn internal_scan<C>(
+    #[async_recursion]
+    async fn internal_scan<C>(
         &mut self,
         lpc_path: &LpcPath,
         code: C,
         existing_output: Option<Vec<Spanned<Token>>>,
     ) -> Result<Vec<Spanned<Token>>>
     where
-        C: AsRef<str>,
+        C: AsRef<str> + Send,
     {
         let mut output = existing_output.unwrap_or_default();
 
@@ -241,7 +243,7 @@ impl Preprocessor {
                                 .parent()
                                 .unwrap_or_else(|| Path::new("/"))
                                 .to_path_buf();
-                            self.handle_local_include(t, &cwd, &mut output)?
+                            self.handle_local_include(t, &cwd, &mut output).await?
                         }
                         Token::SysInclude(t) => {
                             let cwd = lpc_path
@@ -249,7 +251,7 @@ impl Preprocessor {
                                 .parent()
                                 .unwrap_or_else(|| Path::new("/"))
                                 .to_path_buf();
-                            self.handle_sys_include(t, &cwd, &mut output)?
+                            self.handle_sys_include(t, &cwd, &mut output).await?
                         }
                         Token::PreprocessorElse(t) => self.handle_else(t)?,
                         Token::Endif(t) => self.handle_endif(t)?,
@@ -546,7 +548,7 @@ impl Preprocessor {
     /// `cwd` - an in-game directory, to use as the reference for relative paths.
     /// `output` - The vector to append included tokens to
     #[instrument(skip(self, output))]
-    fn handle_sys_include<U>(
+    async fn handle_sys_include<U>(
         &mut self,
         token: &StringToken,
         cwd: &U,
@@ -568,7 +570,7 @@ impl Preprocessor {
             for dir in &config.system_include_dirs {
                 let to_include =
                     LpcPath::new_in_game(matched.as_str(), dir.as_str(), &*config.lib_dir);
-                return match self.include_local_file(&to_include, Some(token.0)) {
+                return match self.include_local_file(&to_include, Some(token.0)).await {
                     Ok(included) => {
                         for spanned in included {
                             self.append_spanned(output, spanned)
@@ -591,7 +593,7 @@ impl Preprocessor {
             let to_include = LpcPath::new_in_game(matched.as_str(), cwd, &*config.lib_dir);
 
             // Fall back to trying the path directly
-            let included = self.include_local_file(&to_include, Some(token.0))?;
+            let included = self.include_local_file(&to_include, Some(token.0)).await?;
 
             for spanned in included {
                 self.append_spanned(output, spanned)
@@ -608,14 +610,15 @@ impl Preprocessor {
     /// `cwd` - an in-game directory, to use as the reference for relative
     /// paths. `output` - The vector to append included tokens to
     #[instrument(skip(self, output))]
-    fn handle_local_include<U>(
+    #[async_recursion]
+    async fn handle_local_include<U>(
         &mut self,
         token: &StringToken,
         cwd: &U,
         output: &mut Vec<Spanned<Token>>,
     ) -> Result<()>
     where
-        U: AsRef<Path> + Debug,
+        U: AsRef<Path> + Debug + Send + Sync,
     {
         if self.skipping_lines() {
             return Ok(());
@@ -628,7 +631,7 @@ impl Preprocessor {
             let to_include =
                 LpcPath::new_in_game(matched.as_str(), cwd, &*self.context.config.lib_dir);
 
-            let included = self.include_local_file(&to_include, Some(token.0))?;
+            let included = self.include_local_file(&to_include, Some(token.0)).await?;
 
             for spanned in included {
                 self.append_spanned(output, spanned)
@@ -895,7 +898,8 @@ impl Preprocessor {
     /// `cwd` - The current working directory. Used for resolving relative
     /// pathnames. `span` - The [`Span`] of the `#include` token.
     #[instrument(skip(self))]
-    fn include_local_file(
+    #[async_recursion]
+    async fn include_local_file(
         &mut self,
         path: &LpcPath,
         span: Option<Span>,
@@ -922,7 +926,7 @@ impl Preprocessor {
             .with_span(span));
         }
 
-        let file_content = match read_lpc_file(&canon_include_path) {
+        let file_content = match read_lpc_file(&canon_include_path).await {
             Ok(content) => content,
             Err(e) => {
                 return Err(
@@ -933,7 +937,7 @@ impl Preprocessor {
         };
 
         let path = LpcPath::new_server(canon_include_path);
-        self.internal_scan(&path, &file_content, None)
+        self.internal_scan(&path, &file_content, None).await
     }
 
     /// Are we skipping lines right now due to `#if`s?
@@ -1019,9 +1023,9 @@ mod tests {
         Preprocessor::new(context)
     }
 
-    fn test_valid(input: &str, expected: &[&str]) {
+    async fn test_valid(input: &str, expected: &[&str]) {
         let mut preprocessor = fixture();
-        match preprocessor.scan("/test.c", input) {
+        match preprocessor.scan("/test.c", input).await {
             Ok(result) => {
                 let mapped = result.iter().map(|i| i.1.to_string()).collect::<Vec<_>>();
 
@@ -1034,9 +1038,9 @@ mod tests {
     }
 
     // `expected` is converted to a Regex, for easier matching on errors.
-    fn test_invalid(input: &str, expected: &str) {
+    async fn test_invalid(input: &str, expected: &str) {
         let mut preprocessor = fixture();
-        match preprocessor.scan("/test.c", input) {
+        match preprocessor.scan("/test.c", input).await {
             Ok(result) => {
                 panic!("Expected to fail, but passed with {result:?}");
             }
@@ -1046,8 +1050,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_ignored_if_commented() {
+    #[tokio::test]
+    async fn test_ignored_if_commented() {
         let input = indoc! { r#"
                 /* #defoon laksdjfalskdj */
                 // #if 0
@@ -1055,11 +1059,11 @@ mod tests {
                 // #endif
             "# };
 
-        test_valid(input, &["This should be printed"]);
+        test_valid(input, &["This should be printed"]).await;
     }
 
-    #[test]
-    fn test_auto_include() {
+    #[tokio::test]
+    async fn test_auto_include() {
         let input = indoc! { r#"
                 string marf = MY_FN;
             "# };
@@ -1080,32 +1084,33 @@ mod tests {
                 ")",
                 ";",
             ],
-        );
+        )
+        .await;
     }
 
     mod test_system_includes {
         use super::*;
 
-        #[test]
-        fn test_includes_the_file() {
+        #[tokio::test]
+        async fn test_includes_the_file() {
             let input = r#"#include <sys_include1.h>"#;
 
             let expected = vec!["sys_include1.h"];
 
-            test_valid(input, &expected);
+            test_valid(input, &expected).await;
         }
 
-        #[test]
-        fn test_includes_multiple_levels() {
+        #[tokio::test]
+        async fn test_includes_multiple_levels() {
             let input = r#"#include <sys_include2.h>"#;
 
             let expected = vec!["sys_include1.h", "sys_include2.h"];
 
-            test_valid(input, &expected);
+            test_valid(input, &expected).await;
         }
 
-        #[test]
-        fn test_includes_multiple_files() {
+        #[tokio::test]
+        async fn test_includes_multiple_files() {
             let input = indoc! {r#"
                 #include <sys_include2.h>
                 int j = 123;
@@ -1123,11 +1128,11 @@ mod tests {
                 "sys_include1.h",
             ];
 
-            test_valid(input, &expected);
+            test_valid(input, &expected).await;
         }
 
-        #[test]
-        fn test_ifdefed_out() {
+        #[tokio::test]
+        async fn test_ifdefed_out() {
             let input = indoc! { r#"
                 #ifdef FOO
                 #include <sys_include1.h>
@@ -1135,25 +1140,25 @@ mod tests {
                 #endif
             "# };
 
-            test_valid(input, &[]);
+            test_valid(input, &[]).await;
         }
 
-        #[test]
-        fn test_errors_for_nonexistent_paths() {
+        #[tokio::test]
+        async fn test_errors_for_nonexistent_paths() {
             let input = r#"#include <nonexistent.h>"#;
 
-            test_invalid(input, "unable to read include file `/nonexistent.h`");
+            test_invalid(input, "unable to read include file `/nonexistent.h`").await;
         }
 
-        #[test]
-        fn test_errors_for_traversal_attacks() {
+        #[tokio::test]
+        async fn test_errors_for_traversal_attacks() {
             let input = r#"#include </../../some_file.h>"#;
 
-            test_invalid(input, "attempt to include a file outside the root");
+            test_invalid(input, "attempt to include a file outside the root").await;
         }
 
-        #[test]
-        fn test_error_if_not_first_on_line() {
+        #[tokio::test]
+        async fn test_error_if_not_first_on_line() {
             let prog = indoc! { r#"
                 a + 3 + as; #include <sys_include1.h>
             "#
@@ -1162,43 +1167,44 @@ mod tests {
             test_invalid(
                 prog,
                 "preprocessor directives must appear on their own line",
-            );
+            )
+            .await;
         }
 
-        #[test]
-        fn test_error_if_invalid() {
+        #[tokio::test]
+        async fn test_error_if_invalid() {
             let prog = indoc! { r#"
                 #include <sys_include1.h> klasjd
             "#
             };
 
-            test_invalid(prog, "invalid `#include`");
+            test_invalid(prog, "invalid `#include`").await;
         }
     }
 
     mod test_local_includes {
         use super::*;
 
-        #[test]
-        fn test_includes_the_file() {
+        #[tokio::test]
+        async fn test_includes_the_file() {
             let input = r#"#include "include/simple.h""#;
 
             let expected = vec!["1", "+", "2", "+", "3", "+", "4", "+", "5", ";"];
 
-            test_valid(input, &expected);
+            test_valid(input, &expected).await;
         }
 
-        #[test]
-        fn test_includes_multiple_levels() {
+        #[tokio::test]
+        async fn test_includes_multiple_levels() {
             let input = r#"#include "include/level_2/two_level.h""#;
 
             let expected = vec!["1", "+", "2", "+", "3", "+", "4", "+", "5", ";"];
 
-            test_valid(input, &expected);
+            test_valid(input, &expected).await;
         }
 
-        #[test]
-        fn test_includes_multiple_files() {
+        #[tokio::test]
+        async fn test_includes_multiple_files() {
             let input = indoc! {r#"
                 #include "include/level_2/two_level.h"
                 int j = 123;
@@ -1210,45 +1216,45 @@ mod tests {
                 "+", "2", "+", "3", "+", "4", "+", "5", ";",
             ];
 
-            test_valid(input, &expected);
+            test_valid(input, &expected).await;
         }
 
-        #[test]
-        fn test_includes_absolute_paths() {
+        #[tokio::test]
+        async fn test_includes_absolute_paths() {
             let input = r#"#include "/include/simple.h""#;
 
             let expected = vec!["1", "+", "2", "+", "3", "+", "4", "+", "5", ";"];
 
-            test_valid(input, &expected);
+            test_valid(input, &expected).await;
         }
 
-        #[test]
-        fn test_ifdefed_out() {
+        #[tokio::test]
+        async fn test_ifdefed_out() {
             let input = indoc! { r#"
                 #ifdef FOO
                 #include "./simple.h"
                 #endif
             "# };
 
-            test_valid(input, &[]);
+            test_valid(input, &[]).await;
         }
 
-        #[test]
-        fn test_errors_for_nonexistent_paths() {
+        #[tokio::test]
+        async fn test_errors_for_nonexistent_paths() {
             let input = r#"#include "/askdf/foo.h""#;
 
-            test_invalid(input, "unable to read include file `/askdf/foo.h`");
+            test_invalid(input, "unable to read include file `/askdf/foo.h`").await;
         }
 
-        #[test]
-        fn test_errors_for_traversal_attacks() {
+        #[tokio::test]
+        async fn test_errors_for_traversal_attacks() {
             let input = r#"#include "/../../some_file.h""#;
 
-            test_invalid(input, "attempt to include a file outside the root");
+            test_invalid(input, "attempt to include a file outside the root").await;
         }
 
-        #[test]
-        fn test_error_if_not_first_on_line() {
+        #[tokio::test]
+        async fn test_error_if_not_first_on_line() {
             let prog = indoc! { r#"
                 a + 3 + as; #include "foo.h"
             "#
@@ -1257,17 +1263,18 @@ mod tests {
             test_invalid(
                 prog,
                 "preprocessor directives must appear on their own line",
-            );
+            )
+            .await;
         }
 
-        #[test]
-        fn test_error_if_invalid() {
+        #[tokio::test]
+        async fn test_error_if_invalid() {
             let prog = indoc! { r#"
                 #include "./include/simple.h" klasjd
             "#
             };
 
-            test_invalid(prog, "invalid `#include`");
+            test_invalid(prog, "invalid `#include`").await;
         }
     }
 
@@ -1276,8 +1283,8 @@ mod tests {
 
         use super::*;
 
-        #[test]
-        fn test_object_define() {
+        #[tokio::test]
+        async fn test_object_define() {
             let input = indoc! { r#"
                 #define ASS 1234
                 #define MAR
@@ -1287,7 +1294,7 @@ mod tests {
             "# };
             let mut preprocessor = fixture();
 
-            match preprocessor.scan("test.c", input) {
+            match preprocessor.scan("test.c", input).await {
                 Ok(_) => {
                     assert!(matches!(
                         preprocessor.defines.get("ASS").unwrap(),
@@ -1338,15 +1345,15 @@ mod tests {
             }
         }
 
-        #[test]
-        fn test_duplicate_define() {
+        #[tokio::test]
+        async fn test_duplicate_define() {
             let input = indoc! { r#"
                 #define ASS 123
                 #define ASS 456
             "# };
             let mut preprocessor = fixture();
 
-            match preprocessor.scan("test.c", input) {
+            match preprocessor.scan("test.c", input).await {
                 Ok(_) => {
                     panic!("Expected an error due to duplicate definition.");
                 }
@@ -1356,8 +1363,8 @@ mod tests {
             }
         }
 
-        #[test]
-        fn test_duplicate_after_undef() {
+        #[tokio::test]
+        async fn test_duplicate_after_undef() {
             let input = indoc! { r#"
                 #define ASS 123
                 #undef ASS
@@ -1365,7 +1372,7 @@ mod tests {
             "# };
             let mut preprocessor = fixture();
 
-            match preprocessor.scan("test.c", input) {
+            match preprocessor.scan("test.c", input).await {
                 Ok(_) => {
                     assert!(matches!(
                         preprocessor.defines.get("ASS").unwrap(),
@@ -1381,8 +1388,8 @@ mod tests {
             }
         }
 
-        #[test]
-        fn test_duplicate_ifdefed_out() {
+        #[tokio::test]
+        async fn test_duplicate_ifdefed_out() {
             let input = indoc! { r#"
                 #define HELLO 123
                 #ifdef FOO
@@ -1391,7 +1398,7 @@ mod tests {
             "# };
             let mut preprocessor = fixture();
 
-            match preprocessor.scan("test.c", input) {
+            match preprocessor.scan("test.c", input).await {
                 Ok(_) => {
                     assert!(matches!(
                         preprocessor.defines.get("HELLO").unwrap(),
@@ -1407,8 +1414,8 @@ mod tests {
             }
         }
 
-        #[test]
-        fn test_error_if_not_first_on_line() {
+        #[tokio::test]
+        async fn test_error_if_not_first_on_line() {
             let prog = indoc! { r#"
                 a + 3 + as; #define LOL WUT
             "#
@@ -1417,25 +1424,26 @@ mod tests {
             test_invalid(
                 prog,
                 "preprocessor directives must appear on their own line",
-            );
+            )
+            .await;
         }
 
-        #[test]
-        fn test_error_if_invalid() {
+        #[tokio::test]
+        async fn test_error_if_invalid() {
             let prog = indoc! { r#"
                 #define
             "#
             };
 
-            test_invalid(prog, "invalid `#define`");
+            test_invalid(prog, "invalid `#define`").await;
         }
     }
 
     mod test_ifdef {
         use super::*;
 
-        #[test]
-        fn test_with_defined() {
+        #[tokio::test]
+        async fn test_with_defined() {
             let prog = indoc! { r#"
                 #define FOO
                 #ifdef FOO
@@ -1452,11 +1460,11 @@ mod tests {
 
             let expected = vec!["I", "should", "be", "rendered"];
 
-            test_valid(prog, &expected);
+            test_valid(prog, &expected).await;
         }
 
-        #[test]
-        fn test_ifdefed_out() {
+        #[tokio::test]
+        async fn test_ifdefed_out() {
             let input = indoc! { r#"
                 #define BAR
                 #ifdef FOO
@@ -1466,33 +1474,33 @@ mod tests {
                 #endif
             "# };
 
-            test_valid(input, &[]);
+            test_valid(input, &[]).await;
         }
 
-        #[test]
-        fn test_error_without_if() {
+        #[tokio::test]
+        async fn test_error_without_if() {
             let prog = indoc! { r#"
                 #define FOO
                 "this will error because of the #endif without an #if or #ifdef";
                 #endif
             "# };
 
-            test_invalid(prog, "found `#endif` without a corresponding `#if`");
+            test_invalid(prog, "found `#endif` without a corresponding `#if`").await;
         }
 
-        #[test]
-        fn test_error_without_endif() {
+        #[tokio::test]
+        async fn test_error_without_endif() {
             let prog = indoc! { r#"
                 #define FOO
                 #ifdef FOO
                 "this will error because there's no endif";
             "# };
 
-            test_invalid(prog, "Found `#if` without a corresponding `#endif`");
+            test_invalid(prog, "Found `#if` without a corresponding `#endif`").await;
         }
 
-        #[test]
-        fn test_error_if_not_first_on_line() {
+        #[tokio::test]
+        async fn test_error_if_not_first_on_line() {
             let prog = indoc! { r#"
                 a + 3 + as; #ifdef WUT
             "#
@@ -1501,11 +1509,12 @@ mod tests {
             test_invalid(
                 prog,
                 "preprocessor directives must appear on their own line",
-            );
+            )
+            .await;
         }
 
-        #[test]
-        fn test_error_if_invalid() {
+        #[tokio::test]
+        async fn test_error_if_invalid() {
             let prog = indoc! { r#"
                 #ifdef
                 123;
@@ -1513,15 +1522,15 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "invalid `#ifdef`");
+            test_invalid(prog, "invalid `#ifdef`").await;
         }
     }
 
     mod test_ifndef {
         use super::*;
 
-        #[test]
-        fn test_with_not_defined() {
+        #[tokio::test]
+        async fn test_with_not_defined() {
             let prog = indoc! { r#"
                 #define BAR
                 #ifndef FOO
@@ -1538,11 +1547,11 @@ mod tests {
 
             let expected = vec!["I", "should", "be", "rendered"];
 
-            test_valid(prog, &expected);
+            test_valid(prog, &expected).await;
         }
 
-        #[test]
-        fn test_ifdefed_out() {
+        #[tokio::test]
+        async fn test_ifdefed_out() {
             let input = indoc! { r#"
                 #ifdef FOO
                 #ifndef BAR
@@ -1551,21 +1560,21 @@ mod tests {
                 #endif
             "# };
 
-            test_valid(input, &[]);
+            test_valid(input, &[]).await;
         }
 
-        #[test]
-        fn test_error_without_endif() {
+        #[tokio::test]
+        async fn test_error_without_endif() {
             let prog = indoc! { r#"
                 #ifndef FOO
                 "this will error because there's no endif";
             "# };
 
-            test_invalid(prog, "Found `#if` without a corresponding `#endif`");
+            test_invalid(prog, "Found `#if` without a corresponding `#endif`").await;
         }
 
-        #[test]
-        fn test_error_if_not_first_on_line() {
+        #[tokio::test]
+        async fn test_error_if_not_first_on_line() {
             let prog = indoc! { r#"
                 a + 3 + as; #ifndef HELLO
                 1 + 3;
@@ -1575,11 +1584,12 @@ mod tests {
             test_invalid(
                 prog,
                 "preprocessor directives must appear on their own line",
-            );
+            )
+            .await;
         }
 
-        #[test]
-        fn test_error_if_invalid() {
+        #[tokio::test]
+        async fn test_error_if_invalid() {
             let prog = indoc! { r#"
                 #ifndef
                 123;
@@ -1587,15 +1597,15 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "invalid `#ifndef`");
+            test_invalid(prog, "invalid `#ifndef`").await;
         }
     }
 
     mod test_else {
         use super::*;
 
-        #[test]
-        fn test_else() {
+        #[tokio::test]
+        async fn test_else() {
             let prog = indoc! { r#"
                 #define FOO
                 #ifdef FOO
@@ -1621,11 +1631,11 @@ mod tests {
                 "should", "be", "rendered", "3",
             ];
 
-            test_valid(prog, &expected);
+            test_valid(prog, &expected).await;
         }
 
-        #[test]
-        fn test_ifdefed_out() {
+        #[tokio::test]
+        async fn test_ifdefed_out() {
             let input = indoc! { r#"
                 #ifdef FOO
                 #ifndef BAR
@@ -1636,11 +1646,11 @@ mod tests {
                 #endif
             "# };
 
-            test_valid(input, &[]);
+            test_valid(input, &[]).await;
         }
 
-        #[test]
-        fn test_error_on_duplicate_else() {
+        #[tokio::test]
+        async fn test_error_on_duplicate_else() {
             let prog = indoc! { r#"
                 #ifndef FOO
                 #else
@@ -1649,11 +1659,11 @@ mod tests {
                 #endif
             "# };
 
-            test_invalid(prog, "duplicate `#else`");
+            test_invalid(prog, "duplicate `#else`").await;
         }
 
-        #[test]
-        fn test_error_if_not_first_on_line() {
+        #[tokio::test]
+        async fn test_error_if_not_first_on_line() {
             let prog = indoc! { r#"
                 a + 3 + as; #else
             "#
@@ -1662,11 +1672,12 @@ mod tests {
             test_invalid(
                 prog,
                 "preprocessor directives must appear on their own line",
-            );
+            )
+            .await;
         }
 
-        #[test]
-        fn test_error_if_invalid() {
+        #[tokio::test]
+        async fn test_error_if_invalid() {
             let prog = indoc! { r#"
                 #ifdef ASD
                 #else 1 + 4
@@ -1674,15 +1685,15 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "invalid `#else`");
+            test_invalid(prog, "invalid `#else`").await;
         }
     }
 
     mod test_object_expansion {
         use super::*;
 
-        #[test]
-        fn test_simple_replacement() {
+        #[tokio::test]
+        async fn test_simple_replacement() {
             let prog = indoc! { r#"
                 #define FOO 666
 
@@ -1691,11 +1702,11 @@ mod tests {
 
             let expected = vec!["int", "a", "=", "1", "+", "5", "+", "666", "+", "3", ";"];
 
-            test_valid(prog, &expected);
+            test_valid(prog, &expected).await;
         }
 
-        #[test]
-        fn test_multi_token_replacement() {
+        #[tokio::test]
+        async fn test_multi_token_replacement() {
             let prog = indoc! { r#"
                 #define FOO 666 + 54
 
@@ -1706,26 +1717,26 @@ mod tests {
                 "int", "a", "=", "1", "+", "5", "+", "666", "+", "54", "+", "3", ";",
             ];
 
-            test_valid(prog, &expected);
+            test_valid(prog, &expected).await;
         }
 
-        #[test]
-        fn test_unknown_replacement_token() {
+        #[tokio::test]
+        async fn test_unknown_replacement_token() {
             let prog = indoc! { r#"
                 #define FOO 666 ` 54
 
                 int a = 1 + 5 + FOO + 3;
             "# };
 
-            test_invalid(prog, "Lex Error: Invalid Token ```");
+            test_invalid(prog, "Lex Error: Invalid Token ```").await;
         }
     }
 
     mod test_if {
         use super::*;
 
-        #[test]
-        fn test_simple_if() {
+        #[tokio::test]
+        async fn test_simple_if() {
             let prog = indoc! { r##"
                 #define FOO 1
                 #define BAR
@@ -1744,11 +1755,11 @@ mod tests {
                 #endif
             "## };
 
-            test_valid(prog, &["#if FOO works"])
+            test_valid(prog, &["#if FOO works"]).await
         }
 
-        #[test]
-        fn test_simple_if_defined() {
+        #[tokio::test]
+        async fn test_simple_if_defined() {
             let prog = indoc! { r##"
                 #define FOO 1
                 #define BAR
@@ -1775,10 +1786,11 @@ mod tests {
                     "#if defined(BAZ) works",
                 ],
             )
+            .await
         }
 
-        #[test]
-        fn test_if_expressions() {
+        #[tokio::test]
+        async fn test_if_expressions() {
             let prog = indoc! { r##"
                 #define FOO 1
                 #define BAR
@@ -1831,11 +1843,12 @@ mod tests {
                     "fifth test passes",
                     "sixth test passes",
                 ],
-            );
+            )
+            .await;
         }
 
-        #[test]
-        fn test_macro_expansion() {
+        #[tokio::test]
+        async fn test_macro_expansion() {
             let prog = indoc! { r##"
                 #define FOO 1
                 #define BAR (FOO - 1)
@@ -1844,15 +1857,15 @@ mod tests {
                 #endif
             "## };
 
-            test_valid(prog, &[])
+            test_valid(prog, &[]).await
         }
     }
 
     mod test_macros {
         use super::*;
 
-        #[test]
-        fn test_functional_macros() {
+        #[tokio::test]
+        async fn test_functional_macros() {
             let prog = indoc! { r##"
                 #define FOO 1234
                 #define BAR(a, b) (a + b + FOO)
@@ -1862,11 +1875,11 @@ mod tests {
                 666 + BAR(5, 7)
             "## };
 
-            test_valid(prog, &["666", "+", "(", "5", "+", "7", "+", "1234", ")"])
+            test_valid(prog, &["666", "+", "(", "5", "+", "7", "+", "1234", ")"]).await
         }
 
-        #[test]
-        fn test_uses_latest_value() {
+        #[tokio::test]
+        async fn test_uses_latest_value() {
             let prog = indoc! { r##"
                 #define FOO 1234
                 #define BAR FOO
@@ -1876,52 +1889,52 @@ mod tests {
                 BAR
             "## };
 
-            test_valid(prog, &["1234", "4567"])
+            test_valid(prog, &["1234", "4567"]).await
         }
 
-        #[test]
-        fn test_errors_if_no_args() {
+        #[tokio::test]
+        async fn test_errors_if_no_args() {
             let prog = indoc! { r##"
                 #define BAR(a, b) (a - b)
                 BAR;
             "## };
 
-            test_invalid(prog, "functional macro call missing arguments");
+            test_invalid(prog, "functional macro call missing arguments").await;
         }
 
-        #[test]
-        fn test_errors_if_mismatched_parens() {
+        #[tokio::test]
+        async fn test_errors_if_mismatched_parens() {
             let prog = indoc! { r##"
                 #define BAR(a, b) (a - b)
                 BAR(dump("asdf");
             "## };
 
-            test_invalid(prog, "mismatched parentheses");
+            test_invalid(prog, "mismatched parentheses").await;
         }
 
-        #[test]
-        fn test_errors_if_wrong_arg_count() {
+        #[tokio::test]
+        async fn test_errors_if_wrong_arg_count() {
             let prog = indoc! { r##"
                 #define BAR(a, b) (a - b)
                 BAR(34);
             "## };
 
-            test_invalid(prog, "incorrect number of macro arguments");
+            test_invalid(prog, "incorrect number of macro arguments").await;
         }
     }
 
     mod test_pragmas {
         use super::*;
 
-        #[test]
-        fn test_pragmas() {
+        #[tokio::test]
+        async fn test_pragmas() {
             let prog = indoc! { r##"
                 #pragma strict_types
                 #pragma no_clone,resident ,  no_shadow
             "## };
 
             let mut preprocessor = fixture();
-            match preprocessor.scan("test.c", prog) {
+            match preprocessor.scan("test.c", prog).await {
                 Ok(_) => {
                     assert!(preprocessor.context.pragmas.strict_types());
                     assert!(preprocessor.context.pragmas.no_clone());

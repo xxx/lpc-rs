@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use async_trait::async_trait;
 use indextree::NodeId;
 use lpc_rs_errors::Result;
 
@@ -27,9 +28,10 @@ impl BlockNode {
     }
 }
 
+#[async_trait]
 impl AstNodeTrait for BlockNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_block(self)
+    async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
+        tree_walker.visit_block(self).await
     }
 }
 

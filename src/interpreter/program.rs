@@ -123,6 +123,7 @@ impl<'a> Program {
     ///
     /// # Examples
     /// ```
+    /// # tokio_test::block_on(async {
     /// use lpc_rs::compiler::{
     ///     ast::{
     ///         binary_op_node::{BinaryOpNode, BinaryOperation},
@@ -143,11 +144,13 @@ impl<'a> Program {
     /// let compiler = Compiler::default();
     /// let program = compiler
     ///     .compile_string("~/my_file.c", code)
+    ///     .await
     ///     .expect("Failed to compile.");
     ///
     /// for instruction in program.listing() {
     ///     println!("{}", instruction);
     /// }
+    /// # });
     /// ```
     pub fn listing(&self) -> Vec<String> {
         let functions = self
@@ -184,8 +187,8 @@ mod tests {
     use super::*;
     use crate::compiler::Compiler;
 
-    #[test]
-    fn test_serialization_and_deserialization() {
+    #[tokio::test]
+    async fn test_serialization_and_deserialization() {
         let content = r#"
             int *foo = ({ 1, 2, 3, 4, 234 });
             void create() {
@@ -194,7 +197,7 @@ mod tests {
             }
         "#;
         let compiler = Compiler::default();
-        let prog = compiler.compile_string("foo.c", content).unwrap();
+        let prog = compiler.compile_string("foo.c", content).await.unwrap();
 
         let msgpack = prog.to_msgpack();
 

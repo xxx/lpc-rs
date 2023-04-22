@@ -89,7 +89,7 @@ mod tests {
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
 
-        let (program, config, _) = compile_prog(code);
+        let (program, config, _) = compile_prog(code).await;
         let func = program.initializer.clone().expect("no init found?");
         let context = task_context_fixture(program, config, tx);
         let to_find = ProgramBuilder::default()
@@ -122,7 +122,7 @@ mod tests {
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
 
-        let (program, config, _) = compile_prog(code);
+        let (program, config, _) = compile_prog(code).await;
         let func = program.initializer.clone().expect("no init found?");
         let context = task_context_fixture(program, config, tx);
 

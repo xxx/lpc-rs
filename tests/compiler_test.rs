@@ -34,12 +34,12 @@ fn default_compiler() -> Compiler {
     CompilerBuilder::default().config(config).build().unwrap()
 }
 
-#[test]
-fn errors_on_max_inherit_depth() {
+#[tokio::test]
+async fn errors_on_max_inherit_depth() {
     let code = r#"inherit "/std/inherit_loop1";"#;
 
     let compiler = default_compiler();
-    let result = compiler.compile_string("foo.c", code);
+    let result = compiler.compile_string("foo.c", code).await;
 
     assert_err!(result, "maximum inheritance depth of 10 reached reached");
 }

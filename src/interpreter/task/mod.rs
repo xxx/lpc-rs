@@ -2690,7 +2690,7 @@ mod tests {
                 let (tx, _rx) = mpsc::channel(128);
                 let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
-                let (program, config, process) = compile_prog(code);
+                let (program, config, process) = compile_prog(code).await;
                 let space_cell = object_space.into();
                 ObjectSpace::insert_process(&space_cell, process);
                 let vm_upvalues = Arc::new(RwLock::new(upvalues));
@@ -2720,7 +2720,7 @@ mod tests {
                     }
                 "##};
 
-                let (program, config, process) = compile_prog(code);
+                let (program, config, process) = compile_prog(code).await;
                 ObjectSpace::insert_process(&space_cell, process);
 
                 let result = InitializeProgramBuilder::<10>::default()
@@ -2748,7 +2748,7 @@ mod tests {
                     }
                 "##};
 
-                let (program, config, process) = compile_prog(code);
+                let (program, config, process) = compile_prog(code).await;
                 let object_space = ObjectSpace::default();
                 let space_cell = object_space.into();
                 ObjectSpace::insert_process(&space_cell, process);
@@ -3369,7 +3369,7 @@ mod tests {
                     mixed s = q / r;
                 "##};
 
-                let (program, _, _) = compile_prog(code);
+                let (program, _, _) = compile_prog(code).await;
                 let (tx, _rx) = mpsc::channel(128);
 
                 let r = InitializeProgramBuilder::<10>::default()
@@ -3419,7 +3419,7 @@ mod tests {
                     mixed s = q % r;
                 "##};
 
-                let (program, _, _) = compile_prog(code);
+                let (program, _, _) = compile_prog(code).await;
                 let (tx, _rx) = mpsc::channel(128);
 
                 let r = InitializeProgramBuilder::<20>::default()
@@ -4361,7 +4361,7 @@ mod tests {
                 }
             "##};
 
-            let (program, _, _) = compile_prog(code);
+            let (program, _, _) = compile_prog(code).await;
             let (tx, _rx) = mpsc::channel(128);
 
             let r = InitializeProgramBuilder::<20>::default()
@@ -4381,7 +4381,7 @@ mod tests {
                 }
             "##};
 
-            let (program, _, _) = compile_prog(code);
+            let (program, _, _) = compile_prog(code).await;
             let (tx, _rx) = mpsc::channel(128);
 
             let r = InitializeProgramBuilder::<20>::default()

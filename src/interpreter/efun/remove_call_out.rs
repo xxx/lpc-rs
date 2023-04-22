@@ -62,7 +62,7 @@ mod tests {
         "##;
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code);
+        let (program, _, _) = compile_prog(code).await;
         let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
         let result = InitializeProgramBuilder::<10>::default()
             .program(program)

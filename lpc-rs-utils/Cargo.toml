@@ -15,8 +15,10 @@ dotenvy = "0.15.7"
 fs-err = "2.6.0"
 if_chain = "1.0.1"
 readonly = "0.2.3"
+tokio = { version = "1.27.0", features = ["fs"] }
 tracing = "0.1"
 ustr = "0.9.0"
 
 [dev-dependencies]
 claims = "0.7.1"
+tokio-test = "0.4.2"

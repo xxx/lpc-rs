@@ -145,10 +145,11 @@ mod tests {
         interpreter::{program::Program, task::initialize_program::InitializeProgramBuilder},
     };
 
-    fn compile_prog(code: &str) -> Program {
+    async fn compile_prog(code: &str) -> Program {
         let compiler = Compiler::default();
         compiler
             .compile_string("~/my_file.c", code)
+            .await
             .expect("Failed to compile.")
     }
 
@@ -164,7 +165,7 @@ mod tests {
         "##;
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let program = compile_prog(code);
+        let program = compile_prog(code).await;
         let result = InitializeProgramBuilder::<10>::default()
             .program(program)
             .tx(tx.clone())
@@ -185,7 +186,7 @@ mod tests {
             }
         "##;
 
-        let program = compile_prog(code);
+        let program = compile_prog(code).await;
         let result = InitializeProgramBuilder::<5>::default()
             .program(program)
             .tx(tx)

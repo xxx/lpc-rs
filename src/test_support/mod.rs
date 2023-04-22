@@ -58,7 +58,7 @@ pub fn test_config() -> Config {
     test_config_builder!().build().unwrap()
 }
 
-fn compile_simul_efuns(config: &Arc<Config>) -> Program {
+async fn compile_simul_efuns(config: &Arc<Config>) -> Program {
     let compiler = CompilerBuilder::default()
         .config(config.clone())
         .build()
@@ -68,12 +68,12 @@ fn compile_simul_efuns(config: &Arc<Config>) -> Program {
         "/",
         &*config.lib_dir,
     );
-    compiler.compile_in_game_file(&path, None).unwrap()
+    compiler.compile_in_game_file(&path, None).await.unwrap()
 }
 
-pub fn compile_prog(code: &str) -> (Program, Arc<Config>, Arc<Process>) {
+pub async fn compile_prog(code: &str) -> (Program, Arc<Config>, Arc<Process>) {
     let config = Arc::new(test_config());
-    let simul_efuns = compile_simul_efuns(&config);
+    let simul_efuns = compile_simul_efuns(&config).await;
     let se_proc = Arc::new(Process::new(simul_efuns));
 
     let compiler = CompilerBuilder::default()
@@ -84,13 +84,14 @@ pub fn compile_prog(code: &str) -> (Program, Arc<Config>, Arc<Process>) {
     let path = LpcPath::new_in_game("/my_file.c", "/", &*config.lib_dir);
     let program = compiler
         .compile_string(path, code)
+        .await
         .expect("Failed to compile.");
 
     (program, config, se_proc)
 }
 
 pub async fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
-    let (program, config, se_proc) = compile_prog(code);
+    let (program, config, se_proc) = compile_prog(code).await;
 
     let object_space = ObjectSpace::default();
     let object_space: Arc<ObjectSpace> = object_space.into();

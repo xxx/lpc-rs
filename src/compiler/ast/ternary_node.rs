@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use async_trait::async_trait;
 use lpc_rs_errors::{span::Span, Result};
 
 use crate::compiler::{
@@ -44,9 +45,10 @@ impl SpannedNode for TernaryNode {
     }
 }
 
+#[async_trait]
 impl AstNodeTrait for TernaryNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_ternary(self)
+    async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
+        tree_walker.visit_ternary(self).await
     }
 }
 

@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use async_trait::async_trait;
 use itertools::Itertools;
 use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType, ScopeId};
 use lpc_rs_errors::{span::Span, Result};
@@ -34,9 +35,10 @@ impl SpannedNode for ClosureNode {
     }
 }
 
+#[async_trait]
 impl AstNodeTrait for ClosureNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_closure(self)
+    async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
+        tree_walker.visit_closure(self).await
     }
 }
 

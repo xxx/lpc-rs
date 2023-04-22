@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use async_trait::async_trait;
 use indextree::NodeId;
 use lpc_rs_errors::{span::Span, Result};
 
@@ -44,9 +45,10 @@ impl ForNode {
     }
 }
 
+#[async_trait]
 impl AstNodeTrait for ForNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_for(self)
+    async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
+        tree_walker.visit_for(self).await
     }
 }
 

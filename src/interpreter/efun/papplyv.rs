@@ -41,7 +41,7 @@ mod tests {
         "##;
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code);
+        let (program, _, _) = compile_prog(code).await;
         let result = InitializeProgramBuilder::<5>::default()
             .program(program)
             .tx(tx)

@@ -1,6 +1,7 @@
 use std::{collections::VecDeque, ffi::OsStr, fmt::Debug, io::ErrorKind, sync::Arc};
 
 use ast::{ast_node::AstNodeTrait, program_node::ProgramNode};
+use async_recursion::async_recursion;
 use codegen::{
     codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
     function_prototype_walker::FunctionPrototypeWalker, inheritance_walker::InheritanceWalker,
@@ -36,7 +37,7 @@ pub mod semantic;
 macro_rules! apply_walker {
     ($walker:ty, $program:expr, $context:expr, $fatal:expr) => {{
         let mut walker = <$walker>::new($context);
-        let result = $program.visit(&mut walker);
+        let result = $program.visit(&mut walker).await;
 
         let mut context = walker.into_context();
 
@@ -94,21 +95,25 @@ impl Compiler {
     ///
     /// # Examples
     /// ```
+    /// # tokio_test::block_on(async {
     /// use lpc_rs::compiler::Compiler;
     /// ///
     /// let prog = Compiler::default()
     ///     .compile_file("tests/fixtures/code/example.c")
+    ///     .await
     ///     .expect("Unable to compile.");
+    /// # });
     /// ```
     #[instrument(skip(self))]
-    pub fn compile_file<T>(&self, path: T) -> Result<Program>
+    #[async_recursion]
+    pub async fn compile_file<T>(&self, path: T) -> Result<Program>
     where
-        T: Into<LpcPath> + Debug,
+        T: Into<LpcPath> + Debug + Send,
     {
         let lpc_path = path.into();
         let absolute = lpc_path.as_server(&*self.config.lib_dir);
 
-        let file_content = match read_lpc_file(&*absolute) {
+        let file_content = match read_lpc_file(&*absolute).await {
             Ok(s) => s,
             Err(e) => {
                 return match e.kind() {
@@ -122,7 +127,7 @@ impl Compiler {
                         }
 
                         let dot_c = lpc_path.with_extension("c");
-                        self.compile_file(dot_c)
+                        self.compile_file(dot_c).await
                     }
                     _ => Err(LpcError::new(format!(
                         "Cannot read file `{}`: {}",
@@ -133,15 +138,19 @@ impl Compiler {
             }
         };
 
-        self.compile_string(lpc_path, file_content)
+        self.compile_string(lpc_path, file_content).await
     }
 
     /// Intended for in-game use to be able to compile a file with relative pathname handling
     #[instrument(skip(self))]
-    pub fn compile_in_game_file(&self, path: &LpcPath, span: Option<Span>) -> Result<Program> {
+    pub async fn compile_in_game_file(
+        &self,
+        path: &LpcPath,
+        span: Option<Span>,
+    ) -> Result<Program> {
         self.config.validate_in_game_path(path, span)?;
 
-        self.compile_file(path)
+        self.compile_file(path).await
     }
 
     /// Take a str and preprocess it into a vector of Span tuples, and also
@@ -153,6 +162,7 @@ impl Compiler {
     ///
     /// # Examples
     /// ```
+    /// # tokio_test::block_on(async {
     /// use lpc_rs::compiler::Compiler;
     ///
     /// let code = r#"
@@ -167,17 +177,19 @@ impl Compiler {
     /// let compiler = Compiler::default();
     /// let (tokens, preprocessor) = compiler
     ///     .preprocess_string("~/my_file.c", code)
+    ///     .await
     ///     .expect("Failed to preprocess.");
+    /// # });
     /// ```
     #[instrument(skip(self, code))]
-    pub fn preprocess_string<P, S>(
+    pub async fn preprocess_string<P, S>(
         &self,
         path: P,
         code: S,
     ) -> Result<(Vec<Spanned<Token>>, Preprocessor)>
     where
         P: Into<LpcPath> + Debug,
-        S: AsRef<str>,
+        S: AsRef<str> + Send + Sync,
     {
         let lpc_path = path.into();
 
@@ -192,6 +204,7 @@ impl Compiler {
 
         preprocessor
             .scan(&lpc_path, &code)
+            .await
             .map(|tokens| (tokens, preprocessor))
     }
 
@@ -202,8 +215,9 @@ impl Compiler {
     /// `code` - The actual code to be compiled.
     /// # Examples
     /// ```
+    /// # tokio_test::block_on(async {
     /// use lpc_rs::compiler::Compiler;
-    /// ///
+    ///
     /// let code = r#"
     ///     int j = 123;
     ///
@@ -215,16 +229,18 @@ impl Compiler {
     /// let compiler = Compiler::default();
     /// let prog = compiler
     ///     .compile_string("~/my_file.c", code)
+    ///     .await
     ///     .expect("Failed to compile.");
+    /// # });
     /// ```
     #[instrument(skip_all)]
-    pub fn compile_string<T, U>(&self, path: T, code: U) -> Result<Program>
+    pub async fn compile_string<T, U>(&self, path: T, code: U) -> Result<Program>
     where
         T: Into<LpcPath>,
-        U: AsRef<str>,
+        U: AsRef<str> + Send + Sync,
     {
         let lpc_path = path.into();
-        let (mut program_node, context) = self.parse_string(&lpc_path, code)?;
+        let (mut program_node, context) = self.parse_string(&lpc_path, code).await?;
 
         // inject the auto-inherit if it's to be used.
         if let Some(dir) = &self.config.auto_inherit_file {
@@ -252,7 +268,7 @@ impl Compiler {
 
         let mut asm_walker = CodegenWalker::new(context);
 
-        program_node.visit(&mut asm_walker)?;
+        program_node.visit(&mut asm_walker).await?;
 
         // emit warnings
         asm_walker
@@ -291,15 +307,15 @@ impl Compiler {
     /// A [`Result`] with a tuple containing the parsed [`ProgramNode`],
     /// as well as the [`Preprocessor`]'s [`CompilationContext`]
     #[instrument(skip(self, code))]
-    pub fn parse_string<T>(
+    pub async fn parse_string<T>(
         &self,
         path: &LpcPath,
         code: T,
     ) -> Result<(ProgramNode, CompilationContext)>
     where
-        T: AsRef<str>,
+        T: AsRef<str> + Send + Sync,
     {
-        let (tokens, preprocessor) = self.preprocess_string(path, code)?;
+        let (tokens, preprocessor) = self.preprocess_string(path, code).await?;
 
         let wrapper = TokenVecWrapper::new(&tokens);
         let mut context = preprocessor.into_context();
@@ -318,11 +334,14 @@ mod tests {
     mod test_compile_file {
         use super::*;
 
-        #[test]
-        fn tries_dot_c() {
+        #[tokio::test]
+        async fn tries_dot_c() {
             let compiler = Compiler::default();
 
-            assert!(compiler.compile_file("tests/fixtures/code/example").is_ok());
+            assert!(compiler
+                .compile_file("tests/fixtures/code/example")
+                .await
+                .is_ok());
         }
     }
 
@@ -331,8 +350,8 @@ mod tests {
 
         use super::*;
 
-        #[test]
-        fn disallows_going_outside_the_root() {
+        #[tokio::test]
+        async fn disallows_going_outside_the_root() {
             let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests")
                 .build()
@@ -347,12 +366,14 @@ mod tests {
 
             assert!(compiler
                 .compile_in_game_file(&server_path, None)
+                .await
                 .unwrap_err()
                 .to_string()
                 .starts_with("attempt to access a file outside of lib_dir"));
 
             assert!(compiler
                 .compile_in_game_file(&in_game_path, None)
+                .await
                 .unwrap_err()
                 .to_string()
                 .starts_with("attempt to access a file outside of lib_dir"));
@@ -364,8 +385,8 @@ mod tests {
 
         use super::*;
 
-        #[test]
-        fn uses_auto_inherit_if_specified() {
+        #[tokio::test]
+        async fn uses_auto_inherit_if_specified() {
             let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests/fixtures/code")
                 .auto_inherit_file("/std/auto.c")
@@ -378,21 +399,19 @@ mod tests {
 
                 string foo = auto_inherited();
             "#;
-            let prog = compiler.compile_string("my_file.c", code).unwrap();
-            println!("{:?}", prog.functions.keys().collect::<Vec<_>>());
-            let inherited = prog
+            let prog = compiler.compile_string("my_file.c", code).await.unwrap();
+            let _inherited = prog
                 .functions
                 .iter()
                 .find(|(_, f)| f.name() == "auto_inherited")
                 .unwrap();
-            println!("{:?}", inherited);
             // assert!(prog.functions.keys().)
             // assert_eq!(prog.inherits.len(), 2);
             // assert_eq!(prog.inherits[0].filename.to_str().unwrap(), "/std/auto.c");
         }
 
-        #[test]
-        fn skips_auto_inherit_if_not_specified() {
+        #[tokio::test]
+        async fn skips_auto_inherit_if_not_specified() {
             let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests/fixtures/code")
                 .build()
@@ -404,7 +423,10 @@ mod tests {
 
                 string foo = auto_inherited();
             "#;
-            let err = compiler.compile_string("my_file.c", code).unwrap_err();
+            let err = compiler
+                .compile_string("my_file.c", code)
+                .await
+                .unwrap_err();
             assert_eq!(
                 &err.to_string(),
                 "call to unknown function `auto_inherited`"

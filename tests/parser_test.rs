@@ -405,8 +405,8 @@ fn typeless_functions_are_mixed() {
     ));
 }
 
-#[test]
-fn error_when_pragma_strict_types_without_return_type() {
+#[tokio::test]
+async fn error_when_pragma_strict_types_without_return_type() {
     let prog = indoc! { r#"
         #pragma strict_types
 
@@ -415,24 +415,24 @@ fn error_when_pragma_strict_types_without_return_type() {
         }
     "# };
 
-    let program = parse_prog(prog);
+    let program = parse_prog(prog).await;
 
     assert_eq!(&program.unwrap_err().to_string(), "Missing return type");
 }
 
-#[test]
-fn allows_extra_commas_for_array() {
+#[tokio::test]
+async fn allows_extra_commas_for_array() {
     let prog = indoc! { r#"
         mixed foo = ({ 1, 2, 3, });
     "# };
 
-    let program = parse_prog(prog);
+    let program = parse_prog(prog).await;
 
     assert!(program.is_ok());
 }
 
-#[test]
-fn allows_extra_commas_for_mapping() {
+#[tokio::test]
+async fn allows_extra_commas_for_mapping() {
     let prog = indoc! { r#"
         mapping thing = ([
             "foo": "bar",
@@ -441,7 +441,7 @@ fn allows_extra_commas_for_mapping() {
         ]);
     "# };
 
-    let program = parse_prog(prog);
+    let program = parse_prog(prog).await;
 
     assert!(program.is_ok());
 }
@@ -492,8 +492,8 @@ fn ellipsis_sets_the_flag_when_not_only_arg() {
     }
 }
 
-#[test]
-fn partial_application_argument_lists() {
+#[tokio::test]
+async fn partial_application_argument_lists() {
     let prog = indoc! { r#"
         function a = &foo();
         function b = &foo(1);
@@ -506,7 +506,7 @@ fn partial_application_argument_lists() {
         function i = &foo(,);
     "# };
 
-    let program = parse_prog(prog).expect("Failed to parse");
+    let program = parse_prog(prog).await.expect("Failed to parse");
 
     let get_args = |node: &AstNode| -> Option<Vec<Option<LpcIntInner>>> {
         if_chain! {
@@ -562,15 +562,15 @@ fn partial_application_argument_lists() {
     assert_eq!(get_args(&program.body[8]), Some(vec![None, None]));
 }
 
-#[test]
-fn error_when_multiple_visibilities_given() {
+#[tokio::test]
+async fn error_when_multiple_visibilities_given() {
     let prog = indoc! { r#"
         public private void foo() {
             dump("sup?");
         }
     "# };
 
-    let program = parse_prog(prog);
+    let program = parse_prog(prog).await;
 
     assert_eq!(
         &program.unwrap_err().to_string(),
@@ -578,13 +578,13 @@ fn error_when_multiple_visibilities_given() {
     );
 }
 
-#[test]
-fn error_on_varargs_var() {
+#[tokio::test]
+async fn error_on_varargs_var() {
     let prog = indoc! { r#"
         varargs string a;
     "# };
 
-    let program = parse_prog(prog);
+    let program = parse_prog(prog).await;
 
     assert_eq!(
         &program.unwrap_err().to_string(),
@@ -592,13 +592,13 @@ fn error_on_varargs_var() {
     );
 }
 
-#[test]
-fn error_on_nomask_var() {
+#[tokio::test]
+async fn error_on_nomask_var() {
     let prog = indoc! { r#"
         nomask string a;
     "# };
 
-    let program = parse_prog(prog);
+    let program = parse_prog(prog).await;
 
     assert_eq!(
         &program.unwrap_err().to_string(),
@@ -606,14 +606,14 @@ fn error_on_nomask_var() {
     );
 }
 
-#[test]
-fn warning_on_prototype() {
+#[tokio::test]
+async fn warning_on_prototype() {
     let prog = indoc! { r#"
         private int tacos(string a);
     "# };
 
     let compiler = Compiler::default();
-    let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).unwrap();
+    let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).await.unwrap();
     let code = TokenVecWrapper::new(&code);
     let mut context = preprocessor.into_context();
 
@@ -627,8 +627,8 @@ fn warning_on_prototype() {
     );
 }
 
-#[test]
-fn test_closure_bodies() {
+#[tokio::test]
+async fn test_closure_bodies() {
     let prog = indoc! { r#"
         function f = (: :);
         function g = (: 1 :);
@@ -649,12 +649,12 @@ fn test_closure_bodies() {
         :);
     "#};
 
-    assert_ok!(parse_prog(prog));
+    assert_ok!(parse_prog(prog).await);
 }
 
-fn parse_prog(prog: &str) -> Result<ProgramNode> {
+async fn parse_prog(prog: &str) -> Result<ProgramNode> {
     let compiler = Compiler::default();
-    let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).unwrap();
+    let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).await.unwrap();
     let code = TokenVecWrapper::new(&code);
     let mut context = preprocessor.into_context();
 

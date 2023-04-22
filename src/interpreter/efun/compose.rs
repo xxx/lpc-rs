@@ -25,7 +25,7 @@ use crate::interpreter::{
 
 /// The static composed function handler.
 /// It's just a pre-compiled (and slightly optimized) version of:
-/// ```lpc
+/// ```c
 /// function compose_executor(function f, function g, ...) {
 ///     return f(papplyv(g, argv)());
 /// }

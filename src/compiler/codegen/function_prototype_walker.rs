@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use lpc_rs_core::function_arity::FunctionArity;
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototypeBuilder};
@@ -51,8 +52,9 @@ impl ContextHolder for FunctionPrototypeWalker {
     }
 }
 
+#[async_trait]
 impl TreeWalker for FunctionPrototypeWalker {
-    fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+    async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         let mut num_args = node
             .parameters
             .as_ref()
@@ -79,12 +81,12 @@ impl TreeWalker for FunctionPrototypeWalker {
         // look for cases of closures-within-closures
         if let Some(parameters) = &mut node.parameters {
             for param in parameters {
-                param.visit(self)?;
+                param.visit(self).await?;
             }
         }
 
         for expression in &mut node.body {
-            expression.visit(self)?;
+            expression.visit(self).await?;
         }
 
         if self.max_closure_arg_reference > num_args {
@@ -114,7 +116,7 @@ impl TreeWalker for FunctionPrototypeWalker {
         Ok(())
     }
 
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
+    async fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         // Store the prototype now, to allow for forward references.
         let num_args = node.parameters.len();
         let num_default_args = node.parameters.iter().filter(|p| p.value.is_some()).count();
@@ -158,17 +160,17 @@ impl TreeWalker for FunctionPrototypeWalker {
 
         // walk the contents of the function, in case any closures are defined.
         for parameter in &mut node.parameters {
-            parameter.visit(self)?;
+            parameter.visit(self).await?;
         }
 
         for expression in &mut node.body {
-            expression.visit(self)?;
+            expression.visit(self).await?;
         }
 
         Ok(())
     }
 
-    fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
+    async fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         if node.is_closure_arg_var() {
             let idx = closure_arg_number(node.name)?;
 
@@ -193,8 +195,8 @@ mod tests {
         ast_node::AstNode, expression_node::ExpressionNode, var_init_node::VarInitNode,
     };
 
-    #[test]
-    fn function_def_stores_the_prototype() {
+    #[tokio::test]
+    async fn function_def_stores_the_prototype() {
         let mut walker = FunctionPrototypeWalker::default();
         let mut node = FunctionDefNode {
             return_type: LpcType::Mixed(false),
@@ -208,7 +210,7 @@ mod tests {
             span: None,
         };
 
-        let _ = walker.visit_function_def(&mut node);
+        let _ = walker.visit_function_def(&mut node).await;
 
         let proto = walker
             .context
@@ -229,8 +231,8 @@ mod tests {
         )
     }
 
-    #[test]
-    fn closure_stores_the_prototype() {
+    #[tokio::test]
+    async fn closure_stores_the_prototype() {
         let mut walker = FunctionPrototypeWalker::default();
         let mut node = ClosureNode {
             name: "closure-123".into(),
@@ -245,7 +247,7 @@ mod tests {
             scope_id: None,
         };
 
-        let _ = walker.visit_closure(&mut node);
+        let _ = walker.visit_closure(&mut node).await;
 
         let proto = walker
             .context

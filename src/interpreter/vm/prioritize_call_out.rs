@@ -175,7 +175,10 @@ mod tests {
         let mut vm = Vm::new(test_config());
 
         let prog = vm
-            .with_compiler(|compiler| compiler.compile_string("/foo/bar.c", code))
+            .with_async_compiler(|compiler| async move {
+                compiler.compile_string("/foo/bar.c", code).await
+            })
+            .await
             .unwrap();
 
         let func = prog.lookup_function("foo").unwrap().clone();

@@ -85,10 +85,7 @@ fn to_millis(x: LpcFloatInner) -> Duration {
 mod tests {
 
     use crate::{
-        interpreter::{
-            task::{initialize_program::InitializeProgramBuilder, task_id::TaskId},
-            vm::vm_op::VmOp,
-        },
+        interpreter::{task::initialize_program::InitializeProgramBuilder, vm::vm_op::VmOp},
         test_support::compile_prog,
     };
 
@@ -105,7 +102,7 @@ mod tests {
         "##;
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code);
+        let (program, _, _) = compile_prog(code).await;
         let result = InitializeProgramBuilder::<10>::default()
             .program(program)
             .tx(tx)
@@ -131,7 +128,7 @@ mod tests {
         "##;
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code);
+        let (program, _, _) = compile_prog(code).await;
         let result = InitializeProgramBuilder::<5>::default()
             .program(program)
             .tx(tx)

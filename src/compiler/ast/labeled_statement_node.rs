@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use async_trait::async_trait;
 use lpc_rs_errors::Result;
 
 use crate::compiler::{
@@ -30,10 +31,11 @@ impl LabeledStatementNode {
     }
 }
 
+#[async_trait]
 impl AstNodeTrait for LabeledStatementNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        self.label.visit(tree_walker)?;
-        self.node.visit(tree_walker)
+    async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
+        self.label.visit(tree_walker).await?;
+        self.node.visit(tree_walker).await
     }
 }
 

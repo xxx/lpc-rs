@@ -26,7 +26,10 @@ async fn load_master<const N: usize>(
                 .config(context.config())
                 .build()?;
 
-            match compiler.compile_in_game_file(&full_path, context.current_debug_span()) {
+            match compiler
+                .compile_in_game_file(&full_path, context.current_debug_span())
+                .await
+            {
                 Ok(prog) => {
                     let Some(prog_function) = prog.initializer.clone() else {
                         return Err(LpcError::new("Init function not found on master?"));
@@ -142,7 +145,7 @@ mod tests {
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
 
-        let (program, config, _) = compile_prog(prog);
+        let (program, config, _) = compile_prog(prog).await;
         let func = program.initializer.clone().expect("no init found?");
         let context = task_context_fixture(program, config, tx);
 
@@ -166,7 +169,7 @@ mod tests {
             object foo = clone_object("./no_clone.c");
         "# };
 
-        let (program, config, _) = compile_prog(prog);
+        let (program, config, _) = compile_prog(prog).await;
         let func = program.initializer.clone().expect("no init found?");
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
 

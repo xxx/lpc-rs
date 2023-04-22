@@ -4,6 +4,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use async_trait::async_trait;
 use lpc_rs_errors::{span::Span, LpcError, Result};
 
 use crate::compiler::{
@@ -117,9 +118,10 @@ impl SpannedNode for BinaryOpNode {
     }
 }
 
+#[async_trait]
 impl AstNodeTrait for BinaryOpNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_binary_op(self)
+    async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
+        tree_walker.visit_binary_op(self).await
     }
 }
 

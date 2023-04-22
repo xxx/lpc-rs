@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use async_trait::async_trait;
 use lpc_rs_core::{BaseFloat, LpcFloatInner};
 use lpc_rs_errors::{span::Span, Result};
 
@@ -42,9 +43,10 @@ impl SpannedNode for FloatNode {
     }
 }
 
+#[async_trait]
 impl AstNodeTrait for FloatNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_float(self)
+    async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
+        tree_walker.visit_float(self).await
     }
 }
 

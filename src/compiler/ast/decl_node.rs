@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use async_trait::async_trait;
 use itertools::Itertools;
 use lpc_rs_core::lpc_type::LpcType;
 use lpc_rs_errors::Result;
@@ -21,9 +22,10 @@ pub struct DeclNode {
     pub initializations: Vec<VarInitNode>,
 }
 
+#[async_trait]
 impl AstNodeTrait for DeclNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_decl(self)
+    async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
+        tree_walker.visit_decl(self).await
     }
 }
 

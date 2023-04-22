@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::{future::Future, path::Path, sync::Arc};
 
 use bit_set::BitSet;
 use flume::Sender as FlumeSender;
@@ -189,8 +189,11 @@ impl Vm {
     async fn initialize_file(&mut self, filename: &LpcPath) -> Result<TaskContext> {
         debug_assert!(matches!(filename, &LpcPath::InGame(_)));
 
-        let program =
-            self.with_compiler(|compiler| compiler.compile_in_game_file(filename, None))?;
+        let program = self
+            .with_async_compiler(|compiler| async move {
+                compiler.compile_in_game_file(filename, None).await
+            })
+            .await?;
 
         self.create_and_initialize_task(program).await.map_err(|e| {
             e.emit_diagnostics();
@@ -215,26 +218,33 @@ impl Vm {
     /// # Examples
     ///
     /// ```
-    /// tokio_test::block_on(async {
-    /// use lpc_rs::interpreter::{lpc_ref::LpcRef, vm::Vm, lpc_int::LpcInt};
+    /// # tokio_test::block_on(async {
+    /// use lpc_rs::interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, vm::Vm};
     /// use lpc_rs_utils::config::Config;
     ///
     /// let mut vm = Vm::new(Config::default());
     /// let ctx = vm.initialize_string("int x = 5;", "test.c").await.unwrap();
     ///
-    /// assert_eq!(ctx.process().globals.read().registers[0], LpcRef::Int(LpcInt(5)));
+    /// assert_eq!(
+    ///     ctx.process().globals.read().registers[0],
+    ///     LpcRef::Int(LpcInt(5))
+    /// );
     /// assert!(vm.object_space.lookup("/test").is_some());
     /// # })
     /// ```
     pub async fn initialize_string<P, S>(&mut self, code: S, filename: P) -> Result<TaskContext>
     where
         P: AsRef<Path>,
-        S: AsRef<str>,
+        S: AsRef<str> + Send + Sync,
     {
         let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config.lib_dir);
         self.config.validate_in_game_path(&lpc_path, None)?;
 
-        let prog = self.with_compiler(|compiler| compiler.compile_string(lpc_path, code))?;
+        let prog = self
+            .with_async_compiler(
+                |compiler| async move { compiler.compile_string(lpc_path, code).await },
+            )
+            .await?;
 
         self.create_and_initialize_task(prog).await.map_err(|e| {
             e.emit_diagnostics();
@@ -242,16 +252,29 @@ impl Vm {
         })
     }
 
-    /// Run a callback with a new, initialized [`Compiler`].
-    fn with_compiler<F, T>(&mut self, f: F) -> Result<T>
+    // /// Run a callback with a new, initialized [`Compiler`].
+    // fn with_compiler<F, T>(&mut self, f: F) -> Result<T>
+    // where
+    //     F: FnOnce(Compiler) -> Result<T>,
+    // {
+    //     let compiler = CompilerBuilder::default()
+    //         .config(self.config.clone())
+    //         .simul_efuns(get_simul_efuns(&self.config, &self.object_space))
+    //         .build()?;
+    //     f(compiler)
+    // }
+
+    /// Run a callback with a new, initialized [`Compiler`], that can handle callbacks that return futures.
+    async fn with_async_compiler<F, U, T>(&mut self, f: F) -> Result<T>
     where
-        F: FnOnce(Compiler) -> Result<T>,
+        F: FnOnce(Compiler) -> U,
+        U: Future<Output = Result<T>>,
     {
         let compiler = CompilerBuilder::default()
             .config(self.config.clone())
             .simul_efuns(get_simul_efuns(&self.config, &self.object_space))
             .build()?;
-        f(compiler)
+        f(compiler).await
     }
 
     /// Create a new [`Task`] and initialize it with the given [`Program`].

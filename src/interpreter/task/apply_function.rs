@@ -59,7 +59,7 @@ mod tests {
                 return x * 10;
             }
        "};
-        let (prog, config, _proc) = compile_prog(code);
+        let (prog, config, _proc) = compile_prog(code).await;
         let f = prog
             .unmangled_functions
             .get("my_cool_func")

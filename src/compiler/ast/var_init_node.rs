@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use async_trait::async_trait;
 use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
 use lpc_rs_errors::{span::Span, Result};
 use lpc_rs_function_support::symbol::Symbol;
@@ -79,9 +80,10 @@ impl SpannedNode for VarInitNode {
     }
 }
 
+#[async_trait]
 impl AstNodeTrait for VarInitNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_var_init(self)
+    async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
+        tree_walker.visit_var_init(self).await
     }
 }
 

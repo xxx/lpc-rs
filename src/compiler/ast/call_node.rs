@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use async_trait::async_trait;
 use itertools::Itertools;
 use lazy_format::lazy_format;
 use lpc_rs_core::call_namespace::CallNamespace;
@@ -68,9 +69,10 @@ impl SpannedNode for CallNode {
     }
 }
 
+#[async_trait]
 impl AstNodeTrait for CallNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_call(self)
+    async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
+        tree_walker.visit_call(self).await
     }
 }
 

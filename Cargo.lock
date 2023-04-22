@@ -1509,6 +1509,7 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "async-recursion",
+ "async-trait",
  "auto_impl",
  "beaver",
  "bit-set",
@@ -1669,6 +1670,8 @@ dependencies = [
  "lpc-rs-core",
  "lpc-rs-errors",
  "readonly",
+ "tokio",
+ "tokio-test",
  "tracing",
  "ustr",
 ]

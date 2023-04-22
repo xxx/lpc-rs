@@ -32,13 +32,14 @@ pub fn test_config() -> Config {
     test_config_builder().build().unwrap()
 }
 
-pub fn compile_prog_custom<P>(code: &str, path: P, config: Config) -> Program
+pub async fn compile_prog_custom<P>(code: &str, path: P, config: Config) -> Program
 where
     P: Into<LpcPath>,
 {
     let compiler = CompilerBuilder::default().config(config).build().unwrap();
     compiler
         .compile_string(path, code)
+        .await
         .expect("Failed to compile.")
 }
 
@@ -47,7 +48,7 @@ where
     P: Into<LpcPath>,
 {
     let (tx, _rx) = tokio::sync::mpsc::channel(128);
-    let program = compile_prog_custom(code, path, config);
+    let program = compile_prog_custom(code, path, config).await;
 
     InitializeProgramBuilder::default()
         .program(program)

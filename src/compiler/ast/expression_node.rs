@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use async_trait::async_trait;
 use indexmap::IndexMap;
 use lpc_rs_core::{BaseFloat, LpcIntInner};
 use lpc_rs_errors::{span::Span, Result};
@@ -65,11 +66,12 @@ pub fn first_span(nodes: &[&ExpressionNode]) -> Span {
 
 macro_rules! delegated_traits {
     ( $( $x:path ),+ ) => {
+        #[async_trait]
         impl AstNodeTrait for ExpressionNode {
-            fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
+            async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
                 match self {
                 $(
-                    $x(y) => y.visit(tree_walker),
+                    $x(y) => y.visit(tree_walker).await,
                 )*
                 }
             }

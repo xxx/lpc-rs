@@ -16,6 +16,7 @@ lpc-rs-utils = { path = "./lpc-rs-utils"}
 
 arrayvec = "0.7.1"
 async-recursion = "1.0.4"
+async-trait = "0.1.68"
 auto_impl = "1.0.1"
 bit-set = "0.5.3"
 bytes = "1.4.0"

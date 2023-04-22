@@ -1,5 +1,6 @@
 use std::{collections::HashMap, ops::Range, sync::Arc};
 
+use async_trait::async_trait;
 use bit_set::BitSet;
 use if_chain::if_chain;
 use indexmap::IndexMap;
@@ -428,7 +429,7 @@ impl CodegenWalker {
     /// A special case for function def parameters, where we don't want to
     /// generate code for default arguments - we just want to have it on
     /// hand to refer to when we generate code for calls.
-    fn visit_parameter(&mut self, node: &VarInitNode) -> RegisterVariant {
+    async fn visit_parameter(&mut self, node: &VarInitNode) -> RegisterVariant {
         let loc = self.assign_sym_location(&node.name);
 
         if let Some(sym) = self.context.lookup_var(node.name) {
@@ -470,9 +471,9 @@ impl CodegenWalker {
     /// `reference` - The [`Register`] holding the reference to the ref we're
     /// taking a slice from. `node` - A reference to the [`RangeNode`] that
     /// holds the range of the slice we're taking.
-    fn emit_range(&mut self, reference: RegisterVariant, node: &mut RangeNode) -> Result<()> {
+    async fn emit_range(&mut self, reference: RegisterVariant, node: &mut RangeNode) -> Result<()> {
         let first_index = if let Some(expr) = &mut *node.l {
-            expr.visit(self)?;
+            expr.visit(self).await?;
             self.current_result
         } else {
             // Default to 0. No instruction needed as the value in registers defaults to int
@@ -481,7 +482,7 @@ impl CodegenWalker {
         };
 
         let second_index = if let Some(expr) = &mut *node.r {
-            expr.visit(self)?;
+            expr.visit(self).await?;
             self.current_result
         } else {
             // A missing range end means just go to the end of the array.
@@ -570,7 +571,7 @@ impl CodegenWalker {
     }
 
     // special case for `catch()`
-    fn emit_catch(&mut self, node: &mut CallNode) -> Result<()> {
+    async fn emit_catch(&mut self, node: &mut CallNode) -> Result<()> {
         let result_register = self.register_counter.next().unwrap().as_local();
         let label = self.new_label("catch_end");
 
@@ -582,7 +583,7 @@ impl CodegenWalker {
         );
 
         for argument in &mut node.arguments {
-            argument.visit(self)?;
+            argument.visit(self).await?;
         }
 
         // get the address of the `catch_end` pseudo-instruction, so we can jump to a
@@ -753,7 +754,7 @@ impl CodegenWalker {
         }
     }
 
-    fn init_default_params(
+    async fn init_default_params(
         &mut self,
         parameters: &mut [VarInitNode],
         declared_arg_locations: &[RegisterVariant],
@@ -768,7 +769,7 @@ impl CodegenWalker {
 
                 // generate code for only the value, then copy by hand, because we
                 // pre-generated locations of the parameters above.
-                value.visit(self)?;
+                value.visit(self).await?;
                 let instruction =
                     Instruction::Copy(self.current_result, declared_arg_locations[idx]);
                 push_instruction!(self, instruction, span);
@@ -817,14 +818,17 @@ impl CodegenWalker {
         }
     }
 
-    fn visit_parameters(&mut self, nodes: &[VarInitNode]) -> Vec<RegisterVariant> {
-        nodes
-            .iter()
-            .map(|parameter| self.visit_parameter(parameter))
-            .collect::<Vec<_>>()
+    async fn visit_parameters(&mut self, nodes: &[VarInitNode]) -> Vec<RegisterVariant> {
+        let mut result = Vec::with_capacity(nodes.len());
+
+        for node in nodes {
+            result.push(self.visit_parameter(node).await);
+        }
+
+        result
     }
 
-    fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
+    async fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
         let node_span = node.span();
         let CallChain::Root { ref mut receiver, ref name, ref namespace } = &mut node.chain else {
             return Err(LpcError::new_bug("Invalid call chain").with_span(node.span));
@@ -832,14 +836,14 @@ impl CodegenWalker {
         let has_receiver = receiver.is_some();
 
         if name.as_str() == CATCH {
-            return self.emit_catch(node);
+            return self.emit_catch(node).await;
         }
 
         let argument_len = node.arguments.len();
         let mut arg_results = Vec::with_capacity(argument_len);
 
         for argument in &mut node.arguments {
-            argument.visit(self)?;
+            argument.visit(self).await?;
             arg_results.push(self.current_result);
         }
 
@@ -860,7 +864,7 @@ impl CodegenWalker {
             }
 
             if let Some(rcvr) = receiver {
-                rcvr.visit(self)?;
+                rcvr.visit(self).await?;
                 let receiver_result = self.current_result;
 
                 let name_register = self.register_counter.next().unwrap().as_local();
@@ -964,19 +968,19 @@ impl CodegenWalker {
         Ok(())
     }
 
-    fn visit_call_chain(&mut self, node: &mut CallNode) -> Result<()> {
+    async fn visit_call_chain(&mut self, node: &mut CallNode) -> Result<()> {
         let CallChain::Node(chain_node) = &mut node.chain else {
             return Err(LpcError::new_bug("Invalid call chain").with_span(node.span));
         };
 
-        chain_node.visit(self)?;
+        chain_node.visit(self).await?;
         let fp_loc = self.current_result;
 
         let argument_len = node.arguments.len();
         let mut arg_results = Vec::with_capacity(argument_len);
 
         for argument in &mut node.arguments {
-            argument.visit(self)?;
+            argument.visit(self).await?;
             arg_results.push(self.current_result);
         }
 
@@ -1009,12 +1013,13 @@ impl ContextHolder for CodegenWalker {
     }
 }
 
+#[async_trait]
 impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
-    fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()> {
+    async fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()> {
         let mut items = Vec::with_capacity(node.value.len());
         for member in &mut node.value {
-            let _ = member.visit(self);
+            let _ = member.visit(self).await;
             items.push(self.current_result);
         }
 
@@ -1031,14 +1036,14 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
-        node.rhs.visit(self)?;
+    async fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
+        node.rhs.visit(self).await?;
         let rhs_result = self.current_result;
         let lhs = &mut *node.lhs;
 
         match lhs {
             ExpressionNode::Var(_) => {
-                lhs.visit(self)?;
+                lhs.visit(self).await?;
                 let lhs_result = self.current_result;
                 trace!("assignment: lhs: {}, rhs: {}", lhs_result, rhs_result);
 
@@ -1054,9 +1059,9 @@ impl TreeWalker for CodegenWalker {
                 ref mut r,
                 ..
             }) => {
-                l.visit(self)?;
+                l.visit(self).await?;
                 let var_result = self.current_result;
-                r.visit(self)?;
+                r.visit(self).await?;
                 let index_result = self.current_result;
 
                 let store = Instruction::Store(rhs_result, var_result, index_result);
@@ -1077,8 +1082,8 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
-        node.l.visit(self)?;
+    async fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
+        node.l.visit(self).await?;
         let reg_left = self.current_result;
 
         // special handling for ops that require more than a single instruction
@@ -1087,7 +1092,7 @@ impl TreeWalker for CodegenWalker {
                 // Ranges need special handling that complicates this function otherwise, due to
                 // the visit to node.r needing to handle multiple results.
                 if let ExpressionNode::Range(range_node) = &mut *node.r {
-                    self.emit_range(reg_left, range_node)?;
+                    self.emit_range(reg_left, range_node).await?;
                     return Ok(());
                 }
             }
@@ -1098,7 +1103,7 @@ impl TreeWalker for CodegenWalker {
                 let instruction = Instruction::Jz(reg_left, Address(0));
                 push_instruction!(self, instruction, node.span);
 
-                node.r.visit(self)?;
+                node.r.visit(self).await?;
                 let reg_right = self.current_result;
                 self.schedule_backpatch(&end_label, self.current_address())?;
                 let instruction = Instruction::Jz(reg_right, Address(0));
@@ -1126,7 +1131,7 @@ impl TreeWalker for CodegenWalker {
                 let instruction = Instruction::Jnz(reg_result, Address(0));
                 push_instruction!(self, instruction, node.span);
 
-                node.r.visit(self)?;
+                node.r.visit(self).await?;
                 let reg_right = self.current_result;
                 let instruction = Instruction::Copy(reg_right, reg_result);
                 push_instruction!(self, instruction, node.span);
@@ -1139,7 +1144,7 @@ impl TreeWalker for CodegenWalker {
             BinaryOperation::Compose => {
                 // This literally just sets up a call to the compose() efun, and
                 // puts the result of it into a register.
-                node.r.visit(self)?;
+                node.r.visit(self).await?;
                 let reg_right = self.current_result;
 
                 push_instruction!(self, Instruction::ClearArgs, node.span);
@@ -1163,7 +1168,7 @@ impl TreeWalker for CodegenWalker {
             _ => { /* fallthrough */ }
         }
 
-        node.r.visit(self)?;
+        node.r.visit(self).await?;
         let reg_right = self.current_result;
 
         let reg_result = self.register_counter.next().unwrap().as_local();
@@ -1176,11 +1181,11 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
+    async fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
         for stmt in &mut node.body {
-            stmt.visit(self)?;
+            stmt.visit(self).await?;
         }
 
         self.context.scopes.pop();
@@ -1188,7 +1193,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
+    async fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
         if let Some(JumpTarget { break_target, .. }) = self.jump_targets.last() {
             self.schedule_backpatch(&break_target.clone(), self.current_address())?;
             let instruction = Instruction::Jmp(0.into());
@@ -1200,15 +1205,15 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
+    async fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
         match &node.chain {
-            CallChain::Root { .. } => self.visit_call_root(node),
-            CallChain::Node(_) => self.visit_call_chain(node),
+            CallChain::Root { .. } => self.visit_call_root(node).await,
+            CallChain::Node(_) => self.visit_call_chain(node).await,
         }
     }
 
     #[instrument(skip_all)]
-    fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
+    async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         let Some(prototype) = self.context.function_prototypes.get(&*node.name) else {
             return Err(LpcError::new(format!(
                 "closure prototype for {} not found",
@@ -1247,11 +1252,12 @@ impl TreeWalker for CodegenWalker {
         self.function_upvalue_counter.push();
 
         self.context.scopes.goto(node.scope_id); // XXX difference between closure and function def
-        let declared_arg_locations = node // XXX
-            .parameters
-            .as_ref()
-            .map(|nodes| self.visit_parameters(nodes))
-            .unwrap_or_default();
+
+        let declared_arg_locations = if let Some(parameters) = &node.parameters {
+            self.visit_parameters(parameters).await
+        } else {
+            Vec::new()
+        };
         let declared_arg_count = declared_arg_locations.len();
 
         self.closure_arg_locations.push(declared_arg_locations);
@@ -1273,7 +1279,7 @@ impl TreeWalker for CodegenWalker {
         self.insert_label(&start_label, self.current_address());
 
         for expression in &mut node.body {
-            expression.visit(self)?;
+            expression.visit(self).await?;
         }
 
         // return the current result if there is no explicit return.
@@ -1304,7 +1310,8 @@ impl TreeWalker for CodegenWalker {
                     &declared_arg_locations,
                     node.span,
                     populate_defaults_index.unwrap(),
-                )?;
+                )
+                .await?;
             }
         }
 
@@ -1353,7 +1360,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
+    async fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
         if let Some(JumpTarget {
             continue_target, ..
         }) = self.jump_targets.last()
@@ -1368,16 +1375,16 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_decl(&mut self, node: &mut DeclNode) -> Result<()> {
+    async fn visit_decl(&mut self, node: &mut DeclNode) -> Result<()> {
         for init in &mut node.initializations {
-            self.visit_var_init(init)?;
+            self.visit_var_init(init).await?;
         }
 
         Ok(())
     }
 
     #[instrument(skip_all)]
-    fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
+    async fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
         let start_label = self.new_label("do-while-start");
@@ -1389,12 +1396,12 @@ impl TreeWalker for CodegenWalker {
         let start_addr = self.current_address();
         self.insert_label(start_label.clone(), start_addr);
 
-        node.body.visit(self)?;
+        node.body.visit(self).await?;
 
         let continue_addr = self.current_address();
         self.insert_label(continue_label, continue_addr);
 
-        node.condition.visit(self)?;
+        node.condition.visit(self).await?;
 
         // Go back to the start of the loop if the result isn't zero
         self.schedule_backpatch(&start_label, self.current_address())?;
@@ -1409,7 +1416,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_float(&mut self, node: &mut FloatNode) -> Result<()> {
+    async fn visit_float(&mut self, node: &mut FloatNode) -> Result<()> {
         let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
         let instruction = Instruction::FConst(self.current_result, node.value);
@@ -1419,11 +1426,11 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
+    async fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
         if let Some(i) = &mut *node.initializer {
-            i.visit(self)?;
+            i.visit(self).await?;
         }
 
         let start_label = self.new_label("for-start");
@@ -1435,20 +1442,20 @@ impl TreeWalker for CodegenWalker {
         self.insert_label(start_label.clone(), start_addr);
 
         if let Some(cond) = &mut node.condition {
-            cond.visit(self)?;
+            cond.visit(self).await?;
 
             self.schedule_backpatch(&end_label, self.current_address())?;
             let instruction = Instruction::Jz(self.current_result, Address(0));
             push_instruction!(self, instruction, cond.span());
         };
 
-        node.body.visit(self)?;
+        node.body.visit(self).await?;
 
         let continue_addr = self.current_address();
         self.insert_label(continue_label, continue_addr);
 
         if let Some(i) = &mut node.incrementer {
-            i.visit(self)?;
+            i.visit(self).await?;
         }
 
         // go back to the start of the loop
@@ -1465,10 +1472,10 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
+    async fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
-        node.collection.visit(self)?;
+        node.collection.visit(self).await?;
         let collection_location = self.current_result;
 
         let index_location = self.assign_sym_location(FOREACH_INDEX);
@@ -1479,7 +1486,7 @@ impl TreeWalker for CodegenWalker {
 
         let locations = match &mut node.initializer {
             ForEachInit::Array(ref mut node) | ForEachInit::String(ref mut node) => {
-                node.visit(self)?;
+                node.visit(self).await?;
 
                 vec![self.current_result]
             }
@@ -1487,9 +1494,9 @@ impl TreeWalker for CodegenWalker {
                 ref mut key,
                 ref mut value,
             } => {
-                key.visit(self)?;
+                key.visit(self).await?;
                 let key_result = self.current_result;
-                value.visit(self)?;
+                value.visit(self).await?;
                 vec![key_result, self.current_result]
             }
         };
@@ -1532,7 +1539,7 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        node.body.visit(self)?;
+        node.body.visit(self).await?;
 
         let continue_addr = self.current_address();
         self.insert_label(continue_label, continue_addr);
@@ -1554,7 +1561,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
+    async fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         // Note we don't look to inherited files at all for this -
         // We're generating code for a function defined _in this object_
         let prototype = match self.context.function_prototypes.get(&*node.name) {
@@ -1585,7 +1592,7 @@ impl TreeWalker for CodegenWalker {
 
         self.context.scopes.goto_function(&node.name)?;
         let declared_arg_count = node.parameters.len();
-        let declared_arg_locations = self.visit_parameters(&node.parameters);
+        let declared_arg_locations = self.visit_parameters(&node.parameters).await;
 
         let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);
 
@@ -1596,7 +1603,7 @@ impl TreeWalker for CodegenWalker {
         self.insert_label(&start_label, self.current_address());
 
         for expression in &mut node.body {
-            expression.visit(self)?;
+            expression.visit(self).await?;
         }
 
         // insert a final return if one isn't already there.
@@ -1630,7 +1637,8 @@ impl TreeWalker for CodegenWalker {
                 &declared_arg_locations,
                 node.span,
                 populate_defaults_index.unwrap(),
-            )?;
+            )
+            .await?;
         }
 
         self.context.scopes.pop();
@@ -1659,12 +1667,12 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
+    async fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
         let mut applied_arguments = vec![];
         if let Some(args) = &mut node.arguments {
             for argument in args {
                 if let Some(n) = argument {
-                    n.visit(self)?;
+                    n.visit(self).await?;
                     applied_arguments.push(Some(self.current_result));
                 } else {
                     applied_arguments.push(None);
@@ -1676,7 +1684,7 @@ impl TreeWalker for CodegenWalker {
             // remote receiver, i.e. `call_other`
             match rcvr {
                 FunctionPtrReceiver::Static(rcvr_node) => {
-                    rcvr_node.visit(self)?;
+                    rcvr_node.visit(self).await?;
                     FunctionReceiver::Var(self.current_result)
                 }
 
@@ -1734,13 +1742,13 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
+    async fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
         let else_label = self.new_label("if-else");
         let end_label = self.new_label("if-end");
 
         // Visit the condition
-        node.condition.visit(self)?;
+        node.condition.visit(self).await?;
 
         // If the condition is false (i.e. equal to 0 or 0.0), jump to the end of the
         // "then" body. Insert a placeholder address, which we correct below
@@ -1750,7 +1758,7 @@ impl TreeWalker for CodegenWalker {
         push_instruction!(self, instruction, node.span);
 
         // Generate the main body of the statement
-        node.body.visit(self)?;
+        node.body.visit(self).await?;
 
         if node.else_clause.is_some() {
             self.schedule_backpatch(&end_label, self.current_address())?;
@@ -1763,7 +1771,7 @@ impl TreeWalker for CodegenWalker {
 
         // Generate the else clause code if necessary
         if let Some(n) = &mut *node.else_clause {
-            n.visit(self)?;
+            n.visit(self).await?;
 
             let addr = self.current_address();
             self.insert_label(end_label, addr);
@@ -1774,7 +1782,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_int(&mut self, node: &mut IntNode) -> Result<()> {
+    async fn visit_int(&mut self, node: &mut IntNode) -> Result<()> {
         let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
         let instruction = match node.value {
@@ -1788,7 +1796,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_label(&mut self, node: &mut LabelNode) -> Result<()> {
+    async fn visit_label(&mut self, node: &mut LabelNode) -> Result<()> {
         let address = self.current_address();
         match self.case_addresses.last_mut() {
             Some(x) => {
@@ -1805,14 +1813,14 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<()> {
+    async fn visit_mapping(&mut self, node: &mut MappingNode) -> Result<()> {
         let mut items = Vec::with_capacity(node.value.len() * 2);
 
         for (key, value) in &mut node.value {
-            key.visit(self)?;
+            key.visit(self).await?;
             items.push(self.current_result);
 
-            value.visit(self)?;
+            value.visit(self).await?;
             items.push(self.current_result);
         }
 
@@ -1831,7 +1839,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_program(&mut self, program: &mut ProgramNode) -> Result<()> {
+    async fn visit_program(&mut self, program: &mut ProgramNode) -> Result<()> {
         self.context.scopes.goto_root();
         self.setup_init();
         self.backpatch_maps.push(HashMap::new());
@@ -1845,7 +1853,7 @@ impl TreeWalker for CodegenWalker {
         // Hoist all global variables, and initialize them at the very start
         // of the program (i.e. at the time it's cloned)
         for node in global_init {
-            node.visit(self)?;
+            node.visit(self).await?;
         }
 
         // Insert a call to `create`, if it's been defined.
@@ -1863,17 +1871,17 @@ impl TreeWalker for CodegenWalker {
                 arguments: vec![],
                 span: None,
             };
-            call.visit(self)?;
+            call.visit(self).await?;
         }
 
         let mut ret = ReturnNode {
             value: None,
             span: None,
         };
-        ret.visit(self)?;
+        ret.visit(self).await?;
 
         for node in functions {
-            node.visit(self)?;
+            node.visit(self).await?;
         }
 
         let backpatch_map = self.backpatch_maps.pop().unwrap();
@@ -1893,16 +1901,16 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_range(&mut self, node: &mut RangeNode) -> Result<()> {
+    async fn visit_range(&mut self, node: &mut RangeNode) -> Result<()> {
         let mut result_left: Option<RegisterVariant> = None;
         let mut result_right: Option<RegisterVariant> = None;
         if let Some(expr) = &mut *node.l {
-            expr.visit(self)?;
+            expr.visit(self).await?;
             result_left = Some(self.current_result);
         }
 
         if let Some(expr) = &mut *node.r {
-            expr.visit(self)?;
+            expr.visit(self).await?;
             result_right = Some(self.current_result);
         }
 
@@ -1912,9 +1920,9 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()> {
+    async fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()> {
         if let Some(expression) = &mut node.value {
-            expression.visit(self)?;
+            expression.visit(self).await?;
             let copy = Instruction::Copy(self.current_result, Register(0).as_local());
             push_instruction!(self, copy, expression.span());
         }
@@ -1925,7 +1933,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_string(&mut self, node: &mut StringNode) -> Result<()> {
+    async fn visit_string(&mut self, node: &mut StringNode) -> Result<()> {
         let register = self.register_counter.next().unwrap().as_local();
         self.current_result = register;
 
@@ -1941,8 +1949,8 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_switch(&mut self, node: &mut SwitchNode) -> Result<()> {
-        node.expression.visit(self)?;
+    async fn visit_switch(&mut self, node: &mut SwitchNode) -> Result<()> {
+        node.expression.visit(self).await?;
         let expr_result = self.current_result;
 
         let test_label = self.new_label("switch-test");
@@ -1956,7 +1964,7 @@ impl TreeWalker for CodegenWalker {
         let addresses = vec![];
         self.case_addresses.push(addresses);
 
-        node.body.visit(self)?;
+        node.body.visit(self).await?;
 
         // skip over the tests that we're about to generate.
         let instruction = Instruction::Jmp(Address(0));
@@ -1989,7 +1997,7 @@ impl TreeWalker for CodegenWalker {
         for case_address in case_addresses {
             match case_address.0 .0 {
                 Some(mut case_expr) => {
-                    case_expr.visit(self)?;
+                    case_expr.visit(self).await?;
                     let case_result = self.current_result;
                     let test_result = self.register_counter.next().unwrap().as_local();
 
@@ -2048,18 +2056,18 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
+    async fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
         let result_reg = self.register_counter.next().unwrap().as_local();
         let else_label = self.new_label("ternary-else");
         let end_label = self.new_label("ternary-end");
 
-        node.condition.visit(self)?;
+        node.condition.visit(self).await?;
 
         self.schedule_backpatch(&else_label, self.current_address())?;
         let instruction = Instruction::Jz(self.current_result, Address(0));
         push_instruction!(self, instruction, node.span);
 
-        node.body.visit(self)?;
+        node.body.visit(self).await?;
         push_instruction!(
             self,
             Instruction::Copy(self.current_result, result_reg),
@@ -2073,7 +2081,7 @@ impl TreeWalker for CodegenWalker {
         let else_addr = self.current_address();
         self.insert_label(else_label, else_addr);
 
-        node.else_clause.visit(self)?;
+        node.else_clause.visit(self).await?;
         push_instruction!(
             self,
             Instruction::Copy(self.current_result, result_reg),
@@ -2088,8 +2096,8 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
-        node.expr.visit(self)?;
+    async fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
+        node.expr.visit(self).await?;
         let location = self.current_result;
 
         self.current_result = match node.op {
@@ -2147,7 +2155,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
+    async fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         if node.is_closure_arg_var() {
             let idx = closure_arg_number(node.name)?;
             let loc = self
@@ -2169,7 +2177,7 @@ impl TreeWalker for CodegenWalker {
                 span: node.span,
             };
 
-            return self.visit_function_ptr(&mut fptr_node);
+            return self.visit_function_ptr(&mut fptr_node).await;
         }
 
         let Some(sym) = self.context.lookup_var(node.name) else {
@@ -2192,7 +2200,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
+    async fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
         let symbol = self.context.lookup_var(node.name);
 
         let Some(sym) = symbol else {
@@ -2207,7 +2215,7 @@ impl TreeWalker for CodegenWalker {
         let upvalue = sym.upvalue;
 
         let current_register = if let Some(expression) = &mut node.value {
-            expression.visit(self)?;
+            expression.visit(self).await?;
 
             // TODO: This whole thing sucks. We'd rather have the `expression.visit()` call
             //       above put the result into the correct location directly.
@@ -2267,7 +2275,7 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
+    async fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
 
         let start_label = self.new_label("while-start");
@@ -2277,7 +2285,7 @@ impl TreeWalker for CodegenWalker {
         let start_addr = self.current_address();
         self.insert_label(start_label.clone(), start_addr);
 
-        node.condition.visit(self)?;
+        node.condition.visit(self).await?;
 
         let cond_result = self.current_result;
 
@@ -2285,7 +2293,7 @@ impl TreeWalker for CodegenWalker {
         let instruction = Instruction::Jz(cond_result, Address(0));
         push_instruction!(self, instruction, node.span);
 
-        node.body.visit(self)?;
+        node.body.visit(self).await?;
 
         // go back to the start of the loop
         self.schedule_backpatch(&start_label, self.current_address())?;
@@ -2405,11 +2413,11 @@ mod tests {
         walker
     }
 
-    fn walk_prog(prog: &str) -> CodegenWalker {
-        walk_code(prog).expect("failed to walk.")
+    async fn walk_prog(prog: &str) -> CodegenWalker {
+        walk_code(prog).await.expect("failed to walk.")
     }
 
-    fn walk_code(code: &str) -> Result<CodegenWalker> {
+    async fn walk_code(code: &str) -> Result<CodegenWalker> {
         let config = ConfigBuilder::default()
             .lib_dir(LIB_DIR)
             .simul_efun_file("/secure/simul_efuns")
@@ -2419,6 +2427,7 @@ mod tests {
         let compiler = CompilerBuilder::default().config(config).build()?;
         let (mut program, context) = compiler
             .parse_string(&LpcPath::new_in_game("/my_test.c", "/", LIB_DIR), code)
+            .await
             .expect("failed to parse");
 
         let context = apply_walker!(InheritanceWalker, program, context, false);
@@ -2428,7 +2437,7 @@ mod tests {
         let context = apply_walker!(SemanticCheckWalker, program, context, false);
 
         let mut walker = CodegenWalker::new(context);
-        let _ = program.visit(&mut walker);
+        let _ = program.visit(&mut walker).await;
 
         Ok(walker)
     }
@@ -2449,9 +2458,14 @@ mod tests {
         walker.function_stack.last().unwrap().instructions.clone()
     }
 
-    fn generate_init_instructions(prog: &str) -> Vec<Instruction> {
+    async fn generate_init_instructions(prog: &str) -> Vec<Instruction> {
         // walker_init_instructions(&mut walk_prog(prog))
-        walk_prog(prog).initializer.unwrap().instructions.clone()
+        walk_prog(prog)
+            .await
+            .initializer
+            .unwrap()
+            .instructions
+            .clone()
     }
 
     fn find_function<'a, K>(
@@ -2461,8 +2475,8 @@ mod tests {
         map.values().find(|f| f.name() == name)
     }
 
-    #[test]
-    fn test_visit_array_populates_the_instructions() {
+    #[tokio::test]
+    async fn test_visit_array_populates_the_instructions() {
         let mut walker = default_walker();
 
         let mut arr = ArrayNode::new(vec![
@@ -2471,7 +2485,7 @@ mod tests {
             ExpressionNode::from(vec![ExpressionNode::from(666)]),
         ]);
 
-        let _ = walker.visit_array(&mut arr);
+        let _ = walker.visit_array(&mut arr).await;
 
         let expected = vec![
             IConst(RegisterVariant::Local(Register(1)), 123),
@@ -2493,8 +2507,8 @@ mod tests {
     mod test_visit_assignment {
         use super::*;
 
-        #[test]
-        fn test_populates_the_instructions_for_globals() {
+        #[tokio::test]
+        async fn test_populates_the_instructions_for_globals() {
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
@@ -2519,7 +2533,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_assignment(&mut node);
+            let _ = walker.visit_assignment(&mut node).await;
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [
@@ -2532,8 +2546,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn test_populates_the_instructions_for_locals() {
+        #[tokio::test]
+        async fn test_populates_the_instructions_for_locals() {
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let local_id = context.scopes.push_new();
@@ -2555,7 +2569,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_assignment(&mut node);
+            let _ = walker.visit_assignment(&mut node).await;
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [
@@ -2568,8 +2582,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn test_populates_the_instructions_for_array_items() {
+        #[tokio::test]
+        async fn test_populates_the_instructions_for_array_items() {
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let local_id = context.scopes.push_new();
@@ -2596,7 +2610,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_assignment(&mut node);
+            let _ = walker.visit_assignment(&mut node).await;
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [
@@ -2619,8 +2633,8 @@ mod tests {
 
         use super::*;
 
-        #[test]
-        fn populates_the_instructions_for_ints() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_ints() {
             let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
@@ -2635,7 +2649,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -2656,8 +2670,8 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_floats() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_floats() {
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut sym = Symbol::new("foo", LpcType::Float(false));
@@ -2684,7 +2698,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node).await;
 
             let expected = vec![
                 FConst(
@@ -2707,8 +2721,8 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_strings() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_strings() {
             let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
@@ -2723,7 +2737,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node).await;
 
             let expected = vec![
                 SConst(RegisterVariant::Local(Register(1)), 0),
@@ -2744,8 +2758,8 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_arrays() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_arrays() {
             let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
@@ -2755,7 +2769,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
@@ -2776,8 +2790,8 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_indexes() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_indexes() {
             let context = CompilationContext::default();
             let mut walker = CodegenWalker::new(context);
 
@@ -2788,7 +2802,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
@@ -2806,8 +2820,8 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_slices() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_slices() {
             let mut walker = default_walker();
 
             let mut node = BinaryOpNode {
@@ -2821,7 +2835,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
@@ -2841,8 +2855,8 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_andand_expressions() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_andand_expressions() {
             let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
@@ -2853,7 +2867,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
@@ -2871,8 +2885,8 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_oror_expressions() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_oror_expressions() {
             let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
@@ -2883,7 +2897,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
@@ -2904,8 +2918,8 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_function_composition() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_function_composition() {
             let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
@@ -2926,7 +2940,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_binary_op(&mut node);
+            let _ = walker.visit_binary_op(&mut node).await;
 
             let expected = vec![
                 ClearPartialArgs,
@@ -2960,8 +2974,8 @@ mod tests {
 
         use super::*;
 
-        #[test]
-        fn breaks_out_of_while_loops() {
+        #[tokio::test]
+        async fn breaks_out_of_while_loops() {
             let code = r#"
                 void create() {
                     int i;
@@ -2976,7 +2990,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code).await;
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(2)), 10),
                 Lt(
@@ -3020,8 +3034,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn breaks_out_of_for_loops() {
+        #[tokio::test]
+        async fn breaks_out_of_for_loops() {
             let code = r#"
                 void create() {
                     for (int i = 0; i < 10; i += 1) {
@@ -3035,7 +3049,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code).await;
             let expected = vec![
                 IConst0(RegisterVariant::Local(Register(1))),
                 IConst(RegisterVariant::Local(Register(2)), 10),
@@ -3090,8 +3104,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn breaks_out_of_do_while_loops() {
+        #[tokio::test]
+        async fn breaks_out_of_do_while_loops() {
             let code = r#"
                 void create() {
                     int i;
@@ -3106,7 +3120,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code).await;
             let expected = vec![
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
@@ -3149,8 +3163,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn breaks_out_of_switch_statements() {
+        #[tokio::test]
+        async fn breaks_out_of_switch_statements() {
             let code = r#"
                 void create() {
                     int i = 666;
@@ -3167,7 +3181,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code).await;
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
                 Jmp(Address(16)),
@@ -3244,13 +3258,13 @@ mod tests {
             }
         }
 
-        #[test]
-        fn populates_the_instructions_for_local_calls() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_local_calls() {
             let mut walker = default_walker();
             let call = "mixed m = local_function(4 - 5);";
             let mut node = get_call_node(call, &mut walker.context);
 
-            walker.visit_call(&mut node).unwrap();
+            walker.visit_call(&mut node).await.unwrap();
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), -1),
@@ -3262,13 +3276,13 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_efuns() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_efuns() {
             let mut walker = default_walker();
             let call = "mixed m = dump(4 - 5);";
             let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut node);
+            let _ = walker.visit_call(&mut node).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), -1),
@@ -3280,13 +3294,13 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_simul_efuns() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_simul_efuns() {
             let mut walker = default_walker();
             let call = "mixed m = simul_efun(4 - 5);";
             let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut node);
+            let _ = walker.visit_call(&mut node).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), -1),
@@ -3298,18 +3312,18 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_call_other() {
-            let check = |code: &str, expected: &[Instruction]| {
+        #[tokio::test]
+        async fn populates_the_instructions_for_call_other() {
+            let check = |code: &'static str, expected: Vec<Instruction>| async move {
                 let wrapped = format!("void create() {{ {}; }}", code);
-                let (prog, _, _) = compile_prog(&wrapped);
+                let (prog, _, _) = compile_prog(&wrapped).await;
 
                 // `closure-1` is the outer closure that refers to $1.
                 let instructions = &find_function(&prog.functions, "create")
                     .unwrap()
                     .instructions;
 
-                assert_eq!(instructions, expected);
+                assert_eq!(instructions, &expected);
             };
 
             let expected = vec![
@@ -3328,7 +3342,7 @@ mod tests {
                 ),
                 Ret,
             ];
-            check(r#""foo"->print(4 - 5)"#, &expected);
+            check(r#""foo"->print(4 - 5)"#, expected).await;
 
             let expected = vec![
                 SConst(RegisterVariant::Local(Register(1)), 1),
@@ -3348,20 +3362,20 @@ mod tests {
                 ),
                 Ret,
             ];
-            check(r#"call_other("foo", "print", 4 - 5)"#, &expected);
+            check(r#"call_other("foo", "print", 4 - 5)"#, expected).await;
         }
 
-        #[test]
-        fn populates_the_instructions_for_sizeof() {
-            let check = |code: &str, expected: &[Instruction]| {
+        #[tokio::test]
+        async fn populates_the_instructions_for_sizeof() {
+            let check = |code: &'static str, expected: Vec<Instruction>| async move {
                 let wrapped = format!("void create() {{ {}; }}", code);
-                let (prog, _, _) = compile_prog(&wrapped);
+                let (prog, _, _) = compile_prog(&wrapped).await;
 
                 let instructions = &find_function(&prog.functions, "create")
                     .unwrap()
                     .instructions;
 
-                assert_eq!(instructions, expected);
+                assert_eq!(instructions, &expected);
             };
 
             let expected = vec![
@@ -3379,13 +3393,13 @@ mod tests {
                 ),
                 Ret,
             ];
-            check(r#"sizeof(({ 1, 2, "c" }))"#, &expected);
+            check(r#"sizeof(({ 1, 2, "c" }))"#, expected).await;
         }
 
-        #[test]
-        fn populates_the_instructions_for_catch() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_catch() {
             let call = "void create() { catch(12 / 0); }";
-            let (prog, _, _) = compile_prog(call);
+            let (prog, _, _) = compile_prog(call).await;
             let instructions = &find_function(&prog.functions, "create")
                 .unwrap()
                 .instructions;
@@ -3406,8 +3420,8 @@ mod tests {
             assert_eq!(instructions, &expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_function_pointers() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_function_pointers() {
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("marfin")
@@ -3428,7 +3442,7 @@ mod tests {
             context.scopes.current_mut().unwrap().insert(sym);
 
             let call = "void create() { function my_func = (: $1 :); my_func(666); }";
-            let (prog, _, _) = compile_prog(call);
+            let (prog, _, _) = compile_prog(call).await;
             let instructions = &find_function(&prog.functions, "create")
                 .unwrap()
                 .instructions;
@@ -3454,8 +3468,8 @@ mod tests {
             assert_eq!(instructions, &expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_global_function_pointers() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_global_function_pointers() {
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("marfin")
@@ -3475,7 +3489,7 @@ mod tests {
             context.scopes.current_mut().unwrap().insert(sym);
 
             let call = "function my_func = (: $1 :); void create() { my_func(666); }";
-            let (prog, _, _) = compile_prog(call);
+            let (prog, _, _) = compile_prog(call).await;
             let instructions = &find_function(&prog.functions, "create")
                 .unwrap()
                 .instructions;
@@ -3495,8 +3509,8 @@ mod tests {
             assert_eq!(instructions, &expected);
         }
 
-        #[test]
-        fn copies_non_void_call_results() {
+        #[tokio::test]
+        async fn copies_non_void_call_results() {
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("marfin")
@@ -3514,7 +3528,7 @@ mod tests {
             let call = "mixed m = marfin(666);";
             let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut node);
+            let _ = walker.visit_call(&mut node).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -3530,8 +3544,8 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn does_not_copy_void_call_results() {
+        #[tokio::test]
+        async fn does_not_copy_void_call_results() {
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("void_thing")
@@ -3549,7 +3563,7 @@ mod tests {
             let call = "mixed m = void_thing(666);";
             let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut node);
+            let _ = walker.visit_call(&mut node).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -3561,13 +3575,13 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn copies_non_void_efun_results() {
+        #[tokio::test]
+        async fn copies_non_void_efun_results() {
             let mut walker = default_walker();
             let call = r#"mixed m = clone_object("/foo.c");"#;
             let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut node);
+            let _ = walker.visit_call(&mut node).await;
 
             let expected = vec![
                 SConst(RegisterVariant::Local(Register(1)), 0),
@@ -3583,13 +3597,13 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn does_not_copy_void_efun_results() {
+        #[tokio::test]
+        async fn does_not_copy_void_efun_results() {
             let mut walker = default_walker();
             let call = r#"mixed m = dump("lkajsdflkajsdf");"#;
             let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut node);
+            let _ = walker.visit_call(&mut node).await;
 
             let expected = vec![
                 SConst(RegisterVariant::Local(Register(1)), 0),
@@ -3601,8 +3615,8 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn handles_ellipsis_functions() {
+        #[tokio::test]
+        async fn handles_ellipsis_functions() {
             let mut context = CompilationContext::default();
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_func")
@@ -3622,7 +3636,7 @@ mod tests {
             let call = "mixed m = my_func(\"hello!\", 42, \"cool beans\");";
             let mut node = get_call_node(call, &mut walker.context);
 
-            let _ = walker.visit_call(&mut node);
+            let _ = walker.visit_call(&mut node).await;
 
             let expected = vec![
                 SConst(RegisterVariant::Local(Register(1)), 0),
@@ -3638,8 +3652,8 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn handles_chained_calls() {
+        #[tokio::test]
+        async fn handles_chained_calls() {
             let call = "mixed m = papplyv(dump, ({ \"foo\", 25 }))();";
 
             // do a stupid dance to get the efuns into the context
@@ -3650,11 +3664,11 @@ mod tests {
 
             // This walk by Scope Walker will actually populate the efuns.
             let mut walker = ScopeWalker::new(ctx);
-            walker.visit_call(&mut node).unwrap();
+            walker.visit_call(&mut node).await.unwrap();
 
             let ctx = walker.into_context();
             let mut walker = CodegenWalker::new(ctx);
-            walker.visit_call(&mut node).unwrap();
+            walker.visit_call(&mut node).await.unwrap();
 
             let expected = vec![
                 ClearPartialArgs,
@@ -3692,8 +3706,8 @@ mod tests {
     mod test_visit_block {
         use super::*;
 
-        #[test]
-        fn test_visit_block_populates_instructions() {
+        #[tokio::test]
+        async fn test_visit_block_populates_instructions() {
             let block = "void marf() { { int a = '🏯'; dump(a); } }";
             let mut prog_node = lpc_parser::ProgramParser::new()
                 .parse(&mut CompilationContext::default(), LexWrapper::new(block))
@@ -3710,11 +3724,11 @@ mod tests {
             };
 
             let mut scope_walker = ScopeWalker::default();
-            let _ = scope_walker.visit_block(node);
+            let _ = scope_walker.visit_block(node).await;
 
             let context = scope_walker.into_context();
             let mut walker = CodegenWalker::new(context);
-            let _ = walker.visit_block(node);
+            let _ = walker.visit_block(node).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 127983),
@@ -3727,8 +3741,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_visit_comma_expression_populates_the_instructions() {
+    #[tokio::test]
+    async fn test_visit_comma_expression_populates_the_instructions() {
         let mut walker = default_walker();
 
         let mut expr = CommaExpressionNode::new(vec![
@@ -3737,7 +3751,7 @@ mod tests {
             ExpressionNode::from(vec![ExpressionNode::from(666)]),
         ]);
 
-        let _ = walker.visit_comma_expression(&mut expr);
+        let _ = walker.visit_comma_expression(&mut expr).await;
 
         let expected = vec![
             IConst(RegisterVariant::Local(Register(1)), 123),
@@ -3773,32 +3787,32 @@ mod tests {
             }
         }
 
-        fn compile(code: &str) -> CodegenWalker {
+        async fn compile(code: &str) -> CodegenWalker {
             let mut context = CompilationContext::default();
 
             let mut node = get_closure_node(code, &mut context);
 
             let mut prototype_walker = FunctionPrototypeWalker::new(context);
-            let _ = prototype_walker.visit_closure(&mut node);
+            let _ = prototype_walker.visit_closure(&mut node).await;
             let mut context = prototype_walker.into_context();
 
             context.scopes.push_new(); // global scope
 
             let mut scope_walker = ScopeWalker::new(context);
-            let _ = scope_walker.visit_closure(&mut node);
+            let _ = scope_walker.visit_closure(&mut node).await;
 
             let mut context = scope_walker.into_context();
             context.scopes.goto_root();
 
             let mut walker = CodegenWalker::new(context);
-            let _ = walker.visit_closure(&mut node);
+            let _ = walker.visit_closure(&mut node).await;
 
             walker
         }
 
-        #[test]
-        fn populates_the_instructions() {
-            let mut walker = compile("function f = (: dump(4 + 5 + $1) :);");
+        #[tokio::test]
+        async fn populates_the_instructions() {
+            let mut walker = compile("function f = (: dump(4 + 5 + $1) :);").await;
 
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),
@@ -3817,9 +3831,9 @@ mod tests {
             );
         }
 
-        #[test]
-        fn handles_ellipses() {
-            let mut walker = compile("function f = (: [int i, ...] argv :);");
+        #[tokio::test]
+        async fn handles_ellipses() {
+            let mut walker = compile("function f = (: [int i, ...] argv :);").await;
 
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),
@@ -3834,10 +3848,10 @@ mod tests {
             );
         }
 
-        #[test]
-        fn populates_the_default_arguments() {
+        #[tokio::test]
+        async fn populates_the_default_arguments() {
             let mut walker =
-                compile("function f = (: [int i, int j = 666, float d = 3.54] i * j :);");
+                compile("function f = (: [int i, int j = 666, float d = 3.54] i * j :);").await;
 
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),
@@ -3870,8 +3884,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn sets_the_correct_upvalue_information() {
+        #[tokio::test]
+        async fn sets_the_correct_upvalue_information() {
             let code = indoc! {r##"
                 int g = 42;
 
@@ -3883,7 +3897,7 @@ mod tests {
                     :);
                 }
             "##};
-            let walker = walk_prog(code);
+            let walker = walk_prog(code).await;
 
             let closure = walker
                 .functions
@@ -3915,8 +3929,8 @@ mod tests {
 
         use super::*;
 
-        #[test]
-        fn continues_while_loops() {
+        #[tokio::test]
+        async fn continues_while_loops() {
             let code = r#"
                 void create() {
                     int i;
@@ -3931,7 +3945,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code).await;
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(2)), 10),
                 Lt(
@@ -3975,8 +3989,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn continues_for_loops() {
+        #[tokio::test]
+        async fn continues_for_loops() {
             let code = r#"
                 void create() {
                     for (int i = 0; i < 10; i += 1) {
@@ -3990,7 +4004,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code).await;
             let expected = vec![
                 IConst0(RegisterVariant::Local(Register(1))),
                 IConst(RegisterVariant::Local(Register(2)), 10),
@@ -4045,8 +4059,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn continues_do_while_loops() {
+        #[tokio::test]
+        async fn continues_do_while_loops() {
             let code = r#"
                 void create() {
                     int i;
@@ -4061,7 +4075,7 @@ mod tests {
                 }
             "#;
 
-            let mut walker = walk_prog(code);
+            let mut walker = walk_prog(code).await;
             let expected = vec![
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
@@ -4105,8 +4119,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_decl_sets_scope_and_instructions() {
+    #[tokio::test]
+    async fn test_decl_sets_scope_and_instructions() {
         let call = "int foo = 1, *bar = ({ 56 });";
         let mut prog_node: ProgramNode = lpc_parser::ProgramParser::new()
             .parse(&mut CompilationContext::default(), LexWrapper::new(call))
@@ -4118,11 +4132,11 @@ mod tests {
         };
 
         let mut scope_walker = ScopeWalker::default();
-        let _ = scope_walker.visit_decl(node);
+        let _ = scope_walker.visit_decl(node).await;
 
         let context = scope_walker.into_context();
         let mut walker = CodegenWalker::new(context);
-        let _ = walker.visit_decl(node);
+        let _ = walker.visit_decl(node).await;
 
         let expected = vec![
             IConst1(RegisterVariant::Local(Register(1))),
@@ -4179,8 +4193,8 @@ mod tests {
         use super::*;
         use crate::compiler::ast::do_while_node::DoWhileNode;
 
-        #[test]
-        fn test_populates_the_instructions() {
+        #[tokio::test]
+        async fn test_populates_the_instructions() {
             let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
@@ -4200,7 +4214,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_do_while(&mut node);
+            let _ = walker.visit_do_while(&mut node).await;
 
             let expected = vec![
                 SConst(RegisterVariant::Local(Register(1)), 0),
@@ -4225,8 +4239,8 @@ mod tests {
         use super::*;
         use crate::compiler::ast::for_node::ForNode;
 
-        #[test]
-        fn populates_the_instructions() {
+        #[tokio::test]
+        async fn populates_the_instructions() {
             let var = VarNode {
                 name: ustr("i"),
                 span: None,
@@ -4269,13 +4283,13 @@ mod tests {
             };
 
             let mut scope_walker = ScopeWalker::default();
-            let _ = scope_walker.visit_for(&mut node);
+            let _ = scope_walker.visit_for(&mut node).await;
 
             let context = scope_walker.into_context();
             let mut walker = CodegenWalker::new(context);
             walker.backpatch_maps.push(HashMap::new());
 
-            walker.visit_for(&mut node).unwrap();
+            walker.visit_for(&mut node).await.unwrap();
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 10),
@@ -4303,7 +4317,7 @@ mod tests {
     mod test_visit_function_def {
         use super::*;
 
-        fn assert_compiles_to(code: &str, expected: Vec<Instruction>) {
+        async fn assert_compiles_to(code: &str, expected: Vec<Instruction>) {
             let mut prototype_walker = FunctionPrototypeWalker::default();
 
             let mut prog_node: ProgramNode = lpc_parser::ProgramParser::new()
@@ -4316,25 +4330,25 @@ mod tests {
                 panic!("Didn't receive a function def?");
             };
 
-            let _ = prototype_walker.visit_function_def(node);
+            let _ = prototype_walker.visit_function_def(node).await;
             let mut context = prototype_walker.into_context();
 
             context.scopes.push_new(); // global scope
 
             let mut scope_walker = ScopeWalker::new(context);
-            let _ = scope_walker.visit_function_def(node);
+            let _ = scope_walker.visit_function_def(node).await;
 
             let mut context = scope_walker.into_context();
             context.scopes.goto_root();
 
             let mut walker = CodegenWalker::new(context);
-            let _ = walker.visit_function_def(node);
+            let _ = walker.visit_function_def(node).await;
 
             assert_eq!(walker_function_instructions(&mut walker, "main"), expected);
         }
 
-        #[test]
-        fn populates_the_data() {
+        #[tokio::test]
+        async fn populates_the_data() {
             assert_compiles_to(
                 "int main(int i) { return i + 4; }",
                 vec![
@@ -4350,11 +4364,12 @@ mod tests {
                     ),
                     Ret,
                 ],
-            );
+            )
+            .await;
         }
 
-        #[test]
-        fn handles_ellipses() {
+        #[tokio::test]
+        async fn handles_ellipses() {
             assert_compiles_to(
                 "int main(int i, ...) { return argv; }",
                 vec![
@@ -4365,11 +4380,12 @@ mod tests {
                     ),
                     Ret,
                 ],
-            );
+            )
+            .await;
         }
 
-        #[test]
-        fn populates_the_default_arguments() {
+        #[tokio::test]
+        async fn populates_the_default_arguments() {
             assert_compiles_to(
                 "int main(int i, int j = 666, float d = 3.54) { return i * j; }",
                 vec![
@@ -4398,7 +4414,8 @@ mod tests {
                     ),
                     Jmp(Address(3)),
                 ],
-            );
+            )
+            .await;
         }
     }
 
@@ -4406,8 +4423,8 @@ mod tests {
         use super::*;
         use crate::compiler::ast::function_ptr_node::FunctionPtrNode;
 
-        #[test]
-        fn populates_the_instructions_for_efuns() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_efuns() {
             let mut node = FunctionPtrNode {
                 receiver: None,
                 name: ustr("dump"),
@@ -4416,7 +4433,7 @@ mod tests {
             };
 
             let mut walker = default_walker();
-            walker.visit_function_ptr(&mut node).unwrap();
+            walker.visit_function_ptr(&mut node).await.unwrap();
 
             let expected = vec![
                 ClearPartialArgs,
@@ -4430,8 +4447,8 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn populates_the_instructions_for_simul_efuns() {
+        #[tokio::test]
+        async fn populates_the_instructions_for_simul_efuns() {
             let mut node = FunctionPtrNode {
                 receiver: None,
                 name: ustr("simul_efun"),
@@ -4440,7 +4457,7 @@ mod tests {
             };
 
             let mut walker = default_walker();
-            walker.visit_function_ptr(&mut node).unwrap();
+            walker.visit_function_ptr(&mut node).await.unwrap();
 
             let expected = vec![
                 ClearPartialArgs,
@@ -4460,8 +4477,8 @@ mod tests {
 
         use super::*;
 
-        #[test]
-        fn test_populates_the_instructions() {
+        #[tokio::test]
+        async fn test_populates_the_instructions() {
             let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
@@ -4486,7 +4503,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_if(&mut node);
+            let _ = walker.visit_if(&mut node).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4512,17 +4529,17 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_visit_int_populates_the_instructions() {
+    #[tokio::test]
+    async fn test_visit_int_populates_the_instructions() {
         let mut walker = default_walker();
 
         let mut tree = IntNode::new(666);
         let mut tree0 = IntNode::new(0);
         let mut tree1 = IntNode::new(1);
 
-        let _ = walker.visit_int(&mut tree);
-        let _ = walker.visit_int(&mut tree0);
-        let _ = walker.visit_int(&mut tree1);
+        let _ = walker.visit_int(&mut tree).await;
+        let _ = walker.visit_int(&mut tree0).await;
+        let _ = walker.visit_int(&mut tree1).await;
 
         let expected = vec![
             IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4536,8 +4553,8 @@ mod tests {
     mod test_visit_program {
         use super::*;
 
-        #[test]
-        fn populates_the_instructions() {
+        #[tokio::test]
+        async fn populates_the_instructions() {
             let prog = "
                 void create() {
                     1 + 3 - 5;
@@ -4545,7 +4562,7 @@ mod tests {
                 }
             ";
 
-            let walker = walk_prog(prog);
+            let walker = walk_prog(prog).await;
 
             let expected = vec![ClearArgs, Call(0), Ret];
 
@@ -4571,8 +4588,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn initializes_the_globals() {
+        #[tokio::test]
+        async fn initializes_the_globals() {
             let prog = r#"
                 int j = 123;
                 string q = "cool";
@@ -4581,7 +4598,7 @@ mod tests {
                 }
             "#;
 
-            let instructions = generate_init_instructions(prog);
+            let instructions = generate_init_instructions(prog).await;
 
             let expected = [
                 IConst(RegisterVariant::Local(Register(1)), 123),
@@ -4600,8 +4617,8 @@ mod tests {
             assert_eq!(instructions, expected);
         }
 
-        #[test]
-        fn calls_create_if_create_is_defined() {
+        #[tokio::test]
+        async fn calls_create_if_create_is_defined() {
             let prog = r#"
                 int q = 666;
                 int marf() {
@@ -4612,7 +4629,7 @@ mod tests {
                 }
             "#;
 
-            let instructions = generate_init_instructions(prog);
+            let instructions = generate_init_instructions(prog).await;
 
             let expected = [
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4628,8 +4645,8 @@ mod tests {
             assert_eq!(instructions, expected);
         }
 
-        #[test]
-        fn tracks_global_registers_over_multiple_sections() {
+        #[tokio::test]
+        async fn tracks_global_registers_over_multiple_sections() {
             let prog = r#"
                 int q = 666;
                 int marf() {
@@ -4638,7 +4655,7 @@ mod tests {
                 int r = 777;
             "#;
 
-            let instructions = generate_init_instructions(prog);
+            let instructions = generate_init_instructions(prog).await;
 
             let expected = [
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4658,12 +4675,12 @@ mod tests {
         }
     }
 
-    #[test]
-    fn visit_return_populates_the_instructions() {
+    #[tokio::test]
+    async fn visit_return_populates_the_instructions() {
         let mut walker = default_walker();
 
         let mut node = ReturnNode::new(Some(ExpressionNode::from(IntNode::new(666))));
-        let _ = walker.visit_return(&mut node);
+        let _ = walker.visit_return(&mut node).await;
 
         let expected = vec![
             IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4680,23 +4697,23 @@ mod tests {
 
         let mut walker = default_walker();
         let mut node = ReturnNode::new(None);
-        let _ = walker.visit_return(&mut node);
+        let _ = walker.visit_return(&mut node).await;
 
         let expected = vec![Ret];
 
         assert_eq!(walker_init_instructions(&mut walker), expected);
     }
 
-    #[test]
-    fn test_visit_string_populates_the_instructions() {
+    #[tokio::test]
+    async fn test_visit_string_populates_the_instructions() {
         let mut walker = default_walker();
         let mut node = StringNode::new("marf");
         let mut node2 = StringNode::new("tacos");
         let mut node3 = StringNode::new("marf");
 
-        let _ = walker.visit_string(&mut node);
-        let _ = walker.visit_string(&mut node2);
-        let _ = walker.visit_string(&mut node3);
+        let _ = walker.visit_string(&mut node).await;
+        let _ = walker.visit_string(&mut node2).await;
+        let _ = walker.visit_string(&mut node3).await;
 
         let expected = vec![
             SConst(RegisterVariant::Local(Register(1)), 0),
@@ -4710,8 +4727,8 @@ mod tests {
     mod test_visit_switch {
         use super::*;
 
-        #[test]
-        fn populates_the_instructions() {
+        #[tokio::test]
+        async fn populates_the_instructions() {
             let code = r#"
                 void create() {
                     switch(666) {
@@ -4728,7 +4745,7 @@ mod tests {
                 }
             "#;
 
-            let walker = walk_prog(code);
+            let walker = walk_prog(code).await;
             let func = walker
                 .functions
                 .values()
@@ -4781,8 +4798,8 @@ mod tests {
         use super::*;
         use crate::compiler::ast::ternary_node::TernaryNode;
 
-        #[test]
-        fn populates_the_instructions() {
+        #[tokio::test]
+        async fn populates_the_instructions() {
             let mut node = TernaryNode {
                 condition: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
                     l: Box::new(ExpressionNode::from(2)),
@@ -4798,7 +4815,7 @@ mod tests {
             let mut walker = CodegenWalker::new(CompilationContext::default());
             walker.backpatch_maps.push(HashMap::new());
 
-            walker.visit_ternary(&mut node).unwrap();
+            walker.visit_ternary(&mut node).await.unwrap();
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(2)), 2),
@@ -4829,7 +4846,7 @@ mod tests {
     mod test_unary_op {
         use super::*;
 
-        fn setup(op: UnaryOperation, is_post: bool) -> CodegenWalker {
+        async fn setup(op: UnaryOperation, is_post: bool) -> CodegenWalker {
             let mut walker = default_walker();
             let mut node = UnaryOpNode {
                 op,
@@ -4838,16 +4855,16 @@ mod tests {
                 is_post,
             };
 
-            let _ = walker.visit_unary_op(&mut node);
+            let _ = walker.visit_unary_op(&mut node).await;
             walker
         }
 
         mod negate {
             use super::*;
 
-            #[test]
-            fn populates_instructions() {
-                let mut walker = setup(UnaryOperation::Negate, false);
+            #[tokio::test]
+            async fn populates_instructions() {
+                let mut walker = setup(UnaryOperation::Negate, false).await;
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4866,9 +4883,9 @@ mod tests {
         mod inc {
             use super::*;
 
-            #[test]
-            fn populates_instructions_for_pre() {
-                let mut walker = setup(UnaryOperation::Inc, false);
+            #[tokio::test]
+            async fn populates_instructions_for_pre() {
+                let mut walker = setup(UnaryOperation::Inc, false).await;
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4878,9 +4895,9 @@ mod tests {
                 assert_eq!(walker_init_instructions(&mut walker), expected);
             }
 
-            #[test]
-            fn populates_instructions_for_post() {
-                let mut walker = setup(UnaryOperation::Inc, true);
+            #[tokio::test]
+            async fn populates_instructions_for_post() {
+                let mut walker = setup(UnaryOperation::Inc, true).await;
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4898,9 +4915,9 @@ mod tests {
         mod dec {
             use super::*;
 
-            #[test]
-            fn populates_instructions_for_pre() {
-                let mut walker = setup(UnaryOperation::Dec, false);
+            #[tokio::test]
+            async fn populates_instructions_for_pre() {
+                let mut walker = setup(UnaryOperation::Dec, false).await;
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4910,9 +4927,9 @@ mod tests {
                 assert_eq!(walker_init_instructions(&mut walker), expected);
             }
 
-            #[test]
-            fn populates_instructions_for_post() {
-                let mut walker = setup(UnaryOperation::Dec, true);
+            #[tokio::test]
+            async fn populates_instructions_for_post() {
+                let mut walker = setup(UnaryOperation::Dec, true).await;
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4930,9 +4947,9 @@ mod tests {
         mod bang {
             use super::*;
 
-            #[test]
-            fn populates_instructions() {
-                let mut walker = setup(UnaryOperation::Bang, false);
+            #[tokio::test]
+            async fn populates_instructions() {
+                let mut walker = setup(UnaryOperation::Bang, false).await;
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4949,9 +4966,9 @@ mod tests {
         mod bitwise_not {
             use super::*;
 
-            #[test]
-            fn populates_instructions() {
-                let mut walker = setup(UnaryOperation::BitwiseNot, false);
+            #[tokio::test]
+            async fn populates_instructions() {
+                let mut walker = setup(UnaryOperation::BitwiseNot, false).await;
 
                 let expected = vec![
                     IConst(RegisterVariant::Local(Register(1)), 666),
@@ -4972,8 +4989,8 @@ mod tests {
         use super::*;
         use crate::test_support::compile_prog;
 
-        #[test]
-        fn test_visit_var_loads_the_var_and_sets_the_result_for_globals() {
+        #[tokio::test]
+        async fn test_visit_var_loads_the_var_and_sets_the_result_for_globals() {
             let mut context = CompilationContext::default();
             context.scopes.push_new();
 
@@ -4997,7 +5014,7 @@ mod tests {
                 external_capture: false,
             };
 
-            let _ = walker.visit_var(&mut node);
+            let _ = walker.visit_var(&mut node).await;
             assert_eq!(
                 walker.current_result,
                 RegisterVariant::Global(Register(666))
@@ -5007,8 +5024,8 @@ mod tests {
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn test_visit_var_sets_the_result_for_locals() {
+        #[tokio::test]
+        async fn test_visit_var_sets_the_result_for_locals() {
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
@@ -5037,15 +5054,15 @@ mod tests {
 
             let mut node = VarNode::new("marf");
 
-            let _ = walker.visit_var(&mut node);
+            let _ = walker.visit_var(&mut node).await;
             assert_eq!(walker.current_result, RegisterVariant::Local(Register(666)));
 
             let expected = vec![];
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
 
-        #[test]
-        fn test_closure_positional_arguments() {
+        #[tokio::test]
+        async fn test_closure_positional_arguments() {
             let code = indoc! { r##"
                 function maker() {
                     return (: [int i] dump("i", $1); (: i :) :);
@@ -5057,7 +5074,7 @@ mod tests {
                 }
             "## };
 
-            let (prog, _, _) = compile_prog(code);
+            let (prog, _, _) = compile_prog(code).await;
 
             // `closure-1` is the outer closure that refers to $1.
             let instructions = &find_function(&prog.functions, "closure-1")
@@ -5088,7 +5105,7 @@ mod tests {
             CodegenWalker::new(context)
         }
 
-        fn setup_var(type_: LpcType, walker: &mut CodegenWalker) {
+        async fn setup_var(type_: LpcType, walker: &mut CodegenWalker) {
             let scope_id = walker.context.scopes.current().unwrap().id;
 
             let sym = Symbol {
@@ -5113,10 +5130,10 @@ mod tests {
             new_sym.scope_id = scope_id;
             insert_symbol(walker, new_sym);
 
-            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node).await;
         }
 
-        fn setup_literal(type_: LpcType, value: ExpressionNode, walker: &mut CodegenWalker) {
+        async fn setup_literal(type_: LpcType, value: ExpressionNode, walker: &mut CodegenWalker) {
             let mut node = VarInitNode {
                 type_,
                 name: ustr("muffins"),
@@ -5129,18 +5146,19 @@ mod tests {
 
             insert_symbol(walker, Symbol::from(&mut node));
 
-            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node).await;
         }
 
-        #[test]
-        fn test_does_not_copy_mapping_literals() {
+        #[tokio::test]
+        async fn test_does_not_copy_mapping_literals() {
             let mut walker = setup();
             let pairs = vec![(ExpressionNode::from("foo"), ExpressionNode::from("bar"))];
             setup_literal(
                 LpcType::Mapping(false),
                 ExpressionNode::Mapping(MappingNode::new(pairs, None)),
                 &mut walker,
-            );
+            )
+            .await;
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -5155,10 +5173,10 @@ mod tests {
             );
         }
 
-        #[test]
-        fn test_copies_mapping_vars() {
+        #[tokio::test]
+        async fn test_copies_mapping_vars() {
             let mut walker = setup();
-            setup_var(LpcType::Mapping(false), &mut walker);
+            setup_var(LpcType::Mapping(false), &mut walker).await;
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -5169,14 +5187,15 @@ mod tests {
             );
         }
 
-        #[test]
-        fn test_does_not_copy_int_literals() {
+        #[tokio::test]
+        async fn test_does_not_copy_int_literals() {
             let mut walker = setup();
             setup_literal(
                 LpcType::Int(false),
                 ExpressionNode::Int(IntNode::new(123)),
                 &mut walker,
-            );
+            )
+            .await;
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -5184,10 +5203,10 @@ mod tests {
             );
         }
 
-        #[test]
-        fn test_copies_int_vars() {
+        #[tokio::test]
+        async fn test_copies_int_vars() {
             let mut walker = setup();
-            setup_var(LpcType::Int(false), &mut walker);
+            setup_var(LpcType::Int(false), &mut walker).await;
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -5198,14 +5217,15 @@ mod tests {
             );
         }
 
-        #[test]
-        fn test_does_not_copy_float_literals() {
+        #[tokio::test]
+        async fn test_does_not_copy_float_literals() {
             let mut walker = setup();
             setup_literal(
                 LpcType::Float(false),
                 ExpressionNode::Float(FloatNode::new(123.0)),
                 &mut walker,
-            );
+            )
+            .await;
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -5216,10 +5236,10 @@ mod tests {
             );
         }
 
-        #[test]
-        fn test_copies_float_vars() {
+        #[tokio::test]
+        async fn test_copies_float_vars() {
             let mut walker = setup();
-            setup_var(LpcType::Float(false), &mut walker);
+            setup_var(LpcType::Float(false), &mut walker).await;
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -5230,14 +5250,15 @@ mod tests {
             );
         }
 
-        #[test]
-        fn test_does_not_copy_string_literals() {
+        #[tokio::test]
+        async fn test_does_not_copy_string_literals() {
             let mut walker = setup();
             setup_literal(
                 LpcType::Int(true),
                 ExpressionNode::String(StringNode::new("foo")),
                 &mut walker,
-            );
+            )
+            .await;
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -5245,10 +5266,10 @@ mod tests {
             );
         }
 
-        #[test]
-        fn test_copies_string_vars() {
+        #[tokio::test]
+        async fn test_copies_string_vars() {
             let mut walker = setup();
-            setup_var(LpcType::String(false), &mut walker);
+            setup_var(LpcType::String(false), &mut walker).await;
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -5259,14 +5280,15 @@ mod tests {
             );
         }
 
-        #[test]
-        fn test_does_not_copy_array_literals() {
+        #[tokio::test]
+        async fn test_does_not_copy_array_literals() {
             let mut walker = setup();
             setup_literal(
                 LpcType::Int(true),
                 ExpressionNode::Array(ArrayNode::new(vec![ExpressionNode::from(1234)])),
                 &mut walker,
-            );
+            )
+            .await;
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -5279,10 +5301,10 @@ mod tests {
             );
         }
 
-        #[test]
-        fn test_copies_array_vars() {
+        #[tokio::test]
+        async fn test_copies_array_vars() {
             let mut walker = setup();
-            setup_var(LpcType::Int(true), &mut walker);
+            setup_var(LpcType::Int(true), &mut walker).await;
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -5293,8 +5315,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn copies_calls() {
+        #[tokio::test]
+        async fn copies_calls() {
             let mut walker = setup();
 
             let mut node = VarInitNode {
@@ -5313,7 +5335,7 @@ mod tests {
 
             insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
 
-            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node).await;
 
             assert_eq!(
                 walker_init_instructions(&mut walker),
@@ -5330,8 +5352,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn sets_up_globals() {
+        #[tokio::test]
+        async fn sets_up_globals() {
             let mut context = CompilationContext::default();
             context.scopes.push_new();
             let mut walker = CodegenWalker::new(context);
@@ -5370,8 +5392,8 @@ mod tests {
             insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
             insert_symbol(&mut walker, Symbol::from(&mut node2.clone()));
 
-            let _ = walker.visit_var_init(&mut node);
-            let _ = walker.visit_var_init(&mut node2);
+            let _ = walker.visit_var_init(&mut node).await;
+            let _ = walker.visit_var_init(&mut node2).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 12),
@@ -5406,8 +5428,8 @@ mod tests {
             assert_eq!(walker.global_counter.number_emitted(), 2);
         }
 
-        #[test]
-        fn sets_up_upvalues_when_initialized_to_upvalued_var() {
+        #[tokio::test]
+        async fn sets_up_upvalues_when_initialized_to_upvalued_var() {
             let mut context = CompilationContext::default();
             context.scopes.push_new(); // push a global scope
             context.scopes.push_new(); // push a local scope
@@ -5432,14 +5454,14 @@ mod tests {
             insert_symbol(&mut walker, existing);
             insert_symbol(&mut walker, sym);
 
-            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node).await;
 
             let sym = walker.context.lookup_var("a").unwrap();
             assert_eq!(sym.location.unwrap(), RegisterVariant::Upvalue(Register(0)));
         }
 
-        #[test]
-        fn sets_up_upvalues_when_initialized_to_upvalued_value() {
+        #[tokio::test]
+        async fn sets_up_upvalues_when_initialized_to_upvalued_value() {
             let mut context = CompilationContext::default();
             context.scopes.push_new(); // push a global scope
             context.scopes.push_new(); // push a local scope
@@ -5456,7 +5478,7 @@ mod tests {
 
             insert_symbol(&mut walker, sym);
 
-            let _ = walker.visit_var_init(&mut node);
+            let _ = walker.visit_var_init(&mut node).await;
 
             let sym = walker.context.lookup_var("a").unwrap();
             assert_eq!(sym.location.unwrap(), RegisterVariant::Upvalue(Register(0)));
@@ -5468,8 +5490,8 @@ mod tests {
 
         use super::*;
 
-        #[test]
-        fn test_populates_the_instructions() {
+        #[tokio::test]
+        async fn test_populates_the_instructions() {
             let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
 
@@ -5489,7 +5511,7 @@ mod tests {
                 span: None,
             };
 
-            let _ = walker.visit_while(&mut node);
+            let _ = walker.visit_while(&mut node).await;
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 666),
@@ -5514,8 +5536,8 @@ mod tests {
     mod test_into_program {
         use super::*;
 
-        #[test]
-        fn sets_num_globals() {
+        #[tokio::test]
+        async fn sets_num_globals() {
             let code = r##"
                 int i = 123, j;
                 mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
@@ -5523,12 +5545,15 @@ mod tests {
                 string b;
             "##;
 
-            let program = walk_prog(code).into_program().expect("failed to compile");
+            let program = walk_prog(code)
+                .await
+                .into_program()
+                .expect("failed to compile");
             assert_eq!(program.num_globals, 5)
         }
 
-        #[test]
-        fn sets_num_init_registers() {
+        #[tokio::test]
+        async fn sets_num_init_registers() {
             let code = r##"
                 int i = 123, j;
                 mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
@@ -5536,13 +5561,16 @@ mod tests {
                 string b;
             "##;
 
-            let program = walk_prog(code).into_program().expect("failed to compile");
+            let program = walk_prog(code)
+                .await
+                .into_program()
+                .expect("failed to compile");
             assert_eq!(program.num_init_registers(), 10);
             assert_eq!(program.initializer.unwrap().num_locals, 9)
         }
 
-        #[test]
-        fn reserves_enough_global_registers_when_create_returns_non_void() {
+        #[tokio::test]
+        async fn reserves_enough_global_registers_when_create_returns_non_void() {
             let code = r##"
                 int create() {
                     dump("sup dawg");
@@ -5551,12 +5579,15 @@ mod tests {
                 }
             "##;
 
-            let program = walk_prog(code).into_program().expect("failed to compile");
+            let program = walk_prog(code)
+                .await
+                .into_program()
+                .expect("failed to compile");
             assert_eq!(program.num_init_registers(), 2)
         }
 
-        #[test]
-        fn sets_strings_on_functions() {
+        #[tokio::test]
+        async fn sets_strings_on_functions() {
             let code = r##"
                 int create() {
                     dump("sup dawg");
@@ -5565,7 +5596,10 @@ mod tests {
                 }
             "##;
 
-            let program = walk_prog(code).into_program().expect("failed to compile");
+            let program = walk_prog(code)
+                .await
+                .into_program()
+                .expect("failed to compile");
             assert_eq!(program.functions.len(), 1);
             assert_eq!(
                 &program
@@ -5585,8 +5619,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn tracks_inherited_globals_for_init() {
+    #[tokio::test]
+    async fn tracks_inherited_globals_for_init() {
         let code = r##"
             inherit "/parent";
             int i = 123, j;
@@ -5594,7 +5628,10 @@ mod tests {
             string b;
         "##;
 
-        let program = walk_prog(code).into_program().expect("failed to compile");
+        let program = walk_prog(code)
+            .await
+            .into_program()
+            .expect("failed to compile");
         let init = program.initializer.unwrap();
 
         assert_eq!(program.num_globals, 9);

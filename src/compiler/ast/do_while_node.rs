@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use async_trait::async_trait;
 use indextree::NodeId;
 use lpc_rs_errors::{span::Span, Result};
 
@@ -34,9 +35,10 @@ impl DoWhileNode {
     }
 }
 
+#[async_trait]
 impl AstNodeTrait for DoWhileNode {
-    fn visit(&mut self, tree_walker: &mut impl TreeWalker) -> Result<()> {
-        tree_walker.visit_do_while(self)
+    async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
+        tree_walker.visit_do_while(self).await
     }
 }
 
