@@ -15,6 +15,7 @@ pub(crate) mod query_resident_memory;
 pub(crate) mod remove_call_out;
 pub(crate) mod this_object;
 pub(crate) mod throw;
+pub(crate) mod write_socket;
 
 use std::sync::Arc;
 
@@ -58,6 +59,7 @@ pub const REMOVE_CALL_OUT: &str = "remove_call_out";
 pub const SIZEOF: &str = "sizeof";
 pub const THIS_OBJECT: &str = "this_object";
 pub const THROW: &str = "throw";
+pub const WRITE_SOCKET: &str = "write_socket";
 
 pub async fn call_efun<const STACKSIZE: usize>(
     efun_name: &str,
@@ -79,6 +81,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
         REMOVE_CALL_OUT => remove_call_out::remove_call_out(efun_context).await,
         THIS_OBJECT => this_object::this_object(efun_context).await,
         THROW => throw::throw(efun_context).await,
+        WRITE_SOCKET => write_socket::write_socket(efun_context).await,
         _ => Err(efun_context.runtime_error(format!("Unknown efun: {}", efun_name))),
     }
 }
@@ -365,6 +368,19 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::Mixed(false)])
             .build()
             .expect("failed to build throw"),
+    );
+
+    m.insert(
+        WRITE_SOCKET,
+        FunctionPrototypeBuilder::default()
+            .name(WRITE_SOCKET)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Int(false) | LpcType::Float(false) | LpcType::String(false)])
+            .build()
+            .expect("failed to build write_socket"),
     );
 
     m
