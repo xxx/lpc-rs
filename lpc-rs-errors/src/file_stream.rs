@@ -6,11 +6,12 @@ use codespan_reporting::term::termcolor::{ColorSpec, WriteColor};
 /// diagnostics to files.
 pub struct FileStream {
     file: File,
+    color: Option<ColorSpec>
 }
 
 impl FileStream {
     pub fn new(file: File) -> Self {
-        Self { file }
+        Self { file, color: None }
     }
 }
 
@@ -26,14 +27,16 @@ impl Write for FileStream {
 
 impl WriteColor for FileStream {
     fn supports_color(&self) -> bool {
-        false
+        true
     }
 
-    fn set_color(&mut self, _spec: &ColorSpec) -> std::io::Result<()> {
+    fn set_color(&mut self, spec: &ColorSpec) -> std::io::Result<()> {
+        self.color = Some(spec.clone());
         Ok(())
     }
 
     fn reset(&mut self) -> std::io::Result<()> {
+        self.color = None;
         Ok(())
     }
 }
