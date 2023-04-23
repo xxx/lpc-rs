@@ -108,7 +108,7 @@ impl Telnet {
         broker_tx: FlumeSender<BrokerOp>,
         template: TaskTemplate,
     ) {
-        let codec = TelnetCodec::new(4096);
+        let codec = TelnetCodec::new(8192);
         let mut framed = codec.framed(stream);
 
         Self::negotiations(&mut framed, remote_ip, &broker_tx).await;
@@ -250,22 +250,14 @@ impl Telnet {
             TelnetEvent::Message(msg) => {
                 // TODO: don't make this swap if it's already None.
                 if let Some(input_to) = connection.input_to.swap(None) {
-                    Self::resolve_input_to(&input_to, &msg, sink, template).await;
+                    Self::resolve_input_to(&input_to, &msg, sink, connection, template).await;
 
                     return;
                 }
                 info!("Received message: {}", msg);
-                // let _ = sink
-                //     .send(TelnetEvent::Message("Goodbye, world!".to_string()))
-                //     .await;
-                // let _ = broker_tx.send_async(BrokerOp::Disconnect(connection_id)).await;
             }
             TelnetEvent::RawMessage(msg) => {
                 trace!("Received raw message: {}", msg);
-                // let _ = sink
-                //     .send(TelnetEvent::Message("Goodbye, world!".to_string()))
-                //     .await;
-                // let _ = broker_tx.send_async(BrokerOp::Disconnect(connection_id)).await;
             }
             TelnetEvent::Do(option) => {
                 trace!("Received DO: {:?}", option);
@@ -295,6 +287,7 @@ impl Telnet {
         input_to: &InputTo,
         msg: &String,
         sink: &mut SplitSink<Framed<TcpStream, TelnetCodec>, TelnetEvent>,
+        connection: &Connection,
         template: &TaskTemplate,
     ) {
         if input_to.no_echo {
@@ -321,14 +314,18 @@ impl Telnet {
             args.push(input_arg);
         }
 
-        let result = apply_function(function, &args, process, template.clone()).await;
+        let mut template = template.clone();
+        template.set_this_player(connection.process.load_full());
+
+        let result = apply_function(function, &args, process, template).await;
         if let Err(e) = result {
             // TODO: this should apply runtime_error() on the master.
             error!("{}", e);
         };
     }
 
-    /// Stops the telnet server. This will disable new connections.
+    /// Stops the telnet server. This will disable new connections, but will _not_
+    /// drop any of the existing connections.
     pub fn shutdown(&mut self) {
         info!("Shutting down telnet server");
         if let Some(h) = self.handle.take() {

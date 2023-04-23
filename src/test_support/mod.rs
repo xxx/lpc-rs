@@ -8,8 +8,11 @@ use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcBank, heap::Heap, object_space::ObjectSpace,
-        process::Process, program::Program, task::Task,
+        call_outs::CallOuts,
+        object_space::ObjectSpace,
+        process::Process,
+        program::Program,
+        task::{initialize_program::InitializeProgramBuilder, Task},
     },
 };
 
@@ -99,19 +102,17 @@ pub async fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
     let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
     ObjectSpace::insert_process(&object_space, se_proc);
 
-    Task::initialize_program(
-        program,
-        config,
-        object_space,
-        Heap::default(),
-        RwLock::new(GcBank::default()),
-        call_outs,
-        tx,
-    )
-    .await
-    .unwrap_or_else(|e| {
-        e.emit_diagnostics();
-        eprintln!("{:?}", e);
-        panic!("failed to initialize");
-    })
+    InitializeProgramBuilder::default()
+        .program(program)
+        .config(config)
+        .object_space(object_space)
+        .call_outs(call_outs)
+        .tx(tx)
+        .build()
+        .await
+        .unwrap_or_else(|e| {
+            e.emit_diagnostics();
+            eprintln!("{:?}", e);
+            panic!("failed to initialize");
+        })
 }

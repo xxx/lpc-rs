@@ -8,7 +8,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::interpreter::{
     call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, object_space::ObjectSpace,
-    program::Program, task::Task, vm::vm_op::VmOp,
+    process::Process, program::Program, task::Task, vm::vm_op::VmOp,
 };
 
 /// This struct exists solely to allow a Builder to be derived,
@@ -31,6 +31,8 @@ pub struct InitializeProgram<const N: usize> {
         default = "Arc::new(RwLock::new(CallOuts::new(self.tx.as_ref().unwrap().clone())))"
     )]
     call_outs: Arc<RwLock<CallOuts>>,
+    #[builder(setter(into), default = "None")]
+    this_player: Option<Arc<Process>>,
 
     tx: Sender<VmOp>,
 }
@@ -49,6 +51,7 @@ impl<const N: usize> InitializeProgramBuilder<N> {
             init.memory,
             init.vm_upvalues,
             init.call_outs,
+            init.this_player,
             init.tx,
         )
         .await

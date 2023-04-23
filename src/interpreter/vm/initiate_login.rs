@@ -84,8 +84,11 @@ impl Vm {
             // This is the initial exec() of the player into a body.
             Connection::takeover_process(connection.clone(), login_ob.clone()).await;
 
+            let mut template = task_template.clone();
+            template.set_this_player(Some(login_ob.clone()));
+
             // call 'logon' in the login object
-            match apply_function_by_name(LOGON, &[], login_ob, task_template.clone()).await {
+            match apply_function_by_name(LOGON, &[], login_ob, template).await {
                 Some(Ok(LpcRef::Int(i))) => {
                     if i == 0 {
                         // We don't send an error in this case, as we assume that logon() has sent them messages.

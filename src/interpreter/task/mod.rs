@@ -251,6 +251,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         memory: M,
         vm_upvalues: U,
         call_outs: A,
+        this_player: Option<Arc<Process>>,
         tx: Sender<VmOp>,
     ) -> Result<Task<STACKSIZE>>
     where
@@ -277,6 +278,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             memory.into(),
             vm_upvalues,
             call_outs,
+            this_player,
             tx,
         );
         context.insert_process(process);

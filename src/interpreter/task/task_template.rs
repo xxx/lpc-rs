@@ -7,7 +7,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::interpreter::{
     call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, object_space::ObjectSpace,
-    vm::vm_op::VmOp,
+    process::Process, vm::vm_op::VmOp,
 };
 
 /// A struct to handle the non-changing Task state, so we can prepare it ahead of time.
@@ -37,4 +37,17 @@ pub struct TaskTemplate {
     /// A pointer to a memory pool to allocate new values from
     #[builder(default, setter(into))]
     pub memory: Arc<Heap>,
+
+    /// The command giver, if there was one. This might be an NPC, or None, in the case of a
+    /// call_out or input_to callback.
+    pub this_player: Option<Arc<Process>>,
+}
+
+impl TaskTemplate {
+    /// Set the player to be used for this [`TaskTemplate`]. We often don't know
+    /// who this until just before we start the task. This is just here for
+    /// convenience.
+    pub fn set_this_player(&mut self, this_player: Option<Arc<Process>>) {
+        self.this_player = this_player;
+    }
 }

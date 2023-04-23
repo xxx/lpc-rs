@@ -46,6 +46,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 memory.clone(),
                 upvalues.clone(),
                 call_outs.clone(),
+                None,
                 tx.clone(),
             )
             .await;

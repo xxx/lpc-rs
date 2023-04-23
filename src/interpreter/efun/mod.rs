@@ -15,6 +15,7 @@ pub(crate) mod query_call_outs;
 pub(crate) mod query_resident_memory;
 pub(crate) mod remove_call_out;
 pub(crate) mod this_object;
+pub(crate) mod this_player;
 pub(crate) mod throw;
 pub(crate) mod write_socket;
 
@@ -60,6 +61,7 @@ pub const QUERY_RESIDENT_MEMORY: &str = "query_resident_memory";
 pub const REMOVE_CALL_OUT: &str = "remove_call_out";
 pub const SIZEOF: &str = "sizeof";
 pub const THIS_OBJECT: &str = "this_object";
+pub const THIS_PLAYER: &str = "this_player";
 pub const THROW: &str = "throw";
 pub const WRITE_SOCKET: &str = "write_socket";
 
@@ -83,6 +85,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
         QUERY_RESIDENT_MEMORY => query_resident_memory::query_resident_memory(efun_context).await,
         REMOVE_CALL_OUT => remove_call_out::remove_call_out(efun_context).await,
         THIS_OBJECT => this_object::this_object(efun_context).await,
+        THIS_PLAYER => this_player::this_player(efun_context).await,
         THROW => throw::throw(efun_context).await,
         WRITE_SOCKET => write_socket::write_socket(efun_context).await,
         _ => Err(efun_context.runtime_error(format!("Unknown efun: {}", efun_name))),
@@ -376,6 +379,17 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .kind(FunctionKind::Efun)
             .build()
             .expect("failed to build this_object"),
+    );
+
+    m.insert(
+        THIS_PLAYER,
+        FunctionPrototypeBuilder::default()
+            .name(THIS_PLAYER)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Object(false))
+            .kind(FunctionKind::Efun)
+            .build()
+            .expect("failed to build this_player"),
     );
 
     m.insert(

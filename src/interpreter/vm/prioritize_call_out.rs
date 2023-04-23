@@ -78,6 +78,7 @@ impl Vm {
                 memory,
                 upvalues,
                 call_outs,
+                None, // TODO: this should always be set
                 tx.clone(),
             );
 

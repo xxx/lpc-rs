@@ -163,6 +163,12 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.task_context.remove_process(process);
     }
 
+    /// Get a reference to `this_player` from the context
+    #[inline]
+    pub fn this_player(&self) -> Option<&Arc<Process>> {
+        self.task_context.this_player.as_ref()
+    }
+
     /// Return a clone of the current stack, for snapshotting
     #[cfg(test)]
     pub fn clone_stack(&self) -> CallStack<N> {

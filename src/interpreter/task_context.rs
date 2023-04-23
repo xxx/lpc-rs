@@ -30,7 +30,7 @@ pub struct TaskContext {
     pub process: Arc<Process>,
 
     /// The global [`ObjectSpace`]
-    #[builder(setter(into))]
+    #[builder(default, setter(into))]
     pub object_space: Arc<ObjectSpace>,
 
     /// Direct pointer to the simul efuns
@@ -39,7 +39,7 @@ pub struct TaskContext {
 
     /// The [`GcBank`](crate::interpreter::gc::gc_bank::GcBank) that stores all of the upvalues in
     /// the system, from the [`Vm`](crate::interpreter::vm::Vm).
-    #[builder(setter(into))]
+    #[builder(default, setter(into))]
     pub vm_upvalues: Arc<RwLock<GcRefBank>>,
 
     /// Call out handling, passed down from the [`Vm`](crate::interpreter::vm::Vm).
@@ -56,6 +56,10 @@ pub struct TaskContext {
     /// The final result of the original function that was called
     #[builder(default)]
     pub result: OnceCell<LpcRef>,
+
+    /// The command giver, if there was one. This might be an NPC, or None.
+    #[builder(default, setter(strip_option))]
+    pub this_player: Option<Arc<Process>>,
 }
 
 impl TaskContext {
@@ -68,6 +72,7 @@ impl TaskContext {
         memory: M,
         vm_upvalues: U,
         call_outs: A,
+        this_player: Option<Arc<Process>>,
         tx: Sender<VmOp>,
     ) -> Self
     where
@@ -91,6 +96,7 @@ impl TaskContext {
             simul_efuns,
             vm_upvalues: vm_upvalues.into(),
             call_outs: call_outs.into(),
+            this_player,
             tx,
         }
     }
@@ -108,6 +114,7 @@ impl TaskContext {
             simul_efuns,
             vm_upvalues: template.vm_upvalues,
             call_outs: template.call_outs,
+            this_player: template.this_player,
             tx: template.tx,
         }
     }
@@ -253,7 +260,7 @@ mod tests {
     use tokio::sync::mpsc;
 
     use super::*;
-    use crate::interpreter::{gc::gc_bank::GcBank, program::ProgramBuilder};
+    use crate::interpreter::program::ProgramBuilder;
 
     #[test]
     fn test_in_game_cwd() {
@@ -267,18 +274,16 @@ mod tests {
             .build()
             .unwrap();
         let process = Process::new(program);
-        let upvalues = RwLock::new(GcBank::default());
         let (tx, _rx) = mpsc::channel(100);
         let call_outs = RwLock::new(CallOuts::new(tx.clone()));
-        let context = TaskContext::new(
-            config,
-            process,
-            space,
-            Heap::default(),
-            upvalues,
-            call_outs,
-            tx,
-        );
+        let context = TaskContextBuilder::default()
+            .config(config)
+            .process(process)
+            .object_space(space)
+            .call_outs(call_outs)
+            .tx(tx)
+            .build()
+            .unwrap();
 
         assert_eq!(context.in_game_cwd().to_str().unwrap(), "/foo/bar");
     }

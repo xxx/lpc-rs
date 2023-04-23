@@ -51,13 +51,12 @@ mod tests {
     use crate::{
         interpreter::{
             call_outs::CallOuts,
-            gc::gc_bank::GcBank,
             heap::Heap,
             object_space::ObjectSpace,
             process::Process,
             program::{Program, ProgramBuilder},
             task::Task,
-            task_context::TaskContext,
+            task_context::{TaskContext, TaskContextBuilder},
             vm::vm_op::VmOp,
         },
         test_support::compile_prog,
@@ -70,15 +69,14 @@ mod tests {
     ) -> TaskContext {
         let process = Process::new(program);
 
-        TaskContext::new(
-            config,
-            process,
-            ObjectSpace::default(),
-            Heap::new(10),
-            RwLock::new(GcBank::default()),
-            Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
-            tx,
-        )
+        TaskContextBuilder::default()
+            .config(config)
+            .process(process)
+            .memory(Heap::new(10))
+            .call_outs(RwLock::new(CallOuts::new(tx.clone())))
+            .tx(tx)
+            .build()
+            .unwrap()
     }
 
     #[tokio::test]

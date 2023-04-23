@@ -58,6 +58,7 @@ async fn main() {
                 memory,
                 upvalues,
                 call_outs,
+                None,
                 tx,
             )
             .await

@@ -109,6 +109,7 @@ mod tests {
             call_outs: Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
             memory: Arc::new(Default::default()),
             tx,
+            this_player: None,
         };
 
         let args = vec![LpcRef::from(42)];

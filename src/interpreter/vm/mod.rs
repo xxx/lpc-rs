@@ -288,6 +288,7 @@ impl Vm {
             self.memory.clone(),
             self.upvalues.clone(),
             self.call_outs.clone(),
+            None,
             self.tx.clone(),
         )
         .await
@@ -307,6 +308,7 @@ impl Vm {
             memory: self.memory.clone(),
             vm_upvalues: self.upvalues.clone(),
             call_outs: self.call_outs.clone(),
+            this_player: None,
             tx: self.tx.clone(),
         }
     }

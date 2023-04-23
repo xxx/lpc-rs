@@ -155,6 +155,7 @@ mod tests {
             vm_upvalues: Arc::new(Default::default()),
             call_outs: Arc::new(RwLock::new(CallOuts::new(vm_tx.clone()))),
             tx: vm_tx.clone(),
+            this_player: None,
             memory: Arc::new(Default::default()),
         };
 
