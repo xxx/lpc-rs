@@ -1,5 +1,6 @@
 pub mod apply_function;
 pub mod initialize_program;
+pub mod into_task_context;
 pub mod task_id;
 pub mod task_state;
 pub mod task_template;

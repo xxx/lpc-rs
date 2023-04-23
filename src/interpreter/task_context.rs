@@ -10,9 +10,15 @@ use tokio::sync::mpsc::Sender;
 
 use crate::{
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, lpc_ref::LpcRef,
-        object_space::ObjectSpace, process::Process, program::Program,
-        task::task_template::TaskTemplate, vm::vm_op::VmOp,
+        call_outs::CallOuts,
+        gc::gc_bank::GcRefBank,
+        heap::Heap,
+        lpc_ref::LpcRef,
+        object_space::ObjectSpace,
+        process::Process,
+        program::Program,
+        task::{into_task_context::IntoTaskContext, task_template::TaskTemplate},
+        vm::vm_op::VmOp,
     },
     util::get_simul_efuns,
 };
@@ -269,6 +275,12 @@ impl Clone for TaskContext {
             this_player: ArcSwapAny::from(self.this_player.load_full()),
             tx: self.tx.clone(),
         }
+    }
+}
+
+impl IntoTaskContext for TaskContext {
+    fn into_task_context(self, _proc: Arc<Process>) -> TaskContext {
+        self
     }
 }
 

@@ -8,7 +8,8 @@ use tokio::sync::mpsc::Sender;
 
 use crate::interpreter::{
     call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, object_space::ObjectSpace,
-    process::Process, vm::vm_op::VmOp,
+    process::Process, task::into_task_context::IntoTaskContext, task_context::TaskContext,
+    vm::vm_op::VmOp,
 };
 
 /// A struct to handle the non-changing Task state, so we can prepare it ahead of time.
@@ -21,12 +22,12 @@ pub struct TaskTemplate {
     pub config: Arc<Config>,
 
     /// The global [`ObjectSpace`]
-    #[builder(setter(into))]
+    #[builder(default, setter(into))]
     pub object_space: Arc<ObjectSpace>,
 
     /// The [`GcBank`](crate::interpreter::gc::gc_bank::GcBank) that stores all of the upvalues in
     /// the system, from the [`Vm`](crate::interpreter::vm::Vm).
-    #[builder(setter(into))]
+    #[builder(default, setter(into))]
     pub vm_upvalues: Arc<RwLock<GcRefBank>>,
 
     /// Call out handling, passed down from the [`Vm`](crate::interpreter::vm::Vm).
@@ -42,6 +43,7 @@ pub struct TaskTemplate {
 
     /// The command giver, if there was one. This might be an NPC, or None, in the case of a
     /// call_out or input_to callback.
+    #[builder(default, setter(into))]
     pub this_player: ArcSwapAny<Option<Arc<Process>>>,
 }
 
@@ -65,5 +67,11 @@ impl Clone for TaskTemplate {
             memory: self.memory.clone(),
             this_player: ArcSwapAny::from(self.this_player.load_full()),
         }
+    }
+}
+
+impl IntoTaskContext for TaskTemplate {
+    fn into_task_context(self, process: Arc<Process>) -> TaskContext {
+        TaskContext::from_template(self, process)
     }
 }

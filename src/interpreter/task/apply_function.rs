@@ -8,8 +8,7 @@ use crate::{
     interpreter::{
         lpc_ref::LpcRef,
         process::Process,
-        task::{task_template::TaskTemplate, Task},
-        task_context::TaskContext,
+        task::{into_task_context::IntoTaskContext, Task},
     },
 };
 
@@ -30,13 +29,16 @@ use crate::{
 ///
 /// * `Ok(LpcRef)` - The result of the function.
 /// * `Err(LpcError)` - The error that occurred.
-pub async fn apply_function(
+pub async fn apply_function<T>(
     f: Arc<ProgramFunction>,
     args: &[LpcRef],
     proc: Arc<Process>,
-    template: TaskTemplate,
-) -> Result<LpcRef> {
-    let ctx = TaskContext::from_template(template, proc);
+    template: T,
+) -> Result<LpcRef>
+where
+    T: IntoTaskContext,
+{
+    let ctx = template.into_task_context(proc);
     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(ctx);
 
     task.timed_eval(f, args)
@@ -62,14 +64,15 @@ pub async fn apply_function(
 /// * `Some(Ok(LpcRef))` - The result of the function.
 /// * `Some(Err(LpcError))` - The error that occurred.
 /// * `None` - The function is not defined in `proc`.
-pub async fn apply_function_by_name<S>(
+pub async fn apply_function_by_name<S, T>(
     name: S,
     args: &[LpcRef],
     proc: Arc<Process>,
-    template: TaskTemplate,
+    template: T,
 ) -> Option<Result<LpcRef>>
 where
     S: AsRef<str>,
+    T: IntoTaskContext,
 {
     let Some(f) = proc.program.unmangled_functions.get(name.as_ref()) else {
         return None;
@@ -80,12 +83,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use arc_swap::ArcSwapAny;
     use indoc::indoc;
     use parking_lot::RwLock;
 
     use super::*;
-    use crate::{interpreter::call_outs::CallOuts, test_support::compile_prog};
+    use crate::{
+        interpreter::{call_outs::CallOuts, task::task_template::TaskTemplateBuilder},
+        test_support::compile_prog,
+    };
 
     #[tokio::test]
     async fn test_apply_function() {
@@ -103,15 +108,12 @@ mod tests {
         let process = Process::new(prog);
         let (tx, _rx) = tokio::sync::mpsc::channel(10);
 
-        let template = TaskTemplate {
-            config,
-            object_space: Arc::new(Default::default()),
-            vm_upvalues: Arc::new(Default::default()),
-            call_outs: Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
-            memory: Arc::new(Default::default()),
-            tx,
-            this_player: ArcSwapAny::from(None),
-        };
+        let template = TaskTemplateBuilder::default()
+            .config(config)
+            .call_outs(Arc::new(RwLock::new(CallOuts::new(tx.clone()))))
+            .tx(tx)
+            .build()
+            .unwrap();
 
         let args = vec![LpcRef::from(42)];
         // We could use `proc` as the process, but the language supports functions being applied

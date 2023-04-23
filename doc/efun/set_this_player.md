@@ -13,4 +13,4 @@ This function returns the previous value of `this_player()`.
 
 ### See Also
 
-`this_player()`
+`this_player`

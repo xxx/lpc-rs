@@ -18,6 +18,7 @@ pub(crate) mod set_this_player;
 pub(crate) mod this_object;
 pub(crate) mod this_player;
 pub(crate) mod throw;
+pub(crate) mod write;
 pub(crate) mod write_socket;
 
 use std::sync::Arc;
@@ -65,6 +66,7 @@ pub const SIZEOF: &str = "sizeof";
 pub const THIS_OBJECT: &str = "this_object";
 pub const THIS_PLAYER: &str = "this_player";
 pub const THROW: &str = "throw";
+pub const WRITE: &str = "write";
 pub const WRITE_SOCKET: &str = "write_socket";
 
 pub async fn call_efun<const STACKSIZE: usize>(
@@ -90,6 +92,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
         THIS_OBJECT => this_object::this_object(efun_context).await,
         THIS_PLAYER => this_player::this_player(efun_context).await,
         THROW => throw::throw(efun_context).await,
+        WRITE => write::write(efun_context).await,
         WRITE_SOCKET => write_socket::write_socket(efun_context).await,
         _ => Err(efun_context.runtime_error(format!("Unknown efun: {}", efun_name))),
     }
@@ -419,6 +422,19 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::Mixed(false)])
             .build()
             .expect("failed to build throw"),
+    );
+
+    m.insert(
+        WRITE,
+        FunctionPrototypeBuilder::default()
+            .name(WRITE)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Mixed(false)])
+            .build()
+            .expect("failed to build write"),
     );
 
     m.insert(
