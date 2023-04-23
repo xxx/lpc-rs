@@ -23,7 +23,7 @@ use crate::{
 /// * `f` - The [`ProgramFunction`] to apply.
 /// * `args` - A slice of [`LpcRef`]s to apply the function to.
 /// * `proc` - The [`Process`] to apply the function in.
-/// * `template` - The [`TaskTemplate`] that holds the rest of the context information.
+/// * `template` - The template that holds the rest of the context information.
 ///
 /// # Returns
 ///
@@ -57,7 +57,7 @@ where
 /// * `name` - The name of the function to apply. This is assumed to be an unmangled name.
 /// * `args` - A slice of [`LpcRef`]s to apply the function to.
 /// * `proc` - The [`Process`] to apply the function in.
-/// * `template` - The [`TaskTemplate`] that holds the rest of the context information.
+/// * `template` - The template that holds the rest of the context information.
 ///
 /// # Returns
 ///
