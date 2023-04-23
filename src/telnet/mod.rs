@@ -314,7 +314,7 @@ impl Telnet {
             args.push(input_arg);
         }
 
-        let mut template = template.clone();
+        let template = template.clone();
         template.set_this_player(connection.process.load_full());
 
         let result = apply_function(function, &args, process, template).await;

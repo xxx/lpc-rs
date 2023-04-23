@@ -80,6 +80,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use arc_swap::ArcSwapAny;
     use indoc::indoc;
     use parking_lot::RwLock;
 
@@ -109,7 +110,7 @@ mod tests {
             call_outs: Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
             memory: Arc::new(Default::default()),
             tx,
-            this_player: None,
+            this_player: ArcSwapAny::from(None),
         };
 
         let args = vec![LpcRef::from(42)];

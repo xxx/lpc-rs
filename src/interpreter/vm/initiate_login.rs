@@ -84,7 +84,7 @@ impl Vm {
             // This is the initial exec() of the player into a body.
             Connection::takeover_process(connection.clone(), login_ob.clone()).await;
 
-            let mut template = task_template.clone();
+            let template = task_template.clone();
             template.set_this_player(Some(login_ob.clone()));
 
             // call 'logon' in the login object

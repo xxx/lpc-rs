@@ -8,7 +8,7 @@ use crate::interpreter::{
 
 /// `this_player`, an efun for returning the command giver for the current Task
 pub async fn this_player<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let result = if let Some(process) = context.this_player() {
+    let result = if let Some(process) = &*context.this_player().load() {
         Arc::downgrade(process).into_lpc_ref(context.memory())
     } else {
         LpcRef::from(0)

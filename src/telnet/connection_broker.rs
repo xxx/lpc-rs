@@ -131,6 +131,7 @@ impl ConnectionBroker {
 mod tests {
     use std::time::Duration;
 
+    use arc_swap::ArcSwapAny;
     use parking_lot::RwLock;
 
     use super::*;
@@ -155,7 +156,7 @@ mod tests {
             vm_upvalues: Arc::new(Default::default()),
             call_outs: Arc::new(RwLock::new(CallOuts::new(vm_tx.clone()))),
             tx: vm_tx.clone(),
-            this_player: None,
+            this_player: ArcSwapAny::from(None),
             memory: Arc::new(Default::default()),
         };
 

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use arc_swap::ArcSwapAny;
 use derive_builder::Builder;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
@@ -11,7 +12,8 @@ use crate::interpreter::{
 };
 
 /// A struct to handle the non-changing Task state, so we can prepare it ahead of time.
-#[derive(Debug, Clone, Builder)]
+#[derive(Debug, Builder)]
+#[builder(pattern = "owned")]
 pub struct TaskTemplate {
     /// The [`Config`] that's in use for the
     /// [`Task`](crate::interpreter::task::Task).
@@ -40,14 +42,28 @@ pub struct TaskTemplate {
 
     /// The command giver, if there was one. This might be an NPC, or None, in the case of a
     /// call_out or input_to callback.
-    pub this_player: Option<Arc<Process>>,
+    pub this_player: ArcSwapAny<Option<Arc<Process>>>,
 }
 
 impl TaskTemplate {
     /// Set the player to be used for this [`TaskTemplate`]. We often don't know
     /// who this until just before we start the task. This is just here for
     /// convenience.
-    pub fn set_this_player(&mut self, this_player: Option<Arc<Process>>) {
-        self.this_player = this_player;
+    pub fn set_this_player(&self, this_player: Option<Arc<Process>>) {
+        self.this_player.store(this_player);
+    }
+}
+
+impl Clone for TaskTemplate {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            object_space: self.object_space.clone(),
+            vm_upvalues: self.vm_upvalues.clone(),
+            call_outs: self.call_outs.clone(),
+            tx: self.tx.clone(),
+            memory: self.memory.clone(),
+            this_player: ArcSwapAny::from(self.this_player.load_full()),
+        }
     }
 }

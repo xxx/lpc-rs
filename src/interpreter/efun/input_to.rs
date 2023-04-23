@@ -15,7 +15,7 @@ pub async fn input_to<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     };
 
     let LpcRef::Int(no_echo) = context.resolve_local_register(2_usize) else {
-      return Err(context.runtime_error("non-integer sent as second argument to `input_to`"));
+        return Err(context.runtime_error("non-integer sent as second argument to `input_to`"));
     };
 
     let input_to = InputTo {
@@ -23,10 +23,10 @@ pub async fn input_to<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         no_echo: no_echo.into(),
     };
 
-    let process = context.this_player();
+    let process = context.this_player().load();
 
     if_chain! {
-        if let Some(process) = process;
+        if let Some(process) = &*process;
         if let Some(connection) = &*process.connection.load();
         then {
             let _ = connection.tx.send(ConnectionOp::InputTo(input_to)).await;

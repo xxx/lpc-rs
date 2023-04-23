@@ -1,5 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
+use arc_swap::ArcSwapAny;
 use derive_builder::Builder;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
@@ -17,7 +18,8 @@ use crate::{
 };
 
 /// A struct to carry context during the evaluation of a single [`Task`](crate::interpreter::task::Task).
-#[derive(Debug, Clone, Builder)]
+#[derive(Debug, Builder)]
+#[builder(pattern = "owned")]
 pub struct TaskContext {
     /// The [`Config`] that's in use for the
     /// [`Task`](crate::interpreter::task::Task).
@@ -59,7 +61,7 @@ pub struct TaskContext {
 
     /// The command giver, if there was one. This might be an NPC, or None.
     #[builder(default, setter(strip_option))]
-    pub this_player: Option<Arc<Process>>,
+    pub this_player: ArcSwapAny<Option<Arc<Process>>>,
 }
 
 impl TaskContext {
@@ -96,7 +98,7 @@ impl TaskContext {
             simul_efuns,
             vm_upvalues: vm_upvalues.into(),
             call_outs: call_outs.into(),
-            this_player,
+            this_player: ArcSwapAny::from(this_player),
             tx,
         }
     }
@@ -250,6 +252,23 @@ impl TaskContext {
     #[inline]
     pub fn tx(&self) -> Sender<VmOp> {
         self.tx.clone()
+    }
+}
+
+impl Clone for TaskContext {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            process: self.process.clone(),
+            object_space: self.object_space.clone(),
+            memory: self.memory.clone(),
+            result: OnceCell::new(),
+            simul_efuns: self.simul_efuns.clone(),
+            vm_upvalues: self.vm_upvalues.clone(),
+            call_outs: self.call_outs.clone(),
+            this_player: ArcSwapAny::from(self.this_player.load_full()),
+            tx: self.tx.clone(),
+        }
     }
 }
 

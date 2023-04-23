@@ -1,5 +1,6 @@
 use std::{future::Future, path::Path, sync::Arc};
 
+use arc_swap::ArcSwapAny;
 use bit_set::BitSet;
 use flume::Sender as FlumeSender;
 use lpc_rs_core::lpc_path::LpcPath;
@@ -308,7 +309,7 @@ impl Vm {
             memory: self.memory.clone(),
             vm_upvalues: self.upvalues.clone(),
             call_outs: self.call_outs.clone(),
-            this_player: None,
+            this_player: ArcSwapAny::from(None),
             tx: self.tx.clone(),
         }
     }

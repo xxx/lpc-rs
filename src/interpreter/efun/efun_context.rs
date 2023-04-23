@@ -1,5 +1,6 @@
 use std::{borrow::Cow, fmt::Debug, path::PathBuf, sync::Arc};
 
+use arc_swap::ArcSwapAny;
 use delegate::delegate;
 use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_errors::{span::Span, LpcError, Result};
@@ -165,8 +166,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Get a reference to `this_player` from the context
     #[inline]
-    pub fn this_player(&self) -> Option<&Arc<Process>> {
-        self.task_context.this_player.as_ref()
+    pub fn this_player(&self) -> &ArcSwapAny<Option<Arc<Process>>> {
+        &self.task_context.this_player
     }
 
     /// Return a clone of the current stack, for snapshotting
