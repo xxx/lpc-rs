@@ -26,7 +26,7 @@ pub struct Config {
     pub bind_address: Ustr,
 
     #[builder(setter(into, strip_option), default = "Some(ustr(\"STDOUT\"))")]
-    pub log_file: Option<Ustr>,
+    pub server_log_file: Option<Ustr>,
 
     #[builder(setter(custom), default = "ustr(\"\")")]
     pub lib_dir: Ustr,
@@ -87,11 +87,11 @@ impl ConfigBuilder {
                 .or_else(|| env.get("BIND_ADDRESS"))
                 .map(|x| ustr(x))
                 .or(self.bind_address),
-            log_file: env
-                .get("LPC_LOG_FILE")
-                .or_else(|| env.get("LOG_FILE"))
+            server_log_file: env
+                .get("LPC_SERVER_LOG_FILE")
+                .or_else(|| env.get("SERVER_LOG_FILE"))
                 .map(|x| Some(ustr(x)))
-                .or(self.log_file),
+                .or(self.server_log_file),
             lib_dir: env
                 .get("LPC_LIB_DIR")
                 .or_else(|| env.get("LIB_DIR"))
@@ -197,11 +197,14 @@ impl Config {
 
         let registry = tracing_subscriber::registry().with(filter);
 
-        let file = self.log_file.as_deref().unwrap_or("STDOUT");
+        let file = self.server_log_file.as_deref().unwrap_or("STDOUT");
 
         match file {
             "STDOUT" => registry
                 .with(fmt::Layer::default().with_writer(std::io::stdout))
+                .init(),
+            "STDERR" => registry
+                .with(fmt::Layer::default().with_writer(std::io::stderr))
                 .init(),
             s => registry
                 .with(fmt::Layer::default().with_writer(std::fs::File::create(s).unwrap()))
