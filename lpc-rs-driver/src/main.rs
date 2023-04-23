@@ -45,31 +45,28 @@ async fn main() {
 }
 
 fn init_tracing_subscriber(config: &Config) {
-    if_chain! {
-        if let Some(level) = config.log_level;
-        if let Some(file) = &config.log_file;
-        then {
-            match file.as_str() {
-                "STDOUT" => {
-                    tracing::subscriber::set_global_default(
-                        tracing_subscriber::fmt()
-                            .with_max_level(level)
-                            // .with_env_filter("lpc_rs::interpreter::task=trace,[populate_upvalues]=trace")
-                            .with_writer(std::io::stdout)
-                            .finish(),
-                    )
-                    .expect("setting tracing default failed");
-                }
-                s => {
-                    tracing::subscriber::set_global_default(
-                        tracing_subscriber::fmt()
-                            .with_max_level(level)
-                            .with_writer(std::fs::File::create(s).unwrap())
-                            .finish(),
-                    )
-                    .expect("setting tracing default failed");
-                }
-            }
+    let level = config.log_level.unwrap_or(tracing::Level::INFO);
+    let file = config.log_file.as_deref().unwrap_or("STDOUT");
+
+    match file.as_str() {
+        "STDOUT" => {
+            tracing::subscriber::set_global_default(
+                tracing_subscriber::fmt()
+                    .with_max_level(level)
+                    // .with_env_filter("lpc_rs::interpreter::task=trace,[populate_upvalues]=trace")
+                    .with_writer(std::io::stdout)
+                    .finish(),
+            )
+                .expect("setting tracing default failed");
+        }
+        s => {
+            tracing::subscriber::set_global_default(
+                tracing_subscriber::fmt()
+                    .with_max_level(level)
+                    .with_writer(std::fs::File::create(s).unwrap())
+                    .finish(),
+            )
+                .expect("setting tracing default failed");
         }
     }
 }
