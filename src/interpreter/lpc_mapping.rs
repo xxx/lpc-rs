@@ -13,7 +13,7 @@ use crate::interpreter::{
     lpc_ref::LpcRef,
 };
 
-/// A newtype wrapper for a map of [`LpcRefs`]s to [`LpcRef`]s,
+/// A newtype wrapper for a map of [`LpcRef`]s to [`LpcRef`]s,
 /// with a [`UniqueId`] for GC purposes.
 #[derive(Default, Clone, PartialEq, Eq)]
 pub struct LpcMapping {
