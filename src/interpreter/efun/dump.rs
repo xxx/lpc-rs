@@ -93,7 +93,7 @@ fn format_mapping<const N: usize>(
     let inner = map
         .iter()
         .map(|(key, val)| {
-            let k_format = format_ref(&key.value, context, 0, recurse_level + 1)?;
+            let k_format = format_ref(key, context, 0, recurse_level + 1)?;
             let v_format = format_ref(val, context, 2, recurse_level + 1)?;
 
             Ok(format!(

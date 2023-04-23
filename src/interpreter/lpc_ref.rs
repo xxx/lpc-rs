@@ -1,6 +1,5 @@
 use std::{
     cmp::Ordering,
-    collections::hash_map::DefaultHasher,
     fmt,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
@@ -123,12 +122,6 @@ impl LpcRef {
             LpcRef::Object(_) => LpcType::Object(false),
             LpcRef::Function(_) => LpcType::Function(false),
         }
-    }
-
-    /// Convert this [`LpcRef`] into a [`HashedLpcRef`], for use in a
-    /// [`HashMap`](std::collections::HashMap).
-    pub fn into_hashed(self) -> HashedLpcRef {
-        HashedLpcRef::new(self)
     }
 
     /// Convenience to perform a binary operation on a pair of [`LpcRef`]s
@@ -538,42 +531,6 @@ impl Default for LpcRef {
     }
 }
 
-// TODO: this shouldn't be necessary anymore, but maybe keep it to reduce contention?
-/// A structure that contains a pre-calculated hash.
-#[readonly::make]
-#[derive(Debug, Clone)]
-pub struct HashedLpcRef {
-    pub hash: u64,
-    pub value: LpcRef,
-}
-
-impl HashedLpcRef {
-    pub fn new(value: LpcRef) -> Self {
-        let mut hasher = DefaultHasher::new();
-        value.hash(&mut hasher);
-        Self {
-            hash: hasher.finish(),
-            value,
-        }
-    }
-}
-
-impl Hash for HashedLpcRef {
-    #[inline]
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.hash.hash(state)
-    }
-}
-
-impl PartialEq for HashedLpcRef {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.hash == other.hash
-    }
-}
-
-impl Eq for HashedLpcRef {}
-
 #[cfg(test)]
 mod tests {
     use claims::assert_err;
@@ -721,10 +678,10 @@ mod tests {
             let value2 = LpcRef::from(666);
 
             let mut hash1 = IndexMap::new();
-            hash1.insert(key1.clone().into_hashed(), value1.clone());
+            hash1.insert(key1.clone(), value1.clone());
 
             let mut hash2 = IndexMap::new();
-            hash2.insert(key2.clone().into_hashed(), value2.clone());
+            hash2.insert(key2.clone(), value2.clone());
 
             let map = LpcMapping::new(hash1).into_lpc_ref(&pool);
             let map2 = LpcMapping::new(hash2).into_lpc_ref(&pool);
@@ -732,8 +689,8 @@ mod tests {
             let result = map.add(&map2, &Heap::new(5));
 
             let mut expected = IndexMap::new();
-            expected.insert(key1.into_hashed(), value1);
-            expected.insert(key2.into_hashed(), value2);
+            expected.insert(key1, value1);
+            expected.insert(key2, value2);
 
             if let Ok(LpcRef::Mapping(m)) = result {
                 assert_eq!(*m.read(), expected)
@@ -751,10 +708,10 @@ mod tests {
             let value2 = LpcRef::from(666);
 
             let mut hash1 = IndexMap::new();
-            hash1.insert(key1.into_hashed(), value1);
+            hash1.insert(key1, value1);
 
             let mut hash2 = IndexMap::new();
-            hash2.insert(key2.clone().into_hashed(), value2.clone());
+            hash2.insert(key2.clone(), value2.clone());
 
             let map = LpcMapping::new(hash1).into_lpc_ref(&pool);
             let map2 = LpcMapping::new(hash2).into_lpc_ref(&pool);
@@ -762,7 +719,7 @@ mod tests {
             let result = map.add(&map2, &Heap::new(5));
 
             let mut expected = IndexMap::new();
-            expected.insert(key2.into_hashed(), value2);
+            expected.insert(key2, value2);
 
             if let Ok(LpcRef::Mapping(m)) = result {
                 assert_eq!(*m.read(), expected)

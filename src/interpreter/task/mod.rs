@@ -17,7 +17,6 @@ use bit_set::BitSet;
 use decorum::Total;
 use educe::Educe;
 use futures::future::join_all;
-use hash_hasher::HashBuildHasher;
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -670,7 +669,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.binary_operation(r1, r2, r3, |x, y, memory| x.add(y, memory))?;
             }
             Instruction::MapConst(r) => {
-                let mut register_map = IndexMap::with_hasher(HashBuildHasher::default());
+                let mut register_map = IndexMap::with_capacity(self.array_items.len() / 2);
 
                 debug_assert!(
                     self.array_items.len() % 2 == 0,
@@ -679,7 +678,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 for chunk in &self.array_items.iter().copied().chunks(2) {
                     let (key, value) = chunk.into_iter().collect_tuple().unwrap();
                     register_map.insert(
-                        get_loc!(self, key)?.into_owned().into_hashed(),
+                        get_loc!(self, key)?.into_owned(),
                         get_loc!(self, value)?.into_owned(),
                     );
                 }
@@ -1710,7 +1709,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             LpcRef::Mapping(map_ref) => {
                 let map = map_ref.read();
 
-                let var = if let Some(v) = map.get(&lpc_ref.into_hashed()) {
+                let var = if let Some(v) = map.get(&lpc_ref) {
                     v.clone()
                 } else {
                     NULL
@@ -1750,7 +1749,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     };
 
                     if let Some((key, _)) = map.get_index(index as usize) {
-                        key.value.clone()
+                        key.clone()
                     } else {
                         NULL
                     }
@@ -1820,10 +1819,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             LpcRef::Mapping(ref mut map_ref) => {
                 let mut map = map_ref.write();
 
-                map.insert(
-                    index.clone().into_hashed(),
-                    get_loc!(self, value_loc)?.into_owned(),
-                );
+                map.insert(index.clone(), get_loc!(self, value_loc)?.into_owned());
 
                 Ok(())
             }
@@ -2106,7 +2102,7 @@ mod tests {
                     let m = x.read();
                     let mapping = m
                         .iter()
-                        .map(|(k, v)| (BareVal::from_lpc_ref(&k.value), BareVal::from_lpc_ref(v)))
+                        .map(|(k, v)| (BareVal::from_lpc_ref(k), BareVal::from_lpc_ref(v)))
                         .collect::<HashMap<_, _>>();
                     BareVal::Mapping(mapping)
                 }

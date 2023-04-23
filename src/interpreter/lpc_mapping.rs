@@ -10,21 +10,21 @@ use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
     heap::Heap,
     into_lpc_ref::IntoLpcRef,
-    lpc_ref::{HashedLpcRef, LpcRef},
+    lpc_ref::LpcRef,
 };
 
-/// A newtype wrapper for a map of [`HashedLpcRef`]s to [`LpcRef`]s,
+/// A newtype wrapper for a map of [`LpcRefs`]s to [`LpcRef`]s,
 /// with a [`UniqueId`] for GC purposes.
 #[derive(Default, Clone, PartialEq, Eq)]
 pub struct LpcMapping {
     pub unique_id: UniqueId,
-    pub mapping: IndexMap<HashedLpcRef, LpcRef>,
+    pub mapping: IndexMap<LpcRef, LpcRef>,
 }
 
 impl LpcMapping {
     /// Create a new [`LpcMapping`].
     #[inline]
-    pub fn new(mapping: IndexMap<HashedLpcRef, LpcRef>) -> Self {
+    pub fn new(mapping: IndexMap<LpcRef, LpcRef>) -> Self {
         Self {
             unique_id: UniqueId::new(),
             mapping,
@@ -33,16 +33,16 @@ impl LpcMapping {
 
     delegate! {
         to self.mapping {
-            pub fn get(&self, key: &HashedLpcRef) -> Option<&LpcRef>;
-            pub fn get_index(&self, index: usize) -> Option<(&HashedLpcRef, &LpcRef)>;
-            pub fn insert(&mut self, key: HashedLpcRef, value: LpcRef) -> Option<LpcRef>;
+            pub fn get(&self, key: &LpcRef) -> Option<&LpcRef>;
+            pub fn get_index(&self, index: usize) -> Option<(&LpcRef, &LpcRef)>;
+            pub fn insert(&mut self, key: LpcRef, value: LpcRef) -> Option<LpcRef>;
             pub fn extend<T>(&mut self, iter: T)
-                where T: IntoIterator<Item = (HashedLpcRef, LpcRef)>;
-            pub fn iter(&self) -> indexmap::map::Iter<HashedLpcRef, LpcRef>;
+                where T: IntoIterator<Item = (LpcRef, LpcRef)>;
+            pub fn iter(&self) -> indexmap::map::Iter<LpcRef, LpcRef>;
             pub fn is_empty(&self) -> bool;
             pub fn len(&self) -> usize;
-            pub fn keys(&self) -> indexmap::map::Keys<HashedLpcRef, LpcRef>;
-            pub fn values(&self) -> indexmap::map::Values<HashedLpcRef, LpcRef>;
+            pub fn keys(&self) -> indexmap::map::Keys<LpcRef, LpcRef>;
+            pub fn values(&self) -> indexmap::map::Values<LpcRef, LpcRef>;
         }
     }
 }
@@ -57,13 +57,13 @@ where
             result.push_str(", ");
         }
         if_chain! {
-            if let LpcRef::Mapping(other) = &key.value;
+            if let LpcRef::Mapping(other) = &key;
             if &*other.read() == mapping;
             then {
                 result.push_str("([ this ])");
                 continue;
             } else {
-                result.push_str(&fun(&key.value));
+                result.push_str(&fun(key));
             }
         }
 
@@ -110,7 +110,7 @@ impl Mark for LpcMapping {
         }
 
         for (key, value) in &self.mapping {
-            key.value.mark(marked, processed)?;
+            key.mark(marked, processed)?;
             value.mark(marked, processed)?;
         }
 
@@ -119,8 +119,8 @@ impl Mark for LpcMapping {
 }
 
 impl IntoIterator for LpcMapping {
-    type Item = (HashedLpcRef, LpcRef);
-    type IntoIter = indexmap::map::IntoIter<HashedLpcRef, LpcRef>;
+    type Item = (LpcRef, LpcRef);
+    type IntoIter = indexmap::map::IntoIter<LpcRef, LpcRef>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -128,8 +128,8 @@ impl IntoIterator for LpcMapping {
     }
 }
 
-impl PartialEq<IndexMap<HashedLpcRef, LpcRef>> for LpcMapping {
-    fn eq(&self, other: &IndexMap<HashedLpcRef, LpcRef>) -> bool {
+impl PartialEq<IndexMap<LpcRef, LpcRef>> for LpcMapping {
+    fn eq(&self, other: &IndexMap<LpcRef, LpcRef>) -> bool {
         &self.mapping == other
     }
 }
@@ -162,7 +162,7 @@ mod tests {
 
         let mut mapping = LpcMapping::new(IndexMap::new());
 
-        mapping.insert(HashedLpcRef::new(key_ref), value_ref);
+        mapping.insert(key_ref, value_ref);
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
