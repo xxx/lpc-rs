@@ -9,14 +9,14 @@ use lpc_rs_utils::config::ConfigBuilder;
 struct Args {
     /// Use a specific configuration file
     #[clap(short, long, value_parser)]
-    config: Option<String>,
+    env: Option<String>,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
 
-    let config_override = args.config;
+    let config_override = args.env;
 
     let built = ConfigBuilder::default().load_env(config_override).build();
 
