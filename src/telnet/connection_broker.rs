@@ -6,7 +6,7 @@ use tokio::{net::ToSocketAddrs, sync::mpsc::Sender, task::JoinHandle};
 use tracing::{error, info, instrument, trace};
 
 use crate::{
-    interpreter::vm::vm_op::VmOp,
+    interpreter::{task::task_template::TaskTemplate, vm::vm_op::VmOp},
     telnet::{
         connection::Connection,
         ops::{BrokerOp, ConnectionOp},
@@ -17,7 +17,7 @@ use crate::{
 /// Manages all the outgoing connections to users.
 #[derive(Debug)]
 pub struct ConnectionBroker {
-    /// Map of remote IP address to the tx channel of the connection itself
+    /// Map of remote IP address to the connection itself
     connections: Arc<DashMap<SocketAddr, Arc<Connection>>>,
 
     /// Map of remote IP addresses to join handles, which can be dropped to disconnect the user.
@@ -47,18 +47,17 @@ impl ConnectionBroker {
 
     /// Starts the connection broker.
     /// This will also start the telnet server.
-    pub async fn run<A>(&mut self, listen_address: A)
+    pub async fn run<A>(&mut self, listen_address: A, template: TaskTemplate)
     where
         A: ToSocketAddrs + Send + 'static,
     {
         info!("Starting connection broker");
-        self.telnet.run(listen_address).await;
+        self.telnet.run(listen_address, template).await;
 
         self.main_loop();
     }
 
     /// The main loop of the connection broker.
-    /// This will listen for incoming messages from the telnet server and the VM.
     #[instrument(skip(self))]
     fn main_loop(&self) {
         let vm_tx = self.vm_tx.clone();
@@ -83,24 +82,22 @@ impl ConnectionBroker {
                         }
                         BrokerOp::NewHandle(address, handle) => {
                             handles.insert(address, handle);
-                            trace!("Added handle for connection {}", address);
+                            trace!("Added handle for {}", address);
                         }
-                        BrokerOp::Disconnect(address) => {
-                            match handles.remove(&address) {
+                        BrokerOp::Disconnect(ref address) => {
+                            match handles.remove(address) {
                                 Some((_, handle)) => {
-                                    info!("Disconnecting connection {}", address);
+                                    info!(?op, "Disconnecting {}", address);
                                     handle.abort();
                                 }
                                 None => {
-                                    error!("Failed to find handle for connection from {}", address);
+                                    error!("Failed to find handle for {}", address);
                                 }
                             }
 
-                            if connections.remove(&address).is_none() {
+                            if connections.remove(address).is_none() {
                                 error!("Failed to find connection with ID {}", address);
                             }
-                            //
-                            // return;
                         }
                         BrokerOp::SendMessage(msg, address) => {
                             let tx = {
@@ -134,8 +131,14 @@ impl ConnectionBroker {
 mod tests {
     use std::time::Duration;
 
+    use parking_lot::RwLock;
+
     use super::*;
-    use crate::telnet::connection::Connection;
+    use crate::{
+        interpreter::{call_outs::CallOuts, object_space::ObjectSpace},
+        telnet::connection::Connection,
+        test_support::test_config,
+    };
 
     #[tokio::test]
     async fn test_connection_broker() {
@@ -143,15 +146,29 @@ mod tests {
         let (vm_tx, mut vm_rx) = tokio::sync::mpsc::channel(10);
         let (connection_tx, mut connection_rx) = tokio::sync::mpsc::channel(10);
         let telnet = Telnet::new(broker_tx.clone());
-        let mut broker = ConnectionBroker::new(vm_tx, broker_rx.clone(), telnet);
+        let config = Arc::new(test_config());
+        let object_space = Arc::new(ObjectSpace::new(config.clone()));
+        let mut broker = ConnectionBroker::new(vm_tx.clone(), broker_rx.clone(), telnet);
+        let template = TaskTemplate {
+            config,
+            object_space,
+            vm_upvalues: Arc::new(Default::default()),
+            call_outs: Arc::new(RwLock::new(CallOuts::new(vm_tx.clone()))),
+            tx: vm_tx.clone(),
+            memory: Arc::new(Default::default()),
+        };
 
-        broker.run("127.0.0.1:6666").await;
+        broker.run("127.0.0.1:6666", template).await;
 
         //
         // BrokerOp::NewConnection
         //
         let address = SocketAddr::from(([127, 0, 0, 1], 1234));
-        let connection = Arc::new(Connection::new(address, connection_tx.clone(), broker_tx.clone()));
+        let connection = Arc::new(Connection::new(
+            address,
+            connection_tx.clone(),
+            broker_tx.clone(),
+        ));
         let op = BrokerOp::NewConnection(connection.clone());
         broker_tx.send_async(op).await.unwrap();
 

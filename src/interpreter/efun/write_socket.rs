@@ -1,29 +1,17 @@
-use std::sync::Arc;
-use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext,
-    into_lpc_ref::IntoLpcRef,
-    lpc_ref::{LpcRef, NULL},
-    lpc_string::LpcString,
+use crate::{
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},
+    telnet::ops::ConnectionOp,
 };
-use crate::interpreter::lpc_int::LpcInt;
-use crate::telnet::connection::Connection;
-use crate::telnet::ops::ConnectionOp;
 
 /// `write_socket`, an efun for writing to the interactive inhabiting the object.
 pub async fn write_socket<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1_usize);
 
     let result = match arg_ref {
-        LpcRef::Float(_)
-        | LpcRef::Int(_)
-        | LpcRef::String(_) => arg_ref.to_string(),
-        | LpcRef::Array(_)
-        | LpcRef::Mapping(_)
-        | LpcRef::Function(_)
-        | LpcRef::Object(_) => {
+        LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::String(_) => arg_ref.to_string(),
+        LpcRef::Array(_) | LpcRef::Mapping(_) | LpcRef::Function(_) | LpcRef::Object(_) => {
             return Err(context.runtime_error("invalid argument to `write_socket`"));
         }
     };

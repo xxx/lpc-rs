@@ -48,6 +48,12 @@ impl PartialEq<LpcIntInner> for LpcInt {
     }
 }
 
+impl From<LpcInt> for bool {
+    fn from(i: LpcInt) -> Self {
+        i.0 != 0
+    }
+}
+
 impl Add<LpcInt> for LpcInt {
     type Output = LpcInt;
 

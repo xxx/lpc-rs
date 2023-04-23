@@ -103,7 +103,9 @@ impl Vm {
         self.bootstrap().await?;
 
         let address = format!("{}:{}", self.config.bind_address, self.config.port);
-        self.connection_broker.run(address).await;
+        self.connection_broker
+            .run(address, self.new_task_template())
+            .await;
         self.run().await
     }
 

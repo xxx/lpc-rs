@@ -6,7 +6,7 @@ use codespan_reporting::term::termcolor::{ColorSpec, WriteColor};
 /// diagnostics to files.
 pub struct FileStream {
     file: File,
-    color: Option<ColorSpec>
+    color: Option<ColorSpec>,
 }
 
 impl FileStream {

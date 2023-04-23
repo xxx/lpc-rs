@@ -1,9 +1,8 @@
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use tokio::task::JoinHandle;
 
-use crate::telnet::connection::Connection;
+use crate::telnet::connection::{Connection, InputTo};
 
 /// Operations that are handled by the [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker)
 #[derive(Debug)]
@@ -30,4 +29,7 @@ pub enum BrokerOp {
 pub enum ConnectionOp {
     /// Send a message to the user
     SendMessage(String),
+
+    /// Set a function to receive the next line of input
+    InputTo(InputTo),
 }

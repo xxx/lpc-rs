@@ -5,8 +5,8 @@ use std::{
     path::Path,
     sync::Arc,
 };
-use arc_swap::{ArcSwap, ArcSwapAny, ArcSwapOption};
 
+use arc_swap::ArcSwapAny;
 use bit_set::BitSet;
 use delegate::delegate;
 use parking_lot::RwLock;

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use if_chain::if_chain;
 use lpc_rs_errors::LpcError;
 use tokio::task::JoinHandle;
@@ -7,15 +5,12 @@ use tokio::task::JoinHandle;
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
-        efun::EFUN_FUNCTIONS,
-        function_type::function_address::FunctionAddress,
-        lpc_ref::{LpcRef, NULL},
-        process::Process,
+        function_type::function_ptr::FunctionPtr,
+        lpc_ref::LpcRef,
         task::{task_id::TaskId, Task},
         task_context::TaskContext,
         vm::{vm_op::VmOp, Vm},
     },
-    util::get_simul_efuns,
 };
 
 impl Vm {
@@ -54,61 +49,13 @@ impl Vm {
                 }
             };
 
-            let Ok((ptr_lock, repeating)) = pair else {
+            let Ok((ptr_arc, repeating)) = pair else {
                 call_outs.write().remove(idx);
                 let _ = tx.send(VmOp::TaskError(TaskId(0), pair.unwrap_err())).await;
                 return;
             };
 
-            let triple = {
-                let ptr = ptr_lock.read();
-
-                // call outs don't get any additional args passed to them, so just set up the partial args.
-                // use int 0 for any that were not applied at the time the pointer was created
-                // TODO: error instead of int 0?
-                let args = ptr
-                    .partial_args
-                    .iter()
-                    .map(|arg| match arg {
-                        Some(lpc_ref) => lpc_ref.clone(),
-                        None => NULL,
-                    })
-                    .collect::<Vec<_>>();
-
-                match ptr.address {
-                    FunctionAddress::Local(ref proc, ref function) => {
-                        if let Some(proc) = proc.upgrade() {
-                            Ok((proc, function.clone(), args))
-                        } else {
-                            Err(LpcError::new(
-                                "attempted to prioritize a function pointer to a dead process",
-                            ))
-                        }
-                    }
-                    FunctionAddress::Dynamic(_) => Err(LpcError::new(
-                        "attempted to prioritize a dynamic receiver passed to call_out",
-                    )),
-                    FunctionAddress::SimulEfun(name) => {
-                        match get_simul_efuns(&config, &object_space) {
-                            Some(simul_efuns) => match simul_efuns.program.lookup_function(name) {
-                                Some(function) => Ok((simul_efuns.clone(), function.clone(), args)),
-                                None => Err(LpcError::new(format!(
-                                    "call to unknown simul_efun `{name}`"
-                                ))),
-                            },
-                            None => Err(LpcError::new(
-                                "function pointer to simul_efun passed, but no simul_efuns?",
-                            )),
-                        }
-                    }
-                    FunctionAddress::Efun(name) => {
-                        let pf = EFUN_FUNCTIONS.get(name.as_str()).unwrap();
-
-                        Ok((Arc::new(Process::default()), pf.clone(), args))
-                    }
-                }
-            };
-
+            let triple = FunctionPtr::triple(&ptr_arc, &config, &object_space);
             let Ok((process, function, args)) = triple else {
                 call_outs.write().remove(idx);
                 let _ = tx.send(VmOp::TaskError(TaskId(0), triple.unwrap_err())).await;
@@ -151,12 +98,15 @@ impl Vm {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use indoc::indoc;
 
     use super::*;
     use crate::{
         interpreter::{
-            call_outs::CallOutBuilder, function_type::function_ptr::FunctionPtrBuilder,
+            call_outs::CallOutBuilder,
+            function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
             into_lpc_ref::IntoLpcRef,
         },
         test_support::test_config,

@@ -1,22 +1,33 @@
 use std::{
     fmt::{Display, Formatter},
-    sync::Weak,
+    sync::{Arc, Weak},
 };
 
 use bit_set::BitSet;
 use derive_builder::Builder;
 use itertools::Itertools;
 use lpc_rs_core::register::Register;
+use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_function_support::program_function::ProgramFunction;
+use lpc_rs_utils::config::Config;
+use parking_lot::RwLock;
 use tracing::{instrument, trace};
 
-use crate::interpreter::{
-    function_type::function_address::FunctionAddress,
-    gc::{mark::Mark, unique_id::UniqueId},
-    heap::Heap,
-    into_lpc_ref::IntoLpcRef,
-    lpc_ref::LpcRef,
-    process::Process,
+use crate::{
+    interpreter::{
+        efun::EFUN_FUNCTIONS,
+        function_type::function_address::FunctionAddress,
+        gc::{mark::Mark, unique_id::UniqueId},
+        heap::Heap,
+        into_lpc_ref::IntoLpcRef,
+        lpc_ref::{LpcRef, NULL},
+        object_space::ObjectSpace,
+        process::Process,
+    },
+    util::get_simul_efuns,
 };
+
+type PtrTriple = (Arc<Process>, Arc<ProgramFunction>, Vec<LpcRef>);
 
 /// A pointer to a function, created with the `&` syntax.
 #[derive(Debug, Clone, Builder)]
@@ -41,7 +52,7 @@ pub struct FunctionPtr {
     pub call_other: bool,
 
     /// The variables that I need from the environment, at the time this
-    /// [`FunctionPtr`] ss created.
+    /// [`FunctionPtr`] is created.
     #[builder(default)]
     pub upvalue_ptrs: Vec<Register>,
 
@@ -87,11 +98,80 @@ impl FunctionPtr {
 
         self.partial_args.extend(arg_iter.cloned().map(Some));
     }
+
+    /// Prepare this function pointer for a call, by getting all of the pieces out of it, and into separate variables.
+    pub fn triple(
+        ptr_arc: &RwLock<FunctionPtr>,
+        config: &Config,
+        object_space: &ObjectSpace,
+    ) -> Result<PtrTriple> {
+        let ptr = ptr_arc.read();
+
+        // We won't get any additional args passed to us, so just set up the partial args.
+        // Use int 0 for any that were not applied at the time the pointer was created.
+        // TODO: error instead of int 0?
+        let args = ptr
+            .partial_args
+            .iter()
+            .map(|arg| match arg {
+                Some(lpc_ref) => lpc_ref.clone(),
+                None => NULL,
+            })
+            .collect::<Vec<_>>();
+
+        match ptr.address {
+            FunctionAddress::Local(ref proc, ref function) => {
+                if let Some(proc) = proc.upgrade() {
+                    Ok((proc, function.clone(), args))
+                } else {
+                    Err(LpcError::new(
+                        "attempted to call a function pointer with a dead process",
+                    ))
+                }
+            }
+            FunctionAddress::Dynamic(name) => {
+                let Some(Some(LpcRef::Object(proc))) = ptr.partial_args.first() else {
+                    return Err(LpcError::new(
+                        "attempted to call a dynamic receiver that is not an object",
+                    ));
+                };
+
+                let Some(proc) = proc.upgrade() else {
+                    return Err(LpcError::new(
+                        "attempted to call a dynamic receiver that has been destructed",
+                    ));
+                };
+
+                let func = proc.program.lookup_function(name).ok_or_else(|| {
+                    LpcError::new(format!("attempted to call unknown function `{}`", name))
+                })?;
+
+                let func = func.clone();
+                Ok((proc, func, args))
+            }
+            FunctionAddress::SimulEfun(name) => match get_simul_efuns(config, object_space) {
+                Some(simul_efuns) => match simul_efuns.program.lookup_function(name) {
+                    Some(function) => Ok((simul_efuns.clone(), function.clone(), args)),
+                    None => Err(LpcError::new(format!(
+                        "call to unknown simul_efun `{name}`"
+                    ))),
+                },
+                None => Err(LpcError::new(
+                    "function pointer to simul_efun passed, but no simul_efuns?",
+                )),
+            },
+            FunctionAddress::Efun(name) => {
+                let pf = EFUN_FUNCTIONS.get(name.as_str()).unwrap();
+
+                Ok((Arc::new(Process::default()), pf.clone(), args))
+            }
+        }
+    }
 }
 
 impl Mark for FunctionPtr {
     #[instrument(skip(self))]
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
         trace!("marking function ptr");
 
         if !processed.insert(*self.unique_id.as_ref()) {

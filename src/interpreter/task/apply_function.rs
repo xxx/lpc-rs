@@ -44,6 +44,40 @@ pub async fn apply_function(
         .map(|_| task.result().cloned().unwrap())
 }
 
+/// Apply function named `name`, in process `proc`, to arguments `args`, using context
+/// information from `template`.
+/// Returns the result of the function.
+///
+/// This function uses timed evaluation, and will timeout if execution takes too long.
+///
+/// # Arguments
+///
+/// * `name` - The name of the function to apply. This is assumed to be an unmangled name.
+/// * `args` - A slice of [`LpcRef`]s to apply the function to.
+/// * `proc` - The [`Process`] to apply the function in.
+/// * `template` - The [`TaskTemplate`] that holds the rest of the context information.
+///
+/// # Returns
+///
+/// * `Some(Ok(LpcRef))` - The result of the function.
+/// * `Some(Err(LpcError))` - The error that occurred.
+/// * `None` - The function is not defined in `proc`.
+pub async fn apply_function_by_name<S>(
+    name: S,
+    args: &[LpcRef],
+    proc: Arc<Process>,
+    template: TaskTemplate,
+) -> Option<Result<LpcRef>>
+where
+    S: AsRef<str>,
+{
+    let Some(f) = proc.program.unmangled_functions.get(name.as_ref()) else {
+        return None;
+    };
+
+    Some(apply_function(f.clone(), args, proc, template).await)
+}
+
 #[cfg(test)]
 mod tests {
     use indoc::indoc;

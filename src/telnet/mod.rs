@@ -2,8 +2,7 @@ pub mod connection;
 pub mod connection_broker;
 pub mod ops;
 
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use bytes::Bytes;
 use flume::Sender as FlumeSender;
@@ -20,12 +19,20 @@ use tokio::{
 use tokio_util::codec::{Decoder, Framed};
 use tracing::{error, info, instrument, trace, warn};
 
-use crate::telnet::{
-    connection::Connection,
-    ops::{BrokerOp, ConnectionOp},
+use crate::{
+    interpreter::{
+        function_type::function_ptr::FunctionPtr,
+        into_lpc_ref::IntoLpcRef,
+        lpc_string::LpcString,
+        task::{apply_function::apply_function, task_template::TaskTemplate},
+    },
+    telnet::{
+        connection::{Connection, InputTo},
+        ops::{BrokerOp, ConnectionOp},
+    },
 };
 
-/// The incoming connection handler. Once established, connections are handled by [`ConnectionBroker`](connection_broker::ConnectionBroker).
+/// The incoming connection handler. Once established, individual connections are managed by [`ConnectionBroker`](connection_broker::ConnectionBroker).
 #[derive(Debug)]
 pub struct Telnet {
     /// The handle to the main connection handler task.
@@ -45,7 +52,7 @@ impl Telnet {
     }
 
     /// Starts the telnet server.
-    pub async fn run<A>(&self, address: A)
+    pub async fn run<A>(&self, address: A, template: TaskTemplate)
     where
         A: ToSocketAddrs + Send + 'static,
     {
@@ -74,11 +81,12 @@ impl Telnet {
             loop {
                 while let Ok((stream, remote_ip)) = listener.accept().await {
                     let spawn_broker_tx = broker_tx.clone();
+                    let template = template.clone();
 
                     let handle = tokio::spawn(async move {
                         info!("New connection from {}", &remote_ip);
 
-                        Self::connection_loop(stream, remote_ip, spawn_broker_tx).await;
+                        Self::connection_loop(stream, remote_ip, spawn_broker_tx, template).await;
                     });
 
                     let Ok(_) = broker_tx.send_async(BrokerOp::NewHandle(remote_ip, handle)).await else {
@@ -93,34 +101,29 @@ impl Telnet {
     }
 
     /// Start the main loop for a single user's connection. Handles sends and receives.
-    #[instrument(skip(stream, broker_tx))]
+    #[instrument(skip(stream, broker_tx, template))]
     async fn connection_loop(
         stream: TcpStream,
         remote_ip: SocketAddr,
         broker_tx: FlumeSender<BrokerOp>,
+        template: TaskTemplate,
     ) {
         let codec = TelnetCodec::new(4096);
         let mut framed = codec.framed(stream);
 
         Self::negotiations(&mut framed, remote_ip, &broker_tx).await;
 
-        // Disable echo for password entry. It may seem counterintuitive that we're
-        // saying we WILL echo here, but it's really telling their client to stop its
-        // own echoing. We're lying to the client - we're not going to echo either.
-        // let _ = framed.send(TelnetEvent::Will(TelnetOption::Echo)).await;
-
-        // TODO: login / auth
-        // apply `connect` to the master
-        // if an object result, apply `logon` to it
-        // if an object result, it's a successful connection
-
         let (mut sink, mut input) = framed.split();
 
         let (connection_tx, mut connection_rx) = mpsc::channel::<ConnectionOp>(128);
 
-        let connection = Arc::new(Connection::new(remote_ip, connection_tx.clone(), broker_tx.clone()));
+        let connection = Arc::new(Connection::new(
+            remote_ip,
+            connection_tx.clone(),
+            broker_tx.clone(),
+        ));
 
-        let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection)).await else {
+        let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection.clone())).await else {
             error!("Failed to send BrokerOp::NewConnection. Dropping connection.");
             let msg = TelnetEvent::Message("The server is currently unable to accept new connections. Please try again shortly.".to_string());
             let _ = sink.send(msg).await;
@@ -135,10 +138,20 @@ impl Telnet {
 
                     match send_to_user {
                         Some(ConnectionOp::SendMessage(msg)) => {
-                            if let Err(e) = sink.send(TelnetEvent::Message(msg)).await {
+                            if let Err(e) = sink.send(TelnetEvent::RawMessage(msg)).await {
                                 error!("Failed to send message to user: {}", e);
                             }
                         },
+                        Some(ConnectionOp::InputTo(input_to)) => {
+                            if input_to.no_echo {
+                                // It may seem counterintuitive that we're saying we WILL echo here,
+                                // but it's really telling their client to stop its own echoing.
+                                // We're lying to the client - we're not going to echo, either.
+
+                                sink.send(TelnetEvent::Will(TelnetOption::Echo)).await.unwrap();
+                            }
+                            connection.input_to.store(Some(Arc::new(input_to)));
+                        }
                         None => {
                             info!("Broker closed the channel for {}. Closing connection.", &remote_ip);
                             let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
@@ -149,8 +162,7 @@ impl Telnet {
                 received_from_user = input.next() => {
                     match received_from_user {
                         Some(Ok(msg)) => {
-                            println!("Received message from user: {:?}", msg);
-                            Self::handle_input_event(msg, &mut sink, remote_ip, &broker_tx).await;
+                            Self::handle_input_event(msg, &mut sink, &connection, &template).await;
                         }
                         Some(Err(e)) => {
                             warn!("User input error: {:?}", e);
@@ -165,6 +177,7 @@ impl Telnet {
         }
     }
 
+    /// Handle the Telnet negotiations when a user first connects.
     async fn negotiations(
         framed: &mut Framed<TcpStream, TelnetCodec>,
         _remote_ip: SocketAddr,
@@ -177,7 +190,8 @@ impl Telnet {
                 // *We* send the requests, so we reject their charset suggestion.
                 // This is technically not to spec (we should only do this after we send the
                 // request ourselves, and they respond with a charset request).
-                Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetRequest(_data)))) => {
+                Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetRequest(data)))) => {
+                    trace!("Charset request: {:?}", data);
                     let _ = framed
                         .send(TelnetEvent::Subnegotiate(
                             SubnegotiationType::CharsetRejected,
@@ -185,7 +199,7 @@ impl Telnet {
                         .await;
                 }
                 Some(Ok(TelnetEvent::Do(TelnetOption::Charset))) => {
-                    info!(
+                    trace!(
                         "matching CHARSET negotiation result: {:?}",
                         TelnetEvent::Do(TelnetOption::Charset)
                     );
@@ -198,17 +212,17 @@ impl Telnet {
                     // let _ = broker_tx.send_async(BrokerOp::SetCharset(remote_ip, data)).await;
                 }
                 Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetAccepted(data)))) => {
-                    info!("Charset accepted: {:?}", data);
+                    trace!("Charset accepted: {:?}", data);
                     break;
                     // let _ = broker_tx.send_async(BrokerOp::SetCharset(remote_ip, data)).await;
                 }
                 Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetRejected))) => {
-                    info!("CHARSET rejected");
+                    trace!("CHARSET rejected");
                     break;
                     // let _ = broker_tx.send_async(BrokerOp::SetCharset(remote_ip, data)).await;
                 }
                 x => {
-                    trace!("CHARSET negotiation result: {:?}", x);
+                    trace!("Unknown CHARSET negotiation result: {:?}", x);
                     break;
                 }
             }
@@ -225,43 +239,93 @@ impl Telnet {
 
     async fn handle_input_event(
         msg: TelnetEvent,
-        _sink: &mut SplitSink<Framed<TcpStream, TelnetCodec>, TelnetEvent>,
-        _remote_ip: SocketAddr,
-        _broker_tx: &FlumeSender<BrokerOp>,
+        sink: &mut SplitSink<Framed<TcpStream, TelnetCodec>, TelnetEvent>,
+        connection: &Connection,
+        template: &TaskTemplate,
     ) {
         match msg {
             TelnetEvent::Character(char) => {
-                println!("Received character: {}", char);
+                trace!("Received character: {}", char);
             }
             TelnetEvent::Message(msg) => {
-                println!("Received message: {}", msg);
+                // TODO: don't make this swap if it's already None.
+                if let Some(input_to) = connection.input_to.swap(None) {
+                    Self::resolve_input_to(&input_to, &msg, sink, template).await;
+
+                    return;
+                }
+                info!("Received message: {}", msg);
+                // let _ = sink
+                //     .send(TelnetEvent::Message("Goodbye, world!".to_string()))
+                //     .await;
+                // let _ = broker_tx.send_async(BrokerOp::Disconnect(connection_id)).await;
+            }
+            TelnetEvent::RawMessage(msg) => {
+                trace!("Received raw message: {}", msg);
                 // let _ = sink
                 //     .send(TelnetEvent::Message("Goodbye, world!".to_string()))
                 //     .await;
                 // let _ = broker_tx.send_async(BrokerOp::Disconnect(connection_id)).await;
             }
             TelnetEvent::Do(option) => {
-                println!("Received DO: {:?}", option);
+                trace!("Received DO: {:?}", option);
             }
             TelnetEvent::Dont(option) => {
-                println!("Received DONT: {:?}", option);
+                trace!("Received DONT: {:?}", option);
             }
             TelnetEvent::Will(option) => {
-                println!("Received WILL: {:?}", option);
+                trace!("Received WILL: {:?}", option);
             }
             TelnetEvent::Wont(option) => {
-                println!("Received WONT: {:?}", option);
+                trace!("Received WONT: {:?}", option);
             }
             TelnetEvent::Subnegotiate(subneg) => {
-                println!("Received subnegotiation: {:?}", subneg);
+                trace!("Received subnegotiation: {:?}", subneg);
             }
             TelnetEvent::GoAhead => {
-                println!("Received GA");
+                trace!("Received GA");
             }
             TelnetEvent::Nop => {
-                println!("Received NOP");
+                trace!("Received NOP");
             }
         }
+    }
+
+    async fn resolve_input_to(
+        input_to: &InputTo,
+        msg: &String,
+        sink: &mut SplitSink<Framed<TcpStream, TelnetCodec>, TelnetEvent>,
+        template: &TaskTemplate,
+    ) {
+        if input_to.no_echo {
+            // Tell the client to start echoing again (by saying that we won't be).
+            let _ = sink.send(TelnetEvent::Wont(TelnetOption::Echo)).await;
+        }
+
+        let triple = FunctionPtr::triple(&input_to.ptr, &template.config, &template.object_space);
+        let Ok((process, function, mut args)) = triple else {
+            let _ = sink.send(TelnetEvent::Message("Canceled.".to_string())).await;
+            return;
+        };
+
+        let arg_index: Option<usize> = input_to
+            .ptr
+            .read()
+            .partial_args
+            .iter()
+            .position(|x| x.is_none());
+        let input_arg = LpcString::from(msg).into_lpc_ref(&template.memory);
+        if let Some(idx) = arg_index {
+            args[idx] = input_arg;
+        } else {
+            args.push(input_arg);
+        }
+
+        let result = apply_function(function, &args, process, template.clone()).await;
+        if let Err(e) = result {
+            // TODO: this should apply runtime_error() on the master.
+            error!("{}", e);
+        };
     }
 
     /// Stops the telnet server. This will disable new connections.

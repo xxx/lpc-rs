@@ -1788,7 +1788,6 @@ dependencies = [
 [[package]]
 name = "nectar"
 version = "0.1.0"
-source = "git+https://github.com/xxx/nectar?branch=main#22d8be108b11194074028aed2e401c921edd45cf"
 dependencies = [
  "bytes",
  "tokio-util",
