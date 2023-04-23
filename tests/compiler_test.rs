@@ -14,17 +14,6 @@ use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 use crate::support::{run_prog, test_config, test_config_builder};
 
-// #[ctor::ctor]
-// fn init() {
-//     tracing::subscriber::set_global_default(
-//         tracing_subscriber::fmt()
-//             .with_max_level(tracing::Level::TRACE)
-//             .with_writer(std::io::stdout)
-//             .finish(),
-//     )
-//         .expect("setting tracing default failed");
-// }
-
 fn default_compiler() -> Compiler {
     let config: Arc<Config> = ConfigBuilder::default()
         .lib_dir("tests/fixtures/code")

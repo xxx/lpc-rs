@@ -5,6 +5,7 @@ use fs_err as fs;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use tracing::{info, warn};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use ustr::{ustr, Ustr};
 
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
@@ -26,9 +27,6 @@ pub struct Config {
 
     #[builder(setter(into, strip_option), default = "Some(ustr(\"STDOUT\"))")]
     pub log_file: Option<Ustr>,
-
-    #[builder(setter(strip_option), default = "None")]
-    pub log_level: Option<tracing::Level>,
 
     #[builder(setter(custom), default = "ustr(\"\")")]
     pub lib_dir: Ustr,
@@ -94,11 +92,6 @@ impl ConfigBuilder {
                 .or_else(|| env.get("LOG_FILE"))
                 .map(|x| Some(ustr(x)))
                 .or(self.log_file),
-            log_level: env
-                .get("LPC_LOG_LEVEL")
-                .or_else(|| env.get("LOG_LEVEL"))
-                .map(|x| Some(x.parse::<tracing::Level>().unwrap()))
-                .or(self.log_level),
             lib_dir: env
                 .get("LPC_LIB_DIR")
                 .or_else(|| env.get("LIB_DIR"))
@@ -192,6 +185,28 @@ impl Config {
         }
 
         Ok(true_path)
+    }
+
+    /// Set up the global tracing subscriber for the server logs.
+    /// This will panic if called multiple times.
+    pub fn init_tracing_subscriber(&self) {
+        let filter = EnvFilter::builder()
+            .with_env_var("RUST_LOG")
+            .with_default_directive(tracing::Level::INFO.into())
+            .from_env_lossy();
+
+        let registry = tracing_subscriber::registry().with(filter);
+
+        let file = self.log_file.as_deref().unwrap_or("STDOUT");
+
+        match file {
+            "STDOUT" => registry
+                .with(fmt::Layer::default().with_writer(std::io::stdout))
+                .init(),
+            s => registry
+                .with(fmt::Layer::default().with_writer(std::fs::File::create(s).unwrap()))
+                .init(),
+        }
     }
 }
 

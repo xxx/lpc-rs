@@ -1,9 +1,8 @@
 #![forbid(unsafe_code)]
 
 use clap::Parser;
-use if_chain::if_chain;
 use lpc_rs::interpreter::vm::Vm;
-use lpc_rs_utils::config::{Config, ConfigBuilder};
+use lpc_rs_utils::config::ConfigBuilder;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -34,7 +33,7 @@ async fn main() {
         }
     };
 
-    init_tracing_subscriber(&config);
+    config.init_tracing_subscriber();
 
     let mut vm = Vm::new(config);
 
@@ -42,31 +41,4 @@ async fn main() {
         eprintln!("unable to boot VM: {e:?}");
         std::process::exit(1);
     });
-}
-
-fn init_tracing_subscriber(config: &Config) {
-    let level = config.log_level.unwrap_or(tracing::Level::INFO);
-    let file = config.log_file.as_deref().unwrap_or("STDOUT");
-
-    match file.as_str() {
-        "STDOUT" => {
-            tracing::subscriber::set_global_default(
-                tracing_subscriber::fmt()
-                    .with_max_level(level)
-                    // .with_env_filter("lpc_rs::interpreter::task=trace,[populate_upvalues]=trace")
-                    .with_writer(std::io::stdout)
-                    .finish(),
-            )
-                .expect("setting tracing default failed");
-        }
-        s => {
-            tracing::subscriber::set_global_default(
-                tracing_subscriber::fmt()
-                    .with_max_level(level)
-                    .with_writer(std::fs::File::create(s).unwrap())
-                    .finish(),
-            )
-                .expect("setting tracing default failed");
-        }
-    }
 }
