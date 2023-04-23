@@ -1570,7 +1570,6 @@ dependencies = [
  "tokio-test",
  "tokio-util",
  "tracing",
- "tracing-subscriber",
  "ustr",
 ]
 
@@ -1611,7 +1610,6 @@ dependencies = [
  "lpc-rs-utils",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "ustr",
 ]
 
