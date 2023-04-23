@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::path::Path;
 
 use lpc_rs_errors::lazy_files::FILE_CACHE;

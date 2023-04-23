@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use clap::Parser;
 use if_chain::if_chain;
 use lpc_rs::interpreter::vm::Vm;
