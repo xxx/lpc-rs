@@ -1,19 +1,21 @@
 use std::{borrow::Cow, collections::HashMap, path::Path};
+use std::fmt::Debug;
 
 use derive_builder::Builder;
 use fs_err as fs;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{span::Span, LpcError, Result};
-use tracing::{info, warn};
+use lpc_rs_errors::{span::Span, LpcError, Result, lpc_error};
+use tracing::{info, Subscriber, warn};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use ustr::{ustr, Ustr};
+use crate::debug_log::DebugLog;
 
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
 const DEFAULT_MAX_EXECUTION_TIME: u64 = 300;
 
 /// The main struct that handles runtime use configurations.
 #[derive(Debug, Builder)]
-#[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
+#[builder(build_fn(error = "lpc_rs_errors::LpcError"), pattern = "owned")]
 #[readonly::make]
 pub struct Config {
     #[builder(setter(into, strip_option), default = "None")]
@@ -27,6 +29,9 @@ pub struct Config {
 
     #[builder(setter(into, strip_option), default = "Some(ustr(\"STDOUT\"))")]
     pub server_log_file: Option<Ustr>,
+
+    #[builder(setter(into, strip_option), default = "None")]
+    pub debug_log: Option<DebugLog>,
 
     #[builder(setter(custom), default = "ustr(\"\")")]
     pub lib_dir: Ustr,
@@ -52,13 +57,13 @@ pub struct Config {
 
 impl ConfigBuilder {
     /// Set config values from a `dotenv` file. If `env_path` is `None`, the default `.env` is used.
-    pub fn load_env<P>(&mut self, env_path: Option<P>) -> &mut Self
+    pub async fn load_env<P>(self, env_path: Option<P>) -> Self
     where
         P: AsRef<Path>,
     {
         let _ = match env_path {
             Some(p) => {
-                dotenvy::from_filename(p).map_err(|e| info!(".env not loaded: {}", e.to_string()))
+                dotenvy::from_filename(p.as_ref()).map_err(|e| info!("{:?} not loaded: {}", p.as_ref(), e.to_string()))
             }
             None => dotenvy::dotenv().map_err(|e| info!(".env not loaded: {}", e.to_string())),
         };
@@ -71,7 +76,16 @@ impl ConfigBuilder {
             })
             .collect::<HashMap<_, _>>();
 
-        let s = Self {
+        let debug_log = {
+            let path = env.get("LPC_DEBUG_LOG_FILE")
+                .or_else(|| env.get("DEBUG_LOG_FILE"))
+                .map(|x| ustr(x))
+                .unwrap_or_else(|| ustr("STDOUT"));
+
+            DebugLog::from_str(path).await
+        };
+
+        let new_self = Self {
             auto_include_file: env
                 .get("LPC_AUTO_INCLUDE_FILE")
                 .or_else(|| env.get("AUTO_INCLUDE_FILE"))
@@ -92,6 +106,7 @@ impl ConfigBuilder {
                 .or_else(|| env.get("SERVER_LOG_FILE"))
                 .map(|x| Some(ustr(x)))
                 .or(self.server_log_file),
+            debug_log: Some(Some(debug_log)),
             lib_dir: env
                 .get("LPC_LIB_DIR")
                 .or_else(|| env.get("LIB_DIR"))
@@ -129,18 +144,13 @@ impl ConfigBuilder {
                 .or_else(|| self.system_include_dirs.clone()),
         };
 
-        let new = self;
-
-        *new = s;
-
-        new
+        new_self
     }
 
-    pub fn lib_dir<S>(&mut self, lib_dir: S) -> &mut Self
+    pub fn lib_dir<S>(mut self, lib_dir: S) -> Self
     where
         S: Into<String>,
     {
-        let mut new = self;
         let dir = match canonicalized_path(lib_dir.into()) {
             Ok(x) => x,
             Err(e) => {
@@ -150,19 +160,18 @@ impl ConfigBuilder {
             }
         };
 
-        new.lib_dir = Some(ustr(&dir));
+        self.lib_dir = Some(ustr(&dir));
 
-        new
+        self
     }
 
     /// Set the system include directories. These are in-game directories.
-    pub fn system_include_dirs<T>(&mut self, dirs: Vec<T>) -> &mut Self
+    pub fn system_include_dirs<T>(mut self, dirs: Vec<T>) -> Self
     where
         T: Into<Ustr>,
     {
-        let mut new = self;
-        new.system_include_dirs = Some(dirs.into_iter().map(Into::into).collect());
-        new
+        self.system_include_dirs = Some(dirs.into_iter().map(Into::into).collect());
+        self
     }
 }
 
@@ -176,12 +185,13 @@ impl Config {
         let true_path = path.as_server(self.lib_dir.as_str());
 
         if path.as_os_str().is_empty() || !true_path.starts_with(self.lib_dir.as_str()) {
-            return Err(LpcError::new(format!(
+            return Err(lpc_error!(
+                span,
                 "attempt to access a file outside of lib_dir: `{}` (expanded to `{}`) (lib_dir: `{}`)",
                 path,
                 true_path.display(),
                 &self.lib_dir
-            )).with_span(span));
+            ));
         }
 
         Ok(true_path)
@@ -209,6 +219,16 @@ impl Config {
             s => registry
                 .with(fmt::Layer::default().with_writer(std::fs::File::create(s).unwrap()))
                 .init(),
+        }
+    }
+
+    /// Log a message to the debug log, if one is configured.
+    pub async fn debug_log<M>(&self, msg: M)
+    where
+        M: Into<Cow<'static, str>> + Send,
+    {
+        if let Some(debug_log) = &self.debug_log {
+            debug_log.log(msg).await;
         }
     }
 }

@@ -46,7 +46,6 @@ pub enum AstNode {
     NoOp,
 }
 
-// #[auto_impl(&mut)]
 #[async_trait]
 pub trait AstNodeTrait {
     /// This is the double-dispatch endpoint for tree-walking

@@ -32,6 +32,7 @@ async fn main() {
 
     let config = ConfigBuilder::default()
         .load_env(args.config)
+        .await
         .build()
         .unwrap();
 

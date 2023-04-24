@@ -6,6 +6,7 @@ use lpc_rs_errors::lazy_files::FILE_CACHE;
 use tokio::fs;
 
 pub mod config;
+pub mod debug_log;
 pub mod string;
 
 /// A convenience helper to handle adding a trailing newline if one isn't there.

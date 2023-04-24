@@ -23,9 +23,8 @@ macro_rules! assert_regex {
 }
 
 pub fn test_config_builder() -> ConfigBuilder {
-    let mut builder = ConfigBuilder::default();
-    builder.lib_dir("./tests/fixtures/code");
-    builder
+    ConfigBuilder::default()
+        .lib_dir("./tests/fixtures/code")
 }
 
 pub fn test_config() -> Config {
