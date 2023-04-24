@@ -1078,7 +1078,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 if !pf.public()
                     && !pf.is_closure()
-                    && (is_call_other || !Arc::ptr_eq(&self.context.process(), &receiver))
+                    && (is_call_other || !Arc::ptr_eq(self.context.process(), &receiver))
                 {
                     return set_loc!(self, Register(0).as_local(), NULL);
                 }
@@ -1256,7 +1256,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Err(self.runtime_error(format!("call to unknown simul_efun `{name}`")));
                 };
 
-                (Arc::downgrade(&simul_efuns), function.clone())
+                (Arc::downgrade(simul_efuns), function.clone())
             }
         };
 

@@ -111,11 +111,11 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Resolve a local register
     #[inline]
-    pub fn try_resolve_local_register<I>(&self, register: I) -> Option<LpcRef>
+    pub fn try_resolve_local_register<I>(&self, register: I) -> Option<&LpcRef>
     where
         I: Into<usize>,
     {
-        self.frame().registers.get(register.into()).cloned()
+        self.frame().registers.get(register.into())
     }
 
     /// Resolve any RegisterVariant
