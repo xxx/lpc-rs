@@ -318,7 +318,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
     #[async_recursion]
     pub async fn eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef]) -> Result<()> {
-        let process = self.context.process();
+        let process = self.context.process().clone();
 
         self.eval_function(process, f, args).await
     }
@@ -341,7 +341,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return self.eval(f, args).await;
         }
 
-        let process = self.context.process();
+        let process = self.context.process().clone();
 
         match timeout(
             Duration::from_millis(limit),

@@ -221,8 +221,8 @@ impl TaskContext {
     /// Return the [`Process`] that the task roots from.
     /// This *does not* change over the life of the task.
     #[inline]
-    pub fn process(&self) -> Arc<Process> {
-        self.process.clone()
+    pub fn process(&self) -> &Arc<Process> {
+        &self.process
     }
 
     /// Return the [`ObjectSpace`]

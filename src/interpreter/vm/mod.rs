@@ -294,7 +294,7 @@ impl Vm {
         )
         .await
         .map(|task| {
-            let process = task.context.process();
+            let process = task.context.process().clone();
             ObjectSpace::insert_process(&self.object_space, process);
 
             task.context
