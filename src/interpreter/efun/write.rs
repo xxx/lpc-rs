@@ -1,5 +1,4 @@
-use lpc_rs_errors::Result;
-use tracing::{error, trace};
+use lpc_rs_errors::{lpc_error, Result};
 
 use crate::interpreter::{
     efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef,
@@ -12,9 +11,19 @@ pub async fn write<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
 
     let msg = arg_ref.to_string();
 
+    apply_catch_tell(msg, context).await?;
+
+    Ok(())
+}
+
+/// A convenience helper to apply catch_tell to the this_player in a context.
+pub async fn apply_catch_tell<const N: usize>(
+    msg: String,
+    context: &mut EfunContext<'_, N>,
+) -> Result<()> {
     let player_guard = context.this_player().load();
     let Some(this_player) = &*player_guard else {
-        context.config().debug_log(msg).await;
+        context.config().debug_log(msg.to_string()).await;
         return Ok(());
     };
 
@@ -23,7 +32,7 @@ pub async fn write<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
 
     let result = apply_function_by_name(
         CATCH_TELL,
-        &[LpcString::from(msg).into_lpc_ref(context.memory())],
+        &[LpcString::from(&msg).into_lpc_ref(context.memory())],
         this_player.clone(),
         ctx,
     )
@@ -32,17 +41,17 @@ pub async fn write<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
     match result {
         Some(Ok(_)) => {
             context.return_efun_result(LpcRef::from(1));
-            return Ok(());
+            Ok(())
         }
-        Some(Err(e)) => {
-            error!("write: failed to write to this_player(): {:?}", e);
-        }
+        Some(Err(e)) => Err(lpc_error!(
+            "write: failed to write to this_player(): {:?}",
+            e
+        )),
         None => {
-            context.config().debug_log(arg_ref.to_string()).await;
+            context.config().debug_log(msg).await;
+            Ok(())
         }
     }
-
-    Ok(())
 }
 
 #[cfg(test)]

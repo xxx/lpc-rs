@@ -17,4 +17,4 @@ with by NPCs.
 
 ### See Also
 
-`write_socket`, `this_player`
+`write_socket`, `this_player`, `dump`

@@ -39,9 +39,6 @@ macro_rules! lpc_error {
     ($span:expr, $fmt:expr, $($arg:tt)*) => {
         $crate::LpcError::new(format!($fmt, $($arg)*)).with_span($span)
     };
-    ($span:expr, $err:expr $(,)?) => {
-        $crate::LpcError::new($err).with_span($span)
-    };
     ($msg:literal $(,)?) => {
         $crate::LpcError::new($msg)
     };

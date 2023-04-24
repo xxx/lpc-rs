@@ -1,18 +1,17 @@
-use std::borrow::Cow;
-use std::fmt::Debug;
-use tokio::io::AsyncWriteExt;
-use tokio::sync::mpsc;
+use std::{borrow::Cow, fmt::Debug};
+
+use tokio::{io::AsyncWriteExt, sync::mpsc};
 
 pub enum LogOp {
     Message(Cow<'static, str>),
-    Shutdown
+    Shutdown,
 }
 
 /// A struct to handle the simple requirements of the in-game debug log,
 /// which is where unreceived `write`s go.
 pub struct DebugLog {
     handle: Option<tokio::task::JoinHandle<()>>,
-    tx: mpsc::Sender<LogOp>
+    tx: mpsc::Sender<LogOp>,
 }
 
 impl DebugLog {
@@ -41,28 +40,27 @@ impl DebugLog {
             let _ = writer.flush().await;
         });
 
-        Self { handle: Some(handle), tx }
+        Self {
+            handle: Some(handle),
+            tx,
+        }
     }
 
     /// Create a new [`DebugLog`] that appends to the file at <path> (or STDOUT / STDERR).
     pub async fn from_str<P>(path: P) -> Self
     where
-        P: AsRef<str>
+        P: AsRef<str>,
     {
         match path.as_ref() {
-            "STDOUT" => {
-                Self::new(tokio::io::stdout())
-            }
-            "STDERR" => {
-                Self::new(tokio::io::stderr())
-            }
+            "STDOUT" => Self::new(tokio::io::stdout()),
+            "STDERR" => Self::new(tokio::io::stderr()),
             p => {
                 if let Ok(file) = tokio::fs::OpenOptions::new()
                     .create(true)
                     .append(true)
                     .open(p)
-                    .await {
-
+                    .await
+                {
                     Self::new(file)
                 } else {
                     Self::new(tokio::io::stdout())
@@ -74,7 +72,7 @@ impl DebugLog {
     /// Log a message to the debug log.
     pub async fn log<M>(&self, msg: M)
     where
-        M: Into<Cow<'static, str>>
+        M: Into<Cow<'static, str>>,
     {
         let _ = self.tx.send(LogOp::Message(msg.into())).await;
     }

@@ -3,7 +3,9 @@ use std::fmt::Write;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    efun::efun_context::EfunContext, lpc_mapping::LpcMapping, lpc_ref::LpcRef,
+    efun::{efun_context::EfunContext, write::apply_catch_tell},
+    lpc_mapping::LpcMapping,
+    lpc_ref::LpcRef,
 };
 
 const MAX_RECURSION: usize = 20;
@@ -132,7 +134,7 @@ pub async fn dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
         .collect::<Result<Vec<_>>>()?
         .join(" ");
 
-    println!("{s}");
+    apply_catch_tell(s, context).await?;
 
     Ok(())
 }

@@ -1,13 +1,13 @@
-use std::{borrow::Cow, collections::HashMap, path::Path};
-use std::fmt::Debug;
+use std::{borrow::Cow, collections::HashMap, fmt::Debug, path::Path};
 
 use derive_builder::Builder;
 use fs_err as fs;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{span::Span, LpcError, Result, lpc_error};
-use tracing::{info, Subscriber, warn};
+use lpc_rs_errors::{lpc_error, span::Span, LpcError, Result};
+use tracing::{info, warn};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use ustr::{ustr, Ustr};
+
 use crate::debug_log::DebugLog;
 
 const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
@@ -62,9 +62,8 @@ impl ConfigBuilder {
         P: AsRef<Path>,
     {
         let _ = match env_path {
-            Some(p) => {
-                dotenvy::from_filename(p.as_ref()).map_err(|e| info!("{:?} not loaded: {}", p.as_ref(), e.to_string()))
-            }
+            Some(p) => dotenvy::from_filename(p.as_ref())
+                .map_err(|e| info!("{:?} not loaded: {}", p.as_ref(), e.to_string())),
             None => dotenvy::dotenv().map_err(|e| info!(".env not loaded: {}", e.to_string())),
         };
 
@@ -77,7 +76,8 @@ impl ConfigBuilder {
             .collect::<HashMap<_, _>>();
 
         let debug_log = {
-            let path = env.get("LPC_DEBUG_LOG_FILE")
+            let path = env
+                .get("LPC_DEBUG_LOG_FILE")
                 .or_else(|| env.get("DEBUG_LOG_FILE"))
                 .map(|x| ustr(x))
                 .unwrap_or_else(|| ustr("STDOUT"));

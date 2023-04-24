@@ -18,7 +18,10 @@ async fn main() {
 
     let config_override = args.env;
 
-    let built = ConfigBuilder::default().load_env(config_override).await.build();
+    let built = ConfigBuilder::default()
+        .load_env(config_override)
+        .await
+        .build();
 
     let config = match built {
         Ok(c) => c,
