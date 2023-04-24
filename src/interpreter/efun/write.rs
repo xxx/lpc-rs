@@ -1,5 +1,5 @@
 use lpc_rs_errors::Result;
-use tracing::trace;
+use tracing::{error, trace};
 
 use crate::interpreter::{
     efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef,
@@ -14,8 +14,7 @@ pub async fn write<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
 
     let player_guard = context.this_player().load();
     let Some(this_player) = &*player_guard else {
-        // TODO: write the message to the debug log;
-        context.return_efun_result(LpcRef::from(0));
+        context.config().debug_log(msg).await;
         return Ok(());
     };
 
@@ -30,13 +29,18 @@ pub async fn write<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
     )
     .await;
 
-    if let Some(Ok(_)) = result {
-        context.return_efun_result(LpcRef::from(1));
-        return Ok(());
+    match result {
+        Some(Ok(_)) => {
+            context.return_efun_result(LpcRef::from(1));
+            return Ok(());
+        }
+        Some(Err(e)) => {
+            error!("write: failed to write to this_player(): {:?}", e);
+        }
+        None => {
+            context.config().debug_log(arg_ref.to_string()).await;
+        }
     }
-
-    // TODO: emit to debug log
-    trace!(%this_player, "write: failed to write to this_player(): {:?}", result);
 
     Ok(())
 }

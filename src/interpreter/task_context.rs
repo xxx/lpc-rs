@@ -205,6 +205,7 @@ impl TaskContext {
         self.result.into_inner()
     }
 
+    // TODO: don't clone this on every call.
     /// Return the [`Config`] used for the task
     #[inline]
     pub fn config(&self) -> Arc<Config> {
