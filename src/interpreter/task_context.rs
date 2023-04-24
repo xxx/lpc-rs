@@ -208,8 +208,8 @@ impl TaskContext {
     // TODO: don't clone this on every call.
     /// Return the [`Config`] used for the task
     #[inline]
-    pub fn config(&self) -> Arc<Config> {
-        self.config.clone()
+    pub fn config(&self) -> &Arc<Config> {
+        &self.config
     }
 
     /// Return the current pointer to the simul_efuns, if any

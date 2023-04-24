@@ -23,7 +23,7 @@ async fn load_master<const N: usize>(
         Some(proc) => Ok(proc),
         None => {
             let compiler = CompilerBuilder::default()
-                .config(context.config())
+                .config(context.config().clone())
                 .build()?;
 
             match compiler

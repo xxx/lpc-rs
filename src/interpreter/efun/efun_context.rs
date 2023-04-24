@@ -50,7 +50,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             pub fn in_game_cwd(&self) -> PathBuf;
 
             /// Get pointer to the current [`Config`] that's in-use
-            pub fn config(&self) -> Arc<Config>;
+            pub fn config(&self) -> &Arc<Config>;
 
             /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
             /// then insert it into the object space.
