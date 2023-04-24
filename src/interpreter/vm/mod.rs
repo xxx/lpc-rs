@@ -316,7 +316,7 @@ impl Vm {
         }
     }
 
-    /// Send to operation to the VM queue
+    /// Send an operation to the VM queue
     pub async fn send_op(&self, msg: VmOp) -> std::result::Result<(), SendError<VmOp>> {
         self.tx.send(msg).await
     }
