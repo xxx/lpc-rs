@@ -122,6 +122,9 @@ impl CallOuts {
 
             /// Push a [`CallOut`] to the end of the queue
             pub fn push(&mut self, value: CallOut) -> usize;
+
+            /// Get the index of the next [`CallOut`] to be pushed
+            pub fn next_push_index(&self) -> usize;
         }
     }
 

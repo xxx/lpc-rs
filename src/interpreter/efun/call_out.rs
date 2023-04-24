@@ -11,6 +11,13 @@ use crate::interpreter::{
 
 /// `call_out`, an efun for calling a function at some future point in time
 pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    {
+        let call_outs = context.call_outs().read();
+        if call_outs.next_push_index() > LpcIntInner::MAX as usize {
+            return Err(LpcError::new("too many call outs"));
+        }
+    }
+
     let func_ref = context.resolve_local_register(1_usize).clone();
 
     // Some validations
@@ -62,7 +69,6 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         call_outs.schedule_task(process, func_ref, duration, repeat)?
     };
 
-    // TODO: limit the max number of call outs so we don't overflow this
     let result = LpcRef::Int(LpcInt(index as LpcIntInner));
     context.return_efun_result(result);
 
