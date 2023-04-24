@@ -11,9 +11,9 @@ keywords = ["lpc", "mud", "driver", "compiler"]
 categories = ["command-line-utilities", "compilers", "game-engines"]
 
 [dependencies]
-lpc-rs = { path = ".." }
-lpc-rs-core = { path = "../lpc-rs-core" }
-lpc-rs-utils = { path = "../lpc-rs-utils" }
+lpc-rs = { version = "0.1", path = ".." }
+lpc-rs-core = { version = "0.1", path = "../lpc-rs-core" }
+lpc-rs-utils = { version = "0.1", path = "../lpc-rs-utils" }
 
 clap = { version = "4.1.6", features = ["derive"] }
 parking_lot = "0.12.1"

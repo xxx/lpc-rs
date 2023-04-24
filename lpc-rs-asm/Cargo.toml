@@ -10,8 +10,8 @@ keywords = ["lpc", "mud", "driver", "compiler"]
 categories = ["command-line-utilities", "compilers", "game-engines"]
 
 [dependencies]
-lpc-rs-core = { path = "../lpc-rs-core"}
-lpc-rs-errors = { path = "../lpc-rs-errors"}
+lpc-rs-core = { version = "0.1", path = "../lpc-rs-core"}
+lpc-rs-errors = { version = "0.1", path = "../lpc-rs-errors"}
 
 itertools = "0.10.0"
 serde = { version = "1.0.123", features = ["derive"] }

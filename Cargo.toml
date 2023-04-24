@@ -14,11 +14,11 @@ categories = ["command-line-utilities", "compilers", "game-engines"]
 lalrpop = "0.19.4"
 
 [dependencies]
-lpc-rs-asm = { path = "./lpc-rs-asm"}
-lpc-rs-core = { path = "./lpc-rs-core"}
-lpc-rs-errors = { path = "./lpc-rs-errors"}
-lpc-rs-function-support = { path = "./lpc-rs-function-support"}
-lpc-rs-utils = { path = "./lpc-rs-utils"}
+lpc-rs-asm = { version = "0.1", path = "./lpc-rs-asm"}
+lpc-rs-core = { version = "0.1", path = "./lpc-rs-core"}
+lpc-rs-errors = { version = "0.1", path = "./lpc-rs-errors"}
+lpc-rs-function-support = { version = "0.1", path = "./lpc-rs-function-support"}
+lpc-rs-utils = { version = "0.1", path = "./lpc-rs-utils"}
 
 arc-swap = "1.6.0"
 arrayvec = "0.7.1"

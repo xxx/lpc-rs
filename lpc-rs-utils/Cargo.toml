@@ -11,8 +11,8 @@ keywords = ["lpc", "mud", "driver", "compiler"]
 categories = ["command-line-utilities", "compilers", "game-engines"]
 
 [dependencies]
-lpc-rs-core = { path = "../lpc-rs-core"}
-lpc-rs-errors = { path = "../lpc-rs-errors"}
+lpc-rs-core = { version = "0.1", path = "../lpc-rs-core"}
+lpc-rs-errors = { version = "0.1", path = "../lpc-rs-errors"}
 
 derive_builder = "0.12.0"
 dotenvy = "0.15.7"

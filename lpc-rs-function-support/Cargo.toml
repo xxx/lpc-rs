@@ -11,9 +11,9 @@ keywords = ["lpc", "mud", "driver", "compiler"]
 categories = ["command-line-utilities", "compilers", "game-engines"]
 
 [dependencies]
-lpc-rs-asm = { path = "../lpc-rs-asm" }
-lpc-rs-core = { path = "../lpc-rs-core" }
-lpc-rs-errors = { path = "../lpc-rs-errors" }
+lpc-rs-asm = { version = "0.1", path = "../lpc-rs-asm" }
+lpc-rs-core = { version = "0.1", path = "../lpc-rs-core" }
+lpc-rs-errors = { version = "0.1", path = "../lpc-rs-errors" }
 
 derive_builder = "0.12.0"
 itertools = "0.10.0"
