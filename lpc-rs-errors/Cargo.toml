@@ -1,8 +1,14 @@
 [package]
 name = "lpc-rs-errors"
+description = "lpc-rs LPC compiler and gamedriver suite error support."
 version = "0.1.0"
 authors = ["mpd <mpd@jesters-court.net>"]
 edition = "2021"
+readme = "README.md"
+repository = "https://github.com/xxx/lpc-rs"
+license = "MIT"
+keywords = ["lpc", "mud", "driver", "compiler"]
+categories = ["command-line-utilities", "compilers", "game-engines"]
 
 [dependencies]
 cached = "0.43.0"

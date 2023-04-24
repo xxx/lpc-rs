@@ -1,11 +1,15 @@
 [package]
 name = "lpc-rs-driver"
-description = "A networked compiler / server that users can connect to"
+description = "lpc-rs LPC compiler and gamedriver suite gamedriver. The server that runs the game."
 version = "0.1.0"
 authors = ["mpd <mpd@jesters-court.net>"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+readme = "README.md"
+repository = "https://github.com/xxx/lpc-rs"
+license = "MIT"
+keywords = ["lpc", "mud", "driver", "compiler"]
+categories = ["command-line-utilities", "compilers", "game-engines"]
+default-run = "lpc-rs-driver"
 
 [dependencies]
 lpc-rs = { path = ".." }

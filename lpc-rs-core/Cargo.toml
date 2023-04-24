@@ -1,10 +1,14 @@
 [package]
 name = "lpc-rs-core"
+description = "lpc-rs LPC compiler and gamedriver suite core utilities."
 version = "0.1.0"
 authors = ["mpd <mpd@jesters-court.net>"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+readme = "README.md"
+repository = "https://github.com/xxx/lpc-rs"
+license = "MIT"
+keywords = ["lpc", "mud", "driver", "compiler"]
+categories = ["command-line-utilities", "compilers", "game-engines"]
 
 [dependencies]
 bstr = "1.3.0"

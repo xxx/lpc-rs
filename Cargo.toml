@@ -3,6 +3,12 @@ name = "lpc-rs"
 version = "0.1.0"
 authors = ["mpd <mpd@jesters-court.net>"]
 edition = "2021"
+description = "lpc-rs LPC compiler and gamedriver suite."
+readme = "README.md"
+repository = "https://github.com/xxx/lpc-rs"
+license = "MIT"
+keywords = ["lpc", "mud", "driver", "compiler"]
+categories = ["command-line-utilities", "compilers", "game-engines"]
 
 [build-dependencies]
 lalrpop = "0.19.4"
