@@ -19,8 +19,8 @@ pub async fn input_to<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     };
 
     let input_to = InputTo {
-        ptr,
-        no_echo: no_echo.into(),
+        ptr: ptr.clone(),
+        no_echo: (*no_echo).into(),
     };
 
     let process = context.this_player().load();

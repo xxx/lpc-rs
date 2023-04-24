@@ -127,7 +127,7 @@ pub async fn dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
 
     let s = (1..=arg_count)
         .map(|i| {
-            let lpc_ref = context.resolve_local_register(i);
+            let lpc_ref = context.resolve_local_register(i).clone();
 
             format_ref(&lpc_ref, context, 0, 0)
         })

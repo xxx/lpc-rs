@@ -11,7 +11,7 @@ use crate::interpreter::{
 
 /// `call_out`, an efun for calling a function at some future point in time
 pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let func_ref = context.resolve_local_register(1_usize);
+    let func_ref = context.resolve_local_register(1_usize).clone();
 
     // Some validations
     {
