@@ -7,7 +7,8 @@ use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcBank, heap::Heap, object_space::ObjectSpace, task::Task,
+        call_outs::CallOuts, gc::gc_bank::GcBank, heap::Heap, object_space::ObjectSpace,
+        task::initialize_program::InitializeProgramBuilder,
     },
 };
 use lpc_rs_core::lpc_path::LpcPath;
@@ -54,17 +55,16 @@ async fn main() {
         Ok(program) => {
             let memory = Heap::default();
             let object_space = ObjectSpace::default();
-            if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_program(
-                program,
-                config,
-                object_space,
-                memory,
-                upvalues,
-                call_outs,
-                None,
-                tx,
-            )
-            .await
+            if let Err(e) = InitializeProgramBuilder::<MAX_CALL_STACK_SIZE>::default()
+                .program(program)
+                .config(config)
+                .object_space(object_space)
+                .memory(memory)
+                .vm_upvalues(upvalues)
+                .call_outs(call_outs)
+                .tx(tx)
+                .build()
+                .await
             {
                 e.emit_diagnostics();
             }

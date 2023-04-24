@@ -344,3 +344,23 @@ async fn test_calls_simul_efuns() {
     let val = ctx.result().unwrap();
     assert_eq!("local simul_efun: pointed!", val.to_string());
 }
+
+// unclear how to test this, specifically waiting for the call out to complete
+// #[tokio::test]
+// async fn test_call_out_with_upvalue() {
+//     let code = indoc! { r##"
+//         void create() {
+//             int i = 123;
+//
+//             call_out((: i += 12 :), 0);
+//         }
+//     "## };
+//
+//     let config = test_config();
+//     let mut vm = Vm::new(config);
+//
+//     let result = vm.initialize_string(code, "/foo.c").await.expect("received an error");
+//     let _ = vm.send_op(VmOp::PrioritizeCallOut(0)).await;
+//
+//     assert_eq!(result.vm_upvalues.read()[0], LpcRef::from(135));
+// }

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwapAny;
 use derive_builder::Builder;
+use lpc_rs_core::register::Register;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
@@ -45,6 +46,10 @@ pub struct TaskTemplate {
     /// call_out or input_to callback.
     #[builder(default, setter(into))]
     pub this_player: ArcSwapAny<Option<Arc<Process>>>,
+
+    /// The upvalue_ptrs to populate the initial frame with, if any.
+    #[builder(default)]
+    pub upvalue_ptrs: Option<Vec<Register>>,
 }
 
 impl TaskTemplate {
@@ -66,6 +71,7 @@ impl Clone for TaskTemplate {
             tx: self.tx.clone(),
             memory: self.memory.clone(),
             this_player: ArcSwapAny::from(self.this_player.load_full()),
+            upvalue_ptrs: self.upvalue_ptrs.clone(),
         }
     }
 }

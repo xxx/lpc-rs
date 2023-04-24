@@ -9,7 +9,7 @@ use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::{
     signal,
-    sync::mpsc::{Receiver, Sender},
+    sync::mpsc::{error::SendError, Receiver, Sender},
 };
 use tracing::{info, instrument, trace};
 use vm_op::VmOp;
@@ -290,6 +290,7 @@ impl Vm {
             self.upvalues.clone(),
             self.call_outs.clone(),
             None,
+            None,
             self.tx.clone(),
         )
         .await
@@ -310,8 +311,14 @@ impl Vm {
             vm_upvalues: self.upvalues.clone(),
             call_outs: self.call_outs.clone(),
             this_player: ArcSwapAny::from(None),
+            upvalue_ptrs: None,
             tx: self.tx.clone(),
         }
+    }
+
+    /// Send to operation to the VM queue
+    pub async fn send_op(&self, msg: VmOp) -> std::result::Result<(), SendError<VmOp>> {
+        self.tx.send(msg).await
     }
 }
 

@@ -97,7 +97,7 @@ impl CallOuts {
     /// Create a new [`CallOuts`]
     pub fn new(tx: Sender<VmOp>) -> Self {
         Self {
-            queue: StableVec::with_capacity(64),
+            queue: StableVec::with_capacity(512),
             tx,
         }
     }
@@ -167,7 +167,9 @@ impl CallOuts {
                     }
                 });
 
-                // TODO: check for race condition with 0 delay case. Maybe use OnceCell for the handle?
+                // TODO: Unclear if this is a race condition for the 0 delay case.
+                //       Hand testing doesn't show one, but it's possible that
+                //       something shows up under load.
                 self.queue.push(CallOut {
                     process,
                     func_ref,

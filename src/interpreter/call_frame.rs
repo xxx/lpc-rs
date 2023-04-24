@@ -97,7 +97,7 @@ impl CallFrame {
         process: P,
         function: Arc<ProgramFunction>,
         called_with_num_args: usize,
-        upvalue_ptrs: Option<&Vec<Register>>,
+        upvalue_ptrs: Option<&[Register]>,
         vm_upvalues: Arc<RwLock<GcRefBank>>,
     ) -> Self
     where
@@ -108,7 +108,7 @@ impl CallFrame {
             + function.num_locals
             + 1;
         let process = process.into();
-        let ups = upvalue_ptrs.cloned().unwrap_or_default();
+        let ups = upvalue_ptrs.map(|v| v.to_vec()).unwrap_or_default();
 
         let mut instance = Self {
             process,
@@ -145,7 +145,7 @@ impl CallFrame {
         function: Arc<ProgramFunction>,
         called_with_num_args: usize,
         arg_capacity: usize,
-        upvalue_ptrs: Option<&Vec<Register>>,
+        upvalue_ptrs: Option<&[Register]>,
         vm_upvalues: Arc<RwLock<GcRefBank>>,
     ) -> Self
     where

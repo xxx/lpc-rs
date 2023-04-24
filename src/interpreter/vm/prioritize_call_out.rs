@@ -78,7 +78,8 @@ impl Vm {
                 memory,
                 upvalues,
                 call_outs,
-                None, // TODO: this should always be set
+                None,
+                Some(&ptr_arc.read().upvalue_ptrs).cloned(),
                 tx.clone(),
             );
 

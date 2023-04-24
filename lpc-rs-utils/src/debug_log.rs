@@ -46,7 +46,7 @@ impl DebugLog {
         }
     }
 
-    /// Create a new [`DebugLog`] that appends to the file at <path> (or STDOUT / STDERR).
+    /// Create a new [`DebugLog`] that appends to the file at `path` (or STDOUT / STDERR).
     pub async fn from_str<P>(path: P) -> Self
     where
         P: AsRef<str>,

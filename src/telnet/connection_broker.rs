@@ -157,6 +157,7 @@ mod tests {
             call_outs: Arc::new(RwLock::new(CallOuts::new(vm_tx.clone()))),
             tx: vm_tx.clone(),
             this_player: ArcSwapAny::from(None),
+            upvalue_ptrs: None,
             memory: Arc::new(Default::default()),
         };
 

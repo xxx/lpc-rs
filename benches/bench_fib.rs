@@ -1,14 +1,13 @@
 use std::sync::Arc;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use lpc_rs::{
     compiler::Compiler,
     interpreter::{
-        call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, object_space::ObjectSpace,
-        task::Task,
+        call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap,
+        task::initialize_program::InitializeProgramBuilder,
     },
 };
-use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
@@ -39,17 +38,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("fib 20", |b| {
         b.to_async(&runtime).iter(|| async {
-            let _ = Task::<64>::initialize_program(
-                program.clone(),
-                black_box(Config::default()),
-                ObjectSpace::default(),
-                memory.clone(),
-                upvalues.clone(),
-                call_outs.clone(),
-                None,
-                tx.clone(),
-            )
-            .await;
+            let _ = InitializeProgramBuilder::<64>::default()
+                .program(program.clone())
+                .memory(memory.clone())
+                .vm_upvalues(upvalues.clone())
+                .call_outs(call_outs.clone())
+                .tx(tx.clone())
+                .build()
+                .await;
         })
     });
 }

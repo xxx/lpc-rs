@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
+use lpc_rs_core::register::Register;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
@@ -33,6 +34,8 @@ pub struct InitializeProgram<const N: usize> {
     call_outs: Arc<RwLock<CallOuts>>,
     #[builder(setter(into), default = "None")]
     this_player: Option<Arc<Process>>,
+    #[builder(setter(into), default = "None")]
+    upvalue_ptrs: Option<Vec<Register>>,
 
     tx: Sender<VmOp>,
 }
@@ -52,6 +55,7 @@ impl<const N: usize> InitializeProgramBuilder<N> {
             init.vm_upvalues,
             init.call_outs,
             init.this_player,
+            init.upvalue_ptrs.as_deref(),
             init.tx,
         )
         .await

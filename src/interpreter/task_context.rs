@@ -2,6 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use arc_swap::ArcSwapAny;
 use derive_builder::Builder;
+use lpc_rs_core::register::Register;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
 use once_cell::sync::OnceCell;
@@ -68,6 +69,10 @@ pub struct TaskContext {
     /// The command giver, if there was one. This might be an NPC, or None.
     #[builder(default, setter(strip_option))]
     pub this_player: ArcSwapAny<Option<Arc<Process>>>,
+
+    /// The upvalue_ptrs to populate the initial frame with, if any.
+    #[builder(default)]
+    pub upvalue_ptrs: Option<Vec<Register>>,
 }
 
 impl TaskContext {
@@ -81,6 +86,7 @@ impl TaskContext {
         vm_upvalues: U,
         call_outs: A,
         this_player: Option<Arc<Process>>,
+        upvalue_ptrs: Option<Vec<Register>>,
         tx: Sender<VmOp>,
     ) -> Self
     where
@@ -105,6 +111,7 @@ impl TaskContext {
             vm_upvalues: vm_upvalues.into(),
             call_outs: call_outs.into(),
             this_player: ArcSwapAny::from(this_player),
+            upvalue_ptrs,
             tx,
         }
     }
@@ -123,6 +130,7 @@ impl TaskContext {
             vm_upvalues: template.vm_upvalues,
             call_outs: template.call_outs,
             this_player: template.this_player,
+            upvalue_ptrs: template.upvalue_ptrs,
             tx: template.tx,
         }
     }
@@ -274,6 +282,7 @@ impl Clone for TaskContext {
             vm_upvalues: self.vm_upvalues.clone(),
             call_outs: self.call_outs.clone(),
             this_player: ArcSwapAny::from(self.this_player.load_full()),
+            upvalue_ptrs: self.upvalue_ptrs.clone(),
             tx: self.tx.clone(),
         }
     }

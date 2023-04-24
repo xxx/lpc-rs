@@ -104,8 +104,8 @@ pub fn get_location_in_frame(frame: &CallFrame, location: RegisterVariant) -> Re
             Ok(Cow::Owned(proc.globals.read()[reg].clone()))
         }
         RegisterVariant::Upvalue(upv) => {
-            let upvalues = &frame.upvalue_ptrs;
-            let idx = upvalues[upv.index()];
+            let upvalue_ptrs = &frame.upvalue_ptrs;
+            let idx = upvalue_ptrs[upv.index()];
 
             let vm_upvalues = &frame.vm_upvalues.read();
             trace!("upvalue data: idx = {}, len = {}", idx, vm_upvalues.len());
@@ -252,6 +252,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         vm_upvalues: U,
         call_outs: A,
         this_player: Option<Arc<Process>>,
+        upvalue_ptrs: Option<&[Register]>,
         tx: Sender<VmOp>,
     ) -> Result<Task<STACKSIZE>>
     where
@@ -279,6 +280,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             vm_upvalues,
             call_outs,
             this_player,
+            upvalue_ptrs.map(|v| v.to_vec()),
             tx,
         );
         context.insert_process(process);
@@ -390,7 +392,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             process,
             f,
             args.len(),
-            None,
+            self.context.upvalue_ptrs.as_deref(),
             self.context.upvalues().clone(),
         );
         if !args.is_empty() {
@@ -1114,7 +1116,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     function,
                     passed_args_count,
                     max_arg_length,
-                    upvalues,
+                    upvalues.map(|f| f.as_slice()),
                     self.context.upvalues().clone(),
                 ),
                 is_dynamic_receiver,
