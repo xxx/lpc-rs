@@ -214,8 +214,8 @@ impl TaskContext {
 
     /// Return the current pointer to the simul_efuns, if any
     #[inline]
-    pub fn simul_efuns(&self) -> Option<Arc<Process>> {
-        self.simul_efuns.clone()
+    pub fn simul_efuns(&self) -> Option<&Arc<Process>> {
+        self.simul_efuns.as_ref()
     }
 
     /// Return the [`Process`] that the task roots from.
