@@ -11,7 +11,7 @@ keywords = ["lpc", "mud", "driver", "compiler"]
 categories = ["command-line-utilities", "compilers", "game-engines"]
 
 [build-dependencies]
-lalrpop = "0.19.4"
+lalrpop = "0.19.10"
 
 [dependencies]
 lpc-rs-asm = { version = "0.1", path = "./lpc-rs-asm"}
