@@ -263,11 +263,12 @@ impl Telnet {
                 trace!("Received character: {}", char);
             }
             TelnetEvent::Message(msg) => {
-                // TODO: don't make this swap if it's already None.
-                if let Some(input_to) = connection.input_to.swap(None) {
-                    Self::resolve_input_to(&input_to, &msg, sink, connection, template).await;
+                if connection.input_to.load().is_some() {
+                    if let Some(input_to) = connection.input_to.swap(None) {
+                        Self::resolve_input_to(&input_to, &msg, sink, connection, template).await;
 
-                    return;
+                        return;
+                    }
                 }
                 info!("Received message: {}", msg);
             }
