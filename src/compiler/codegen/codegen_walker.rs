@@ -1978,7 +1978,6 @@ impl TreeWalker for CodegenWalker {
             .unwrap()
             != &instruction
         {
-            // TODO: this may be sketchy, since the jump address we're testing against has not been set
             self.schedule_backpatch(&end_label, self.current_address())?;
             push_instruction!(self, instruction, node.span);
         }

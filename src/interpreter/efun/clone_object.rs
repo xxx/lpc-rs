@@ -37,9 +37,11 @@ async fn load_master<const N: usize>(
                     let process: Arc<Process> = Process::new(prog).into();
                     context.insert_process(process.clone());
 
-                    let new_context = context.clone_task_context().with_process(process.clone());
+                    let new_context = context.clone_task_context().with_process(process);
                     let mut task = Task::<MAX_CALL_STACK_SIZE>::new(new_context);
                     task.timed_eval(prog_function, &[]).await?;
+
+                    let process = task.context.process;
 
                     Ok(process)
                 }
@@ -82,12 +84,13 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
 
         let new_clone = context.insert_clone(new_prog);
 
-        let new_context = context.clone_task_context().with_process(new_clone.clone());
+        let new_context = context.clone_task_context().with_process(new_clone);
         let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
         task.timed_eval(initializer, &[]).await?;
 
         // Set up the return value
-        let v = Arc::downgrade(&new_clone);
+        let return_val = task.context.process;
+        let v = Arc::downgrade(&return_val);
         let result = v.into_lpc_ref(context.memory());
 
         context.return_efun_result(result);
