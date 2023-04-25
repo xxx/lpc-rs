@@ -288,7 +288,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let mut task = Task::new(context);
 
         // let max_execution_time = task.context.config.max_execution_time;
-        task.timed_eval(init_function, &[], task.context.config.max_execution_time).await?;
+        task.timed_eval(init_function, &[], task.context.config.max_execution_time)
+            .await?;
 
         Ok(task)
     }
@@ -338,7 +339,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// `Ok(())` if successful, or an [`LpcError`] if not
     #[instrument(skip_all)]
     #[async_recursion]
-    pub async fn timed_eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef], timeout_ms: u64) -> Result<()> {
+    pub async fn timed_eval(
+        &mut self,
+        f: Arc<ProgramFunction>,
+        args: &[LpcRef],
+        timeout_ms: u64,
+    ) -> Result<()> {
         if timeout_ms == 0 {
             return self.eval(f, args).await;
         }

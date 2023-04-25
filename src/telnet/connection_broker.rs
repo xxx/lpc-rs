@@ -3,7 +3,7 @@ use std::{net::SocketAddr, sync::Arc};
 use dashmap::DashMap;
 use flume::Receiver as FlumeReceiver;
 use tokio::{net::ToSocketAddrs, sync::mpsc::Sender, task::JoinHandle};
-use tracing::{debug, error, info, instrument, trace};
+use tracing::{error, info, instrument, trace};
 
 use crate::{
     interpreter::{task::task_template::TaskTemplate, vm::vm_op::VmOp},

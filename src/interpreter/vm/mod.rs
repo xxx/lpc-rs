@@ -27,14 +27,13 @@ use crate::{
         heap::Heap,
         object_space::ObjectSpace,
         program::Program,
-        task::{task_template::TaskTemplate, Task},
+        task::{apply_function::apply_function_in_master, task_template::TaskTemplate, Task},
         task_context::TaskContext,
+        SHUTDOWN,
     },
     telnet::{connection_broker::ConnectionBroker, ops::BrokerOp, Telnet},
     util::get_simul_efuns,
 };
-use crate::interpreter::SHUTDOWN;
-use crate::interpreter::task::apply_function::{apply_function, apply_function_in_master};
 
 mod initiate_login;
 mod prioritize_call_out;
@@ -180,7 +179,9 @@ impl Vm {
             &[],
             self.new_task_template(),
             Some(5000), // a much longer timeout than normal, to allow for saving.
-        ).await {
+        )
+        .await
+        {
             Some(Ok(_)) => {
                 debug!("shutdown() successfully applied in master object");
             }

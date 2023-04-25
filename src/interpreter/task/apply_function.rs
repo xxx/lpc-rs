@@ -8,10 +8,9 @@ use crate::{
     interpreter::{
         lpc_ref::LpcRef,
         process::Process,
-        task::{into_task_context::IntoTaskContext, Task},
+        task::{into_task_context::IntoTaskContext, task_template::TaskTemplate, Task},
     },
 };
-use crate::interpreter::task::task_template::TaskTemplate;
 
 /// Apply function `f` in process `proc`, to arguments `args`, using context
 /// information from `template`.

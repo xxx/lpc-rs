@@ -25,4 +25,3 @@ pub const CATCH_TELL: &str = "catch_tell";
 pub const CONNECT: &str = "connect";
 pub const LOGON: &str = "logon";
 pub const SHUTDOWN: &str = "shutdown";
-

@@ -3,7 +3,6 @@ pub mod connection_broker;
 pub mod ops;
 
 use std::{net::SocketAddr, sync::Arc};
-use std::fmt::Display;
 
 use bytes::Bytes;
 use flume::Sender as FlumeSender;
@@ -69,7 +68,9 @@ impl Telnet {
                 Ok(listener) => listener,
                 Err(e) => {
                     error!("Telnet failed to bind to port: {}", &e);
-                    let _ = broker_tx.send_async(BrokerOp::FatalError(e.to_string())).await;
+                    let _ = broker_tx
+                        .send_async(BrokerOp::FatalError(e.to_string()))
+                        .await;
                     return;
                 }
             };
@@ -332,7 +333,8 @@ impl Telnet {
         template.set_this_player(connection.process.load_full());
 
         let max_execution_time = template.config.max_execution_time;
-        let result = apply_function(function, &args, process, template, Some(max_execution_time)).await;
+        let result =
+            apply_function(function, &args, process, template, Some(max_execution_time)).await;
         if let Err(e) = result {
             // TODO: this should apply runtime_error() on the master.
             error!("{}", e);

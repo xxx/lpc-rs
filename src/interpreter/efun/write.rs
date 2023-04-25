@@ -36,7 +36,7 @@ pub async fn apply_catch_tell<const N: usize>(
         &[LpcString::from(&msg).into_lpc_ref(context.memory())],
         this_player.clone(),
         ctx,
-        Some(max_execution_time)
+        Some(max_execution_time),
     )
     .await;
 
