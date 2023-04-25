@@ -25,6 +25,11 @@ pub enum BrokerOp {
 
     /// Shut down the broker, and all connections.
     Shutdown,
+
+    /// A subsystem has run into a problem that cannot be recovered from, so we need to shut down.
+    /// This op is for sending messages up the chain to the VM only.
+    /// The VM will handle actual shutdown.
+    FatalError(String),
 }
 
 /// Operations that can be performed on outgoing connections

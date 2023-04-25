@@ -154,6 +154,10 @@ impl Vm {
                         VmOp::TaskError(_task_id, error) => {
                             tokio::spawn(async move { error.emit_diagnostics() });
                         },
+                        VmOp::FatalError(error) => {
+                            error!("VM notified of fatal error: {}. Shutting down.", error);
+                            break;
+                        },
                     }
                 }
             }

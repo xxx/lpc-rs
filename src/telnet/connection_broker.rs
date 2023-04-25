@@ -118,6 +118,11 @@ impl ConnectionBroker {
                             info!("Shutting down broker main loop");
                             return;
                         }
+                        BrokerOp::FatalError(s) => {
+                            error!("Broker received fatal error: {}", s);
+                            let _ = vm_tx.send(VmOp::FatalError(s)).await;
+                            return;
+                        }
                     }
                 }
             }

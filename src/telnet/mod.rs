@@ -3,6 +3,7 @@ pub mod connection_broker;
 pub mod ops;
 
 use std::{net::SocketAddr, sync::Arc};
+use std::fmt::Display;
 
 use bytes::Bytes;
 use flume::Sender as FlumeSender;
@@ -67,9 +68,9 @@ impl Telnet {
             let listener = match TcpListener::bind(address).await {
                 Ok(listener) => listener,
                 Err(e) => {
-                    error!("Failed to bind to port: {}", e);
-                    std::process::exit(1); // TODO: this should send a message to the vm. VmOp::FatalError?
-                                           // return;
+                    error!("Telnet failed to bind to port: {}", &e);
+                    let _ = broker_tx.send_async(BrokerOp::FatalError(e.to_string())).await;
+                    return;
                 }
             };
 
