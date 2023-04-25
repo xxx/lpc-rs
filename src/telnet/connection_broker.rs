@@ -3,7 +3,7 @@ use std::{net::SocketAddr, sync::Arc};
 use dashmap::DashMap;
 use flume::Receiver as FlumeReceiver;
 use tokio::{net::ToSocketAddrs, sync::mpsc::Sender, task::JoinHandle};
-use tracing::{error, info, instrument, trace};
+use tracing::{debug, error, info, instrument, trace};
 
 use crate::{
     interpreter::{task::task_template::TaskTemplate, vm::vm_op::VmOp},
@@ -114,10 +114,25 @@ impl ConnectionBroker {
                                 return;
                             };
                         }
+                        BrokerOp::Shutdown => {
+                            info!("Shutting down broker main loop");
+                            return;
+                        }
                     }
                 }
             }
         });
+    }
+
+    /// Disable new connections from being made, in preparation for shutdown.
+    pub fn disable_incoming_connections(&mut self) {
+        self.telnet.shutdown();
+    }
+
+    /// Disconnect all users, immediately.
+    pub fn disconnect_users(&mut self) {
+        info!("Disconnecting users");
+        self.connections.clear();
     }
 
     /// Removes a connection from the manager.

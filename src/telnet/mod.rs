@@ -35,7 +35,8 @@ use crate::{
 /// The incoming connection handler. Once established, individual connections are managed by [`ConnectionBroker`](connection_broker::ConnectionBroker).
 #[derive(Debug)]
 pub struct Telnet {
-    /// The handle to the main connection handler task.
+    /// The handle to the main connection handler task. Dropping it will shut
+    /// down incoming connections, but will not disconnect existing ones.
     handle: OnceCell<JoinHandle<()>>,
 
     /// The channel to send operations to the [`ConnectionBroker`](connection_broker::ConnectionBroker).
@@ -132,6 +133,8 @@ impl Telnet {
         };
 
         loop {
+            let mut shutting_down = false;
+
             tokio::select! {
                 send_to_user = connection_rx.recv() => {
                     trace!("Received message from VM: {:?}", send_to_user);
@@ -152,6 +155,11 @@ impl Telnet {
                             }
                             connection.input_to.store(Some(Arc::new(input_to)));
                         }
+                        Some(ConnectionOp::Shutdown) => {
+                            shutting_down = true;
+                            trace!("Shutting down connection for {}", &remote_ip);
+                            // sink.send(TelnetEvent::Message("The server is shutting down. Please try again shortly.".to_string())).await;
+                        }
                         None => {
                             info!("Broker closed the channel for {}. Closing connection.", &remote_ip);
                             let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
@@ -162,7 +170,12 @@ impl Telnet {
                 received_from_user = input.next() => {
                     match received_from_user {
                         Some(Ok(msg)) => {
-                            Self::handle_input_event(msg, &mut sink, &connection, &template).await;
+                            if shutting_down {
+                                // TODO: apply something in the player here?
+                                // let _ = sink.send(TelnetEvent::Message("The server is shutting down. Please try again shortly.".to_string())).await;
+                            } else {
+                                Self::handle_input_event(msg, &mut sink, &connection, &template).await;
+                            }
                         }
                         Some(Err(e)) => {
                             warn!("User input error: {:?}", e);
@@ -327,7 +340,7 @@ impl Telnet {
     /// Stops the telnet server. This will disable new connections, but will _not_
     /// drop any of the existing connections.
     pub fn shutdown(&mut self) {
-        info!("Shutting down telnet server");
+        info!("Shutting down telnet server & disabling new connections");
         if let Some(h) = self.handle.take() {
             h.abort()
         }

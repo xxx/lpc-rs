@@ -18,7 +18,6 @@ use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, process::Process, vm::
 #[builder(pattern = "owned")]
 pub struct CallOut {
     /// The process where `call_out` was called from.
-    #[educe(Debug(ignore))]
     process: Weak<Process>,
 
     /// The reference to the function that will be run.
@@ -52,6 +51,7 @@ impl CallOut {
         }
     }
 
+    /// Get the duration of the repeat interval, if any
     #[inline]
     pub fn repeat_duration(&self) -> Option<Duration> {
         self.repeat_duration
@@ -100,6 +100,11 @@ impl CallOuts {
             queue: StableVec::with_capacity(512),
             tx,
         }
+    }
+
+    /// Clear all [`CallOut`]s from the queue
+    pub fn clear(&mut self) {
+        self.queue.clear();
     }
 
     delegate! {

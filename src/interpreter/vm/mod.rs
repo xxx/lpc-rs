@@ -11,7 +11,7 @@ use tokio::{
     signal,
     sync::mpsc::{error::SendError, Receiver, Sender},
 };
-use tracing::{info, instrument, trace};
+use tracing::{debug, error, info, instrument, trace};
 use vm_op::VmOp;
 
 use crate::{
@@ -33,6 +33,8 @@ use crate::{
     telnet::{connection_broker::ConnectionBroker, ops::BrokerOp, Telnet},
     util::get_simul_efuns,
 };
+use crate::interpreter::SHUTDOWN;
+use crate::interpreter::task::apply_function::{apply_function, apply_function_in_master};
 
 mod initiate_login;
 mod prioritize_call_out;
@@ -156,6 +158,36 @@ impl Vm {
                 }
             }
         }
+
+        // Only the VM shuts down on its own. Everything else is explicit.
+        self.shutdown().await
+    }
+
+    /// Shut down the [`Vm`].
+    pub async fn shutdown(&mut self) -> Result<()> {
+        // tell the broker to break out of its main loop.
+        let _ = self.broker_tx.send_async(BrokerOp::Shutdown).await;
+
+        self.connection_broker.disable_incoming_connections();
+        self.call_outs.write().clear();
+
+        match apply_function_in_master(
+            SHUTDOWN,
+            &[],
+            self.new_task_template(),
+        ).await {
+            Some(Ok(_)) => {
+                debug!("shutdown() successfully applied in master object");
+            }
+            Some(Err(e)) => {
+                error!("shutdown() in master object errored: {}", e);
+            }
+            None => {
+                debug!("shutdown() not defined in the master object, so nothing to do");
+            }
+        }
+
+        self.connection_broker.disconnect_users();
 
         Ok(())
     }

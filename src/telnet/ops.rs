@@ -22,6 +22,9 @@ pub enum BrokerOp {
 
     /// Send a message to the specified connection
     SendMessage(String, SocketAddr),
+
+    /// Shut down the broker, and all connections.
+    Shutdown,
 }
 
 /// Operations that can be performed on outgoing connections
@@ -32,4 +35,7 @@ pub enum ConnectionOp {
 
     /// Set a function to receive the next line of input
     InputTo(InputTo),
+
+    /// Signal to the connection that the server is shutting down.
+    Shutdown,
 }

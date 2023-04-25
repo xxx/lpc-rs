@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{lpc_error, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::{
@@ -11,6 +11,7 @@ use crate::{
         task::{into_task_context::IntoTaskContext, Task},
     },
 };
+use crate::interpreter::task::task_template::TaskTemplate;
 
 /// Apply function `f` in process `proc`, to arguments `args`, using context
 /// information from `template`.
@@ -79,6 +80,43 @@ where
     };
 
     Some(apply_function(f.clone(), args, proc, template).await)
+}
+
+/// Apply function named `name`, in the master object, to arguments `args`, using context
+/// information from `template`.
+/// Returns the result of the function.
+///
+/// This function uses timed evaluation, and will timeout if execution takes too long.
+///
+/// # Arguments
+///
+/// * `name` - The name of the function to apply. This is assumed to be an unmangled name.
+/// * `args` - A slice of [`LpcRef`]s to apply the function to.
+/// * `template` - The [`TaskTemplate`] that holds the rest of the context information.
+///
+/// # Returns
+///
+/// * `Some(Ok(LpcRef))` - The result of the function.
+/// * `Some(Err(LpcError))` - The error that occurred.
+/// * `None` - The function is not defined in the master object.
+pub async fn apply_function_in_master<S>(
+    name: S,
+    args: &[LpcRef],
+    template: TaskTemplate,
+    // timeout: Option<usize>,
+) -> Option<Result<LpcRef>>
+where
+    S: AsRef<str>,
+{
+    let master = {
+        let Some(master) = template.object_space.master_object() else {
+            return Some(Err(lpc_error!("No master object defined.")));
+        };
+
+        master.clone()
+    };
+
+    apply_function_by_name(name, args, master, template).await
 }
 
 #[cfg(test)]
