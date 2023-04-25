@@ -25,8 +25,8 @@ pub async fn write_socket<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         }
         None => {
             // No connection to receive the message, so dump it to the debug log.
-            // TODO: write to the actual log
-            tracing::debug!("write_socket: {}", result);
+            context.config().debug_log(result).await;
+
             // 0 is already returned by default
         }
     }
