@@ -287,7 +287,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let mut task = Task::new(context);
 
-        task.timed_eval(init_function, &[]).await?;
+        // let max_execution_time = task.context.config.max_execution_time;
+        task.timed_eval(init_function, &[], task.context.config.max_execution_time).await?;
 
         Ok(task)
     }
@@ -301,7 +302,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let args = args.to_vec();
 
         tokio::spawn(async move {
-            match task.timed_eval(f, &args).await {
+            let max_execution_time = task.context.config.max_execution_time;
+            match task.timed_eval(f, &args, max_execution_time).await {
                 Ok(_) => Ok(task),
                 Err(e) => Err(e),
             }
@@ -336,17 +338,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// `Ok(())` if successful, or an [`LpcError`] if not
     #[instrument(skip_all)]
     #[async_recursion]
-    pub async fn timed_eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef]) -> Result<()> {
-        let limit = self.context.config.max_execution_time;
-
-        if limit == 0 {
+    pub async fn timed_eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef], timeout_ms: u64) -> Result<()> {
+        if timeout_ms == 0 {
             return self.eval(f, args).await;
         }
 
         let process = self.context.process().clone();
 
         match timeout(
-            Duration::from_millis(limit),
+            Duration::from_millis(timeout_ms),
             self.eval_function(process, f, args),
         )
         .await
@@ -354,7 +354,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(e)) => Err(e),
             Err(_) => Err(LpcError::new(format!(
-                "evaluation limit of {limit}ms has been reached"
+                "evaluation limit of {timeout_ms}ms has been reached"
             ))),
         }
     }
@@ -1375,7 +1375,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         .clone();
 
                     let result = if function.public() {
-                        task.timed_eval(function, args).await?;
+                        let max_execution_time = task_context.config.max_execution_time;
+                        task.timed_eval(function, args, max_execution_time).await?;
 
                         let Some(r) = task.context.into_result() else {
                             return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));

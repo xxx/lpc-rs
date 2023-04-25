@@ -30,11 +30,13 @@ pub async fn apply_catch_tell<const N: usize>(
     let mut ctx = context.clone_task_context();
     ctx.process = this_player.clone();
 
+    let max_execution_time = context.config().max_execution_time;
     let result = apply_function_by_name(
         CATCH_TELL,
         &[LpcString::from(&msg).into_lpc_ref(context.memory())],
         this_player.clone(),
         ctx,
+        Some(max_execution_time)
     )
     .await;
 

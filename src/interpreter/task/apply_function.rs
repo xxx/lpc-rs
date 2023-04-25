@@ -25,6 +25,7 @@ use crate::interpreter::task::task_template::TaskTemplate;
 /// * `args` - A slice of [`LpcRef`]s to apply the function to.
 /// * `proc` - The [`Process`] to apply the function in.
 /// * `template` - The template that holds the rest of the context information.
+/// * `timeout` - The maximum amount of time to allow the function to execute, in milliseconds.
 ///
 /// # Returns
 ///
@@ -35,6 +36,7 @@ pub async fn apply_function<T>(
     args: &[LpcRef],
     proc: Arc<Process>,
     template: T,
+    timeout: Option<u64>,
 ) -> Result<LpcRef>
 where
     T: IntoTaskContext,
@@ -42,9 +44,15 @@ where
     let ctx = template.into_task_context(proc);
     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(ctx);
 
-    task.timed_eval(f, args)
-        .await
-        .map(|_| task.result().cloned().unwrap())
+    if let Some(timeout) = timeout {
+        task.timed_eval(f, args, timeout)
+            .await
+            .map(|_| task.result().cloned().unwrap())
+    } else {
+        task.eval(f, args)
+            .await
+            .map(|_| task.result().cloned().unwrap())
+    }
 }
 
 /// Apply function named `name`, in process `proc`, to arguments `args`, using context
@@ -59,6 +67,7 @@ where
 /// * `args` - A slice of [`LpcRef`]s to apply the function to.
 /// * `proc` - The [`Process`] to apply the function in.
 /// * `template` - The template that holds the rest of the context information.
+/// * `timeout` - The maximum amount of time to allow the function to execute, in milliseconds.
 ///
 /// # Returns
 ///
@@ -70,6 +79,7 @@ pub async fn apply_function_by_name<S, T>(
     args: &[LpcRef],
     proc: Arc<Process>,
     template: T,
+    timeout: Option<u64>,
 ) -> Option<Result<LpcRef>>
 where
     S: AsRef<str>,
@@ -79,7 +89,7 @@ where
         return None;
     };
 
-    Some(apply_function(f.clone(), args, proc, template).await)
+    Some(apply_function(f.clone(), args, proc, template, timeout).await)
 }
 
 /// Apply function named `name`, in the master object, to arguments `args`, using context
@@ -103,7 +113,7 @@ pub async fn apply_function_in_master<S>(
     name: S,
     args: &[LpcRef],
     template: TaskTemplate,
-    // timeout: Option<usize>,
+    timeout: Option<u64>,
 ) -> Option<Result<LpcRef>>
 where
     S: AsRef<str>,
@@ -116,7 +126,7 @@ where
         master.clone()
     };
 
-    apply_function_by_name(name, args, master, template).await
+    apply_function_by_name(name, args, master, template, timeout).await
 }
 
 #[cfg(test)]
@@ -157,7 +167,7 @@ mod tests {
         // We could use `proc` as the process, but the language supports functions being applied
         // in different processes, so we'll use a new one. Note that this can lead to mismatches
         // with global variables, but that's the nature of the beast.
-        let result = apply_function(f, &args, Arc::new(process), template)
+        let result = apply_function(f, &args, Arc::new(process), template, None)
             .await
             .unwrap();
 

@@ -38,8 +38,9 @@ async fn load_master<const N: usize>(
                     context.insert_process(process.clone());
 
                     let new_context = context.clone_task_context().with_process(process);
+                    let max_execution_time = context.config().max_execution_time;
                     let mut task = Task::<MAX_CALL_STACK_SIZE>::new(new_context);
-                    task.timed_eval(prog_function, &[]).await?;
+                    task.timed_eval(prog_function, &[], max_execution_time).await?;
 
                     let process = task.context.process;
 
@@ -85,8 +86,9 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         let new_clone = context.insert_clone(new_prog);
 
         let new_context = context.clone_task_context().with_process(new_clone);
+        let max_execution_time = context.config().max_execution_time;
         let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
-        task.timed_eval(initializer, &[]).await?;
+        task.timed_eval(initializer, &[], max_execution_time).await?;
 
         // Set up the return value
         let return_val = task.context.process;

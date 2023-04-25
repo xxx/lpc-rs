@@ -330,7 +330,8 @@ impl Telnet {
         let template = template.clone();
         template.set_this_player(connection.process.load_full());
 
-        let result = apply_function(function, &args, process, template).await;
+        let max_execution_time = template.config.max_execution_time;
+        let result = apply_function(function, &args, process, template, Some(max_execution_time)).await;
         if let Err(e) = result {
             // TODO: this should apply runtime_error() on the master.
             error!("{}", e);

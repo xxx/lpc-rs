@@ -40,6 +40,7 @@ impl Vm {
                 &[],
                 master.clone(),
                 task_template.clone(),
+                Some(task_template.config.max_execution_time)
             )
             .await
             {
@@ -88,7 +89,8 @@ impl Vm {
             template.set_this_player(Some(login_ob.clone()));
 
             // call 'logon' in the login object
-            match apply_function_by_name(LOGON, &[], login_ob, template).await {
+            let max_execution_time = task_template.config.max_execution_time;
+            match apply_function_by_name(LOGON, &[], login_ob, template, Some(max_execution_time)).await {
                 Some(Ok(LpcRef::Int(i))) => {
                     if i == 0 {
                         // We don't send an error in this case, as we assume that logon() has sent them messages.

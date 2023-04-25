@@ -71,6 +71,7 @@ impl Vm {
                 }
             }
 
+            let max_execution_time = config.max_execution_time;
             let task_context = TaskContext::new(
                 config,
                 process,
@@ -86,7 +87,7 @@ impl Vm {
             let mut task = Task::<MAX_CALL_STACK_SIZE>::new(task_context);
             let id = task.id;
 
-            if let Err(e) = task.timed_eval(function, &args).await {
+            if let Err(e) = task.timed_eval(function, &args, max_execution_time).await {
                 let _ = tx
                     .send(VmOp::TaskError(
                         id,

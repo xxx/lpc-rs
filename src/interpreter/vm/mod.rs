@@ -175,6 +175,7 @@ impl Vm {
             SHUTDOWN,
             &[],
             self.new_task_template(),
+            Some(5000), // a much longer timeout than normal, to allow for saving.
         ).await {
             Some(Ok(_)) => {
                 debug!("shutdown() successfully applied in master object");
