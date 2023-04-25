@@ -157,12 +157,12 @@ mod tests {
         let context = task_context_fixture(program, config, tx);
 
         let mut task = Task::<10>::new(context.clone());
-        task.timed_eval(func.clone(), &[])
+        task.timed_eval(func.clone(), &[], 300)
             .await
             .expect("first task failed");
 
         let mut task = Task::<10>::new(context);
-        task.timed_eval(func, &[])
+        task.timed_eval(func, &[], 300)
             .await
             .expect("second task failed");
 
@@ -183,7 +183,7 @@ mod tests {
         let context = task_context_fixture(program, config, tx);
         let mut task = Task::<10>::new(context);
 
-        let result = task.timed_eval(func, &[]).await;
+        let result = task.timed_eval(func, &[], 300).await;
 
         assert_regex!(
             result.as_ref().unwrap_err().as_ref(),

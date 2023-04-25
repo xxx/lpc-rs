@@ -133,9 +133,9 @@ impl Telnet {
             return;
         };
 
-        loop {
-            let mut shutting_down = false;
+        let mut shutting_down = false;
 
+        loop {
             tokio::select! {
                 send_to_user = connection_rx.recv() => {
                     trace!("Received message from VM: {:?}", send_to_user);

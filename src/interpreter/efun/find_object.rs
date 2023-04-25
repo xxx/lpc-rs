@@ -98,7 +98,7 @@ mod tests {
         ObjectSpace::insert_process(&context.object_space, proc);
 
         let mut task = Task::<10>::new(context.clone());
-        task.timed_eval(func.clone(), &[])
+        task.timed_eval(func.clone(), &[], 500)
             .await
             .expect("task failed");
 
@@ -125,7 +125,7 @@ mod tests {
         let context = task_context_fixture(program, config, tx);
 
         let mut task = Task::<10>::new(context.clone());
-        task.timed_eval(func.clone(), &[])
+        task.timed_eval(func.clone(), &[], 500)
             .await
             .expect("task failed");
 
