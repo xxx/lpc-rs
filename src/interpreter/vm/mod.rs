@@ -34,6 +34,9 @@ use crate::{
     telnet::{connection_broker::ConnectionBroker, ops::BrokerOp, Telnet},
     util::get_simul_efuns,
 };
+use crate::interpreter::process::Process;
+use crate::telnet::connection::Connection;
+use crate::telnet::ops::ConnectionOp;
 
 mod initiate_login;
 mod prioritize_call_out;
@@ -139,7 +142,6 @@ impl Vm {
                 _ = signal::ctrl_c() => {
                     // SIGINT on Linux
                     info!("Ctrl-C received... shutting down");
-                    // TODO: send message to broker to shut down, wait for response.
                     break;
                 }
                 Some(op) = self.rx.recv() => {
@@ -149,6 +151,13 @@ impl Vm {
                         }
                         VmOp::PrioritizeCallOut(idx) => {
                             self.prioritize_call_out(idx).await;
+                        }
+                        VmOp::Exec(connection, process, callback) => {
+                            // We do this here in the VM because there are multiple objects
+                            // being updated at once, and we don't want to have to deal with
+                            // locking them behind a mutex.
+                            let prev = Self::takeover_process(connection, process).await;
+                            let _ = callback.send(prev);
                         }
                         VmOp::TaskError(_task_id, error) => {
                             tokio::spawn(async move { error.emit_diagnostics() });
@@ -162,11 +171,11 @@ impl Vm {
             }
         }
 
-        // Only the VM shuts down on its own. Everything else is explicit.
+        // Only the VM shuts down on its own. Everything else shuts down only at the behest of the VM.
         self.shutdown().await
     }
 
-    /// Shut down the [`Vm`].
+    /// Shut down the [`Vm`], and all subsystems.
     pub async fn shutdown(&mut self) -> Result<()> {
         // tell the broker to break out of its main loop.
         let _ = self.broker_tx.send_async(BrokerOp::Shutdown).await;
@@ -357,6 +366,58 @@ impl Vm {
     /// Send an operation to the VM queue
     pub async fn send_op(&self, msg: VmOp) -> std::result::Result<(), SendError<VmOp>> {
         self.tx.send(msg).await
+    }
+
+    /// Serialized public facade for the `exec` efun.
+    /// The overall mechanism is to call this function, which will send an `VmOp::Exec` to the VM, and
+    /// await the response. The `Exec` op is picked up, and will call `takeover_process`, which actually
+    /// makes the switch, and then will return the previous connection, if there was one.
+    ///
+    /// # Arguments
+    ///
+    /// * `connection` - The [`Connection`] to attach to the [`Process`]
+    /// * `process` - The [`Process`] to attach the [`Connection`] to
+    /// * `vm_tx` - The channel to send the `Exec` op to
+    ///
+    /// # Returns
+    ///
+    /// * `Some(Arc<Connection>)` - The previous connection in `process`, if there was one
+    /// * `None` - If there was no previous connection
+    pub async fn exec(connection: Arc<Connection>, process: Arc<Process>, vm_tx: Sender<VmOp>) -> Option<Arc<Connection>> {
+        let (exec_tx, exec_rx) = tokio::sync::oneshot::channel();
+        let _ = vm_tx.send(VmOp::Exec(connection, process, exec_tx)).await;
+        exec_rx.await.ok().flatten()
+    }
+
+    /// Set the [`Process`] that a [`Connection`] is connected to, and tag the
+    /// [`Process`] with the [`Connection`].
+    /// Drops the previous [`Connection`] that was attached to the [`Process`] if there was one.'
+    /// This is the underlying mechanism of the `exec` efun.
+    ///
+    /// NOTE: No synchronization is done here. It's assumed that this is being called
+    /// from behind a channel for serialization.
+    async fn takeover_process(
+        connection: Arc<Connection>,
+        process: Arc<Process>,
+    ) -> Option<Arc<Connection>> {
+        // These are the swaps that need to be done atomically.
+        connection.process.swap(Some(process.clone()));
+        let previous = process.connection.swap(Some(connection));
+
+        if let Some(conn) = &previous {
+            let _ = conn
+                .tx
+                .send(ConnectionOp::SendMessage(
+                    "You are being disconnected because someone else logged in as you.".to_string(),
+                ))
+                .await;
+            let _ = conn
+                .broker_tx
+                .send_async(BrokerOp::Disconnect(conn.address))
+                .await;
+        }
+
+        previous
     }
 }
 

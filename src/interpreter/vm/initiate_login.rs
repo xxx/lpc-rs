@@ -20,6 +20,7 @@ impl Vm {
         let object_space = self.object_space.clone();
         let broker_tx = self.broker_tx.clone();
         let task_template = self.new_task_template();
+        let vm_tx = self.tx.clone();
 
         tokio::spawn(async move {
             debug!("initiating login for {}", connection.address);
@@ -83,7 +84,7 @@ impl Vm {
             };
 
             // This is the initial exec() of the player into a body.
-            Connection::takeover_process(connection.clone(), login_ob.clone()).await;
+            Vm::exec(connection.clone(), login_ob.clone(), vm_tx.clone()).await;
 
             let template = task_template.clone();
             template.set_this_player(Some(login_ob.clone()));

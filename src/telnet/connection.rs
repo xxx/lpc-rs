@@ -63,37 +63,6 @@ impl Connection {
             input_to: ArcSwapOption::from(None),
         }
     }
-
-    /// Set the [`Process`] that this [`Connection`] is connected to, and tag the
-    /// [`Process`] with the [`Connection`].
-    /// Drops the previous [`Connection`] that was attached to the [`Process`] if there was one.'
-    /// This is the underlying mechanism of the `exec` efun.
-    // TODO: hide this behind a channel, so calls to it can be serialized to avoid races.
-    pub async fn takeover_process(
-        connection: Arc<Connection>,
-        process: Arc<Process>,
-    ) -> Option<Arc<Connection>> {
-        let previous = process.connection.rcu(|_c| {
-            connection.process.rcu(|_p| Some(process.clone()));
-
-            Some(connection.clone())
-        });
-
-        if let Some(conn) = &previous {
-            let _ = conn
-                .tx
-                .send(ConnectionOp::SendMessage(
-                    "You are being disconnected because someone else logged in as you.".to_string(),
-                ))
-                .await;
-            let _ = conn
-                .broker_tx
-                .send_async(BrokerOp::Disconnect(conn.address))
-                .await;
-        }
-
-        previous
-    }
 }
 
 impl PartialEq for Connection {
