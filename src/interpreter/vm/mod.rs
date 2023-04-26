@@ -26,17 +26,20 @@ use crate::{
         },
         heap::Heap,
         object_space::ObjectSpace,
+        process::Process,
         program::Program,
         task::{apply_function::apply_function_in_master, task_template::TaskTemplate, Task},
         task_context::TaskContext,
         SHUTDOWN,
     },
-    telnet::{connection_broker::ConnectionBroker, ops::BrokerOp, Telnet},
+    telnet::{
+        connection::Connection,
+        connection_broker::ConnectionBroker,
+        ops::{BrokerOp, ConnectionOp},
+        Telnet,
+    },
     util::get_simul_efuns,
 };
-use crate::interpreter::process::Process;
-use crate::telnet::connection::Connection;
-use crate::telnet::ops::ConnectionOp;
 
 mod initiate_login;
 mod prioritize_call_out;
@@ -383,7 +386,11 @@ impl Vm {
     ///
     /// * `Some(Arc<Connection>)` - The previous connection in `process`, if there was one
     /// * `None` - If there was no previous connection
-    pub async fn exec(connection: Arc<Connection>, process: Arc<Process>, vm_tx: Sender<VmOp>) -> Option<Arc<Connection>> {
+    pub async fn exec(
+        connection: Arc<Connection>,
+        process: Arc<Process>,
+        vm_tx: Sender<VmOp>,
+    ) -> Option<Arc<Connection>> {
         let (exec_tx, exec_rx) = tokio::sync::oneshot::channel();
         let _ = vm_tx.send(VmOp::Exec(connection, process, exec_tx)).await;
         exec_rx.await.ok().flatten()

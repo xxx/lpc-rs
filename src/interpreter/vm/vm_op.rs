@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use lpc_rs_errors::LpcError;
 
-use crate::{interpreter::task::task_id::TaskId, telnet::connection::Connection};
-use crate::interpreter::process::Process;
+use crate::{
+    interpreter::{process::Process, task::task_id::TaskId},
+    telnet::connection::Connection,
+};
 
 /// Operations that can be communicated to the [`Vm`](crate::interpreter::vm::Vm) remotely.
 #[derive(Debug)]
@@ -16,7 +18,11 @@ pub enum VmOp {
 
     /// Connect a user to a Process. Include a channel to call the response back,
     /// since the entire point of this op is to enforce sequential handling.
-    Exec(Arc<Connection>, Arc<Process>, tokio::sync::oneshot::Sender<Option<Arc<Connection>>>),
+    Exec(
+        Arc<Connection>,
+        Arc<Process>,
+        tokio::sync::oneshot::Sender<Option<Arc<Connection>>>,
+    ),
 
     /// The Task with the passed ID has failed.
     TaskError(TaskId, LpcError),
