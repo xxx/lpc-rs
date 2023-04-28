@@ -1,6 +1,7 @@
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
+use crate::interpreter::object_flags::ObjectFlags;
 
 /// `destruct`, an efun for deleting objects from the [`ObjectSpace`]
 pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -20,12 +21,14 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
                 };
 
                 if let Some(proc) = proc.upgrade() {
+                    proc.flags.set(ObjectFlags::DESTRUCTED);
                     context.remove_process(proc);
                 } // else it's already destructed
             }
         }
         LpcRef::Object(proc) => {
             if let Some(proc) = proc.upgrade() {
+                proc.flags.set(ObjectFlags::DESTRUCTED);
                 context.remove_process(proc);
             } // else it's already destructed
         }
@@ -46,10 +49,11 @@ mod tests {
     #[tokio::test]
     async fn test_destruct() {
         let code = r##"
-            function create() {
-                // won't delete the object immediately, but will delete it
-                // after the current Task finishes
-                destruct(this_object());
+            void create() {
+                dump(file_name(this_object()));
+                object ob = clone_object("/my_file"); // this file
+                dump(file_name(ob));
+                destruct(ob);
             }
         "##;
 
@@ -62,6 +66,14 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(result.context.object_space.is_empty());
+        let space = result
+            .context
+            .object_space
+            .iter()
+            .map(|x| x.key().to_owned())
+            .collect::<Vec<_>>();
+
+        assert!(space.contains(&"/my_file".to_owned())); // clone is removed
+        assert_eq!(result.context.object_space.len(), 1);
     }
 }

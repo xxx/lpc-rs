@@ -1,8 +1,13 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    future::Future,
+    path::{PathBuf},
+    sync::Arc,
+};
 
 use arc_swap::ArcSwapAny;
+use async_trait::async_trait;
 use derive_builder::Builder;
-use lpc_rs_core::register::Register;
+use lpc_rs_core::{lpc_path::LpcPath, register::Register};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
 use once_cell::sync::OnceCell;
@@ -10,6 +15,8 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
+    compile_time_config::MAX_CALL_STACK_SIZE,
+    compiler::{Compiler},
     interpreter::{
         call_outs::CallOuts,
         gc::gc_bank::GcRefBank,
@@ -18,23 +25,25 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        task::{into_task_context::IntoTaskContext, task_template::TaskTemplate},
+        task::{into_task_context::IntoTaskContext, task_template::TaskTemplate, Task},
         vm::vm_op::VmOp,
     },
-    util::get_simul_efuns,
+    util::{get_simul_efuns, process_builder::ProcessBuilder, with_compiler::WithCompiler},
 };
 
-/// A struct to carry context during the evaluation of a single [`Task`](crate::interpreter::task::Task).
+pub const MAX_CHAIN_COUNT: u16 = 10000;
+
+/// A struct to carry context during the evaluation of a single [`Task`].
 #[derive(Debug, Builder)]
 #[builder(pattern = "owned")]
 pub struct TaskContext {
     /// The [`Config`] that's in use for the
-    /// [`Task`](crate::interpreter::task::Task).
+    /// [`Task`].
     #[builder(setter(into))]
     pub config: Arc<Config>,
 
     /// The [`Process`] that owns the function being
-    /// called in this [`Task`](crate::interpreter::task::Task).
+    /// called in this [`Task`].
     #[builder(setter(into))]
     pub process: Arc<Process>,
 
@@ -67,12 +76,19 @@ pub struct TaskContext {
     pub result: OnceCell<LpcRef>,
 
     /// The command giver, if there was one. This might be an NPC, or None.
+    // TODO: put this into an Arc so it can shared more easily between multiple contexts.
     #[builder(default, setter(strip_option))]
     pub this_player: ArcSwapAny<Option<Arc<Process>>>,
 
     /// The upvalue_ptrs to populate the initial frame with, if any.
     #[builder(default)]
+    // TODO: thinvec this
     pub upvalue_ptrs: Option<Vec<Register>>,
+
+    /// The number of this task in the current chain of Tasks. This is
+    /// used to prevent infinite recursion among multiple Tasks.
+    #[builder(default)]
+    pub chain_count: u16,
 }
 
 impl TaskContext {
@@ -112,6 +128,7 @@ impl TaskContext {
             call_outs: call_outs.into(),
             this_player: ArcSwapAny::from(this_player),
             upvalue_ptrs,
+            chain_count: 0,
             tx,
         }
     }
@@ -132,6 +149,7 @@ impl TaskContext {
             this_player: template.this_player,
             upvalue_ptrs: template.upvalue_ptrs,
             tx: template.tx,
+            chain_count: 0,
         }
     }
 
@@ -282,6 +300,7 @@ impl Clone for TaskContext {
             call_outs: self.call_outs.clone(),
             this_player: ArcSwapAny::from(self.this_player.load_full()),
             upvalue_ptrs: self.upvalue_ptrs.clone(),
+            chain_count: self.chain_count,
             tx: self.tx.clone(),
         }
     }
@@ -290,6 +309,121 @@ impl Clone for TaskContext {
 impl IntoTaskContext for TaskContext {
     fn into_task_context(self, _proc: Arc<Process>) -> TaskContext {
         self
+    }
+}
+
+#[async_trait]
+impl WithCompiler for TaskContext {
+    async fn with_async_compiler<F, U, T>(&self, f: F) -> Result<T>
+    where
+        F: FnOnce(Compiler) -> U + Send,
+        U: Future<Output = Result<T>> + Send,
+    {
+        Self::with_async_compiler_associated(f, &self.config, &self.object_space).await
+    }
+}
+
+#[async_trait]
+impl ProcessBuilder for TaskContext {
+    async fn process_create_from_path(&self, filename: &LpcPath) -> Result<Arc<Process>> {
+        let proc = self
+            .with_async_compiler(|compiler| async move {
+                compiler.compile_in_game_file(filename, None).await
+            })
+            .await
+            .map(|pr| async move { Self::process_insert_program(pr, &self.object_space).await })?
+            .await;
+
+        Ok(proc)
+    }
+
+    async fn process_create_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>>
+    where
+        P: Into<LpcPath> + Send + Sync,
+        S: AsRef<str> + Send + Sync,
+    {
+        let proc = self
+            .with_async_compiler(
+                |compiler| async move { compiler.compile_string(filename, code).await },
+            )
+            .await
+            .map(
+                |prog| async move { Self::process_insert_program(prog, &self.object_space).await },
+            )?
+            .await;
+
+        Ok(proc)
+    }
+
+    async fn process_initialize_from_path(
+        &self,
+        filename: &LpcPath,
+    ) -> Result<Task<MAX_CALL_STACK_SIZE>> {
+        let program = self
+            .with_async_compiler(|compiler| async move {
+                compiler.compile_in_game_file(filename, None).await
+            })
+            .await?;
+
+        let template = TaskTemplate::from(self);
+        Self::process_insert_and_initialize_program(program, template).await
+    }
+
+    async fn process_initialize_from_code<P, S>(
+        &self,
+        filename: P,
+        code: S,
+    ) -> Result<Task<MAX_CALL_STACK_SIZE>>
+    where
+        P: Into<LpcPath> + Send + Sync,
+        S: AsRef<str> + Send + Sync,
+    {
+        let program = self
+            .with_async_compiler(
+                |compiler| async move { compiler.compile_string(filename, code).await },
+            )
+            .await?;
+
+        let template = TaskTemplate::from(self);
+        Self::process_insert_and_initialize_program(program, template).await
+    }
+}
+
+impl From<TaskContext> for TaskContextBuilder {
+    fn from(value: TaskContext) -> Self {
+        Self {
+            config: Some(value.config),
+            process: Some(value.process),
+            object_space: Some(value.object_space),
+            memory: Some(value.memory),
+            simul_efuns: Some(value.simul_efuns),
+            vm_upvalues: Some(value.vm_upvalues),
+            result: None,
+            call_outs: Some(value.call_outs),
+            this_player: Some(value.this_player),
+            upvalue_ptrs: Some(value.upvalue_ptrs),
+            chain_count: Some(value.chain_count),
+            tx: Some(value.tx),
+        }
+    }
+}
+
+impl From<&TaskContext> for TaskContextBuilder {
+    fn from(value: &TaskContext) -> Self {
+        Self {
+            config: Some(value.config.clone()),
+            process: Some(value.process.clone()),
+            object_space: Some(value.object_space.clone()),
+            memory: Some(value.memory.clone()),
+            simul_efuns: Some(value.simul_efuns.clone()),
+            vm_upvalues: Some(value.vm_upvalues.clone()),
+            result: None,
+            call_outs: Some(value.call_outs.clone()),
+            this_player: Some(ArcSwapAny::from(value.this_player.load_full())),
+            upvalue_ptrs: Some(value.upvalue_ptrs.clone()),
+            chain_count: Some(value.chain_count),
+            tx: Some(value.tx.clone()),
+        }
     }
 }
 

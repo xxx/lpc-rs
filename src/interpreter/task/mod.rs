@@ -27,13 +27,14 @@ use lpc_rs_core::{
     register::{Register, RegisterVariant},
     LpcIntInner,
 };
-use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_errors::{lpc_bug, span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use string_interner::{DefaultSymbol, Symbol};
+use thin_vec::{thin_vec, ThinVec};
 use tokio::{sync::mpsc::Sender, task::JoinHandle, time::timeout};
-use tracing::{instrument, trace, warn};
+use tracing::{error, instrument, trace, warn};
 use ustr::ustr;
 
 use crate::{
@@ -52,6 +53,7 @@ use crate::{
         lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
         lpc_string::LpcString,
+        object_flags::ObjectFlags,
         object_space::ObjectSpace,
         process::Process,
         program::Program,
@@ -190,19 +192,19 @@ pub struct Task<const STACKSIZE: usize> {
     pub id: TaskId,
 
     /// The call stack
-    pub stack: CallStack<STACKSIZE>,
+    pub stack: Box<CallStack<STACKSIZE>>,
 
     /// Stack of [`CatchPoint`]s
-    catch_points: Vec<CatchPoint>,
+    catch_points: ThinVec<CatchPoint>,
 
     /// The arg vector, populated prior to executing any of the `Call`-family [`Instruction`]s
-    pub args: Vec<RegisterVariant>,
+    pub args: ThinVec<RegisterVariant>,
 
     /// The vector used to collect arguments when creating a partially-applied function pointer
-    pub partial_args: Vec<Option<RegisterVariant>>,
+    pub partial_args: ThinVec<Option<RegisterVariant>>,
 
     /// The vector used to collect members of a soon-to-be-created array
-    array_items: Vec<RegisterVariant>,
+    array_items: ThinVec<RegisterVariant>,
 
     /// The context of this task
     pub context: TaskContext,
@@ -216,7 +218,7 @@ pub struct Task<const STACKSIZE: usize> {
 
     /// Store a snapshot of a specific state, for testing
     #[cfg(test)]
-    pub snapshots: Vec<CallStack<STACKSIZE>>,
+    pub snapshots: ThinVec<CallStack<STACKSIZE>>,
 }
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
@@ -225,11 +227,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub fn new(task_context: TaskContext) -> Self {
         Self {
             id: TaskId::new(),
-            stack: CallStack::default(),
-            catch_points: vec![],
-            args: Vec::with_capacity(10),
-            partial_args: Vec::with_capacity(10),
-            array_items: Vec::with_capacity(10),
+            stack: Box::new(CallStack::default()),
+            catch_points: thin_vec![],
+            args: ThinVec::with_capacity(10),
+            partial_args: ThinVec::with_capacity(10),
+            array_items: ThinVec::with_capacity(10),
             context: task_context,
             state: TaskState::New,
 
@@ -237,11 +239,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             popped_frame: None,
 
             #[cfg(test)]
-            snapshots: vec![],
+            snapshots: thin_vec![],
         }
     }
 
     /// Convenience helper to get a Program initialized.
+    /// This will also insert it into the object space.
     #[allow(clippy::too_many_arguments)]
     #[instrument(skip_all)]
     pub async fn initialize_program<P, C, O, M, U, A>(
@@ -264,13 +267,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         A: Into<Arc<RwLock<CallOuts>>>,
     {
         let program = program.into();
-        let init_function = {
-            let Some(function) = &program.initializer else {
-                return Err(LpcError::new("Init function not found?"));
-            };
-
-            function.clone()
-        };
         let process: Arc<Process> = Process::new(program).into();
         let context = TaskContext::new(
             config,
@@ -283,12 +279,32 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             upvalue_ptrs.map(|v| v.to_vec()),
             tx,
         );
+
         context.insert_process(process);
 
-        let mut task = Task::new(context);
+        Self::initialize_process(context).await
+    }
 
-        // let max_execution_time = task.context.config.max_execution_time;
-        task.timed_eval(init_function, &[], task.context.config.max_execution_time)
+    /// Initialize a [`Process`] by calling its initializer function, using the
+    /// given [`TaskContext`].
+    /// It's assumed that the process has already been inserted into the [`ObjectSpace`]
+    pub async fn initialize_process(context: TaskContext) -> Result<Task<STACKSIZE>> {
+        debug_assert!(!context.process.flags.test(ObjectFlags::INITIALIZED));
+
+        let Some(initializer) = context.process.program.initializer.clone() else {
+            let msg = "Init function not found on cloned object? This should never happen.";
+
+            error!(msg);
+            return Err(lpc_bug!(msg));
+        };
+
+        // We mark ourselves as initialized before actually initializing, to avoid
+        // infinite loops where this_object() is used in global initialization.
+        context.process.flags.set(ObjectFlags::INITIALIZED);
+
+        let max_execution_time = context.config().max_execution_time;
+        let mut task = Task::new(context);
+        task.timed_eval(initializer, &[], max_execution_time)
             .await?;
 
         Ok(task)
@@ -1360,13 +1376,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 task_context: &TaskContext,
             ) -> Result<LpcRef>
             where
-                T: AsRef<str> + Send,
+                T: AsRef<str> + Send + Sync,
             {
                 let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
                     receiver_ref,
                     function_name.as_ref(),
                     task_context,
-                );
+                )
+                .await;
 
                 if let Some(receiver) = resolved {
                     let new_context = task_context.clone().with_process(receiver.clone());
@@ -1837,7 +1854,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     #[instrument(skip_all)]
-    fn resolve_call_other_receiver<T>(
+    async fn resolve_call_other_receiver<T>(
         receiver_ref: &LpcRef,
         name: T,
         context: &TaskContext,
@@ -1852,7 +1869,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 match context.lookup_process(str) {
                     Some(proc) => proc,
-                    None => return None,
+                    None => {
+                        // TODO: this should create a new master object if the path points to one
+                        return None;
+                    }
                 }
             }
             LpcRef::Object(proc) => {
@@ -1865,10 +1885,25 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             _ => return None,
         };
 
+        // If uninitialized, it's time to set that up. Note that we do this regardless
+        // of whether the function exists or not, because this is a primary way of
+        // initializing objects. If you've ever seen a call_other to teleledningsanka()
+        // or some other knowingly undefined function in old lib code, this is why.
+        let result = if !process.flags.test(ObjectFlags::INITIALIZED) {
+            let ctx = context.clone().with_process(process);
+            let Ok(task) = Self::initialize_process(ctx).await else {
+                return None;
+            };
+
+            task.context.process
+        } else {
+            process
+        };
+
         // Only switch the process if there's actually a function to
         // call by this name on the other side.
-        if process.program.contains_function(name) {
-            Some(process)
+        if result.program.contains_function(name) {
+            Some(result)
         } else {
             None
         }
@@ -3110,11 +3145,7 @@ mod tests {
             #[tokio::test]
             async fn stores_the_value_for_call_other_string_receiver() {
                 let code = indoc! { r##"
-                    function f = &("/my_file")->tacco();
-
-                    void tacco() {
-                        dump("tacco!");
-                    }
+                    function f = &("/secure/simul_efuns")->simul_efun();
                 "##};
 
                 let task = run_prog(code).await;
@@ -3122,8 +3153,8 @@ mod tests {
 
                 let expected = vec![
                     Int(0),
-                    String("/my_file".into()),
-                    Function("tacco".to_string(), vec![]),
+                    String("/secure/simul_efuns".into()),
+                    Function("simul_efun".to_string(), vec![]),
                 ];
 
                 BareVal::assert_vec_equal(&expected, &registers);
@@ -4260,7 +4291,7 @@ mod tests {
 
                 let program = Program {
                     filename: path,
-                    functions: IndexMap::new(),
+                    functions: Box::new(IndexMap::new()),
                     initializer: Some(initializer),
                     // num_init_registers: 2,
                     ..Default::default()

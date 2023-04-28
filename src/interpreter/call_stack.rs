@@ -10,7 +10,7 @@ use crate::interpreter::{call_frame::CallFrame, gc::mark::Mark, lpc_ref::LpcRef}
 #[derive(Debug, Clone)]
 pub struct CallStack<const STACKSIZE: usize> {
     /// The call stack
-    stack: ArrayVec<CallFrame, STACKSIZE>,
+    stack: Box<ArrayVec<CallFrame, STACKSIZE>>,
 }
 
 impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
@@ -129,7 +129,7 @@ impl<const STACKSIZE: usize> Mark for CallStack<STACKSIZE> {
 impl<const STACKSIZE: usize> Default for CallStack<STACKSIZE> {
     fn default() -> Self {
         Self {
-            stack: ArrayVec::<_, STACKSIZE>::new(),
+            stack: Box::new(ArrayVec::<_, STACKSIZE>::new()),
         }
     }
 }

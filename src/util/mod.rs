@@ -1,3 +1,6 @@
+pub mod process_builder;
+pub mod with_compiler;
+
 use std::sync::Arc;
 
 use lpc_rs_utils::config::Config;

@@ -220,7 +220,9 @@ impl Preprocessor {
             if Path::exists(&server_path) {
                 cache.add(server_path.to_string_lossy())
             } else {
+                // We pretend the eager file has an absolute path in the cache, as it makes lookups easier.
                 cache.add_eager(server_path.to_string_lossy(), code.as_ref())
+                // cache.add_eager(lpc_path.to_string_lossy(), code.as_ref())
             }
         };
 

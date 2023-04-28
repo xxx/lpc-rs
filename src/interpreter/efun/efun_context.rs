@@ -1,18 +1,33 @@
-use std::{borrow::Cow, fmt::Debug, path::PathBuf, sync::Arc};
+use std::{borrow::Cow, fmt::Debug, future::Future, path::PathBuf, sync::Arc};
 
 use arc_swap::ArcSwapAny;
+use async_trait::async_trait;
 use delegate::delegate;
-use lpc_rs_core::register::RegisterVariant;
+use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
 
-use crate::interpreter::{
-    call_frame::CallFrame, call_outs::CallOuts, call_stack::CallStack, gc::gc_bank::GcRefBank,
-    heap::Heap, lpc_ref::LpcRef, process::Process, program::Program, task::get_location,
-    task_context::TaskContext, vm::vm_op::VmOp,
+use crate::{
+    compile_time_config::MAX_CALL_STACK_SIZE,
+    compiler::Compiler,
+    interpreter::{
+        call_frame::CallFrame,
+        call_outs::CallOuts,
+        call_stack::CallStack,
+        gc::gc_bank::GcRefBank,
+        heap::Heap,
+        lpc_ref::LpcRef,
+        process::Process,
+        program::Program,
+        task::{get_location, Task},
+        task_context::TaskContext,
+        vm::vm_op::VmOp,
+    },
+    util::{process_builder::ProcessBuilder, with_compiler::WithCompiler},
 };
+use crate::interpreter::task_context::TaskContextBuilder;
 
 /// A structure to hold various pieces of interpreter state, to be passed to
 /// Efuns when they're called
@@ -135,8 +150,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Get a clone of the task context
     #[inline]
-    pub fn clone_task_context(&self) -> TaskContext {
-        self.task_context.clone()
+    pub fn task_context_builder(&self) -> TaskContextBuilder {
+        TaskContextBuilder::from(self.task_context)
     }
 
     /// Get a reference to the [`Process`] that contains the call to this efun
@@ -170,9 +185,66 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         &self.task_context.this_player
     }
 
+    /// Get the current `chain_count` from the context.
+    #[inline]
+    pub fn chain_count(&self) -> u16 {
+        self.task_context.chain_count
+    }
+
     /// Return a clone of the current stack, for snapshotting
     #[cfg(test)]
     pub fn clone_stack(&self) -> CallStack<N> {
         self.stack.clone()
+    }
+}
+
+#[async_trait]
+impl<'task, const N: usize> WithCompiler for EfunContext<'task, N> {
+    async fn with_async_compiler<F, U, T>(&self, f: F) -> Result<T>
+    where
+        F: FnOnce(Compiler) -> U + Send,
+        U: Future<Output = Result<T>> + Send,
+    {
+        self.task_context.with_async_compiler(f).await
+    }
+}
+
+#[async_trait]
+impl<'task, const N: usize> ProcessBuilder for EfunContext<'task, N> {
+    async fn process_create_from_path(&self, filename: &LpcPath) -> Result<Arc<Process>> {
+        self.task_context.process_create_from_path(filename).await
+    }
+
+    async fn process_create_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>>
+    where
+        P: Into<LpcPath> + Send + Sync,
+        S: AsRef<str> + Send + Sync,
+    {
+        self.task_context
+            .process_create_from_code(filename, code)
+            .await
+    }
+
+    async fn process_initialize_from_path(
+        &self,
+        filename: &LpcPath,
+    ) -> Result<Task<MAX_CALL_STACK_SIZE>> {
+        self.task_context
+            .process_initialize_from_path(filename)
+            .await
+    }
+
+    async fn process_initialize_from_code<P, S>(
+        &self,
+        filename: P,
+        code: S,
+    ) -> Result<Task<MAX_CALL_STACK_SIZE>>
+    where
+        P: Into<LpcPath> + Send + Sync,
+        S: AsRef<str> + Send + Sync,
+    {
+        self.task_context
+            .process_initialize_from_code(filename, code)
+            .await
     }
 }

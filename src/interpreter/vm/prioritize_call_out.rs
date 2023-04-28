@@ -51,14 +51,14 @@ impl Vm {
 
             let Ok((ptr_arc, repeating)) = pair else {
                 call_outs.write().remove(idx);
-                let _ = tx.send(VmOp::TaskError(TaskId(0), pair.unwrap_err())).await;
+                let _ = tx.send(VmOp::TaskError(TaskId(0), Box::new(pair.unwrap_err()))).await;
                 return;
             };
 
             let triple = FunctionPtr::triple(&ptr_arc, &config, &object_space);
             let Ok((process, function, args)) = triple else {
                 call_outs.write().remove(idx);
-                let _ = tx.send(VmOp::TaskError(TaskId(0), triple.unwrap_err())).await;
+                let _ = tx.send(VmOp::TaskError(TaskId(0), Box::new(triple.unwrap_err()))).await;
                 return;
             };
 
@@ -91,7 +91,7 @@ impl Vm {
                 let _ = tx
                     .send(VmOp::TaskError(
                         id,
-                        e.with_stack_trace(task.stack.stack_trace()),
+                        Box::new(e.with_stack_trace(task.stack.stack_trace())),
                     ))
                     .await;
             }
@@ -113,6 +113,7 @@ mod tests {
             into_lpc_ref::IntoLpcRef,
         },
         test_support::test_config,
+        util::{process_builder::ProcessBuilder, with_compiler::WithCompiler},
     };
 
     #[tokio::test]
@@ -127,15 +128,17 @@ mod tests {
 
         let mut vm = Vm::new(test_config());
 
-        let prog = vm
-            .with_async_compiler(|compiler| async move {
-                compiler.compile_string("/foo/bar.c", code).await
-            })
-            .await
-            .unwrap();
-
-        let func = prog.lookup_function("foo").unwrap().clone();
-        let proc = vm.create_and_initialize_task(prog).await.unwrap().process;
+        let r = vm.process_initialize_from_code("/foo/bar.c", code).await;
+        // let prog = vm
+        //     .with_async_compiler(|compiler| async move {
+        //         compiler.compile_string("/foo/bar.c", code).await
+        //     })
+        //     .await
+        //     .unwrap();
+        //
+        // let func = prog.lookup_function("foo").unwrap().clone();
+        let proc = r.unwrap().context.process;
+        let func = proc.program.lookup_function("foo").unwrap().clone();
         let ptr = FunctionPtrBuilder::default()
             .address(FunctionAddress::Local(Arc::downgrade(&proc), func.clone()))
             .build()

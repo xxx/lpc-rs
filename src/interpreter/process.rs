@@ -16,6 +16,7 @@ use crate::{
         bank::RefBank,
         gc::mark::Mark,
         lpc_ref::{LpcRef, NULL},
+        object_flags::{AtomicFlags, ObjectFlags},
         program::Program,
     },
     telnet::connection::Connection,
@@ -39,6 +40,9 @@ pub struct Process {
     /// The [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker)
     /// owns the [`Connection`] with the [`Process`] set on it.
     pub connection: ArcSwapAny<Option<Arc<Connection>>>,
+
+    /// Our flags
+    pub flags: AtomicFlags<ObjectFlags>,
 }
 
 impl Process {
@@ -55,6 +59,7 @@ impl Process {
             globals: RwLock::new(RefBank::new(vec![NULL; num_globals])),
             clone_id: None,
             connection: ArcSwapAny::from(None),
+            flags: Default::default(),
         }
     }
 
@@ -63,11 +68,15 @@ impl Process {
     pub fn new_clone(program: Arc<Program>, clone_id: usize) -> Self {
         let num_globals = program.num_globals;
 
+        let flags = AtomicFlags::new();
+        flags.set(ObjectFlags::CLONE);
+
         Self {
             program,
             globals: RwLock::new(RefBank::new(vec![NULL; num_globals])),
             clone_id: Some(clone_id),
             connection: ArcSwapAny::from(None),
+            flags,
         }
     }
 

@@ -263,10 +263,10 @@ impl CodegenWalker {
 
         Ok(Program {
             filename: self.context.filename.clone(),
-            functions,
+            functions: Box::new(functions),
             initializer: self.initializer,
-            unmangled_functions,
-            global_variables,
+            unmangled_functions: Box::new(unmangled_functions),
+            global_variables: Box::new(global_variables),
             num_globals: self.global_counter.number_emitted(),
             pragmas: self.context.pragmas,
             strings,

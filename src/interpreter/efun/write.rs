@@ -27,8 +27,10 @@ pub async fn apply_catch_tell<const N: usize>(
         return Ok(());
     };
 
-    let mut ctx = context.clone_task_context();
-    ctx.process = this_player.clone();
+    let ctx = context.task_context_builder()
+        .process(this_player.clone())
+        .build()
+        .unwrap();
 
     let max_execution_time = context.config().max_execution_time;
     let result = apply_function_by_name(

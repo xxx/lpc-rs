@@ -1,15 +1,27 @@
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc,
+use std::{
+    future::Future,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };
 
+use async_trait::async_trait;
 use bit_set::BitSet;
-use dashmap::{mapref::one::Ref, DashMap};
+use dashmap::{
+    mapref::{multiple::RefMulti, one::Ref},
+    DashMap,
+};
 use delegate::delegate;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::Config;
+use tracing::trace;
 
-use crate::interpreter::{gc::mark::Mark, process::Process, program::Program};
+use crate::{
+    compiler::{Compiler},
+    interpreter::{gc::mark::Mark, process::Process, program::Program},
+    util::{with_compiler::WithCompiler},
+};
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
 /// and cloned objects. In other words, this is the map that `find_object()`
@@ -26,6 +38,9 @@ pub struct ObjectSpace {
     /// How many clones have been created so far?
     clone_count: AtomicUsize,
 
+    /// The master object.
+    master_object: Option<Arc<Process>>,
+
     /// Our configuration
     config: Arc<Config>,
 }
@@ -41,6 +56,9 @@ impl ObjectSpace {
 
             /// Clear the entire space
             pub fn clear(&self);
+
+            /// Get an iterator over the space
+            pub fn iter(&self) -> impl Iterator<Item = RefMulti<'_, String, Arc<Process>>>;
         }
     }
 
@@ -100,7 +118,16 @@ impl ObjectSpace {
         P: Into<Arc<Process>>,
     {
         let process = process.into();
-        let name = { object_space.prepare_process_filename(&process) };
+        let name = object_space.prepare_process_filename(&process);
+
+        let mo = object_space.config.master_object.as_str();
+        let stripped_config = mo.strip_suffix(".c").unwrap_or(mo);
+
+        trace!(
+            "Inserting process: {} :: {}",
+            process.filename(),
+            stripped_config
+        );
 
         object_space.insert_process_directly(name, process);
     }
@@ -138,6 +165,7 @@ impl ObjectSpace {
     }
 
     /// Lookup a process from its path.
+    /// The path should be absolute, in-game path, without the `.c` extension.
     pub fn lookup<T>(&self, path: T) -> Option<Ref<String, Arc<Process>>>
     where
         T: AsRef<str>,
@@ -152,6 +180,7 @@ impl Clone for ObjectSpace {
             processes: self.processes.clone(),
             clone_count: AtomicUsize::new(self.clone_count.load(Ordering::Relaxed)),
             config: self.config.clone(),
+            master_object: None,
         }
     }
 }
@@ -164,6 +193,7 @@ impl Default for ObjectSpace {
             processes,
             clone_count: AtomicUsize::new(0),
             config: Config::default().into(),
+            master_object: None,
         }
     }
 }
@@ -176,6 +206,17 @@ impl Mark for ObjectSpace {
         }
 
         Ok(())
+    }
+}
+
+#[async_trait]
+impl WithCompiler for ObjectSpace {
+    async fn with_async_compiler<F, U, T>(&self, f: F) -> lpc_rs_errors::Result<T>
+    where
+        F: FnOnce(Compiler) -> U + Send,
+        U: Future<Output = lpc_rs_errors::Result<T>> + Send,
+    {
+        Self::with_async_compiler_associated(f, &self.config, self).await
     }
 }
 

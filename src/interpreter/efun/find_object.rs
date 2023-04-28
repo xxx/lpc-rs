@@ -28,7 +28,10 @@ pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
                     Arc::downgrade(&proc).into_lpc_ref(context.memory())
                     // context.value_to_ref(proc)
                 }
-                None => NULL,
+                None => {
+                    // TODO: if the string is a master object, create it, but don't initialize it
+                    NULL
+                }
             }
         }
     };

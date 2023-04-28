@@ -97,7 +97,7 @@ impl Compiler {
     /// ```
     /// # tokio_test::block_on(async {
     /// use lpc_rs::compiler::Compiler;
-    /// ///
+    ///
     /// let prog = Compiler::default()
     ///     .compile_file("tests/fixtures/code/example.c")
     ///     .await

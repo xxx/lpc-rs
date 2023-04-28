@@ -1,58 +1,65 @@
 use std::sync::Arc;
 
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{Result};
 
 use crate::{
-    compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::CompilerBuilder,
     interpreter::{
         efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef,
-        process::Process, task::Task,
+        object_flags::ObjectFlags, process::Process, task::Task,
     },
+    util::process_builder::ProcessBuilder,
 };
+use crate::interpreter::task_context::{MAX_CHAIN_COUNT, TaskContext};
 
 async fn load_master<const N: usize>(
     context: &mut EfunContext<'_, N>,
     path: &str,
 ) -> Result<Arc<Process>> {
     let full_path = LpcPath::new_in_game(path, context.in_game_cwd(), &*context.config().lib_dir);
+
+    if full_path.is_clone() {
+        return Err(context.runtime_error(format!("Cannot clone a clone: {}", full_path)));
+    }
+
     let path_str: &str = full_path.as_ref();
+
+    if context.frame().process.program.filename.to_str().unwrap() == path_str {
+        return Err(context.runtime_error(format!("Cannot clone self: {}", path_str)));
+    }
 
     match context.lookup_process(path_str) {
         Some(proc) => Ok(proc),
         None => {
-            let compiler = CompilerBuilder::default()
-                .config(context.config().clone())
-                .build()?;
-
-            match compiler
-                .compile_in_game_file(&full_path, context.current_debug_span())
+            context
+                .process_create_from_path(&full_path)
                 .await
-            {
-                Ok(prog) => {
-                    let Some(prog_function) = prog.initializer.clone() else {
-                        return Err(LpcError::new("Init function not found on master?"));
-                    };
-                    let process: Arc<Process> = Process::new(prog).into();
-                    context.insert_process(process.clone());
-
-                    let new_context = context.clone_task_context().with_process(process);
-                    let max_execution_time = context.config().max_execution_time;
-                    let mut task = Task::<MAX_CALL_STACK_SIZE>::new(new_context);
-                    task.timed_eval(prog_function, &[], max_execution_time)
-                        .await?;
-
-                    let process = task.context.process;
-
-                    Ok(process)
-                }
-                Err(e) => {
+                .map_err(|e| {
                     let debug_span = context.current_debug_span();
 
-                    Err(e.with_span(debug_span))
-                }
-            }
+                    e.with_span(debug_span)
+                })
+            // let compiler = CompilerBuilder::default()
+            //     .config(context.config().clone())
+            //     .build()?;
+            //
+            // match compiler
+            //     .compile_in_game_file(&full_path, context.current_debug_span())
+            //     .await
+            // {
+            //     Ok(prog) => {
+            //         // Masters are not initialized unless a call is made against them directly via call_other.
+            //         let process: Arc<Process> = Process::new(prog).into();
+            //         context.insert_process(process.clone());
+            //
+            //         Ok(process)
+            //     }
+            //     Err(e) => {
+            //         let debug_span = context.current_debug_span();
+            //
+            //         Err(e.with_span(debug_span))
+            //     }
+            // }
         }
     }
 }
@@ -70,6 +77,11 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
 
         let master = load_master(context, &path).await?;
 
+        debug_assert!(
+            !master.flags.test(ObjectFlags::CLONE),
+            "master cannot be a clone"
+        );
+
         {
             if master.program.pragmas.no_clone() {
                 return Err(context.runtime_error(format!(
@@ -80,20 +92,37 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         }
 
         let new_prog = master.program.clone();
-        let Some(initializer) = new_prog.initializer.clone() else {
-            return Err(LpcError::new("Init function not found on clone?"));
-        };
-
         let new_clone = context.insert_clone(new_prog);
 
-        let new_context = context.clone_task_context().with_process(new_clone);
-        let max_execution_time = context.config().max_execution_time;
-        let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
-        task.timed_eval(initializer, &[], max_execution_time)
-            .await?;
+        debug_assert!(
+            new_clone.flags.test(ObjectFlags::CLONE),
+            "new_clone must be a clone"
+        );
 
-        // Set up the return value
-        let return_val = task.context.process;
+        // if the master is not initialized, we initialize the clone.
+        let return_val = if !master.flags.test(ObjectFlags::INITIALIZED) {
+            println!("context.chain_count(): {}", context.chain_count());
+            if context.chain_count() >= 20 {
+                return Err(context.runtime_error(format!(
+                    "infinite clone recursion detected",
+                )));
+            }
+
+            let new_context = context
+                .task_context_builder()
+                .process(new_clone)
+                .chain_count(context.chain_count() + 1)
+                .build()
+                .unwrap();
+
+            Task::<N>::initialize_process(new_context)
+                .await?
+                .context
+                .process
+        } else {
+            new_clone
+        };
+
         let v = Arc::downgrade(&return_val);
         let result = v.into_lpc_ref(context.memory());
 
@@ -128,6 +157,8 @@ mod tests {
         },
         test_support::compile_prog,
     };
+    use crate::interpreter::vm::Vm;
+    use crate::test_support::test_config;
 
     fn task_context_fixture(
         program: Program,
@@ -191,5 +222,44 @@ mod tests {
             result.as_ref().unwrap_err().as_ref(),
             r"no_clone\.c has `#pragma no_clone` enabled, and so cannot be cloned\."
         );
+    }
+
+    #[tokio::test]
+    async fn initializes_clone_if_master_not_initialized() {
+        todo!()
+    }
+
+    #[tokio::test]
+    async fn handles_clone_self_recursion() {
+        // This tests the case where an uninitialized master is cloned, (which
+        // initializes the clone), and that clone then clones itself. This is
+        // an infinite loop because if the master is _not_ initialized, then
+        // the clone _will_ be initialized, and then clone itself, and so on.
+
+        // This object will be initialized as a master, and so clones of it will
+        // _not_ be initialized. It's not self-cloning, as it has a different path
+        // than "self_clone".
+        let master = indoc! { r#"
+            object foo = clone_object("self_clone");
+        "# };
+
+        // This is the self-cloning object, which has a different path than the master,
+        // (even though the code is the same, which is just a coincidence). It will
+        // be cloned by the master above, _without_ its master being initialized,
+        // meaning it _will_ be initialized, and start a clone chain.
+        let self_clone = indoc! { r#"
+            object foo = clone_object("self_clone");
+        "# };
+
+        let mut vm = Vm::new(test_config());
+        let self_clone_proc = vm.process_create_from_code(
+            "self_clone.c",
+            self_clone
+        ).await.unwrap();
+
+        let _master_proc = vm.process_initialize_from_code(
+            "master.c",
+            master
+        ).await.unwrap();
     }
 }

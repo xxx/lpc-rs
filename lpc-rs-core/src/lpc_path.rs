@@ -122,6 +122,17 @@ impl LpcPath {
         }
     }
 
+    /// Is this path the file_path of a cloned object?
+    pub fn is_clone(&self) -> bool {
+        match self {
+            LpcPath::Server(x) | LpcPath::InGame(x) => {
+                // a clone ends with "#<number>"
+                let mut parts = x.to_str().unwrap().rsplitn(2, '#');
+                parts.next().map_or(false, |x| x.parse::<u64>().is_ok())
+            }
+        }
+    }
+
     /// Return the current working directory for this path
     pub fn cwd(&self) -> Self {
         match self {

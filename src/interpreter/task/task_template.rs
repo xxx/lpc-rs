@@ -1,16 +1,22 @@
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use arc_swap::ArcSwapAny;
+use async_trait::async_trait;
 use derive_builder::Builder;
 use lpc_rs_core::register::Register;
+use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
 
-use crate::interpreter::{
-    call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, object_space::ObjectSpace,
-    process::Process, task::into_task_context::IntoTaskContext, task_context::TaskContext,
-    vm::vm_op::VmOp,
+use crate::{
+    compiler::{Compiler, CompilerBuilder},
+    interpreter::{
+        call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, object_space::ObjectSpace,
+        process::Process, task::into_task_context::IntoTaskContext, task_context::TaskContext,
+        vm::vm_op::VmOp,
+    },
+    util::{get_simul_efuns, with_compiler::WithCompiler},
 };
 
 /// A struct to handle the non-changing Task state, so we can prepare it ahead of time.
@@ -79,5 +85,46 @@ impl Clone for TaskTemplate {
 impl IntoTaskContext for TaskTemplate {
     fn into_task_context(self, process: Arc<Process>) -> TaskContext {
         TaskContext::from_template(self, process)
+    }
+}
+
+impl From<TaskContext> for TaskTemplate {
+    fn from(task_context: TaskContext) -> Self {
+        Self {
+            config: task_context.config,
+            object_space: task_context.object_space,
+            vm_upvalues: task_context.vm_upvalues,
+            call_outs: task_context.call_outs,
+            tx: task_context.tx,
+            memory: task_context.memory,
+            this_player: task_context.this_player,
+            upvalue_ptrs: task_context.upvalue_ptrs,
+        }
+    }
+}
+
+impl From<&TaskContext> for TaskTemplate {
+    fn from(task_context: &TaskContext) -> Self {
+        Self {
+            config: task_context.config.clone(),
+            object_space: task_context.object_space.clone(),
+            vm_upvalues: task_context.vm_upvalues.clone(),
+            call_outs: task_context.call_outs.clone(),
+            tx: task_context.tx.clone(),
+            memory: task_context.memory.clone(),
+            this_player: ArcSwapAny::from(None),
+            upvalue_ptrs: task_context.upvalue_ptrs.clone(),
+        }
+    }
+}
+
+#[async_trait]
+impl WithCompiler for TaskTemplate {
+    async fn with_async_compiler<F, U, T>(&self, f: F) -> Result<T>
+    where
+        F: FnOnce(Compiler) -> U + Send,
+        U: Future<Output = Result<T>> + Send,
+    {
+        Self::with_async_compiler_associated(f, &self.config, &self.object_space).await
     }
 }

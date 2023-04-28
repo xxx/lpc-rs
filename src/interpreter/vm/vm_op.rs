@@ -25,7 +25,7 @@ pub enum VmOp {
     ),
 
     /// The Task with the passed ID has failed.
-    TaskError(TaskId, LpcError),
+    TaskError(TaskId, Box<LpcError>),
 
     /// A subsystem has run into a problem that cannot be recovered from, so we need to shut down.
     FatalError(String),

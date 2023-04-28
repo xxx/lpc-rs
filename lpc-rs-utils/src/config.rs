@@ -176,7 +176,7 @@ impl ConfigBuilder {
 }
 
 impl Config {
-    /// Validate the passed-in path, and return a canonical, full version of it
+    /// Validate the passed-in path, and return a canonical, absolute on-server version of it
     pub fn validate_in_game_path<'a>(
         &self,
         path: &'a LpcPath,

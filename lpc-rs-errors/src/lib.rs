@@ -415,6 +415,7 @@ pub fn format_expected(expected: &[String]) -> String {
 }
 
 /// Common `Result` type
+/// TODO: Box the error
 pub type Result<T> = result::Result<T, LpcError>;
 
 #[cfg(test)]

@@ -24,13 +24,13 @@ pub struct Program {
     pub filename: Arc<LpcPath>,
 
     /// function mapping of (mangled) name to the function
-    pub functions: IndexMap<String, Arc<ProgramFunction>>,
+    pub functions: Box<IndexMap<String, Arc<ProgramFunction>>>,
 
     /// Function mapping of unmangled name to the function.
     /// This is needed for `call_other`.
     /// Due to unmangled names not being unique, only the last-defined
     /// function with a given unmangled name is referenced here.
-    pub unmangled_functions: IndexMap<String, Arc<ProgramFunction>>,
+    pub unmangled_functions: Box<IndexMap<String, Arc<ProgramFunction>>>,
 
     /// The function that is called when the program is first loaded,
     /// which initializes the global variables. This function is
@@ -38,7 +38,7 @@ pub struct Program {
     pub initializer: Option<Arc<ProgramFunction>>,
 
     /// The map of global variables in this program.
-    pub global_variables: HashMap<String, Symbol>,
+    pub global_variables: Box<HashMap<String, Symbol>>,
 
     /// How many globals does this program need storage for?
     /// Note that this number includes inherited globals.
@@ -134,7 +134,7 @@ impl<'a> Program {
     ///     compilation_context::CompilationContext,
     ///     Compiler,
     /// };
-    /// ///
+    ///
     /// let code = r#"
     ///     void foo() {
     ///         dump("sup?");

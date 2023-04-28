@@ -1,6 +1,5 @@
-use std::{future::Future, path::Path, sync::Arc};
+use std::{future::Future, sync::Arc};
 
-use arc_swap::ArcSwapAny;
 use bit_set::BitSet;
 use flume::Sender as FlumeSender;
 use lpc_rs_core::lpc_path::LpcPath;
@@ -15,8 +14,7 @@ use tracing::{debug, error, info, instrument, trace};
 use vm_op::VmOp;
 
 use crate::{
-    compile_time_config::{MAX_CALL_STACK_SIZE, VM_CHANNEL_CAPACITY},
-    compiler::{Compiler, CompilerBuilder},
+    compile_time_config::VM_CHANNEL_CAPACITY,
     interpreter::{
         call_outs::CallOuts,
         gc::{
@@ -27,8 +25,7 @@ use crate::{
         heap::Heap,
         object_space::ObjectSpace,
         process::Process,
-        program::Program,
-        task::{apply_function::apply_function_in_master, task_template::TaskTemplate, Task},
+        task::{apply_function::apply_function_in_master, Task},
         task_context::TaskContext,
         SHUTDOWN,
     },
@@ -38,10 +35,11 @@ use crate::{
         ops::{BrokerOp, ConnectionOp},
         Telnet,
     },
-    util::get_simul_efuns,
+    util::process_builder::ProcessBuilder,
 };
 
 mod initiate_login;
+mod object_initializers;
 mod prioritize_call_out;
 
 pub mod vm_op;
@@ -107,7 +105,7 @@ impl Vm {
     /// This method will load the master object and simul_efun file, add
     /// the master object to the object space, start networking,
     /// and then start the main loop.
-    pub async fn boot(&mut self) -> Result<()> {
+    pub async fn boot(&mut self) -> lpc_rs_errors::Result<()> {
         self.bootstrap().await?;
 
         let address = format!("{}:{}", self.config.bind_address, self.config.port);
@@ -130,7 +128,10 @@ impl Vm {
 
         let master_path =
             LpcPath::new_in_game(&*self.config.master_object, "/", &*self.config.lib_dir);
-        self.initialize_file(&master_path).await
+        self.process_initialize_from_path(&master_path)
+            .await
+            .map(|t| t.context)
+        // self.initialize_file(&master_path).await
     }
 
     /// Run the [`Vm`]'s main loop, which is the main event loop for the entire system.
@@ -138,7 +139,7 @@ impl Vm {
     /// This runs on the main execution thread, and should never do any work itself.
     /// Spawn a task to do anything beyond message handling, or logging.
     #[instrument(skip_all)]
-    pub async fn run(&mut self) -> Result<()> {
+    pub async fn run(&mut self) -> lpc_rs_errors::Result<()> {
         loop {
             tokio::select! {
                 biased; // we want signal handlers checked first, always.
@@ -210,22 +211,6 @@ impl Vm {
         Ok(())
     }
 
-    /// Initialize the simulated efuns file, if it is configured.
-    ///
-    /// # Returns
-    ///
-    /// * `Some(Ok(TaskContext))` - The [`TaskContext`] for the simul_efun file
-    /// * `Some(Err(LpcError))` - If there was an error loading the simul_efun file
-    /// * `None` - If there is no simul_efun file configured
-    pub async fn initialize_simul_efuns(&mut self) -> Option<Result<TaskContext>> {
-        let Some(path) = &self.config.simul_efun_file else {
-            return None
-        };
-
-        let simul_efun_path = LpcPath::new_in_game(path.as_str(), "/", &*self.config.lib_dir);
-        Some(self.initialize_file(&simul_efun_path).await)
-    }
-
     /// Do a full garbage collection cycle.
     #[instrument(skip_all)]
     pub fn gc(&mut self) -> Result<()> {
@@ -236,134 +221,6 @@ impl Vm {
         trace!("Marked {} objects", marked.len());
 
         self.keyless_sweep(&marked)
-    }
-
-    /// Compile and initialize code from the passed file.
-    async fn initialize_file(&mut self, filename: &LpcPath) -> Result<TaskContext> {
-        debug_assert!(matches!(filename, &LpcPath::InGame(_)));
-
-        let program = self
-            .with_async_compiler(|compiler| async move {
-                compiler.compile_in_game_file(filename, None).await
-            })
-            .await?;
-
-        self.create_and_initialize_task(program).await.map_err(|e| {
-            e.emit_diagnostics();
-            e
-        })
-    }
-
-    /// Compile and initialize arbitrary code from the passed string.
-    /// The filename is assigned as if the code were read from a real file.
-    ///
-    /// # Arguments
-    ///
-    /// * `code` - The code to compile and initialize
-    /// * `filename` - The filename to assign to the code. It's assumed to be an in-game path,
-    ///                with [`lib_dir`](Config) as the root.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(TaskContext)` - The [`TaskContext`] for the code
-    /// * `Err(LpcError)` - If there was an error compiling or initializing the code
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # tokio_test::block_on(async {
-    /// use lpc_rs::interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, vm::Vm};
-    /// use lpc_rs_utils::config::Config;
-    ///
-    /// let mut vm = Vm::new(Config::default());
-    /// let ctx = vm.initialize_string("int x = 5;", "test.c").await.unwrap();
-    ///
-    /// assert_eq!(
-    ///     ctx.process().globals.read().registers[0],
-    ///     LpcRef::Int(LpcInt(5))
-    /// );
-    /// assert!(vm.object_space.lookup("/test").is_some());
-    /// # })
-    /// ```
-    pub async fn initialize_string<P, S>(&mut self, code: S, filename: P) -> Result<TaskContext>
-    where
-        P: AsRef<Path>,
-        S: AsRef<str> + Send + Sync,
-    {
-        let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config.lib_dir);
-        self.config.validate_in_game_path(&lpc_path, None)?;
-
-        let prog = self
-            .with_async_compiler(
-                |compiler| async move { compiler.compile_string(lpc_path, code).await },
-            )
-            .await?;
-
-        self.create_and_initialize_task(prog).await.map_err(|e| {
-            e.emit_diagnostics();
-            e
-        })
-    }
-
-    // /// Run a callback with a new, initialized [`Compiler`].
-    // fn with_compiler<F, T>(&mut self, f: F) -> Result<T>
-    // where
-    //     F: FnOnce(Compiler) -> Result<T>,
-    // {
-    //     let compiler = CompilerBuilder::default()
-    //         .config(self.config.clone())
-    //         .simul_efuns(get_simul_efuns(&self.config, &self.object_space))
-    //         .build()?;
-    //     f(compiler)
-    // }
-
-    /// Run a callback with a new, initialized [`Compiler`], that can handle callbacks that return futures.
-    async fn with_async_compiler<F, U, T>(&mut self, f: F) -> Result<T>
-    where
-        F: FnOnce(Compiler) -> U,
-        U: Future<Output = Result<T>>,
-    {
-        let compiler = CompilerBuilder::default()
-            .config(self.config.clone())
-            .simul_efuns(get_simul_efuns(&self.config, &self.object_space))
-            .build()?;
-        f(compiler).await
-    }
-
-    /// Create a new [`Task`] and initialize it with the given [`Program`].
-    async fn create_and_initialize_task(&mut self, program: Program) -> Result<TaskContext> {
-        Task::<MAX_CALL_STACK_SIZE>::initialize_program(
-            program,
-            self.config.clone(),
-            self.object_space.clone(),
-            self.memory.clone(),
-            self.upvalues.clone(),
-            self.call_outs.clone(),
-            None,
-            None,
-            self.tx.clone(),
-        )
-        .await
-        .map(|task| {
-            let process = task.context.process().clone();
-            ObjectSpace::insert_process(&self.object_space, process);
-
-            task.context
-        })
-    }
-
-    /// A convenience helper to create a populated [`TaskTemplate`]
-    pub fn new_task_template(&self) -> TaskTemplate {
-        TaskTemplate {
-            config: self.config.clone(),
-            object_space: self.object_space.clone(),
-            memory: self.memory.clone(),
-            vm_upvalues: self.upvalues.clone(),
-            call_outs: self.call_outs.clone(),
-            this_player: ArcSwapAny::from(None),
-            upvalue_ptrs: None,
-            tx: self.tx.clone(),
-        }
     }
 
     /// Send an operation to the VM queue
