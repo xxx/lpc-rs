@@ -33,66 +33,60 @@ pub enum LpcErrorSeverity {
 /// A convenience helper for creating a new `LpcError`. (`Error` severity)
 #[macro_export]
 macro_rules! lpc_error {
+    ($fmt:literal, $($arg:tt)*) => {
+        $crate::LpcError::new(format!($fmt, $($arg)*)).into()
+    };
     ($span:expr, $msg:literal $(,)?) => {
-        $crate::LpcError::new($msg).with_span($span)
+        $crate::LpcError::new($msg).with_span($span).into()
     };
     ($span:expr, $fmt:expr, $($arg:tt)*) => {
-        $crate::LpcError::new(format!($fmt, $($arg)*)).with_span($span)
+        $crate::LpcError::new(format!($fmt, $($arg)*)).with_span($span).into()
     };
     ($msg:literal $(,)?) => {
-        $crate::LpcError::new($msg)
+        $crate::LpcError::new($msg).into()
     };
     ($err:expr $(,)?) => {
-        $crate::LpcError::new($err)
-    };
-    ($fmt:expr, $($arg:tt)*) => {
-        $crate::LpcError::new(format!($fmt, $($arg)*))
+        $crate::LpcError::new($err).into()
     };
 }
 
 /// A convenience helper for creating a new `LpcError`. (`Warning` severity)
 #[macro_export]
 macro_rules! lpc_warning {
+    ($fmt:literal, $($arg:tt)*) => {
+        $crate::LpcError::new_warning(format!($fmt, $($arg)*)).into()
+    };
     ($span:expr, $msg:literal $(,)?) => {
-        $crate::LpcError::new_warning($msg).with_span($span)
+        $crate::LpcError::new_warning($msg).with_span($span).into()
     };
     ($span:expr, $fmt:expr, $($arg:tt)*) => {
-        $crate::LpcError::new_warning(format!($fmt, $($arg)*)).with_span($span)
-    };
-    ($span:expr, $err:expr $(,)?) => {
-        $crate::LpcError::new_warning($err).with_span($span)
+        $crate::LpcError::new_warning(format!($fmt, $($arg)*)).with_span($span).into()
     };
     ($msg:literal $(,)?) => {
-        $crate::LpcError::new_warning($msg)
+        $crate::LpcError::new_warning($msg).into()
     };
     ($err:expr $(,)?) => {
-        $crate::LpcError::new_warning($err)
-    };
-    ($fmt:expr, $($arg:tt)*) => {
-        $crate::LpcError::new_warning(format!($fmt, $($arg)*))
+        $crate::LpcError::new_warning($err).into()
     };
 }
 
 /// A convenience helper for creating a new `LpcError`. (`Bug` severity)
 #[macro_export]
 macro_rules! lpc_bug {
+    ($fmt:literal, $($arg:tt)*) => {
+        $crate::LpcError::new_bug(format!($fmt, $($arg)*)).into()
+    };
     ($span:expr, $msg:literal $(,)?) => {
-        $crate::LpcError::new_bug($msg).with_span($span)
+        $crate::LpcError::new_bug($msg).with_span($span).into()
     };
     ($span:expr, $fmt:expr, $($arg:tt)*) => {
-        $crate::LpcError::new_bug(format!($fmt, $($arg)*)).with_span($span)
-    };
-    ($span:expr, $err:expr $(,)?) => {
-        $crate::LpcError::new_bug($err).with_span($span)
+        $crate::LpcError::new_bug(format!($fmt, $($arg)*)).with_span($span).into()
     };
     ($msg:literal $(,)?) => {
-        $crate::LpcError::new_bug($msg)
+        $crate::LpcError::new_bug($msg).into()
     };
     ($err:expr $(,)?) => {
-        $crate::LpcError::new_bug($err)
-    };
-    ($fmt:expr, $($arg:tt)*) => {
-        $crate::LpcError::new_bug(format!($fmt, $($arg)*))
+        $crate::LpcError::new_bug($err).into()
     };
 }
 
@@ -108,7 +102,7 @@ pub struct LpcError {
     notes: Vec<String>,
     /// Additional errors that were collected before this one. This is only
     /// used during compilation, when non-fatal errors can occur.
-    additional_errors: Option<Vec<LpcError>>,
+    additional_errors: Option<Vec<Box<LpcError>>>,
     /// Optional stack trace for printing
     stack_trace: Option<Vec<String>>,
     /// The severity of this error. Warnings are printed, but do not stop
@@ -210,7 +204,7 @@ impl LpcError {
         self
     }
 
-    pub fn with_additional_errors(mut self, additional_errors: Vec<LpcError>) -> Self {
+    pub fn with_additional_errors(mut self, additional_errors: Vec<Box<LpcError>>) -> Self {
         self.additional_errors = Some(additional_errors);
 
         self
@@ -278,7 +272,7 @@ where
 {
     fn from(err: LalrpopParseError<usize, T, LpcError>) -> Self {
         match err {
-            LalrpopParseError::InvalidToken { .. } => LpcError::new("Invalid token"),
+            LalrpopParseError::InvalidToken { .. } => lpc_error!("Invalid token"),
             LalrpopParseError::UnrecognizedEOF { ref expected, .. } => {
                 LpcError::new("Unexpected EOF").with_note(format_expected(expected))
             }
@@ -295,6 +289,37 @@ where
         }
     }
 }
+
+/// Map LALRpop's parse errors into our local error type
+impl<T> From<LalrpopParseError<usize, T, Box<LpcError>>> for LpcError
+where
+    T: Display + HasSpan,
+{
+    fn from(err: LalrpopParseError<usize, T, Box<LpcError>>) -> Self {
+        match err {
+            LalrpopParseError::InvalidToken { .. } => lpc_error!("Invalid token"),
+            LalrpopParseError::UnrecognizedEOF { ref expected, .. } => {
+                LpcError::new("Unexpected EOF").with_note(format_expected(expected))
+            }
+            LalrpopParseError::UnrecognizedToken {
+                token: (_start, ref token, _end),
+                ref expected,
+            } => LpcError::new(format!("Unrecognized Token: {token}"))
+                .with_span(Some(token.span()))
+                .with_note(format_expected(expected)),
+            LalrpopParseError::ExtraToken {
+                token: (_start, ref token, _end),
+            } => LpcError::new(format!("Extra Token: `{token}`")).with_span(Some(token.span())),
+            LalrpopParseError::User { error } => *error,
+        }
+    }
+}
+
+// impl<T> From<LalrpopParseError<usize, T, Box<LpcError>>> for Box<LpcError> {
+//     fn from(value: LalrpopParseError<usize, T, Box<LpcError>>) -> Self {
+//
+//     }
+// }
 
 impl From<std::io::Error> for LpcError {
     fn from(e: std::io::Error) -> Self {
@@ -415,8 +440,7 @@ pub fn format_expected(expected: &[String]) -> String {
 }
 
 /// Common `Result` type
-/// TODO: Box the error
-pub type Result<T> = result::Result<T, LpcError>;
+pub type Result<T> = result::Result<T, Box<LpcError>>;
 
 #[cfg(test)]
 mod tests {
@@ -428,7 +452,7 @@ mod tests {
             .with_span(Some(Span::new(0, 0..1)))
             .with_note("test note")
             .with_label("my label", Some(Span::new(0, 0..1)))
-            .with_additional_errors(vec![LpcError::new("test error 2")])
+            .with_additional_errors(vec![lpc_error!("test error 2")])
             .with_stack_trace(vec!["test".to_string(), "test2".to_string()]);
 
         assert_eq!(error.message, "test error");
@@ -461,7 +485,7 @@ mod tests {
             .with_span(Some(Span::new(0, 0..1)))
             .with_note("test note")
             .with_label("my label", Some(Span::new(0, 0..7)))
-            .with_additional_errors(vec![LpcError::new("test error 2")])
+            .with_additional_errors(vec![lpc_error!("test error 2")])
             .with_stack_trace(vec!["test".to_string(), "test2".to_string()]);
 
         let diagnostic = Diagnostic::from(&error);

@@ -58,7 +58,7 @@ impl Vm {
             let triple = FunctionPtr::triple(&ptr_arc, &config, &object_space);
             let Ok((process, function, args)) = triple else {
                 call_outs.write().remove(idx);
-                let _ = tx.send(VmOp::TaskError(TaskId(0), Box::new(triple.unwrap_err()))).await;
+                let _ = tx.send(VmOp::TaskError(TaskId(0), triple.unwrap_err())).await;
                 return;
             };
 

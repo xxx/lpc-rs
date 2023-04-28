@@ -7,7 +7,7 @@ use bit_set::BitSet;
 use derive_builder::Builder;
 use itertools::Itertools;
 use lpc_rs_core::register::Register;
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{lpc_bug, lpc_error, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
@@ -124,20 +124,20 @@ impl FunctionPtr {
                 if let Some(proc) = proc.upgrade() {
                     Ok((proc, function.clone(), args))
                 } else {
-                    Err(LpcError::new(
+                    Err(lpc_error!(
                         "attempted to call a function pointer with a dead process",
                     ))
                 }
             }
             FunctionAddress::Dynamic(name) => {
                 let Some(Some(LpcRef::Object(proc))) = ptr.partial_args.first() else {
-                    return Err(LpcError::new(
+                    return Err(lpc_error!(
                         "attempted to call a dynamic receiver that is not an object",
                     ));
                 };
 
                 let Some(proc) = proc.upgrade() else {
-                    return Err(LpcError::new(
+                    return Err(lpc_error!(
                         "attempted to call a dynamic receiver that has been destructed",
                     ));
                 };
@@ -152,11 +152,11 @@ impl FunctionPtr {
             FunctionAddress::SimulEfun(name) => match get_simul_efuns(config, object_space) {
                 Some(simul_efuns) => match simul_efuns.program.lookup_function(name) {
                     Some(function) => Ok((simul_efuns.clone(), function.clone(), args)),
-                    None => Err(LpcError::new(format!(
-                        "call to unknown simul_efun `{name}`"
-                    ))),
+                    None => Err(lpc_error!(
+                        "call to unknown simul_efun `{}`", name
+                    )),
                 },
-                None => Err(LpcError::new(
+                None => Err(lpc_bug!(
                     "function pointer to simul_efun passed, but no simul_efuns?",
                 )),
             },

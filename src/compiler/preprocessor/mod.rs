@@ -9,7 +9,7 @@ use lpc_rs_core::{
     pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
     LpcIntInner,
 };
-use lpc_rs_errors::{format_expected, lazy_files::FILE_CACHE, span::Span, LpcError, Result};
+use lpc_rs_errors::{format_expected, lazy_files::FILE_CACHE, span::Span, LpcError, Result, lpc_error};
 use lpc_rs_utils::read_lpc_file;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -292,8 +292,7 @@ impl Preprocessor {
 
         if let Some(ifdef) = self.ifdefs.last() {
             return Err(
-                LpcError::new("Found `#if` without a corresponding `#endif`")
-                    .with_span(Some(ifdef.span)),
+                lpc_error!(Some(ifdef.span), "Found `#if` without a corresponding `#endif`"),
             );
         }
 
@@ -339,15 +338,14 @@ impl Preprocessor {
             }
             Some(Define::Function(function)) => {
                 if !matches!(iter.peek(), Some(Ok((_, Token::LParen(_), _)))) {
-                    return Err(LpcError::new("functional macro call missing arguments")
-                        .with_span(Some(token.0)));
+                    return Err(lpc_error!(Some(token.0), "functional macro call missing arguments"));
                 }
 
                 let args = Preprocessor::consume_macro_arguments(iter, span)?;
 
                 if args.len() != function.args.len() {
                     return Err(
-                        LpcError::new("incorrect number of macro arguments").with_span(Some(span))
+                        lpc_error!(Some(span), "incorrect number of macro arguments")
                     );
                 }
 
@@ -442,7 +440,7 @@ impl Preprocessor {
         }
 
         if parens != 0 {
-            return Err(LpcError::new("mismatched parentheses").with_span(Some(span)));
+            return Err(lpc_error!(Some(span), "mismatched parentheses"));
         }
 
         Ok(args)
@@ -516,11 +514,11 @@ impl Preprocessor {
                 {
                     Ok(i) => i,
                     Err(e) => {
-                        return Err(LpcError::new(format!(
+                        return Err(lpc_error!(
+                            Some(token.0),
                             "parse error: {}, for expression `{}`",
                             e, &captures[2]
                         ))
-                        .with_span(Some(token.0)))
                     }
                 }
             };
@@ -530,7 +528,7 @@ impl Preprocessor {
             self.defines.insert(name, define);
             Ok(())
         } else {
-            Err(LpcError::new("invalid `#define`.").with_span(Some(token.0)))
+            Err(lpc_error!(Some(token.0), "invalid `#define`."))
         }
     }
 
@@ -583,7 +581,7 @@ impl Preprocessor {
                     Err(e) => {
                         // TODO: bleeeeeeech. Errors should have a better way to handle this.
                         // If the error is just "file not found", keep looking
-                        if e.as_ref().contains("unable to read include file") {
+                        if (*e).as_ref().contains("unable to read include file") {
                             continue;
                         }
 
@@ -603,7 +601,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(LpcError::new("invalid `#include`.").with_span(Some(token.0)))
+            Err(lpc_error!(Some(token.0), "invalid `#include`."))
         }
     }
 
@@ -641,7 +639,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(LpcError::new("invalid `#include`.").with_span(Some(token.0)))
+            Err(lpc_error!(Some(token.0), "invalid `#include`."))
         }
     }
 
@@ -689,13 +687,13 @@ impl Preprocessor {
                         }
                     };
 
-                    return Err(err);
+                    return Err(err.into());
                 }
             }
 
             Ok(())
         } else {
-            Err(LpcError::new("invalid `#ifdef`.").with_span(Some(token.0)))
+            Err(lpc_error!(Some(token.0), "invalid `#ifdef`."))
         }
     }
 
@@ -751,8 +749,7 @@ impl Preprocessor {
                     }
                 } else {
                     Err(
-                        LpcError::new(format!("unable to resolve into an int: `{x}`"))
-                            .with_span(span),
+                        lpc_error!(span, "unable to resolve into an int: `{}`", x)
                     )
                 }
             }
@@ -767,16 +764,19 @@ impl Preprocessor {
                     BinaryOperation::AndAnd => Ok(((li != 0) && (ri != 0)) as LpcIntInner),
                     BinaryOperation::OrOr => Ok(((li != 0) || (ri != 0)) as LpcIntInner),
 
-                    operation => Err(LpcError::new(format!(
-                        "unknown binary operation `{operation}` in expression `{expr}`"
-                    ))
-                    .with_span(span)),
+                    operation => Err(lpc_error!(
+                        span,
+                        "unknown binary operation `{}` in expression `{}`",
+                        operation,
+                        expr
+                    )),
                 }
             }
-            _ => Err(LpcError::new(format!(
-                "attempt to convert unknown node type to int: `{expr}`"
+            _ => Err(lpc_error!(
+                span,
+                "attempt to convert unknown node type to int: `{}`",
+                expr
             ))
-            .with_span(span)),
         }
     }
 
@@ -785,7 +785,7 @@ impl Preprocessor {
         self.check_for_previous_newline(token.0)?;
 
         IFDEF.captures(&token.1).map_or_else(
-            || Err(LpcError::new("invalid `#ifdef`.").with_span(Some(token.0))),
+            || Err(lpc_error!(Some(token.0), "invalid `#ifdef`.")),
             |captures| {
                 self.ifdefs.push(IfDef {
                     // code: String::from(&captures[1]),
@@ -804,7 +804,7 @@ impl Preprocessor {
         self.check_for_previous_newline(token.0)?;
 
         IFNDEF.captures(&token.1).map_or_else(
-            || Err(LpcError::new("invalid `#ifndef`.").with_span(Some(token.0))),
+            || Err(lpc_error!(Some(token.0), "invalid `#ifndef`.")),
             |captures| {
                 self.ifdefs.push(IfDef {
                     // code: String::from(&captures[1]),
@@ -824,10 +824,10 @@ impl Preprocessor {
 
         if ELSE.is_match(&token.1) {
             if self.ifdefs.is_empty() {
-                return Err(LpcError::new(
+                return Err(lpc_error!(
+                    Some(token.0),
                     "found `#else` without a corresponding `#if` or `#ifdef`",
-                )
-                .with_span(Some(token.0)));
+                ));
             }
 
             if let Some(else_span) = &self.current_else {
@@ -835,7 +835,7 @@ impl Preprocessor {
                     .with_span(Some(token.0))
                     .with_label("first used here", Some(*else_span));
 
-                return Err(err);
+                return Err(err.into());
             }
 
             self.current_else = Some(token.0);
@@ -847,7 +847,7 @@ impl Preprocessor {
 
             Ok(())
         } else {
-            Err(LpcError::new("invalid `#else`.").with_span(Some(token.0)))
+            Err(lpc_error!(Some(token.0), "invalid `#else`."))
         }
     }
 
@@ -857,8 +857,7 @@ impl Preprocessor {
 
         if self.ifdefs.is_empty() {
             return Err(
-                LpcError::new("found `#endif` without a corresponding `#if`")
-                    .with_span(Some(token.0)),
+                lpc_error!(Some(token.0), "found `#endif` without a corresponding `#if`"),
             );
         }
 
@@ -882,7 +881,7 @@ impl Preprocessor {
                     STRICT_TYPES => self.context.pragmas.set_strict_types(true),
                     x => {
                         return Err(
-                            LpcError::new(format!("unknown pragma `{x}`")).with_span(Some(token.0))
+                            lpc_error!(Some(token.0), "unknown pragma `{}`", x)
                         );
                     }
                 }
@@ -909,31 +908,30 @@ impl Preprocessor {
         let canon_include_path = path.as_server(self.context.lib_dir());
 
         if !path.is_within_root(self.context.lib_dir()) {
-            return Err(LpcError::new(format!(
+            return Err(lpc_error!(
+                span,
                 "attempt to include a file outside the root: `{}` (expanded to `{}`) (lib_dir: `{}`)",
                 path,
                 canon_include_path.display(),
                 self.context.lib_dir()
-            ))
-                .with_span(span));
+            ));
         }
 
         if canon_include_path.is_dir() {
-            return Err(LpcError::new(format!(
+            return Err(lpc_error!(
+                span,
                 "attempt to include a directory: `{}` (expanded to `{}`) (lib_dir: `{}`)",
                 path,
                 canon_include_path.display(),
                 self.context.lib_dir()
-            ))
-            .with_span(span));
+            ));
         }
 
         let file_content = match read_lpc_file(&canon_include_path).await {
             Ok(content) => content,
             Err(e) => {
                 return Err(
-                    LpcError::new(format!("unable to read include file `{path}`: {e:?}"))
-                        .with_span(span),
+                    lpc_error!(span, "unable to read include file `{}`: {:?}", path, e)
                 );
             }
         };
@@ -976,10 +974,10 @@ impl Preprocessor {
     #[instrument(skip(self))]
     fn check_for_previous_newline(&self, span: Span) -> Result<()> {
         if !self.last_slice.ends_with('\n') {
-            return Err(LpcError::new(
-                "preprocessor directives must appear on their own line.".to_string(),
-            )
-            .with_span(Some(span)));
+            return Err(lpc_error!(
+                Some(span),
+                "preprocessor directives must appear on their own line.",
+            ));
         }
 
         Ok(())
@@ -1047,7 +1045,7 @@ mod tests {
                 panic!("Expected to fail, but passed with {result:?}");
             }
             Err(e) => {
-                assert_regex!(e.as_ref(), expected);
+                assert_regex!((*e).as_ref(), expected);
             }
         }
     }

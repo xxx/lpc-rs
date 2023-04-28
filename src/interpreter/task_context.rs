@@ -8,7 +8,7 @@ use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use derive_builder::Builder;
 use lpc_rs_core::{lpc_path::LpcPath, register::Register};
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{lpc_bug, LpcError, Result};
 use lpc_rs_utils::config::Config;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
@@ -222,7 +222,7 @@ impl TaskContext {
     pub fn set_result(&self, new_result: LpcRef) -> Result<()> {
         self.result
             .set(new_result)
-            .map_err(|_| LpcError::new_bug("TaskContext::set_result result already set"))
+            .map_err(|_| lpc_bug!("TaskContext::set_result result already set"))
     }
 
     /// Consume this context, and return its `result` field.

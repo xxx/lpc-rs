@@ -13,7 +13,7 @@ use derive_builder::Builder;
 use educe::Educe;
 use lexer::{Spanned, Token, TokenVecWrapper};
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{span::Span, LpcError, LpcErrorSeverity, Result};
+use lpc_rs_errors::{span::Span, LpcError, LpcErrorSeverity, Result, lpc_error};
 use lpc_rs_utils::{config::Config, read_lpc_file};
 use preprocessor::Preprocessor;
 use tracing::instrument;
@@ -43,7 +43,7 @@ macro_rules! apply_walker {
 
         if let Err(e) = result {
             let e = e.with_additional_errors(context.errors);
-            return Err(e);
+            return Err(e.into());
         } else if $fatal
             && context
                 .errors
@@ -61,7 +61,7 @@ macro_rules! apply_walker {
             // TODO: benchmark these type conversions vs `errors.remove(0)`
             let mut deq = VecDeque::from(errors);
             let mut e = deq.pop_front().unwrap();
-            e = e.with_additional_errors(Vec::from(deq));
+            *e = e.with_additional_errors(Vec::from(deq));
             return Err(e);
         }
 
@@ -119,21 +119,21 @@ impl Compiler {
                 return match e.kind() {
                     ErrorKind::NotFound => {
                         if matches!(absolute.extension().and_then(OsStr::to_str), Some("c")) {
-                            return Err(LpcError::new(format!(
+                            return Err(lpc_error!(
                                 "Cannot read file `{}`: {}",
                                 absolute.display(),
                                 e
-                            )));
+                            ));
                         }
 
                         let dot_c = lpc_path.with_extension("c");
                         self.compile_file(dot_c).await
                     }
-                    _ => Err(LpcError::new(format!(
+                    _ => Err(lpc_error!(
                         "Cannot read file `{}`: {}",
                         absolute.display(),
                         e
-                    ))),
+                    )),
                 };
             }
         };
@@ -323,7 +323,7 @@ impl Compiler {
         lpc_parser::ProgramParser::new()
             .parse(&mut context, wrapper)
             .map(|p| (p, context))
-            .map_err(LpcError::from)
+            .map_err(|e| Box::new(LpcError::from(e)))
     }
 }
 

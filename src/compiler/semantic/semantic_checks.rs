@@ -1,5 +1,5 @@
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{lpc_bug, lpc_error, LpcError, Result};
 use phf::phf_set;
 
 use crate::compiler::{
@@ -68,7 +68,8 @@ pub fn check_var_redefinition(node: &'_ VarInitNode, scope: &'_ LocalScope) -> R
     if let Some(sym) = scope.lookup(&node.name) {
         Err(LpcError::new(format!("Redefinition of `{}`", sym.name))
             .with_span(node.span)
-            .with_label("Originally declared here", sym.span))
+            .with_label("Originally declared here", sym.span)
+            .into())
     } else {
         Ok(())
     }
@@ -89,12 +90,12 @@ pub fn check_binary_operation_types(
         op: BinaryOperation,
         left_type: LpcType,
         right_type: LpcType,
-    ) -> LpcError {
-        LpcError::new(format!(
+    ) -> Box<LpcError> {
+        lpc_error!(
+            node.span,
             "Mismatched types: `{}` ({}) {} `{}` ({})",
             node.l, left_type, op, node.r, right_type
-        ))
-        .with_span(node.span)
+        )
     }
 
     let left_type = node_type(&node.l, context)?;
@@ -240,11 +241,11 @@ pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationCont
     let expr_type = node_type(&node.expr, context)?;
 
     let create_error = |expected| {
-        LpcError::new(format!(
+        lpc_error!(
+            node.span,
             "Invalid Type: `{}` `{}` ({}). Expected {}",
             node.op, node.expr, expr_type, expected
-        ))
-        .with_span(node.span)
+        )
     };
 
     match node.op {
@@ -324,9 +325,9 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                             if var.type_.matches_type(LpcType::Function(false)) {
                                 or_else()
                             } else {
-                                Err(LpcError::new(format!(
-                                    "invalid call: `{name}` is not a function"
-                                )))
+                                Err(lpc_error!(
+                                    "invalid call: `{}` is not a function", name
+                                ))
                             }
                         })
                 }
@@ -340,8 +341,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                 node_type(&value[len - 1], context)
             } else {
                 Err(
-                    LpcError::new("We've somehow created an empty CommaExpression node")
-                        .with_span(node.span()),
+                    lpc_bug!(node.span(), "We've somehow created an empty CommaExpression node")
                 )
             }
         }
@@ -361,7 +361,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                         {
                             Ok(LpcType::Function(false))
                         } else {
-                            Err(LpcError::new(format!("undefined symbol {name}")).with_span(*span))
+                            Err(lpc_error!(*span, "undefined symbol {name}"))
                         }
                     }
                 }
@@ -426,10 +426,10 @@ where
     T: AsRef<str>,
 {
     if KEYWORDS.contains(name.as_ref()) {
-        return Err(LpcError::new(format!(
+        return Err(lpc_error!(
             "`{}` is a keyword of the language, and cannot be used here.",
             name.as_ref()
-        )));
+        ));
     }
 
     Ok(())

@@ -6,11 +6,7 @@ use std::{
 
 use logos::{Lexer, Logos};
 use lpc_rs_core::{convert_escapes, BaseFloat, LpcIntInner};
-use lpc_rs_errors::{
-    lazy_files::FileId,
-    span::{HasSpan, Span},
-    LpcError, Result,
-};
+use lpc_rs_errors::{lazy_files::FileId, span::{HasSpan, Span}, Result, lpc_error};
 
 use crate::compiler::lexer::{
     lex_state::LexState,
@@ -56,11 +52,11 @@ impl Iterator for LexWrapper<'_> {
 
         match token {
             Ok(t) => Some(Ok((span.start, t, span.end))),
-            Err(_) => Some(Err(LpcError::new(format!(
+            Err(_) => Some(Err(lpc_error!(
                 "Lex Error: Invalid Token `{}` at {:?}",
                 self.lexer.slice(),
                 span,
-            )))),
+            ))),
         }
     }
 }

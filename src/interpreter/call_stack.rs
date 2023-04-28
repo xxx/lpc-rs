@@ -3,7 +3,7 @@ use std::ops::{Index, IndexMut};
 use arrayvec::ArrayVec;
 use bit_set::BitSet;
 use delegate::delegate;
-use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_errors::{span::Span, LpcError, Result, lpc_error, lpc_bug};
 
 use crate::interpreter::{call_frame::CallFrame, gc::mark::Mark, lpc_ref::LpcRef};
 
@@ -43,14 +43,14 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     pub fn current_frame(&self) -> Result<&CallFrame> {
         self.stack
             .last()
-            .ok_or_else(|| LpcError::new("stack is somehow empty"))
+            .ok_or_else(|| lpc_error!("stack is somehow empty"))
     }
 
     #[inline]
     pub fn current_frame_mut(&mut self) -> Result<&mut CallFrame> {
         self.stack
             .last_mut()
-            .ok_or_else(|| LpcError::new("stack is somehow empty"))
+            .ok_or_else(|| lpc_error!("stack is somehow empty"))
     }
 
     /// Push a new frame onto the stack. Will return `Err` in the
@@ -58,7 +58,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     pub fn push(&mut self, frame: CallFrame) -> Result<()> {
         match self.stack.try_push(frame) {
             Ok(_) => Ok(()),
-            Err(_e) => Err(LpcError::new("stack overflow")),
+            Err(_e) => Err(lpc_error!("stack overflow")),
         }
     }
 
@@ -85,17 +85,17 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     }
 
     /// Create a runtime error, with stack trace, based on the current state.
-    pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
+    pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
         let span = self.current_frame_debug_span();
 
-        LpcError::new(format!("runtime error: {}", msg.as_ref())).with_span(span)
+        lpc_error!(span, "runtime error: {}", msg.as_ref())
     }
 
     /// Create a runtime bug, with stack trace, based on the current state.
-    pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
+    pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
         let span = self.current_frame_debug_span();
 
-        LpcError::new_bug(format!("runtime error: {}", msg.as_ref())).with_span(span)
+        lpc_bug!(span, "runtime error: {}", msg.as_ref())
     }
 
     /// Convenience helper to get the current frame's debug span

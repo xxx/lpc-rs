@@ -5,7 +5,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_errors::{span::Span, LpcError, Result, lpc_error};
 
 use crate::compiler::{
     ast::{
@@ -71,13 +71,13 @@ impl Display for BinaryOperation {
 }
 
 impl TryFrom<AssignmentOperation> for BinaryOperation {
-    type Error = LpcError;
+    type Error = Box<LpcError>;
 
     fn try_from(value: AssignmentOperation) -> Result<Self> {
         match value {
-            AssignmentOperation::Simple => Err(LpcError::new(format!(
+            AssignmentOperation::Simple => Err(lpc_error!(
                 "Failure to convert `{value}` into a BinaryOperation"
-            ))),
+            )),
             AssignmentOperation::AddEq => Ok(Self::Add),
             AssignmentOperation::AndAndEq => Ok(Self::AndAnd),
             AssignmentOperation::AndEq => Ok(Self::And),

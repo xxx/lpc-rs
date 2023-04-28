@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{lpc_error, LpcError, Result};
 use lpc_rs_utils::string::MAX_STRING_LENGTH;
 use string_interner::{DefaultSymbol, StringInterner, Symbol};
 
@@ -159,7 +159,7 @@ impl Add<LpcString> for LpcString {
 
             Ok(Self::from(s))
         } else {
-            Err(LpcError::new("overflow in string concatenation"))
+            Err(lpc_error!("overflow in string concatenation"))
         }
     }
 }

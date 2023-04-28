@@ -27,7 +27,7 @@ use lpc_rs_core::{
     register::{Register, RegisterVariant},
     LpcIntInner,
 };
-use lpc_rs_errors::{lpc_bug, span::Span, LpcError, Result};
+use lpc_rs_errors::{lpc_bug, span::Span, LpcError, Result, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
@@ -307,6 +307,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         task.timed_eval(initializer, &[], max_execution_time)
             .await?;
 
+        // TODO: do we need an error flag for initialization failures?
+
         Ok(task)
     }
 
@@ -375,9 +377,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(e)) => Err(e),
-            Err(_) => Err(LpcError::new(format!(
-                "evaluation limit of {timeout_ms}ms has been reached"
-            ))),
+            Err(_) => Err(lpc_error!(
+                "evaluation limit of {}ms has been reached", timeout_ms
+            )),
         }
     }
 
@@ -444,13 +446,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             while !halted {
                 halted = match self.eval_one_instruction().await {
                     Ok(x) => x,
-                    Err(e) => {
+                    Err(mut e) => {
                         if !self.catch_points.is_empty() {
                             self.catch_error(e)?;
                             false
                         } else {
                             let stack_trace = self.stack.stack_trace();
-                            return Err(e.with_stack_trace(stack_trace));
+                            return Err({
+                                *e = e.with_stack_trace(stack_trace);
+                                e
+                            });
                         }
                     }
                 };
@@ -521,8 +526,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     Ok(result) => {
                         set_loc!(self, r2, result)?;
                     }
-                    Err(e) => {
-                        return Err(e.with_span(debug_span));
+                    Err(mut e) => {
+                        *e = e.with_span(debug_span);
+                        return Err(e);
                     }
                 }
             }
@@ -606,9 +612,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     Ok(result) => {
                         set_loc!(self, r3, result)?;
                     }
-                    Err(e) => {
+                    Err(mut e) => {
                         let frame = self.stack.current_frame()?;
-                        return Err(e.with_span(frame.current_debug_span()));
+                        *e = e.with_span(frame.current_debug_span());
+                        return Err(e);
                     }
                 }
             }
@@ -623,24 +630,27 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::IDiv(r1, r2, r3) => match get_loc!(self, r1)?.div(&*get_loc!(self, r2)?) {
                 Ok(result) => set_loc!(self, r3, result)?,
-                Err(e) => {
+                Err(mut e) => {
                     let frame = self.stack.current_frame()?;
-                    return Err(e.with_span(frame.current_debug_span()));
+                    *e = e.with_span(frame.current_debug_span());
+                    return Err(e);
                 }
             },
             Instruction::IMod(r1, r2, r3) => match get_loc!(self, r1)?.rem(&*get_loc!(self, r2)?) {
                 Ok(result) => set_loc!(self, r3, result)?,
-                Err(e) => {
+                Err(mut e) => {
                     let frame = self.stack.current_frame()?;
-                    return Err(e.with_span(frame.current_debug_span()));
+                    *e = e.with_span(frame.current_debug_span());
+                    return Err(e);
                 }
             },
             Instruction::IMul(r1, r2, r3) => {
                 match get_loc!(self, r1)?.mul(&*get_loc!(self, r2)?, &self.context.memory) {
                     Ok(result) => set_loc!(self, r3, result)?,
-                    Err(e) => {
+                    Err(mut e) => {
                         let frame = self.stack.current_frame()?;
-                        return Err(e.with_span(frame.current_debug_span()));
+                        *e = e.with_span(frame.current_debug_span());
+                        return Err(e);
                     }
                 }
             }
@@ -650,9 +660,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::ISub(r1, r2, r3) => {
                 match get_loc!(self, r1)?.sub(&*get_loc!(self, r2)?, &self.context.memory) {
                     Ok(result) => set_loc!(self, r3, result)?,
-                    Err(e) => {
+                    Err(mut e) => {
                         let frame = self.stack.current_frame()?;
-                        return Err(e.with_span(frame.current_debug_span()));
+                        *e = e.with_span(frame.current_debug_span());
+                        return Err(e);
                     }
                 }
             }
@@ -809,7 +820,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     Ok(())
                 };
 
-                let get_new_value = |stack| {
+                let get_new_value = |stack| -> Result<LpcRef> {
                     let lpc_ref = &*get_location(stack, r1)?;
 
                     match lpc_ref {
@@ -837,10 +848,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 }
                             } else {
                                 let frame = self.stack.current_frame()?;
-                                Err(LpcError::new(
+                                Err(lpc_error!(
+                                    frame.current_debug_span(),
                                     "Invalid code was generated for a Range instruction.",
-                                )
-                                .with_span(frame.current_debug_span()))
+                                ))
                             }
                         }
                         LpcRef::String(v_ref) => {
@@ -868,10 +879,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 }
                             } else {
                                 let frame = self.stack.current_frame()?;
-                                Err(LpcError::new(
+                                Err(lpc_error!(
+                                    frame.current_debug_span(),
                                     "Invalid code was generated for a Range instruction.",
-                                )
-                                .with_span(frame.current_debug_span()))
+                                ))
                             }
                         }
                         LpcRef::Float(_)
@@ -880,10 +891,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         | LpcRef::Object(_)
                         | LpcRef::Function(_) => {
                             let frame = self.stack.current_frame()?;
-                            Err(LpcError::new(
+                            Err(lpc_error!(
+                                frame.current_debug_span(),
                                 "Range's receiver isn't actually an array or string?",
-                            )
-                            .with_span(frame.current_debug_span()))
+                            ))
                         }
                     }
                 };
@@ -1306,7 +1317,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 ))
                 .with_label("defined here", arg_def_span.copied());
 
-                return Err(error);
+                return Err(error.into());
             }
         }
 
@@ -1402,7 +1413,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         task.timed_eval(function, args, max_execution_time).await?;
 
                         let Some(r) = task.context.into_result() else {
-                            return Err(LpcError::new_bug("resolve_result finished the task, but it has no result? wtf."));
+                            return Err(lpc_bug!("resolve_result finished the task, but it has no result? wtf."));
                         };
 
                         r
@@ -1912,7 +1923,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Set the state to handle a caught error.
     /// Panics if there aren't actually any catch points.
     #[instrument(skip_all)]
-    fn catch_error(&mut self, error: LpcError) -> Result<()> {
+    fn catch_error(&mut self, error: Box<LpcError>) -> Result<()> {
         let catch_point = self.catch_points.last().unwrap();
         let result_index = catch_point.register.index();
         let frame_index = catch_point.frame_index;
@@ -1931,7 +1942,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         if self.stack.is_empty() {
-            return Err(self.runtime_error("stack is empty after popping to catch point?"));
+            return Err(self.runtime_bug("stack is empty after popping to catch point?"));
         }
 
         // set up the catch point's return value
@@ -1964,9 +1975,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Ok(result) => {
                 set_loc!(self, r3, result)?;
             }
-            Err(e) => {
+            Err(mut e) => {
                 let frame = self.stack.current_frame()?;
-                return Err(e.with_span(frame.current_debug_span()));
+                *e = e.with_span(frame.current_debug_span());
+                return Err(e);
             }
         }
 
@@ -1995,18 +2007,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// convenience helper to generate runtime errors
     #[inline]
-    fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
+    fn runtime_error<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
         self.stack.runtime_error(msg)
     }
 
     /// convenience helper to generate runtime bugs
     #[inline]
-    fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
+    fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
         self.stack.runtime_bug(msg)
     }
 
     #[inline]
-    fn array_index_error<T>(&self, index: T, length: usize) -> LpcError
+    fn array_index_error<T>(&self, index: T, length: usize) -> Box<LpcError>
     where
         T: Display,
     {

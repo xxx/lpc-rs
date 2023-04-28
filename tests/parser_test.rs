@@ -660,5 +660,5 @@ async fn parse_prog(prog: &str) -> Result<ProgramNode> {
 
     lpc_parser::ProgramParser::new()
         .parse(&mut context, code)
-        .map_err(|e| e.into())
+        .map_err(|e| Box::new(e.into()))
 }

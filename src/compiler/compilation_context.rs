@@ -19,6 +19,8 @@ use crate::{
     interpreter::{efun::EFUN_PROTOTYPES, process::Process, program::Program},
 };
 
+// TODO: trim the bytesize of this down
+
 /// A big, fat state object to store data created at various stages of
 /// compilation. A single one of these will be used for loading/compiling a
 /// single file (files `#include`d in that file will share this state object
@@ -45,7 +47,7 @@ pub struct CompilationContext {
     pub default_function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
 
     /// Any warnings & errors that have been collected
-    pub errors: Vec<LpcError>,
+    pub errors: Vec<Box<LpcError>>,
 
     /// The pragmas that have been set
     pub pragmas: PragmaFlags,

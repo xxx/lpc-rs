@@ -4,7 +4,7 @@ use itertools::Itertools;
 use lpc_rs_core::{
     call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType, ScopeId,
 };
-use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_errors::{span::Span, LpcError, Result, lpc_error, lpc_bug};
 use lpc_rs_function_support::symbol::Symbol;
 use tracing::trace;
 
@@ -90,7 +90,7 @@ impl ScopeWalker {
 
     async fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
         let CallChain::Root { receiver, name, namespace: _ } = &mut node.chain else {
-            return Err(LpcError::new("CallNode::chain was not a CallChain::Root").with_span(node.span));
+            return Err(lpc_error!(node.span, "CallNode::chain was not a CallChain::Root"));
         };
 
         if let Some(rcvr) = receiver {
@@ -117,7 +117,7 @@ impl ScopeWalker {
 
     async fn visit_call_chain(&mut self, node: &mut CallNode) -> Result<()> {
         let CallChain::Node(chain_node) = &mut node.chain else {
-            return Err(LpcError::new("CallNode::chain was not a CallChain::Root").with_span(node.span));
+            return Err(lpc_error!(node.span, "CallNode::chain was not a CallChain::Root"));
         };
 
         chain_node.visit(self).await?;
@@ -325,8 +325,7 @@ impl TreeWalker for ScopeWalker {
             };
 
             // We check for undefined vars here, in case a symbol is subsequently defined.
-            let e = LpcError::new(format!("undefined variable `{}`", node.name))
-                .with_span(node.span);
+            let e = lpc_error!(node.span, "undefined variable `{}`", node.name);
 
             self.context.errors.push(e);
 
@@ -342,7 +341,8 @@ impl TreeWalker for ScopeWalker {
                 node.name
             ))
             .with_span(node.span)
-            .with_label("defined here", symbol.span);
+            .with_label("defined here", symbol.span)
+            .into();
 
             self.context.errors.push(e);
 
@@ -372,7 +372,7 @@ impl TreeWalker for ScopeWalker {
         let scope = self.context.scopes.current();
 
         if scope.is_none() {
-            return Err(LpcError::new_bug(
+            return Err(lpc_bug!(
                 "There's no current scope for some reason? This is a pretty bad compiler bug.",
             ));
         }
@@ -606,7 +606,7 @@ mod tests {
             let _ = walker.visit_var(&mut node).await;
 
             assert_regex!(
-                walker.context.errors[0].as_ref(),
+                (*walker.context.errors[0]).as_ref(),
                 "undefined variable `foo`"
             );
         }
@@ -645,7 +645,7 @@ mod tests {
             let _ = walker.visit_var(&mut node).await;
 
             assert_regex!(
-                walker.context.errors[0].as_ref(),
+                (*walker.context.errors[0]).as_ref(),
                 "private variable `foo` accessed outside of its file"
             );
         }

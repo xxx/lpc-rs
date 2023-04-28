@@ -9,7 +9,7 @@ use std::{
 
 use bit_set::BitSet;
 use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloatInner, LpcIntInner};
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{lpc_error, LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
 use parking_lot::RwLock;
 use shared_arena::ArenaArc;
@@ -67,24 +67,24 @@ impl LpcRef {
         }
     }
 
-    fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> LpcError {
-        LpcError::new(format!(
+    fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> Box<LpcError> {
+        lpc_error!(
             "runtime error: mismatched types: {} ({}) {} {} ({})",
             self,
             self.type_name(),
             op,
             right,
             right.type_name()
-        ))
+        )
     }
 
-    fn to_unary_op_error(&self, op: UnaryOperation) -> LpcError {
-        LpcError::new(format!(
+    fn to_unary_op_error(&self, op: UnaryOperation) -> Box<LpcError> {
+        lpc_error!(
             "runtime error: mismatched types: {} {} ({})",
             op,
             self,
             self.type_name()
-        ))
+        )
     }
 
     pub fn inc(&mut self) -> Result<()> {
@@ -94,9 +94,7 @@ impl LpcRef {
 
                 Ok(())
             }
-            _ => Err(LpcError::new(
-                "runtime error: invalid increment".to_string(),
-            )),
+            _ => Err(lpc_error!("runtime error: invalid increment"))
         }
     }
 
@@ -106,9 +104,7 @@ impl LpcRef {
                 *x = x.wrapping_sub(1).into();
                 Ok(())
             }
-            _ => Err(LpcError::new(
-                "runtime error: invalid decrement".to_string(),
-            )),
+            _ => Err(lpc_error!("runtime error: invalid decrement")),
         }
     }
 
@@ -241,28 +237,28 @@ impl LpcRef {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
                 if y.0 == 0 {
-                    Err(LpcError::new("Runtime Error: Division by zero"))
+                    Err(lpc_error!("Runtime Error: Division by zero"))
                 } else {
                     Ok(Self::Int(LpcInt(x.0.wrapping_div(y.0))))
                 }
             }
             (LpcRef::Float(x), LpcRef::Float(y)) => {
                 if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
-                    Err(LpcError::new("Runtime Error: Division by zero"))
+                    Err(lpc_error!("Runtime Error: Division by zero"))
                 } else {
                     Ok(Self::Float(LpcFloat(x.0 / y.0)))
                 }
             }
             (LpcRef::Float(x), LpcRef::Int(y)) => {
                 if y.0 == 0 {
-                    Err(LpcError::new("Runtime Error: Division by zero"))
+                    Err(lpc_error!("Runtime Error: Division by zero"))
                 } else {
                     Ok(Self::Float(LpcFloat(x.0 / y.0 as BaseFloat)))
                 }
             }
             (LpcRef::Int(x), LpcRef::Float(y)) => {
                 if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
-                    Err(LpcError::new("Runtime Error: Division by zero"))
+                    Err(lpc_error!("Runtime Error: Division by zero"))
                 } else {
                     Ok(Self::Float(LpcFloat(
                         LpcFloatInner::from(x.0 as BaseFloat) / y.0,
@@ -277,28 +273,28 @@ impl LpcRef {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => {
                 if y.0 == 0 {
-                    Err(LpcError::new("Runtime Error: Remainder division by zero"))
+                    Err(lpc_error!("Runtime Error: Remainder division by zero"))
                 } else {
                     Ok(Self::Int(LpcInt(x.0.wrapping_rem(y.0))))
                 }
             }
             (LpcRef::Float(x), LpcRef::Float(y)) => {
                 if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
-                    Err(LpcError::new("Runtime Error: Division by zero"))
+                    Err(lpc_error!("Runtime Error: Division by zero"))
                 } else {
                     Ok(Self::Float(LpcFloat(x.0 % y.0)))
                 }
             }
             (LpcRef::Float(x), LpcRef::Int(y)) => {
                 if y.0 == 0 {
-                    Err(LpcError::new("Runtime Error: Division by zero"))
+                    Err(lpc_error!("Runtime Error: Division by zero"))
                 } else {
                     Ok(Self::Float(LpcFloat(x.0 % y.0 as BaseFloat)))
                 }
             }
             (LpcRef::Int(x), LpcRef::Float(y)) => {
                 if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
-                    Err(LpcError::new("Runtime Error: Remainder division by zero"))
+                    Err(lpc_error!("Runtime Error: Remainder division by zero"))
                 } else {
                     Ok(Self::Float(LpcFloat(
                         LpcFloatInner::from(x.0 as BaseFloat) % y.0,

@@ -245,7 +245,7 @@ where
 {
     match fs::canonicalize(path) {
         Ok(y) => Ok(ustr(&y.to_string_lossy())),
-        Err(e) => Err(LpcError::new(e.to_string())),
+        Err(e) => Err(lpc_error!(e.to_string())),
     }
 }
 

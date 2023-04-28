@@ -25,7 +25,7 @@ pub fn collapse_binary_op(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, Box<LpcError>>> {
     match op {
         BinaryOperation::Add => collapse_add(op, l, r, span),
         BinaryOperation::Sub => collapse_sub(op, l, r, span),
@@ -55,7 +55,7 @@ fn collapse_add(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, Box<LpcError>>> {
     let result = match &l {
         ExpressionNode::Int(node) => match r {
             ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
@@ -64,7 +64,11 @@ fn collapse_add(
             }),
             ExpressionNode::String(node2) => {
                 let value = concatenate_strings(node.value.to_string(), node2.value)
-                    .map_err(|e| e.with_span(Some(span)))?;
+                    .map_err(|mut e| {
+                        *e = e.with_span(Some(span));
+                        e
+                        // (*e).with_span(Some(span))
+                    })?;
 
                 ExpressionNode::String(StringNode {
                     value,
@@ -78,7 +82,10 @@ fn collapse_add(
                 // "string" + 123 == "string123"
                 ExpressionNode::Int(node2) => {
                     let value = concatenate_strings(&*node.value, node2.value.to_string())
-                        .map_err(|e| e.with_span(Some(span)))?;
+                        .map_err(|mut e| {
+                            *e = e.with_span(Some(span));
+                            e
+                        })?;
 
                     ExpressionNode::String(StringNode {
                         value,
@@ -88,7 +95,10 @@ fn collapse_add(
                 // concat string literals
                 ExpressionNode::String(node2) => {
                     let value = concatenate_strings(&*node.value, node2.value)
-                        .map_err(|e| e.with_span(Some(span)))?;
+                        .map_err(|mut e| {
+                            *e = e.with_span(Some(span));
+                            e
+                        })?;
 
                     ExpressionNode::String(StringNode {
                         value,
@@ -109,7 +119,7 @@ fn collapse_sub(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, Box<LpcError>>> {
     let result = match &l {
         ExpressionNode::Int(node) => match r {
             ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
@@ -129,7 +139,7 @@ fn collapse_mul(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, Box<LpcError>>> {
     let result = match &l {
         ExpressionNode::Int(node) => match r {
             ExpressionNode::Int(node2) => ExpressionNode::Int(IntNode {
@@ -160,7 +170,7 @@ fn collapse_div(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, Box<LpcError>>> {
     let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
             if node2.value != 0 {
@@ -185,7 +195,7 @@ fn collapse_mod(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, Box<LpcError>>> {
     let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => {
             if node2.value != 0 {
@@ -215,7 +225,7 @@ fn collapse_and(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, Box<LpcError>>> {
     let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
             value: node.value & node2.value,
@@ -232,7 +242,7 @@ fn collapse_or(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, Box<LpcError>>> {
     let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
             value: node.value | node2.value,
@@ -249,7 +259,7 @@ fn collapse_xor(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, Box<LpcError>>> {
     let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
             value: node.value ^ node2.value,
@@ -266,7 +276,7 @@ fn collapse_shl(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, Box<LpcError>>> {
     let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
             value: node.value << node2.value,
@@ -283,7 +293,7 @@ fn collapse_shr(
     l: ExpressionNode,
     r: ExpressionNode,
     span: Span,
-) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, Box<LpcError>>> {
     let result = match (&l, &r) {
         (ExpressionNode::Int(node), ExpressionNode::Int(node2)) => ExpressionNode::Int(IntNode {
             value: node.value >> node2.value,
@@ -300,9 +310,13 @@ fn collapse_repeat_string(
     string: String,
     amount: LpcIntInner,
     span: Span,
-) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
+) -> Result<ExpressionNode, ParseError<usize, lexer::Token, Box<LpcError>>> {
     let value =
-        string::repeat_string(string.as_str(), amount).map_err(|e| e.with_span(Some(span)))?;
+        string::repeat_string(string.as_str(), amount).map_err(|mut e| {
+            *e = e.with_span(Some(span));
+
+            e
+        })?;
     let node = ExpressionNode::String(StringNode {
         value,
         span: Some(span),

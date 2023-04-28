@@ -1,6 +1,6 @@
 use if_chain::if_chain;
 use lpc_rs_core::LpcIntInner;
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{lpc_error, LpcError, Result};
 
 /// The maximum length of strings, *in bytes*
 // pub const MAX_STRING_LENGTH: usize = 1_073_741_824; // 1 GiB
@@ -18,7 +18,7 @@ pub fn repeat_string(s: &str, i: LpcIntInner) -> Result<String> {
             then {
                 Ok(s.repeat(i as usize))
             } else {
-                Err(LpcError::new("overflow in string repetition"))
+                Err(lpc_error!("overflow in string repetition"))
             }
         }
     } else {
@@ -41,7 +41,7 @@ where
     if new_capacity <= MAX_STRING_LENGTH {
         Ok(string1 + str2)
     } else {
-        Err(LpcError::new("overflow in string concatenation"))
+        Err(lpc_error!("overflow in string concatenation"))
     }
 }
 
@@ -53,7 +53,7 @@ where
     i.as_ref()
         .strip_prefix('$')
         .and_then(|s| s.parse().ok())
-        .ok_or_else(|| LpcError::new(format!("invalid closure argument number: `{}`", i.as_ref())))
+        .ok_or_else(|| lpc_error!("invalid closure argument number: `{}`", i.as_ref()))
 }
 
 #[cfg(test)]

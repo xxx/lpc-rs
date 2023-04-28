@@ -106,12 +106,12 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     }
 
     #[inline]
-    pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
+    pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
         self.frame().runtime_error(msg)
     }
 
     #[inline]
-    pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
+    pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
         self.frame().runtime_bug(msg)
     }
 

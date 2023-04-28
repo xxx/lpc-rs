@@ -43,7 +43,7 @@ use crate::compiler::parser::collapse_binary_op::collapse_binary_op;
 use crate::compiler::parser::collapse_unary_op::collapse_unary_op;
 use lpc_rs_errors::span::{Span, combine_spans};
 use crate::compiler::lexer::Token;
-use lpc_rs_errors::LpcError;
+use lpc_rs_errors::{LpcError, lpc_error, lpc_bug, lpc_warning};
 use crate::compiler::lexer::logos_token::{StringToken, IntToken, FloatToken};
 use lpc_rs_core::LpcFloatInner;
 use crate::compiler::compilation_context::CompilationContext;
@@ -56,7 +56,7 @@ grammar<'context>(context: &'context mut CompilationContext);
 
 extern {
     type Location = usize;
-    type Error = LpcError;
+    type Error = Box<LpcError>;
 
     enum Token {
         "+" => Token::Plus(<Span>),
@@ -161,8 +161,7 @@ Inherit: InheritNode = {
         let path = if let ExpressionNode::String(StringNode { value, .. }) = path_node {
             value
         } else {
-            let error = LpcError::new_bug("Inherit path isn't a string? This should not have even parsed.")
-            .with_span(Some(span));
+            let error = lpc_bug!(Some(span), "Inherit path isn't a string? This should not have even parsed.");
 
             return Err(ParseError::User { error });
         };
@@ -187,8 +186,7 @@ Def: AstNode = {
         );
         let span = combine_spans(Some(left), Some(r));
 
-        let warning = LpcError::new_warning("prototypes are ignored in this flavor of LPC")
-            .with_span(Some(span));
+        let warning = lpc_warning!(Some(span), "prototypes are ignored in this flavor of LPC");
         context.errors.push(warning);
         AstNode::NoOp
     },
@@ -198,8 +196,7 @@ Def: AstNode = {
         if let Some(field) = invalid.first() {
             let span = combine_spans(Some(flags[0].0), Some(flags.last().unwrap().0));
 
-            let err = LpcError::new(format!("`{}` is intended for functions only", field))
-                                      .with_span(Some(span));
+            let err = lpc_error!(Some(span), "`{}` is intended for functions only", field);
             return Err(ParseError::User { error: err });
         }
 
@@ -253,7 +250,7 @@ FunctionDef: FunctionDefNode = {
             let err = LpcError::new("Missing return type")
                                       .with_span(Some(span))
                                       .with_note("`#pragma strict_types` is enabled, which requires all functions to have an explicit return type.");
-            return Err(ParseError::User { error: err });
+            return Err(ParseError::User { error: Box::new(err) });
         } else {
             LpcType::Mixed(array)
         };
@@ -264,7 +261,7 @@ FunctionDef: FunctionDefNode = {
             .with_note("Use one of `public`, `private`, or `protected`, or leave unspecified for `public` visibility.")
             .with_span(Some(span));
 
-            return Err(ParseError::User { error: err });
+            return Err(ParseError::User { error: err.into() });
         }
         let flags = FunctionFlags::from(&flag_strs[..]).with_ellipsis(ellipsis);
 

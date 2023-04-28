@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use lpc_rs_core::register::Register;
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{lpc_error, LpcError, Result};
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
@@ -45,7 +45,7 @@ impl<const N: usize> InitializeProgramBuilder<N> {
     pub async fn build(&self) -> Result<Task<N>> {
         let init = match self.real_build() {
             Ok(i) => i,
-            Err(e) => return Err(LpcError::new(e.to_string())),
+            Err(e) => return Err(lpc_error!(e.to_string())),
         };
 
         Task::initialize_program(

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use lpc_rs_core::{lpc_path::LpcPath, EFUN};
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{lpc_error, LpcError, Result};
 
 use crate::compiler::{
     ast::inherit_node::InheritNode,
@@ -25,7 +25,7 @@ impl InheritanceWalker {
         let depth = self.context.inherit_depth;
 
         if depth >= self.context.config.max_inherit_depth {
-            let err = LpcError::new("maximum inheritance depth reached").with_span(node.span);
+            let err = lpc_error!(node.span, "maximum inheritance depth reached");
 
             return Err(err);
         }
@@ -33,15 +33,16 @@ impl InheritanceWalker {
         if let Some(namespace) = &node.namespace {
             if namespace.as_str() == EFUN {
                 return Err(
-                    LpcError::new("inheritance namespace `efun` is reserved").with_span(node.span)
+                    lpc_error!(node.span, "inheritance namespace `efun` is reserved")
                 );
             }
 
             if self.context.inherit_names.contains_key(namespace.as_str()) {
-                return Err(LpcError::new(format!(
-                    "inheritance namespace `{namespace}` is already defined"
-                ))
-                .with_span(node.span));
+                return Err(lpc_error!(
+                    node.span,
+                    "inheritance namespace `{}` is already defined",
+                    namespace
+                ));
             }
         }
 
@@ -81,11 +82,11 @@ impl TreeWalker for InheritanceWalker {
         match compiler.compile_in_game_file(&full_path, node.span).await {
             Ok(program) => {
                 if program.pragmas.no_inherit() {
-                    return Err(LpcError::new(format!(
+                    return Err(lpc_error!(
+                        node.span,
                         "`pragma #no_inherit` is set on {}",
                         program.filename
-                    ))
-                    .with_span(node.span));
+                    ));
                 }
 
                 if self
@@ -94,11 +95,11 @@ impl TreeWalker for InheritanceWalker {
                     .iter()
                     .any(|x| x.filename == program.filename)
                 {
-                    let err = LpcError::new(format!(
+                    let err: Box<LpcError> = lpc_error!(
+                        node.span,
                         "`{}` is already being inherited from",
                         program.filename
-                    ))
-                    .with_span(node.span);
+                    );
 
                     self.context.errors.push(err.clone());
 

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use lpc_rs_core::{LpcFloatInner, LpcIntInner};
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{lpc_error, LpcError, Result};
 
 use crate::interpreter::{
     efun::efun_context::EfunContext, function_type::function_address::FunctionAddress,
@@ -14,7 +14,7 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     {
         let call_outs = context.call_outs().read();
         if call_outs.next_push_index() > LpcIntInner::MAX as usize {
-            return Err(LpcError::new("too many call outs"));
+            return Err(lpc_error!("too many call outs"));
         }
     }
 
@@ -27,7 +27,7 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         };
         let func = func.read();
         if let FunctionAddress::Dynamic(_) = func.address {
-            return Err(LpcError::new(
+            return Err(lpc_error!(
                 "cannot `call_out` to a function with a dynamic receiver",
             ));
         }

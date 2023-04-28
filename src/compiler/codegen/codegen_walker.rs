@@ -17,7 +17,7 @@ use lpc_rs_core::{
     register_counter::RegisterCounter,
     ScopeId, CREATE_FUNCTION, INIT_PROGRAM,
 };
-use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_errors::{span::Span, LpcError, Result, lpc_bug, lpc_error, lpc_warning};
 use lpc_rs_function_support::{
     function_prototype::{FunctionKind, FunctionPrototypeBuilder},
     program_function::{ProgramFunction, ProgramFunctionBuilder},
@@ -287,7 +287,7 @@ impl CodegenWalker {
                     a,
                     b,
                     &func.name()
-                )));
+                )).into());
             }
         }
 
@@ -520,17 +520,17 @@ impl CodegenWalker {
         function: &mut ProgramFunction,
     ) -> Result<()> {
         let Some(labels) = &function.labels else {
-            return Err(LpcError::new_bug(format!("No labels found in function `{}`", function.name())));
+            return Err(lpc_bug!("No labels found in function `{}`", function.name()));
         };
 
         for (label, addresses) in backpatch_map {
             let Some(label_address) = labels.get(label) else {
-                return Err(LpcError::new_bug(format!("Label `{}` not found in function `{}", label, function.name())));
+                return Err(lpc_bug!("Label `{}` not found in function `{}", label, function.name()));
             };
 
             for address in addresses {
                 let Some(instruction) = function.instructions.get_mut(address) else {
-                    return Err(LpcError::new_bug(format!("Instruction at address {} not found in function `{}", address, function.name())));
+                    return Err(lpc_bug!("Instruction at address {} not found in function `{}", address, function.name()));
                 };
                 instruction.backpatch(*label_address)?
             }
@@ -552,7 +552,7 @@ impl CodegenWalker {
     /// If the instruction address is already in the backpatch map for the given label.
     fn schedule_backpatch(&mut self, label: &Label, instruction_address: Address) -> Result<()> {
         let Some(backpatch_map) = self.backpatch_maps.last_mut() else {
-            return Err(LpcError::new_bug("No backpatch map found to append to".to_string()));
+            return Err(lpc_bug!("No backpatch map found to append to"));
         };
 
         if let Some(bitset) = backpatch_map.get_mut(label) {
@@ -790,7 +790,7 @@ impl CodegenWalker {
                 sym.instructions[idx + i] = Instruction::Jmp(default_init_addresses[i - 1]);
             }
         } else {
-            return Err(LpcError::new_bug("Invalid populate_defaults_index").with_span(span));
+            return Err(lpc_bug!(span, "Invalid populate_defaults_index"));
         }
 
         // jump back to the function now that defaults are populated.
@@ -814,7 +814,7 @@ impl CodegenWalker {
 
             Ok(())
         } else {
-            Err(LpcError::new("Invalid populate_argv_index").with_span(span))
+            Err(lpc_error!(span, "Invalid populate_argv_index"))
         }
     }
 
@@ -831,7 +831,7 @@ impl CodegenWalker {
     async fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
         let node_span = node.span();
         let CallChain::Root { ref mut receiver, ref name, ref namespace } = &mut node.chain else {
-            return Err(LpcError::new_bug("Invalid call chain").with_span(node.span));
+            return Err(lpc_bug!(node.span, "Invalid call chain"));
         };
         let has_receiver = receiver.is_some();
 
@@ -895,9 +895,11 @@ impl CodegenWalker {
                     } else {
                         let Some(func) =
                             self.context.lookup_function_complete(name, namespace) else {
-                            return Err(LpcError::new_bug(
-                                format!("Cannot find function during code gen: {}", name)
-                            ).with_span(node.span));
+                            return Err(lpc_bug!(
+                                node.span,
+                                "Cannot find function during code gen: {}",
+                                name
+                            ));
                         };
 
                         match func.prototype().kind {
@@ -957,12 +959,12 @@ impl CodegenWalker {
         {
             push_copy(self);
         } else {
-            return Err(LpcError::new_bug(format!(
+            return Err(lpc_bug!(
+                node.span,
                 "Unable to find the return type for `{}`. This is a weird issue that indicates \
                 something very broken in the semantic checks, or that I'm not looking hard enough.",
                 name
-            ))
-            .with_span(node.span));
+            ));
         }
 
         Ok(())
@@ -970,7 +972,7 @@ impl CodegenWalker {
 
     async fn visit_call_chain(&mut self, node: &mut CallNode) -> Result<()> {
         let CallChain::Node(chain_node) = &mut node.chain else {
-            return Err(LpcError::new_bug("Invalid call chain").with_span(node.span));
+            return Err(lpc_bug!(node.span, "Invalid call chain"));
         };
 
         chain_node.visit(self).await?;
@@ -1072,8 +1074,7 @@ impl TreeWalker for CodegenWalker {
             }
             x => {
                 return Err(
-                    LpcError::new(format!("Attempt to assign to an invalid lvalue: `{x}`"))
-                        .with_span(node.span),
+                    lpc_error!(node.span, "Attempt to assign to an invalid lvalue: `{}`", x)
                 )
             }
         }
@@ -1201,7 +1202,7 @@ impl TreeWalker for CodegenWalker {
             return Ok(());
         }
 
-        Err(LpcError::new_bug("`break` statement without a jump target?").with_span(node.span))
+        Err(lpc_bug!(node.span, "`break` statement without a jump target?"))
     }
 
     #[instrument(skip_all)]
@@ -1215,11 +1216,11 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         let Some(prototype) = self.context.function_prototypes.get(&*node.name) else {
-            return Err(LpcError::new(format!(
+            return Err(lpc_error!(
+                node.span,
                 "closure prototype for {} not found",
                 node.name
-            ))
-            .with_span(node.span));
+            ));
         };
 
         let arity = prototype.arity;
@@ -1236,8 +1237,7 @@ impl TreeWalker for CodegenWalker {
             self.closure_scope_stack.push(scope_id);
         } else {
             return Err(
-                LpcError::new(format!("closure scope for {} not found", node.name))
-                    .with_span(node.span),
+                lpc_error!(node.span, "closure scope for {} not found", node.name)
             );
         }
 
@@ -1371,7 +1371,7 @@ impl TreeWalker for CodegenWalker {
             return Ok(());
         }
 
-        Err(LpcError::new("`continue` statement without a jump target?").with_span(node.span))
+        Err(lpc_error!(node.span, "`continue` statement without a jump target?"))
     }
 
     #[instrument(skip_all)]
@@ -1567,11 +1567,11 @@ impl TreeWalker for CodegenWalker {
         let prototype = match self.context.function_prototypes.get(&*node.name) {
             Some(p) => p,
             None => {
-                return Err(LpcError::new(format!(
+                return Err(lpc_error!(
+                    node.span,
                     "function prototype for {} not found",
                     node.name
-                ))
-                .with_span(node.span));
+                ));
             }
         };
 
@@ -1615,11 +1615,10 @@ impl TreeWalker for CodegenWalker {
             {
                 if sym.return_type() != LpcType::Void {
                     self.context.errors.push(
-                        LpcError::new_warning(
+                        lpc_warning!(
+                            node.span,
                             "non-void function does not return a value. defaulting to 0."
-                                .to_string(),
                         )
-                        .with_span(node.span),
                     );
                 }
                 sym.push_instruction(Instruction::Ret, node.span);
@@ -1707,11 +1706,11 @@ impl TreeWalker for CodegenWalker {
                     if EFUN_PROTOTYPES.contains_key(node.name.as_str()) {
                         FunctionReceiver::Efun
                     } else {
-                        return Err(LpcError::new(format!(
+                        return Err(lpc_error!(
+                            node.span,
                             "unknown call in function pointer: `{}`",
                             node.name
-                        ))
-                            .with_span(node.span));
+                        ));
                     }
                 }
             }
@@ -1805,10 +1804,10 @@ impl TreeWalker for CodegenWalker {
                 x.push((case, address));
                 Ok(())
             }
-            None => Err(LpcError::new(
+            None => Err(lpc_error!(
+                node.span,
                 "Found a label in the code generator, but nowhere to store the address?",
-            )
-            .with_span(node.span)),
+            ))
         }
     }
 
@@ -2181,15 +2180,13 @@ impl TreeWalker for CodegenWalker {
 
         let Some(sym) = self.context.lookup_var(node.name) else {
             return Err(
-                LpcError::new(format!("Unable to find symbol `{}`", node.name))
-                    .with_span(node.span),
+                lpc_error!(node.span, "Unable to find symbol `{}`", node.name)
             );
         };
 
         let Some(sym_loc) = sym.location else {
             return Err(
-                LpcError::new(format!("Symbol `{}` has no location set.", sym.name))
-                    .with_span(node.span),
+                lpc_error!(node.span, "Symbol `{}` has no location set.", sym.name)
             );
         };
 
@@ -2203,11 +2200,11 @@ impl TreeWalker for CodegenWalker {
         let symbol = self.context.lookup_var(node.name);
 
         let Some(sym) = symbol else {
-            return Err(LpcError::new(format!(
+            return Err(lpc_error!(
+                node.span,
                 "Missing symbol, that somehow passed semantic checks?: {}",
                 node.name
             ))
-            .with_span(node.span))
         };
 
         let global = sym.is_global();

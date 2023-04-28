@@ -37,7 +37,7 @@ async fn load_master<const N: usize>(
                 .map_err(|e| {
                     let debug_span = context.current_debug_span();
 
-                    e.with_span(debug_span)
+                    e.with_span(debug_span).into()
                 })
             // let compiler = CompilerBuilder::default()
             //     .config(context.config().clone())
@@ -102,7 +102,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         // if the master is not initialized, we initialize the clone.
         let return_val = if !master.flags.test(ObjectFlags::INITIALIZED) {
             println!("context.chain_count(): {}", context.chain_count());
-            if context.chain_count() >= 20 {
+            if context.chain_count() >= 30 {
                 return Err(context.runtime_error(format!(
                     "infinite clone recursion detected",
                 )));
@@ -157,6 +157,7 @@ mod tests {
         },
         test_support::compile_prog,
     };
+    use crate::interpreter::lpc_ref::NULL;
     use crate::interpreter::vm::Vm;
     use crate::test_support::test_config;
 
@@ -219,14 +220,46 @@ mod tests {
         let result = task.timed_eval(func, &[], 300).await;
 
         assert_regex!(
-            result.as_ref().unwrap_err().as_ref(),
+            result.as_ref().unwrap_err().as_ref().as_ref(),
             r"no_clone\.c has `#pragma no_clone` enabled, and so cannot be cloned\."
         );
     }
 
     #[tokio::test]
     async fn initializes_clone_if_master_not_initialized() {
-        todo!()
+        let cloned = indoc! { r#"
+            int i = 123;
+        "# };
+
+        let cloner = indoc! { r#"
+            object foo = clone_object("cloned");
+        "# };
+
+        let mut vm = Vm::new(test_config());
+        let cloned_proc = vm.process_create_from_code(
+            "cloned.c",
+            cloned
+        ).await.unwrap();
+
+        assert_eq!(cloned_proc.global_variable_values().get("i").unwrap(), &NULL);
+        assert!(!cloned_proc.flags.test(ObjectFlags::INITIALIZED));
+
+        let cloner_proc = vm.process_initialize_from_code(
+            "cloner.c",
+            cloner
+        ).await.unwrap().context.process;
+        assert!(cloner_proc.flags.test(ObjectFlags::INITIALIZED));
+
+        assert_eq!(cloned_proc.global_variable_values().get("i").unwrap(), &NULL);
+        let LpcRef::Object(foo) = cloner_proc.global_variable_values().get("foo").unwrap().clone() else {
+            panic!("foo is not an object");
+        };
+
+        let foo = foo.upgrade().unwrap();
+        assert!(foo.flags.test(ObjectFlags::INITIALIZED));
+
+        let foo_i = foo.global_variable_values().get("i").unwrap().clone();
+        assert_eq!(foo_i, LpcRef::from(123));
     }
 
     #[tokio::test]
@@ -257,9 +290,11 @@ mod tests {
             self_clone
         ).await.unwrap();
 
-        let _master_proc = vm.process_initialize_from_code(
+        let master_proc = vm.process_initialize_from_code(
             "master.c",
             master
-        ).await.unwrap();
+        ).await;
+
+        assert!(master_proc.unwrap_err().to_string().contains("infinite clone recursion detected"));
     }
 }

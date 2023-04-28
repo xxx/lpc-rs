@@ -275,13 +275,13 @@ impl CallFrame {
 
     /// a convenience method to generate a runtime error
     #[inline]
-    pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
+    pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
         lpc_error!(self.current_debug_span(), "runtime error: {}", msg.as_ref())
     }
 
     /// a convenience method to generate a runtime bug
     #[inline]
-    pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
+    pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
         lpc_bug!(self.current_debug_span(), "runtime bug: {}", msg.as_ref())
     }
 

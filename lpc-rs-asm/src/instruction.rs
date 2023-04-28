@@ -6,7 +6,7 @@ use std::{
 use lpc_rs_core::{
     function_receiver::FunctionReceiver, register::RegisterVariant, LpcFloatInner, LpcIntInner,
 };
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::{lpc_bug, LpcError, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::address::Address;
@@ -256,10 +256,10 @@ impl Instruction {
                 *self = Instruction::Jz(*r, address.into());
             }
             _ => {
-                return Err(LpcError::new_bug(format!(
+                return Err(lpc_bug!(
                     "Cannot backpatch instruction {:?}",
                     self
-                )));
+                ));
             }
         }
 

@@ -23,7 +23,8 @@ pub trait ProcessBuilder: WithCompiler {
     /// _without_ initialization.
     async fn process_create_from_path(&self, filename: &LpcPath) -> Result<Arc<Process>>;
 
-    /// Compile the passed code, masquerading as the passed filename, and insert it into the [`ObjectSpace`]
+    /// Compile the passed code, masquerading as the passed filename, and insert it into the [`ObjectSpace`],
+    /// _without_ initialization.
     async fn process_create_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>>
     where
         P: Into<LpcPath> + Send + Sync,
