@@ -69,11 +69,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     let arg = context.resolve_local_register(1 as RegisterSize);
 
     if let LpcRef::String(s) = arg {
-        let path = {
-            let path = s.read();
-            // TODO: is there any way to avoid this clone? Added due to async
-            path.to_string()
-        };
+        let path = s.read().to_string();
 
         let master = load_master(context, &path).await?;
 
