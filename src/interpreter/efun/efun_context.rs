@@ -187,7 +187,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Get the current `chain_count` from the context.
     #[inline]
-    pub fn chain_count(&self) -> u16 {
+    pub fn chain_count(&self) -> u8 {
         self.task_context.chain_count
     }
 

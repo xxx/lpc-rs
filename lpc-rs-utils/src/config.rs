@@ -51,7 +51,7 @@ pub struct Config {
     #[builder(setter(custom), default = "vec![]")]
     pub system_include_dirs: Vec<Ustr>,
 
-    #[builder(default = "2496")]
+    #[builder(default = "24960")]
     pub port: u16,
 }
 

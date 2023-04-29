@@ -32,8 +32,6 @@ use crate::{
     util::{get_simul_efuns, process_builder::ProcessBuilder, with_compiler::WithCompiler},
 };
 
-pub const MAX_CHAIN_COUNT: u16 = 10000;
-
 /// A struct to carry context during the evaluation of a single [`Task`].
 #[derive(Debug, Builder)]
 #[builder(pattern = "owned")]
@@ -89,7 +87,7 @@ pub struct TaskContext {
     /// The number of this task in the current chain of Tasks. This is
     /// used to prevent infinite recursion among multiple Tasks.
     #[builder(default)]
-    pub chain_count: u16,
+    pub chain_count: u8,
 }
 
 impl TaskContext {

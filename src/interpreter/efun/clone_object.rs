@@ -11,6 +11,7 @@ use crate::{
     },
     util::process_builder::ProcessBuilder,
 };
+use crate::compile_time_config::MAX_CLONE_CHAIN;
 
 
 async fn load_master<const N: usize>(
@@ -102,8 +103,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
 
         // if the master is not initialized, we initialize the clone.
         let return_val = if !master.flags.test(ObjectFlags::INITIALIZED) {
-            println!("context.chain_count(): {}", context.chain_count());
-            if context.chain_count() >= 30 {
+            if context.chain_count() >= MAX_CLONE_CHAIN {
                 return Err(context.runtime_error("infinite clone recursion detected"));
             }
 
