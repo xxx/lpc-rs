@@ -1,5 +1,4 @@
-use crate::register::Register;
-use crate::RegisterSize;
+use crate::{register::Register, RegisterSize};
 
 /// A [`Register`]-aware counter, used during code generation.
 #[derive(Debug, Clone, Default)]

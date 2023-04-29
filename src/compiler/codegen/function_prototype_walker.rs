@@ -1,6 +1,5 @@
 use async_trait::async_trait;
-use lpc_rs_core::function_arity::FunctionArity;
-use lpc_rs_core::RegisterSize;
+use lpc_rs_core::{function_arity::FunctionArity, RegisterSize};
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototypeBuilder};
 use lpc_rs_utils::string::closure_arg_number;
@@ -123,9 +122,8 @@ impl TreeWalker for FunctionPrototypeWalker {
     async fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         // Store the prototype now, to allow for forward references.
         let num_args = RegisterSize::try_from(node.parameters.len())?;
-        let num_default_args = RegisterSize::try_from(
-            node.parameters.iter().filter(|p| p.value.is_some()).count()
-        )?;
+        let num_default_args =
+            RegisterSize::try_from(node.parameters.iter().filter(|p| p.value.is_some()).count())?;
 
         let kind = if self.is_simul_efuns() {
             FunctionKind::SimulEfun

@@ -11,13 +11,13 @@ use thin_vec::ThinVec;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
-    compiler::{Compiler},
+    compiler::Compiler,
     interpreter::{
         call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, object_space::ObjectSpace,
         process::Process, task::into_task_context::IntoTaskContext, task_context::TaskContext,
         vm::vm_op::VmOp,
     },
-    util::{with_compiler::WithCompiler},
+    util::with_compiler::WithCompiler,
 };
 
 /// A struct to handle the non-changing Task state, so we can prepare it ahead of time.

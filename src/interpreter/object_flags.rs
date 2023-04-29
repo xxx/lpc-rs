@@ -1,5 +1,7 @@
-use std::ops::{BitAnd, BitOr};
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::{
+    ops::{BitAnd, BitOr},
+    sync::atomic::{AtomicU8, Ordering},
+};
 
 /// Flags for a [`Process`]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -106,11 +108,17 @@ mod tests {
         assert!(flags.test(ObjectFlags::INITIALIZED));
         assert!(flags.test(ObjectFlags::DESTRUCTED));
         assert!(!flags.test(ObjectFlags::CLONE));
-        assert_eq!(flags.clear(ObjectFlags::INITIALIZED), ObjectFlags::INITIALIZED | ObjectFlags::DESTRUCTED);
+        assert_eq!(
+            flags.clear(ObjectFlags::INITIALIZED),
+            ObjectFlags::INITIALIZED | ObjectFlags::DESTRUCTED
+        );
         assert!(!flags.test(ObjectFlags::INITIALIZED));
         assert!(flags.test(ObjectFlags::DESTRUCTED));
         assert!(!flags.test(ObjectFlags::CLONE));
-        assert_eq!(flags.clear(ObjectFlags::DESTRUCTED), ObjectFlags::DESTRUCTED);
+        assert_eq!(
+            flags.clear(ObjectFlags::DESTRUCTED),
+            ObjectFlags::DESTRUCTED
+        );
         assert!(!flags.test(ObjectFlags::INITIALIZED));
         assert!(!flags.test(ObjectFlags::DESTRUCTED));
         assert!(!flags.test(ObjectFlags::CLONE));

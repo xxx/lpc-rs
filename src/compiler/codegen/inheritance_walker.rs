@@ -32,9 +32,10 @@ impl InheritanceWalker {
 
         if let Some(namespace) = &node.namespace {
             if namespace.as_str() == EFUN {
-                return Err(
-                    lpc_error!(node.span, "inheritance namespace `efun` is reserved")
-                );
+                return Err(lpc_error!(
+                    node.span,
+                    "inheritance namespace `efun` is reserved"
+                ));
             }
 
             if self.context.inherit_names.contains_key(namespace.as_str()) {

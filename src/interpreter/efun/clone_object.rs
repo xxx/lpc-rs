@@ -1,18 +1,16 @@
 use std::sync::Arc;
 
-use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_core::RegisterSize;
-use lpc_rs_errors::{Result};
+use lpc_rs_core::{lpc_path::LpcPath, RegisterSize};
+use lpc_rs_errors::Result;
 
 use crate::{
+    compile_time_config::MAX_CLONE_CHAIN,
     interpreter::{
         efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef,
         object_flags::ObjectFlags, process::Process, task::Task,
     },
     util::process_builder::ProcessBuilder,
 };
-use crate::compile_time_config::MAX_CLONE_CHAIN;
-
 
 async fn load_master<const N: usize>(
     context: &mut EfunContext<'_, N>,
@@ -150,15 +148,13 @@ mod tests {
         interpreter::{
             call_outs::CallOuts,
             heap::Heap,
+            lpc_ref::NULL,
             program::Program,
             task_context::{TaskContext, TaskContextBuilder},
-            vm::vm_op::VmOp,
+            vm::{vm_op::VmOp, Vm},
         },
-        test_support::compile_prog,
+        test_support::{compile_prog, test_config},
     };
-    use crate::interpreter::lpc_ref::NULL;
-    use crate::interpreter::vm::Vm;
-    use crate::test_support::test_config;
 
     fn task_context_fixture(
         program: Program,
@@ -235,21 +231,29 @@ mod tests {
         "# };
 
         let vm = Vm::new(test_config());
-        let cloned_proc = vm.process_create_from_code(
-            "cloned.c",
-            cloned
-        ).await.unwrap();
+        let cloned_proc = vm
+            .process_create_from_code("cloned.c", cloned)
+            .await
+            .unwrap();
 
-        assert_eq!(cloned_proc.global_variable_values().get("i").unwrap(), &NULL);
+        assert_eq!(
+            cloned_proc.global_variable_values().get("i").unwrap(),
+            &NULL
+        );
         assert!(!cloned_proc.flags.test(ObjectFlags::INITIALIZED));
 
-        let cloner_proc = vm.process_initialize_from_code(
-            "cloner.c",
-            cloner
-        ).await.unwrap().context.process;
+        let cloner_proc = vm
+            .process_initialize_from_code("cloner.c", cloner)
+            .await
+            .unwrap()
+            .context
+            .process;
         assert!(cloner_proc.flags.test(ObjectFlags::INITIALIZED));
 
-        assert_eq!(cloned_proc.global_variable_values().get("i").unwrap(), &NULL);
+        assert_eq!(
+            cloned_proc.global_variable_values().get("i").unwrap(),
+            &NULL
+        );
         let LpcRef::Object(foo) = cloner_proc.global_variable_values().get("foo").unwrap().clone() else {
             panic!("foo is not an object");
         };
@@ -284,16 +288,16 @@ mod tests {
         "# };
 
         let vm = Vm::new(test_config());
-        let _self_clone_proc = vm.process_create_from_code(
-            "self_clone.c",
-            self_clone
-        ).await.unwrap();
+        let _self_clone_proc = vm
+            .process_create_from_code("self_clone.c", self_clone)
+            .await
+            .unwrap();
 
-        let master_proc = vm.process_initialize_from_code(
-            "master.c",
-            master
-        ).await;
+        let master_proc = vm.process_initialize_from_code("master.c", master).await;
 
-        assert!(master_proc.unwrap_err().to_string().contains("infinite clone recursion detected"));
+        assert!(master_proc
+            .unwrap_err()
+            .to_string()
+            .contains("infinite clone recursion detected"));
     }
 }

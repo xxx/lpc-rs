@@ -1,8 +1,9 @@
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
-use crate::interpreter::object_flags::ObjectFlags;
+use crate::interpreter::{
+    efun::efun_context::EfunContext, lpc_ref::LpcRef, object_flags::ObjectFlags,
+};
 
 /// `destruct`, an efun for deleting objects from the [`ObjectSpace`]
 pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {

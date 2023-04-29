@@ -7,10 +7,9 @@ use std::{
 
 use bit_set::BitSet;
 use delegate::delegate;
-use thin_vec::ThinVec;
-use lpc_rs_core::register::Register;
-use lpc_rs_core::RegisterSize;
+use lpc_rs_core::{register::Register, RegisterSize};
 use lpc_rs_function_support::program_function::ProgramFunction;
+use thin_vec::ThinVec;
 
 use crate::interpreter::{
     gc::mark::Mark,
@@ -68,7 +67,9 @@ impl<T> Bank<T> {
     /// Create a new [`Bank`] from the passed [`Vec`] of `T`s.
     #[inline]
     pub fn new(registers: Vec<T>) -> Self {
-        Self { registers: ThinVec::from(registers) }
+        Self {
+            registers: ThinVec::from(registers),
+        }
     }
 }
 

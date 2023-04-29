@@ -12,7 +12,6 @@ use crate::interpreter::{
     process::Process, program::Program, task::Task, vm::vm_op::VmOp,
 };
 
-
 /// This struct exists solely to allow a Builder to be derived,
 /// making calls to Task::initialize_program more ergonomic.
 #[derive(Debug, Builder)]

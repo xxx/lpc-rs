@@ -9,7 +9,9 @@ use lpc_rs_core::{
     pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
     LpcIntInner,
 };
-use lpc_rs_errors::{format_expected, lazy_files::FILE_CACHE, span::Span, LpcError, Result, lpc_error};
+use lpc_rs_errors::{
+    format_expected, lazy_files::FILE_CACHE, lpc_error, span::Span, LpcError, Result,
+};
 use lpc_rs_utils::read_lpc_file;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -291,9 +293,10 @@ impl Preprocessor {
         }
 
         if let Some(ifdef) = self.ifdefs.last() {
-            return Err(
-                lpc_error!(Some(ifdef.span), "Found `#if` without a corresponding `#endif`"),
-            );
+            return Err(lpc_error!(
+                Some(ifdef.span),
+                "Found `#if` without a corresponding `#endif`"
+            ));
         }
 
         Ok(output)
@@ -338,15 +341,19 @@ impl Preprocessor {
             }
             Some(Define::Function(function)) => {
                 if !matches!(iter.peek(), Some(Ok((_, Token::LParen(_), _)))) {
-                    return Err(lpc_error!(Some(token.0), "functional macro call missing arguments"));
+                    return Err(lpc_error!(
+                        Some(token.0),
+                        "functional macro call missing arguments"
+                    ));
                 }
 
                 let args = Preprocessor::consume_macro_arguments(iter, span)?;
 
                 if args.len() != function.args.len() {
-                    return Err(
-                        lpc_error!(Some(span), "incorrect number of macro arguments")
-                    );
+                    return Err(lpc_error!(
+                        Some(span),
+                        "incorrect number of macro arguments"
+                    ));
                 }
 
                 let arg_map = function
@@ -517,7 +524,8 @@ impl Preprocessor {
                         return Err(lpc_error!(
                             Some(token.0),
                             "parse error: {}, for expression `{}`",
-                            e, &captures[2]
+                            e,
+                            &captures[2]
                         ))
                     }
                 }
@@ -748,9 +756,7 @@ impl Preprocessor {
                         Define::Function(_) => Ok(0),
                     }
                 } else {
-                    Err(
-                        lpc_error!(span, "unable to resolve into an int: `{}`", x)
-                    )
+                    Err(lpc_error!(span, "unable to resolve into an int: `{}`", x))
                 }
             }
             PreprocessorNode::Int(i) => Ok(*i),
@@ -776,7 +782,7 @@ impl Preprocessor {
                 span,
                 "attempt to convert unknown node type to int: `{}`",
                 expr
-            ))
+            )),
         }
     }
 
@@ -856,9 +862,10 @@ impl Preprocessor {
         self.check_for_previous_newline(token.0)?;
 
         if self.ifdefs.is_empty() {
-            return Err(
-                lpc_error!(Some(token.0), "found `#endif` without a corresponding `#if`"),
-            );
+            return Err(lpc_error!(
+                Some(token.0),
+                "found `#endif` without a corresponding `#if`"
+            ));
         }
 
         self.ifdefs.pop();
@@ -880,9 +887,7 @@ impl Preprocessor {
                     RESIDENT => self.context.pragmas.set_resident(true),
                     STRICT_TYPES => self.context.pragmas.set_strict_types(true),
                     x => {
-                        return Err(
-                            lpc_error!(Some(token.0), "unknown pragma `{}`", x)
-                        );
+                        return Err(lpc_error!(Some(token.0), "unknown pragma `{}`", x));
                     }
                 }
             }
@@ -930,9 +935,12 @@ impl Preprocessor {
         let file_content = match read_lpc_file(&canon_include_path).await {
             Ok(content) => content,
             Err(e) => {
-                return Err(
-                    lpc_error!(span, "unable to read include file `{}`: {:?}", path, e)
-                );
+                return Err(lpc_error!(
+                    span,
+                    "unable to read include file `{}`: {:?}",
+                    path,
+                    e
+                ));
             }
         };
 

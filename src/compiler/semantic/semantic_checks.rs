@@ -94,7 +94,11 @@ pub fn check_binary_operation_types(
         lpc_error!(
             node.span,
             "Mismatched types: `{}` ({}) {} `{}` ({})",
-            node.l, left_type, op, node.r, right_type
+            node.l,
+            left_type,
+            op,
+            node.r,
+            right_type
         )
     }
 
@@ -244,7 +248,10 @@ pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationCont
         lpc_error!(
             node.span,
             "Invalid Type: `{}` `{}` ({}). Expected {}",
-            node.op, node.expr, expr_type, expected
+            node.op,
+            node.expr,
+            expr_type,
+            expected
         )
     };
 
@@ -325,9 +332,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                             if var.type_.matches_type(LpcType::Function(false)) {
                                 or_else()
                             } else {
-                                Err(lpc_error!(
-                                    "invalid call: `{}` is not a function", name
-                                ))
+                                Err(lpc_error!("invalid call: `{}` is not a function", name))
                             }
                         })
                 }
@@ -340,9 +345,10 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                 let len = value.len();
                 node_type(&value[len - 1], context)
             } else {
-                Err(
-                    lpc_bug!(node.span(), "We've somehow created an empty CommaExpression node")
-                )
+                Err(lpc_bug!(
+                    node.span(),
+                    "We've somehow created an empty CommaExpression node"
+                ))
             }
         }
         ExpressionNode::Float(_) => Ok(LpcType::Float(false)),

@@ -3,17 +3,16 @@ use std::{future::Future, path::Path, sync::Arc};
 use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{Result};
-
+use lpc_rs_errors::Result;
 
 use crate::{
-    compile_time_config::{MAX_CALL_STACK_SIZE},
-    compiler::{Compiler},
+    compile_time_config::MAX_CALL_STACK_SIZE,
+    compiler::Compiler,
     interpreter::{
         process::Process,
         task::{task_template::TaskTemplate, Task},
         task_context::TaskContext,
-        vm::{Vm},
+        vm::Vm,
     },
     util::{process_builder::ProcessBuilder, with_compiler::WithCompiler},
 };

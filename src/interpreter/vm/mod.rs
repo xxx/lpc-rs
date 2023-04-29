@@ -1,4 +1,4 @@
-use std::{sync::Arc};
+use std::sync::Arc;
 
 use bit_set::BitSet;
 use flume::Sender as FlumeSender;
@@ -25,7 +25,7 @@ use crate::{
         heap::Heap,
         object_space::ObjectSpace,
         process::Process,
-        task::{apply_function::apply_function_in_master},
+        task::apply_function::apply_function_in_master,
         task_context::TaskContext,
         SHUTDOWN,
     },

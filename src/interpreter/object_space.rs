@@ -5,8 +5,8 @@ use std::{
         Arc,
     },
 };
-use arc_swap::ArcSwapAny;
 
+use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use bit_set::BitSet;
 use dashmap::{
@@ -14,14 +14,13 @@ use dashmap::{
     DashMap,
 };
 use delegate::delegate;
-
 use lpc_rs_utils::config::Config;
 use tracing::{debug, trace};
 
 use crate::{
-    compiler::{Compiler},
+    compiler::Compiler,
     interpreter::{gc::mark::Mark, process::Process, program::Program},
-    util::{with_compiler::WithCompiler},
+    util::with_compiler::WithCompiler,
 };
 
 /// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
@@ -226,8 +225,9 @@ mod tests {
     use ustr::ustr;
 
     use super::*;
-    use crate::interpreter::{heap::Heap, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray};
-    use crate::interpreter::program::ProgramBuilder;
+    use crate::interpreter::{
+        heap::Heap, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray, program::ProgramBuilder,
+    };
 
     // #[test]
     // fn test_insert_master() {

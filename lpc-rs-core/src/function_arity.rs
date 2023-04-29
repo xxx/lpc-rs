@@ -1,5 +1,6 @@
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
+
 use crate::RegisterSize;
 
 /// A struct to hold data about a function's expected arity at call time.

@@ -1,7 +1,7 @@
 use if_chain::if_chain;
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 use tracing::trace;
-use lpc_rs_core::RegisterSize;
 
 use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},

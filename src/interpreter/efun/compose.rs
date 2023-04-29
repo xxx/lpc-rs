@@ -1,7 +1,13 @@
 use std::sync::Arc;
 
 use lpc_rs_asm::instruction::Instruction;
-use lpc_rs_core::{function_arity::FunctionArityBuilder, function_flags::FunctionFlags, lpc_type::LpcType, register::{Register, RegisterVariant}, RegisterSize};
+use lpc_rs_core::{
+    function_arity::FunctionArityBuilder,
+    function_flags::FunctionFlags,
+    lpc_type::LpcType,
+    register::{Register, RegisterVariant},
+    RegisterSize,
+};
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::{
     function_prototype::FunctionPrototypeBuilder,
@@ -48,7 +54,9 @@ pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
         Instruction::ClearArgs,
         Instruction::PushArg(RegisterVariant::Local(Register(2))),
         Instruction::PushArg(RegisterVariant::Local(Register(3))),
-        Instruction::CallEfun(u8::try_from(EFUN_PROTOTYPES.get_index_of("papplyv").unwrap()).unwrap()), // papplyv()
+        Instruction::CallEfun(
+            u8::try_from(EFUN_PROTOTYPES.get_index_of("papplyv").unwrap()).unwrap(),
+        ), // papplyv()
         Instruction::Copy(
             RegisterVariant::Local(Register(0)),
             RegisterVariant::Local(Register(4)),

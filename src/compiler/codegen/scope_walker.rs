@@ -4,7 +4,7 @@ use itertools::Itertools;
 use lpc_rs_core::{
     call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType, ScopeId,
 };
-use lpc_rs_errors::{span::Span, LpcError, Result, lpc_error, lpc_bug};
+use lpc_rs_errors::{lpc_bug, lpc_error, span::Span, LpcError, Result};
 use lpc_rs_function_support::symbol::Symbol;
 use tracing::trace;
 

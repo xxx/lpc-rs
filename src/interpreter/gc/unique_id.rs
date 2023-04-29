@@ -1,8 +1,7 @@
 use std::{
     fmt::{Display, Formatter},
-    sync::atomic::{Ordering},
+    sync::atomic::{AtomicU32, Ordering},
 };
-use std::sync::atomic::AtomicU32;
 
 use serde::{Deserialize, Serialize};
 

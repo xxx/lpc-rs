@@ -113,7 +113,7 @@ mod tests {
             into_lpc_ref::IntoLpcRef,
         },
         test_support::test_config,
-        util::{process_builder::ProcessBuilder},
+        util::process_builder::ProcessBuilder,
     };
 
     #[tokio::test]

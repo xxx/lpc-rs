@@ -212,7 +212,10 @@ mod tests {
     fn test_mark() {
         let memory = Heap::new(5);
 
-        let ptr = create!(FunctionPtr, upvalue_ptrs: thin_vec![Register(4), Register(33)]);
+        let ptr = create!(
+            FunctionPtr,
+            upvalue_ptrs: thin_vec![Register(4), Register(33)]
+        );
         let ptr_id = *ptr.unique_id.as_ref();
 
         let function_ref = ptr.into_lpc_ref(&memory);
@@ -228,7 +231,8 @@ mod tests {
         marked_expected.extend([4_usize, 33_usize].into_iter());
 
         let mut processed_expected = BitSet::new();
-        processed_expected.extend([ptr_id as usize, *array.unique_id.as_ref() as usize].into_iter());
+        processed_expected
+            .extend([ptr_id as usize, *array.unique_id.as_ref() as usize].into_iter());
 
         assert_eq!(marked, marked_expected);
         assert_eq!(processed, processed_expected);

@@ -13,7 +13,7 @@ use derive_builder::Builder;
 use educe::Educe;
 use lexer::{Spanned, Token, TokenVecWrapper};
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{span::Span, LpcError, LpcErrorSeverity, Result, lpc_error};
+use lpc_rs_errors::{lpc_error, span::Span, LpcError, LpcErrorSeverity, Result};
 use lpc_rs_utils::{config::Config, read_lpc_file};
 use preprocessor::Preprocessor;
 use tracing::instrument;

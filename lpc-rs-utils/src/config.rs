@@ -116,9 +116,7 @@ impl ConfigBuilder {
             server_log_file: env
                 .get("LPC_SERVER_LOG_FILE")
                 .or_else(|| env.get("SERVER_LOG_FILE"))
-                .map(|x| {
-                    canonicalized_path(x).ok()
-                })
+                .map(|x| canonicalized_path(x).ok())
                 .or(self.server_log_file),
             debug_log: Some(Some(debug_log)),
             lib_dir,
@@ -157,10 +155,13 @@ impl ConfigBuilder {
                 .get("LPC_SYSTEM_INCLUDE_DIRS")
                 .or_else(|| env.get("SYSTEM_INCLUDE_DIRS"))
                 .map(|x| {
-                    x.split(':').map(|x| {
-                        let canon = canonicalize_in_game_path(x, "/", lib_dir.unwrap().as_str());
-                        canon.to_string_lossy().as_ref().into()
-                    }).collect::<Vec<_>>()
+                    x.split(':')
+                        .map(|x| {
+                            let canon =
+                                canonicalize_in_game_path(x, "/", lib_dir.unwrap().as_str());
+                            canon.to_string_lossy().as_ref().into()
+                        })
+                        .collect::<Vec<_>>()
                 })
                 .or_else(|| self.system_include_dirs.clone()),
         };

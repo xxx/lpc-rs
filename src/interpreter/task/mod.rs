@@ -21,8 +21,13 @@ use if_chain::if_chain;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_asm::{address::Address, instruction::Instruction};
-use lpc_rs_core::{function_receiver::FunctionReceiver, lpc_type::LpcType, register::{Register, RegisterVariant}, LpcIntInner, RegisterSize};
-use lpc_rs_errors::{lpc_bug, span::Span, LpcError, Result, lpc_error};
+use lpc_rs_core::{
+    function_receiver::FunctionReceiver,
+    lpc_type::LpcType,
+    register::{Register, RegisterVariant},
+    LpcIntInner, RegisterSize,
+};
+use lpc_rs_errors::{lpc_bug, lpc_error, span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
@@ -373,7 +378,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(e)) => Err(e),
             Err(_) => Err(lpc_error!(
-                "evaluation limit of {}ms has been reached", timeout_ms
+                "evaluation limit of {}ms has been reached",
+                timeout_ms
             )),
         }
     }
@@ -1666,7 +1672,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .upvalue_ptrs
             .iter()
             .map(|ptr| {
-                let upvalue = upvalues.get(ptr.index() as usize).cloned().unwrap_or_default();
+                let upvalue = upvalues
+                    .get(ptr.index() as usize)
+                    .cloned()
+                    .unwrap_or_default();
                 let new_index = RegisterSize::try_from(upvalues.insert(upvalue))?;
                 Ok(Register(new_index))
             })

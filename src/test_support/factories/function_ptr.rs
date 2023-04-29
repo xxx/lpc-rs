@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use factori::factori;
-use ustr::ustr;
 use thin_vec::thin_vec;
+use ustr::ustr;
 
 use crate::interpreter::{
     function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},

@@ -3,10 +3,9 @@
 use std::sync::Arc;
 
 use clap::Parser;
+use lpc_rs::{interpreter::vm::Vm, util::process_builder::ProcessBuilder};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::ConfigBuilder;
-use lpc_rs::interpreter::vm::Vm;
-use lpc_rs::util::process_builder::ProcessBuilder;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -35,8 +34,11 @@ async fn main() {
     let lpc_path = LpcPath::new_server(&args.filename);
 
     let vm = Vm::new(config);
-    vm.process_initialize_from_path(&lpc_path).await.map_err(|e| {
-        e.emit_diagnostics();
-        e
-    }).unwrap();
+    vm.process_initialize_from_path(&lpc_path)
+        .await
+        .map_err(|e| {
+            e.emit_diagnostics();
+            e
+        })
+        .unwrap();
 }

@@ -114,8 +114,7 @@ impl SemanticCheckWalker {
 
         if receiver.is_some() {
             if namespace != &CallNamespace::Local {
-                let e =
-                    lpc_error!(node.span, "namespaced `call_other` is not allowed");
+                let e = lpc_error!(node.span, "namespaced `call_other` is not allowed");
                 self.context.errors.push(e);
             }
 
@@ -127,8 +126,7 @@ impl SemanticCheckWalker {
             if !self.context.inherit_names.contains_key(namespace.as_str())
                 && namespace.as_str() != EFUN
             {
-                let e =
-                    lpc_error!(node.span, "unknown namespace `{}`", namespace);
+                let e = lpc_error!(node.span, "unknown namespace `{}`", namespace);
                 self.context.errors.push(e);
             }
         }
@@ -143,8 +141,7 @@ impl SemanticCheckWalker {
             // check for function pointers & closures
             && (lookup.is_none() || !lookup.unwrap().type_.matches_type(LpcType::Function(false)))
         {
-            let e =
-                lpc_error!(node.span, "call to unknown function `{}`", name);
+            let e = lpc_error!(node.span, "call to unknown function `{}`", name);
             self.context.errors.push(e);
             // Non-fatal. Continue.
         }
@@ -249,7 +246,10 @@ impl TreeWalker for SemanticCheckWalker {
             let e: Box<LpcError> = lpc_error!(
                 node.span,
                 "Mismatched types: `{}` ({}) = `{}` ({})",
-                node.lhs, left_type, node.rhs, right_type
+                node.lhs,
+                left_type,
+                node.rhs,
+                right_type
             );
 
             self.context.errors.push(e.clone());
@@ -728,7 +728,10 @@ impl TreeWalker for SemanticCheckWalker {
                 let e = lpc_error!(
                     node.span,
                     "mismatched types: `{}` ({}) = `{}` ({})",
-                    node.name, node.type_, expression, expr_type
+                    node.name,
+                    node.type_,
+                    expression,
+                    expr_type
                 );
 
                 self.context.errors.push(e);

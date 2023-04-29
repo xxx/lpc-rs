@@ -22,12 +22,11 @@ use crate::{
         process::Process,
         program::Program,
         task::{get_location, Task},
-        task_context::TaskContext,
+        task_context::{TaskContext, TaskContextBuilder},
         vm::vm_op::VmOp,
     },
     util::{process_builder::ProcessBuilder, with_compiler::WithCompiler},
 };
-use crate::interpreter::task_context::TaskContextBuilder;
 
 /// A structure to hold various pieces of interpreter state, to be passed to
 /// Efuns when they're called

@@ -63,8 +63,8 @@ fn collapse_add(
                 span: Some(span),
             }),
             ExpressionNode::String(node2) => {
-                let value = concatenate_strings(node.value.to_string(), node2.value)
-                    .map_err(|mut e| {
+                let value =
+                    concatenate_strings(node.value.to_string(), node2.value).map_err(|mut e| {
                         *e = e.with_span(Some(span));
                         e
                         // (*e).with_span(Some(span))
@@ -94,8 +94,8 @@ fn collapse_add(
                 }
                 // concat string literals
                 ExpressionNode::String(node2) => {
-                    let value = concatenate_strings(&*node.value, node2.value)
-                        .map_err(|mut e| {
+                    let value =
+                        concatenate_strings(&*node.value, node2.value).map_err(|mut e| {
                             *e = e.with_span(Some(span));
                             e
                         })?;
@@ -311,12 +311,11 @@ fn collapse_repeat_string(
     amount: LpcIntInner,
     span: Span,
 ) -> Result<ExpressionNode, ParseError<usize, lexer::Token, Box<LpcError>>> {
-    let value =
-        string::repeat_string(string.as_str(), amount).map_err(|mut e| {
-            *e = e.with_span(Some(span));
+    let value = string::repeat_string(string.as_str(), amount).map_err(|mut e| {
+        *e = e.with_span(Some(span));
 
-            e
-        })?;
+        e
+    })?;
     let node = ExpressionNode::String(StringNode {
         value,
         span: Some(span),

@@ -5,7 +5,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use lpc_rs_errors::{span::Span, LpcError, Result, lpc_error};
+use lpc_rs_errors::{lpc_error, span::Span, LpcError, Result};
 
 use crate::compiler::{
     ast::{

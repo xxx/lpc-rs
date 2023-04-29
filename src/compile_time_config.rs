@@ -24,4 +24,3 @@ pub const VM_CHANNEL_CAPACITY: usize = 1024;
 /// If this is set too high, the thread-local stack will overflow before this
 /// limit is reached.
 pub const MAX_CLONE_CHAIN: u8 = 20;
-

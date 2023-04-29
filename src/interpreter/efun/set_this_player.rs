@@ -1,6 +1,6 @@
 use std::sync::Arc;
-use lpc_rs_core::RegisterSize;
 
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -12,7 +12,7 @@ use crate::interpreter::{
 
 /// `set_this_player`, an efun for setting a new command giver for the current Task
 pub async fn set_this_player<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let new = context.resolve_local_register(1  as RegisterSize);
+    let new = context.resolve_local_register(1 as RegisterSize);
 
     let new_value = match new {
         LpcRef::Int(LpcInt(0)) => None,

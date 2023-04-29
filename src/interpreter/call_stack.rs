@@ -3,7 +3,7 @@ use std::ops::{Index, IndexMut};
 use arrayvec::ArrayVec;
 use bit_set::BitSet;
 use delegate::delegate;
-use lpc_rs_errors::{span::Span, LpcError, Result, lpc_error, lpc_bug};
+use lpc_rs_errors::{lpc_bug, lpc_error, span::Span, LpcError, Result};
 
 use crate::interpreter::{call_frame::CallFrame, gc::mark::Mark, lpc_ref::LpcRef};
 

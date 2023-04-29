@@ -7,6 +7,7 @@ use lpc_rs_errors::{lpc_bug, Result};
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
+        object_flags::ObjectFlags,
         object_space::ObjectSpace,
         process::Process,
         program::Program,
@@ -14,7 +15,6 @@ use crate::{
     },
     util::with_compiler::WithCompiler,
 };
-use crate::interpreter::object_flags::ObjectFlags;
 
 /// A convenience trait for creating and initializing [`Process`]es.
 #[async_trait]
@@ -85,7 +85,6 @@ pub trait ProcessBuilder: WithCompiler {
         let mut task = Task::<MAX_CALL_STACK_SIZE>::new(ctx);
         task.timed_eval(prog_function, &[], max_execution_time)
             .await?;
-
 
         Ok(task)
     }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
-use lpc_rs_core::RegisterSize;
 
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{

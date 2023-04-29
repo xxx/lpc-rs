@@ -8,8 +8,16 @@ use lpc_rs_asm::{
     address::{Address, Label},
     instruction::Instruction,
 };
-use lpc_rs_core::{call_namespace::CallNamespace, function_receiver::FunctionReceiver, lpc_type::LpcType, mangle::Mangle, register::{Register, RegisterVariant}, register_counter::RegisterCounter, ScopeId, CREATE_FUNCTION, INIT_PROGRAM, RegisterSize};
-use lpc_rs_errors::{span::Span, LpcError, Result, lpc_bug, lpc_error, lpc_warning};
+use lpc_rs_core::{
+    call_namespace::CallNamespace,
+    function_receiver::FunctionReceiver,
+    lpc_type::LpcType,
+    mangle::Mangle,
+    register::{Register, RegisterVariant},
+    register_counter::RegisterCounter,
+    RegisterSize, ScopeId, CREATE_FUNCTION, INIT_PROGRAM,
+};
+use lpc_rs_errors::{lpc_bug, lpc_error, lpc_warning, span::Span, LpcError, Result};
 use lpc_rs_function_support::{
     function_prototype::{FunctionKind, FunctionPrototypeBuilder},
     program_function::{ProgramFunction, ProgramFunctionBuilder},
@@ -281,7 +289,8 @@ impl CodegenWalker {
                     a,
                     b,
                     &func.name()
-                )).into());
+                ))
+                .into());
             }
         }
 
@@ -1067,9 +1076,11 @@ impl TreeWalker for CodegenWalker {
                 self.current_result = rhs_result;
             }
             x => {
-                return Err(
-                    lpc_error!(node.span, "Attempt to assign to an invalid lvalue: `{}`", x)
-                )
+                return Err(lpc_error!(
+                    node.span,
+                    "Attempt to assign to an invalid lvalue: `{}`",
+                    x
+                ))
             }
         }
 
@@ -1147,7 +1158,9 @@ impl TreeWalker for CodegenWalker {
                 push_instruction!(self, Instruction::PushArg(reg_right), node.span);
                 push_instruction!(
                     self,
-                    Instruction::CallEfun(u8::try_from(EFUN_PROTOTYPES.get_index_of("compose").unwrap())?),
+                    Instruction::CallEfun(u8::try_from(
+                        EFUN_PROTOTYPES.get_index_of("compose").unwrap()
+                    )?),
                     node.span
                 );
 
@@ -1196,7 +1209,10 @@ impl TreeWalker for CodegenWalker {
             return Ok(());
         }
 
-        Err(lpc_bug!(node.span, "`break` statement without a jump target?"))
+        Err(lpc_bug!(
+            node.span,
+            "`break` statement without a jump target?"
+        ))
     }
 
     #[instrument(skip_all)]
@@ -1230,9 +1246,11 @@ impl TreeWalker for CodegenWalker {
         if let Some(scope_id) = node.scope_id {
             self.closure_scope_stack.push(scope_id);
         } else {
-            return Err(
-                lpc_error!(node.span, "closure scope for {} not found", node.name)
-            );
+            return Err(lpc_error!(
+                node.span,
+                "closure scope for {} not found",
+                node.name
+            ));
         }
 
         let len = self.current_address();
@@ -1365,7 +1383,10 @@ impl TreeWalker for CodegenWalker {
             return Ok(());
         }
 
-        Err(lpc_error!(node.span, "`continue` statement without a jump target?"))
+        Err(lpc_error!(
+            node.span,
+            "`continue` statement without a jump target?"
+        ))
     }
 
     #[instrument(skip_all)]
@@ -1608,12 +1629,10 @@ impl TreeWalker for CodegenWalker {
                     && *sym.instructions.last().unwrap() != Instruction::Ret)
             {
                 if sym.return_type() != LpcType::Void {
-                    self.context.errors.push(
-                        lpc_warning!(
-                            node.span,
-                            "non-void function does not return a value. defaulting to 0."
-                        )
-                    );
+                    self.context.errors.push(lpc_warning!(
+                        node.span,
+                        "non-void function does not return a value. defaulting to 0."
+                    ));
                 }
                 sym.push_instruction(Instruction::Ret, node.span);
             }
@@ -1801,7 +1820,7 @@ impl TreeWalker for CodegenWalker {
             None => Err(lpc_error!(
                 node.span,
                 "Found a label in the code generator, but nowhere to store the address?",
-            ))
+            )),
         }
     }
 

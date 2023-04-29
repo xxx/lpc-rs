@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter};
 
 use serde::{Deserialize, Serialize};
+
 use crate::RegisterSize;
 
 /// A struct to handle the split between normal, in-function registers,

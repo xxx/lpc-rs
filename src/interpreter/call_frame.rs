@@ -8,13 +8,15 @@ use bit_set::BitSet;
 use derive_builder::Builder;
 use educe::Educe;
 use lpc_rs_asm::instruction::Instruction;
-use lpc_rs_core::register::{Register, RegisterVariant};
+use lpc_rs_core::{
+    register::{Register, RegisterVariant},
+    RegisterSize,
+};
 use lpc_rs_errors::{lpc_bug, lpc_error, span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use parking_lot::RwLock;
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
-use lpc_rs_core::RegisterSize;
 
 use crate::interpreter::{
     bank::RefBank,
@@ -187,7 +189,8 @@ impl CallFrame {
 
         for _ in 0..num_upvalues {
             let idx = upvalues.insert(NULL);
-            self.upvalue_ptrs.push(Register(RegisterSize::try_from(idx).unwrap()));
+            self.upvalue_ptrs
+                .push(Register(RegisterSize::try_from(idx).unwrap()));
         }
     }
 
@@ -306,7 +309,11 @@ impl Mark for CallFrame {
 
         trace!("marking upvalue ptrs: {:?}", &self.upvalue_ptrs);
 
-        let ptrs = self.upvalue_ptrs.iter().copied().map(|r| r.index() as usize);
+        let ptrs = self
+            .upvalue_ptrs
+            .iter()
+            .copied()
+            .map(|r| r.index() as usize);
 
         marked.extend(ptrs);
 

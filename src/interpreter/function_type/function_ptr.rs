@@ -153,9 +153,7 @@ impl FunctionPtr {
             FunctionAddress::SimulEfun(name) => match get_simul_efuns(config, object_space) {
                 Some(simul_efuns) => match simul_efuns.program.lookup_function(name) {
                     Some(function) => Ok((simul_efuns.clone(), function.clone(), args)),
-                    None => Err(lpc_error!(
-                        "call to unknown simul_efun `{}`", name
-                    )),
+                    None => Err(lpc_error!("call to unknown simul_efun `{}`", name)),
                 },
                 None => Err(lpc_bug!(
                     "function pointer to simul_efun passed, but no simul_efuns?",
@@ -181,7 +179,12 @@ impl Mark for FunctionPtr {
 
         trace!("marking upvalue ptrs: {:?}", &self.upvalue_ptrs);
 
-        marked.extend(self.upvalue_ptrs.iter().copied().map(|r| r.index() as usize));
+        marked.extend(
+            self.upvalue_ptrs
+                .iter()
+                .copied()
+                .map(|r| r.index() as usize),
+        );
 
         Ok(())
     }

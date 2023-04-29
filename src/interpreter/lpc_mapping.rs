@@ -6,7 +6,6 @@ use if_chain::if_chain;
 use indexmap::IndexMap;
 use tracing::{instrument, trace};
 
-
 use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
     heap::Heap,
@@ -144,21 +143,27 @@ impl IntoLpcRef for LpcMapping {
 #[cfg(test)]
 mod tests {
     use factori::create;
+    use lpc_rs_core::register::Register;
     use thin_vec::thin_vec;
 
     use super::*;
     use crate::test_support::factories::*;
-    use lpc_rs_core::register::Register;
 
     #[test]
     fn test_mark() {
         let memory = Heap::new(5);
 
-        let ptr = create!(FunctionPtr, upvalue_ptrs: thin_vec![Register(4), Register(33)]);
+        let ptr = create!(
+            FunctionPtr,
+            upvalue_ptrs: thin_vec![Register(4), Register(33)]
+        );
         let key_id = *ptr.unique_id.as_ref();
         let key_ref = ptr.into_lpc_ref(&memory);
 
-        let ptr2 = create!(FunctionPtr, upvalue_ptrs: thin_vec![Register(4), Register(666)]);
+        let ptr2 = create!(
+            FunctionPtr,
+            upvalue_ptrs: thin_vec![Register(4), Register(666)]
+        );
         let value_id = *ptr2.unique_id.as_ref();
         let value_ref = ptr2.into_lpc_ref(&memory);
 
@@ -177,7 +182,14 @@ mod tests {
         assert_eq!(marked, marked_expected);
 
         let mut processed_expected = BitSet::new();
-        processed_expected.extend([key_id as usize, value_id as usize, (*mapping.unique_id.as_ref() as usize)].into_iter());
+        processed_expected.extend(
+            [
+                key_id as usize,
+                value_id as usize,
+                (*mapping.unique_id.as_ref() as usize),
+            ]
+            .into_iter(),
+        );
 
         assert_eq!(processed, processed_expected);
     }

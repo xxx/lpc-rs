@@ -5,9 +5,9 @@ use std::{
     fmt::{Debug, Display, Formatter},
     fs::OpenOptions,
     hash::{Hash, Hasher},
+    num::TryFromIntError,
     result,
 };
-use std::num::TryFromIntError;
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label, LabelStyle},

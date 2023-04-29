@@ -94,7 +94,7 @@ impl LpcRef {
 
                 Ok(())
             }
-            _ => Err(lpc_error!("runtime error: invalid increment"))
+            _ => Err(lpc_error!("runtime error: invalid increment")),
         }
     }
 

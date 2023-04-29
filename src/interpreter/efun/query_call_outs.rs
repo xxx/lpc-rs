@@ -1,6 +1,6 @@
 use std::sync::Arc;
-use lpc_rs_core::RegisterSize;
 
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -13,7 +13,7 @@ use crate::interpreter::{
 
 /// `query_call_outs`, an efun for returning information about all call outs in a specific object
 pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let owner = match context.resolve_local_register(1  as RegisterSize) {
+    let owner = match context.resolve_local_register(1 as RegisterSize) {
         LpcRef::Object(process) => process.upgrade(),
         LpcRef::Int(LpcInt(0)) => Some(context.frame().process.clone()),
         _ => return Err(context.runtime_error("non-object sent to `query_call_outs`")),

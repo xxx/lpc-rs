@@ -3,7 +3,10 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use lpc_rs_core::{function_receiver::FunctionReceiver, register::RegisterVariant, LpcFloatInner, LpcIntInner, RegisterSize};
+use lpc_rs_core::{
+    function_receiver::FunctionReceiver, register::RegisterVariant, LpcFloatInner, LpcIntInner,
+    RegisterSize,
+};
 use lpc_rs_errors::{lpc_bug, Result};
 use serde::{Deserialize, Serialize};
 
@@ -254,10 +257,7 @@ impl Instruction {
                 *self = Instruction::Jz(*r, address.into());
             }
             _ => {
-                return Err(lpc_bug!(
-                    "Cannot backpatch instruction {:?}",
-                    self
-                ));
+                return Err(lpc_bug!("Cannot backpatch instruction {:?}", self));
             }
         }
 

@@ -1,8 +1,4 @@
-use std::{
-    future::Future,
-    path::{PathBuf},
-    sync::Arc,
-};
+use std::{future::Future, path::PathBuf, sync::Arc};
 
 use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
@@ -17,7 +13,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::{Compiler},
+    compiler::Compiler,
     interpreter::{
         call_outs::CallOuts,
         gc::gc_bank::GcRefBank,

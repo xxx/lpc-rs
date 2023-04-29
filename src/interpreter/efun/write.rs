@@ -28,7 +28,8 @@ pub async fn apply_catch_tell<const N: usize>(
         return Ok(());
     };
 
-    let ctx = context.task_context_builder()
+    let ctx = context
+        .task_context_builder()
         .process(this_player.clone())
         .build()
         .unwrap();

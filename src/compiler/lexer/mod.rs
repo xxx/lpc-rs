@@ -6,7 +6,12 @@ use std::{
 
 use logos::{Lexer, Logos};
 use lpc_rs_core::{convert_escapes, BaseFloat, LpcIntInner};
-use lpc_rs_errors::{lazy_files::FileId, span::{HasSpan, Span}, Result, lpc_error};
+use lpc_rs_errors::{
+    lazy_files::FileId,
+    lpc_error,
+    span::{HasSpan, Span},
+    Result,
+};
 
 use crate::compiler::lexer::{
     lex_state::LexState,

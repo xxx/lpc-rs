@@ -1,5 +1,4 @@
-use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_core::RegisterSize;
+use lpc_rs_core::{lpc_path::LpcPath, RegisterSize};
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -12,7 +11,7 @@ use crate::interpreter::{
 /// `file_name`, an efun for returning the full path and clone number of an
 /// object
 pub async fn file_name<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let arg_ref = context.resolve_local_register(1  as RegisterSize);
+    let arg_ref = context.resolve_local_register(1 as RegisterSize);
     let result = match arg_ref {
         LpcRef::Float(_)
         | LpcRef::Int(_)

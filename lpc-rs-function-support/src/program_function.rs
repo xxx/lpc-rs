@@ -10,7 +10,10 @@ use lpc_rs_asm::{
     address::{Address, Label},
     instruction::Instruction,
 };
-use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType, mangle::Mangle, register::RegisterVariant, RegisterSize};
+use lpc_rs_core::{
+    function_arity::FunctionArity, lpc_type::LpcType, mangle::Mangle, register::RegisterVariant,
+    RegisterSize,
+};
 use lpc_rs_errors::span::Span;
 use multimap::MultiMap;
 use once_cell::sync::OnceCell;
