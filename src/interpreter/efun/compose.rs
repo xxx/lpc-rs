@@ -48,7 +48,7 @@ pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
         Instruction::ClearArgs,
         Instruction::PushArg(RegisterVariant::Local(Register(2))),
         Instruction::PushArg(RegisterVariant::Local(Register(3))),
-        Instruction::CallEfun(EFUN_PROTOTYPES.get_index_of("papplyv").unwrap()), // papplyv()
+        Instruction::CallEfun(u8::try_from(EFUN_PROTOTYPES.get_index_of("papplyv").unwrap()).unwrap()), // papplyv()
         Instruction::Copy(
             RegisterVariant::Local(Register(0)),
             RegisterVariant::Local(Register(4)),

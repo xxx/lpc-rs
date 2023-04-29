@@ -1357,6 +1357,7 @@ dependencies = [
  "lpc-rs-core",
  "lpc-rs-errors",
  "serde",
+ "static_assertions",
 ]
 
 [[package]]

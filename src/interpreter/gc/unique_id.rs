@@ -1,6 +1,6 @@
 use std::{
     fmt::{Display, Formatter},
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{Ordering},
 };
 use std::sync::atomic::AtomicU32;
 

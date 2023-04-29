@@ -27,13 +27,13 @@ pub enum Instruction {
     /// Call a function in the current object.
     /// The `usize` is an index into the object's `strings` table.
     /// TODO: make this index directly into the list of functions
-    Call(usize),
+    Call(RegisterSize),
 
     /// Call an Efun. x.0 is the index into the `EFUN_PROTOTYPES` map.
-    CallEfun(usize),
+    CallEfun(u8),
 
     /// Call a simulated efun. x.0 is the index into the caller's `strings` table.
-    CallSimulEfun(usize),
+    CallSimulEfun(RegisterSize),
 
     /// Call a function pointer, located in x.0.
     CallFp(RegisterVariant),
@@ -80,7 +80,7 @@ pub enum Instruction {
     FunctionPtrConst {
         location: RegisterVariant,
         receiver: FunctionReceiver,
-        name_index: usize,
+        name_index: RegisterSize,
     },
 
     /// Greater than
@@ -172,14 +172,14 @@ pub enum Instruction {
     /// Special case instruction to dynamically populate the `argv` variable
     ///   that is created for ellipsis functions.
     /// `RegisterVariant` is the location of `argv`.
-    /// The first `usize` is the number of formal parameters to the function
+    /// The first `u16` is the number of formal parameters to the function
     ///   (whether they have default values or not, basically just the count
     ///   of non-ellipsis params).
     /// The second `u16` is the number of local variables used by the
     /// function. We know both of these numbers at compile time, and any
     /// other register present in the frame is an ellipsis argument, so
     /// those are the ones we populate.
-    PopulateArgv(RegisterVariant, usize, RegisterSize),
+    PopulateArgv(RegisterVariant, RegisterSize, RegisterSize),
 
     /// Special case instruction to handle calls to functions that have default
     /// argument values.
@@ -444,3 +444,7 @@ impl Display for Instruction {
         }
     }
 }
+
+// This type is used a lot. Make sure it doesn't unintentionally get bigger.
+#[cfg(target_arch = "x86_64")]
+static_assertions::assert_eq_size!(Instruction, [u8; 24]);

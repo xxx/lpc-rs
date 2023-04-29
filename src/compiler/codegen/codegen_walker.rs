@@ -652,7 +652,7 @@ impl CodegenWalker {
             if_chain! {
                 if len > 1;
                 if let Instruction::Call(name_idx) = &instructions[len - 2];
-                if let Some(name) = self.context.strings.resolve(DefaultSymbol::try_from_usize(*name_idx).unwrap());
+                if let Some(name) = self.context.strings.resolve(DefaultSymbol::try_from_usize((*name_idx) as usize).unwrap());
                 if name.starts_with("create__") && matches!(&instructions[len - 1], Instruction::Ret);
                 then {
                     true
@@ -726,7 +726,7 @@ impl CodegenWalker {
         &mut self,
         ellipsis: bool,
         span: Option<Span>,
-        passed_param_count: usize,
+        passed_param_count: RegisterSize,
     ) -> Option<Address> {
         if ellipsis {
             let argv_location = self.assign_sym_location(ARGV);
@@ -904,15 +904,15 @@ impl CodegenWalker {
                         match func.prototype().kind {
                             FunctionKind::Local => {
                                 let idx = self.context.strings.get_or_intern(func.mangle());
-                                Instruction::Call(idx.to_usize())
+                                Instruction::Call(RegisterSize::try_from(idx.to_usize())?)
                             }
                             FunctionKind::Efun => {
                                 let idx = EFUN_PROTOTYPES.get_index_of(name.as_str()).unwrap();
-                                Instruction::CallEfun(idx)
+                                Instruction::CallEfun(u8::try_from(idx)?)
                             }
                             FunctionKind::SimulEfun => {
                                 let idx = self.context.strings.get_or_intern(name);
-                                Instruction::CallSimulEfun(idx.to_usize())
+                                Instruction::CallSimulEfun(RegisterSize::try_from(idx.to_usize())?)
                             }
                         }
                     }
@@ -1152,7 +1152,7 @@ impl TreeWalker for CodegenWalker {
                 push_instruction!(self, Instruction::PushArg(reg_right), node.span);
                 push_instruction!(
                     self,
-                    Instruction::CallEfun(EFUN_PROTOTYPES.get_index_of("compose").unwrap()),
+                    Instruction::CallEfun(u8::try_from(EFUN_PROTOTYPES.get_index_of("compose").unwrap())?),
                     node.span
                 );
 
@@ -1257,7 +1257,7 @@ impl TreeWalker for CodegenWalker {
         } else {
             Vec::new()
         };
-        let declared_arg_count = declared_arg_locations.len();
+        let declared_arg_count = RegisterSize::try_from(declared_arg_locations.len())?;
 
         self.closure_arg_locations.push(declared_arg_locations);
 
@@ -1350,7 +1350,7 @@ impl TreeWalker for CodegenWalker {
         let instruction = Instruction::FunctionPtrConst {
             location,
             receiver: FunctionReceiver::Local,
-            name_index: name_index.to_usize(),
+            name_index: RegisterSize::try_from(name_index.to_usize())?,
         };
 
         push_instruction!(self, instruction, node.span);
@@ -1590,7 +1590,7 @@ impl TreeWalker for CodegenWalker {
         self.function_upvalue_counter.push();
 
         self.context.scopes.goto_function(&node.name)?;
-        let declared_arg_count = node.parameters.len();
+        let declared_arg_count = RegisterSize::try_from(node.parameters.len())?;
         let declared_arg_locations = self.visit_parameters(&node.parameters).await;
 
         let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);
@@ -1624,7 +1624,7 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        debug_assert_eq!(declared_arg_count, declared_arg_locations.len());
+        debug_assert_eq!(declared_arg_count as usize, declared_arg_locations.len());
 
         if num_default_args > 0 {
             // always set when num_default_args > 0
@@ -1730,7 +1730,7 @@ impl TreeWalker for CodegenWalker {
 
         let instruction = Instruction::FunctionPtrConst {
             location,
-            name_index: name_index.to_usize(),
+            name_index: RegisterSize::try_from(name_index.to_usize())?,
             receiver,
         };
 

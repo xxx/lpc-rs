@@ -3,7 +3,6 @@ use std::{
     fmt::{Display, Formatter},
     ops::{Deref, Index, IndexMut, Range, RangeFrom, RangeInclusive},
     slice::Iter,
-    vec::IntoIter,
 };
 
 use bit_set::BitSet;

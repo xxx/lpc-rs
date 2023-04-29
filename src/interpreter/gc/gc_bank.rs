@@ -6,7 +6,7 @@ use lpc_rs_core::register::Register;
 use lpc_rs_errors::Result;
 use slab::{Iter as SlabIter, Slab};
 use tracing::instrument;
-use lpc_rs_core::RegisterSize;
+
 
 use crate::interpreter::{gc::sweep::KeylessSweep, lpc_ref::LpcRef};
 

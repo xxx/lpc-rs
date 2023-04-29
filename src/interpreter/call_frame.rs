@@ -110,7 +110,7 @@ impl CallFrame {
             + function.num_locals
             + 1;
         let process = process.into();
-        let ups = upvalue_ptrs.map(|v| ThinVec::from(v)).unwrap_or_default();
+        let ups = upvalue_ptrs.map(ThinVec::from).unwrap_or_default();
 
         let mut instance = Self {
             process,

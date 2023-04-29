@@ -271,7 +271,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             vm_upvalues,
             call_outs,
             this_player,
-            upvalue_ptrs.map(|v| ThinVec::from(v)),
+            upvalue_ptrs.map(ThinVec::from),
             tx,
         );
 
@@ -528,13 +528,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 }
             }
-            Instruction::Call(name) => {
-                self.handle_call(name)?;
+            Instruction::Call(name_idx) => {
+                self.handle_call(name_idx)?;
             }
             Instruction::CallEfun(name_idx) => {
                 let process = self.stack.current_frame()?.process.clone();
                 let (pf, name) = {
-                    let (name, pf) = EFUN_FUNCTIONS.get_index(name_idx).unwrap();
+                    let (name, pf) = EFUN_FUNCTIONS.get_index(name_idx as usize).unwrap();
 
                     (pf.clone(), name)
                 };
@@ -593,9 +593,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::FunctionPtrConst {
                 location,
                 receiver,
-                name_index: name,
+                name_index,
             } => {
-                self.handle_functionptrconst(location, receiver, name)?;
+                self.handle_functionptrconst(location, receiver, name_index)?;
             }
             Instruction::Gt(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x > y)?;
@@ -752,6 +752,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::PopulateArgv(r, num_args, _num_locals) => {
                 let frame = self.stack.current_frame()?;
                 let arg_locations = &frame.arg_locations;
+                let num_args = usize::from(num_args);
                 let refs = {
                     if arg_locations.len() < num_args {
                         vec![]
@@ -970,7 +971,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     #[instrument(skip_all)]
-    fn handle_call<'task>(&mut self, name_idx: usize) -> Result<()> {
+    fn handle_call<'task>(&mut self, name_idx: RegisterSize) -> Result<()> {
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
         let func = {
@@ -1501,7 +1502,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
-    fn handle_call_simul_efun(&mut self, name_idx: usize) -> Result<()> {
+    fn handle_call_simul_efun(&mut self, name_idx: RegisterSize) -> Result<()> {
         let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().resolve(Self::index_symbol(name_idx)) else {
             return Err(self.runtime_bug("Unable to find the name being pointed to."));
         };
@@ -1535,7 +1536,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         &mut self,
         location: RegisterVariant,
         receiver: FunctionReceiver,
-        name_idx: usize,
+        name_idx: RegisterSize,
     ) -> Result<()> {
         let call_other = match receiver {
             FunctionReceiver::Var(_) | FunctionReceiver::Dynamic => true,
@@ -2054,8 +2055,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     #[inline]
-    fn index_symbol(index: usize) -> DefaultSymbol {
-        DefaultSymbol::try_from_usize(index).unwrap()
+    fn index_symbol(index: RegisterSize) -> DefaultSymbol {
+        DefaultSymbol::try_from_usize(index as usize).unwrap()
     }
 
     #[inline]

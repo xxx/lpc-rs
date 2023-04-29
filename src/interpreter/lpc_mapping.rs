@@ -5,7 +5,7 @@ use delegate::delegate;
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use tracing::{instrument, trace};
-use thin_vec::thin_vec;
+
 
 use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
@@ -144,10 +144,11 @@ impl IntoLpcRef for LpcMapping {
 #[cfg(test)]
 mod tests {
     use factori::create;
-    use lpc_rs_core::register::Register;
+    use thin_vec::thin_vec;
 
     use super::*;
     use crate::test_support::factories::*;
+    use lpc_rs_core::register::Register;
 
     #[test]
     fn test_mark() {
