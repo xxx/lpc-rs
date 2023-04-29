@@ -53,7 +53,7 @@ pub struct Vm {
     /// Shared VM memory. Reference-type `LpcRef`s are allocated out of this.
     memory: Arc<Heap>,
 
-    /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`]s
+    /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`](crate::interpreter::task::Task)s
     pub upvalues: Arc<RwLock<GcRefBank>>,
 
     /// The [`Config`] that's in use for this [`Vm`]

@@ -3,7 +3,7 @@ use std::{
     sync::atomic::{AtomicU8, Ordering},
 };
 
-/// Flags for a [`Process`]
+/// Flags for a [`Process`](crate::interpreter::process::Process).
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ObjectFlags {
     /// Has this process been initialized?

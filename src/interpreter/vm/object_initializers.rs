@@ -45,7 +45,7 @@ impl Vm {
     ///
     /// * `code` - The code to compile and initialize
     /// * `filename` - The filename to assign to the code. It's assumed to be an in-game path,
-    ///                with [`lib_dir`](Config) as the root.
+    ///                with [`lib_dir`](lpc_rs_utils::config::Config) as the root.
     ///
     /// # Returns
     ///
