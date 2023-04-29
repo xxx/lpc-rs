@@ -95,7 +95,7 @@ impl Mark for LpcArray {
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
         trace!("marking array");
 
-        if !processed.insert(*self.unique_id.as_ref()) {
+        if !processed.insert(*self.unique_id.as_ref() as usize) {
             return Ok(());
         }
 
@@ -228,7 +228,7 @@ mod tests {
         marked_expected.extend([4_usize, 33_usize].into_iter());
 
         let mut processed_expected = BitSet::new();
-        processed_expected.extend([ptr_id, *array.unique_id.as_ref()].into_iter());
+        processed_expected.extend([ptr_id as usize, *array.unique_id.as_ref() as usize].into_iter());
 
         assert_eq!(marked, marked_expected);
         assert_eq!(processed, processed_expected);

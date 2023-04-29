@@ -1192,7 +1192,7 @@ mod tests {
 
             array.mark(&mut marked, &mut processed).unwrap();
 
-            assert!(processed.contains(*array_id.as_ref()));
+            assert!(processed.contains(*array_id.as_ref() as usize));
         }
 
         #[test]
@@ -1207,7 +1207,7 @@ mod tests {
 
             mapping.mark(&mut marked, &mut processed).unwrap();
 
-            assert!(processed.contains(*mapping_id.as_ref()));
+            assert!(processed.contains(*mapping_id.as_ref() as usize));
         }
 
         #[test]
@@ -1223,7 +1223,7 @@ mod tests {
 
             ptr.mark(&mut marked, &mut processed).unwrap();
 
-            assert!(processed.contains(*ptr_id.as_ref()));
+            assert!(processed.contains(*ptr_id.as_ref() as usize));
         }
     }
 }

@@ -106,7 +106,7 @@ impl Mark for LpcMapping {
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
         trace!("marking mapping");
 
-        if !processed.insert(*self.unique_id.as_ref()) {
+        if !processed.insert(*self.unique_id.as_ref() as usize) {
             return Ok(());
         }
 
@@ -176,7 +176,7 @@ mod tests {
         assert_eq!(marked, marked_expected);
 
         let mut processed_expected = BitSet::new();
-        processed_expected.extend([key_id, value_id, *mapping.unique_id.as_ref()].into_iter());
+        processed_expected.extend([key_id as usize, value_id as usize, (*mapping.unique_id.as_ref() as usize)].into_iter());
 
         assert_eq!(processed, processed_expected);
     }

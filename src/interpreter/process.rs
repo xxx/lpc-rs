@@ -196,6 +196,6 @@ mod tests {
         let mut processed = BitSet::new();
         process.mark(&mut marked, &mut processed).unwrap();
 
-        assert!(processed.contains(*array_id.as_ref()));
+        assert!(processed.contains(*array_id.as_ref() as usize));
     }
 }

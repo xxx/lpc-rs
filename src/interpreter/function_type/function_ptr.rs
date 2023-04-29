@@ -175,7 +175,7 @@ impl Mark for FunctionPtr {
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
         trace!("marking function ptr");
 
-        if !processed.insert(*self.unique_id.as_ref()) {
+        if !processed.insert(*self.unique_id.as_ref() as usize) {
             return Ok(());
         }
 
@@ -254,7 +254,7 @@ mod tests {
         assert!(marked.contains(5));
 
         assert_eq!(processed.len(), 1);
-        assert!(processed.contains(*ptr.unique_id.as_ref()));
+        assert!(processed.contains(*ptr.unique_id.as_ref() as usize));
 
         marked.clear();
 
