@@ -10,6 +10,7 @@ use bit_set::BitSet;
 use delegate::delegate;
 use thin_vec::ThinVec;
 use lpc_rs_core::register::Register;
+use lpc_rs_core::RegisterSize;
 use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::interpreter::{
@@ -24,14 +25,14 @@ impl RefBank {
     /// arg count.
     pub fn initialized_for_function(
         function: &ProgramFunction,
-        runtime_arg_count: usize,
+        runtime_arg_count: RegisterSize,
     ) -> RefBank {
         // add +1 for r0 (where return value is stored)
         let static_length = function.arity().num_args + function.num_locals + 1;
         let dynamic_length = runtime_arg_count + function.num_locals + 1;
         let reservation = std::cmp::max(static_length, dynamic_length);
 
-        RefBank::new(vec![NULL; reservation])
+        RefBank::new(vec![NULL; reservation as usize])
     }
 }
 
@@ -106,45 +107,83 @@ impl<T> Index<Register> for Bank<T> {
 
     #[inline]
     fn index(&self, register: Register) -> &T {
-        &self.registers[register.index()]
+        &self.registers[register.index() as usize]
     }
 }
 
 impl<T> IndexMut<Register> for Bank<T> {
     #[inline]
     fn index_mut(&mut self, register: Register) -> &mut T {
-        &mut self.registers[register.index()]
+        &mut self.registers[register.index() as usize]
     }
 }
 
-impl<T> Index<usize> for Bank<T> {
+impl<T> Index<RegisterSize> for Bank<T> {
     type Output = T;
 
     #[inline]
-    fn index(&self, index: usize) -> &T {
+    fn index(&self, index: RegisterSize) -> &T {
+        &self.registers[index as usize]
+    }
+}
+
+impl<T> IndexMut<RegisterSize> for Bank<T> {
+    #[inline]
+    fn index_mut(&mut self, index: RegisterSize) -> &mut T {
+        &mut self.registers[index as usize]
+    }
+}
+
+impl<T> Index<Range<RegisterSize>> for Bank<T> {
+    type Output = [T];
+
+    #[inline]
+    fn index(&self, index: Range<RegisterSize>) -> &Self::Output {
+        let index = index.start as usize..index.end as usize;
         &self.registers[index]
     }
 }
 
-impl<T> IndexMut<usize> for Bank<T> {
+impl<T> IndexMut<Range<RegisterSize>> for Bank<T> {
     #[inline]
-    fn index_mut(&mut self, index: usize) -> &mut T {
+    fn index_mut(&mut self, index: Range<RegisterSize>) -> &mut Self::Output {
+        let index = index.start as usize..index.end as usize;
         &mut self.registers[index]
     }
 }
 
-impl<T> Index<Range<usize>> for Bank<T> {
+impl<T> Index<RangeInclusive<RegisterSize>> for Bank<T> {
     type Output = [T];
 
     #[inline]
-    fn index(&self, index: Range<usize>) -> &Self::Output {
+    fn index(&self, index: RangeInclusive<RegisterSize>) -> &Self::Output {
+        let index = (*index.start()) as usize..(*index.end()) as usize;
         &self.registers[index]
     }
 }
 
-impl<T> IndexMut<Range<usize>> for Bank<T> {
+impl<T> IndexMut<RangeInclusive<RegisterSize>> for Bank<T> {
     #[inline]
-    fn index_mut(&mut self, index: Range<usize>) -> &mut Self::Output {
+    fn index_mut(&mut self, index: RangeInclusive<RegisterSize>) -> &mut Self::Output {
+        let index = (*index.start()) as usize..(*index.end()) as usize;
+        &mut self.registers[index]
+    }
+}
+
+impl<T> Index<RangeFrom<RegisterSize>> for Bank<T> {
+    type Output = [T];
+
+    #[inline]
+    fn index(&self, index: RangeFrom<RegisterSize>) -> &Self::Output {
+        let index = index.start as usize..;
+        &self.registers[index]
+    }
+}
+
+impl<T> IndexMut<RangeFrom<RegisterSize>> for Bank<T> {
+    #[inline]
+    fn index_mut(&mut self, index: RangeFrom<RegisterSize>) -> &mut Self::Output {
+        let index = index.start as usize..;
         &mut self.registers[index]
     }
 }
@@ -161,22 +200,6 @@ impl<T> Index<RangeInclusive<usize>> for Bank<T> {
 impl<T> IndexMut<RangeInclusive<usize>> for Bank<T> {
     #[inline]
     fn index_mut(&mut self, index: RangeInclusive<usize>) -> &mut Self::Output {
-        &mut self.registers[index]
-    }
-}
-
-impl<T> Index<RangeFrom<usize>> for Bank<T> {
-    type Output = [T];
-
-    #[inline]
-    fn index(&self, index: RangeFrom<usize>) -> &Self::Output {
-        &self.registers[index]
-    }
-}
-
-impl<T> IndexMut<RangeFrom<usize>> for Bank<T> {
-    #[inline]
-    fn index_mut(&mut self, index: RangeFrom<usize>) -> &mut Self::Output {
         &mut self.registers[index]
     }
 }

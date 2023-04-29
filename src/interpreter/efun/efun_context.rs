@@ -3,7 +3,7 @@ use std::{borrow::Cow, fmt::Debug, future::Future, path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use delegate::delegate;
-use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
+use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant, RegisterSize};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
@@ -119,7 +119,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     #[inline]
     pub fn resolve_local_register<I>(&self, register: I) -> &LpcRef
     where
-        I: Into<usize>,
+        I: Into<RegisterSize>,
     {
         &self.frame().registers[register.into()]
     }

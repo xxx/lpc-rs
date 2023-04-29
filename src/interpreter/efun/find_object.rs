@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use lpc_rs_core::RegisterSize;
 
 use lpc_rs_errors::Result;
 
@@ -11,7 +12,7 @@ use crate::interpreter::{
 /// `find_object`, an efun for finding and returning an object from the [`ObjectSpace`]
 /// from its path and clone number.
 pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let lpc_ref = context.resolve_local_register(1_usize);
+    let lpc_ref = context.resolve_local_register(1 as RegisterSize);
     let result = match lpc_ref {
         LpcRef::Float(_)
         | LpcRef::Int(_)

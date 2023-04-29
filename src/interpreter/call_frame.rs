@@ -14,6 +14,7 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use parking_lot::RwLock;
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
+use lpc_rs_core::RegisterSize;
 
 use crate::interpreter::{
     bank::RefBank,
@@ -68,7 +69,7 @@ pub struct CallFrame {
     /// frame? This will include partially-applied arguments in the case
     /// that the CallFrame is for a call to a function pointer.
     #[builder(default)]
-    pub called_with_num_args: usize,
+    pub called_with_num_args: RegisterSize,
 
     /// The upvalue indexes (into `vm_upvalues`) for this specific call
     #[builder(default, setter(into))]
@@ -97,7 +98,7 @@ impl CallFrame {
     pub fn new<P>(
         process: P,
         function: Arc<ProgramFunction>,
-        called_with_num_args: usize,
+        called_with_num_args: RegisterSize,
         upvalue_ptrs: Option<&[Register]>,
         vm_upvalues: Arc<RwLock<GcRefBank>>,
     ) -> Self
@@ -114,8 +115,8 @@ impl CallFrame {
         let mut instance = Self {
             process,
             function,
-            arg_locations: ThinVec::with_capacity(called_with_num_args),
-            registers: RefBank::new(vec![NULL; reg_len]),
+            arg_locations: ThinVec::with_capacity(called_with_num_args as usize),
+            registers: RefBank::new(vec![NULL; reg_len as usize]),
             pc: 0,
             called_with_num_args,
             upvalue_ptrs: ups,
@@ -144,8 +145,8 @@ impl CallFrame {
     pub fn with_minimum_arg_capacity<P>(
         process: P,
         function: Arc<ProgramFunction>,
-        called_with_num_args: usize,
-        arg_capacity: usize,
+        called_with_num_args: RegisterSize,
+        arg_capacity: RegisterSize,
         upvalue_ptrs: Option<&[Register]>,
         vm_upvalues: Arc<RwLock<GcRefBank>>,
     ) -> Self
@@ -179,14 +180,14 @@ impl CallFrame {
         let mut upvalues = self.vm_upvalues.write();
 
         // Reserve space in the proc for the actual values
-        upvalues.reserve(num_upvalues);
+        upvalues.reserve(num_upvalues as usize);
 
         // Reserve space in me for the indexes
-        self.upvalue_ptrs.reserve(num_upvalues);
+        self.upvalue_ptrs.reserve(num_upvalues as usize);
 
         for _ in 0..num_upvalues {
             let idx = upvalues.insert(NULL);
-            self.upvalue_ptrs.push(Register(idx));
+            self.upvalue_ptrs.push(Register(RegisterSize::try_from(idx).unwrap()));
         }
     }
 
@@ -202,7 +203,7 @@ impl CallFrame {
             }
             RegisterVariant::Upvalue(reg) => {
                 let upvalues = &self.upvalue_ptrs;
-                let idx = upvalues[reg.index()];
+                let idx = upvalues[reg.index() as usize];
 
                 let mut upvalues = self.vm_upvalues.write();
                 upvalues[idx] = lpc_ref;
@@ -227,7 +228,7 @@ impl CallFrame {
                     RegisterVariant::Global(reg) => self.process.globals.read()[reg].clone(),
                     RegisterVariant::Upvalue(ptr_reg) => {
                         let upvalues = &self.upvalue_ptrs;
-                        let data_reg = upvalues[ptr_reg.index()];
+                        let data_reg = upvalues[ptr_reg.index() as usize];
 
                         self.vm_upvalues.read()[data_reg].clone()
                     }
@@ -305,7 +306,7 @@ impl Mark for CallFrame {
 
         trace!("marking upvalue ptrs: {:?}", &self.upvalue_ptrs);
 
-        let ptrs = self.upvalue_ptrs.iter().copied().map(Register::index);
+        let ptrs = self.upvalue_ptrs.iter().copied().map(|r| r.index() as usize);
 
         marked.extend(ptrs);
 

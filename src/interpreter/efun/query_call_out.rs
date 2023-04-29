@@ -1,3 +1,4 @@
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -10,7 +11,7 @@ use crate::interpreter::{
 
 /// `query_call_out`, an efun for returning information about a single call out.
 pub async fn query_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let LpcRef::Int(idx) = context.resolve_local_register(1_usize) else {
+    let LpcRef::Int(idx) = context.resolve_local_register(1 as RegisterSize) else {
         return Err(context.runtime_bug("non-int call out ID sent to `remove_call_out`"));
     };
 

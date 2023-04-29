@@ -181,7 +181,7 @@ impl Mark for FunctionPtr {
 
         trace!("marking upvalue ptrs: {:?}", &self.upvalue_ptrs);
 
-        marked.extend(self.upvalue_ptrs.iter().copied().map(Register::index));
+        marked.extend(self.upvalue_ptrs.iter().copied().map(|r| r.index() as usize));
 
         Ok(())
     }

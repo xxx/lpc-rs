@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter};
 
 use serde::{Deserialize, Serialize};
+use crate::RegisterSize;
 
 /// A struct to handle the split between normal, in-function registers,
 /// and previously-closed-over local variables
@@ -13,7 +14,7 @@ pub enum RegisterVariant {
 
 impl RegisterVariant {
     #[inline]
-    pub fn index(&self) -> usize {
+    pub fn index(&self) -> RegisterSize {
         match self {
             RegisterVariant::Local(reg)
             | RegisterVariant::Global(reg)
@@ -46,12 +47,12 @@ impl Display for RegisterVariant {
 /// A newtype around a usize representing a Register numbered with its value,
 /// `x.0`.
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
-pub struct Register(pub usize);
+pub struct Register(pub RegisterSize);
 
 impl Register {
     /// An alias to get the number.
     #[inline]
-    pub fn index(self) -> usize {
+    pub fn index(self) -> RegisterSize {
         self.0
     }
 
@@ -81,17 +82,31 @@ impl Display for Register {
     }
 }
 
-impl From<Register> for usize {
+impl From<Register> for RegisterSize {
     #[inline]
     fn from(f: Register) -> Self {
         f.0
     }
 }
 
-impl From<&Register> for usize {
+impl From<&Register> for RegisterSize {
     #[inline]
     fn from(f: &Register) -> Self {
         f.0
+    }
+}
+
+impl From<Register> for usize {
+    #[inline]
+    fn from(f: Register) -> Self {
+        f.0 as usize
+    }
+}
+
+impl From<&Register> for usize {
+    #[inline]
+    fn from(f: &Register) -> Self {
+        f.0 as usize
     }
 }
 

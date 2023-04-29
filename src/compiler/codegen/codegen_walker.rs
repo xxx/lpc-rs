@@ -8,15 +8,7 @@ use lpc_rs_asm::{
     address::{Address, Label},
     instruction::Instruction,
 };
-use lpc_rs_core::{
-    call_namespace::CallNamespace,
-    function_receiver::FunctionReceiver,
-    lpc_type::LpcType,
-    mangle::Mangle,
-    register::{Register, RegisterVariant},
-    register_counter::RegisterCounter,
-    ScopeId, CREATE_FUNCTION, INIT_PROGRAM,
-};
+use lpc_rs_core::{call_namespace::CallNamespace, function_receiver::FunctionReceiver, lpc_type::LpcType, mangle::Mangle, register::{Register, RegisterVariant}, register_counter::RegisterCounter, ScopeId, CREATE_FUNCTION, INIT_PROGRAM, RegisterSize};
 use lpc_rs_errors::{span::Span, LpcError, Result, lpc_bug, lpc_error, lpc_warning};
 use lpc_rs_function_support::{
     function_prototype::{FunctionKind, FunctionPrototypeBuilder},
@@ -192,7 +184,7 @@ impl CodegenWalker {
             ..Self::default()
         };
 
-        result.global_counter.set(num_globals as usize);
+        result.global_counter.set(num_globals);
 
         result.register_counter.set(num_init_registers + 1);
 
@@ -710,7 +702,7 @@ impl CodegenWalker {
     fn setup_populate_defaults(
         &mut self,
         span: Option<Span>,
-        num_default_args: usize,
+        num_default_args: RegisterSize,
     ) -> Option<Address> {
         if num_default_args == 0 {
             return None;
@@ -2166,7 +2158,7 @@ impl TreeWalker for CodegenWalker {
             let loc = self
                 .closure_arg_locations
                 .last()
-                .and_then(|locs| locs.get(idx - 1))
+                .and_then(|locs| locs.get((idx - 1) as usize))
                 .copied()
                 .unwrap_or_else(|| Register(idx).as_local());
             self.current_result = loc;

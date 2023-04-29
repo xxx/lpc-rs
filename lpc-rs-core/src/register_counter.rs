@@ -1,17 +1,18 @@
 use crate::register::Register;
+use crate::RegisterSize;
 
 /// A [`Register`]-aware counter, used during code generation.
 #[derive(Debug, Clone, Default)]
 pub struct RegisterCounter {
-    base_count: usize,
-    count: usize,
-    stack: Vec<usize>,
+    base_count: RegisterSize,
+    count: RegisterSize,
+    stack: Vec<RegisterSize>,
 }
 
 impl RegisterCounter {
     /// create a new counter
     #[inline]
-    pub fn new(base_count: usize) -> Self {
+    pub fn new(base_count: RegisterSize) -> Self {
         Self {
             base_count,
             count: base_count,
@@ -20,14 +21,14 @@ impl RegisterCounter {
     }
 
     /// Return the number of registers that have been emitted.
-    pub fn number_emitted(&self) -> usize {
+    pub fn number_emitted(&self) -> RegisterSize {
         self.count - self.base_count
     }
 
     /// Set a new value, and store the old one for `pop`ping.
     /// # Returns
     /// The previous value
-    pub fn push(&mut self) -> usize {
+    pub fn push(&mut self) -> RegisterSize {
         self.stack.push(self.count);
         let ret = self.count;
         self.set(self.base_count);
@@ -37,7 +38,7 @@ impl RegisterCounter {
     /// Pop a value, if there is one, and set the current `count` back to it.
     /// # Returns
     /// The popped value if there is one, else the current `count`
-    pub fn pop(&mut self) -> usize {
+    pub fn pop(&mut self) -> RegisterSize {
         if let Some(x) = self.stack.pop() {
             self.count = x;
         }
@@ -48,7 +49,7 @@ impl RegisterCounter {
     #[inline]
     /// Set a new value on the counter.
     /// Will use the original base_value if the new value is less than it.
-    pub fn set(&mut self, new_val: usize) {
+    pub fn set(&mut self, new_val: RegisterSize) {
         let new = if new_val < self.base_count {
             self.base_count
         } else {

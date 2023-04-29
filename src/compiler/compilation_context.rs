@@ -2,9 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use derive_builder::Builder;
 use indexmap::IndexMap;
-use lpc_rs_core::{
-    call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN,
-};
+use lpc_rs_core::{call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, EFUN, RegisterSize};
 use lpc_rs_errors::LpcError;
 use lpc_rs_function_support::{
     function_like::FunctionLike, function_prototype::FunctionPrototype,
@@ -72,16 +70,16 @@ pub struct CompilationContext {
     /// How many global variables have been declared in inherited-from parents?
     /// This is how we determine how much space the final [`Process`] needs to
     /// allocate for global variables.
-    pub num_globals: u16,
+    pub num_globals: RegisterSize,
 
     /// How many variables need to be upvalued?
-    pub num_upvalues: u16,
+    pub num_upvalues: RegisterSize,
 
     /// How many [`Register`](lpc_rs_core::register::Register)s were required
     /// for initializing global variables, in inherited-from parents?
     /// This is how we determine how much space the final [`Process`] needs to
     /// allocate for the global `init-program` call, when an object is cloned.
-    pub num_init_registers: usize,
+    pub num_init_registers: RegisterSize,
 
     /// Pointer to the simul efuns
     pub simul_efuns: Option<Arc<Process>>,

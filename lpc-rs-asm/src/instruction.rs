@@ -3,9 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use lpc_rs_core::{
-    function_receiver::FunctionReceiver, register::RegisterVariant, LpcFloatInner, LpcIntInner,
-};
+use lpc_rs_core::{function_receiver::FunctionReceiver, register::RegisterVariant, LpcFloatInner, LpcIntInner, RegisterSize};
 use lpc_rs_errors::{lpc_bug, Result};
 use serde::{Deserialize, Serialize};
 
@@ -177,11 +175,11 @@ pub enum Instruction {
     /// The first `usize` is the number of formal parameters to the function
     ///   (whether they have default values or not, basically just the count
     ///   of non-ellipsis params).
-    /// The second `usize` is the number of local variables used by the
+    /// The second `u16` is the number of local variables used by the
     /// function. We know both of these numbers at compile time, and any
     /// other register present in the frame is an ellipsis argument, so
     /// those are the ones we populate.
-    PopulateArgv(RegisterVariant, usize, usize),
+    PopulateArgv(RegisterVariant, usize, RegisterSize),
 
     /// Special case instruction to handle calls to functions that have default
     /// argument values.

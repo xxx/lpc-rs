@@ -1,3 +1,4 @@
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
@@ -5,7 +6,7 @@ use crate::interpreter::object_flags::ObjectFlags;
 
 /// `destruct`, an efun for deleting objects from the [`ObjectSpace`]
 pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let lpc_ref = context.resolve_local_register(1_usize);
+    let lpc_ref = context.resolve_local_register(1 as RegisterSize);
     match lpc_ref {
         LpcRef::Float(_)
         | LpcRef::Int(_)

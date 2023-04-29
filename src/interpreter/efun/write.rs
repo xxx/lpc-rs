@@ -1,3 +1,4 @@
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::{lpc_error, Result};
 
 use crate::interpreter::{
@@ -7,7 +8,7 @@ use crate::interpreter::{
 
 /// `write`, an efun for writing to this_player().
 pub async fn write<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let arg_ref = context.resolve_local_register(1_usize);
+    let arg_ref = context.resolve_local_register(1 as RegisterSize);
 
     let msg = arg_ref.to_string();
 

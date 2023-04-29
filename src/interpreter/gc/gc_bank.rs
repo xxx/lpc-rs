@@ -6,6 +6,7 @@ use lpc_rs_core::register::Register;
 use lpc_rs_errors::Result;
 use slab::{Iter as SlabIter, Slab};
 use tracing::instrument;
+use lpc_rs_core::RegisterSize;
 
 use crate::interpreter::{gc::sweep::KeylessSweep, lpc_ref::LpcRef};
 
@@ -70,14 +71,14 @@ impl<T> Index<Register> for GcBank<T> {
 
     #[inline]
     fn index(&self, register: Register) -> &T {
-        &self.registers[register.index()]
+        &self.registers[register.index() as usize]
     }
 }
 
 impl<T> IndexMut<Register> for GcBank<T> {
     #[inline]
     fn index_mut(&mut self, register: Register) -> &mut T {
-        &mut self.registers[register.index()]
+        &mut self.registers[register.index() as usize]
     }
 }
 

@@ -21,12 +21,7 @@ use if_chain::if_chain;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_asm::{address::Address, instruction::Instruction};
-use lpc_rs_core::{
-    function_receiver::FunctionReceiver,
-    lpc_type::LpcType,
-    register::{Register, RegisterVariant},
-    LpcIntInner,
-};
+use lpc_rs_core::{function_receiver::FunctionReceiver, lpc_type::LpcType, register::{Register, RegisterVariant}, LpcIntInner, RegisterSize};
 use lpc_rs_errors::{lpc_bug, span::Span, LpcError, Result, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
@@ -107,11 +102,11 @@ pub fn get_location_in_frame(frame: &CallFrame, location: RegisterVariant) -> Re
         }
         RegisterVariant::Upvalue(upv) => {
             let upvalue_ptrs = &frame.upvalue_ptrs;
-            let idx = upvalue_ptrs[upv.index()];
+            let reg = upvalue_ptrs[upv.index() as usize];
 
             let vm_upvalues = &frame.vm_upvalues.read();
-            trace!("upvalue data: idx = {}, len = {}", idx, vm_upvalues.len());
-            Ok(Cow::Owned(vm_upvalues[idx].clone()))
+            trace!("upvalue data: idx = {}, len = {}", reg, vm_upvalues.len());
+            Ok(Cow::Owned(vm_upvalues[reg].clone()))
         }
     }
 }
@@ -151,7 +146,7 @@ where
         RegisterVariant::Upvalue(reg) => {
             let frame = stack.current_frame()?;
             let upvalues = &frame.upvalue_ptrs;
-            let idx = upvalues[reg.index()];
+            let idx = upvalues[reg.index() as usize];
 
             let vm_upvalues = &mut frame.vm_upvalues.write();
             func(&mut vm_upvalues[idx])
@@ -415,10 +410,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let mut frame = CallFrame::new(
             process,
             f,
-            args.len(),
+            RegisterSize::try_from(args.len())?,
             self.context.upvalue_ptrs.as_deref(),
             self.context.upvalues().clone(),
         );
+
         if !args.is_empty() {
             frame.registers[1..=args.len()].clone_from_slice(args);
         }
@@ -441,7 +437,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         } else {
             let mut halted = false;
 
-            let mut c = 0_u16;
+            let mut c = 0 as RegisterSize;
 
             while !halted {
                 halted = match self.eval_one_instruction().await {
@@ -783,7 +779,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let defaults_to_init = (num_args.saturating_sub(called_args)).min(num_default_args);
 
                 let jump = num_default_args - defaults_to_init;
-                frame.set_pc(frame.pc() + jump);
+                frame.set_pc(frame.pc() + jump as usize);
             }
             Instruction::PushArg(r) => self.args.push(r),
             Instruction::PushArrayItem(r1) => {
@@ -1025,7 +1021,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         process: Arc<Process>,
         func: Arc<ProgramFunction>,
     ) -> Result<CallFrame> {
-        let num_args = self.args.len();
+        let num_args = RegisterSize::try_from(self.args.len())?;
         let mut new_frame = CallFrame::with_minimum_arg_capacity(
             process,
             func.clone(),
@@ -1037,7 +1033,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         trace!("copying arguments to new frame: {num_args}");
         // copy argument registers from old frame to new
-        if num_args > 0_usize {
+        if num_args > 0 {
             let mut next_index = 1;
             for (i, arg) in self.args.iter().enumerate() {
                 let target_location = func.arg_locations.get(i).copied().unwrap_or_else(|| {
@@ -1070,7 +1066,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
     #[inline]
     async fn handle_call_fp(&mut self, location: RegisterVariant) -> Result<()> {
-        let num_args = self.args.len();
+        let num_args = RegisterSize::try_from(self.args.len())?;
         let func = {
             let lpc_ref = &*get_loc!(self, location)?;
 
@@ -1098,7 +1094,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 + ptr
                     .partial_args
                     .iter()
-                    .fold(0, |sum, arg| sum + arg.is_some() as usize);
+                    .fold(0, |sum, arg| sum + arg.is_some() as RegisterSize);
             let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
             let is_dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
             let is_call_other = ptr.call_other;
@@ -1130,7 +1126,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 )));
             };
 
-            let adjusted_num_args = num_args - (is_dynamic_receiver as usize);
+            let adjusted_num_args = num_args - (is_dynamic_receiver as RegisterSize);
 
             let max_arg_length = std::cmp::max(adjusted_num_args, function.arity().num_args);
             let max_arg_length = std::cmp::max(max_arg_length, passed_args_count);
@@ -1161,20 +1157,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         // for dynamic receivers, skip the first register of the passed args, which contains the receiver itself
         let index = is_dynamic_receiver as usize;
-        let from_slice = &self.args[index..(index + adjusted_num_args)];
+        let from_slice = &self.args[index..(index + adjusted_num_args as usize)];
 
         fn type_check_and_assign_location<const STACKSIZE: usize>(
             task: &Task<STACKSIZE>,
             new_frame: &mut CallFrame,
             loc: RegisterVariant,
             r: LpcRef,
-            i: usize,
+            i: RegisterSize,
         ) -> Result<()> {
             let prototype = &new_frame.function.prototype;
             task.type_check_call_arg(
                 &r,
-                prototype.arg_types.get(i),
-                prototype.arg_spans.get(i),
+                prototype.arg_types.get(i as usize),
+                prototype.arg_spans.get(i as usize),
                 &prototype.name,
             )?;
 
@@ -1194,7 +1190,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let arg_locations = &new_frame.function.clone().arg_locations;
 
             for i in 0..max_arg_length {
-                let target_location = arg_locations.get(i).copied().unwrap_or_else(|| {
+                let target_location = arg_locations.get(i as usize).copied().unwrap_or_else(|| {
                     // This should only be reached by variables that will go
                     // into an ellipsis function's argv.
                     Register(next_index).as_local()
@@ -1204,7 +1200,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     next_index = r.index() + 1;
                 }
 
-                if let Some(Some(lpc_ref)) = ptr.partial_args.get(i) {
+                if let Some(Some(lpc_ref)) = ptr.partial_args.get(i as usize) {
                     // if a partially-applied arg is present, use it
                     type_check_and_assign_location(
                         self,
@@ -1669,8 +1665,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .upvalue_ptrs
             .iter()
             .map(|ptr| {
-                let upvalue = upvalues.get(ptr.index()).cloned().unwrap_or_default();
-                let new_index = upvalues.insert(upvalue);
+                let upvalue = upvalues.get(ptr.index() as usize).cloned().unwrap_or_default();
+                let new_index = RegisterSize::try_from(upvalues.insert(upvalue))?;
                 Ok(Register(new_index))
             })
             .collect::<Result<Vec<Register>>>()

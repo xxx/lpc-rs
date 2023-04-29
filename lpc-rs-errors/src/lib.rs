@@ -7,6 +7,7 @@ use std::{
     hash::{Hash, Hasher},
     result,
 };
+use std::num::TryFromIntError;
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label, LabelStyle},
@@ -315,12 +316,6 @@ where
     }
 }
 
-// impl<T> From<LalrpopParseError<usize, T, Box<LpcError>>> for Box<LpcError> {
-//     fn from(value: LalrpopParseError<usize, T, Box<LpcError>>) -> Self {
-//
-//     }
-// }
-
 impl From<std::io::Error> for LpcError {
     fn from(e: std::io::Error) -> Self {
         Self::new(e.to_string())
@@ -375,6 +370,18 @@ impl From<&LpcError> for Diagnostic<usize> {
 impl<T> From<tokio::sync::mpsc::error::SendError<T>> for LpcError {
     fn from(e: tokio::sync::mpsc::error::SendError<T>) -> Self {
         Self::new(e.to_string())
+    }
+}
+
+impl From<TryFromIntError> for LpcError {
+    fn from(e: TryFromIntError) -> Self {
+        Self::new(e.to_string())
+    }
+}
+
+impl From<TryFromIntError> for Box<LpcError> {
+    fn from(e: TryFromIntError) -> Self {
+        Self::new(lpc_error!(e.to_string()))
     }
 }
 

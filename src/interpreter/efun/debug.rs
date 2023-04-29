@@ -1,3 +1,4 @@
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
@@ -7,7 +8,7 @@ const SNAPSHOT_STACK: &str = "snapshot_stack";
 /// `debug`, the kitchen sink efun to do things around getting
 /// information from, or debugging the vm itself.
 pub async fn debug<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let lpc_ref = context.resolve_local_register(1_usize);
+    let lpc_ref = context.resolve_local_register(1 as RegisterSize);
     if let LpcRef::String(x) = lpc_ref {
         let r = x.read();
         let str = r.to_str();

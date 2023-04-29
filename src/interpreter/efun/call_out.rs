@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use chrono::Duration;
-use lpc_rs_core::{LpcFloatInner, LpcIntInner};
+use lpc_rs_core::{LpcFloatInner, LpcIntInner, RegisterSize};
 use lpc_rs_errors::{lpc_error, Result};
 
 use crate::interpreter::{
@@ -18,7 +18,7 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         }
     }
 
-    let func_ref = context.resolve_local_register(1_usize).clone();
+    let func_ref = context.resolve_local_register(1 as RegisterSize).clone();
 
     // Some validations
     {
@@ -33,14 +33,14 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         }
     }
 
-    let duration_ref = context.resolve_local_register(2_usize);
+    let duration_ref = context.resolve_local_register(2 as RegisterSize);
     let duration = match duration_ref {
         LpcRef::Int(x) => Duration::seconds(x.0),
         LpcRef::Float(x) => to_millis(x.0),
         _ => return Err(context.runtime_error("invalid duration sent to `call_out`")),
     };
 
-    let repeat_ref = context.try_resolve_local_register(3_usize);
+    let repeat_ref = context.try_resolve_local_register(3 as RegisterSize);
     let repeat = if let Some(repeat_ref) = repeat_ref {
         match repeat_ref {
             LpcRef::Int(x) => {

@@ -1,6 +1,7 @@
 use if_chain::if_chain;
 use lpc_rs_errors::Result;
 use tracing::trace;
+use lpc_rs_core::RegisterSize;
 
 use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},
@@ -10,11 +11,11 @@ use crate::{
 /// `input_to`, an efun for registering a function to be called when the user
 /// types something into the game.
 pub async fn input_to<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let LpcRef::Function(ptr) = context.resolve_local_register(1_usize) else {
+    let LpcRef::Function(ptr) = context.resolve_local_register(1 as RegisterSize) else {
         return Err(context.runtime_error("non-function sent as first argument to `input_to`"));
     };
 
-    let LpcRef::Int(no_echo) = context.resolve_local_register(2_usize) else {
+    let LpcRef::Int(no_echo) = context.resolve_local_register(2 as RegisterSize) else {
         return Err(context.runtime_error("non-integer sent as second argument to `input_to`"));
     };
 

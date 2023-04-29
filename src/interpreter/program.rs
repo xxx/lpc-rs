@@ -9,7 +9,7 @@ use std::{
 use derive_builder::Builder;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use lpc_rs_core::{lpc_path::LpcPath, pragma_flags::PragmaFlags};
+use lpc_rs_core::{lpc_path::LpcPath, pragma_flags::PragmaFlags, RegisterSize};
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
@@ -42,7 +42,7 @@ pub struct Program {
 
     /// How many globals does this program need storage for?
     /// Note that this number includes inherited globals.
-    pub num_globals: u16,
+    pub num_globals: RegisterSize,
 
     /// Which pragmas have been set for this program?
     pub pragmas: PragmaFlags,
@@ -112,7 +112,7 @@ impl<'a> Program {
 
     /// Get the number of registers needed to initialize this program.
     /// This number always includes 1 register for the return value
-    pub fn num_init_registers(&self) -> usize {
+    pub fn num_init_registers(&self) -> RegisterSize {
         self.initializer
             .as_ref()
             .map(|init| init.num_locals + 1)

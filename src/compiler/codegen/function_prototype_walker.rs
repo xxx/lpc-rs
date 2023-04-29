@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use lpc_rs_core::function_arity::FunctionArity;
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototypeBuilder};
 use lpc_rs_utils::string::closure_arg_number;
@@ -21,7 +22,7 @@ pub struct FunctionPrototypeWalker {
     context: CompilationContext,
 
     /// Track the max number used in any `$\d` vars within closures
-    max_closure_arg_reference: usize,
+    max_closure_arg_reference: RegisterSize,
 }
 
 impl FunctionPrototypeWalker {
@@ -55,16 +56,19 @@ impl ContextHolder for FunctionPrototypeWalker {
 #[async_trait]
 impl TreeWalker for FunctionPrototypeWalker {
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
-        let mut num_args = node
+        let num_args = node
             .parameters
             .as_ref()
             .map(|nodes| nodes.len())
             .unwrap_or(0);
+        let mut num_args = RegisterSize::try_from(num_args)?;
+
         let num_default_args = node
             .parameters
             .as_ref()
             .map(|nodes| nodes.iter().filter(|p| p.value.is_some()).count())
             .unwrap_or(0);
+        let num_default_args = RegisterSize::try_from(num_default_args)?;
 
         let arg_types = node
             .parameters
@@ -118,8 +122,10 @@ impl TreeWalker for FunctionPrototypeWalker {
 
     async fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         // Store the prototype now, to allow for forward references.
-        let num_args = node.parameters.len();
-        let num_default_args = node.parameters.iter().filter(|p| p.value.is_some()).count();
+        let num_args = RegisterSize::try_from(node.parameters.len())?;
+        let num_default_args = RegisterSize::try_from(
+            node.parameters.iter().filter(|p| p.value.is_some()).count()
+        )?;
 
         let kind = if self.is_simul_efuns() {
             FunctionKind::SimulEfun

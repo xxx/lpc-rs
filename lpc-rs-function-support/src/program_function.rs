@@ -10,9 +10,7 @@ use lpc_rs_asm::{
     address::{Address, Label},
     instruction::Instruction,
 };
-use lpc_rs_core::{
-    function_arity::FunctionArity, lpc_type::LpcType, mangle::Mangle, register::RegisterVariant,
-};
+use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType, mangle::Mangle, register::RegisterVariant, RegisterSize};
 use lpc_rs_errors::span::Span;
 use multimap::MultiMap;
 use once_cell::sync::OnceCell;
@@ -38,13 +36,13 @@ pub struct ProgramFunction {
     /// The number of non-argument, non-return-value locals.
     /// Used for register allocation.
     #[builder(default)]
-    pub num_locals: usize,
+    pub num_locals: RegisterSize,
 
     /// How many of my locals are actually upvalues?
     /// Note that this is just the count of captured variables, not
     /// vars that are captured from elsewhere.
     #[builder(default)]
-    pub num_upvalues: usize,
+    pub num_upvalues: RegisterSize,
 
     /// The actual instructions of this function
     #[builder(default)]
@@ -97,7 +95,7 @@ impl ProgramFunction {
         self.prototype.arity
     }
 
-    pub fn new(prototype: FunctionPrototype, num_locals: usize) -> Self {
+    pub fn new(prototype: FunctionPrototype, num_locals: u16) -> Self {
         Self {
             prototype,
             num_locals,

@@ -1,12 +1,7 @@
 use std::sync::Arc;
 
 use lpc_rs_asm::instruction::Instruction;
-use lpc_rs_core::{
-    function_arity::FunctionArityBuilder,
-    function_flags::FunctionFlags,
-    lpc_type::LpcType,
-    register::{Register, RegisterVariant},
-};
+use lpc_rs_core::{function_arity::FunctionArityBuilder, function_flags::FunctionFlags, lpc_type::LpcType, register::{Register, RegisterVariant}, RegisterSize};
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::{
     function_prototype::FunctionPrototypeBuilder,
@@ -93,12 +88,12 @@ pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
 
 /// `compose`, an efun for composing two functions into a new function.
 pub async fn compose<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let a = context.resolve_local_register(1_usize).clone();
+    let a = context.resolve_local_register(1 as RegisterSize).clone();
     if !matches!(a, LpcRef::Function(_)) {
         return Err(context.runtime_error("non-function sent as first argument to `compose`"));
     };
 
-    let b = context.resolve_local_register(2_usize).clone();
+    let b = context.resolve_local_register(2 as RegisterSize).clone();
     if !matches!(b, LpcRef::Function(_)) {
         return Err(context.runtime_error("non-function sent as second argument to `compose`"));
     };

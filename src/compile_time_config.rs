@@ -1,3 +1,5 @@
+use lpc_rs_core::RegisterSize;
+
 /// This module contains all compile-time configuration
 
 /// The maximum size of an execution call stack, in
@@ -8,7 +10,7 @@ pub const MAX_CALL_STACK_SIZE: usize = 64;
 /// allowed, as enough memory slots for all preceding arguments is also
 /// allocated. Note that declared arguments can go beyond this number, as it
 /// requires intent to do so.
-pub const MAX_CLOSURE_ARG_REFERENCE: usize = 64;
+pub const MAX_CLOSURE_ARG_REFERENCE: RegisterSize = 64;
 
 /// The maximum number of queued Tasks that can be waiting to be executed.
 /// Any more than that will be dropped.

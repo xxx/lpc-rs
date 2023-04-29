@@ -32,6 +32,9 @@ pub const INIT_PROGRAM: &str = "init-program";
 /// Reserved efun inherit namespace
 pub const EFUN: &str = "efun";
 
+/// The type used for the number of Registers we allow.
+pub type RegisterSize = u16;
+
 /// Abstracted type to use as in-game `int`s
 pub type LpcIntInner = i64;
 

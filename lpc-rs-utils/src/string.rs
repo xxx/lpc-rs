@@ -1,5 +1,5 @@
 use if_chain::if_chain;
-use lpc_rs_core::LpcIntInner;
+use lpc_rs_core::{LpcIntInner, RegisterSize};
 use lpc_rs_errors::{lpc_error, Result};
 
 /// The maximum length of strings, *in bytes*
@@ -46,7 +46,7 @@ where
 }
 
 /// Pull the number of out of `$1`, etc. closure argument variable references
-pub fn closure_arg_number<T>(i: T) -> Result<usize>
+pub fn closure_arg_number<T>(i: T) -> Result<RegisterSize>
 where
     T: AsRef<str>,
 {
