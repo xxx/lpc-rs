@@ -253,12 +253,7 @@ impl CodegenWalker {
             .map(|f| (f.prototype.name.to_string(), f.clone()))
             .collect::<IndexMap<_, _>>();
 
-        let Ok(num_globals) = u16::try_from(self.global_counter.number_emitted()) else {
-            return Err(lpc_error!(
-                "Too many global variables. Maximum is {}",
-                u16::MAX
-            ));
-        };
+        let num_globals = self.global_counter.number_emitted();
 
         Ok(Program {
             filename: self.context.filename.clone(),

@@ -122,7 +122,7 @@ where
             return Some(Err(lpc_error!("No master object defined.")));
         };
 
-        master.clone()
+        master
     };
 
     apply_function_by_name(name, args, master, template, timeout).await

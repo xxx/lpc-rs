@@ -2743,7 +2743,7 @@ mod tests {
                 let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
 
                 let (program, config, process) = compile_prog(code).await;
-                let space_cell = object_space.into();
+                let space_cell = object_space;
                 ObjectSpace::insert_process(&space_cell, process);
                 let vm_upvalues = Arc::new(RwLock::new(upvalues));
 
@@ -2802,7 +2802,7 @@ mod tests {
 
                 let (program, config, process) = compile_prog(code).await;
                 let object_space = ObjectSpace::default();
-                let space_cell = object_space.into();
+                let space_cell = object_space;
                 ObjectSpace::insert_process(&space_cell, process);
 
                 let result = InitializeProgramBuilder::<20>::default()

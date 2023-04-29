@@ -14,9 +14,9 @@ use dashmap::{
     DashMap,
 };
 use delegate::delegate;
-use lpc_rs_core::lpc_path::LpcPath;
+
 use lpc_rs_utils::config::Config;
-use tracing::{debug, info, trace};
+use tracing::{debug, trace};
 
 use crate::{
     compiler::{Compiler},
@@ -285,7 +285,7 @@ mod tests {
         prog.filename = filename;
 
         let process = Process::new(prog);
-        let space_cell = space.into();
+        let space_cell = space;
         ObjectSpace::insert_process(&space_cell, process);
 
         assert_eq!(space_cell.len(), 1);
