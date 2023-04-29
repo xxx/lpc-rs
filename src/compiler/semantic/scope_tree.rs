@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use indextree::{Arena, Node, NodeId};
-use lpc_rs_errors::{lpc_bug, LpcError, Result};
+use lpc_rs_errors::{lpc_bug, Result};
 use lpc_rs_function_support::symbol::Symbol;
 
 use crate::compiler::{compilation_context::CompilationContext, semantic::local_scope::LocalScope};

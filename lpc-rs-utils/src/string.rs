@@ -1,6 +1,6 @@
 use if_chain::if_chain;
 use lpc_rs_core::LpcIntInner;
-use lpc_rs_errors::{lpc_error, LpcError, Result};
+use lpc_rs_errors::{lpc_error, Result};
 
 /// The maximum length of strings, *in bytes*
 // pub const MAX_STRING_LENGTH: usize = 1_073_741_824; // 1 GiB

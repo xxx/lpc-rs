@@ -5726,7 +5726,7 @@ mod tests {
         let _ = std::mem::replace(&mut parent_init.debug_spans, parent_spans);
 
         let parent = Program {
-            functions: grandparent.functions.clone(),
+            functions: grandparent.functions,
             initializer: Some(parent_init.into()),
             ..Default::default()
         };

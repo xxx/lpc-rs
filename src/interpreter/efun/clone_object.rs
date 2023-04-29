@@ -10,7 +10,7 @@ use crate::{
     },
     util::process_builder::ProcessBuilder,
 };
-use crate::interpreter::task_context::{MAX_CHAIN_COUNT, TaskContext};
+
 
 async fn load_master<const N: usize>(
     context: &mut EfunContext<'_, N>,
@@ -103,9 +103,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         let return_val = if !master.flags.test(ObjectFlags::INITIALIZED) {
             println!("context.chain_count(): {}", context.chain_count());
             if context.chain_count() >= 30 {
-                return Err(context.runtime_error(format!(
-                    "infinite clone recursion detected",
-                )));
+                return Err(context.runtime_error("infinite clone recursion detected"));
             }
 
             let new_context = context
@@ -235,7 +233,7 @@ mod tests {
             object foo = clone_object("cloned");
         "# };
 
-        let mut vm = Vm::new(test_config());
+        let vm = Vm::new(test_config());
         let cloned_proc = vm.process_create_from_code(
             "cloned.c",
             cloned
@@ -284,8 +282,8 @@ mod tests {
             object foo = clone_object("self_clone");
         "# };
 
-        let mut vm = Vm::new(test_config());
-        let self_clone_proc = vm.process_create_from_code(
+        let vm = Vm::new(test_config());
+        let _self_clone_proc = vm.process_create_from_code(
             "self_clone.c",
             self_clone
         ).await.unwrap();

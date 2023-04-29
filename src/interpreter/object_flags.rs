@@ -95,32 +95,32 @@ mod tests {
     #[test]
     fn test_atomic_flags() {
         let flags = AtomicFlags::<ObjectFlags>::new();
-        assert_eq!(flags.test(ObjectFlags::INITIALIZED), false);
-        assert_eq!(flags.test(ObjectFlags::DESTRUCTED), false);
-        assert_eq!(flags.test(ObjectFlags::CLONE), false);
+        assert!(!flags.test(ObjectFlags::INITIALIZED));
+        assert!(!flags.test(ObjectFlags::DESTRUCTED));
+        assert!(!flags.test(ObjectFlags::CLONE));
         assert_eq!(flags.set(ObjectFlags::INITIALIZED), 0);
-        assert_eq!(flags.test(ObjectFlags::INITIALIZED), true);
-        assert_eq!(flags.test(ObjectFlags::DESTRUCTED), false);
-        assert_eq!(flags.test(ObjectFlags::CLONE), false);
+        assert!(flags.test(ObjectFlags::INITIALIZED));
+        assert!(!flags.test(ObjectFlags::DESTRUCTED));
+        assert!(!flags.test(ObjectFlags::CLONE));
         assert_eq!(flags.set(ObjectFlags::DESTRUCTED), 1);
-        assert_eq!(flags.test(ObjectFlags::INITIALIZED), true);
-        assert_eq!(flags.test(ObjectFlags::DESTRUCTED), true);
-        assert_eq!(flags.test(ObjectFlags::CLONE), false);
+        assert!(flags.test(ObjectFlags::INITIALIZED));
+        assert!(flags.test(ObjectFlags::DESTRUCTED));
+        assert!(!flags.test(ObjectFlags::CLONE));
         assert_eq!(flags.clear(ObjectFlags::INITIALIZED), ObjectFlags::INITIALIZED | ObjectFlags::DESTRUCTED);
-        assert_eq!(flags.test(ObjectFlags::INITIALIZED), false);
-        assert_eq!(flags.test(ObjectFlags::DESTRUCTED), true);
-        assert_eq!(flags.test(ObjectFlags::CLONE), false);
+        assert!(!flags.test(ObjectFlags::INITIALIZED));
+        assert!(flags.test(ObjectFlags::DESTRUCTED));
+        assert!(!flags.test(ObjectFlags::CLONE));
         assert_eq!(flags.clear(ObjectFlags::DESTRUCTED), ObjectFlags::DESTRUCTED);
-        assert_eq!(flags.test(ObjectFlags::INITIALIZED), false);
-        assert_eq!(flags.test(ObjectFlags::DESTRUCTED), false);
-        assert_eq!(flags.test(ObjectFlags::CLONE), false);
+        assert!(!flags.test(ObjectFlags::INITIALIZED));
+        assert!(!flags.test(ObjectFlags::DESTRUCTED));
+        assert!(!flags.test(ObjectFlags::CLONE));
         assert_eq!(flags.set(ObjectFlags::CLONE), 0);
-        assert_eq!(flags.test(ObjectFlags::INITIALIZED), false);
-        assert_eq!(flags.test(ObjectFlags::DESTRUCTED), false);
-        assert_eq!(flags.test(ObjectFlags::CLONE), true);
+        assert!(!flags.test(ObjectFlags::INITIALIZED));
+        assert!(!flags.test(ObjectFlags::DESTRUCTED));
+        assert!(flags.test(ObjectFlags::CLONE));
         assert_eq!(flags.clear(ObjectFlags::CLONE), ObjectFlags::CLONE);
-        assert_eq!(flags.test(ObjectFlags::INITIALIZED), false);
-        assert_eq!(flags.test(ObjectFlags::DESTRUCTED), false);
-        assert_eq!(flags.test(ObjectFlags::CLONE), false);
+        assert!(!flags.test(ObjectFlags::INITIALIZED));
+        assert!(!flags.test(ObjectFlags::DESTRUCTED));
+        assert!(!flags.test(ObjectFlags::CLONE));
     }
 }

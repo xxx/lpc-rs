@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use lpc_rs_errors::{lpc_error, LpcError, Result};
+use lpc_rs_errors::{lpc_error, Result};
 use lpc_rs_utils::string::MAX_STRING_LENGTH;
 use string_interner::{DefaultSymbol, StringInterner, Symbol};
 

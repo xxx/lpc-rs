@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use lpc_rs_core::register::Register;
-use lpc_rs_errors::{lpc_error, LpcError, Result};
+use lpc_rs_errors::{lpc_error, Result};
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;

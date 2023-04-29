@@ -113,7 +113,7 @@ mod tests {
             into_lpc_ref::IntoLpcRef,
         },
         test_support::test_config,
-        util::{process_builder::ProcessBuilder, with_compiler::WithCompiler},
+        util::{process_builder::ProcessBuilder},
     };
 
     #[tokio::test]
@@ -126,7 +126,7 @@ mod tests {
             }
         "# };
 
-        let mut vm = Vm::new(test_config());
+        let vm = Vm::new(test_config());
 
         let r = vm.process_initialize_from_code("/foo/bar.c", code).await;
         // let prog = vm

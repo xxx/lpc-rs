@@ -227,7 +227,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub fn new(task_context: TaskContext) -> Self {
         Self {
             id: TaskId::new(),
-            stack: Box::new(CallStack::default()),
+            stack: Box::<CallStack<STACKSIZE>>::default(),
             catch_points: thin_vec![],
             args: ThinVec::with_capacity(10),
             partial_args: ThinVec::with_capacity(10),

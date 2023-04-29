@@ -8,7 +8,7 @@ use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use derive_builder::Builder;
 use lpc_rs_core::{lpc_path::LpcPath, register::Register};
-use lpc_rs_errors::{lpc_bug, LpcError, Result};
+use lpc_rs_errors::{lpc_bug, Result};
 use lpc_rs_utils::config::Config;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;

@@ -3,7 +3,7 @@ use std::{borrow::Cow, collections::HashMap, fmt::Debug, path::Path};
 use derive_builder::Builder;
 use fs_err as fs;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{lpc_error, span::Span, LpcError, Result};
+use lpc_rs_errors::{lpc_error, span::Span, Result};
 use tracing::{info, warn};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use ustr::{ustr, Ustr};

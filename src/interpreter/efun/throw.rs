@@ -1,4 +1,4 @@
-use lpc_rs_errors::{lpc_error, LpcError, Result};
+use lpc_rs_errors::{lpc_error, Result};
 
 use crate::interpreter::efun::efun_context::EfunContext;
 
@@ -6,7 +6,7 @@ use crate::interpreter::efun::efun_context::EfunContext;
 pub async fn throw<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg = context.resolve_local_register(1_usize);
 
-    return Err(lpc_error!(context.frame().current_debug_span(), "{}", arg.to_string()));
+    Err(lpc_error!(context.frame().current_debug_span(), "{}", arg.to_string()))
 }
 
 #[cfg(test)]
