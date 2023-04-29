@@ -276,7 +276,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             vm_upvalues,
             call_outs,
             this_player,
-            upvalue_ptrs.map(|v| v.to_vec()),
+            upvalue_ptrs.map(|v| ThinVec::from(v)),
             tx,
         );
 
@@ -1639,7 +1639,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 arg.map(|register| Ok(get_loc!(self, register)?.into_owned()))
                     .transpose()
             })
-            .collect::<Result<Vec<Option<LpcRef>>>>()?;
+            .collect::<Result<ThinVec<Option<LpcRef>>>>()?;
 
         let frame = self.stack.current_frame()?;
         let fp = FunctionPtr {

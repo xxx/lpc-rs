@@ -12,6 +12,7 @@ use lpc_rs_errors::{lpc_bug, Result};
 use lpc_rs_utils::config::Config;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
+use thin_vec::ThinVec;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
@@ -83,7 +84,7 @@ pub struct TaskContext {
     /// The upvalue_ptrs to populate the initial frame with, if any.
     #[builder(default)]
     // TODO: thinvec this
-    pub upvalue_ptrs: Option<Vec<Register>>,
+    pub upvalue_ptrs: Option<ThinVec<Register>>,
 
     /// The number of this task in the current chain of Tasks. This is
     /// used to prevent infinite recursion among multiple Tasks.
@@ -102,7 +103,7 @@ impl TaskContext {
         vm_upvalues: U,
         call_outs: A,
         this_player: Option<Arc<Process>>,
-        upvalue_ptrs: Option<Vec<Register>>,
+        upvalue_ptrs: Option<ThinVec<Register>>,
         tx: Sender<VmOp>,
     ) -> Self
     where

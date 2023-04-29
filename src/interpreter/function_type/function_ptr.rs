@@ -11,6 +11,7 @@ use lpc_rs_errors::{lpc_bug, lpc_error, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
+use thin_vec::ThinVec;
 use tracing::{instrument, trace};
 
 use crate::{
@@ -45,7 +46,7 @@ pub struct FunctionPtr {
     /// are expected to be filled at call time, in the case of pointers that
     /// are partially-applied.
     #[builder(default)]
-    pub partial_args: Vec<Option<LpcRef>>,
+    pub partial_args: ThinVec<Option<LpcRef>>,
 
     /// Does this pointer use `call_other`?
     #[builder(default)]
@@ -54,7 +55,7 @@ pub struct FunctionPtr {
     /// The variables that I need from the environment, at the time this
     /// [`FunctionPtr`] is created.
     #[builder(default)]
-    pub upvalue_ptrs: Vec<Register>,
+    pub upvalue_ptrs: ThinVec<Register>,
 
     /// A globally-unique ID for this function pointer, used for GC purposes.
     #[builder(default)]

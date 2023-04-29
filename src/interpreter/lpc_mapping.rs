@@ -5,6 +5,7 @@ use delegate::delegate;
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use tracing::{instrument, trace};
+use thin_vec::thin_vec;
 
 use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
@@ -152,11 +153,11 @@ mod tests {
     fn test_mark() {
         let memory = Heap::new(5);
 
-        let ptr = create!(FunctionPtr, upvalue_ptrs: vec![Register(4), Register(33)]);
+        let ptr = create!(FunctionPtr, upvalue_ptrs: thin_vec![Register(4), Register(33)]);
         let key_id = *ptr.unique_id.as_ref();
         let key_ref = ptr.into_lpc_ref(&memory);
 
-        let ptr2 = create!(FunctionPtr, upvalue_ptrs: vec![Register(4), Register(666)]);
+        let ptr2 = create!(FunctionPtr, upvalue_ptrs: thin_vec![Register(4), Register(666)]);
         let value_id = *ptr2.unique_id.as_ref();
         let value_ref = ptr2.into_lpc_ref(&memory);
 

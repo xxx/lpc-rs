@@ -7,6 +7,7 @@ use lpc_rs_core::register::Register;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
+use thin_vec::ThinVec;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
@@ -55,7 +56,7 @@ pub struct TaskTemplate {
 
     /// The upvalue_ptrs to populate the initial frame with, if any.
     #[builder(default)]
-    pub upvalue_ptrs: Option<Vec<Register>>,
+    pub upvalue_ptrs: Option<ThinVec<Register>>,
 }
 
 impl TaskTemplate {

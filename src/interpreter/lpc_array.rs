@@ -212,7 +212,7 @@ mod tests {
     fn test_mark() {
         let memory = Heap::new(5);
 
-        let ptr = create!(FunctionPtr, upvalue_ptrs: vec![Register(4), Register(33)]);
+        let ptr = create!(FunctionPtr, upvalue_ptrs: thin_vec![Register(4), Register(33)]);
         let ptr_id = *ptr.unique_id.as_ref();
 
         let function_ref = ptr.into_lpc_ref(&memory);

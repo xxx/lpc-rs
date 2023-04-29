@@ -72,7 +72,7 @@ pub struct CallFrame {
 
     /// The upvalue indexes (into `vm_upvalues`) for this specific call
     #[builder(default, setter(into))]
-    pub upvalue_ptrs: Vec<Register>,
+    pub upvalue_ptrs: ThinVec<Register>,
 
     /// The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
     #[builder(setter(into))]
@@ -109,7 +109,7 @@ impl CallFrame {
             + function.num_locals
             + 1;
         let process = process.into();
-        let ups = upvalue_ptrs.map(|v| v.to_vec()).unwrap_or_default();
+        let ups = upvalue_ptrs.map(|v| ThinVec::from(v)).unwrap_or_default();
 
         let mut instance = Self {
             process,

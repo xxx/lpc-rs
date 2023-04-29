@@ -15,6 +15,7 @@ use lpc_rs_function_support::{
 // use logos::Span;
 use once_cell::sync::{Lazy, OnceCell};
 use string_interner::StringInterner;
+use thin_vec::thin_vec;
 
 use crate::interpreter::{
     efun::{efun_context::EfunContext, EFUN_PROTOTYPES},
@@ -110,9 +111,9 @@ pub async fn compose<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
     let ptr = FunctionPtr {
         owner: Arc::downgrade(&context.frame().process),
         address: FunctionAddress::Local(Arc::downgrade(&context.frame().process), pf),
-        partial_args: vec![Some(a), Some(b)],
+        partial_args: thin_vec![Some(a), Some(b)],
         call_other: false,
-        upvalue_ptrs: vec![],
+        upvalue_ptrs: thin_vec![],
         unique_id: Default::default(),
     };
 
