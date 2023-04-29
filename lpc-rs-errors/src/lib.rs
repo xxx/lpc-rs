@@ -102,7 +102,7 @@ pub struct LpcError {
     notes: Vec<String>,
     /// Additional errors that were collected before this one. This is only
     /// used during compilation, when non-fatal errors can occur.
-    additional_errors: Option<Vec<Box<LpcError>>>,
+    additional_errors: Option<Vec<LpcError>>,
     /// Optional stack trace for printing
     stack_trace: Option<Vec<String>>,
     /// The severity of this error. Warnings are printed, but do not stop
@@ -205,7 +205,7 @@ impl LpcError {
     }
 
     pub fn with_additional_errors(mut self, additional_errors: Vec<Box<LpcError>>) -> Self {
-        self.additional_errors = Some(additional_errors);
+        self.additional_errors = Some(additional_errors.into_iter().map(|e| *e).collect());
 
         self
     }
