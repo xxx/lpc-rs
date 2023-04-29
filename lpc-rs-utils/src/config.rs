@@ -2,7 +2,7 @@ use std::{borrow::Cow, collections::HashMap, fmt::Debug, path::Path};
 
 use derive_builder::Builder;
 use fs_err as fs;
-use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_core::lpc_path::{canonicalize_in_game_path, LpcPath};
 use lpc_rs_errors::{lpc_error, span::Span, Result};
 use tracing::{info, warn};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -85,16 +85,28 @@ impl ConfigBuilder {
             DebugLog::from_str(path).await
         };
 
+        let lib_dir = env
+            .get("LPC_LIB_DIR")
+            .or_else(|| env.get("LIB_DIR"))
+            .and_then(|x| canonicalized_path(x).ok())
+            .or(self.lib_dir);
+
         let new_self = Self {
             auto_include_file: env
                 .get("LPC_AUTO_INCLUDE_FILE")
                 .or_else(|| env.get("AUTO_INCLUDE_FILE"))
-                .map(|x| Some(ustr(x)))
+                .map(|x| {
+                    let canon = canonicalize_in_game_path(x, "/", lib_dir.unwrap().as_str());
+                    Some(ustr(canon.to_string_lossy().as_ref()))
+                })
                 .or(self.auto_include_file),
             auto_inherit_file: env
                 .get("LPC_AUTO_INHERIT_FILE")
                 .or_else(|| env.get("AUTO_INHERIT_FILE"))
-                .map(|x| Some(ustr(x)))
+                .map(|x| {
+                    let canon = canonicalize_in_game_path(x, "/", lib_dir.unwrap().as_str());
+                    Some(ustr(canon.to_string_lossy().as_ref()))
+                })
                 .or(self.auto_inherit_file),
             bind_address: env
                 .get("LPC_BIND_ADDRESS")
@@ -104,18 +116,19 @@ impl ConfigBuilder {
             server_log_file: env
                 .get("LPC_SERVER_LOG_FILE")
                 .or_else(|| env.get("SERVER_LOG_FILE"))
-                .map(|x| Some(ustr(x)))
+                .map(|x| {
+                    canonicalized_path(x).ok()
+                })
                 .or(self.server_log_file),
             debug_log: Some(Some(debug_log)),
-            lib_dir: env
-                .get("LPC_LIB_DIR")
-                .or_else(|| env.get("LIB_DIR"))
-                .and_then(|x| canonicalized_path(x).ok())
-                .or(self.lib_dir),
+            lib_dir,
             master_object: env
                 .get("LPC_MASTER_OBJECT")
                 .or_else(|| env.get("MASTER_OBJECT"))
-                .map(|x| ustr(x))
+                .map(|x| {
+                    let canon = canonicalize_in_game_path(x, "/", lib_dir.unwrap().as_str());
+                    ustr(canon.to_string_lossy().as_ref())
+                })
                 .or(self.master_object),
             max_execution_time: env
                 .get("LPC_MAX_EXECUTION_TIME")
@@ -135,12 +148,20 @@ impl ConfigBuilder {
             simul_efun_file: env
                 .get("LPC_SIMUL_EFUN_FILE")
                 .or_else(|| env.get("SIMUL_EFUN_FILE"))
-                .map(|x| Some(ustr(x)))
+                .map(|x| {
+                    let canon = canonicalize_in_game_path(x, "/", lib_dir.unwrap().as_str());
+                    Some(ustr(canon.to_string_lossy().as_ref()))
+                })
                 .or(self.simul_efun_file),
             system_include_dirs: env
                 .get("LPC_SYSTEM_INCLUDE_DIRS")
                 .or_else(|| env.get("SYSTEM_INCLUDE_DIRS"))
-                .map(|x| x.split(':').map(|x| x.into()).collect::<Vec<_>>())
+                .map(|x| {
+                    x.split(':').map(|x| {
+                        let canon = canonicalize_in_game_path(x, "/", lib_dir.unwrap().as_str());
+                        canon.to_string_lossy().as_ref().into()
+                    }).collect::<Vec<_>>()
+                })
                 .or_else(|| self.system_include_dirs.clone()),
         };
 
