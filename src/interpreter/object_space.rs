@@ -5,6 +5,7 @@ use std::{
         Arc,
     },
 };
+use arc_swap::ArcSwapAny;
 
 use async_trait::async_trait;
 use bit_set::BitSet;
@@ -15,7 +16,7 @@ use dashmap::{
 use delegate::delegate;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::Config;
-use tracing::trace;
+use tracing::{debug, info, trace};
 
 use crate::{
     compiler::{Compiler},
@@ -39,7 +40,7 @@ pub struct ObjectSpace {
     clone_count: AtomicUsize,
 
     /// The master object.
-    master_object: Option<Arc<Process>>,
+    master_object: ArcSwapAny<Option<Arc<Process>>>,
 
     /// Our configuration
     config: Arc<Config>,
@@ -74,15 +75,8 @@ impl ObjectSpace {
     }
 
     /// Get a reference to the master object.
-    pub fn master_object(&self) -> Option<Ref<'_, String, Arc<Process>>> {
-        // TODO: this should not need to allocate the filename every time.
-        let filename = LpcPath::new_in_game(
-            self.config.master_object.as_str(),
-            "/",
-            self.config.lib_dir.as_str(),
-        );
-        self.processes
-            .get(&Self::prepare_filename(filename.as_ref()))
+    pub fn master_object(&self) -> Option<Arc<Process>> {
+        self.master_object.load_full()
     }
 
     // /// Create a [`Process`] from a [`Program`], and add add it to the process
@@ -103,33 +97,36 @@ impl ObjectSpace {
 
         let clone = Process::new_clone(program, count);
 
-        let name = space_cell.prepare_process_filename(&clone);
+        let filename = clone.filename().into_owned();
 
         let process: Arc<Process> = clone.into();
 
-        space_cell.insert_process_directly(name, process.clone());
+        trace!("Inserting clone: {}", filename);
+
+        space_cell.insert_process_directly(filename, process.clone());
         process
     }
 
     /// Directly insert the passed [`Process`] into the space, with in-game
     /// local filename.
-    pub fn insert_process<P>(object_space: &Arc<Self>, process: P)
+    pub fn insert_process<P>(object_space: &Self, process: P)
     where
         P: Into<Arc<Process>>,
     {
         let process = process.into();
-        let name = object_space.prepare_process_filename(&process);
 
-        let mo = object_space.config.master_object.as_str();
-        let stripped_config = mo.strip_suffix(".c").unwrap_or(mo);
+        let filename = process.filename().into_owned();
 
-        trace!(
-            "Inserting process: {} :: {}",
-            process.filename(),
-            stripped_config
-        );
+        let master_path = object_space.config.master_object.as_str();
+        let stripped_master_path = master_path.strip_suffix(".c").unwrap_or(master_path);
+        if filename.as_str() == master_path || filename.as_str() == stripped_master_path {
+            debug!("Setting new master object: {}", filename);
+            object_space.master_object.swap(Some(process.clone()));
+        }
 
-        object_space.insert_process_directly(name, process);
+        trace!("Inserting process: {}", filename);
+
+        object_space.insert_process_directly(filename, process);
     }
 
     /// Remove the passed [`Process`] from the space.
@@ -180,7 +177,7 @@ impl Clone for ObjectSpace {
             processes: self.processes.clone(),
             clone_count: AtomicUsize::new(self.clone_count.load(Ordering::Relaxed)),
             config: self.config.clone(),
-            master_object: None,
+            master_object: ArcSwapAny::from(None),
         }
     }
 }
@@ -193,7 +190,7 @@ impl Default for ObjectSpace {
             processes,
             clone_count: AtomicUsize::new(0),
             config: Config::default().into(),
-            master_object: None,
+            master_object: ArcSwapAny::from(None),
         }
     }
 }
@@ -230,6 +227,7 @@ mod tests {
 
     use super::*;
     use crate::interpreter::{heap::Heap, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray};
+    use crate::interpreter::program::ProgramBuilder;
 
     // #[test]
     // fn test_insert_master() {
@@ -283,7 +281,7 @@ mod tests {
         let space = ObjectSpace::new(config);
 
         let mut prog: Program = Program::default();
-        let filename: Arc<LpcPath> = Arc::new("./tests/fixtures/code/foo/bar/baz.c".into());
+        let filename: Arc<LpcPath> = Arc::new("/foo/bar/baz.c".into());
         prog.filename = filename;
 
         let process = Process::new(prog);
@@ -327,10 +325,14 @@ mod tests {
 
         assert!(space.master_object().is_none());
 
-        let proc = Arc::new(Process::default());
-        space.insert_process_directly("/master", proc.clone());
+        let prog = ProgramBuilder::default()
+            .filename(Arc::new(LpcPath::InGame("/master.c".into())))
+            .build()
+            .unwrap();
+        let proc = Arc::new(Process::new(prog));
+        ObjectSpace::insert_process(&space, proc.clone());
 
         let master = space.master_object();
-        assert_eq!(*master.unwrap(), proc);
+        assert_eq!(master.unwrap(), proc);
     }
 }
