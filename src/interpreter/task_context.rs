@@ -72,12 +72,12 @@ pub struct TaskContext {
 
     /// The command giver, if there was one. This might be an NPC, or None.
     // TODO: put this into an Arc so it can shared more easily between multiple contexts.
+    //       also make this Weak
     #[builder(default, setter(strip_option))]
     pub this_player: ArcSwapAny<Option<Arc<Process>>>,
 
     /// The upvalue_ptrs to populate the initial frame with, if any.
     #[builder(default)]
-    // TODO: thinvec this
     pub upvalue_ptrs: Option<ThinVec<Register>>,
 
     /// The number of this task in the current chain of Tasks. This is
