@@ -79,7 +79,7 @@ pub struct Compiler {
 
     /// The current depth in the inheritance chain of this compiler
     #[builder(default)]
-    inherit_depth: usize,
+    inherit_depth: u8,
 
     /// Pointer to the simul_efuns to be used for this compilation
     #[builder(default)]

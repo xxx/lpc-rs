@@ -10,7 +10,7 @@ use ustr::{ustr, Ustr};
 
 use crate::debug_log::DebugLog;
 
-const DEFAULT_MAX_INHERIT_DEPTH: usize = 10;
+const DEFAULT_MAX_INHERIT_DEPTH: u8 = 10;
 const DEFAULT_MAX_EXECUTION_TIME: u64 = 300;
 
 /// The main struct that handles runtime use configurations.
@@ -43,7 +43,7 @@ pub struct Config {
     pub max_execution_time: u64,
 
     #[builder(default = "DEFAULT_MAX_INHERIT_DEPTH")]
-    pub max_inherit_depth: usize,
+    pub max_inherit_depth: u8,
 
     #[builder(setter(into, strip_option), default = "None")]
     pub simul_efun_file: Option<Ustr>,
@@ -125,7 +125,7 @@ impl ConfigBuilder {
             max_inherit_depth: env
                 .get("LPC_MAX_INHERIT_DEPTH")
                 .or_else(|| env.get("MAX_INHERIT_DEPTH"))
-                .map(|x| x.parse::<usize>().unwrap())
+                .map(|x| x.parse::<u8>().unwrap())
                 .or(self.max_inherit_depth),
             port: env
                 .get("LPC_PORT")

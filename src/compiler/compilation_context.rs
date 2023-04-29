@@ -67,7 +67,7 @@ pub struct CompilationContext {
     pub inherit_names: HashMap<String, usize>,
 
     /// How deep into an inheritance chain is this context?
-    pub inherit_depth: usize,
+    pub inherit_depth: u8,
 
     /// How many global variables have been declared in inherited-from parents?
     /// This is how we determine how much space the final [`Process`] needs to
