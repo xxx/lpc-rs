@@ -42,7 +42,7 @@ pub struct Program {
 
     /// How many globals does this program need storage for?
     /// Note that this number includes inherited globals.
-    pub num_globals: usize,
+    pub num_globals: u16,
 
     /// Which pragmas have been set for this program?
     pub pragmas: PragmaFlags,

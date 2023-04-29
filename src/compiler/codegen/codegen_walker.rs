@@ -192,7 +192,7 @@ impl CodegenWalker {
             ..Self::default()
         };
 
-        result.global_counter.set(num_globals);
+        result.global_counter.set(num_globals as usize);
 
         result.register_counter.set(num_init_registers + 1);
 
@@ -261,13 +261,20 @@ impl CodegenWalker {
             .map(|f| (f.prototype.name.to_string(), f.clone()))
             .collect::<IndexMap<_, _>>();
 
+        let Ok(num_globals) = u16::try_from(self.global_counter.number_emitted()) else {
+            return Err(lpc_error!(
+                "Too many global variables. Maximum is {}",
+                u16::MAX
+            ));
+        };
+
         Ok(Program {
             filename: self.context.filename.clone(),
             functions: Box::new(functions),
             initializer: self.initializer,
             unmangled_functions: Box::new(unmangled_functions),
             global_variables: Box::new(global_variables),
-            num_globals: self.global_counter.number_emitted(),
+            num_globals,
             pragmas: self.context.pragmas,
             strings,
         })

@@ -72,10 +72,10 @@ pub struct CompilationContext {
     /// How many global variables have been declared in inherited-from parents?
     /// This is how we determine how much space the final [`Process`] needs to
     /// allocate for global variables.
-    pub num_globals: usize,
+    pub num_globals: u16,
 
     /// How many variables need to be upvalued?
-    pub num_upvalues: usize,
+    pub num_upvalues: u16,
 
     /// How many [`Register`](lpc_rs_core::register::Register)s were required
     /// for initializing global variables, in inherited-from parents?
@@ -88,7 +88,7 @@ pub struct CompilationContext {
 
     /// The count of closures that have been defined, so we can give them unique
     /// names.
-    pub closure_count: usize,
+    pub closure_count: u16,
 }
 
 impl CompilationContext {

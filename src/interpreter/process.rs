@@ -56,7 +56,7 @@ impl Process {
 
         Self {
             program,
-            globals: RwLock::new(RefBank::new(vec![NULL; num_globals])),
+            globals: RwLock::new(RefBank::new(vec![NULL; num_globals as usize])),
             clone_id: None,
             connection: ArcSwapAny::from(None),
             flags: Default::default(),
@@ -73,7 +73,7 @@ impl Process {
 
         Self {
             program,
-            globals: RwLock::new(RefBank::new(vec![NULL; num_globals])),
+            globals: RwLock::new(RefBank::new(vec![NULL; num_globals as usize])),
             clone_id: Some(clone_id),
             connection: ArcSwapAny::from(None),
             flags,
