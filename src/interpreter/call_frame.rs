@@ -12,6 +12,7 @@ use lpc_rs_core::register::{Register, RegisterVariant};
 use lpc_rs_errors::{lpc_bug, lpc_error, span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use parking_lot::RwLock;
+use thin_vec::ThinVec;
 use tracing::{instrument, trace};
 
 use crate::interpreter::{
@@ -52,7 +53,7 @@ pub struct CallFrame {
     /// The actual locations of all arguments that were passed-in.
     /// Necessary for populating `argv` in ellipsis functions, e.g.
     #[builder(default)]
-    pub arg_locations: Vec<RegisterVariant>,
+    pub arg_locations: ThinVec<RegisterVariant>,
 
     /// Our registers. By convention, `registers[0]` is for the return value of
     /// the call, and is not otherwise used for storage of locals.
@@ -113,7 +114,7 @@ impl CallFrame {
         let mut instance = Self {
             process,
             function,
-            arg_locations: Vec::with_capacity(called_with_num_args),
+            arg_locations: ThinVec::with_capacity(called_with_num_args),
             registers: RefBank::new(vec![NULL; reg_len]),
             pc: 0,
             called_with_num_args,

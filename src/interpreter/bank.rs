@@ -8,6 +8,7 @@ use std::{
 
 use bit_set::BitSet;
 use delegate::delegate;
+use thin_vec::ThinVec;
 use lpc_rs_core::register::Register;
 use lpc_rs_function_support::program_function::ProgramFunction;
 
@@ -38,7 +39,7 @@ impl RefBank {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Bank<T> {
     /// Our storage.
-    pub registers: Vec<T>,
+    pub registers: ThinVec<T>,
 }
 
 impl<T> Bank<T> {
@@ -67,7 +68,7 @@ impl<T> Bank<T> {
     /// Create a new [`Bank`] from the passed [`Vec`] of `T`s.
     #[inline]
     pub fn new(registers: Vec<T>) -> Self {
-        Self { registers }
+        Self { registers: ThinVec::from(registers) }
     }
 }
 
@@ -182,7 +183,7 @@ impl<T> IndexMut<RangeFrom<usize>> for Bank<T> {
 
 impl<T> IntoIterator for Bank<T> {
     type Item = T;
-    type IntoIter = IntoIter<Self::Item>;
+    type IntoIter = thin_vec::IntoIter<Self::Item>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
