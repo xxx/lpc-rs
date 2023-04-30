@@ -33,6 +33,8 @@ pub const INIT_PROGRAM: &str = "init-program";
 pub const EFUN: &str = "efun";
 
 /// The type used for the number of Registers we allow.
+/// This can ostensibly be any size, up to and including the platform's `usize`.
+/// To go beyond that, a lot of type coercion code will need to be updated.
 pub type RegisterSize = u16;
 
 /// Abstracted type to use as in-game `int`s
