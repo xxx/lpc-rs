@@ -31,17 +31,17 @@ use crate::{
     },
 };
 
-/// A struct to carry context during the evaluation of a single [`Task`].
+/// A struct to carry context during the evaluation of a single [`Task`](crate::interpreter::task::Task).
 #[derive(Debug, Builder)]
 #[builder(pattern = "owned")]
 pub struct TaskContext {
     /// The [`Config`] that's in use for the
-    /// [`Task`].
+    /// [`Task`](crate::interpreter::task::Task).
     #[builder(setter(into))]
     pub config: Arc<Config>,
 
     /// The [`Process`] that owns the function being
-    /// called in this [`Task`].
+    /// called in this [`Task`](crate::interpreter::task::Task).
     #[builder(setter(into))]
     pub process: Arc<Process>,
 

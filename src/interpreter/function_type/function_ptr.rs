@@ -112,8 +112,9 @@ impl FunctionPtr {
     /// pieces out of it, and into separate variables.
     ///
     /// Note that this is intended for use when calling a [`FunctionPtr`] that's used to
-    /// start a new [`Task`]. If the [`Task`]already exists, you should use
-    /// [`Task::handle_call_fp`] instead.
+    /// start a new [`Task`](crate::interpreter::task::Task). If the
+    /// [`Task`](crate::interpreter::task::Task) already exists, you should use
+    /// set it up to simply [`resume`](crate::interpreter::task::Task::resume) instead.
     ///
     /// In the case of a [`FunctionPtr`] with a `Dynamic` [`FunctionAddress`], this will also
     /// create (but not initialize) the object, if necessary (such as in the case of a
@@ -165,9 +166,11 @@ impl FunctionPtr {
                             let string = string_ref.read();
                             object_space.lookup(string.to_str()).map(|x| x.clone())
                         }
-                        _ => return Err(lpc_error!(
+                        _ => {
+                            return Err(lpc_error!(
                             "attempted to call a dynamic receiver that is not an object or string"
-                        )),
+                        ))
+                        }
                     };
 
                     if string_receiver && proc.is_none() {
