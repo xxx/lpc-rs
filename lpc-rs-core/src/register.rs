@@ -97,20 +97,6 @@ impl From<&Register> for RegisterSize {
     }
 }
 
-impl From<Register> for usize {
-    #[inline]
-    fn from(f: Register) -> Self {
-        f.0 as usize
-    }
-}
-
-impl From<&Register> for usize {
-    #[inline]
-    fn from(f: &Register) -> Self {
-        f.0 as usize
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
