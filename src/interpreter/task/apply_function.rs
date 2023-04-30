@@ -117,12 +117,8 @@ pub async fn apply_function_in_master<S>(
 where
     S: AsRef<str>,
 {
-    let master = {
-        let Some(master) = template.object_space.master_object() else {
-            return Some(Err(lpc_error!("No master object defined.")));
-        };
-
-        master
+    let Some(master) = template.object_space.master_object() else {
+        return Some(Err(lpc_error!("No master object defined.")));
     };
 
     apply_function_by_name(name, args, master, template, timeout).await

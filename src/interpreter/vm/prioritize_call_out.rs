@@ -1,6 +1,7 @@
 use if_chain::if_chain;
 use lpc_rs_errors::LpcError;
 use tokio::task::JoinHandle;
+use tracing::error;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -12,6 +13,9 @@ use crate::{
         vm::{vm_op::VmOp, Vm},
     },
 };
+use crate::interpreter::object_flags::ObjectFlags;
+use crate::interpreter::task::into_task_context::IntoTaskContext;
+use crate::interpreter::task::task_template::TaskTemplateBuilder;
 
 impl Vm {
     /// Handler for [`VmOp::PrioritizeCallOut`].
@@ -61,6 +65,25 @@ impl Vm {
                 let _ = tx.send(VmOp::TaskError(TaskId(0), triple.unwrap_err())).await;
                 return;
             };
+
+            if !process.flags.test(ObjectFlags::INITIALIZED) {
+                let template = TaskTemplateBuilder::default()
+                    .config(config.clone())
+                    .object_space(object_space.clone())
+                    .call_outs(call_outs.clone())
+                    .memory(memory.clone())
+                    .vm_upvalues(upvalues.clone())
+                    .tx(tx.clone())
+                    .build()
+                    .unwrap();
+
+                let ctx = template.into_task_context(process.clone());
+                if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_process(ctx).await {
+                    // TODO: this should apply runtime_error() on the master.
+                    error!("{}", e);
+                    return;
+                }
+            }
 
             {
                 let mut call_outs = call_outs.write();
@@ -117,7 +140,9 @@ mod tests {
         },
         test_support::test_config,
     };
-    use crate::util::process_builder::ProcessInitializer;
+    use crate::interpreter::object_flags::ObjectFlags;
+    use crate::interpreter::process::Process;
+    use crate::util::process_builder::{ProcessCreator, ProcessInitializer};
 
     #[tokio::test]
     async fn test_prioritize_call_out() {
@@ -155,39 +180,63 @@ mod tests {
         assert!(vm.call_outs.read().get(idx).is_none());
     }
 
-    #[tokio::test]
-    async fn works_with_string_receivers() {
-        let code = indoc! { r#"
+    mod test_string_receivers {
+        use super::*;
+        async fn check(vm: &Vm, bar_proc: &Arc<Process>) {
+            let ptr = FunctionPtrBuilder::default()
+                .address(FunctionAddress::Dynamic(ustr("foo")))
+                .partial_args(RwLock::new(thin_vec![Some("/bar".into_lpc_ref(&vm.memory))]))
+                .build()
+                .unwrap();
+
+            let call_out = CallOutBuilder::default()
+                .process(Arc::downgrade(&bar_proc))
+                .func_ref(ptr.into_lpc_ref(&vm.memory))
+                ._handle(tokio::spawn(async {}))
+                .build()
+                .unwrap();
+
+            let idx = vm.call_outs.write().push(call_out);
+
+            let handle = vm.prioritize_call_out(idx).await;
+            handle.await.unwrap();
+
+            assert_eq!(bar_proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
+            assert!(bar_proc.flags.test(ObjectFlags::INITIALIZED));
+            assert!(vm.call_outs.read().get(idx).is_none());
+        }
+
+        #[tokio::test]
+        async fn works_with_string_preinitialized_receivers() {
+            let bar = indoc! { r#"
             int i = 123;
             void foo(string s) {
                 i += 42;
             }
         "# };
 
-        let vm = Vm::new(test_config());
+            let vm = Vm::new(test_config());
 
-        let r = vm.process_initialize_from_code("/bar.c", code).await;
-        let proc = r.unwrap().context.process;
+            let r = vm.process_initialize_from_code("/bar.c", bar).await;
+            let bar_proc = r.unwrap().context.process;
 
-        let ptr = FunctionPtrBuilder::default()
-            .address(FunctionAddress::Dynamic(ustr("foo")))
-            .partial_args(RwLock::new(thin_vec![Some("bar".into_lpc_ref(&vm.memory))]))
-            .build()
-            .unwrap();
+            check(&vm, &bar_proc).await;
+        }
 
-        let call_out = CallOutBuilder::default()
-            .process(Arc::downgrade(&proc))
-            .func_ref(ptr.into_lpc_ref(&vm.memory))
-            ._handle(tokio::spawn(async {}))
-            .build()
-            .unwrap();
+        #[tokio::test]
+        async fn works_with_string_noninitialized_receivers() {
+            let bar = indoc! { r#"
+            int i = 123;
+            void foo(string s) {
+                i += 42;
+            }
+        "# };
 
-        let idx = vm.call_outs.write().push(call_out);
+            let vm = Vm::new(test_config());
 
-        let handle = vm.prioritize_call_out(idx).await;
-        handle.await.unwrap();
+            let bar_proc = vm.process_create_from_code("/bar.c", bar).await.unwrap();
 
-        assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
-        assert!(vm.call_outs.read().get(idx).is_none());
+            check(&vm, &bar_proc).await;
+        }
     }
 }

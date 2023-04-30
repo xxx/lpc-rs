@@ -30,7 +30,11 @@ use crate::{
         connection::{Connection, InputTo},
         ops::{BrokerOp, ConnectionOp},
     },
+    compile_time_config::MAX_CALL_STACK_SIZE
 };
+use crate::interpreter::object_flags::ObjectFlags;
+use crate::interpreter::task::into_task_context::IntoTaskContext;
+use crate::interpreter::task::Task;
 
 /// The incoming connection handler. Once established, individual connections are managed by [`ConnectionBroker`](connection_broker::ConnectionBroker).
 #[derive(Debug)]
@@ -321,6 +325,17 @@ impl Telnet {
             return;
         };
 
+        if !process.flags.test(ObjectFlags::INITIALIZED) {
+            let template = template.clone();
+            template.set_this_player(connection.process.load_full());
+            let ctx = template.into_task_context(process.clone());
+            if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_process(ctx).await {
+                // TODO: this should apply runtime_error() on the master.
+                error!("{}", e);
+                return;
+            }
+        }
+
         let arg_index: Option<usize> = input_to
             .ptr
             .partial_args
@@ -368,9 +383,10 @@ mod tests {
     use crate::interpreter::function_type::function_address::FunctionAddress;
     use crate::interpreter::function_type::function_ptr::FunctionPtrBuilder;
     use crate::interpreter::lpc_ref::LpcRef;
+    use crate::interpreter::object_flags::ObjectFlags;
     use crate::interpreter::vm::Vm;
     use crate::test_support::test_config;
-    use crate::util::process_builder::ProcessInitializer;
+    use crate::util::process_builder::{ProcessCreator, ProcessInitializer};
     use super::*;
 
     struct FakeSink;
@@ -438,9 +454,44 @@ mod tests {
         assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
     }
 
-    #[tokio::test]
-    async fn test_resolve_input_to_with_string_receiver() {
-        let code = indoc! { r#"
+    mod test_string_receivers {
+        use crate::interpreter::process::Process;
+        use super::*;
+
+        async fn check(vm: &Vm, proc: Arc<Process>) {
+            let ptr = FunctionPtrBuilder::default()
+                .address(FunctionAddress::Dynamic("foo".into()))
+                .partial_args(RwLock::new(thin_vec![Some("/foo/bar".into_lpc_ref(&vm.memory))]))
+                .build()
+                .unwrap();
+
+            let (broker_tx, _broker_rx) = flume::unbounded();
+            let (connection_tx, _connection_rx) = mpsc::channel(1);
+
+            let mut sink = FakeSink;
+
+            let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
+            let connection = Connection::new(addr, connection_tx, broker_tx.clone());
+            let input_to = InputTo {
+                ptr: vm.memory.alloc_function_arc(ptr),
+                no_echo: false,
+            };
+
+            Telnet::resolve_input_to(
+                &input_to,
+                &"hello".to_string(),
+                &mut sink,
+                &connection,
+                &vm.new_task_template()
+            ).await;
+
+            assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
+            assert!(proc.flags.test(ObjectFlags::INITIALIZED));
+        }
+
+        #[tokio::test]
+        async fn test_preinitialized_string_receiver() {
+            let code = indoc! { r#"
             int i = 123;
 
             void foo() {
@@ -448,37 +499,29 @@ mod tests {
             }
         "# };
 
-        let vm = Vm::new(test_config());
+            let vm = Vm::new(test_config());
 
-        let r = vm.process_initialize_from_code("/foo/bar.c", code).await;
-        let proc = r.unwrap().context.process;
+            let r = vm.process_initialize_from_code("/foo/bar.c", code).await;
+            let proc = r.unwrap().context.process;
 
-        let ptr = FunctionPtrBuilder::default()
-            .address(FunctionAddress::Dynamic("foo".into()))
-            .partial_args(RwLock::new(thin_vec![Some("/foo/bar".into_lpc_ref(&vm.memory))]))
-            .build()
-            .unwrap();
+            check(&vm, proc).await;
+        }
 
-        let (broker_tx, _broker_rx) = flume::unbounded();
-        let (connection_tx, _connection_rx) = mpsc::channel(1);
+        #[tokio::test]
+        async fn test_noninitialized_string_receiver() {
+            let code = indoc! { r#"
+            int i = 123;
 
-        let mut sink = FakeSink;
+            void foo() {
+                i += 42;
+            }
+        "# };
 
-        let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
-        let connection = Connection::new(addr, connection_tx, broker_tx.clone());
-        let input_to = InputTo {
-            ptr: vm.memory.alloc_function_arc(ptr),
-            no_echo: false,
-        };
+            let vm = Vm::new(test_config());
 
-        Telnet::resolve_input_to(
-            &input_to,
-            &"hello".to_string(),
-            &mut sink,
-            &connection,
-            &vm.new_task_template()
-        ).await;
+            let proc = vm.process_create_from_code("/foo/bar.c", code).await.unwrap();
 
-        assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
+            check(&vm, proc).await;
+        }
     }
 }
