@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use factori::factori;
+use parking_lot::RwLock;
 use thin_vec::thin_vec;
 use ustr::ustr;
-use parking_lot::RwLock;
 
 use crate::interpreter::{
     function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},

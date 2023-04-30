@@ -35,8 +35,8 @@ use crate::{
         ops::{BrokerOp, ConnectionOp},
         Telnet,
     },
+    util::process_builder::ProcessInitializer,
 };
-use crate::util::process_builder::ProcessInitializer;
 
 mod initiate_login;
 mod object_initializers;

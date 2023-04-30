@@ -1,20 +1,26 @@
 use std::sync::Arc;
-use thin_vec::ThinVec;
-use tracing::{instrument, trace};
-use lpc_rs_core::register::{Register, RegisterVariant};
-use lpc_rs_core::RegisterSize;
-use crate::interpreter::call_frame::CallFrame;
-use crate::interpreter::function_type::function_address::FunctionAddress;
-use crate::interpreter::lpc_ref::LpcRef;
-use crate::interpreter::object_flags::ObjectFlags;
-use crate::interpreter::task::Task;
+
+use lpc_rs_core::{
+    register::{Register, RegisterVariant},
+    RegisterSize,
+};
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::program_function::ProgramFunction;
-use crate::{get_loc, set_loc};
-use crate::interpreter::function_type::function_ptr::FunctionPtr;
-use crate::interpreter::task::{get_location, set_location};
-use crate::interpreter::lpc_ref::NULL;
-use crate::interpreter::process::Process;
+use thin_vec::ThinVec;
+use tracing::{instrument, trace};
+
+use crate::{
+    get_loc,
+    interpreter::{
+        call_frame::CallFrame,
+        function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
+        lpc_ref::{LpcRef, NULL},
+        object_flags::ObjectFlags,
+        process::Process,
+        task::{get_location, set_location, Task},
+    },
+    set_loc,
+};
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
@@ -33,18 +39,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        let (
-            passed_args_count,
-            function_is_efun,
-            is_dynamic_receiver,
-            function,
-            proc,
-            upvalues
-        ) = match self.extract_ptr_data(&ptr_arc, num_args).await {
-            Ok(Some(tuple)) => tuple,
-            Ok(None) => return Ok(()),
-            Err(e) => return Err(e),
-        };
+        let (passed_args_count, function_is_efun, is_dynamic_receiver, function, proc, upvalues) =
+            match self.extract_ptr_data(&ptr_arc, num_args).await {
+                Ok(Some(tuple)) => tuple,
+                Ok(None) => return Ok(()),
+                Err(e) => return Err(e),
+            };
 
         if !proc.flags.test(ObjectFlags::INITIALIZED) {
             let ctx = self.context.clone().with_process(proc.clone());
@@ -149,15 +149,28 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// A broken-out function to avoid the ptr's lock being held across awaits.
-    async fn extract_ptr_data(&mut self, ptr: &FunctionPtr, num_args: u16) -> Result<Option<(u16, bool, bool, Arc<ProgramFunction>, Arc<Process>, Option<ThinVec<Register>>)>> {
+    async fn extract_ptr_data(
+        &mut self,
+        ptr: &FunctionPtr,
+        num_args: u16,
+    ) -> Result<
+        Option<(
+            u16,
+            bool,
+            bool,
+            Arc<ProgramFunction>,
+            Arc<Process>,
+            Option<ThinVec<Register>>,
+        )>,
+    > {
         trace!("Calling function ptr: {}", ptr);
 
         let passed_args_count = num_args
             + ptr
-            .partial_args
-            .read()
-            .iter()
-            .fold(0, |sum, arg| sum + arg.is_some() as RegisterSize);
+                .partial_args
+                .read()
+                .iter()
+                .fold(0, |sum, arg| sum + arg.is_some() as RegisterSize);
         let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
         let is_dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
         let is_call_other = ptr.call_other;
@@ -197,6 +210,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             // same as normal direct calls to them.
             None
         };
-        Ok(Some((passed_args_count, function_is_efun, is_dynamic_receiver, function, proc, upvalues)))
+        Ok(Some((
+            passed_args_count,
+            function_is_efun,
+            is_dynamic_receiver,
+            function,
+            proc,
+            upvalues,
+        )))
     }
 }

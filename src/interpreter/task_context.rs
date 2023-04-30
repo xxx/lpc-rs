@@ -3,7 +3,7 @@ use std::{future::Future, path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use derive_builder::Builder;
-use lpc_rs_core::{register::Register};
+use lpc_rs_core::register::Register;
 use lpc_rs_errors::{lpc_bug, Result};
 use lpc_rs_utils::config::Config;
 use once_cell::sync::OnceCell;
@@ -24,9 +24,12 @@ use crate::{
         task::{into_task_context::IntoTaskContext, task_template::TaskTemplate},
         vm::vm_op::VmOp,
     },
-    util::{get_simul_efuns, with_compiler::WithCompiler},
+    util::{
+        get_simul_efuns,
+        process_builder::{ProcessCreator, ProcessInitializer},
+        with_compiler::WithCompiler,
+    },
 };
-use crate::util::process_builder::{ProcessCreator, ProcessInitializer};
 
 /// A struct to carry context during the evaluation of a single [`Task`].
 #[derive(Debug, Builder)]

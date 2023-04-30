@@ -18,17 +18,18 @@ use crate::{
         gc::gc_bank::GcRefBank,
         heap::Heap,
         lpc_ref::LpcRef,
+        object_space::ObjectSpace,
         process::Process,
         program::Program,
-        task::{get_location},
+        task::{get_location, task_template::TaskTemplate},
         task_context::{TaskContext, TaskContextBuilder},
         vm::vm_op::VmOp,
     },
-    util::{with_compiler::WithCompiler},
+    util::{
+        process_builder::{ProcessCreator, ProcessInitializer},
+        with_compiler::WithCompiler,
+    },
 };
-use crate::interpreter::object_space::ObjectSpace;
-use crate::interpreter::task::task_template::TaskTemplate;
-use crate::util::process_builder::{ProcessCreator, ProcessInitializer};
 
 /// A structure to hold various pieces of interpreter state, to be passed to
 /// Efuns when they're called

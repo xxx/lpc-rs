@@ -140,8 +140,8 @@ impl AsRef<str> for &LpcString {
 }
 
 impl<T> IntoLpcRef for T
-    where
-        T: Into<LpcString>,
+where
+    T: Into<LpcString>,
 {
     fn into_lpc_ref(self, memory: &Heap) -> LpcRef {
         memory.alloc_string(self.into())

@@ -20,21 +20,22 @@ use tokio_util::codec::{Decoder, Framed};
 use tracing::{error, info, instrument, trace, warn};
 
 use crate::{
+    compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
         function_type::function_ptr::FunctionPtr,
         into_lpc_ref::IntoLpcRef,
         lpc_string::LpcString,
-        task::{apply_function::apply_function, task_template::TaskTemplate},
+        object_flags::ObjectFlags,
+        task::{
+            apply_function::apply_function, into_task_context::IntoTaskContext,
+            task_template::TaskTemplate, Task,
+        },
     },
     telnet::{
         connection::{Connection, InputTo},
         ops::{BrokerOp, ConnectionOp},
     },
-    compile_time_config::MAX_CALL_STACK_SIZE
 };
-use crate::interpreter::object_flags::ObjectFlags;
-use crate::interpreter::task::into_task_context::IntoTaskContext;
-use crate::interpreter::task::Task;
 
 /// The incoming connection handler. Once established, individual connections are managed by [`ConnectionBroker`](connection_broker::ConnectionBroker).
 #[derive(Debug)]
@@ -310,8 +311,7 @@ impl Telnet {
         sink: &mut S,
         connection: &Connection,
         template: &TaskTemplate,
-    )
-    where
+    ) where
         S: SinkExt<TelnetEvent> + Unpin,
     {
         if input_to.no_echo {
@@ -319,7 +319,8 @@ impl Telnet {
             let _ = sink.send(TelnetEvent::Wont(TelnetOption::Echo)).await;
         }
 
-        let triple = FunctionPtr::triple(&input_to.ptr, &template.config, &template.object_space).await;
+        let triple =
+            FunctionPtr::triple(&input_to.ptr, &template.config, &template.object_space).await;
         let Ok((process, function, mut args)) = triple else {
             let _ = sink.send(TelnetEvent::Message("Canceled.".to_string())).await;
             return;
@@ -374,26 +375,36 @@ impl Telnet {
 
 #[cfg(test)]
 mod tests {
-    use std::net::ToSocketAddrs;
-    use std::pin::Pin;
-    use std::task::{Context, Poll};
+    use std::{
+        net::ToSocketAddrs,
+        pin::Pin,
+        task::{Context, Poll},
+    };
+
     use indoc::indoc;
     use parking_lot::RwLock;
     use thin_vec::thin_vec;
-    use crate::interpreter::function_type::function_address::FunctionAddress;
-    use crate::interpreter::function_type::function_ptr::FunctionPtrBuilder;
-    use crate::interpreter::lpc_ref::LpcRef;
-    use crate::interpreter::object_flags::ObjectFlags;
-    use crate::interpreter::vm::Vm;
-    use crate::test_support::test_config;
-    use crate::util::process_builder::{ProcessCreator, ProcessInitializer};
+
     use super::*;
+    use crate::{
+        interpreter::{
+            function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
+            lpc_ref::LpcRef,
+            object_flags::ObjectFlags,
+            vm::Vm,
+        },
+        test_support::test_config,
+        util::process_builder::{ProcessCreator, ProcessInitializer},
+    };
 
     struct FakeSink;
     impl futures::Sink<TelnetEvent> for FakeSink {
         type Error = ();
 
-        fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        fn poll_ready(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
             Poll::Ready(Ok(()))
         }
 
@@ -401,11 +412,17 @@ mod tests {
             Ok(())
         }
 
-        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        fn poll_flush(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
             Poll::Ready(Ok(()))
         }
 
-        fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        fn poll_close(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
             Poll::Ready(Ok(()))
         }
     }
@@ -448,20 +465,23 @@ mod tests {
             &"hello".to_string(),
             &mut sink,
             &connection,
-            &vm.new_task_template()
-        ).await;
+            &vm.new_task_template(),
+        )
+        .await;
 
         assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
     }
 
     mod test_string_receivers {
-        use crate::interpreter::process::Process;
         use super::*;
+        use crate::interpreter::process::Process;
 
         async fn check(vm: &Vm, proc: Arc<Process>) {
             let ptr = FunctionPtrBuilder::default()
                 .address(FunctionAddress::Dynamic("foo".into()))
-                .partial_args(RwLock::new(thin_vec![Some("/foo/bar".into_lpc_ref(&vm.memory))]))
+                .partial_args(RwLock::new(thin_vec![Some(
+                    "/foo/bar".into_lpc_ref(&vm.memory)
+                )]))
                 .build()
                 .unwrap();
 
@@ -482,8 +502,9 @@ mod tests {
                 &"hello".to_string(),
                 &mut sink,
                 &connection,
-                &vm.new_task_template()
-            ).await;
+                &vm.new_task_template(),
+            )
+            .await;
 
             assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
             assert!(proc.flags.test(ObjectFlags::INITIALIZED));
@@ -519,7 +540,10 @@ mod tests {
 
             let vm = Vm::new(test_config());
 
-            let proc = vm.process_create_from_code("/foo/bar.c", code).await.unwrap();
+            let proc = vm
+                .process_create_from_code("/foo/bar.c", code)
+                .await
+                .unwrap();
 
             check(&vm, proc).await;
         }

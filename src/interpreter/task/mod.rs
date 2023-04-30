@@ -10,10 +10,10 @@ mod handle_call_fp;
 use std::{
     borrow::Cow,
     fmt::{Debug, Display},
+    path::PathBuf,
     sync::{Arc, Weak},
     time::Duration,
 };
-use std::path::PathBuf;
 
 use async_recursion::async_recursion;
 use bit_set::BitSet;
@@ -26,6 +26,7 @@ use itertools::Itertools;
 use lpc_rs_asm::{address::Address, instruction::Instruction};
 use lpc_rs_core::{
     function_receiver::FunctionReceiver,
+    lpc_path::LpcPath,
     lpc_type::LpcType,
     register::{Register, RegisterVariant},
     LpcIntInner, RegisterSize,
@@ -39,7 +40,6 @@ use thin_vec::{thin_vec, ThinVec};
 use tokio::{sync::mpsc::Sender, task::JoinHandle, time::timeout};
 use tracing::{error, instrument, trace, warn};
 use ustr::ustr;
-use lpc_rs_core::lpc_path::LpcPath;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -65,8 +65,8 @@ use crate::{
         task_context::TaskContext,
         vm::vm_op::VmOp,
     },
+    util::process_builder::ProcessCreator,
 };
-use crate::util::process_builder::ProcessCreator;
 
 // this is just to shut clippy up
 type ProcessFunctionPair = (Weak<Process>, Arc<ProgramFunction>);
@@ -1041,7 +1041,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             func.clone(),
             num_args,
             num_args,
-            None::<&[Register]>, // static functions do not inherit upvalues from the calling function
+            None::<&[Register]>, /* static functions do not inherit upvalues from the calling function */
             self.context.upvalues().clone(),
         );
 
@@ -1103,9 +1103,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         }
                     }
                     _ => {
-                        return Err(self.runtime_error(
-                            "non-object receiver to function pointer call",
-                        ));
+                        return Err(
+                            self.runtime_error("non-object receiver to function pointer call")
+                        );
                     }
                 };
 
@@ -2362,10 +2362,11 @@ mod tests {
             use tokio::sync::mpsc;
 
             use super::*;
-            use crate::interpreter::task::initialize_program::InitializeProgramBuilder;
-            use crate::interpreter::vm::Vm;
-            use crate::test_support::test_config;
-            use crate::util::process_builder::ProcessInitializer;
+            use crate::{
+                interpreter::{task::initialize_program::InitializeProgramBuilder, vm::Vm},
+                test_support::test_config,
+                util::process_builder::ProcessInitializer,
+            };
 
             #[tokio::test]
             async fn stores_the_value() {

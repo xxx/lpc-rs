@@ -3,8 +3,7 @@
 use std::sync::Arc;
 
 use clap::Parser;
-use lpc_rs::{interpreter::vm::Vm};
-use lpc_rs::util::process_builder::ProcessInitializer;
+use lpc_rs::{interpreter::vm::Vm, util::process_builder::ProcessInitializer};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::ConfigBuilder;
 

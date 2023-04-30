@@ -384,9 +384,7 @@ impl Mark for LpcRef {
                 let map = map.read();
                 map.mark(marked, processed)
             }
-            LpcRef::Function(fun) => {
-                fun.mark(marked, processed)
-            }
+            LpcRef::Function(fun) => fun.mark(marked, processed),
         }
     }
 }

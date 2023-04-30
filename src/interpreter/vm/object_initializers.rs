@@ -8,14 +8,14 @@ use lpc_rs_errors::Result;
 use crate::{
     compiler::Compiler,
     interpreter::{
-        task::{task_template::TaskTemplate},
-        task_context::TaskContext,
+        object_space::ObjectSpace, task::task_template::TaskTemplate, task_context::TaskContext,
         vm::Vm,
     },
-    util::{with_compiler::WithCompiler},
+    util::{
+        process_builder::{ProcessCreator, ProcessInitializer},
+        with_compiler::WithCompiler,
+    },
 };
-use crate::interpreter::object_space::ObjectSpace;
-use crate::util::process_builder::{ProcessCreator, ProcessInitializer};
 
 impl Vm {
     /// Initialize the simulated efuns file, if it is configured.
@@ -77,7 +77,9 @@ impl Vm {
         let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config.lib_dir);
         self.config.validate_in_game_path(&lpc_path, None)?;
 
-        self.process_initialize_from_code(&lpc_path, code).await.map(|t| t.context)
+        self.process_initialize_from_code(&lpc_path, code)
+            .await
+            .map(|t| t.context)
         // let prog = self
         //     .with_async_compiler(
         //         |compiler| async move { compiler.compile_string(lpc_path, code).await },

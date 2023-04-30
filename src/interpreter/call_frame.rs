@@ -359,7 +359,13 @@ mod tests {
         let fs = ProgramFunction::new(prototype, 7);
         let vm_upvalues = RwLock::new(GcBank::default());
 
-        let frame = CallFrame::new(process, Arc::new(fs), 4, None::<&[Register]>, vm_upvalues.into());
+        let frame = CallFrame::new(
+            process,
+            Arc::new(fs),
+            4,
+            None::<&[Register]>,
+            vm_upvalues.into(),
+        );
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -454,7 +460,13 @@ mod tests {
             pf.num_upvalues = 2;
 
             let vm_upvalues = Arc::new(RwLock::new(GcBank::default()));
-            let frame = CallFrame::new(process, Arc::new(pf), 0, None::<&[Register]>, vm_upvalues.clone());
+            let frame = CallFrame::new(
+                process,
+                Arc::new(pf),
+                0,
+                None::<&[Register]>,
+                vm_upvalues.clone(),
+            );
 
             assert_eq!(frame.upvalue_ptrs, vec![Register(0), Register(1)]);
             assert_eq!(frame.vm_upvalues.read().len(), 2);
@@ -483,7 +495,13 @@ mod tests {
             pf.local_variables.extend([a, b, c]);
             pf.num_upvalues = 3;
 
-            let frame = CallFrame::new(frame.process, Arc::new(pf), 0, None::<&[Register]>, vm_upvalues);
+            let frame = CallFrame::new(
+                frame.process,
+                Arc::new(pf),
+                0,
+                None::<&[Register]>,
+                vm_upvalues,
+            );
             assert_eq!(
                 frame.upvalue_ptrs,
                 vec![Register(2), Register(3), Register(4)]

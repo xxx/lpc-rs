@@ -1,20 +1,19 @@
 use std::{
     fmt::{Display, Formatter},
+    path::PathBuf,
     sync::{Arc, Weak},
 };
-use std::path::PathBuf;
 
 use bit_set::BitSet;
 use derive_builder::Builder;
 use itertools::Itertools;
-use lpc_rs_core::register::Register;
+use lpc_rs_core::{lpc_path::LpcPath, register::Register};
 use lpc_rs_errors::{lpc_bug, lpc_error, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
-use lpc_rs_core::lpc_path::LpcPath;
 
 use crate::{
     interpreter::{
@@ -27,10 +26,8 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
     },
-    util::get_simul_efuns,
+    util::{get_simul_efuns, process_builder::ProcessCreator},
 };
-
-use crate::util::process_builder::ProcessCreator;
 
 type PtrTriple = (Arc<Process>, Arc<ProgramFunction>, Vec<LpcRef>);
 
@@ -78,7 +75,11 @@ impl FunctionPtr {
     /// How many arguments do we expect to be called with at runtime?
     #[inline]
     pub fn arity(&self) -> usize {
-        self.partial_args.read().iter().filter(|x| x.is_none()).count()
+        self.partial_args
+            .read()
+            .iter()
+            .filter(|x| x.is_none())
+            .count()
     }
 
     /// Get a clone of this function pointer, with a new unique ID.
@@ -158,13 +159,15 @@ impl FunctionPtr {
                             };
 
                             Some(proc)
-                        },
+                        }
                         Some(Some(LpcRef::String(string_ref))) => {
                             string_receiver = true;
                             let string = string_ref.read();
                             object_space.lookup(string.to_str()).map(|x| x.clone())
-                        },
-                        _ => return Err(lpc_error!("attempted to call a dynamic receiver that is not an object or string")),
+                        }
+                        _ => return Err(lpc_error!(
+                            "attempted to call a dynamic receiver that is not an object or string"
+                        )),
                     };
 
                     if string_receiver && proc.is_none() {

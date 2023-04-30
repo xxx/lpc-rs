@@ -20,9 +20,8 @@ use tracing::{debug, trace};
 use crate::{
     compiler::Compiler,
     interpreter::{gc::mark::Mark, process::Process, program::Program},
-    util::with_compiler::WithCompiler,
+    util::{process_builder::ProcessCreator, with_compiler::WithCompiler},
 };
-use crate::util::process_builder::ProcessCreator;
 
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;

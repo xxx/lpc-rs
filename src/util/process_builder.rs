@@ -11,11 +11,10 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        task::{into_task_context::IntoTaskContext, Task},
+        task::{into_task_context::IntoTaskContext, task_template::TaskTemplate, Task},
     },
     util::with_compiler::WithCompiler,
 };
-use crate::interpreter::task::task_template::TaskTemplate;
 
 /// A convenience trait for creating [`Process`]es without initialization.
 #[async_trait]
@@ -34,26 +33,26 @@ pub trait ProcessCreator: WithCompiler {
                 compiler.compile_in_game_file(filename, None).await
             })
             .await
-            .map(
-                |prog| process_insert_program(prog, object_space)
-            )?;
+            .map(|prog| process_insert_program(prog, object_space))?;
 
         Ok(proc)
     }
 
     /// Compile the passed code, masquerading as the passed filename, and insert it into the [`ObjectSpace`],
     /// _without_ initialization.
-    async fn process_create_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>> where P: Into<LpcPath> + Send + Sync, S: AsRef<str> + Send + Sync {
+    async fn process_create_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>>
+    where
+        P: Into<LpcPath> + Send + Sync,
+        S: AsRef<str> + Send + Sync,
+    {
         let object_space = self.process_creator_data();
 
         let proc = self
-            .with_async_compiler(|compiler| async move {
-                compiler.compile_string(filename, code).await
-            })
+            .with_async_compiler(
+                |compiler| async move { compiler.compile_string(filename, code).await },
+            )
             .await
-            .map(
-                |prog| process_insert_program(prog, object_space)
-            )?;
+            .map(|prog| process_insert_program(prog, object_space))?;
 
         Ok(proc)
     }
@@ -61,10 +60,7 @@ pub trait ProcessCreator: WithCompiler {
 
 /// Helper to directly insert a [`Program`] into the [`ObjectSpace`], _without_ initialization
 #[inline]
-fn process_insert_program(
-    program: Program,
-    object_space: &ObjectSpace,
-) -> Arc<Process> {
+fn process_insert_program(program: Program, object_space: &ObjectSpace) -> Arc<Process> {
     let process = Arc::new(Process::new(program));
     ObjectSpace::insert_process(object_space, process.clone());
     process
@@ -101,9 +97,9 @@ pub trait ProcessInitializer: WithCompiler {
         filename: P,
         code: S,
     ) -> Result<Task<MAX_CALL_STACK_SIZE>>
-        where
-            P: Into<LpcPath> + Send + Sync,
-            S: AsRef<str> + Send + Sync,
+    where
+        P: Into<LpcPath> + Send + Sync,
+        S: AsRef<str> + Send + Sync,
     {
         let template = self.process_initializer_data();
 
@@ -122,8 +118,8 @@ async fn process_insert_and_initialize_program<T>(
     program: Program,
     template: T,
 ) -> Result<Task<MAX_CALL_STACK_SIZE>>
-    where
-        T: IntoTaskContext + Send,
+where
+    T: IntoTaskContext + Send,
 {
     let process = Arc::new(Process::new(program));
 

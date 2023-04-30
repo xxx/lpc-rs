@@ -8,14 +8,15 @@ use crate::{
     interpreter::{
         function_type::function_ptr::FunctionPtr,
         lpc_ref::LpcRef,
-        task::{task_id::TaskId, Task},
+        object_flags::ObjectFlags,
+        task::{
+            into_task_context::IntoTaskContext, task_id::TaskId,
+            task_template::TaskTemplateBuilder, Task,
+        },
         task_context::TaskContext,
         vm::{vm_op::VmOp, Vm},
     },
 };
-use crate::interpreter::object_flags::ObjectFlags;
-use crate::interpreter::task::into_task_context::IntoTaskContext;
-use crate::interpreter::task::task_template::TaskTemplateBuilder;
 
 impl Vm {
     /// Handler for [`VmOp::PrioritizeCallOut`].
@@ -137,12 +138,12 @@ mod tests {
             call_outs::CallOutBuilder,
             function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
             into_lpc_ref::IntoLpcRef,
+            object_flags::ObjectFlags,
+            process::Process,
         },
         test_support::test_config,
+        util::process_builder::{ProcessCreator, ProcessInitializer},
     };
-    use crate::interpreter::object_flags::ObjectFlags;
-    use crate::interpreter::process::Process;
-    use crate::util::process_builder::{ProcessCreator, ProcessInitializer};
 
     #[tokio::test]
     async fn test_prioritize_call_out() {
@@ -185,7 +186,9 @@ mod tests {
         async fn check(vm: &Vm, bar_proc: &Arc<Process>) {
             let ptr = FunctionPtrBuilder::default()
                 .address(FunctionAddress::Dynamic(ustr("foo")))
-                .partial_args(RwLock::new(thin_vec![Some("/bar".into_lpc_ref(&vm.memory))]))
+                .partial_args(RwLock::new(thin_vec![Some(
+                    "/bar".into_lpc_ref(&vm.memory)
+                )]))
                 .build()
                 .unwrap();
 
