@@ -98,7 +98,7 @@ impl ProgramFunction {
         self.prototype.arity
     }
 
-    pub fn new(prototype: FunctionPrototype, num_locals: u16) -> Self {
+    pub fn new(prototype: FunctionPrototype, num_locals: RegisterSize) -> Self {
         Self {
             prototype,
             num_locals,
