@@ -179,7 +179,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         }
 
-        let Some((proc, function)) = self.extract_process_and_function(&ptr).await? else {
+        let Some((proc, function)) = self.extract_process_and_function(ptr).await? else {
             return Ok(None)
         };
 

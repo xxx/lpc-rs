@@ -3,14 +3,13 @@ use std::{borrow::Cow, fmt::Debug, future::Future, path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use delegate::delegate;
-use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant, RegisterSize};
+use lpc_rs_core::{register::RegisterVariant, RegisterSize};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
-    compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::Compiler,
     interpreter::{
         call_frame::CallFrame,
@@ -21,7 +20,7 @@ use crate::{
         lpc_ref::LpcRef,
         process::Process,
         program::Program,
-        task::{get_location, Task},
+        task::{get_location},
         task_context::{TaskContext, TaskContextBuilder},
         vm::vm_op::VmOp,
     },

@@ -3,7 +3,7 @@ use std::{future::Future, path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use derive_builder::Builder;
-use lpc_rs_core::{lpc_path::LpcPath, register::Register};
+use lpc_rs_core::{register::Register};
 use lpc_rs_errors::{lpc_bug, Result};
 use lpc_rs_utils::config::Config;
 use once_cell::sync::OnceCell;
@@ -12,7 +12,6 @@ use thin_vec::ThinVec;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
-    compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::Compiler,
     interpreter::{
         call_outs::CallOuts,
@@ -22,7 +21,7 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        task::{into_task_context::IntoTaskContext, task_template::TaskTemplate, Task},
+        task::{into_task_context::IntoTaskContext, task_template::TaskTemplate},
         vm::vm_op::VmOp,
     },
     util::{get_simul_efuns, with_compiler::WithCompiler},

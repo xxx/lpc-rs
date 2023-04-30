@@ -190,7 +190,7 @@ mod tests {
                 .unwrap();
 
             let call_out = CallOutBuilder::default()
-                .process(Arc::downgrade(&bar_proc))
+                .process(Arc::downgrade(bar_proc))
                 .func_ref(ptr.into_lpc_ref(&vm.memory))
                 ._handle(tokio::spawn(async {}))
                 .build()
