@@ -32,7 +32,9 @@ pub const INIT_PROGRAM: &str = "init-program";
 /// Reserved efun inherit namespace
 pub const EFUN: &str = "efun";
 
-/// The type used for the number of Registers we allow.
+/// The type used for the number of Registers we allow. This limit is also used for
+/// the number of local variables (per function), arguments (per function), and
+/// global variables (per Program).
 /// This can ostensibly be any size, up to and including the platform's `usize`.
 /// To go beyond that, a lot of type coercion code will need to be updated.
 pub type RegisterSize = u16;

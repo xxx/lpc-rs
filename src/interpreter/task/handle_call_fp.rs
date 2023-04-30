@@ -152,10 +152,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     async fn extract_ptr_data(
         &mut self,
         ptr: &FunctionPtr,
-        num_args: u16,
+        num_args: RegisterSize,
     ) -> Result<
         Option<(
-            u16,
+            RegisterSize,
             bool,
             bool,
             Arc<ProgramFunction>,

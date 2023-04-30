@@ -8,6 +8,7 @@ use std::{
     num::TryFromIntError,
     result,
 };
+use std::convert::Infallible;
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label, LabelStyle},
@@ -382,6 +383,12 @@ impl From<TryFromIntError> for LpcError {
 impl From<TryFromIntError> for Box<LpcError> {
     fn from(e: TryFromIntError) -> Self {
         Self::new(lpc_error!(e.to_string()))
+    }
+}
+
+impl From<Infallible> for Box<LpcError> {
+    fn from(_e: Infallible) -> Self {
+        unreachable!("this better be unreachable.")
     }
 }
 
