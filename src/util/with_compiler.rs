@@ -36,3 +36,15 @@ pub trait WithCompiler {
         f(compiler).await
     }
 }
+
+/// A generic impl that anything with a `Config` and an `ObjectSpace` can use.
+#[async_trait]
+impl WithCompiler for (&Arc<Config>, &ObjectSpace) {
+    async fn with_async_compiler<F, U, T>(&self, f: F) -> Result<T>
+    where
+        F: FnOnce(Compiler) -> U + Send,
+        U: Future<Output = Result<T>> + Send,
+    {
+        Self::with_async_compiler_associated(f, self.0, self.1).await
+    }
+}

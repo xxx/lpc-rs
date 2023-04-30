@@ -1,7 +1,7 @@
 use std::sync::Weak;
 
 use parking_lot::RwLock;
-use shared_arena::SharedArena;
+use shared_arena::{ArenaArc, SharedArena};
 
 use crate::interpreter::{
     function_type::function_ptr::FunctionPtr, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray,
@@ -29,7 +29,7 @@ pub struct Heap {
     object_pool: SharedArena<Weak<Process>>,
 
     /// The function arena
-    function_pool: SharedArena<RwLock<FunctionPtr>>,
+    function_pool: SharedArena<FunctionPtr>,
 }
 
 impl Heap {
@@ -81,8 +81,14 @@ impl Heap {
     /// Allocate a new [`FunctionPtr`]
     #[inline]
     pub fn alloc_function(&self, function: FunctionPtr) -> LpcRef {
-        let ptr = self.function_pool.alloc_arc(RwLock::new(function));
+        let ptr = self.alloc_function_arc(function);
         LpcRef::Function(ptr)
+    }
+
+    /// Allocate a new [`FunctionPtr`] and return an [`ArenaArc`] to it.
+    #[inline]
+    pub fn alloc_function_arc(&self, function: FunctionPtr) -> ArenaArc<FunctionPtr> {
+        self.function_pool.alloc_arc(function)
     }
 }
 

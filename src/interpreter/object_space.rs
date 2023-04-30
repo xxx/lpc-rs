@@ -22,14 +22,14 @@ use crate::{
     interpreter::{gc::mark::Mark, process::Process, program::Program},
     util::with_compiler::WithCompiler,
 };
-
-/// A wrapper around a [`HashMap`] of [`Process`]es, to hold all of the master
-/// and cloned objects. In other words, this is the map that `find_object()`
-/// uses.
+use crate::util::process_builder::ProcessCreator;
 
 /// The initial size (in objects) of the object space
 const OBJECT_SPACE_SIZE: usize = 100_000;
 
+/// A wrapper around a [`DashMap`] of [`Process`]es, to hold all of the master
+/// and cloned objects. In other words, this is the map that `find_object()`
+/// uses.
 #[derive(Debug)]
 pub struct ObjectSpace {
     /// The actual mapping of "paths" to processes
@@ -167,6 +167,12 @@ impl ObjectSpace {
         T: AsRef<str>,
     {
         self.processes.get(path.as_ref())
+    }
+}
+
+impl ProcessCreator for ObjectSpace {
+    fn process_creator_data(&self) -> &Self {
+        self
     }
 }
 

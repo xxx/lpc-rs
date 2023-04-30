@@ -25,8 +25,11 @@ use crate::{
         task_context::{TaskContext, TaskContextBuilder},
         vm::vm_op::VmOp,
     },
-    util::{process_builder::ProcessBuilder, with_compiler::WithCompiler},
+    util::{with_compiler::WithCompiler},
 };
+use crate::interpreter::object_space::ObjectSpace;
+use crate::interpreter::task::task_template::TaskTemplate;
+use crate::util::process_builder::{ProcessCreator, ProcessInitializer};
 
 /// A structure to hold various pieces of interpreter state, to be passed to
 /// Efuns when they're called
@@ -209,41 +212,17 @@ impl<'task, const N: usize> WithCompiler for EfunContext<'task, N> {
 }
 
 #[async_trait]
-impl<'task, const N: usize> ProcessBuilder for EfunContext<'task, N> {
-    async fn process_create_from_path(&self, filename: &LpcPath) -> Result<Arc<Process>> {
-        self.task_context.process_create_from_path(filename).await
+impl<'task, const N: usize> ProcessCreator for EfunContext<'task, N> {
+    #[inline]
+    fn process_creator_data(&self) -> &ObjectSpace {
+        self.task_context.process_creator_data()
     }
+}
 
-    async fn process_create_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>>
-    where
-        P: Into<LpcPath> + Send + Sync,
-        S: AsRef<str> + Send + Sync,
-    {
-        self.task_context
-            .process_create_from_code(filename, code)
-            .await
-    }
-
-    async fn process_initialize_from_path(
-        &self,
-        filename: &LpcPath,
-    ) -> Result<Task<MAX_CALL_STACK_SIZE>> {
-        self.task_context
-            .process_initialize_from_path(filename)
-            .await
-    }
-
-    async fn process_initialize_from_code<P, S>(
-        &self,
-        filename: P,
-        code: S,
-    ) -> Result<Task<MAX_CALL_STACK_SIZE>>
-    where
-        P: Into<LpcPath> + Send + Sync,
-        S: AsRef<str> + Send + Sync,
-    {
-        self.task_context
-            .process_initialize_from_code(filename, code)
-            .await
+#[async_trait]
+impl<'task, const N: usize> ProcessInitializer for EfunContext<'task, N> {
+    #[inline]
+    fn process_initializer_data(&self) -> TaskTemplate {
+        self.task_context.process_initializer_data()
     }
 }

@@ -97,22 +97,23 @@ impl CallFrame {
     ///   the call to this function?
     /// * `upvalue_ptrs` - The indexes pointing to the real data, contained in `vm_upvalues`
     /// * `vm_upvalues` - The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
-    pub fn new<P>(
+    pub fn new<P, V>(
         process: P,
         function: Arc<ProgramFunction>,
         called_with_num_args: RegisterSize,
-        upvalue_ptrs: Option<&[Register]>,
+        upvalue_ptrs: Option<V>,
         vm_upvalues: Arc<RwLock<GcRefBank>>,
     ) -> Self
     where
         P: Into<Arc<Process>>,
+        V: Into<ThinVec<Register>>,
     {
         // add +1 for r0 (where return value is stored)
         let reg_len = std::cmp::max(function.arity().num_args, called_with_num_args)
             + function.num_locals
             + 1;
         let process = process.into();
-        let ups = upvalue_ptrs.map(ThinVec::from).unwrap_or_default();
+        let ups = upvalue_ptrs.map(Into::into).unwrap_or_default();
 
         let mut instance = Self {
             process,
@@ -144,16 +145,17 @@ impl CallFrame {
     ///   is used for ellipsis args and `call_other`)
     /// * `upvalue_ptrs` - The indexes pointing to the real data, contained in `vm_upvalues`
     /// * `vm_upvalues` - The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
-    pub fn with_minimum_arg_capacity<P>(
+    pub fn with_minimum_arg_capacity<P, V>(
         process: P,
         function: Arc<ProgramFunction>,
         called_with_num_args: RegisterSize,
         arg_capacity: RegisterSize,
-        upvalue_ptrs: Option<&[Register]>,
+        upvalue_ptrs: Option<V>,
         vm_upvalues: Arc<RwLock<GcRefBank>>,
     ) -> Self
     where
         P: Into<Arc<Process>>,
+        V: Into<ThinVec<Register>>,
     {
         Self {
             registers: RefBank::initialized_for_function(&function, arg_capacity),
@@ -357,7 +359,7 @@ mod tests {
         let fs = ProgramFunction::new(prototype, 7);
         let vm_upvalues = RwLock::new(GcBank::default());
 
-        let frame = CallFrame::new(process, Arc::new(fs), 4, None, vm_upvalues.into());
+        let frame = CallFrame::new(process, Arc::new(fs), 4, None::<&[Register]>, vm_upvalues.into());
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -386,7 +388,7 @@ mod tests {
                 Arc::new(fs),
                 4,
                 30,
-                None,
+                None::<&[Register]>,
                 vm_upvalues.into(),
             );
 
@@ -414,7 +416,7 @@ mod tests {
                 Arc::new(fs),
                 4,
                 2,
-                None,
+                None::<&[Register]>,
                 vm_upvalues.into(),
             );
 
@@ -452,7 +454,7 @@ mod tests {
             pf.num_upvalues = 2;
 
             let vm_upvalues = Arc::new(RwLock::new(GcBank::default()));
-            let frame = CallFrame::new(process, Arc::new(pf), 0, None, vm_upvalues.clone());
+            let frame = CallFrame::new(process, Arc::new(pf), 0, None::<&[Register]>, vm_upvalues.clone());
 
             assert_eq!(frame.upvalue_ptrs, vec![Register(0), Register(1)]);
             assert_eq!(frame.vm_upvalues.read().len(), 2);
@@ -481,7 +483,7 @@ mod tests {
             pf.local_variables.extend([a, b, c]);
             pf.num_upvalues = 3;
 
-            let frame = CallFrame::new(frame.process, Arc::new(pf), 0, None, vm_upvalues);
+            let frame = CallFrame::new(frame.process, Arc::new(pf), 0, None::<&[Register]>, vm_upvalues);
             assert_eq!(
                 frame.upvalue_ptrs,
                 vec![Register(2), Register(3), Register(4)]

@@ -299,19 +299,23 @@ impl Telnet {
         }
     }
 
-    async fn resolve_input_to(
+    async fn resolve_input_to<S>(
         input_to: &InputTo,
         msg: &String,
-        sink: &mut SplitSink<Framed<TcpStream, TelnetCodec>, TelnetEvent>,
+        // sink: &mut SplitSink<Framed<TcpStream, TelnetCodec>, TelnetEvent>,
+        sink: &mut S,
         connection: &Connection,
         template: &TaskTemplate,
-    ) {
+    )
+    where
+        S: SinkExt<TelnetEvent> + Unpin,
+    {
         if input_to.no_echo {
             // Tell the client to start echoing again (by saying that we won't be).
             let _ = sink.send(TelnetEvent::Wont(TelnetOption::Echo)).await;
         }
 
-        let triple = FunctionPtr::triple(&input_to.ptr, &template.config, &template.object_space);
+        let triple = FunctionPtr::triple(&input_to.ptr, &template.config, &template.object_space).await;
         let Ok((process, function, mut args)) = triple else {
             let _ = sink.send(TelnetEvent::Message("Canceled.".to_string())).await;
             return;
@@ -319,8 +323,8 @@ impl Telnet {
 
         let arg_index: Option<usize> = input_to
             .ptr
-            .read()
             .partial_args
+            .read()
             .iter()
             .position(|x| x.is_none());
         let input_arg = LpcString::from(msg).into_lpc_ref(&template.memory);
@@ -336,6 +340,7 @@ impl Telnet {
         let max_execution_time = template.config.max_execution_time;
         let result =
             apply_function(function, &args, process, template, Some(max_execution_time)).await;
+
         if let Err(e) = result {
             // TODO: this should apply runtime_error() on the master.
             error!("{}", e);
@@ -352,15 +357,128 @@ impl Telnet {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//
-//     #[tokio::test]
-//     async fn test_connection_loop() {
-//         let (tx, _rx) = flume::unbounded();
-//
-//
-//
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use std::net::ToSocketAddrs;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+    use indoc::indoc;
+    use parking_lot::RwLock;
+    use thin_vec::thin_vec;
+    use crate::interpreter::function_type::function_address::FunctionAddress;
+    use crate::interpreter::function_type::function_ptr::FunctionPtrBuilder;
+    use crate::interpreter::lpc_ref::LpcRef;
+    use crate::interpreter::vm::Vm;
+    use crate::test_support::test_config;
+    use crate::util::process_builder::ProcessInitializer;
+    use super::*;
+
+    struct FakeSink;
+    impl futures::Sink<TelnetEvent> for FakeSink {
+        type Error = ();
+
+        fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn start_send(self: Pin<&mut Self>, item: TelnetEvent) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_resolve_input_to() {
+        let code = indoc! { r#"
+            int i = 123;
+
+            void foo() {
+                i += 42;
+            }
+        "# };
+
+        let vm = Vm::new(test_config());
+
+        let r = vm.process_initialize_from_code("/foo/bar.c", code).await;
+        let proc = r.unwrap().context.process;
+        let func = proc.program.lookup_function("foo").unwrap().clone();
+
+        let ptr = FunctionPtrBuilder::default()
+            .address(FunctionAddress::Local(Arc::downgrade(&proc), func.clone()))
+            .build()
+            .unwrap();
+
+        let (broker_tx, _broker_rx) = flume::unbounded();
+        let (connection_tx, _connection_rx) = mpsc::channel(1);
+
+        let mut sink = FakeSink;
+
+        let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
+        let connection = Connection::new(addr, connection_tx, broker_tx.clone());
+        let input_to = InputTo {
+            ptr: vm.memory.alloc_function_arc(ptr),
+            no_echo: false,
+        };
+
+        Telnet::resolve_input_to(
+            &input_to,
+            &"hello".to_string(),
+            &mut sink,
+            &connection,
+            &vm.new_task_template()
+        ).await;
+
+        assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_input_to_with_string_receiver() {
+        let code = indoc! { r#"
+            int i = 123;
+
+            void foo() {
+                i += 42;
+            }
+        "# };
+
+        let vm = Vm::new(test_config());
+
+        let r = vm.process_initialize_from_code("/foo/bar.c", code).await;
+        let proc = r.unwrap().context.process;
+
+        let ptr = FunctionPtrBuilder::default()
+            .address(FunctionAddress::Dynamic("foo".into()))
+            .partial_args(RwLock::new(thin_vec![Some("/foo/bar".into_lpc_ref(&vm.memory))]))
+            .build()
+            .unwrap();
+
+        let (broker_tx, _broker_rx) = flume::unbounded();
+        let (connection_tx, _connection_rx) = mpsc::channel(1);
+
+        let mut sink = FakeSink;
+
+        let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
+        let connection = Connection::new(addr, connection_tx, broker_tx.clone());
+        let input_to = InputTo {
+            ptr: vm.memory.alloc_function_arc(ptr),
+            no_echo: false,
+        };
+
+        Telnet::resolve_input_to(
+            &input_to,
+            &"hello".to_string(),
+            &mut sink,
+            &connection,
+            &vm.new_task_template()
+        ).await;
+
+        assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
+    }
+}

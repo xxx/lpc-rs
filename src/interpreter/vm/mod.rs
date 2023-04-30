@@ -35,8 +35,8 @@ use crate::{
         ops::{BrokerOp, ConnectionOp},
         Telnet,
     },
-    util::process_builder::ProcessBuilder,
 };
+use crate::util::process_builder::ProcessInitializer;
 
 mod initiate_login;
 mod object_initializers;
@@ -51,7 +51,7 @@ pub struct Vm {
     pub object_space: Arc<ObjectSpace>,
 
     /// Shared VM memory. Reference-type `LpcRef`s are allocated out of this.
-    memory: Arc<Heap>,
+    pub memory: Arc<Heap>,
 
     /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`](crate::interpreter::task::Task)s
     pub upvalues: Arc<RwLock<GcRefBank>>,

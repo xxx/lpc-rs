@@ -5,12 +5,15 @@ pub mod task_id;
 pub mod task_state;
 pub mod task_template;
 
+mod handle_call_fp;
+
 use std::{
     borrow::Cow,
     fmt::{Debug, Display},
     sync::{Arc, Weak},
     time::Duration,
 };
+use std::path::PathBuf;
 
 use async_recursion::async_recursion;
 use bit_set::BitSet;
@@ -36,6 +39,7 @@ use thin_vec::{thin_vec, ThinVec};
 use tokio::{sync::mpsc::Sender, task::JoinHandle, time::timeout};
 use tracing::{error, instrument, trace, warn};
 use ustr::ustr;
+use lpc_rs_core::lpc_path::LpcPath;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -62,6 +66,7 @@ use crate::{
         vm::vm_op::VmOp,
     },
 };
+use crate::util::process_builder::ProcessCreator;
 
 // this is just to shut clippy up
 type ProcessFunctionPair = (Weak<Process>, Arc<ProgramFunction>);
@@ -159,12 +164,14 @@ where
     }
 }
 
+#[macro_export]
 macro_rules! get_loc {
     ($self:expr, $loc:expr) => {{
         get_location(&$self.stack, $loc)
     }};
 }
 
+#[macro_export]
 macro_rules! set_loc {
     ($self:expr, $loc:expr, $val:expr) => {{
         set_location(&mut $self.stack, $loc, $val)
@@ -1034,7 +1041,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             func.clone(),
             num_args,
             num_args,
-            None, // static functions do not inherit upvalues from the calling function
+            None::<&[Register]>, // static functions do not inherit upvalues from the calling function
             self.context.upvalues().clone(),
         );
 
@@ -1070,198 +1077,43 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(new_frame)
     }
 
-    #[instrument(skip_all)]
-    #[inline]
-    async fn handle_call_fp(&mut self, location: RegisterVariant) -> Result<()> {
-        let num_args = RegisterSize::try_from(self.args.len())?;
-        let func = {
-            let lpc_ref = &*get_loc!(self, location)?;
-
-            if let LpcRef::Function(func) = lpc_ref {
-                func.clone() // this is a cheap clone
-            } else {
-                return Err(
-                    self.runtime_error(format!("callfp instruction on non-function: {}", lpc_ref))
-                );
-            }
-        };
-
-        let (
-            mut new_frame,
-            is_dynamic_receiver,
-            function_is_efun,
-            adjusted_num_args,
-            max_arg_length,
-        ) = {
-            let ptr = func.read();
-
-            trace!("Calling function ptr: {}", ptr);
-
-            let passed_args_count = num_args
-                + ptr
-                    .partial_args
-                    .iter()
-                    .fold(0, |sum, arg| sum + arg.is_some() as RegisterSize);
-            let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
-            let is_dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
-            let is_call_other = ptr.call_other;
-
-            if let FunctionAddress::Local(receiver, pf) = &ptr.address {
-                let Some(receiver) = receiver.upgrade() else {
-                    return Err(self.runtime_error(format!(
-                        "attempted to call a pointer to a function in a destructed object: {}",
-                        ptr
-                    )));
-                };
-
-                if !pf.public()
-                    && !pf.is_closure()
-                    && (is_call_other || !Arc::ptr_eq(self.context.process(), &receiver))
-                {
-                    return set_loc!(self, Register(0).as_local(), NULL);
-                }
-            }
-
-            let Some((proc, function)) = self.extract_process_and_function(&ptr)? else {
-                return Ok(())
-            };
-
-            let Some(proc) = proc.upgrade() else {
-                return Err(self.runtime_error(format!(
-                    "attempted to call a pointer to a function in a destructed object: {}",
-                    ptr
-                )));
-            };
-
-            let adjusted_num_args = num_args - (is_dynamic_receiver as RegisterSize);
-
-            let max_arg_length = std::cmp::max(adjusted_num_args, function.arity().num_args);
-            let max_arg_length = std::cmp::max(max_arg_length, passed_args_count);
-
-            let upvalues = if function.is_closure() {
-                Some(&ptr.upvalue_ptrs)
-            } else {
-                // Calls to pointers to static functions do not inherit upvalues,
-                // same as normal direct calls to them.
-                None
-            };
-
-            (
-                CallFrame::with_minimum_arg_capacity(
-                    proc,
-                    function,
-                    passed_args_count,
-                    max_arg_length,
-                    upvalues.map(|f| f.as_slice()),
-                    self.context.upvalues().clone(),
-                ),
-                is_dynamic_receiver,
-                function_is_efun,
-                adjusted_num_args,
-                max_arg_length,
-            )
-        };
-
-        // for dynamic receivers, skip the first register of the passed args, which contains the receiver itself
-        let index = is_dynamic_receiver as usize;
-        let from_slice = &self.args[index..(index + adjusted_num_args as usize)];
-
-        fn type_check_and_assign_location<const STACKSIZE: usize>(
-            task: &Task<STACKSIZE>,
-            new_frame: &mut CallFrame,
-            loc: RegisterVariant,
-            r: LpcRef,
-            i: RegisterSize,
-        ) -> Result<()> {
-            let prototype = &new_frame.function.prototype;
-            task.type_check_call_arg(
-                &r,
-                prototype.arg_types.get(i as usize),
-                prototype.arg_spans.get(i as usize),
-                &prototype.name,
-            )?;
-
-            trace!("Copying argument {} ({}) to {}", i, r, loc);
-
-            new_frame.arg_locations.push(loc);
-            new_frame.set_location(loc, r);
-
-            Ok(())
-        }
-
-        let mut from_slice_index = 0;
-        let mut next_index = 1;
-        {
-            // This read() needs to be dropped before the `await`.
-            let ptr = func.read();
-            let arg_locations = &new_frame.function.clone().arg_locations;
-
-            for i in 0..max_arg_length {
-                let target_location = arg_locations.get(i as usize).copied().unwrap_or_else(|| {
-                    // This should only be reached by variables that will go
-                    // into an ellipsis function's argv.
-                    Register(next_index).as_local()
-                });
-
-                if let RegisterVariant::Local(r) = target_location {
-                    next_index = r.index() + 1;
-                }
-
-                if let Some(Some(lpc_ref)) = ptr.partial_args.get(i as usize) {
-                    // if a partially-applied arg is present, use it
-                    type_check_and_assign_location(
-                        self,
-                        &mut new_frame,
-                        target_location,
-                        lpc_ref.clone(),
-                        i,
-                    )?;
-                } else if let Some(location) = from_slice.get(from_slice_index) {
-                    // check if the user passed an argument, which will
-                    // fill in the next hole in the partial arguments, or
-                    // append to the end
-
-                    let lpc_ref = get_loc!(self, *location)?;
-                    type_check_and_assign_location(
-                        self,
-                        &mut new_frame,
-                        target_location,
-                        lpc_ref.into_owned(),
-                        i,
-                    )?;
-
-                    from_slice_index += 1;
-                }
-            }
-        }
-
-        let pf = new_frame.function.clone();
-        self.stack.push(new_frame)?;
-
-        if function_is_efun {
-            self.prepare_and_call_efun(pf.name()).await?;
-        }
-
-        Ok(())
-    }
-
     /// An extracted helper to handle pulling the [`Process`] and [`ProgramFunction`] out of a [`FunctionPtr`].
-    pub fn extract_process_and_function(
+    /// This will create a [`Process`] from a path name, in the case of `call_other` receivers that are strings.
+    pub async fn extract_process_and_function(
         &mut self,
         ptr: &FunctionPtr,
     ) -> Result<Option<ProcessFunctionPair>> {
         let (proc, function) = match &ptr.address {
             FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
             FunctionAddress::Dynamic(name) => {
-                let LpcRef::Object(lpc_ref) = &*get_loc!(self, self.args[0])? else {
-                    return Err(self.runtime_error("non-object receiver to function pointer call"));
+                let lpc_ref = match &*get_loc!(self, self.args[0])? {
+                    LpcRef::Object(lpc_ref) => lpc_ref.upgrade(),
+                    LpcRef::String(string_ref) => {
+                        let lookup = {
+                            let string = string_ref.read();
+                            self.context.lookup_process(string.to_str())
+                        };
+
+                        if lookup.is_some() {
+                            lookup
+                        } else {
+                            let path = LpcPath::InGame(PathBuf::from(string_ref.read().to_str()));
+                            // This will be initialized later on, if necessary.
+                            Some(self.context.process_create_from_path(&path).await?)
+                        }
+                    }
+                    _ => {
+                        return Err(self.runtime_error(
+                            "non-object receiver to function pointer call",
+                        ));
+                    }
                 };
 
                 let pair_opt = {
-                    if let Some(proc) = lpc_ref.upgrade() {
+                    if let Some(proc) = lpc_ref {
                         proc.program
                             .lookup_function(name)
-                            .map(|func| ((**lpc_ref).clone(), func.clone()))
+                            .map(|func| (proc.clone(), func.clone()))
                     } else {
                         None
                     }
@@ -1275,7 +1127,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Ok(None);
                 };
 
-                pair
+                (Arc::downgrade(&pair.0), pair.1)
             }
             FunctionAddress::Efun(name) => {
                 // unwrap is safe because this should have been checked in an earlier step
@@ -1327,6 +1179,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
+    /// Create a new [`EfunContext`] and called the named efun.
     async fn prepare_and_call_efun<S>(&mut self, name: S) -> Result<()>
     where
         S: AsRef<str>,
@@ -1648,9 +1501,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let fp = FunctionPtr {
             owner: Arc::downgrade(&frame.process),
             address,
-            partial_args,
+            partial_args: RwLock::new(partial_args),
             call_other,
-            // Function pointers inherit the creating function's upvalues
+            // Function pointers inherit the current upvalue_ptrs
             upvalue_ptrs: frame.upvalue_ptrs.clone(),
             unique_id: UniqueId::new(),
         };
@@ -1881,15 +1734,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     {
         let process = match receiver_ref {
             LpcRef::String(s) => {
-                let r = s.read();
-                let str = r.to_str();
+                let lookup = {
+                    let r = s.read();
+                    let str = r.to_str();
+                    context.lookup_process(str)
+                };
 
-                match context.lookup_process(str) {
-                    Some(proc) => proc,
-                    None => {
-                        // TODO: this should create a new master object if the path points to one
-                        return None;
-                    }
+                if let Some(proc) = lookup {
+                    proc
+                } else {
+                    let path = LpcPath::InGame(PathBuf::from(s.read().to_str()));
+                    context.process_create_from_path(&path).await.ok()?
                 }
             }
             LpcRef::Object(proc) => {
@@ -2176,10 +2031,10 @@ mod tests {
                         BareVal::Int(0)
                     }
                 }
-                LpcRef::Function(x) => {
-                    let fp = x.read();
+                LpcRef::Function(fp) => {
                     let args = fp
                         .partial_args
+                        .read()
                         .iter()
                         .map(|item| item.as_ref().map(BareVal::from_lpc_ref))
                         .collect::<Vec<_>>();
@@ -2508,6 +2363,9 @@ mod tests {
 
             use super::*;
             use crate::interpreter::task::initialize_program::InitializeProgramBuilder;
+            use crate::interpreter::vm::Vm;
+            use crate::test_support::test_config;
+            use crate::util::process_builder::ProcessInitializer;
 
             #[tokio::test]
             async fn stores_the_value() {
@@ -2684,6 +2542,31 @@ mod tests {
                 ];
 
                 BareVal::assert_vec_equal(&expected, &registers);
+            }
+
+            #[tokio::test]
+            async fn initializes_receiver_if_necessary() {
+                let code = indoc! { r##"
+                    function q = &->name(, "awesome!");
+
+                    // object o = clone_object("/std/widget");
+                    int a = q("/std/widget", 666); // should initialize /std/widget
+
+                    string name(int rank, string reaction) {
+                        return "me: " + rank + ". " + reaction;
+                    }
+                "##};
+
+                let vm = Vm::new(test_config());
+                let task = vm
+                    .process_initialize_from_code("doody.c", code)
+                    .await
+                    .unwrap();
+
+                let object_space = task.context.object_space;
+
+                let widget = object_space.lookup("/std/widget").unwrap();
+                assert!(widget.flags.test(ObjectFlags::INITIALIZED));
             }
 
             #[tokio::test]

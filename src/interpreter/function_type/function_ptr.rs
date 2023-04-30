@@ -2,6 +2,7 @@ use std::{
     fmt::{Display, Formatter},
     sync::{Arc, Weak},
 };
+use std::path::PathBuf;
 
 use bit_set::BitSet;
 use derive_builder::Builder;
@@ -13,6 +14,7 @@ use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
+use lpc_rs_core::lpc_path::LpcPath;
 
 use crate::{
     interpreter::{
@@ -27,11 +29,14 @@ use crate::{
     },
     util::get_simul_efuns,
 };
+use crate::interpreter::task::Task;
+use crate::util::process_builder::ProcessCreator;
 
 type PtrTriple = (Arc<Process>, Arc<ProgramFunction>, Vec<LpcRef>);
 
 /// A pointer to a function, created with the `&` syntax.
-#[derive(Debug, Clone, Builder)]
+#[derive(Debug, Builder)]
+#[builder(pattern = "owned")]
 pub struct FunctionPtr {
     /// The object that this pointer was declared in.
     /// *note* This is *not* necessarily the object that the function is
@@ -46,7 +51,7 @@ pub struct FunctionPtr {
     /// are expected to be filled at call time, in the case of pointers that
     /// are partially-applied.
     #[builder(default)]
-    pub partial_args: ThinVec<Option<LpcRef>>,
+    pub partial_args: RwLock<ThinVec<Option<LpcRef>>>,
 
     /// Does this pointer use `call_other`?
     #[builder(default)]
@@ -73,7 +78,7 @@ impl FunctionPtr {
     /// How many arguments do we expect to be called with at runtime?
     #[inline]
     pub fn arity(&self) -> usize {
-        self.partial_args.iter().filter(|x| x.is_none()).count()
+        self.partial_args.read().iter().filter(|x| x.is_none()).count()
     }
 
     /// Get a clone of this function pointer, with a new unique ID.
@@ -88,31 +93,41 @@ impl FunctionPtr {
 
     /// partially apply this function pointer to the passed arguments, filling in any existing
     /// holes first, then appending to the end of the list.
-    pub fn partially_apply(&mut self, args: &[LpcRef]) {
+    pub fn partially_apply(&self, args: &[LpcRef]) {
         let mut arg_iter = args.iter();
 
-        for arg in self.partial_args.iter_mut() {
+        let mut arg_writer = self.partial_args.write();
+
+        for arg in arg_writer.iter_mut() {
             if arg.is_none() {
                 *arg = arg_iter.next().cloned();
             }
         }
 
-        self.partial_args.extend(arg_iter.cloned().map(Some));
+        arg_writer.extend(arg_iter.cloned().map(Some));
     }
 
-    /// Prepare this function pointer for a call, by getting all of the pieces out of it, and into separate variables.
-    pub fn triple(
-        ptr_arc: &RwLock<FunctionPtr>,
+    /// Prepare this function pointer for a call, by getting all of the
+    /// pieces out of it, and into separate variables.
+    ///
+    /// Note that this is intended for use when calling a [`FunctionPtr`] that's used to
+    /// start a new [`Task`]. If the [`Task`]already exists, you should use
+    /// [`Task::handle_call_fp`] instead.
+    ///
+    /// In the case of a [`FunctionPtr`] with a `Dynamic` [`FunctionAddress`], this will also
+    /// create (but not initialize) the object, if necessary (such as in the case of a
+    /// string path receiver).
+    pub async fn triple(
+        ptr: &FunctionPtr,
         config: &Config,
         object_space: &ObjectSpace,
     ) -> Result<PtrTriple> {
-        let ptr = ptr_arc.read();
-
         // We won't get any additional args passed to us, so just set up the partial args.
-        // Use int 0 for any that were not applied at the time the pointer was created.
+        // Use int 0 for any that haven't been filled-in.
         // TODO: error instead of int 0?
         let args = ptr
             .partial_args
+            .read()
             .iter()
             .map(|arg| match arg {
                 Some(lpc_ref) => lpc_ref.clone(),
@@ -131,16 +146,38 @@ impl FunctionPtr {
                 }
             }
             FunctionAddress::Dynamic(name) => {
-                let Some(Some(LpcRef::Object(proc))) = ptr.partial_args.first() else {
-                    return Err(lpc_error!(
-                        "attempted to call a dynamic receiver that is not an object",
-                    ));
-                };
+                let proc = {
+                    let first_arg = ptr.partial_args.read().first().cloned();
+                    let mut string_receiver = false;
+                    let mut proc = match &first_arg {
+                        Some(Some(LpcRef::Object(proc))) => {
+                            let Some(proc) = proc.upgrade() else {
+                                return Err(lpc_error!(
+                                    "attempted to call a dynamic receiver that has been destructed",
+                                ));
+                            };
 
-                let Some(proc) = proc.upgrade() else {
-                    return Err(lpc_error!(
-                        "attempted to call a dynamic receiver that has been destructed",
-                    ));
+                            Some(proc)
+                        },
+                        Some(Some(LpcRef::String(string_ref))) => {
+                            string_receiver = true;
+                            let string = string_ref.read();
+                            object_space.lookup(string.to_str()).map(|x| x.clone())
+                        },
+                        _ => return Err(lpc_error!("attempted to call a dynamic receiver that is not an object or string")),
+                    };
+
+                    if string_receiver && proc.is_none() {
+                        let Some(Some(LpcRef::String(string_ref))) = &first_arg else {
+                            unreachable!("No other branch should be setting `string_receiver` to true.");
+                        };
+
+                        let path = LpcPath::InGame(PathBuf::from(string_ref.read().to_str()));
+                        // This will be initialized later on, if necessary.
+                        proc = Some(object_space.process_create_from_path(&path).await?);
+                    }
+
+                    proc.unwrap()
                 };
 
                 let func = proc.program.lookup_function(name).ok_or_else(|| {
@@ -164,6 +201,19 @@ impl FunctionPtr {
 
                 Ok((Arc::new(Process::default()), pf.clone(), args))
             }
+        }
+    }
+}
+
+impl Clone for FunctionPtr {
+    fn clone(&self) -> Self {
+        Self {
+            owner: self.owner.clone(),
+            address: self.address.clone(),
+            partial_args: RwLock::new(self.partial_args.read().clone()),
+            call_other: self.call_other,
+            upvalue_ptrs: self.upvalue_ptrs.clone(),
+            unique_id: UniqueId::new(),
         }
     }
 }
@@ -207,6 +257,7 @@ impl Display for FunctionPtr {
 
         let partial_args = &self
             .partial_args
+            .read()
             .iter()
             .map(|arg| match arg {
                 Some(a) => a.to_string(),

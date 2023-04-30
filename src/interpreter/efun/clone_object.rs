@@ -9,8 +9,8 @@ use crate::{
         efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef,
         object_flags::ObjectFlags, process::Process, task::Task,
     },
-    util::process_builder::ProcessBuilder,
 };
+use crate::util::process_builder::ProcessCreator;
 
 async fn load_master<const N: usize>(
     context: &mut EfunContext<'_, N>,
@@ -151,6 +151,7 @@ mod tests {
         },
         test_support::{compile_prog, test_config},
     };
+    use crate::util::process_builder::ProcessInitializer;
 
     fn task_context_fixture(
         program: Program,

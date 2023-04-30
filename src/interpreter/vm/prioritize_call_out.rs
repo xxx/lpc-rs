@@ -55,7 +55,7 @@ impl Vm {
                 return;
             };
 
-            let triple = FunctionPtr::triple(&ptr_arc, &config, &object_space);
+            let triple = FunctionPtr::triple(&ptr_arc, &config, &object_space).await;
             let Ok((process, function, args)) = triple else {
                 call_outs.write().remove(idx);
                 let _ = tx.send(VmOp::TaskError(TaskId(0), triple.unwrap_err())).await;
@@ -80,7 +80,7 @@ impl Vm {
                 upvalues,
                 call_outs,
                 None,
-                Some(&ptr_arc.read().upvalue_ptrs).cloned(),
+                Some(&ptr_arc.upvalue_ptrs).cloned(),
                 tx.clone(),
             );
 
@@ -104,6 +104,9 @@ mod tests {
     use std::sync::Arc;
 
     use indoc::indoc;
+    use parking_lot::RwLock;
+    use thin_vec::thin_vec;
+    use ustr::ustr;
 
     use super::*;
     use crate::{
@@ -113,8 +116,8 @@ mod tests {
             into_lpc_ref::IntoLpcRef,
         },
         test_support::test_config,
-        util::process_builder::ProcessBuilder,
     };
+    use crate::util::process_builder::ProcessInitializer;
 
     #[tokio::test]
     async fn test_prioritize_call_out() {
@@ -129,18 +132,46 @@ mod tests {
         let vm = Vm::new(test_config());
 
         let r = vm.process_initialize_from_code("/foo/bar.c", code).await;
-        // let prog = vm
-        //     .with_async_compiler(|compiler| async move {
-        //         compiler.compile_string("/foo/bar.c", code).await
-        //     })
-        //     .await
-        //     .unwrap();
-        //
-        // let func = prog.lookup_function("foo").unwrap().clone();
         let proc = r.unwrap().context.process;
         let func = proc.program.lookup_function("foo").unwrap().clone();
         let ptr = FunctionPtrBuilder::default()
             .address(FunctionAddress::Local(Arc::downgrade(&proc), func.clone()))
+            .build()
+            .unwrap();
+
+        let call_out = CallOutBuilder::default()
+            .process(Arc::downgrade(&proc))
+            .func_ref(ptr.into_lpc_ref(&vm.memory))
+            ._handle(tokio::spawn(async {}))
+            .build()
+            .unwrap();
+
+        let idx = vm.call_outs.write().push(call_out);
+
+        let handle = vm.prioritize_call_out(idx).await;
+        handle.await.unwrap();
+
+        assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
+        assert!(vm.call_outs.read().get(idx).is_none());
+    }
+
+    #[tokio::test]
+    async fn works_with_string_receivers() {
+        let code = indoc! { r#"
+            int i = 123;
+            void foo(string s) {
+                i += 42;
+            }
+        "# };
+
+        let vm = Vm::new(test_config());
+
+        let r = vm.process_initialize_from_code("/bar.c", code).await;
+        let proc = r.unwrap().context.process;
+
+        let ptr = FunctionPtrBuilder::default()
+            .address(FunctionAddress::Dynamic(ustr("foo")))
+            .partial_args(RwLock::new(thin_vec![Some("bar".into_lpc_ref(&vm.memory))]))
             .build()
             .unwrap();
 

@@ -42,7 +42,7 @@ fn format_ref<const N: usize>(
                 Ok(format!("{:width$}{}", "", "0", width = indent))
             }
         }
-        LpcRef::Function(x) => Ok(format!("{:width$}{}", "", x.read(), width = indent)),
+        LpcRef::Function(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::Array(x) => {
             let arr = x.read();
             format_array(&arr, context, indent, recurse_level + 1)

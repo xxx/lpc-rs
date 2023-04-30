@@ -25,7 +25,6 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         let LpcRef::Function(func) = func_ref.clone() else {
             return Err(context.runtime_error("invalid function sent to `call_out`"));
         };
-        let func = func.read();
         if let FunctionAddress::Dynamic(_) = func.address {
             return Err(lpc_error!(
                 "cannot `call_out` to a function with a dynamic receiver",

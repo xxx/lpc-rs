@@ -25,8 +25,9 @@ use crate::{
         task::{into_task_context::IntoTaskContext, task_template::TaskTemplate, Task},
         vm::vm_op::VmOp,
     },
-    util::{get_simul_efuns, process_builder::ProcessBuilder, with_compiler::WithCompiler},
+    util::{get_simul_efuns, with_compiler::WithCompiler},
 };
+use crate::util::process_builder::{ProcessCreator, ProcessInitializer};
 
 /// A struct to carry context during the evaluation of a single [`Task`].
 #[derive(Debug, Builder)]
@@ -319,68 +320,16 @@ impl WithCompiler for TaskContext {
 }
 
 #[async_trait]
-impl ProcessBuilder for TaskContext {
-    async fn process_create_from_path(&self, filename: &LpcPath) -> Result<Arc<Process>> {
-        let proc = self
-            .with_async_compiler(|compiler| async move {
-                compiler.compile_in_game_file(filename, None).await
-            })
-            .await
-            .map(|pr| async move { Self::process_insert_program(pr, &self.object_space).await })?
-            .await;
-
-        Ok(proc)
+impl ProcessCreator for TaskContext {
+    fn process_creator_data(&self) -> &ObjectSpace {
+        &self.object_space
     }
+}
 
-    async fn process_create_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>>
-    where
-        P: Into<LpcPath> + Send + Sync,
-        S: AsRef<str> + Send + Sync,
-    {
-        let proc = self
-            .with_async_compiler(
-                |compiler| async move { compiler.compile_string(filename, code).await },
-            )
-            .await
-            .map(
-                |prog| async move { Self::process_insert_program(prog, &self.object_space).await },
-            )?
-            .await;
-
-        Ok(proc)
-    }
-
-    async fn process_initialize_from_path(
-        &self,
-        filename: &LpcPath,
-    ) -> Result<Task<MAX_CALL_STACK_SIZE>> {
-        let program = self
-            .with_async_compiler(|compiler| async move {
-                compiler.compile_in_game_file(filename, None).await
-            })
-            .await?;
-
-        let template = TaskTemplate::from(self);
-        Self::process_insert_and_initialize_program(program, template).await
-    }
-
-    async fn process_initialize_from_code<P, S>(
-        &self,
-        filename: P,
-        code: S,
-    ) -> Result<Task<MAX_CALL_STACK_SIZE>>
-    where
-        P: Into<LpcPath> + Send + Sync,
-        S: AsRef<str> + Send + Sync,
-    {
-        let program = self
-            .with_async_compiler(
-                |compiler| async move { compiler.compile_string(filename, code).await },
-            )
-            .await?;
-
-        let template = TaskTemplate::from(self);
-        Self::process_insert_and_initialize_program(program, template).await
+#[async_trait]
+impl ProcessInitializer for TaskContext {
+    fn process_initializer_data(&self) -> TaskTemplate {
+        TaskTemplate::from(self)
     }
 }
 

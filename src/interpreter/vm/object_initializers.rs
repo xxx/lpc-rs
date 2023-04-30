@@ -14,8 +14,10 @@ use crate::{
         task_context::TaskContext,
         vm::Vm,
     },
-    util::{process_builder::ProcessBuilder, with_compiler::WithCompiler},
+    util::{with_compiler::WithCompiler},
 };
+use crate::interpreter::object_space::ObjectSpace;
+use crate::util::process_builder::{ProcessCreator, ProcessInitializer};
 
 impl Vm {
     /// Initialize the simulated efuns file, if it is configured.
@@ -77,15 +79,16 @@ impl Vm {
         let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config.lib_dir);
         self.config.validate_in_game_path(&lpc_path, None)?;
 
-        let prog = self
-            .with_async_compiler(
-                |compiler| async move { compiler.compile_string(lpc_path, code).await },
-            )
-            .await?;
-
-        Self::process_insert_and_initialize_program(prog, self.new_task_template())
-            .await
-            .map(|t| t.context)
+        self.process_initialize_from_code(&lpc_path, code).await.map(|t| t.context)
+        // let prog = self
+        //     .with_async_compiler(
+        //         |compiler| async move { compiler.compile_string(lpc_path, code).await },
+        //     )
+        //     .await?;
+        //
+        // Self::process_insert_and_initialize_program(prog, self.new_task_template())
+        //     .await
+        //     .map(|t| t.context)
     }
 
     /// A convenience helper to create a populated [`TaskTemplate`]
@@ -115,67 +118,17 @@ impl WithCompiler for Vm {
 }
 
 #[async_trait]
-impl ProcessBuilder for Vm {
-    async fn process_create_from_path(&self, filename: &LpcPath) -> Result<Arc<Process>> {
-        let proc = self
-            .with_async_compiler(|compiler| async move {
-                compiler.compile_in_game_file(filename, None).await
-            })
-            .await
-            .map(
-                |prog| async move { Self::process_insert_program(prog, &self.object_space).await },
-            )?
-            .await;
-
-        Ok(proc)
+impl ProcessCreator for Vm {
+    #[inline]
+    fn process_creator_data(&self) -> &ObjectSpace {
+        &self.object_space
     }
+}
 
-    async fn process_create_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>>
-    where
-        P: Into<LpcPath> + Send + Sync,
-        S: AsRef<str> + Send + Sync,
-    {
-        let proc = self
-            .with_async_compiler(
-                |compiler| async move { compiler.compile_string(filename, code).await },
-            )
-            .await
-            .map(
-                |prog| async move { Self::process_insert_program(prog, &self.object_space).await },
-            )?
-            .await;
-
-        Ok(proc)
-    }
-
-    async fn process_initialize_from_path(
-        &self,
-        filename: &LpcPath,
-    ) -> Result<Task<MAX_CALL_STACK_SIZE>> {
-        let program = self
-            .with_async_compiler(|compiler| async move {
-                compiler.compile_in_game_file(filename, None).await
-            })
-            .await?;
-
-        Self::process_insert_and_initialize_program(program, self.new_task_template()).await
-    }
-
-    async fn process_initialize_from_code<P, S>(
-        &self,
-        filename: P,
-        code: S,
-    ) -> Result<Task<MAX_CALL_STACK_SIZE>>
-    where
-        P: Into<LpcPath> + Send + Sync,
-        S: AsRef<str> + Send + Sync,
-    {
-        let program = self
-            .with_async_compiler(
-                |compiler| async move { compiler.compile_string(filename, code).await },
-            )
-            .await?;
-
-        Self::process_insert_and_initialize_program(program, self.new_task_template()).await
+#[async_trait]
+impl ProcessInitializer for Vm {
+    #[inline]
+    fn process_initializer_data(&self) -> TaskTemplate {
+        self.new_task_template()
     }
 }
