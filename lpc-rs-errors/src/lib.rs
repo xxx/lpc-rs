@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use std::{
+    convert::Infallible,
     error::Error,
     fmt::{Debug, Display, Formatter},
     fs::OpenOptions,
@@ -8,7 +9,6 @@ use std::{
     num::TryFromIntError,
     result,
 };
-use std::convert::Infallible;
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label, LabelStyle},
