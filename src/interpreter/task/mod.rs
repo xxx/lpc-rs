@@ -199,7 +199,7 @@ pub struct Task<const STACKSIZE: usize> {
     pub id: TaskId,
 
     /// The call stack
-    pub stack: Box<CallStack<STACKSIZE>>,
+    pub stack: CallStack<STACKSIZE>,
 
     /// Stack of [`CatchPoint`]s
     catch_points: ThinVec<CatchPoint>,
@@ -234,7 +234,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub fn new(task_context: TaskContext) -> Self {
         Self {
             id: TaskId::new(),
-            stack: Box::<CallStack<STACKSIZE>>::default(),
+            stack: CallStack::default(),
             catch_points: thin_vec![],
             args: ThinVec::with_capacity(10),
             partial_args: ThinVec::with_capacity(10),
