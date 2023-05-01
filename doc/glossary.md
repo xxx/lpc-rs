@@ -58,6 +58,21 @@ written in Rust, and can be called from anywhere in LPC code. They are the prima
 that LPC code interacts with the driver, and the outside world. They are analogous
 to system calls in an operating system.
 
+## I
+
+### inheritance
+
+Inheritance is the primary way that LPC code is reused. It allows an object to
+inherit the global variables and functions of another object, and then add to or
+override them. Inheritance is done by using the `inherit` keyword in an object's
+definition.
+
+Inheritance in LPC is less like traditional inheritance, and more like mixins in
+other languages. An object can inherit from multiple objects, and the order of
+inheritance matters. If two inherited-from objects provide the same function,
+the function that is inherited last will "win".
+
+
 ## L
 
 ### lfun
@@ -84,6 +99,12 @@ It's intended to be a singleton object that is never cloned. Permission applies
 are done in the master object.
 If the master is missing or won't compile, the driver will not start.
 
+### mudlib (lib)
+
+Along with the driver, the mudlib is the other half of the game. It's the
+collection of objects that make up the game, and is responsible for the
+game's behavior. Lib code is written in LPC.
+
 ## P
 
 ### prototype (master)
@@ -100,15 +121,16 @@ is first loaded if it hasn't been already, and then the clone is created from it
 
 While I'm aware of a small number of cases where the prototype is called the "master"
 when compared to clones, this documentation will always use "prototype" to refer to
-these objects, and "master" or "master object" to refer to the single master object.
+these objects, and "master" or "master object" to refer to the single object that
+runs the game.
 
 ## S
 
 ### simul efun (sefun)
 
 Short for "simulated efun". These are functions that are defined in LPC, but are
-callable from anywhere, just like an efun. The driver can be configured to not
-include them, in which case there won't be any available.
+callable from anywhere, just like an efun. The driver can be configured at runtime
+to not include them, in which case there won't be any available.
 
 It should be noted that simul efuns act similar to the auto-inherit mechanism, but
 are _not_ inherited. They are simply available everywhere.
