@@ -72,6 +72,10 @@ other languages. An object can inherit from multiple objects, and the order of
 inheritance matters. If two inherited-from objects provide the same function,
 the function that is inherited last will "win".
 
+### interactive
+
+An interactive object is one that is currently controlled by a player. NPCs
+are not interactive.
 
 ## L
 
@@ -81,6 +85,11 @@ Short for "local function". These are functions that are defined in LPC, and are
 called by other functions in the same object, or via `call_other` from other
 objects. They are the standard functions that you write, and the vast majority of
 functions in the game are lfuns.
+
+### living
+
+A living object is an object that can interact with the game world. It can move,
+talk, and perform actions. Players are living objects, as are NPCs.
 
 ### LPC
 
