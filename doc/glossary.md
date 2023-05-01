@@ -60,6 +60,13 @@ to system calls in an operating system.
 
 ## L
 
+### lfun
+
+Short for "local function". These are functions that are defined in LPC, and are
+called by other functions in the same object, or via `call_other` from other
+objects. They are the standard functions that you write, and the vast majority of
+functions in the game are lfuns.
+
 ### LPC
 
 Short for ["Lars Pensjö C"](https://en.wikipedia.org/wiki/LPMud).
