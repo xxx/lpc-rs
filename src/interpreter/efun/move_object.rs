@@ -36,7 +36,11 @@ pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
 
     let this_object = &context.frame().process;
 
+    // TODO: remove old commands
+
     Process::move_to(this_object, destination).await
+
+    // TODO: add new commands
 }
 
 #[cfg(test)]
