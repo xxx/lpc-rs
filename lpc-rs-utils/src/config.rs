@@ -251,6 +251,8 @@ impl Config {
     {
         if let Some(debug_log) = &self.debug_log {
             debug_log.log(msg).await;
+        } else {
+            println!("{}", msg.into());
         }
     }
 }
