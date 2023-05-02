@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use flume::Sender as FlumeSender;
 use tracing::{debug, error};
+use lpc_rs_core::{LpcIntInner, RegisterSize};
 
 use crate::{
     interpreter::{
@@ -12,6 +13,9 @@ use crate::{
         ops::{BrokerOp, ConnectionOp},
     },
 };
+use crate::interpreter::into_lpc_ref::IntoLpcRef;
+use crate::interpreter::lpc_int::LpcInt;
+use crate::interpreter::lpc_string::LpcString;
 
 impl Vm {
     /// Start the login process for a [`Connection`]. This assumes the connection is not
@@ -35,10 +39,15 @@ impl Vm {
                 return;
             };
 
+            let address = connection.address;
+            let (ip, port) = (address.ip().to_string(), address.port());
+
             // call 'connect' in the master object
+            let ip_ref = LpcString::from(ip).into_lpc_ref(&self.memory);
+            let port_ref = LpcRef::from(port as LpcIntInner);
             let maybe_login_ob = match apply_function_by_name(
                 CONNECT,
-                &[],
+                &[ip_ref.clone(), port_ref.clone()],
                 master.clone(),
                 task_template.clone(),
                 Some(task_template.config.max_execution_time),
@@ -46,6 +55,14 @@ impl Vm {
             .await
             {
                 Some(Ok(LpcRef::Object(ob))) => ob,
+                Some(Ok(LpcRef::String(string_arc))) => {
+                    Self::fatal_error(
+                        &connection,
+                        string_arc.read().to_string(),
+                        broker_tx.clone(),
+                    ).await;
+                    return;
+                }
                 Some(Ok(_)) => {
                     Self::fatal_error(
                         &connection,
@@ -91,7 +108,7 @@ impl Vm {
 
             // call 'logon' in the login object
             let max_execution_time = task_template.config.max_execution_time;
-            match apply_function_by_name(LOGON, &[], login_ob, template, Some(max_execution_time))
+            match apply_function_by_name(LOGON, &[ip_ref, port_ref], login_ob, template, Some(max_execution_time))
                 .await
             {
                 Some(Ok(LpcRef::Int(i))) => {
@@ -128,7 +145,7 @@ impl Vm {
                 None => {
                     Self::fatal_error(
                         &connection,
-                        "Fatal server error - Unable to find the `logon` function in the login object.".to_string(),
+                        "Fatal server error - Unable to find the `logon` function in the object.".to_string(),
                         broker_tx.clone()
                     ).await;
                     return;
