@@ -9,7 +9,6 @@ use crate::{
         efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef,
         object_flags::ObjectFlags, process::Process, task::Task,
     },
-    util::process_builder::ProcessCreator,
 };
 
 async fn load_master<const N: usize>(
@@ -28,40 +27,7 @@ async fn load_master<const N: usize>(
         return Err(context.runtime_error(format!("Cannot clone self: {}", path_str)));
     }
 
-    match context.lookup_process(path_str) {
-        Some(proc) => Ok(proc),
-        None => {
-            context
-                .process_create_from_path(&full_path)
-                .await
-                .map_err(|e| {
-                    let debug_span = context.current_debug_span();
-
-                    e.with_span(debug_span).into()
-                })
-            // let compiler = CompilerBuilder::default()
-            //     .config(context.config().clone())
-            //     .build()?;
-            //
-            // match compiler
-            //     .compile_in_game_file(&full_path, context.current_debug_span())
-            //     .await
-            // {
-            //     Ok(prog) => {
-            //         // Masters are not initialized unless a call is made against them directly via call_other.
-            //         let process: Arc<Process> = Process::new(prog).into();
-            //         context.insert_process(process.clone());
-            //
-            //         Ok(process)
-            //     }
-            //     Err(e) => {
-            //         let debug_span = context.current_debug_span();
-            //
-            //         Err(e.with_span(debug_span))
-            //     }
-            // }
-        }
-    }
+    context.create_object(&full_path).await
 }
 
 /// `clone_object`, the efun for creating new object instances.
@@ -150,7 +116,7 @@ mod tests {
             vm::{vm_op::VmOp, Vm},
         },
         test_support::{compile_prog, test_config},
-        util::process_builder::ProcessInitializer,
+        util::process_builder::{ProcessCreator, ProcessInitializer},
     };
 
     fn task_context_fixture(

@@ -11,6 +11,7 @@ use lpc_rs_asm::{
 use lpc_rs_core::{
     call_namespace::CallNamespace,
     function_receiver::FunctionReceiver,
+    lpc_path::LpcPath,
     lpc_type::LpcType,
     mangle::Mangle,
     register::{Register, RegisterVariant},
@@ -263,8 +264,14 @@ impl CodegenWalker {
 
         let num_globals = self.global_counter.number_emitted();
 
+        let filename = self
+            .context
+            .filename
+            .as_in_game(self.context.config.lib_dir.as_str())
+            .into_owned();
+
         Ok(Program {
-            filename: self.context.filename.clone(),
+            filename: Arc::new(LpcPath::InGame(filename)),
             functions: Box::new(functions),
             initializer: self.initializer,
             unmangled_functions: Box::new(unmangled_functions),
@@ -3695,7 +3702,7 @@ mod tests {
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
                 PushArg(RegisterVariant::Local(Register(4))),
-                CallEfun(11),
+                CallEfun(12),
                 Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(5)),

@@ -277,6 +277,7 @@ impl Compiler {
             .iter()
             .filter(|e| e.is_warning())
             .for_each(|e| {
+                // TODO: this should not do this, and instead pass the error up the chain
                 e.emit_diagnostics();
             });
 

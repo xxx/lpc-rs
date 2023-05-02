@@ -9,6 +9,7 @@ pub(crate) mod dump;
 pub(crate) mod file_name;
 pub(crate) mod find_object;
 pub(crate) mod input_to;
+pub(crate) mod move_object;
 pub(crate) mod papplyv;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
@@ -56,6 +57,7 @@ pub const DUMP: &str = "dump";
 pub const FILE_NAME: &str = "file_name";
 pub const FIND_OBJECT: &str = "find_object";
 pub const INPUT_TO: &str = "input_to";
+pub const MOVE_OBJECT: &str = "move_object";
 pub const PAPPLYV: &str = "papplyv";
 pub const QUERY_CALL_OUT: &str = "query_call_out";
 pub const QUERY_CALL_OUTS: &str = "query_call_outs";
@@ -83,6 +85,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
         FILE_NAME => file_name::file_name(efun_context).await,
         FIND_OBJECT => find_object::find_object(efun_context).await,
         INPUT_TO => input_to::input_to(efun_context).await,
+        MOVE_OBJECT => move_object::move_object(efun_context).await,
         PAPPLYV => papplyv::papplyv(efun_context).await,
         QUERY_CALL_OUT => query_call_out::query_call_out(efun_context).await,
         QUERY_CALL_OUTS => query_call_outs::query_call_outs(efun_context).await,
@@ -284,6 +287,19 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::Function(false), LpcType::Int(false)])
             .build()
             .expect("failed to build input_to"),
+    );
+
+    m.insert(
+        MOVE_OBJECT,
+        FunctionPrototypeBuilder::default()
+            .name(MOVE_OBJECT)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Void)
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
+            .build()
+            .expect("failed to build move_object"),
     );
 
     m.insert(

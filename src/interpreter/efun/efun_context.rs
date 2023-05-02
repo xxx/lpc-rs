@@ -3,7 +3,7 @@ use std::{borrow::Cow, fmt::Debug, future::Future, path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use delegate::delegate;
-use lpc_rs_core::{register::RegisterVariant, RegisterSize};
+use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant, RegisterSize};
 use lpc_rs_errors::{span::Span, LpcError, Result};
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
@@ -82,6 +82,45 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
             /// Get access to the `tx` channel, to talk to the [`Vm`](crate::interpreter::vm::Vm)
             pub fn tx(&self) -> Sender<VmOp>;
+        }
+    }
+
+    /// Find or create (not don't initialize) an object by path
+    pub async fn create_object(&self, path: &LpcPath) -> Result<Arc<Process>> {
+        match self.lookup_process(path.to_str().unwrap()) {
+            Some(proc) => Ok(proc),
+            None => {
+                let process = self.process_create_from_path(path).await.map_err(|mut e| {
+                    let debug_span = self.current_debug_span();
+
+                    *e = e.with_span(debug_span);
+
+                    e
+                })?;
+
+                Ok(process)
+            }
+        }
+    }
+
+    /// Find or initialize an object by path
+    pub async fn load_object(&self, path: &LpcPath) -> Result<Arc<Process>> {
+        match self.lookup_process(path.to_str().unwrap()) {
+            Some(proc) => Ok(proc),
+            None => {
+                let task = self
+                    .process_initialize_from_path(path)
+                    .await
+                    .map_err(|mut e| {
+                        let debug_span = self.current_debug_span();
+
+                        *e = e.with_span(debug_span);
+
+                        e
+                    })?;
+
+                Ok(task.context.process)
+            }
         }
     }
 

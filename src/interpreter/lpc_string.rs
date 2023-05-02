@@ -3,6 +3,7 @@ use std::{
     fmt::Display,
     hash::{Hash, Hasher},
     ops::Add,
+    path::Path,
     sync::Arc,
 };
 
@@ -136,6 +137,13 @@ impl AsRef<str> for &LpcString {
     #[inline]
     fn as_ref(&self) -> &str {
         self.to_str()
+    }
+}
+
+impl AsRef<Path> for &LpcString {
+    #[inline]
+    fn as_ref(&self) -> &Path {
+        self.to_str().as_ref()
     }
 }
 

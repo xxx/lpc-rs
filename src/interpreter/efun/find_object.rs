@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use lpc_rs_core::RegisterSize;
+use lpc_rs_core::{lpc_path::LpcPath, RegisterSize};
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -21,18 +21,15 @@ pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         | LpcRef::Mapping(_)
         | LpcRef::Function(_) => NULL,
         LpcRef::String(x) => {
-            let path = x.read();
+            let path = {
+                let string = x.read();
+                LpcPath::new_in_game(&*string, context.in_game_cwd(), &*context.config().lib_dir)
+            };
 
-            match context.lookup_process(&*path) {
-                Some(proc) => {
-                    drop(path);
-                    Arc::downgrade(&proc).into_lpc_ref(context.memory())
-                    // context.value_to_ref(proc)
-                }
-                None => {
-                    // TODO: if the string is a master object, create it, but don't initialize it
-                    NULL
-                }
+            if let Ok(proc) = context.load_object(&path).await {
+                Arc::downgrade(&proc).into_lpc_ref(context.memory())
+            } else {
+                NULL
             }
         }
     };
@@ -44,10 +41,14 @@ pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
 
 #[cfg(test)]
 mod tests {
-    use std::{path::Path, sync::Arc};
+    use std::{
+        path::{Path, PathBuf},
+        sync::Arc,
+    };
 
     use indoc::indoc;
     use lpc_rs_core::lpc_path::LpcPath;
+    use lpc_rs_errors::lazy_files::FILE_CACHE;
     use lpc_rs_utils::config::Config;
     use parking_lot::RwLock;
 
@@ -61,9 +62,10 @@ mod tests {
             program::{Program, ProgramBuilder},
             task::Task,
             task_context::{TaskContext, TaskContextBuilder},
-            vm::vm_op::VmOp,
+            vm::{vm_op::VmOp, Vm},
         },
-        test_support::compile_prog,
+        test_support::{compile_prog, test_config},
+        util::process_builder::ProcessInitializer,
     };
 
     fn task_context_fixture(
@@ -119,7 +121,7 @@ mod tests {
     #[tokio::test]
     async fn test_find_object_failure() {
         let code = indoc! { r#"
-            object foo = find_object("/example");
+            object foo = find_object("/non-existent");
         "# };
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
@@ -134,5 +136,31 @@ mod tests {
             .expect("task failed");
 
         assert_eq!(task.result().unwrap(), &NULL);
+    }
+
+    #[tokio::test]
+    async fn test_creates_object() {
+        let master = indoc! { r#"
+            object create() {
+                return find_object("/foo");
+            }
+        "# };
+
+        let vm = Vm::new(test_config());
+
+        {
+            let mut current_path = PathBuf::from(test_config().lib_dir.to_owned());
+            current_path.push("foo.c");
+
+            let mut cache = FILE_CACHE.write();
+            cache.add_eager(current_path.to_string_lossy(), "");
+        }
+
+        let master_proc = vm
+            .process_initialize_from_code("/master.c", master)
+            .await
+            .unwrap();
+
+        assert!(master_proc.context.object_space.lookup("/foo").is_some());
     }
 }
