@@ -23,14 +23,14 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
                 };
 
                 if let Some(proc) = proc.upgrade() {
-                    proc.flags.set(ObjectFlags::DESTRUCTED);
+                    proc.flags.set(ObjectFlags::Destructed);
                     context.remove_process(proc);
                 } // else it's already destructed
             }
         }
         LpcRef::Object(proc) => {
             if let Some(proc) = proc.upgrade() {
-                proc.flags.set(ObjectFlags::DESTRUCTED);
+                proc.flags.set(ObjectFlags::Destructed);
                 context.remove_process(proc);
             } // else it's already destructed
         }

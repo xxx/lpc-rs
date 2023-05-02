@@ -115,7 +115,7 @@ impl Process {
         let num_globals = program.num_globals;
 
         let flags = AtomicFlags::new();
-        flags.set(ObjectFlags::CLONE);
+        flags.set(ObjectFlags::Clone);
 
         Self {
             program,

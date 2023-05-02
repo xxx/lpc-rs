@@ -296,7 +296,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// given [`TaskContext`].
     /// It's assumed that the process has already been inserted into the [`ObjectSpace`]
     pub async fn initialize_process(context: TaskContext) -> Result<Task<STACKSIZE>> {
-        debug_assert!(!context.process.flags.test(ObjectFlags::INITIALIZED));
+        debug_assert!(!context.process.flags.test(ObjectFlags::Initialized));
 
         let Some(initializer) = context.process.program.initializer.clone() else {
             let msg = "Init function not found on cloned object? This should never happen.";
@@ -307,7 +307,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         // We mark ourselves as initialized before actually initializing, to avoid
         // infinite loops where this_object() is used in global initialization.
-        context.process.flags.set(ObjectFlags::INITIALIZED);
+        context.process.flags.set(ObjectFlags::Initialized);
 
         let max_execution_time = context.config().max_execution_time;
         let mut task = Task::new(context);
@@ -1761,7 +1761,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // of whether the function exists or not, because this is a primary way of
         // initializing objects. If you've ever seen a call_other to teleledningsanka()
         // or some other knowingly undefined function in old lib code, this is why.
-        let result = if !process.flags.test(ObjectFlags::INITIALIZED) {
+        let result = if !process.flags.test(ObjectFlags::Initialized) {
             let ctx = context.clone().with_process(process);
             let Ok(task) = Self::initialize_process(ctx).await else {
                 return None;
@@ -2567,7 +2567,7 @@ mod tests {
                 let object_space = task.context.object_space;
 
                 let widget = object_space.lookup("/std/widget").unwrap();
-                assert!(widget.flags.test(ObjectFlags::INITIALIZED));
+                assert!(widget.flags.test(ObjectFlags::Initialized));
             }
 
             #[tokio::test]

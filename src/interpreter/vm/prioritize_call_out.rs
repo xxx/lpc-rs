@@ -67,7 +67,7 @@ impl Vm {
                 return;
             };
 
-            if !process.flags.test(ObjectFlags::INITIALIZED) {
+            if !process.flags.test(ObjectFlags::Initialized) {
                 let template = TaskTemplateBuilder::default()
                     .config(config.clone())
                     .object_space(object_space.clone())
@@ -205,7 +205,7 @@ mod tests {
             handle.await.unwrap();
 
             assert_eq!(bar_proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
-            assert!(bar_proc.flags.test(ObjectFlags::INITIALIZED));
+            assert!(bar_proc.flags.test(ObjectFlags::Initialized));
             assert!(vm.call_outs.read().get(idx).is_none());
         }
 

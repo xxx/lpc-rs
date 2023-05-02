@@ -326,7 +326,7 @@ impl Telnet {
             return;
         };
 
-        if !process.flags.test(ObjectFlags::INITIALIZED) {
+        if !process.flags.test(ObjectFlags::Initialized) {
             let template = template.clone();
             template.set_this_player(connection.process.load_full());
             let ctx = template.into_task_context(process.clone());
@@ -507,7 +507,7 @@ mod tests {
             .await;
 
             assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
-            assert!(proc.flags.test(ObjectFlags::INITIALIZED));
+            assert!(proc.flags.test(ObjectFlags::Initialized));
         }
 
         #[tokio::test]

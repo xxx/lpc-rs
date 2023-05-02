@@ -40,7 +40,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         let master = load_master(context, &path).await?;
 
         debug_assert!(
-            !master.flags.test(ObjectFlags::CLONE),
+            !master.flags.test(ObjectFlags::Clone),
             "master cannot be a clone"
         );
 
@@ -57,12 +57,12 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         let new_clone = context.insert_clone(new_prog);
 
         debug_assert!(
-            new_clone.flags.test(ObjectFlags::CLONE),
+            new_clone.flags.test(ObjectFlags::Clone),
             "new_clone must be a clone"
         );
 
         // if the master is not initialized, we initialize the clone.
-        let return_val = if !master.flags.test(ObjectFlags::INITIALIZED) {
+        let return_val = if !master.flags.test(ObjectFlags::Initialized) {
             if context.chain_count() >= MAX_CLONE_CHAIN {
                 return Err(context.runtime_error("infinite clone recursion detected"));
             }
@@ -203,7 +203,7 @@ mod tests {
             cloned_proc.global_variable_values().get("i").unwrap(),
             &NULL
         );
-        assert!(!cloned_proc.flags.test(ObjectFlags::INITIALIZED));
+        assert!(!cloned_proc.flags.test(ObjectFlags::Initialized));
 
         let cloner_proc = vm
             .process_initialize_from_code("cloner.c", cloner)
@@ -211,7 +211,7 @@ mod tests {
             .unwrap()
             .context
             .process;
-        assert!(cloner_proc.flags.test(ObjectFlags::INITIALIZED));
+        assert!(cloner_proc.flags.test(ObjectFlags::Initialized));
 
         assert_eq!(
             cloned_proc.global_variable_values().get("i").unwrap(),
@@ -222,7 +222,7 @@ mod tests {
         };
 
         let foo = foo.upgrade().unwrap();
-        assert!(foo.flags.test(ObjectFlags::INITIALIZED));
+        assert!(foo.flags.test(ObjectFlags::Initialized));
 
         let foo_i = foo.global_variable_values().get("i").unwrap().clone();
         assert_eq!(foo_i, LpcRef::from(123));

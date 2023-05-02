@@ -46,7 +46,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 Err(e) => return Err(e),
             };
 
-        if !proc.flags.test(ObjectFlags::INITIALIZED) {
+        if !proc.flags.test(ObjectFlags::Initialized) {
             let ctx = self.context.clone().with_process(proc.clone());
             Self::initialize_process(ctx).await?;
         }

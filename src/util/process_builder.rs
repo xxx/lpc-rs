@@ -134,7 +134,7 @@ where
 
     // We mark ourselves as initialized before actually initializing, to avoid
     // infinite loops where this_object() is used in global initialization.
-    ctx.process.flags.set(ObjectFlags::INITIALIZED);
+    ctx.process.flags.set(ObjectFlags::Initialized);
 
     let max_execution_time = ctx.config.max_execution_time;
     let mut task = Task::<MAX_CALL_STACK_SIZE>::new(ctx);

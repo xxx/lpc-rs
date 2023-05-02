@@ -84,7 +84,7 @@ mod tests {
             .unwrap();
 
         let foo_clone = master_proc.context.object_space().lookup("/foo#0").unwrap();
-        assert!(foo_clone.flags.test(ObjectFlags::INITIALIZED));
+        assert!(foo_clone.flags.test(ObjectFlags::Initialized));
 
         assert_eq!(
             foo_clone
