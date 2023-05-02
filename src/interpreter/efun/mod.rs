@@ -5,10 +5,14 @@ pub(crate) mod clone_object;
 pub(crate) mod compose;
 pub(crate) mod debug;
 pub(crate) mod destruct;
+pub(crate) mod disable_commands;
 pub(crate) mod dump;
+pub(crate) mod enable_commands;
 pub(crate) mod file_name;
 pub(crate) mod find_object;
 pub(crate) mod input_to;
+pub(crate) mod interactive;
+pub(crate) mod living;
 pub(crate) mod move_object;
 pub(crate) mod papplyv;
 pub(crate) mod query_call_out;
@@ -53,10 +57,14 @@ pub const CLONE_OBJECT: &str = "clone_object";
 pub const COMPOSE: &str = "compose";
 pub const DEBUG: &str = "debug";
 pub const DESTRUCT: &str = "destruct";
+pub const DISABLE_COMMANDS: &str = "disable_commands";
 pub const DUMP: &str = "dump";
+pub const ENABLE_COMMANDS: &str = "enable_commands";
 pub const FILE_NAME: &str = "file_name";
 pub const FIND_OBJECT: &str = "find_object";
 pub const INPUT_TO: &str = "input_to";
+pub const INTERACTIVE: &str = "interactive";
+pub const LIVING: &str = "living";
 pub const MOVE_OBJECT: &str = "move_object";
 pub const PAPPLYV: &str = "papplyv";
 pub const QUERY_CALL_OUT: &str = "query_call_out";
@@ -81,10 +89,14 @@ pub async fn call_efun<const STACKSIZE: usize>(
         COMPOSE => compose::compose(efun_context).await,
         DEBUG => debug::debug(efun_context).await,
         DESTRUCT => destruct::destruct(efun_context).await,
+        DISABLE_COMMANDS => disable_commands::disable_commands(efun_context).await,
         DUMP => dump::dump(efun_context).await,
+        ENABLE_COMMANDS => enable_commands::enable_commands(efun_context).await,
         FILE_NAME => file_name::file_name(efun_context).await,
         FIND_OBJECT => find_object::find_object(efun_context).await,
         INPUT_TO => input_to::input_to(efun_context).await,
+        INTERACTIVE => interactive::interactive(efun_context).await,
+        LIVING => living::living(efun_context).await,
         MOVE_OBJECT => move_object::move_object(efun_context).await,
         PAPPLYV => papplyv::papplyv(efun_context).await,
         QUERY_CALL_OUT => query_call_out::query_call_out(efun_context).await,
@@ -196,6 +208,17 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
     );
 
     m.insert(
+        DISABLE_COMMANDS,
+        FunctionPrototypeBuilder::default()
+            .name(DISABLE_COMMANDS)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Void)
+            .kind(FunctionKind::Efun)
+            .build()
+            .expect("failed to build disable_commands"),
+    );
+
+    m.insert(
         DEBUG,
         FunctionPrototypeBuilder::default()
             .name(DEBUG)
@@ -246,6 +269,17 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
     );
 
     m.insert(
+        ENABLE_COMMANDS,
+        FunctionPrototypeBuilder::default()
+            .name(ENABLE_COMMANDS)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Void)
+            .kind(FunctionKind::Efun)
+            .build()
+            .expect("failed to build enable_commands"),
+    );
+
+    m.insert(
         FILE_NAME,
         FunctionPrototypeBuilder::default()
             .name(FILE_NAME)
@@ -287,6 +321,40 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::Function(false), LpcType::Int(false)])
             .build()
             .expect("failed to build input_to"),
+    );
+
+    m.insert(
+        INTERACTIVE,
+        FunctionPrototypeBuilder::default()
+            .name(INTERACTIVE)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity {
+                num_args: 1,
+                num_default_args: 1,
+                ellipsis: false,
+                varargs: false,
+            })
+            .build()
+            .expect("failed to build interactive"),
+    );
+
+    m.insert(
+        LIVING,
+        FunctionPrototypeBuilder::default()
+            .name(LIVING)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity {
+                num_args: 1,
+                num_default_args: 1,
+                ellipsis: false,
+                varargs: false,
+            })
+            .build()
+            .expect("failed to build living"),
     );
 
     m.insert(

@@ -417,6 +417,13 @@ impl From<LpcFloat> for LpcRef {
     }
 }
 
+impl From<bool> for LpcRef {
+    #[inline]
+    fn from(b: bool) -> Self {
+        Self::Int(LpcInt::from(b))
+    }
+}
+
 impl Hash for LpcRef {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {

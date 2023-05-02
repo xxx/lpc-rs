@@ -54,6 +54,12 @@ impl From<LpcInt> for bool {
     }
 }
 
+impl From<bool> for LpcInt {
+    fn from(b: bool) -> Self {
+        Self::from(if b { 1 } else { 0 })
+    }
+}
+
 impl Add<LpcInt> for LpcInt {
     type Output = LpcInt;
 
