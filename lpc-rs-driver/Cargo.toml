@@ -15,7 +15,7 @@ default-run = "lpc-rs-driver"
 lpc-rs = { version = "0.1", path = ".." }
 lpc-rs-utils = { version = "0.1", path = "../lpc-rs-utils" }
 
-clap = { version = "4.1.6", features = ["derive"] }
+clap = { version = "4.2.5", features = ["derive"] }
 if_chain = "1.0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time"] }
 tracing = "0.1"
