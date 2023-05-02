@@ -1,0 +1,1 @@
+This directory contains documentation for applies that can be called on any object.
