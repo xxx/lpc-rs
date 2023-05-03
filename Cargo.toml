@@ -69,7 +69,7 @@ ustr = "0.9.0"
 [dev-dependencies]
 beaver = "1.0.0"
 claims = "0.7.1"
-criterion = { version = "0.4.0", features = ["async_tokio"] }
+criterion = { version = "0.4.0", default-features = false, features = ["cargo_bench_support", "async_tokio"] }
 ctor = "0.2.0"
 factori = "1.1.0"
 fake = "2.5.0"
