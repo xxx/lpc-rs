@@ -4,3 +4,4 @@
 /lib
 .env
 Makefile.toml
+deny.toml
