@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use flume::Sender as FlumeSender;
 use lpc_rs_core::LpcIntInner;
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 use crate::{
     interpreter::{
@@ -18,6 +18,7 @@ use crate::{
 impl Vm {
     /// Start the login process for a [`Connection`]. This assumes the connection is not
     /// already logged in and attached to an object.
+    #[instrument(skip_all)]
     pub async fn initiate_login(&self, connection: Arc<Connection>) {
         let object_space = self.object_space.clone();
         let broker_tx = self.broker_tx.clone();

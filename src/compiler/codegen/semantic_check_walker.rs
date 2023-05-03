@@ -413,9 +413,10 @@ impl TreeWalker for SemanticCheckWalker {
         let proto_opt = self
             .context
             .lookup_function_complete(node.name, &CallNamespace::default());
+
         if let Some(function_like) = proto_opt {
             let prototype = function_like.as_ref();
-            if prototype.flags.nomask() {
+            if prototype.flags.nomask() && node.span != prototype.span {
                 let e = LpcError::new(format!(
                     "attempt to redefine nomask function `{}`",
                     node.name
@@ -1909,6 +1910,7 @@ mod tests {
         use std::sync::Arc;
 
         use lpc_rs_core::function_flags::FunctionFlags;
+        use lpc_rs_errors::span::Span;
         use lpc_rs_function_support::{
             function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
         };
@@ -2039,10 +2041,11 @@ mod tests {
                 .return_type(LpcType::Void)
                 .arity(FunctionArity::new(4))
                 .flags(FunctionFlags::default().with_nomask(true))
+                .span(Some(Span::new(3, 3..1))) // same span = same definition
                 .build()
                 .unwrap();
 
-            let func = ProgramFunction::new(prototype, 7);
+            let func = ProgramFunction::new(prototype, 0);
 
             program
                 .functions
