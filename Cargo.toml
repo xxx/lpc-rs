@@ -27,7 +27,7 @@ async-trait = "0.1.68"
 atomic_bitfield = "0.1.0"
 bit-set = "0.5.3"
 bytes = "1.4.0"
-chrono = "0.4.24"
+chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
 crossbeam = "0.8.2"
 dashmap = "5.4.0"
 decorum = "0.3.1"
