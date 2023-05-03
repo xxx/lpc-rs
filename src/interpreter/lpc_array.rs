@@ -116,6 +116,13 @@ impl Deref for LpcArray {
     }
 }
 
+impl From<&[LpcRef]> for LpcArray {
+    #[inline]
+    fn from(array: &[LpcRef]) -> Self {
+        Self::new(ThinVec::from(array))
+    }
+}
+
 impl<'a> FromIterator<&'a LpcRef> for LpcArray {
     #[inline]
     fn from_iter<T: IntoIterator<Item = &'a LpcRef>>(iter: T) -> Self {

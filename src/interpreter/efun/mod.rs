@@ -20,6 +20,7 @@ pub(crate) mod query_call_outs;
 pub(crate) mod query_resident_memory;
 pub(crate) mod remove_call_out;
 pub(crate) mod set_this_player;
+pub(crate) mod tell_object;
 pub(crate) mod this_object;
 pub(crate) mod this_player;
 pub(crate) mod throw;
@@ -73,6 +74,7 @@ pub const QUERY_RESIDENT_MEMORY: &str = "query_resident_memory";
 pub const REMOVE_CALL_OUT: &str = "remove_call_out";
 pub const SET_THIS_PLAYER: &str = "set_this_player";
 pub const SIZEOF: &str = "sizeof";
+pub const TELL_OBJECT: &str = "tell_object";
 pub const THIS_OBJECT: &str = "this_object";
 pub const THIS_PLAYER: &str = "this_player";
 pub const THROW: &str = "throw";
@@ -104,6 +106,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
         QUERY_RESIDENT_MEMORY => query_resident_memory::query_resident_memory(efun_context).await,
         REMOVE_CALL_OUT => remove_call_out::remove_call_out(efun_context).await,
         SET_THIS_PLAYER => set_this_player::set_this_player(efun_context).await,
+        TELL_OBJECT => tell_object::tell_object(efun_context).await,
         THIS_OBJECT => this_object::this_object(efun_context).await,
         THIS_PLAYER => this_player::this_player(efun_context).await,
         THROW => throw::throw(efun_context).await,
@@ -471,6 +474,22 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::Mixed(true) | LpcType::Mapping(false)])
             .build()
             .expect("failed to build sizeof"),
+    );
+
+    m.insert(
+        TELL_OBJECT,
+        FunctionPrototypeBuilder::default()
+            .name(TELL_OBJECT)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(2))
+            .arg_types(vec![
+                LpcType::Object(false) | LpcType::String(false),
+                LpcType::String(false),
+            ])
+            .build()
+            .expect("failed to build tell_object"),
     );
 
     m.insert(

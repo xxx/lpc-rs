@@ -1,21 +1,19 @@
 use std::sync::Arc;
 
 use flume::Sender as FlumeSender;
+use lpc_rs_core::LpcIntInner;
 use tracing::{debug, error};
-use lpc_rs_core::{LpcIntInner, RegisterSize};
 
 use crate::{
     interpreter::{
-        lpc_ref::LpcRef, task::apply_function::apply_function_by_name, vm::Vm, CONNECT, LOGON,
+        into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef, lpc_string::LpcString,
+        task::apply_function::apply_function_by_name, vm::Vm, CONNECT, LOGON,
     },
     telnet::{
         connection::Connection,
         ops::{BrokerOp, ConnectionOp},
     },
 };
-use crate::interpreter::into_lpc_ref::IntoLpcRef;
-use crate::interpreter::lpc_int::LpcInt;
-use crate::interpreter::lpc_string::LpcString;
 
 impl Vm {
     /// Start the login process for a [`Connection`]. This assumes the connection is not
@@ -25,6 +23,13 @@ impl Vm {
         let broker_tx = self.broker_tx.clone();
         let task_template = self.new_task_template();
         let vm_tx = self.tx.clone();
+
+        let address = connection.address;
+        let (ip, port) = (address.ip().to_string(), address.port());
+
+        // call 'connect' in the master object
+        let ip_ref = LpcString::from(ip).into_lpc_ref(&self.memory);
+        let port_ref = LpcRef::from(port as LpcIntInner);
 
         tokio::spawn(async move {
             debug!("initiating login for {}", connection.address);
@@ -39,12 +44,6 @@ impl Vm {
                 return;
             };
 
-            let address = connection.address;
-            let (ip, port) = (address.ip().to_string(), address.port());
-
-            // call 'connect' in the master object
-            let ip_ref = LpcString::from(ip).into_lpc_ref(&self.memory);
-            let port_ref = LpcRef::from(port as LpcIntInner);
             let maybe_login_ob = match apply_function_by_name(
                 CONNECT,
                 &[ip_ref.clone(), port_ref.clone()],
@@ -56,11 +55,9 @@ impl Vm {
             {
                 Some(Ok(LpcRef::Object(ob))) => ob,
                 Some(Ok(LpcRef::String(string_arc))) => {
-                    Self::fatal_error(
-                        &connection,
-                        string_arc.read().to_string(),
-                        broker_tx.clone(),
-                    ).await;
+                    let message = string_arc.read().to_string();
+
+                    Self::fatal_error(&connection, message, broker_tx.clone()).await;
                     return;
                 }
                 Some(Ok(_)) => {
@@ -108,8 +105,14 @@ impl Vm {
 
             // call 'logon' in the login object
             let max_execution_time = task_template.config.max_execution_time;
-            match apply_function_by_name(LOGON, &[ip_ref, port_ref], login_ob, template, Some(max_execution_time))
-                .await
+            match apply_function_by_name(
+                LOGON,
+                &[ip_ref, port_ref],
+                login_ob,
+                template,
+                Some(max_execution_time),
+            )
+            .await
             {
                 Some(Ok(LpcRef::Int(i))) => {
                     if i == 0 {
@@ -145,9 +148,11 @@ impl Vm {
                 None => {
                     Self::fatal_error(
                         &connection,
-                        "Fatal server error - Unable to find the `logon` function in the object.".to_string(),
-                        broker_tx.clone()
-                    ).await;
+                        "Fatal server error - Unable to find the `logon` function in the object."
+                            .to_string(),
+                        broker_tx.clone(),
+                    )
+                    .await;
                     return;
                 }
             }

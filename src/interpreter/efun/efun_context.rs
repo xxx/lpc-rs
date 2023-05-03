@@ -195,6 +195,10 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         TaskContextBuilder::from(self.task_context)
     }
 
+    pub fn new_task_template(&self) -> TaskTemplate {
+        TaskTemplate::from(self.task_context)
+    }
+
     /// Get a reference to the [`Process`] that contains the call to this efun
     #[inline]
     pub fn process(&self) -> &Arc<Process> {
@@ -247,6 +251,12 @@ impl<'task, const N: usize> WithCompiler for EfunContext<'task, N> {
         U: Future<Output = Result<T>> + Send,
     {
         self.task_context.with_async_compiler(f).await
+    }
+}
+
+impl<'task, const N: usize> From<&EfunContext<'task, N>> for TaskTemplate {
+    fn from(value: &EfunContext<'task, N>) -> Self {
+        TaskTemplate::from(value.task_context)
     }
 }
 
