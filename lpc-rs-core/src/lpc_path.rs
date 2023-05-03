@@ -8,7 +8,7 @@ use std::{
 };
 
 use bstr::ByteSlice;
-use path_absolutize::Absolutize;
+use path_absolutize::{path_dedot::ParseDot, Absolutize};
 use serde::{Deserialize, Serialize};
 
 use crate::mangle::Mangle;
@@ -158,55 +158,17 @@ impl Mangle for LpcPath {
     }
 }
 
-pub trait ToLpcPath {
-    fn to_lpc_path(&self) -> LpcPath;
-}
-
-impl From<PathBuf> for LpcPath {
-    fn from(pb: PathBuf) -> Self {
-        Self::new_server(pb)
-    }
-}
-
-impl From<&str> for LpcPath {
-    fn from(s: &str) -> Self {
-        Self::new_server(s)
-    }
-}
-
-impl From<Cow<'_, Path>> for LpcPath {
-    fn from(c: Cow<'_, Path>) -> Self {
-        Self::new_server(c.as_os_str())
-    }
-}
-
-impl From<OsString> for LpcPath {
-    fn from(c: OsString) -> Self {
-        Self::new_server(c.as_os_str())
-    }
-}
-
-impl From<&LpcPath> for LpcPath {
-    fn from(p: &LpcPath) -> Self {
-        p.clone()
-    }
-}
-
-impl ToLpcPath for PathBuf {
-    fn to_lpc_path(&self) -> LpcPath {
-        LpcPath::new_server(self.as_os_str())
-    }
-}
-
-impl ToLpcPath for &Path {
-    fn to_lpc_path(&self) -> LpcPath {
-        LpcPath::Server(self.to_path_buf())
-    }
-}
-
-impl ToLpcPath for &str {
-    fn to_lpc_path(&self) -> LpcPath {
-        LpcPath::new_server(self)
+impl<T> From<T> for LpcPath
+where
+    T: Into<PathBuf>,
+{
+    fn from(pb: T) -> Self {
+        let pb = pb.into();
+        let dedotted = pb
+            .parse_dot_from("/".as_ref())
+            .map(|path| path.into_owned())
+            .unwrap_or(pb);
+        Self::InGame(dedotted)
     }
 }
 

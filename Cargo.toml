@@ -49,6 +49,7 @@ nectar = { git = "https://github.com/robertwayne/nectar", branch = "main" }
 #nectar = { path = "../nectar" }
 once_cell = "1.10.0"
 parking_lot = "0.12.1"
+path-dedot = "3.0.18"
 phf = { version = "0.11.0", features = ["macros"] }
 readonly = "0.2.3"
 regex = "1"

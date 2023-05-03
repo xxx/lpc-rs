@@ -87,6 +87,17 @@ pub struct Compiler {
 }
 
 impl Compiler {
+    /// Create a new [`Compiler`] with the passed [`Config`]
+    pub fn new<C>(config: C) -> Self
+    where
+        C: Into<Arc<Config>>,
+    {
+        Self {
+            config: config.into(),
+            ..Default::default()
+        }
+    }
+
     /// Fully compile a file into a Program struct
     ///
     /// # Arguments
@@ -334,15 +345,13 @@ mod tests {
 
     mod test_compile_file {
         use super::*;
+        use crate::test_support::test_config;
 
         #[tokio::test]
         async fn tries_dot_c() {
-            let compiler = Compiler::default();
+            let compiler = Compiler::new(test_config());
 
-            assert!(compiler
-                .compile_file("tests/fixtures/code/example")
-                .await
-                .is_ok());
+            assert!(compiler.compile_file("example").await.is_ok());
         }
     }
 

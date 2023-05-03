@@ -1357,6 +1357,7 @@ dependencies = [
  "nectar",
  "once_cell",
  "parking_lot 0.12.1",
+ "path-dedot",
  "phf",
  "readonly",
  "regex",

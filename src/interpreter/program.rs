@@ -11,6 +11,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{lpc_path::LpcPath, pragma_flags::PragmaFlags, RegisterSize};
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
+use path_dedot::*;
 use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
 use string_interner::StringInterner;
@@ -102,11 +103,21 @@ impl<'a> Program {
         self.lookup_function(name).map(callback)
     }
 
-    /// Get the directory of this program. Used for clone_object, etc.
+    /// Get the in-game directory of this program. Used for clone_object, etc.
     pub fn cwd(&'a self) -> Cow<'a, Path> {
         match self.filename.parent() {
-            None => Cow::Owned(PathBuf::from("")),
-            Some(path) => Cow::Borrowed(path),
+            None => Cow::Owned(PathBuf::from("/")),
+            Some(path) => {
+                let dedotted = path
+                    .parse_dot_from("/".as_ref())
+                    .unwrap_or_else(|_| path.into());
+
+                if path.is_absolute() {
+                    dedotted
+                } else {
+                    Cow::Owned(PathBuf::from("/").join(dedotted))
+                }
+            }
         }
     }
 
@@ -211,16 +222,18 @@ mod tests {
             ..Program::default()
         };
 
-        let full_path = Path::new(".").canonicalize().unwrap().display().to_string();
-        assert_eq!(
-            program.cwd().to_str().unwrap(),
-            format!("{full_path}/foo/bar")
-        );
+        assert_eq!(program.cwd().to_str().unwrap(), format!("/foo/bar"));
 
         program.filename = Arc::new("marf.c".into());
-        assert_eq!(program.cwd().to_str().unwrap(), full_path);
+        assert_eq!(program.cwd().to_str().unwrap(), "/");
 
         program.filename = Arc::new(LpcPath::Server(Path::new("").to_path_buf()));
-        assert_eq!(program.cwd().to_str().unwrap(), "");
+        assert_eq!(program.cwd().to_str().unwrap(), "/");
+
+        program.filename = Arc::new("foo/bar/baz/quux/../../snerd/marf.c".into());
+        assert_eq!(program.cwd().to_str().unwrap(), "/foo/bar/snerd");
+
+        program.filename = Arc::new("../foo/bar/marf.c".into());
+        assert_eq!(program.cwd().to_str().unwrap(), "/foo/bar");
     }
 }
