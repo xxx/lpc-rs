@@ -108,7 +108,8 @@ where
 ///
 /// * `name` - The name of the function to apply. This is assumed to be an unmangled name.
 /// * `args` - A slice of [`LpcRef`]s to apply the function to.
-/// * `template` - The [`TaskTemplate`] that holds the rest of the context information.
+/// * `template` - The object that will eventually become the
+///   [`TaskContext`](crate::interpreter::task_context::TaskContext).
 ///
 /// # Returns
 ///
