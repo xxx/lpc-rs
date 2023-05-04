@@ -1,7 +1,6 @@
 use if_chain::if_chain;
 use lpc_rs_errors::LpcError;
 use tokio::task::JoinHandle;
-use tracing::error;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -17,6 +16,7 @@ use crate::{
         vm::{vm_op::VmOp, Vm},
     },
 };
+use crate::interpreter::task::apply_function::apply_runtime_error;
 
 impl Vm {
     /// Handler for [`VmOp::PrioritizeCallOut`].
@@ -67,8 +67,8 @@ impl Vm {
                 return;
             };
 
-            if !process.flags.test(ObjectFlags::Initialized) {
-                let template = TaskTemplateBuilder::default()
+            let build_template = || {
+                TaskTemplateBuilder::default()
                     .config(config.clone())
                     .object_space(object_space.clone())
                     .call_outs(call_outs.clone())
@@ -76,12 +76,21 @@ impl Vm {
                     .vm_upvalues(upvalues.clone())
                     .tx(tx.clone())
                     .build()
-                    .unwrap();
+                    .unwrap()
+            };
+
+            if !process.flags.test(ObjectFlags::Initialized) {
+                let template = build_template();
 
                 let ctx = template.into_task_context(process.clone());
                 if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_process(ctx).await {
-                    // TODO: this should apply runtime_error() on the master.
-                    error!("{}", e);
+                    let template = build_template();
+
+                    let Some(Ok(_)) = apply_runtime_error(&e, Some(process), template).await else {
+                        config.debug_log(e.diagnostic_string()).await;
+                        return;
+                    };
+
                     return;
                 }
             }

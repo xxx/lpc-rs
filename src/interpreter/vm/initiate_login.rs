@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
 use flume::Sender as FlumeSender;
+use tokio::sync::mpsc::Sender;
 use lpc_rs_core::LpcIntInner;
 use tracing::{debug, error, instrument};
+use lpc_rs_errors::{lpc_error, LpcError};
 
 use crate::{
     interpreter::{
@@ -14,6 +16,8 @@ use crate::{
         ops::{BrokerOp, ConnectionOp},
     },
 };
+use crate::interpreter::process::Process;
+use crate::interpreter::vm::vm_op::VmOp;
 
 impl Vm {
     /// Start the login process for a [`Connection`]. This assumes the connection is not
@@ -39,7 +43,9 @@ impl Vm {
             let Some(master) = object_space.master_object() else {
                 Self::fatal_error(
                     &connection,
-                    "Fatal server error - Failed to get master object.".to_string(),
+                    lpc_error!("Fatal server error - Failed to get master object."),
+                    None,
+                    vm_tx.clone(),
                     broker_tx.clone()
                 ).await;
                 return;
@@ -56,15 +62,20 @@ impl Vm {
             {
                 Some(Ok(LpcRef::Object(ob))) => ob,
                 Some(Ok(LpcRef::String(string_arc))) => {
+                    // Not a runtime error in this case. Just a custom error message.
                     let message = string_arc.read().to_string();
-
-                    Self::fatal_error(&connection, message, broker_tx.clone()).await;
+                    let _ = connection.tx.send(ConnectionOp::SendMessage(message)).await;
+                    let _ = broker_tx
+                        .send_async(BrokerOp::Disconnect(connection.address))
+                        .await;
                     return;
                 }
                 Some(Ok(_)) => {
                     Self::fatal_error(
                         &connection,
-                        "Fatal server error - We didn't receive an object back when calling connect().".to_string(),
+                        lpc_error!("Fatal server error - We didn't receive an object back when calling connect()."),
+                        Some(master),
+                        vm_tx.clone(),
                         broker_tx.clone()
                     ).await;
                     return;
@@ -72,7 +83,9 @@ impl Vm {
                 Some(Err(e)) => {
                     Self::fatal_error(
                         &connection,
-                        format!("Fatal server error - Failed during connect(): {}", e),
+                        e,
+                        Some(master),
+                        vm_tx.clone(),
                         broker_tx.clone(),
                     )
                     .await;
@@ -81,7 +94,9 @@ impl Vm {
                 None => {
                     Self::fatal_error(
                         &connection,
-                        "Fatal server error - Unable to find the `connect` function in the master object.".to_string(),
+                        lpc_error!("Fatal server error - Unable to find the `connect` function in the master object."),
+                        Some(master),
+                        vm_tx.clone(),
                         broker_tx.clone()
                     ).await;
                     return;
@@ -92,7 +107,9 @@ impl Vm {
                 debug_assert!(false, "We received a destructed object back when calling connect(). This should never happen.");
                 Self::fatal_error(
                     &connection,
-                    "Fatal server error - We received a destructed object back when calling connect().".to_string(),
+                    lpc_error!("Fatal server error - We received a destructed object back when calling connect()."),
+                    Some(master),
+                    vm_tx.clone(),
                     broker_tx.clone()
                 ).await;
                 return;
@@ -109,7 +126,7 @@ impl Vm {
             match apply_function_by_name(
                 LOGON,
                 &[ip_ref, port_ref],
-                login_ob,
+                login_ob.clone(),
                 template,
                 Some(max_execution_time),
             )
@@ -127,8 +144,9 @@ impl Vm {
                 Some(Ok(_)) => {
                     Self::fatal_error(
                         &connection,
-                        "Fatal server error - We didn't receive an int back when calling logon()."
-                            .to_string(),
+                        lpc_error!("Fatal server error - We didn't receive an int back when calling logon()."),
+                        Some(login_ob),
+                        vm_tx.clone(),
                         broker_tx.clone(),
                     )
                     .await;
@@ -137,10 +155,9 @@ impl Vm {
                 Some(Err(e)) => {
                     Self::fatal_error(
                         &connection,
-                        format!(
-                            "Fatal server error - Something failed while executing logon(). {}",
-                            e
-                        ),
+                        e,
+                        Some(login_ob),
+                        vm_tx.clone(),
                         broker_tx.clone(),
                     )
                     .await;
@@ -149,8 +166,9 @@ impl Vm {
                 None => {
                     Self::fatal_error(
                         &connection,
-                        "Fatal server error - Unable to find the `logon` function in the object."
-                            .to_string(),
+                        lpc_error!("Fatal server error - Unable to find the `logon` function in the object."),
+                        Some(login_ob),
+                        vm_tx.clone(),
                         broker_tx.clone(),
                     )
                     .await;
@@ -164,13 +182,19 @@ impl Vm {
 
     async fn fatal_error(
         connection: &Connection,
-        message: String,
+        error: Box<LpcError>,
+        object: Option<Arc<Process>>,
+        vm_tx: Sender<VmOp>,
         broker_tx: FlumeSender<BrokerOp>,
     ) {
-        error!("{}", &message);
-        let _ = connection.tx.send(ConnectionOp::SendMessage(message)).await;
+        let _ = connection.tx.send(ConnectionOp::SendMessage(error.to_string())).await;
         let _ = broker_tx
             .send_async(BrokerOp::Disconnect(connection.address))
             .await;
+
+        if object.is_some() {
+            // if object is None here, it means we have a bad master object, so we can't send a runtime error.
+            let _ = vm_tx.send(VmOp::RuntimeError(error, object)).await;
+        }
     }
 }

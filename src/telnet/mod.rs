@@ -36,6 +36,7 @@ use crate::{
         ops::{BrokerOp, ConnectionOp},
     },
 };
+use crate::interpreter::task::apply_function::apply_runtime_error;
 
 /// The incoming connection handler. Once established, individual connections are managed by [`ConnectionBroker`](connection_broker::ConnectionBroker).
 #[derive(Debug)]
@@ -307,7 +308,6 @@ impl Telnet {
     async fn resolve_input_to<S>(
         input_to: &InputTo,
         msg: &String,
-        // sink: &mut SplitSink<Framed<TcpStream, TelnetCodec>, TelnetEvent>,
         sink: &mut S,
         connection: &Connection,
         template: &TaskTemplate,
@@ -327,12 +327,18 @@ impl Telnet {
         };
 
         if !process.flags.test(ObjectFlags::Initialized) {
-            let template = template.clone();
-            template.set_this_player(connection.process.load_full());
-            let ctx = template.into_task_context(process.clone());
+            let init_template = template.clone();
+            init_template.set_this_player(connection.process.load_full());
+            let ctx = init_template.into_task_context(process.clone());
             if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_process(ctx).await {
-                // TODO: this should apply runtime_error() on the master.
-                error!("{}", e);
+                let template = template.clone();
+                let config = template.config.clone();
+
+                let Some(Ok(_)) = apply_runtime_error(&e, Some(process), template).await else {
+                    config.debug_log(e.diagnostic_string()).await;
+                    return;
+                };
+
                 return;
             }
         }
@@ -350,16 +356,18 @@ impl Telnet {
             args.push(input_arg);
         }
 
-        let template = template.clone();
-        template.set_this_player(connection.process.load_full());
+        let apply_template = template.clone();
+        apply_template.set_this_player(connection.process.load_full());
 
-        let max_execution_time = template.config.max_execution_time;
+        let max_execution_time = apply_template.config.max_execution_time;
         let result =
-            apply_function(function, &args, process, template, Some(max_execution_time)).await;
+            apply_function(function, &args, process.clone(), apply_template, Some(max_execution_time)).await;
 
         if let Err(e) = result {
-            // TODO: this should apply runtime_error() on the master.
-            error!("{}", e);
+            let Some(Ok(_)) = apply_runtime_error(&e, Some(process), template.clone()).await else {
+                template.config.debug_log(e.diagnostic_string()).await;
+                return;
+            };
         };
     }
 

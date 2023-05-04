@@ -37,6 +37,7 @@ use crate::{
     },
     util::process_builder::ProcessInitializer,
 };
+use crate::interpreter::task::apply_function::apply_runtime_error;
 
 mod initiate_login;
 mod object_initializers;
@@ -162,6 +163,21 @@ impl Vm {
                             // locking them behind a mutex.
                             let prev = Self::takeover_process(connection, process).await;
                             let _ = callback.send(prev);
+                        }
+                        VmOp::RuntimeError(error, proc) => {
+                            let template = self.new_task_template();
+
+                            tokio::spawn(async move {
+                                match apply_runtime_error(&error, proc, template).await {
+                                    Some(Ok(_)) => {},
+                                    None => {
+                                        error!("runtime_error() is not defined in the master object.");
+                                    }
+                                    Some(Err(e)) => {
+                                        error!("Error applying runtime error: {}", e.diagnostic_string());
+                                    }
+                                }
+                            });
                         }
                         VmOp::TaskError(_task_id, error) => {
                             tokio::spawn(async move { error.emit_diagnostics() });

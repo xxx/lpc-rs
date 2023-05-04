@@ -27,6 +27,11 @@ pub enum VmOp {
     /// The Task with the passed ID has failed.
     TaskError(TaskId, Box<LpcError>),
 
+    /// A generic runtime error has occurred.
+    /// Note we use an Arc instead of a Weak here because we want to
+    /// report the error even if the object has been destructed.
+    RuntimeError(Box<LpcError>, Option<Arc<Process>>),
+
     /// A subsystem has run into a problem that cannot be recovered from, so we need to shut down.
     FatalError(String),
 }

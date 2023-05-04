@@ -14,6 +14,7 @@ use codespan_reporting::{
     diagnostic::{Diagnostic, Label, LabelStyle},
     term::termcolor::{ColorChoice, StandardStream, WriteColor},
 };
+use codespan_reporting::term::termcolor::Buffer;
 use derive_builder::UninitializedFieldError;
 use itertools::Itertools;
 use lalrpop_util::ParseError as LalrpopParseError;
@@ -228,7 +229,7 @@ impl LpcError {
         v
     }
 
-    /// Emit this error's collected diagnostics
+    /// Emit this error's collected diagnostics to stderr
     pub fn emit_diagnostics(&self) {
         output_diagnostics(
             &self.to_diagnostics(),
@@ -250,6 +251,21 @@ impl LpcError {
                 eprintln!("Error opening file `{path}`: {e}");
             }
         }
+    }
+
+    /// Emit the diagnostics as a String
+    pub fn diagnostic_string(&self) -> String {
+        let mut err = self.to_string();
+        err.push('\n');
+
+        let mut buffer = Buffer::ansi();
+        let diagnostics = self.to_diagnostics();
+
+        output_diagnostics(&diagnostics, &mut buffer);
+        err.push_str(std::str::from_utf8(buffer.as_slice()).unwrap_or("<diagnostic with invalid utf8?>"));
+        err.push('\n');
+
+        err
     }
 }
 
@@ -413,7 +429,8 @@ impl Hash for LpcError {
     }
 }
 
-fn output_diagnostics(diagnostics: &[Diagnostic<usize>], writer: &mut dyn WriteColor) {
+/// Write a list of diagnostics to a writer.
+pub fn output_diagnostics(diagnostics: &[Diagnostic<usize>], writer: &mut dyn WriteColor) {
     let files = FILE_CACHE.read();
 
     let config = codespan_reporting::term::Config::default();

@@ -304,6 +304,18 @@ impl Clone for TaskContext {
     }
 }
 
+impl AsRef<Heap> for TaskContext {
+    fn as_ref(&self) -> &Heap {
+        &self.memory
+    }
+}
+
+impl AsRef<ObjectSpace> for TaskContext {
+    fn as_ref(&self) -> &ObjectSpace {
+        &self.object_space
+    }
+}
+
 impl IntoTaskContext for TaskContext {
     fn into_task_context(self, _proc: Arc<Process>) -> TaskContext {
         self

@@ -36,7 +36,7 @@ async fn main() {
     let mut vm = Vm::new(config);
 
     vm.boot().await.unwrap_or_else(|e| {
-        eprintln!("unable to boot VM: {e:?}");
+        eprintln!("unable to boot VM: {}", e.diagnostic_string());
         std::process::exit(1);
     });
 }

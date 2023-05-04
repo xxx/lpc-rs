@@ -130,20 +130,33 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.stack.last().unwrap()
     }
 
+    /// Get a reference to the [`Heap`]
     #[inline]
     pub fn memory(&self) -> &Arc<Heap> {
         &self.memory
     }
 
+    /// Place the passed `result` into the correct location to return from an efun.
     #[inline]
     pub fn return_efun_result(&mut self, result: LpcRef) {
         let frame = self.stack.last_mut().unwrap();
         frame.registers[0] = result;
     }
 
+    /// Get the current debug span
     #[inline]
     pub fn current_debug_span(&self) -> Option<Span> {
         self.frame().current_debug_span()
+    }
+
+    /// Get the current debug span of the previous frame
+    #[inline]
+    pub fn previous_debug_span(&self) -> Option<Span> {
+        if self.stack.len() > 1 {
+            self.stack[self.stack.len() - 2].current_debug_span()
+        } else {
+            None
+        }
     }
 
     #[inline]

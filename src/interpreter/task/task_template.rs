@@ -83,6 +83,18 @@ impl Clone for TaskTemplate {
     }
 }
 
+impl AsRef<Heap> for TaskTemplate {
+    fn as_ref(&self) -> &Heap {
+        &self.memory
+    }
+}
+
+impl AsRef<ObjectSpace> for TaskTemplate {
+    fn as_ref(&self) -> &ObjectSpace {
+        &self.object_space
+    }
+}
+
 impl IntoTaskContext for TaskTemplate {
     fn into_task_context(self, process: Arc<Process>) -> TaskContext {
         TaskContext::from_template(self, process)

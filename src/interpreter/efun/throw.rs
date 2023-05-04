@@ -8,7 +8,7 @@ pub async fn throw<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
     let arg = context.resolve_local_register(1 as RegisterSize);
 
     Err(lpc_error!(
-        context.frame().current_debug_span(),
+        context.previous_debug_span().or_else(|| context.current_debug_span()),
         "{}",
         arg.to_string()
     ))
