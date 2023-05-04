@@ -4291,6 +4291,8 @@ mod tests {
 
         use super::*;
         use crate::interpreter::task::initialize_program::InitializeProgramBuilder;
+        use crate::test_config_builder;
+        use lpc_rs_utils::config::ConfigBuilder;
 
         #[tokio::test]
         async fn errors_on_stack_overflow() {
@@ -4325,7 +4327,14 @@ mod tests {
             let (program, _, _) = compile_prog(code).await;
             let (tx, _rx) = mpsc::channel(128);
 
+
+            let config = test_config_builder!()
+                .max_execution_time(40_u64)
+                .build()
+                .unwrap();
+
             let r = InitializeProgramBuilder::<20>::default()
+                .config(config)
                 .program(program)
                 .tx(tx)
                 .build()
@@ -4333,7 +4342,7 @@ mod tests {
 
             assert_eq!(
                 r.unwrap_err().to_string(),
-                "evaluation limit of 300ms has been reached"
+                "evaluation limit of 40ms has been reached"
             );
         }
     }
