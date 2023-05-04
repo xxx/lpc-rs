@@ -270,8 +270,8 @@ pub enum Token {
     #[regex(r#""(\\.|[^"])*""#, string_token_without_startend)]
     StringLiteral(StringToken),
 
-    // Allow multiple characters so any Unicode scalar can be matched.
-    #[regex(r#"'(\\.|[^'])+'"#, |lex| {
+    // Allow multiple bytes so any Unicode scalar can be matched.
+    #[regex(r#"'(\\.|[^']){1,4}'"#, |lex| {
     track_slice(lex);
 
     let span = Span::new(lex.extras.current_file_id, lex.span());
