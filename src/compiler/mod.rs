@@ -101,16 +101,17 @@ impl Compiler {
     /// Fully compile a file into a Program struct
     ///
     /// # Arguments
-    /// `path` - The full, on-server path of the file to compile. Also used for error messaging.
+    /// `path` - The path of the file to compile. Also used for error messaging.
     ///  If the file in question ends in `.c`, the extension can be left off, per LPC convention.
     ///
     /// # Examples
     /// ```
     /// # tokio_test::block_on(async {
+    /// use lpc_rs_core::lpc_path::LpcPath;
     /// use lpc_rs::compiler::Compiler;
     ///
     /// let prog = Compiler::default()
-    ///     .compile_file("tests/fixtures/code/example.c")
+    ///     .compile_file(LpcPath::new_server("tests/fixtures/code/example.c"))
     ///     .await
     ///     .expect("Unable to compile.");
     /// # });

@@ -226,14 +226,14 @@ async fn test_inherited_create_called_when_not_overridden() {
     "# };
 
     let parent = indoc! { r#"
-        inherit "test_grandparent";
+        inherit "test_inherited_create_called_when_not_overridden_test_grandparent";
 
         void create() {
             dump("parent create");
         }
     "# };
     let _parent2 = indoc! { r#"
-        inherit "test_grandparent";
+        inherit "test_inherited_create_called_when_not_overridden_test_grandparent";
 
         void create() {
             dump("parent2 create"); // this should be called because child inherits it last.
@@ -241,12 +241,12 @@ async fn test_inherited_create_called_when_not_overridden() {
     "# };
 
     let child = indoc! { r#"
-        inherit "test_parent";
-        inherit "test_parent2";
+        inherit "test_inherited_create_called_when_not_overridden_test_parent";
+        inherit "test_inherited_create_called_when_not_overridden_test_parent2";
     "# };
 
     let _grandparent_ctx = vm
-        .initialize_string(grandparent, "test_grandparent.c")
+        .initialize_string(grandparent, "test_inherited_create_called_when_not_overridden_test_grandparent.c")
         .await
         .map_err(|e| {
             e.emit_diagnostics();
@@ -254,7 +254,7 @@ async fn test_inherited_create_called_when_not_overridden() {
         })
         .unwrap();
     let _parent_ctx = vm
-        .initialize_string(parent, "test_parent.c")
+        .initialize_string(parent, "test_inherited_create_called_when_not_overridden_test_parent.c")
         .await
         .map_err(|e| {
             e.emit_diagnostics();
@@ -262,7 +262,7 @@ async fn test_inherited_create_called_when_not_overridden() {
         })
         .unwrap();
     let _parent2_ctx = vm
-        .initialize_string(parent, "test_parent2.c")
+        .initialize_string(parent, "test_inherited_create_called_when_not_overridden_test_parent2.c")
         .await
         .map_err(|e| {
             e.emit_diagnostics();
@@ -270,7 +270,7 @@ async fn test_inherited_create_called_when_not_overridden() {
         })
         .unwrap();
     let child_ctx = vm
-        .initialize_string(child, "test_child.c")
+        .initialize_string(child, "test_inherited_create_called_when_not_overridden_test_child.c")
         .await
         .map_err(|e| {
             e.emit_diagnostics();
