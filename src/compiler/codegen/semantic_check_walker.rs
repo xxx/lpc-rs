@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use if_chain::if_chain;
-use lpc_rs_core::{call_namespace::CallNamespace, EFUN, lpc_type::LpcType};
+use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
 use lpc_rs_errors::{lpc_error, LpcError, Result};
 use lpc_rs_utils::string::closure_arg_number;
 
@@ -20,7 +20,7 @@ use crate::{
             expression_node::ExpressionNode,
             for_each_node::{ForEachInit, ForEachNode},
             for_node::ForNode,
-            function_def_node::{ARGV, FunctionDefNode},
+            function_def_node::{FunctionDefNode, ARGV},
             function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
             int_node::IntNode,
             label_node::LabelNode,
@@ -29,7 +29,7 @@ use crate::{
             return_node::ReturnNode,
             switch_node::SwitchNode,
             ternary_node::TernaryNode,
-            unary_op_node::{UnaryOperation, UnaryOpNode},
+            unary_op_node::{UnaryOpNode, UnaryOperation},
             var_init_node::VarInitNode,
             var_node::VarNode,
             while_node::WhileNode,
@@ -779,7 +779,6 @@ mod tests {
     use lpc_rs_errors::LpcErrorSeverity;
     use lpc_rs_function_support::symbol::Symbol;
     use ustr::ustr;
-    use crate::test_support::factories::*;
 
     use super::*;
     use crate::{
@@ -790,9 +789,10 @@ mod tests {
                 default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
                 semantic_check_walker::SemanticCheckWalker,
             },
-            Compiler,
             semantic::scope_tree::ScopeTree,
+            Compiler,
         },
+        test_support::factories::*,
     };
 
     fn context_with_var(name: &str, var_type: LpcType) -> CompilationContext {
@@ -1166,8 +1166,9 @@ mod tests {
         };
 
         use super::*;
-        use crate::{assert_regex, interpreter::program::Program};
-        use crate::test_support::empty_compilation_context;
+        use crate::{
+            assert_regex, interpreter::program::Program, test_support::empty_compilation_context,
+        };
 
         #[tokio::test]
         async fn allows_known_functions() {
@@ -1903,14 +1904,15 @@ mod tests {
 
     mod test_visit_function_def {
         use lpc_rs_core::function_flags::FunctionFlags;
+
         use super::*;
         use crate::{
             compiler::{
                 ast::{ast_node::AstNode, binary_op_node::BinaryOperation},
                 codegen::scope_walker::ScopeWalker,
             },
+            test_support::empty_compilation_context,
         };
-        use crate::test_support::empty_compilation_context;
 
         #[tokio::test]
         async fn handles_scopes() {
@@ -2016,8 +2018,9 @@ mod tests {
         };
 
         use super::*;
-        use crate::{assert_regex, interpreter::program::Program};
-        use crate::test_support::empty_compilation_context;
+        use crate::{
+            assert_regex, interpreter::program::Program, test_support::empty_compilation_context,
+        };
 
         #[tokio::test]
         async fn allows_local_private_functions() {
@@ -2151,8 +2154,8 @@ mod tests {
     }
 
     mod test_visit_program {
-        use crate::test_support::empty_compilation_context;
         use super::*;
+        use crate::test_support::empty_compilation_context;
 
         #[tokio::test]
         async fn checks_its_body() {
@@ -2179,8 +2182,8 @@ mod tests {
     }
 
     mod test_visit_range {
-        use crate::test_support::empty_compilation_context;
         use super::*;
+        use crate::test_support::empty_compilation_context;
 
         #[tokio::test]
         async fn allows_ints() {
@@ -2451,8 +2454,8 @@ mod tests {
         }
 
         mod test_inc {
-            use crate::test_support::empty_compilation_context;
             use super::*;
+            use crate::test_support::empty_compilation_context;
 
             #[tokio::test]
             async fn allows_vars() {
@@ -2489,8 +2492,8 @@ mod tests {
         }
 
         mod test_dec {
-            use crate::test_support::empty_compilation_context;
             use super::*;
+            use crate::test_support::empty_compilation_context;
 
             #[tokio::test]
             async fn allows_vars() {
@@ -2574,9 +2577,9 @@ mod tests {
 
     mod test_visit_var_init {
         use lpc_rs_core::function_flags::FunctionFlags;
-        use crate::test_support::empty_compilation_context;
 
         use super::*;
+        use crate::test_support::empty_compilation_context;
 
         #[tokio::test]
         async fn validates_both_sides() {

@@ -6,7 +6,9 @@ use parking_lot::RwLock;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::CompilerBuilder,
+    compiler::{
+        compilation_context::CompilationContext, semantic::scope_tree::ScopeTree, CompilerBuilder,
+    },
     interpreter::{
         call_outs::CallOuts,
         object_space::ObjectSpace,
@@ -15,8 +17,6 @@ use crate::{
         task::{initialize_program::InitializeProgramBuilder, Task},
     },
 };
-use crate::compiler::compilation_context::CompilationContext;
-use crate::compiler::semantic::scope_tree::ScopeTree;
 
 pub mod factories;
 

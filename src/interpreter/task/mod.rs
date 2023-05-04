@@ -4289,10 +4289,12 @@ mod tests {
 
     mod test_limits {
 
-        use super::*;
-        use crate::interpreter::task::initialize_program::InitializeProgramBuilder;
-        use crate::test_config_builder;
         use lpc_rs_utils::config::ConfigBuilder;
+
+        use super::*;
+        use crate::{
+            interpreter::task::initialize_program::InitializeProgramBuilder, test_config_builder,
+        };
 
         #[tokio::test]
         async fn errors_on_stack_overflow() {
@@ -4326,7 +4328,6 @@ mod tests {
 
             let (program, _, _) = compile_prog(code).await;
             let (tx, _rx) = mpsc::channel(128);
-
 
             let config = test_config_builder!()
                 .max_execution_time(40_u64)

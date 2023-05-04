@@ -8,8 +8,8 @@ use indoc::indoc;
 use lpc_rs::{
     compiler::{Compiler, CompilerBuilder},
     interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, lpc_string::LpcString, vm::Vm},
+    util::process_builder::ProcessInitializer,
 };
-use lpc_rs::util::process_builder::{ProcessCreator, ProcessInitializer};
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 
@@ -366,7 +366,6 @@ async fn test_calls_simul_efuns() {
 //     assert_eq!(result.vm_upvalues.read()[0], LpcRef::from(135));
 // }
 
-
 #[tokio::test]
 async fn test_nomask_children() {
     let parent = indoc! { r#"
@@ -384,14 +383,17 @@ async fn test_nomask_children() {
     "# };
 
     let vm = Vm::new(test_config());
-    let parent_proc = vm
+    let _parent_proc = vm
         .process_initialize_from_code("/test_parent.c", parent)
         .await
         .unwrap();
 
     let child_proc = vm.process_initialize_from_code("/child.c", child).await;
 
-    assert_eq!(child_proc.unwrap_err().to_string(), "attempt to redefine nomask function `noooo`");
+    assert_eq!(
+        child_proc.unwrap_err().to_string(),
+        "attempt to redefine nomask function `noooo`"
+    );
 }
 
 #[tokio::test]
@@ -415,14 +417,21 @@ async fn test_nomask_grandchildren() {
     "# };
 
     let vm = Vm::new(test_config());
-    let parent_proc = vm
+    let _parent_proc = vm
         .process_initialize_from_code("/test_parent.c", parent)
         .await
         .unwrap();
 
-    let _child_proc = vm.process_initialize_from_code("/child.c", child).await.unwrap();
+    let _child_proc = vm
+        .process_initialize_from_code("/child.c", child)
+        .await
+        .unwrap();
 
-    let grandchild_proc = vm.process_initialize_from_code("/grandchild.c", grandchild).await;
-    assert_eq!(grandchild_proc.unwrap_err().to_string(), "attempt to redefine nomask function `noooo`");
+    let grandchild_proc = vm
+        .process_initialize_from_code("/grandchild.c", grandchild)
+        .await;
+    assert_eq!(
+        grandchild_proc.unwrap_err().to_string(),
+        "attempt to redefine nomask function `noooo`"
+    );
 }
-

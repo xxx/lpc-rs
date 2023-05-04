@@ -1,6 +1,5 @@
 use async_trait::async_trait;
-use lpc_rs_core::{function_arity::FunctionArity, RegisterSize};
-use lpc_rs_core::call_namespace::CallNamespace;
+use lpc_rs_core::{call_namespace::CallNamespace, function_arity::FunctionArity, RegisterSize};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototypeBuilder};
 use lpc_rs_utils::string::closure_arg_number;
@@ -133,15 +132,15 @@ impl TreeWalker for FunctionPrototypeWalker {
                     "attempt to redefine nomask function `{}`",
                     node.name
                 ))
-                    .with_span(node.span)
-                    .with_label("defined here", prototype.span)
-                    .into();
+                .with_span(node.span)
+                .with_label("defined here", prototype.span)
+                .into();
 
                 return Err(e);
             }
         }
 
-                // Store the prototype now, to allow for forward references.
+        // Store the prototype now, to allow for forward references.
         let num_args = RegisterSize::try_from(node.parameters.len())?;
         let num_default_args =
             RegisterSize::try_from(node.parameters.iter().filter(|p| p.value.is_some()).count())?;
@@ -213,17 +212,19 @@ mod tests {
     use std::sync::Arc;
 
     use lpc_rs_core::{function_flags::FunctionFlags, lpc_path::LpcPath, lpc_type::LpcType};
-    use ustr::ustr;
     use lpc_rs_errors::span::Span;
     use lpc_rs_function_support::program_function::ProgramFunction;
-    use crate::assert_regex;
+    use ustr::ustr;
 
     use super::*;
-    use crate::compiler::ast::{
-        ast_node::AstNode, expression_node::ExpressionNode, var_init_node::VarInitNode,
+    use crate::{
+        assert_regex,
+        compiler::ast::{
+            ast_node::AstNode, expression_node::ExpressionNode, var_init_node::VarInitNode,
+        },
+        interpreter::program::Program,
+        test_support::empty_compilation_context,
     };
-    use crate::interpreter::program::Program;
-    use crate::test_support::empty_compilation_context;
 
     #[tokio::test]
     async fn disallows_redefining_nomask_function() {
@@ -265,9 +266,9 @@ mod tests {
 
         if let Err(e) = result {
             assert_regex!(
-                    (*e).as_ref(),
-                    "attempt to redefine nomask function `duplicate`"
-                );
+                (*e).as_ref(),
+                "attempt to redefine nomask function `duplicate`"
+            );
         } else {
             panic!("didn't error?")
         }

@@ -282,10 +282,18 @@ impl Compiler {
         program_node.visit(&mut asm_walker).await?;
 
         // emit warnings
-        let (warnings, errors):(Vec<_>, Vec<_>) = asm_walker.context().errors.iter().partition(|e| e.is_warning());
+        let (warnings, errors): (Vec<_>, Vec<_>) = asm_walker
+            .context()
+            .errors
+            .iter()
+            .partition(|e| e.is_warning());
 
         for warning in warnings {
-            asm_walker.context().config.debug_log(warning.diagnostic_string()).await;
+            asm_walker
+                .context()
+                .config
+                .debug_log(warning.diagnostic_string())
+                .await;
         }
 
         if !errors.is_empty() {

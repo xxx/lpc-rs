@@ -292,14 +292,13 @@ mod tests {
             .await
             .unwrap();
 
-        let _master_proc = vm.process_initialize_from_code("/master.c", master).await.unwrap();
+        let _master_proc = vm
+            .process_initialize_from_code("/master.c", master)
+            .await
+            .unwrap();
 
         let student = vm.object_space.lookup("/clone#0").unwrap();
 
-        assert!(student
-            .globals
-            .read()
-            .iter()
-            .all(|v| v.is_null()));
+        assert!(student.globals.read().iter().all(|v| v.is_null()));
     }
 }
