@@ -233,9 +233,17 @@ impl CodegenWalker {
         // These are expected and assumed to be in 1:1 correspondence at runtime
         self.ensure_sync()?;
 
+        // get a combined hashmap of all inherited global variables
+        let inherits = std::mem::take(&mut self.context.inherits);
+        let mut global_variables = inherits.into_iter().map(|i| i.global_variables).fold(
+            HashMap::new(),
+            |mut acc, vars| {
+                acc.extend(vars.into_iter());
+                acc
+            },
+        );
         self.context.scopes.goto_root();
-        let global_variables =
-            std::mem::take(&mut self.context.scopes.current_mut().unwrap().symbols);
+        global_variables.extend(std::mem::take(&mut self.context.scopes.current_mut().unwrap().symbols));
 
         let strings = Arc::new(self.context.strings);
         for func in self.functions.values() {
