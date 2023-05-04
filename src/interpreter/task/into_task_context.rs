@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::interpreter::{process::Process, task_context::TaskContext};
-use crate::interpreter::object_space::ObjectSpace;
-use crate::interpreter::heap::Heap;
+use crate::interpreter::{
+    heap::Heap, object_space::ObjectSpace, process::Process, task_context::TaskContext,
+};
 
 pub trait IntoTaskContext: AsRef<Heap> + AsRef<ObjectSpace> {
     /// Create a new [`TaskContext`].

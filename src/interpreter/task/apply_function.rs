@@ -1,23 +1,23 @@
 use std::sync::Arc;
-use indexmap::IndexMap;
-use termcolor::Buffer;
 
+use indexmap::IndexMap;
 use lpc_rs_errors::{lpc_error, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
+use termcolor::Buffer;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
+        into_lpc_ref::IntoLpcRef,
+        lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
+        lpc_string::LpcString,
+        object_space::ObjectSpace,
         process::Process,
         task::{into_task_context::IntoTaskContext, Task},
+        ERROR_HANDLER,
     },
 };
-use crate::interpreter::ERROR_HANDLER;
-use crate::interpreter::into_lpc_ref::IntoLpcRef;
-use crate::interpreter::lpc_mapping::LpcMapping;
-use crate::interpreter::lpc_string::LpcString;
-use crate::interpreter::object_space::ObjectSpace;
 
 /// Apply function `f` in process `proc`, to arguments `args`, using context
 /// information from `template`.
@@ -152,9 +152,14 @@ where
 
     // get the path and line number from the span, stripping off the lib dir so
     // the path is an in-game path.
-    let span_string = error.span.and_then(|s| {
-        s.to_string().strip_prefix(ctx.config.lib_dir.as_str()).map(|s| s.to_string())
-    }).unwrap_or_else(|| String::from("<unknown>"));
+    let span_string = error
+        .span
+        .and_then(|s| {
+            s.to_string()
+                .strip_prefix(ctx.config.lib_dir.as_str())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| String::from("<unknown>"));
 
     mapping.insert(
         LpcString::from("location").into_lpc_ref(&ctx.memory),
@@ -164,10 +169,7 @@ where
     let object = proc
         .map(|pr| Arc::downgrade(&pr).into_lpc_ref(&ctx.memory))
         .unwrap_or_else(|| LpcString::from("<no object>").into_lpc_ref(&ctx.memory));
-    mapping.insert(
-        LpcString::from("object").into_lpc_ref(&ctx.memory),
-        object,
-    );
+    mapping.insert(LpcString::from("object").into_lpc_ref(&ctx.memory), object);
 
     let mut buffer = Buffer::ansi();
     let diagnostics = error.to_diagnostics();

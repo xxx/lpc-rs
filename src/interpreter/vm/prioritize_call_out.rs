@@ -9,14 +9,13 @@ use crate::{
         lpc_ref::LpcRef,
         object_flags::ObjectFlags,
         task::{
-            into_task_context::IntoTaskContext, task_id::TaskId,
-            task_template::TaskTemplateBuilder, Task,
+            apply_function::apply_runtime_error, into_task_context::IntoTaskContext,
+            task_id::TaskId, task_template::TaskTemplateBuilder, Task,
         },
         task_context::TaskContext,
         vm::{vm_op::VmOp, Vm},
     },
 };
-use crate::interpreter::task::apply_function::apply_runtime_error;
 
 impl Vm {
     /// Handler for [`VmOp::PrioritizeCallOut`].

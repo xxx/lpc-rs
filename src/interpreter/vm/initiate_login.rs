@@ -1,23 +1,26 @@
 use std::sync::Arc;
 
 use flume::Sender as FlumeSender;
-use tokio::sync::mpsc::Sender;
 use lpc_rs_core::LpcIntInner;
-use tracing::{debug, instrument};
 use lpc_rs_errors::{lpc_error, LpcError};
+use tokio::sync::mpsc::Sender;
+use tracing::{debug, instrument};
 
 use crate::{
     interpreter::{
-        into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef, lpc_string::LpcString,
-        task::apply_function::apply_function_by_name, vm::Vm, CONNECT, LOGON,
+        into_lpc_ref::IntoLpcRef,
+        lpc_ref::LpcRef,
+        lpc_string::LpcString,
+        process::Process,
+        task::apply_function::apply_function_by_name,
+        vm::{vm_op::VmOp, Vm},
+        CONNECT, LOGON,
     },
     telnet::{
         connection::Connection,
         ops::{BrokerOp, ConnectionOp},
     },
 };
-use crate::interpreter::process::Process;
-use crate::interpreter::vm::vm_op::VmOp;
 
 impl Vm {
     /// Start the login process for a [`Connection`]. This assumes the connection is not
@@ -187,7 +190,10 @@ impl Vm {
         vm_tx: Sender<VmOp>,
         broker_tx: FlumeSender<BrokerOp>,
     ) {
-        let _ = connection.tx.send(ConnectionOp::SendMessage(error.to_string())).await;
+        let _ = connection
+            .tx
+            .send(ConnectionOp::SendMessage(error.to_string()))
+            .await;
         let _ = broker_tx
             .send_async(BrokerOp::Disconnect(connection.address))
             .await;

@@ -27,8 +27,10 @@ use crate::{
         lpc_string::LpcString,
         object_flags::ObjectFlags,
         task::{
-            apply_function::apply_function, into_task_context::IntoTaskContext,
-            task_template::TaskTemplate, Task,
+            apply_function::{apply_function, apply_runtime_error},
+            into_task_context::IntoTaskContext,
+            task_template::TaskTemplate,
+            Task,
         },
     },
     telnet::{
@@ -36,7 +38,6 @@ use crate::{
         ops::{BrokerOp, ConnectionOp},
     },
 };
-use crate::interpreter::task::apply_function::apply_runtime_error;
 
 /// The incoming connection handler. Once established, individual connections are managed by [`ConnectionBroker`](connection_broker::ConnectionBroker).
 #[derive(Debug)]
@@ -360,8 +361,14 @@ impl Telnet {
         apply_template.set_this_player(connection.process.load_full());
 
         let max_execution_time = apply_template.config.max_execution_time;
-        let result =
-            apply_function(function, &args, process.clone(), apply_template, Some(max_execution_time)).await;
+        let result = apply_function(
+            function,
+            &args,
+            process.clone(),
+            apply_template,
+            Some(max_execution_time),
+        )
+        .await;
 
         if let Err(e) = result {
             let Some(Ok(_)) = apply_runtime_error(&e, Some(process), template.clone()).await else {

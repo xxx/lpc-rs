@@ -12,16 +12,18 @@ use std::{
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label, LabelStyle},
-    term::termcolor::{ColorChoice, StandardStream, WriteColor},
+    term::termcolor::{Buffer, ColorChoice, StandardStream, WriteColor},
 };
-use codespan_reporting::term::termcolor::Buffer;
 use derive_builder::UninitializedFieldError;
 use itertools::Itertools;
 use lalrpop_util::ParseError as LalrpopParseError;
 use span::HasSpan;
 
-use crate::{file_stream::FileStream, lazy_files::FILE_CACHE, span::Span};
-use crate::lazy_files::FileId;
+use crate::{
+    file_stream::FileStream,
+    lazy_files::{FileId, FILE_CACHE},
+    span::Span,
+};
 
 pub mod file_stream;
 pub mod lazy_files;
@@ -263,7 +265,9 @@ impl LpcError {
         let diagnostics = self.to_diagnostics();
 
         output_diagnostics(&diagnostics, &mut buffer);
-        err.push_str(std::str::from_utf8(buffer.as_slice()).unwrap_or("<diagnostic with invalid utf8?>"));
+        err.push_str(
+            std::str::from_utf8(buffer.as_slice()).unwrap_or("<diagnostic with invalid utf8?>"),
+        );
         err.push('\n');
 
         err
