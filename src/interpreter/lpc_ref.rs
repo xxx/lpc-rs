@@ -67,6 +67,11 @@ impl LpcRef {
         }
     }
 
+    /// Is this a null ref?
+    pub fn is_null(&self) -> bool {
+        matches!(self, LpcRef::Int(LpcInt(0)))
+    }
+
     fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> Box<LpcError> {
         lpc_error!(
             "runtime error: mismatched types: {} ({}) {} {} ({})",

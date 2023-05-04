@@ -101,6 +101,7 @@ mod tests {
     use std::sync::Arc;
 
     use indoc::indoc;
+    use itertools::Itertools;
     use lpc_rs_utils::config::Config;
     use parking_lot::RwLock;
 
@@ -262,5 +263,43 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("infinite clone recursion detected"));
+    }
+
+    #[tokio::test]
+    async fn empties_vars_before_initialization() {
+        let master = indoc! { r#"
+            void create() {
+                "/clone"->set_name("master foo");
+
+                // Prototype has been called, and so is initialized.
+                // Clone should not be initialized, and should not have a
+                // copy of the prototype's data
+                object student = clone_object("/clone");
+            }
+        "# };
+
+        let clone = indoc! { r#"
+            string name;
+
+            void set_name(string new_name) {
+                name = new_name;
+            }
+        "# };
+
+        let vm = Vm::new(test_config());
+        let _clone_proc = vm
+            .process_create_from_code("/clone.c", clone)
+            .await
+            .unwrap();
+
+        let _master_proc = vm.process_initialize_from_code("/master.c", master).await.unwrap();
+
+        let student = vm.object_space.lookup("/clone#0").unwrap();
+
+        assert!(student
+            .globals
+            .read()
+            .iter()
+            .all(|v| v.is_null()));
     }
 }
