@@ -282,15 +282,15 @@ impl Compiler {
         program_node.visit(&mut asm_walker).await?;
 
         // emit warnings
-        asm_walker
+        let iter = asm_walker
             .context()
             .errors
             .iter()
-            .filter(|e| e.is_warning())
-            .for_each(|e| {
-                // TODO: this should not do this, and instead pass the error up the chain
-                e.emit_diagnostics();
-            });
+            .filter(|e| e.is_warning());
+
+        for warning in iter {
+            asm_walker.context().config.debug_log(warning.diagnostic_string()).await;
+        }
 
         // for s in asm_walker.listing() {
         //     println!("{}", s);
