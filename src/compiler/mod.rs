@@ -107,8 +107,8 @@ impl Compiler {
     /// # Examples
     /// ```
     /// # tokio_test::block_on(async {
-    /// use lpc_rs_core::lpc_path::LpcPath;
     /// use lpc_rs::compiler::Compiler;
+    /// use lpc_rs_core::lpc_path::LpcPath;
     ///
     /// let prog = Compiler::default()
     ///     .compile_file(LpcPath::new_server("tests/fixtures/code/example.c"))

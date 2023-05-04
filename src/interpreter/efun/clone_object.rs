@@ -101,7 +101,6 @@ mod tests {
     use std::sync::Arc;
 
     use indoc::indoc;
-    use itertools::Itertools;
     use lpc_rs_utils::config::Config;
     use parking_lot::RwLock;
 
