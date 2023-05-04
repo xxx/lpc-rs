@@ -2041,7 +2041,10 @@ mod tests {
                 .return_type(LpcType::Void)
                 .arity(FunctionArity::new(4))
                 .flags(FunctionFlags::default().with_nomask(true))
-                .span(Some(Span::new(3, 3..1))) // same span = same definition
+                // If the span of the def is the same as the span of the prototype, that's _our_ prototype,
+                // and we *are* allowed to define it, if it's a nomask function.
+                // So we artificially set a different span here for this test.
+                .span(Some(Span::new(3, 1..3)))
                 .build()
                 .unwrap();
 

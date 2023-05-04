@@ -153,7 +153,7 @@ where
     // get the path and line number from the span, stripping off the lib dir so
     // the path is an in-game path.
     let span_string = error.span.and_then(|s| {
-        s.to_string().strip_prefix(&ctx.config.lib_dir.as_str()).map(|s| s.to_string())
+        s.to_string().strip_prefix(ctx.config.lib_dir.as_str()).map(|s| s.to_string())
     }).unwrap_or_else(|| String::from("<unknown>"));
 
     mapping.insert(
@@ -180,9 +180,9 @@ where
         LpcString::from(s).into_lpc_ref(&ctx.memory),
     );
 
-    let mut args = vec![LpcMapping::new(mapping).into_lpc_ref(&ctx.memory)];
+    let args = [LpcMapping::new(mapping).into_lpc_ref(&ctx.memory)];
     // TODO wire the timeout up to config
-    apply_function_in_master(ERROR_HANDLER, &mut args, ctx, Some(300)).await
+    apply_function_in_master(ERROR_HANDLER, &args, ctx, Some(300)).await
 }
 
 #[cfg(test)]
