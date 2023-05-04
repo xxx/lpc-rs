@@ -282,16 +282,15 @@ impl Compiler {
         program_node.visit(&mut asm_walker).await?;
 
         // emit warnings
-        let iter = asm_walker
-            .context()
-            .errors
-            .iter()
-            .filter(|e| e.is_warning());
+        let (warnings, errors):(Vec<_>, Vec<_>) = asm_walker.context().errors.iter().partition(|e| e.is_warning());
 
-        for warning in iter {
+        for warning in warnings {
             asm_walker.context().config.debug_log(warning.diagnostic_string()).await;
         }
 
+        if !errors.is_empty() {
+            return Err(errors[0].clone());
+        }
         // for s in asm_walker.listing() {
         //     println!("{}", s);
         // }
@@ -301,7 +300,7 @@ impl Compiler {
             Err(e) => return Err(e),
         };
 
-        // println!("{}", program.filename);
+        println!("{}", program.filename);
         // for s in program.listing() {
         //     println!("{s}");
         // }

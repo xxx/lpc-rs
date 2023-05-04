@@ -15,6 +15,8 @@ use crate::{
         task::{initialize_program::InitializeProgramBuilder, Task},
     },
 };
+use crate::compiler::compilation_context::CompilationContext;
+use crate::compiler::semantic::scope_tree::ScopeTree;
 
 pub mod factories;
 
@@ -105,4 +107,14 @@ pub async fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
             eprintln!("{:?}", e);
             panic!("failed to initialize");
         })
+}
+
+/// A helper to make an empty [`CompilationContext`] with a single empty scope.
+pub fn empty_compilation_context() -> CompilationContext {
+    let mut scopes = ScopeTree::default();
+    scopes.push_new();
+    CompilationContext {
+        scopes,
+        ..CompilationContext::default()
+    }
 }

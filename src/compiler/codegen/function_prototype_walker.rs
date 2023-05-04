@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use lpc_rs_core::{function_arity::FunctionArity, RegisterSize};
-use lpc_rs_errors::Result;
+use lpc_rs_core::call_namespace::CallNamespace;
+use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototypeBuilder};
 use lpc_rs_utils::string::closure_arg_number;
 
@@ -120,7 +121,27 @@ impl TreeWalker for FunctionPrototypeWalker {
     }
 
     async fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
-        // Store the prototype now, to allow for forward references.
+        let proto_opt = self
+            .context
+            .lookup_function_complete(node.name, &CallNamespace::default());
+
+        if let Some(function_like) = proto_opt {
+            let prototype = function_like.as_ref();
+            // If we find another prototype with this name, it's not ours.
+            if prototype.flags.nomask() {
+                let e = LpcError::new(format!(
+                    "attempt to redefine nomask function `{}`",
+                    node.name
+                ))
+                    .with_span(node.span)
+                    .with_label("defined here", prototype.span)
+                    .into();
+
+                return Err(e);
+            }
+        }
+
+                // Store the prototype now, to allow for forward references.
         let num_args = RegisterSize::try_from(node.parameters.len())?;
         let num_default_args =
             RegisterSize::try_from(node.parameters.iter().filter(|p| p.value.is_some()).count())?;
@@ -193,11 +214,64 @@ mod tests {
 
     use lpc_rs_core::{function_flags::FunctionFlags, lpc_path::LpcPath, lpc_type::LpcType};
     use ustr::ustr;
+    use lpc_rs_errors::span::Span;
+    use lpc_rs_function_support::program_function::ProgramFunction;
+    use crate::assert_regex;
 
     use super::*;
     use crate::compiler::ast::{
         ast_node::AstNode, expression_node::ExpressionNode, var_init_node::VarInitNode,
     };
+    use crate::interpreter::program::Program;
+    use crate::test_support::empty_compilation_context;
+
+    #[tokio::test]
+    async fn disallows_redefining_nomask_function() {
+        let mut node = FunctionDefNode {
+            return_type: LpcType::Void,
+            name: ustr("duplicate"),
+            parameters: vec![],
+            flags: FunctionFlags::default(),
+            body: vec![],
+            span: None,
+        };
+
+        let mut context = empty_compilation_context();
+        let mut program = Program::default();
+
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("duplicate")
+            .filename(Arc::new("duplicate".into()))
+            .return_type(LpcType::Void)
+            .arity(FunctionArity::new(4))
+            .flags(FunctionFlags::default().with_nomask(true))
+            // If the span of the def is the same as the span of the prototype, that's _our_ prototype,
+            // and we *are* allowed to define it, if it's a nomask function.
+            // So we artificially set a different span here for this test.
+            .span(Some(Span::new(3, 1..3)))
+            .build()
+            .unwrap();
+
+        let func = ProgramFunction::new(prototype, 0);
+
+        program
+            .functions
+            .insert(String::from("duplicate"), func.into());
+
+        context.inherits.push(program);
+
+        let mut walker = FunctionPrototypeWalker::new(context);
+        let result = walker.visit_function_def(&mut node).await;
+
+        if let Err(e) = result {
+            assert_regex!(
+                    (*e).as_ref(),
+                    "attempt to redefine nomask function `duplicate`"
+                );
+        } else {
+            panic!("didn't error?")
+        }
+    }
 
     #[tokio::test]
     async fn function_def_stores_the_prototype() {

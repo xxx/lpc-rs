@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use if_chain::if_chain;
-use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
+use lpc_rs_core::{call_namespace::CallNamespace, EFUN, lpc_type::LpcType};
 use lpc_rs_errors::{lpc_error, LpcError, Result};
 use lpc_rs_utils::string::closure_arg_number;
 
@@ -20,7 +20,7 @@ use crate::{
             expression_node::ExpressionNode,
             for_each_node::{ForEachInit, ForEachNode},
             for_node::ForNode,
-            function_def_node::{FunctionDefNode, ARGV},
+            function_def_node::{ARGV, FunctionDefNode},
             function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
             int_node::IntNode,
             label_node::LabelNode,
@@ -29,7 +29,7 @@ use crate::{
             return_node::ReturnNode,
             switch_node::SwitchNode,
             ternary_node::TernaryNode,
-            unary_op_node::{UnaryOpNode, UnaryOperation},
+            unary_op_node::{UnaryOperation, UnaryOpNode},
             var_init_node::VarInitNode,
             var_node::VarNode,
             while_node::WhileNode,
@@ -410,24 +410,27 @@ impl TreeWalker for SemanticCheckWalker {
     async fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         is_keyword(node.name)?;
 
-        let proto_opt = self
-            .context
-            .lookup_function_complete(node.name, &CallNamespace::default());
-
-        if let Some(function_like) = proto_opt {
-            let prototype = function_like.as_ref();
-            if prototype.flags.nomask() && node.span != prototype.span {
-                let e = LpcError::new(format!(
-                    "attempt to redefine nomask function `{}`",
-                    node.name
-                ))
-                .with_span(node.span)
-                .with_label("defined here", prototype.span)
-                .into();
-
-                return Err(e);
-            }
-        }
+        // let proto_opt = self
+        //     .context
+        //     .lookup_function_complete(node.name, &CallNamespace::default());
+        //
+        // if let Some(function_like) = proto_opt {
+        //     let prototype = function_like.as_ref();
+        //     if prototype.flags.nomask() {
+        //         println!("{} {}", prototype.filename, self.context.filename);
+        //     }
+        //     if prototype.flags.nomask() && &self.context.filename != &prototype.filename {
+        //         let e = LpcError::new(format!(
+        //             "attempt to redefine nomask function `{}`",
+        //             node.name
+        //         ))
+        //         .with_span(node.span)
+        //         .with_label("defined here", prototype.span)
+        //         .into();
+        //
+        //         return Err(e);
+        //     }
+        // }
 
         self.context.scopes.goto_function(&node.name)?;
         self.current_function = Some(node.clone());
@@ -776,6 +779,7 @@ mod tests {
     use lpc_rs_errors::LpcErrorSeverity;
     use lpc_rs_function_support::symbol::Symbol;
     use ustr::ustr;
+    use crate::test_support::factories::*;
 
     use super::*;
     use crate::{
@@ -786,20 +790,10 @@ mod tests {
                 default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
                 semantic_check_walker::SemanticCheckWalker,
             },
-            semantic::scope_tree::ScopeTree,
             Compiler,
+            semantic::scope_tree::ScopeTree,
         },
-        test_support::factories::*,
     };
-
-    fn empty_context() -> CompilationContext {
-        let mut scopes = ScopeTree::default();
-        scopes.push_new();
-        CompilationContext {
-            scopes,
-            ..CompilationContext::default()
-        }
-    }
 
     fn context_with_var(name: &str, var_type: LpcType) -> CompilationContext {
         let mut scopes = ScopeTree::default();
@@ -1173,6 +1167,7 @@ mod tests {
 
         use super::*;
         use crate::{assert_regex, interpreter::program::Program};
+        use crate::test_support::empty_compilation_context;
 
         #[tokio::test]
         async fn allows_known_functions() {
@@ -1522,7 +1517,7 @@ mod tests {
                 arguments: vec![ExpressionNode::from(IntNode::new(12))],
             ));
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
@@ -1609,7 +1604,7 @@ mod tests {
                 chain: create!(CallChain, name: ustr("unknown")),
             ));
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
             assert_eq!(walker.context.errors.len(), 1);
@@ -1622,7 +1617,7 @@ mod tests {
                 chain: create!(CallChain, name: ustr("dump")),
             ));
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
             assert_eq!(walker.context.errors.len(), 1);
@@ -1643,7 +1638,7 @@ mod tests {
                     ], // `call_other` is specified as having 2 arguments, but we're passing more
             ));
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
             assert!(walker.context.errors.is_empty());
@@ -1809,7 +1804,7 @@ mod tests {
                 arguments: vec![],
             ));
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
             assert!(walker.context.errors.is_empty());
@@ -1828,7 +1823,7 @@ mod tests {
                 arguments: vec![],
             ));
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
             assert!(!walker.context.errors.is_empty());
@@ -1907,23 +1902,15 @@ mod tests {
     }
 
     mod test_visit_function_def {
-        use std::sync::Arc;
-
         use lpc_rs_core::function_flags::FunctionFlags;
-        use lpc_rs_errors::span::Span;
-        use lpc_rs_function_support::{
-            function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
-        };
-
         use super::*;
         use crate::{
-            assert_regex,
             compiler::{
                 ast::{ast_node::AstNode, binary_op_node::BinaryOperation},
                 codegen::scope_walker::ScopeWalker,
             },
-            interpreter::program::Program,
         };
+        use crate::test_support::empty_compilation_context;
 
         #[tokio::test]
         async fn handles_scopes() {
@@ -1986,7 +1973,7 @@ mod tests {
                 span: None,
             };
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut scope_walker = ScopeWalker::new(context);
             let _ = scope_walker.visit_function_def(&mut function_def1).await;
             let _ = scope_walker.visit_function_def(&mut function_def2).await;
@@ -2010,60 +1997,12 @@ mod tests {
                 body: vec![],
                 span: None,
             };
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let result = walker.visit_function_def(&mut node).await;
 
             if let Err(e) = result {
                 assert!(e.to_string().contains("is a keyword of the language"));
-            } else {
-                panic!("didn't error?")
-            }
-        }
-
-        #[tokio::test]
-        async fn disallows_redefining_nomask_function() {
-            let mut node = FunctionDefNode {
-                return_type: LpcType::Void,
-                name: ustr("duplicate"),
-                parameters: vec![],
-                flags: FunctionFlags::default(),
-                body: vec![],
-                span: None,
-            };
-
-            let mut context = empty_context();
-            let mut program = Program::default();
-
-            let prototype = FunctionPrototypeBuilder::default()
-                .name("duplicate")
-                .filename(Arc::new("duplicate".into()))
-                .return_type(LpcType::Void)
-                .arity(FunctionArity::new(4))
-                .flags(FunctionFlags::default().with_nomask(true))
-                // If the span of the def is the same as the span of the prototype, that's _our_ prototype,
-                // and we *are* allowed to define it, if it's a nomask function.
-                // So we artificially set a different span here for this test.
-                .span(Some(Span::new(3, 1..3)))
-                .build()
-                .unwrap();
-
-            let func = ProgramFunction::new(prototype, 0);
-
-            program
-                .functions
-                .insert(String::from("duplicate"), func.into());
-
-            context.inherits.push(program);
-
-            let mut walker = SemanticCheckWalker::new(context);
-            let result = walker.visit_function_def(&mut node).await;
-
-            if let Err(e) = result {
-                assert_regex!(
-                    (*e).as_ref(),
-                    "attempt to redefine nomask function `duplicate`"
-                );
             } else {
                 panic!("didn't error?")
             }
@@ -2078,6 +2017,7 @@ mod tests {
 
         use super::*;
         use crate::{assert_regex, interpreter::program::Program};
+        use crate::test_support::empty_compilation_context;
 
         #[tokio::test]
         async fn allows_local_private_functions() {
@@ -2163,7 +2103,7 @@ mod tests {
                 span: None,
             });
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
@@ -2211,6 +2151,7 @@ mod tests {
     }
 
     mod test_visit_program {
+        use crate::test_support::empty_compilation_context;
         use super::*;
 
         #[tokio::test]
@@ -2228,7 +2169,7 @@ mod tests {
                 })],
             };
 
-            let mut walker = SemanticCheckWalker::new(empty_context());
+            let mut walker = SemanticCheckWalker::new(empty_compilation_context());
             if let Err(e) = walker.visit_program(&mut node).await {
                 assert!(e.to_string().contains("is a keyword of the language"));
             } else {
@@ -2238,6 +2179,7 @@ mod tests {
     }
 
     mod test_visit_range {
+        use crate::test_support::empty_compilation_context;
         use super::*;
 
         #[tokio::test]
@@ -2294,7 +2236,7 @@ mod tests {
                 span: None,
             });
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
@@ -2309,7 +2251,7 @@ mod tests {
                 span: None,
             });
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
@@ -2324,7 +2266,7 @@ mod tests {
                 span: None,
             });
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
@@ -2509,6 +2451,7 @@ mod tests {
         }
 
         mod test_inc {
+            use crate::test_support::empty_compilation_context;
             use super::*;
 
             #[tokio::test]
@@ -2534,7 +2477,7 @@ mod tests {
                     span: None,
                 });
 
-                let context = empty_context();
+                let context = empty_compilation_context();
                 let mut walker = SemanticCheckWalker::new(context);
                 let result = node.visit(&mut walker).await;
                 assert_err!(result.clone());
@@ -2546,6 +2489,7 @@ mod tests {
         }
 
         mod test_dec {
+            use crate::test_support::empty_compilation_context;
             use super::*;
 
             #[tokio::test]
@@ -2571,7 +2515,7 @@ mod tests {
                     span: None,
                 });
 
-                let context = empty_context();
+                let context = empty_compilation_context();
                 let mut walker = SemanticCheckWalker::new(context);
                 let result = node.visit(&mut walker).await;
                 assert_err!(result.clone());
@@ -2630,6 +2574,7 @@ mod tests {
 
     mod test_visit_var_init {
         use lpc_rs_core::function_flags::FunctionFlags;
+        use crate::test_support::empty_compilation_context;
 
         use super::*;
 
@@ -2645,7 +2590,7 @@ mod tests {
                 flags: None,
             };
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
@@ -2664,7 +2609,7 @@ mod tests {
                 flags: None,
             };
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
@@ -2708,7 +2653,7 @@ mod tests {
                 flags: None,
             };
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let result = node.visit(&mut walker).await;
 
@@ -2731,7 +2676,7 @@ mod tests {
                 flags: None,
             };
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
 
             // Fake it, as if we're currently walking a function def
@@ -2767,7 +2712,7 @@ mod tests {
                 flags: None,
             };
 
-            let context = empty_context();
+            let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
 
             // Fake it, as if we're currently walking a function def
