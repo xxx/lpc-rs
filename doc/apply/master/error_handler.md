@@ -8,10 +8,11 @@ it from there.
 
 The error mapping has the following keys:
 
-* `error["error"` (string) - The error message.
+* `error["error"]` (string) - The error message.
+* `error["location"]` (string) - The file:line:column where the error occurred.
 * `error["object"]` (object) - The object in which the error occurred.
 * `error["diagnostic"]` (string) - The full diagnostic message, if any.
-  note: This field may be broken up further in the future.
+  _note:_ This field may be broken up further in the future.
 
 Diagnostic example:
 ```c

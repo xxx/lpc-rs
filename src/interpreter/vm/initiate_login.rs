@@ -3,7 +3,7 @@ use std::sync::Arc;
 use flume::Sender as FlumeSender;
 use tokio::sync::mpsc::Sender;
 use lpc_rs_core::LpcIntInner;
-use tracing::{debug, error, instrument};
+use tracing::{debug, instrument};
 use lpc_rs_errors::{lpc_error, LpcError};
 
 use crate::{

@@ -21,6 +21,7 @@ use lalrpop_util::ParseError as LalrpopParseError;
 use span::HasSpan;
 
 use crate::{file_stream::FileStream, lazy_files::FILE_CACHE, span::Span};
+use crate::lazy_files::FileId;
 
 pub mod file_stream;
 pub mod lazy_files;
@@ -219,7 +220,7 @@ impl LpcError {
         self
     }
 
-    pub fn to_diagnostics(&self) -> Vec<Diagnostic<usize>> {
+    pub fn to_diagnostics(&self) -> Vec<Diagnostic<FileId>> {
         let mut v = vec![Diagnostic::from(self)];
 
         if let Some(ref additional_errors) = self.additional_errors {
@@ -345,7 +346,7 @@ impl From<UninitializedFieldError> for LpcError {
     }
 }
 
-impl From<&LpcError> for Diagnostic<usize> {
+impl From<&LpcError> for Diagnostic<FileId> {
     fn from(error: &LpcError) -> Self {
         let mut diagnostic = match error.severity {
             LpcErrorSeverity::Warning => Diagnostic::warning(),
@@ -430,7 +431,7 @@ impl Hash for LpcError {
 }
 
 /// Write a list of diagnostics to a writer.
-pub fn output_diagnostics(diagnostics: &[Diagnostic<usize>], writer: &mut dyn WriteColor) {
+pub fn output_diagnostics(diagnostics: &[Diagnostic<FileId>], writer: &mut dyn WriteColor) {
     let files = FILE_CACHE.read();
 
     let config = codespan_reporting::term::Config::default();
@@ -450,7 +451,7 @@ pub fn output_diagnostics(diagnostics: &[Diagnostic<usize>], writer: &mut dyn Wr
 /// # Arguments
 /// `message` - The main message for the error
 /// `span` - The [`Span`] of the code that created this error
-pub fn default_diagnostic(message: String, span: Option<Span>) -> Vec<Diagnostic<usize>> {
+pub fn default_diagnostic(message: String, span: Option<Span>) -> Vec<Diagnostic<FileId>> {
     let mut diagnostic = Diagnostic::error().with_message(message);
 
     if let Some(span) = span {

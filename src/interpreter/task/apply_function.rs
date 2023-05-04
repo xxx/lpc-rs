@@ -150,6 +150,17 @@ where
         LpcString::from(error.to_string()).into_lpc_ref(&ctx.memory),
     );
 
+    // get the path and line number from the span, stripping off the lib dir so
+    // the path is an in-game path.
+    let span_string = error.span.and_then(|s| {
+        s.to_string().strip_prefix(&ctx.config.lib_dir.as_str()).map(|s| s.to_string())
+    }).unwrap_or_else(|| String::from("<unknown>"));
+
+    mapping.insert(
+        LpcString::from("location").into_lpc_ref(&ctx.memory),
+        LpcString::from(span_string).into_lpc_ref(&ctx.memory),
+    );
+
     let object = proc
         .map(|pr| Arc::downgrade(&pr).into_lpc_ref(&ctx.memory))
         .unwrap_or_else(|| LpcString::from("<no object>").into_lpc_ref(&ctx.memory));
