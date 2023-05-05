@@ -37,7 +37,7 @@ mod tests {
     };
 
     #[tokio::test]
-    async fn test_environment() {
+    async fn test_all_environment() {
         let inner = indoc! { r#"
             void create() {
                 move_object("/outer");
