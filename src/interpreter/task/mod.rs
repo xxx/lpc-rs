@@ -1447,7 +1447,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                             func.clone()
                         };
-                        let weak_process = (**weak_process).clone();
+                        let weak_process = (*weak_process).clone();
                         FunctionAddress::Local(weak_process, func)
                     }
                     LpcRef::String(s) => {

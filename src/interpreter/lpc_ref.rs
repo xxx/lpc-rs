@@ -47,7 +47,7 @@ pub enum LpcRef {
     Mapping(ArenaArc<RwLock<LpcMapping>>),
 
     /// Reference type, pointing to an LPC `object`
-    Object(ArenaArc<Weak<Process>>),
+    Object(Weak<Process>),
 
     /// Reference type, a function pointer or closure
     Function(ArenaArc<FunctionPtr>),
@@ -438,7 +438,7 @@ impl Hash for LpcRef {
             LpcRef::String(x) => x.read().hash(state),
             LpcRef::Array(x) => ptr::hash(&**x, state),
             LpcRef::Mapping(x) => ptr::hash(&**x, state),
-            LpcRef::Object(x) => ptr::hash(&**x, state),
+            LpcRef::Object(x) => ptr::hash(&*x, state),
             LpcRef::Function(x) => ptr::hash(&**x, state),
         }
     }
@@ -451,7 +451,7 @@ impl PartialEq for LpcRef {
             (LpcRef::Float(x), LpcRef::Float(y)) => x == y,
             (LpcRef::Int(x), LpcRef::Int(y)) => x == y,
             (LpcRef::String(x), LpcRef::String(y)) => *x.read() == *y.read(),
-            (LpcRef::Object(x), LpcRef::Object(y)) => ptr::eq(&**x, &**y),
+            (LpcRef::Object(x), LpcRef::Object(y)) => ptr::eq(&*x, &*y),
             (LpcRef::Array(x), LpcRef::Array(y)) => ptr::eq(&**x, &**y),
             (LpcRef::Mapping(x), LpcRef::Mapping(y)) => ptr::eq(&**x, &**y),
             (LpcRef::Function(x), LpcRef::Function(y)) => ptr::eq(&**x, &**y),

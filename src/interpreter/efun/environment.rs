@@ -79,7 +79,7 @@ mod tests {
             .await
             .unwrap();
 
-        let LpcRef::Object(result) = master_proc.result.unwrap() else {
+        let LpcRef::Object(result) = master_proc.result().unwrap() else {
             panic!("Expected object result");
         };
 

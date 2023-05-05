@@ -74,8 +74,7 @@ impl Heap {
     /// Allocate a new [`Process`]
     #[inline]
     pub fn alloc_process(&self, process: Weak<Process>) -> LpcRef {
-        let arc = self.object_pool.alloc_arc(process);
-        LpcRef::Object(arc)
+        LpcRef::Object(process)
     }
 
     /// Allocate a new [`FunctionPtr`]
