@@ -243,7 +243,9 @@ impl CodegenWalker {
             },
         );
         self.context.scopes.goto_root();
-        global_variables.extend(std::mem::take(&mut self.context.scopes.current_mut().unwrap().symbols));
+        global_variables.extend(std::mem::take(
+            &mut self.context.scopes.current_mut().unwrap().symbols,
+        ));
 
         let strings = Arc::new(self.context.strings);
         for func in self.functions.values() {

@@ -46,10 +46,10 @@ use lpc_rs_function_support::{
     program_function::ProgramFunction,
 };
 use once_cell::sync::Lazy;
-use crate::interpreter::efun::efun_context::EfunContext;
-use crate::interpreter::lpc_int::LpcInt;
-use crate::interpreter::lpc_ref::LpcRef;
-use crate::interpreter::process::Process;
+
+use crate::interpreter::{
+    efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef, process::Process,
+};
 
 /// Signature for Efuns
 pub type Efun<const N: usize> = fn(&mut EfunContext<N>) -> Result<()>;
@@ -636,14 +636,13 @@ pub static EFUN_FUNCTIONS: Lazy<IndexMap<&'static str, Arc<ProgramFunction>>> = 
 });
 
 /// Helper for efuns with an `ob = this_object()` default argument
-fn arg_or_this_object<const N: usize>(arg_ref: &LpcRef, context: &EfunContext<'_, N>) -> Option<Arc<Process>> {
+fn arg_or_this_object<const N: usize>(
+    arg_ref: &LpcRef,
+    context: &EfunContext<'_, N>,
+) -> Option<Arc<Process>> {
     match arg_ref {
-        LpcRef::Int(LpcInt(0)) => {
-            Some(context.frame().process.clone())
-        }
-        LpcRef::Object(proc) => {
-            proc.upgrade()
-        }
+        LpcRef::Int(LpcInt(0)) => Some(context.frame().process.clone()),
+        LpcRef::Object(proc) => proc.upgrade(),
         LpcRef::Float(_)
         | LpcRef::Int(_)
         | LpcRef::String(_)

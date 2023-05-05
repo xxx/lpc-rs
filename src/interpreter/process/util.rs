@@ -1,5 +1,7 @@
-use std::sync::{Arc,};
+use std::sync::Arc;
+
 use if_chain::if_chain;
+
 use crate::interpreter::process::Process;
 
 /// An iterator over all of the environments of a [`Process`]. The iterator can be created
@@ -14,7 +16,7 @@ pub struct AllEnvironment {
 impl AllEnvironment {
     pub fn new(starter: Arc<Process>) -> Self {
         Self {
-            current: Some(starter)
+            current: Some(starter),
         }
     }
 }

@@ -471,7 +471,7 @@ impl PartialEq<&Process> for LpcRef {
                 };
 
                 ptr::eq(&*x, *other)
-            },
+            }
             _ => false,
         }
     }

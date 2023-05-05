@@ -1,13 +1,13 @@
 use if_chain::if_chain;
-use lpc_rs_core::{RegisterSize};
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::efun_context::EfunContext,
     into_lpc_ref::IntoLpcRef,
+    lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL},
 };
-use crate::interpreter::lpc_int::LpcInt;
 
 /// `environment`, an efun for returning the environment of an object
 pub async fn environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -49,10 +49,12 @@ pub async fn environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
-    use crate::interpreter::lpc_ref::LpcRef;
-    use crate::interpreter::vm::Vm;
-    use crate::test_support::test_config;
-    use crate::util::process_builder::{ProcessCreator, ProcessInitializer};
+
+    use crate::{
+        interpreter::{lpc_ref::LpcRef, vm::Vm},
+        test_support::test_config,
+        util::process_builder::{ProcessCreator, ProcessInitializer},
+    };
 
     #[tokio::test]
     async fn test_environment() {

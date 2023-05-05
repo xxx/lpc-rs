@@ -25,11 +25,11 @@ use crate::{
         gc::mark::Mark,
         lpc_ref::{LpcRef, NULL},
         object_flags::{AtomicFlags, ObjectFlags},
+        process::util::AllEnvironment,
         program::Program,
     },
     telnet::connection::Connection,
 };
-use crate::interpreter::process::util::{AllEnvironment};
 
 #[derive(Debug)]
 /// A type to represent the position of a [`Process`] in the game world.
@@ -204,10 +204,7 @@ impl Process {
         }
 
         // ob.environment = new_env
-        object
-            .position
-            .environment
-            .store(Some(new_env_weak));
+        object.position.environment.store(Some(new_env_weak));
 
         Ok(())
     }
