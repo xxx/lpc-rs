@@ -3,11 +3,7 @@ use if_chain::if_chain;
 use lpc_rs_core::{RegisterSize};
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext,
-    into_lpc_ref::IntoLpcRef,
-    lpc_ref::{LpcRef, NULL},
-};
+use crate::interpreter::{efun, efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_ref::{LpcRef, NULL}};
 use crate::interpreter::lpc_array::LpcArray;
 use crate::interpreter::lpc_int::LpcInt;
 use crate::interpreter::process::Process;
@@ -16,7 +12,7 @@ use crate::interpreter::process::Process;
 pub async fn all_environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
 
-    let Some(current_env) = determine_proc(&arg_ref, context) else {
+    let Some(current_env) = efun::arg_or_this_object(&arg_ref, context) else {
         let result = LpcArray::default().into_lpc_ref(context.memory());
         context.return_efun_result(result);
         return Ok(());
@@ -28,23 +24,6 @@ pub async fn all_environment<const N: usize>(context: &mut EfunContext<'_, N>) -
     context.return_efun_result(result);
 
     Ok(())
-}
-
-fn determine_proc<const N: usize>(arg_ref: &LpcRef, context: &EfunContext<'_, N>) -> Option<Arc<Process>> {
-    match arg_ref {
-        LpcRef::Int(LpcInt(0)) => {
-            Some(context.frame().process.clone())
-        }
-        LpcRef::Object(proc) => {
-            proc.upgrade()
-        }
-        LpcRef::Float(_)
-        | LpcRef::Int(_)
-        | LpcRef::String(_)
-        | LpcRef::Array(_)
-        | LpcRef::Mapping(_)
-        | LpcRef::Function(_) => None,
-    }
 }
 
 #[cfg(test)]

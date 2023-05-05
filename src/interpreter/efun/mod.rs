@@ -1,6 +1,7 @@
 pub mod efun_context;
 
 pub(crate) mod all_environment;
+pub(crate) mod all_inventory;
 pub(crate) mod call_out;
 pub(crate) mod clone_object;
 pub(crate) mod compose;
@@ -45,9 +46,10 @@ use lpc_rs_function_support::{
     program_function::ProgramFunction,
 };
 use once_cell::sync::Lazy;
-use crate::interpreter::efun::all_environment::all_environment;
-
 use crate::interpreter::efun::efun_context::EfunContext;
+use crate::interpreter::lpc_int::LpcInt;
+use crate::interpreter::lpc_ref::LpcRef;
+use crate::interpreter::process::Process;
 
 /// Signature for Efuns
 pub type Efun<const N: usize> = fn(&mut EfunContext<N>) -> Result<()>;
@@ -55,6 +57,7 @@ pub type AsyncEfun<const N: usize> =
     Box<dyn Send + Sync + for<'a> Fn(&'a mut EfunContext<N>) -> BoxFuture<'a, Result<()>>>;
 
 pub const ALL_ENVIRONMENT: &str = "all_environment";
+pub const ALL_INVENTORY: &str = "all_inventory";
 pub const CALL_OUT: &str = "call_out";
 pub const CALL_OTHER: &str = "call_other";
 pub const CATCH: &str = "catch";
@@ -92,6 +95,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
 ) -> Result<()> {
     match efun_name {
         ALL_ENVIRONMENT => all_environment::all_environment(efun_context).await,
+        ALL_INVENTORY => all_inventory::all_inventory(efun_context).await,
         CALL_OUT => call_out::call_out(efun_context).await,
         CLONE_OBJECT => clone_object::clone_object(efun_context).await,
         COMPOSE => compose::compose(efun_context).await,
@@ -142,8 +146,27 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
                 varargs: false,
                 ellipsis: false,
             })
+            .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
             .build()
             .expect("failed to build all_environment"),
+    );
+
+    m.insert(
+        ALL_INVENTORY,
+        FunctionPrototypeBuilder::default()
+            .name(ALL_INVENTORY)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Object(true))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity {
+                num_args: 1,
+                num_default_args: 1,
+                varargs: false,
+                ellipsis: false,
+            })
+            .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
+            .build()
+            .expect("failed to build all_inventory"),
     );
 
     m.insert(
@@ -319,6 +342,7 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
                 ellipsis: false,
                 varargs: false,
             })
+            .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
             .build()
             .expect("failed to build environment"),
     );
@@ -397,6 +421,7 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
                 ellipsis: false,
                 varargs: false,
             })
+            .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
             .build()
             .expect("failed to build living"),
     );
@@ -609,3 +634,21 @@ pub static EFUN_FUNCTIONS: Lazy<IndexMap<&'static str, Arc<ProgramFunction>>> = 
         })
         .collect()
 });
+
+/// Helper for efuns with an `ob = this_object()` default argument
+fn arg_or_this_object<const N: usize>(arg_ref: &LpcRef, context: &EfunContext<'_, N>) -> Option<Arc<Process>> {
+    match arg_ref {
+        LpcRef::Int(LpcInt(0)) => {
+            Some(context.frame().process.clone())
+        }
+        LpcRef::Object(proc) => {
+            proc.upgrade()
+        }
+        LpcRef::Float(_)
+        | LpcRef::Int(_)
+        | LpcRef::String(_)
+        | LpcRef::Array(_)
+        | LpcRef::Mapping(_)
+        | LpcRef::Function(_) => None,
+    }
+}

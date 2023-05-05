@@ -11,7 +11,9 @@ use std::{
 use arc_swap::ArcSwapAny;
 use bit_set::BitSet;
 use crossbeam::atomic::AtomicCell;
+use dashmap::DashSet;
 use delegate::delegate;
+use if_chain::if_chain;
 use lpc_rs_errors::{lpc_error, Result};
 use parking_lot::RwLock;
 use sharded_slab::Slab as ShardedSlab;
@@ -27,7 +29,7 @@ use crate::{
     },
     telnet::connection::Connection,
 };
-use crate::interpreter::process::util::AllEnvironment;
+use crate::interpreter::process::util::{AllEnvironment};
 
 #[derive(Debug)]
 /// A type to represent the position of a [`Process`] in the game world.
@@ -37,6 +39,9 @@ pub struct ProcessPosition {
 
     /// The objects that this object contains. This object is the `environment` for everything in this container.
     pub inventory: ShardedSlab<Weak<Process>>,
+
+    /// The inventory IDs of this object's inventory. This is needed for iteration.
+    pub inventory_ids: DashSet<usize>,
 
     /// The inventory ID of this object in its environment. This is the index into our `environment`'s
     /// `inventory` [`Slab`]. Needed for removal.
@@ -59,6 +64,7 @@ impl Default for ProcessPosition {
         ProcessPosition {
             environment: ArcSwapAny::from(None),
             inventory: Default::default(),
+            inventory_ids: Default::default(),
             environment_inventory_id: Default::default(),
             move_semaphore: Semaphore::new(1),
         }
@@ -143,34 +149,65 @@ impl Process {
     /// Move an object to a new environment. This is a transactional operation, so it will
     /// block until it can acquire the semaphore.
     pub async fn move_to(object: &Arc<Process>, new_environment: Arc<Process>) -> Result<()> {
-        // Take the lock. We need to do all this swapping in a synchronized fashion.
-        // Only the moving object needs to be locked.
-        let _permit = object.position.move_semaphore.acquire().await;
+        let current_env = if_chain! {
+            if let Some(current_env) = &*object.position.environment.load();
+            if let Some(current_env) = current_env.upgrade();
+            then {
+                if current_env == new_environment {
+                    return Ok(())
+                }
 
-        // ob.environment = new_env
-        let old_environment = object
-            .position
-            .environment
-            .swap(Some(Arc::downgrade(&new_environment)));
+                Some(current_env)
+            } else {
+                None
+            }
+        };
+
+        // The moving object needs to be locked for the rest of the move.
+        let _object_permit = object.position.move_semaphore.acquire().await;
 
         // old_env.inventory -= ob
-        if let Some(old_environment) = old_environment.and_then(|env| env.upgrade()) {
+        if let Some(old_environment) = current_env {
+            // Take the old environment's lock. We remove all object data from it in this block.
+            let _old_permit = old_environment.position.move_semaphore.acquire().await;
+
+            let current_inventory_id = object.position.environment_inventory_id.load();
+
             old_environment
                 .position
                 .inventory
-                .remove(object.position.environment_inventory_id.load());
+                .remove(current_inventory_id);
+            old_environment
+                .position
+                .inventory_ids
+                .remove(&current_inventory_id);
         }
 
-        let Some(entry) = new_environment.position.inventory.vacant_entry() else {
-            return Err(
-                lpc_error!("new environment is full. cannot move. this really only happens in an out-of-memory situation, so I'm not bothering to clean up.")
-            );
-        };
-
-        object.position.environment_inventory_id.store(entry.key());
+        let new_env_weak = Arc::downgrade(&new_environment);
 
         // new_env.inventory += ob
-        entry.insert(Arc::downgrade(object));
+        {
+            // Take the new environment's lock. We add all object data to it in this block.
+            let _new_permit = new_environment.position.move_semaphore.acquire().await;
+
+            let Some(entry) = new_environment.position.inventory.vacant_entry() else {
+                return Err(
+                    lpc_error!("new environment is full. cannot move. this really only happens in an out-of-memory situation, so I'm not bothering to clean up.")
+                );
+            };
+
+            new_environment.position.inventory_ids.insert(entry.key());
+            object.position.environment_inventory_id.store(entry.key());
+
+            // new_env.inventory += ob
+            entry.insert(Arc::downgrade(object));
+        }
+
+        // ob.environment = new_env
+        object
+            .position
+            .environment
+            .store(Some(new_env_weak));
 
         Ok(())
     }
