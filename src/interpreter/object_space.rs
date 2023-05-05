@@ -156,7 +156,12 @@ impl ObjectSpace {
         P: Into<Arc<Process>>,
         S: Into<String>,
     {
-        self.processes.insert(name.into(), process.into());
+        let mut k = name.into();
+        if !k.starts_with('/') {
+            k = format!("/{}", k);
+        }
+
+        self.processes.insert(k, process.into());
     }
 
     /// Lookup a process from its path.
