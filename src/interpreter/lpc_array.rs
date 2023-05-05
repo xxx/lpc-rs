@@ -38,6 +38,15 @@ impl LpcArray {
         }
     }
 
+    /// Create a new [`LpcArray`] with the given capacity.
+    #[inline]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            unique_id: UniqueId::new(),
+            array: ThinVec::with_capacity(capacity),
+        }
+    }
+
     delegate! {
         to self.array {
             pub fn extend<T>(&mut self, iter: T)

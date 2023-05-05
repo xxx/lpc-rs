@@ -1,5 +1,6 @@
 pub mod efun_context;
 
+pub(crate) mod all_environment;
 pub(crate) mod call_out;
 pub(crate) mod clone_object;
 pub(crate) mod compose;
@@ -44,6 +45,7 @@ use lpc_rs_function_support::{
     program_function::ProgramFunction,
 };
 use once_cell::sync::Lazy;
+use crate::interpreter::efun::all_environment::all_environment;
 
 use crate::interpreter::efun::efun_context::EfunContext;
 
@@ -52,6 +54,7 @@ pub type Efun<const N: usize> = fn(&mut EfunContext<N>) -> Result<()>;
 pub type AsyncEfun<const N: usize> =
     Box<dyn Send + Sync + for<'a> Fn(&'a mut EfunContext<N>) -> BoxFuture<'a, Result<()>>>;
 
+pub const ALL_ENVIRONMENT: &str = "all_environment";
 pub const CALL_OUT: &str = "call_out";
 pub const CALL_OTHER: &str = "call_other";
 pub const CATCH: &str = "catch";
@@ -88,6 +91,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
     efun_context: &mut EfunContext<'_, STACKSIZE>,
 ) -> Result<()> {
     match efun_name {
+        ALL_ENVIRONMENT => all_environment::all_environment(efun_context).await,
         CALL_OUT => call_out::call_out(efun_context).await,
         CLONE_OBJECT => clone_object::clone_object(efun_context).await,
         COMPOSE => compose::compose(efun_context).await,
@@ -124,6 +128,23 @@ pub async fn call_efun<const STACKSIZE: usize>(
 /// so changes to the insert order will invalidate previously-compiled code, and break tests.
 pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = Lazy::new(|| {
     let mut m = IndexMap::new();
+
+    m.insert(
+        ALL_ENVIRONMENT,
+        FunctionPrototypeBuilder::default()
+            .name(ALL_ENVIRONMENT)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Object(true))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity {
+                num_args: 1,
+                num_default_args: 1,
+                varargs: false,
+                ellipsis: false,
+            })
+            .build()
+            .expect("failed to build all_environment"),
+    );
 
     m.insert(
         CALL_OUT,

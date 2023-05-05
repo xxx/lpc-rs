@@ -462,6 +462,21 @@ impl PartialEq for LpcRef {
 
 impl Eq for LpcRef {}
 
+impl PartialEq<&Process> for LpcRef {
+    fn eq(&self, other: &&Process) -> bool {
+        match self {
+            LpcRef::Object(x) => {
+                let Some(x) = x.upgrade() else {
+                    return false;
+                };
+
+                ptr::eq(&*x, *other)
+            },
+            _ => false,
+        }
+    }
+}
+
 impl PartialOrd for LpcRef {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {

@@ -25,9 +25,6 @@ pub struct Heap {
     /// The mapping arena
     mapping_pool: SharedArena<RwLock<LpcMapping>>,
 
-    /// The object arena
-    object_pool: SharedArena<Weak<Process>>,
-
     /// The function arena
     function_pool: SharedArena<FunctionPtr>,
 }
@@ -39,7 +36,6 @@ impl Heap {
             string_pool: SharedArena::with_capacity(size),
             array_pool: SharedArena::with_capacity(size),
             mapping_pool: SharedArena::with_capacity(size),
-            object_pool: SharedArena::with_capacity(size),
             function_pool: SharedArena::with_capacity(size),
         }
     }
@@ -93,6 +89,6 @@ impl Heap {
 
 impl Default for Heap {
     fn default() -> Self {
-        Self::new(MEMORY_SIZE / 5)
+        Self::new(MEMORY_SIZE / 4)
     }
 }

@@ -1,3 +1,5 @@
+pub mod util;
+
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -25,6 +27,7 @@ use crate::{
     },
     telnet::connection::Connection,
 };
+use crate::interpreter::process::util::AllEnvironment;
 
 #[derive(Debug)]
 /// A type to represent the position of a [`Process`] in the game world.
@@ -130,6 +133,11 @@ impl Process {
             /// Get the program's current working directory
             pub fn cwd(&self) -> Cow<'_, Path>;
         }
+    }
+
+    /// Returns an iterator over all of `object`'s environments, starting with their current environment.
+    pub fn all_environment(object: Arc<Process>) -> AllEnvironment {
+        AllEnvironment::new(object)
     }
 
     /// Move an object to a new environment. This is a transactional operation, so it will
