@@ -1,18 +1,18 @@
-use std::sync::{Arc, Weak};
-use if_chain::if_chain;
+use std::sync::{Arc};
+
 use lpc_rs_core::{RegisterSize};
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun, efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_ref::{LpcRef, NULL}};
+use crate::interpreter::{efun, efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef};
 use crate::interpreter::lpc_array::LpcArray;
-use crate::interpreter::lpc_int::LpcInt;
+
 use crate::interpreter::process::Process;
 
 /// `all_environment`, an efun for returning all wrapping environments of an object.
 pub async fn all_environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
 
-    let Some(current_env) = efun::arg_or_this_object(&arg_ref, context) else {
+    let Some(current_env) = efun::arg_or_this_object(arg_ref, context) else {
         let result = LpcArray::default().into_lpc_ref(context.memory());
         context.return_efun_result(result);
         return Ok(());
@@ -62,7 +62,7 @@ mod tests {
 
         let vm = Vm::new(test_config());
 
-        let foo_proc = vm.process_create_from_code("/foo.c", foo).await.unwrap();
+        let _foo_proc = vm.process_create_from_code("/foo.c", foo).await.unwrap();
         let outer_proc = vm.process_initialize_from_code("/outer.c", "").await.unwrap();
         let inner_proc = vm.process_initialize_from_code("/inner.c", inner).await.unwrap();
         let innermost_proc = vm.process_initialize_from_code("/innermost.c", innermost).await.unwrap();
