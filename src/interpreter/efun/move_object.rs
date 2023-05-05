@@ -90,7 +90,7 @@ mod tests {
             foo_clone
                 .position
                 .environment
-                .take()
+                .swap(None)
                 .unwrap()
                 .upgrade()
                 .unwrap(),

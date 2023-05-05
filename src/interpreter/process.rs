@@ -10,7 +10,6 @@ use arc_swap::ArcSwapAny;
 use bit_set::BitSet;
 use crossbeam::atomic::AtomicCell;
 use delegate::delegate;
-use educe::Educe;
 use lpc_rs_errors::{lpc_error, Result};
 use parking_lot::RwLock;
 use sharded_slab::Slab as ShardedSlab;
@@ -27,18 +26,17 @@ use crate::{
     telnet::connection::Connection,
 };
 
-#[derive(Educe)]
-#[educe(Debug)]
+#[derive(Debug)]
 /// A type to represent the position of a [`Process`] in the game world.
 pub struct ProcessPosition {
     /// The object that contains this object. This object is in that object's `inventory`.
-    #[educe(Debug(ignore))]
-    pub environment: AtomicCell<Option<Weak<Process>>>,
+    pub environment: ArcSwapAny<Option<Weak<Process>>>,
 
     /// The objects that this object contains. This object is the `environment` for everything in this container.
     pub inventory: ShardedSlab<Weak<Process>>,
 
-    /// The inventory ID of this object in its environment. Needed for removal.
+    /// The inventory ID of this object in its environment. This is the index into our `environment`'s
+    /// `inventory` [`Slab`]. Needed for removal.
     environment_inventory_id: AtomicCell<usize>,
 
     /// The semaphore that prevents multiple threads from moving this object simultaneously, since it
@@ -56,7 +54,7 @@ impl ProcessPosition {
 impl Default for ProcessPosition {
     fn default() -> Self {
         ProcessPosition {
-            environment: AtomicCell::new(None),
+            environment: ArcSwapAny::from(None),
             inventory: Default::default(),
             environment_inventory_id: Default::default(),
             move_semaphore: Semaphore::new(1),
@@ -227,7 +225,7 @@ impl Display for Process {
 }
 
 impl Mark for Process {
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
+    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
         self.globals.read().mark(marked, processed)?;
         Ok(())
     }

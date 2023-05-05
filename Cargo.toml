@@ -20,7 +20,7 @@ lpc-rs-errors = { version = "0.1", path = "./lpc-rs-errors"}
 lpc-rs-function-support = { version = "0.1", path = "./lpc-rs-function-support"}
 lpc-rs-utils = { version = "0.1", path = "./lpc-rs-utils"}
 
-arc-swap = "1.6.0"
+arc-swap = { version = "1.6.0", features = ["weak"] }
 arrayvec = "0.7.1"
 async-recursion = "1.0.4"
 async-trait = "0.1.68"
