@@ -7,6 +7,7 @@ use std::{
     path::Path,
     sync::{Arc, Weak},
 };
+use std::hash::{Hash, Hasher};
 
 use arc_swap::ArcSwapAny;
 use bit_set::BitSet;
@@ -246,11 +247,19 @@ impl Process {
 impl PartialEq for Process {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.program, &other.program) && self.clone_id == other.clone_id
+        self.filename() == other.filename()
+        // Arc::ptr_eq(&self.program, &other.program) && self.clone_id == other.clone_id
     }
 }
 
 impl Eq for Process {}
+
+impl Hash for Process {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.filename().hash(state)
+    }
+}
 
 impl AsRef<Program> for Process {
     #[inline]
