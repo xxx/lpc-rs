@@ -15,9 +15,12 @@ pub async fn all_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> 
         return Ok(());
     };
 
-    let result = current_env.position.weak_inventory_iter().map(|item| {
-        item.into_lpc_ref(context.memory())
-    }).collect::<LpcArray>().into_lpc_ref(context.memory());
+    let result = current_env
+        .position
+        .weak_inventory_iter()
+        .map(|item| item.into_lpc_ref(context.memory()))
+        .collect::<LpcArray>()
+        .into_lpc_ref(context.memory());
 
     context.return_efun_result(result);
 
