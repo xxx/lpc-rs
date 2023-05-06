@@ -86,7 +86,9 @@ impl Debug for LpcArray {
         write!(f, "LpcArray {{ ")?;
         write!(f, "unique_id: {:?}, ", self.unique_id)?;
         write!(f, "array: [")?;
-        f.write_str(&format_array(self, |item| format!("{:?}", item)))?;
+        // Use display format to avoid infinite loops via inventory, etc.
+        // TODO: this could be more elegant
+        f.write_str(&format_array(self, |item| format!("{}", item)))?;
         write!(f, "] }}")
     }
 }

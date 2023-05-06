@@ -6,6 +6,7 @@ pub(crate) mod call_out;
 pub(crate) mod clone_object;
 pub(crate) mod compose;
 pub(crate) mod debug;
+pub(crate) mod deep_inventory;
 pub(crate) mod destruct;
 pub(crate) mod disable_commands;
 pub(crate) mod dump;
@@ -64,6 +65,7 @@ pub const CATCH: &str = "catch";
 pub const CLONE_OBJECT: &str = "clone_object";
 pub const COMPOSE: &str = "compose";
 pub const DEBUG: &str = "debug";
+pub const DEEP_INVENTORY: &str = "deep_inventory";
 pub const DESTRUCT: &str = "destruct";
 pub const DISABLE_COMMANDS: &str = "disable_commands";
 pub const DUMP: &str = "dump";
@@ -100,6 +102,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
         CLONE_OBJECT => clone_object::clone_object(efun_context).await,
         COMPOSE => compose::compose(efun_context).await,
         DEBUG => debug::debug(efun_context).await,
+        DEEP_INVENTORY => deep_inventory::deep_inventory(efun_context).await,
         DESTRUCT => destruct::destruct(efun_context).await,
         DISABLE_COMMANDS => disable_commands::disable_commands(efun_context).await,
         DUMP => dump::dump(efun_context).await,
@@ -258,17 +261,6 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
     );
 
     m.insert(
-        DISABLE_COMMANDS,
-        FunctionPrototypeBuilder::default()
-            .name(DISABLE_COMMANDS)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Void)
-            .kind(FunctionKind::Efun)
-            .build()
-            .expect("failed to build disable_commands"),
-    );
-
-    m.insert(
         DEBUG,
         FunctionPrototypeBuilder::default()
             .name(DEBUG)
@@ -287,6 +279,24 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
     );
 
     m.insert(
+        DEEP_INVENTORY,
+        FunctionPrototypeBuilder::default()
+            .name(DEEP_INVENTORY)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Object(true))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity {
+                num_args: 1,
+                num_default_args: 1,
+                varargs: false,
+                ellipsis: false,
+            })
+            .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
+            .build()
+            .expect("failed to build deep_inventory"),
+    );
+
+    m.insert(
         DESTRUCT,
         FunctionPrototypeBuilder::default()
             .name(DESTRUCT)
@@ -297,6 +307,17 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::Object(false) | LpcType::Object(true)])
             .build()
             .expect("failed to build destruct"),
+    );
+
+    m.insert(
+        DISABLE_COMMANDS,
+        FunctionPrototypeBuilder::default()
+            .name(DISABLE_COMMANDS)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Void)
+            .kind(FunctionKind::Efun)
+            .build()
+            .expect("failed to build disable_commands"),
     );
 
     m.insert(

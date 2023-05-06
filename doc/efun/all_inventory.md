@@ -8,4 +8,4 @@ for that.)
 
 ### See also:
 
-`environment`, `all_environment`, `deep_inventory`
+`deep_inventory`, `environment`, `all_environment`

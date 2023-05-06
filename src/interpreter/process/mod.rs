@@ -14,6 +14,7 @@ use bit_set::BitSet;
 use crossbeam::atomic::AtomicCell;
 use dashmap::DashSet;
 use delegate::delegate;
+use educe::Educe;
 use if_chain::if_chain;
 use lpc_rs_errors::{lpc_error, Result};
 use parking_lot::RwLock;
@@ -32,13 +33,15 @@ use crate::{
     telnet::connection::Connection,
 };
 
-#[derive(Debug)]
+#[derive(Educe)]
+#[educe(Debug)]
 /// A type to represent the position of a [`Process`] in the game world.
 pub struct ProcessPosition {
     /// The object that contains this object. This object is in that object's `inventory`.
     pub environment: ArcSwapAny<Option<Weak<Process>>>,
 
     /// The objects that this object contains. This object is the `environment` for everything in this container.
+    #[educe(Debug(ignore))]
     pub inventory: ShardedSlab<Weak<Process>>,
 
     /// The inventory IDs of this object's inventory. This is needed for iteration.
@@ -57,6 +60,20 @@ pub struct ProcessPosition {
 impl ProcessPosition {
     pub fn environment_inventory_id(&self) -> usize {
         self.environment_inventory_id.load()
+    }
+
+    pub fn weak_inventory_iter(&self) -> impl Iterator<Item = Weak<Process>> + '_ {
+        self.inventory_ids
+            .iter()
+            .filter_map(move |id| self.inventory.get(*id))
+            .map(|x| x.clone())
+    }
+
+    pub fn inventory_iter(&self) -> impl Iterator<Item = Arc<Process>> + '_ {
+        self.inventory_ids
+            .iter()
+            .filter_map(move |id| self.inventory.get(*id))
+            .filter_map(|weak| weak.upgrade())
     }
 }
 
@@ -257,7 +274,7 @@ impl Eq for Process {}
 impl Hash for Process {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.filename().hash(state)
+        self.filename().as_ref().hash(state)
     }
 }
 
