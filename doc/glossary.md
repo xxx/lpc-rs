@@ -98,6 +98,9 @@ It's the language that the game is written in. Numerous drivers have been
 written for it, but all have their differences, as the language has no
 specification.
 
+Unlike many other languages, LPC code can be written and (re-)loaded into an
+already-running game. There is no need to restart anything to make changes.
+
 ## M
 
 ### master object (master)
