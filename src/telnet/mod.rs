@@ -38,6 +38,10 @@ use crate::{
         ops::{BrokerOp, ConnectionOp},
     },
 };
+use crate::interpreter::lpc_int::LpcInt;
+use crate::interpreter::lpc_ref::LpcRef;
+use crate::interpreter::PROCESS_INPUT;
+use crate::interpreter::task::apply_function::{apply_function_by_name, apply_function_in_master};
 
 /// The incoming connection handler. Once established, individual connections are managed by [`ConnectionBroker`](connection_broker::ConnectionBroker).
 #[derive(Debug)]
@@ -277,7 +281,46 @@ impl Telnet {
                         return;
                     }
                 }
-                info!("Received message: {}", msg);
+
+                let Some(proc) = connection.process.load_full() else {
+                    warn!("No process for connection. Closing.");
+                    return;
+                };
+
+                let arg = LpcString::from(msg).into_lpc_ref(&template.memory);
+                let timeout = Some(template.config.max_execution_time);
+
+                let mut template = template.clone();
+                template.this_player.store(Some(proc.clone()));
+
+                match apply_function_by_name(
+                    PROCESS_INPUT,
+                    &[arg],
+                    proc,
+                    template.clone(),
+                    timeout
+                ).await {
+                    Some(Ok(LpcRef::Int(LpcInt(0)))) => {
+                        // TODO: notify_fail is handled here, but will require updating the apply functions to return the Task itself,
+                        //       rather than just the result.
+                        let _ = sink.send(TelnetEvent::Message("What?".to_string())).await;
+
+                        // nothing else to do here unless / until add_action support is added
+                    },
+                    Some(Ok(_)) => {
+                        // nothing to do here unless / until add_action support is added
+                    },
+                    Some(Err(x)) => {
+                        apply_runtime_error(&x, connection.process.load_full(), template.clone()).await;
+                    },
+                    None => {
+                        let err = concat!(
+                            "Error: *I* received your command, but the game hasn't implemented any way to handle it. ",
+                            "Please tell the game's owner to implement `process_input` in your body."
+                        );
+                        let _ = sink.send(TelnetEvent::Message(err.to_string())).await;
+                    },
+                }
             }
             TelnetEvent::RawMessage(msg) => {
                 trace!("Received raw message: {}", msg);

@@ -26,4 +26,5 @@ pub const CATCH_TELL: &str = "catch_tell";
 pub const CONNECT: &str = "connect";
 pub const ERROR_HANDLER: &str = "error_handler";
 pub const LOGON: &str = "logon";
+pub const PROCESS_INPUT: &str = "process_input";
 pub const SHUTDOWN: &str = "shutdown";
