@@ -15,15 +15,10 @@ pub async fn all_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> 
         return Ok(());
     };
 
-    let iter = current_env.position.inventory_ids.iter();
-
-    let result = iter
-        .map(|idx| {
-            let weak = current_env.position.inventory.get(*idx).unwrap().clone();
-            weak.into_lpc_ref(context.memory())
-        })
-        .collect::<LpcArray>()
-        .into_lpc_ref(context.memory());
+    let result = current_env.position.weak_inventory_iter().map(|item| {
+        let weak = item.clone();
+        weak.into_lpc_ref(context.memory())
+    }).collect::<LpcArray>().into_lpc_ref(context.memory());
 
     context.return_efun_result(result);
 

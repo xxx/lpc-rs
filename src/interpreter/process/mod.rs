@@ -45,7 +45,7 @@ pub struct ProcessPosition {
     pub inventory: ShardedSlab<Weak<Process>>,
 
     /// The inventory IDs of this object's inventory. This is needed for iteration.
-    pub inventory_ids: DashSet<usize>,
+    inventory_ids: DashSet<usize>,
 
     /// The inventory ID of this object in its environment. This is the index into our `environment`'s
     /// `inventory` `Slab`. Needed for removal.
@@ -53,7 +53,7 @@ pub struct ProcessPosition {
 
     /// The semaphore that prevents multiple threads from moving this object simultaneously, since it
     /// needs to happen in a transactional manner. The semaphore is specifically for when this object
-    /// is being moved. The new and former environments can use standard locking.
+    /// is being moved.
     move_semaphore: Semaphore,
 }
 
@@ -62,6 +62,7 @@ impl ProcessPosition {
         self.environment_inventory_id.load()
     }
 
+    /// Get an iterator over the inventory of this object, as `Weak<Process>` references.
     pub fn weak_inventory_iter(&self) -> impl Iterator<Item = Weak<Process>> + '_ {
         self.inventory_ids
             .iter()
@@ -69,6 +70,7 @@ impl ProcessPosition {
             .map(|x| x.clone())
     }
 
+    /// Get an iterator over the inventory of this object, as `Arc<Process>` references.
     pub fn inventory_iter(&self) -> impl Iterator<Item = Arc<Process>> + '_ {
         self.inventory_ids
             .iter()
