@@ -69,8 +69,8 @@ definition.
 
 Inheritance in LPC is less like traditional inheritance, and more like mixins in
 other languages. An object can inherit from multiple objects, and the order of
-inheritance matters. If two inherited-from objects provide the same function,
-the function that is inherited last will "win".
+inheritance matters. If two inherited-from objects provide functions with the
+same name, the function that is inherited last will "win".
 
 ### interactive
 
