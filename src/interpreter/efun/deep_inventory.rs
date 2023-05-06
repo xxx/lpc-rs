@@ -1,12 +1,12 @@
-use std::collections::HashSet;
-use std::sync::{Arc};
+use std::{collections::HashSet, sync::Arc};
+
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun, efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray,
+    process::Process,
 };
-use crate::interpreter::process::Process;
 
 /// `deep_inventory`, an efun for recursively returning the inventories of all objects contained by an object.
 pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -134,6 +134,14 @@ mod tests {
             .sorted()
             .collect_vec();
 
-        assert_eq!(globals, &["/deep_inv_bar", "/deep_inv_baz", "/deep_inv_foo", "/deep_inv_ob"]);
+        assert_eq!(
+            globals,
+            &[
+                "/deep_inv_bar",
+                "/deep_inv_baz",
+                "/deep_inv_foo",
+                "/deep_inv_ob"
+            ]
+        );
     }
 }

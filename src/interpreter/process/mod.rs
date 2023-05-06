@@ -4,10 +4,10 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     fmt::{Debug, Display, Formatter},
+    hash::{Hash, Hasher},
     path::Path,
     sync::{Arc, Weak},
 };
-use std::hash::{Hash, Hasher};
 
 use arc_swap::ArcSwapAny;
 use bit_set::BitSet;
