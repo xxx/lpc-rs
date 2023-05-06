@@ -48,7 +48,7 @@ pub struct ProcessPosition {
     pub inventory_ids: DashSet<usize>,
 
     /// The inventory ID of this object in its environment. This is the index into our `environment`'s
-    /// `inventory` [`Slab`]. Needed for removal.
+    /// `inventory` `Slab`. Needed for removal.
     environment_inventory_id: AtomicCell<usize>,
 
     /// The semaphore that prevents multiple threads from moving this object simultaneously, since it
