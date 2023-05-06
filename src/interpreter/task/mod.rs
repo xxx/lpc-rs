@@ -4722,8 +4722,8 @@ mod tests {
     }
 
     mod test_gc {
+        use crate::interpreter::gc::sweep::Sweep;
         use super::*;
-        use crate::interpreter::gc::sweep::KeylessSweep;
 
         #[tokio::test]
         async fn test_gc_is_accurate() {
@@ -4754,7 +4754,7 @@ mod tests {
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
             task.mark(&mut marked, &mut processed).unwrap();
-            ctx.upvalues().write().keyless_sweep(&marked).unwrap();
+            ctx.upvalues().write().sweep(&marked).unwrap();
 
             assert!(ctx.upvalues().read().is_empty());
         }

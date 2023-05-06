@@ -7,18 +7,3 @@ pub trait Sweep {
     /// Sweep the passed indices from the [`Vm`](crate::interpreter::vm::Vm)'s `upvalues`.
     fn sweep(&mut self, marked: &BitSet) -> Result<()>;
 }
-
-/// [`Sweep`] is automatically implemented for types that implement this trait.
-pub trait KeylessSweep {
-    /// Sweep the passed indices from the [`Vm`](crate::interpreter::vm::Vm)'s `upvalues`.
-    fn keyless_sweep(&mut self, marked: &BitSet) -> Result<()>;
-}
-
-impl<T> Sweep for T
-where
-    T: KeylessSweep,
-{
-    fn sweep(&mut self, marked: &BitSet) -> Result<()> {
-        self.keyless_sweep(marked)
-    }
-}

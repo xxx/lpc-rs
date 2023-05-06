@@ -20,7 +20,6 @@ use crate::{
         gc::{
             gc_bank::{GcBank, GcRefBank},
             mark::Mark,
-            sweep::KeylessSweep,
         },
         heap::Heap,
         object_space::ObjectSpace,
@@ -37,6 +36,7 @@ use crate::{
     },
     util::process_builder::ProcessInitializer,
 };
+use crate::interpreter::gc::sweep::Sweep;
 
 mod initiate_login;
 mod object_initializers;
@@ -239,7 +239,7 @@ impl Vm {
 
         trace!("Marked {} objects", marked.len());
 
-        self.keyless_sweep(&marked)
+        self.sweep(&marked)
     }
 
     /// Send an operation to the VM queue
@@ -352,11 +352,11 @@ impl Mark for Vm {
     }
 }
 
-impl KeylessSweep for Vm {
+impl Sweep for Vm {
     #[instrument(skip(self))]
     #[inline]
-    fn keyless_sweep(&mut self, marked: &BitSet) -> Result<()> {
-        self.upvalues.write().keyless_sweep(marked)
+    fn sweep(&mut self, marked: &BitSet) -> Result<()> {
+        self.upvalues.write().sweep(marked)
     }
 }
 

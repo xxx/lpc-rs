@@ -7,7 +7,8 @@ use lpc_rs_errors::Result;
 use slab::{Iter as SlabIter, Slab};
 use tracing::instrument;
 
-use crate::interpreter::{gc::sweep::KeylessSweep, lpc_ref::LpcRef};
+use crate::interpreter::{lpc_ref::LpcRef};
+use crate::interpreter::gc::sweep::Sweep;
 
 pub type GcRefBank = GcBank<LpcRef>;
 
@@ -31,9 +32,9 @@ impl<T> GcBank<T> {
     }
 }
 
-impl<T> KeylessSweep for GcBank<T> {
+impl<T> Sweep for GcBank<T> {
     #[instrument(skip(self))]
-    fn keyless_sweep(&mut self, marked: &BitSet) -> Result<()> {
+    fn sweep(&mut self, marked: &BitSet) -> Result<()> {
         // `marked` is what's still alive. The rest can be culled.
         self.registers.retain(|idx, _e| marked.contains(idx));
 
