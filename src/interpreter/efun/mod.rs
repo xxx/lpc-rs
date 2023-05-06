@@ -13,8 +13,10 @@ pub(crate) mod dump;
 pub(crate) mod enable_commands;
 pub(crate) mod environment;
 pub(crate) mod exec;
+pub(crate) mod explode;
 pub(crate) mod file_name;
 pub(crate) mod find_object;
+pub(crate) mod implode;
 pub(crate) mod input_to;
 pub(crate) mod interactive;
 pub(crate) mod living;
@@ -73,8 +75,10 @@ pub const DUMP: &str = "dump";
 pub const ENABLE_COMMANDS: &str = "enable_commands";
 pub const ENVIRONMENT: &str = "environment";
 pub const EXEC: &str = "exec";
+pub const EXPLODE: &str = "explode";
 pub const FILE_NAME: &str = "file_name";
 pub const FIND_OBJECT: &str = "find_object";
+pub const IMPLODE: &str = "implode";
 pub const INPUT_TO: &str = "input_to";
 pub const INTERACTIVE: &str = "interactive";
 pub const LIVING: &str = "living";
@@ -111,8 +115,10 @@ pub async fn call_efun<const STACKSIZE: usize>(
         ENABLE_COMMANDS => enable_commands::enable_commands(efun_context).await,
         ENVIRONMENT => environment::environment(efun_context).await,
         EXEC => exec::exec(efun_context).await,
+        EXPLODE => explode::explode(efun_context).await,
         FILE_NAME => file_name::file_name(efun_context).await,
         FIND_OBJECT => find_object::find_object(efun_context).await,
+        IMPLODE => implode::implode(efun_context).await,
         INPUT_TO => input_to::input_to(efun_context).await,
         INTERACTIVE => interactive::interactive(efun_context).await,
         LIVING => living::living(efun_context).await,
@@ -385,6 +391,24 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
     );
 
     m.insert(
+        EXPLODE,
+        FunctionPrototypeBuilder::default()
+            .name(EXPLODE)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::String(true))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity {
+                num_args: 2,
+                num_default_args: 1,
+                ellipsis: false,
+                varargs: false,
+            })
+            .arg_types(vec![LpcType::String(false), LpcType::String(false)])
+            .build()
+            .expect("failed to build explode"),
+    );
+
+    m.insert(
         FILE_NAME,
         FunctionPrototypeBuilder::default()
             .name(FILE_NAME)
@@ -408,6 +432,24 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::String(false)])
             .build()
             .expect("failed to build find_object"),
+    );
+
+    m.insert(
+        IMPLODE,
+        FunctionPrototypeBuilder::default()
+            .name(IMPLODE)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::String(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity {
+                num_args: 2,
+                num_default_args: 1,
+                ellipsis: false,
+                varargs: false,
+            })
+            .arg_types(vec![LpcType::String(true), LpcType::String(false)])
+            .build()
+            .expect("failed to build implode"),
     );
 
     m.insert(

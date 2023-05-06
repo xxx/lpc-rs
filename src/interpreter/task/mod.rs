@@ -4722,8 +4722,8 @@ mod tests {
     }
 
     mod test_gc {
-        use crate::interpreter::gc::sweep::Sweep;
         use super::*;
+        use crate::interpreter::gc::sweep::Sweep;
 
         #[tokio::test]
         async fn test_gc_is_accurate() {

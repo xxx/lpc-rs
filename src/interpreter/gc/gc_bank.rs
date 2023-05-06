@@ -7,8 +7,7 @@ use lpc_rs_errors::Result;
 use slab::{Iter as SlabIter, Slab};
 use tracing::instrument;
 
-use crate::interpreter::{lpc_ref::LpcRef};
-use crate::interpreter::gc::sweep::Sweep;
+use crate::interpreter::{gc::sweep::Sweep, lpc_ref::LpcRef};
 
 pub type GcRefBank = GcBank<LpcRef>;
 

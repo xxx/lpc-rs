@@ -20,6 +20,7 @@ use crate::{
         gc::{
             gc_bank::{GcBank, GcRefBank},
             mark::Mark,
+            sweep::Sweep,
         },
         heap::Heap,
         object_space::ObjectSpace,
@@ -36,7 +37,6 @@ use crate::{
     },
     util::process_builder::ProcessInitializer,
 };
-use crate::interpreter::gc::sweep::Sweep;
 
 mod initiate_login;
 mod object_initializers;
