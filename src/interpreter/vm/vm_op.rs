@@ -16,10 +16,16 @@ pub enum VmOp {
     /// Run a CallOut function, identified by its index in the [`CallOuts`](crate::interpreter::call_outs::CallOuts) list
     PrioritizeCallOut(usize),
 
-    /// Connect a user to a Process. Include a channel to call the response back,
-    /// since the entire point of this op is to enforce sequential handling.
-    Exec(
+    /// Connect a user to a Process. Include a channel to call the response back.
+    Takeover(
         Arc<Connection>,
+        Arc<Process>,
+        tokio::sync::oneshot::Sender<Option<Arc<Connection>>>,
+    ),
+
+    /// Move a connection from one process to another.
+    Exec(
+        Arc<Process>,
         Arc<Process>,
         tokio::sync::oneshot::Sender<Option<Arc<Connection>>>,
     ),
@@ -41,7 +47,7 @@ impl PartialEq for VmOp {
         match (self, other) {
             (Self::InitiateLogin(a), Self::InitiateLogin(b)) => a.address == b.address,
             (Self::PrioritizeCallOut(a), Self::PrioritizeCallOut(b)) => a == b,
-            (Self::Exec(a, _, _), Self::Exec(b, _, _)) => a.address == b.address,
+            (Self::Takeover(a, _, _), Self::Takeover(b, _, _)) => a.address == b.address,
             (Self::TaskError(a, _), Self::TaskError(b, _)) => a == b,
             (Self::FatalError(a), Self::FatalError(b)) => a == b,
             _ => false,

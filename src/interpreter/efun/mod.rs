@@ -12,6 +12,7 @@ pub(crate) mod disable_commands;
 pub(crate) mod dump;
 pub(crate) mod enable_commands;
 pub(crate) mod environment;
+pub(crate) mod exec;
 pub(crate) mod file_name;
 pub(crate) mod find_object;
 pub(crate) mod input_to;
@@ -71,6 +72,7 @@ pub const DISABLE_COMMANDS: &str = "disable_commands";
 pub const DUMP: &str = "dump";
 pub const ENABLE_COMMANDS: &str = "enable_commands";
 pub const ENVIRONMENT: &str = "environment";
+pub const EXEC: &str = "exec";
 pub const FILE_NAME: &str = "file_name";
 pub const FIND_OBJECT: &str = "find_object";
 pub const INPUT_TO: &str = "input_to";
@@ -108,6 +110,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
         DUMP => dump::dump(efun_context).await,
         ENABLE_COMMANDS => enable_commands::enable_commands(efun_context).await,
         ENVIRONMENT => environment::environment(efun_context).await,
+        EXEC => exec::exec(efun_context).await,
         FILE_NAME => file_name::file_name(efun_context).await,
         FIND_OBJECT => find_object::find_object(efun_context).await,
         INPUT_TO => input_to::input_to(efun_context).await,
@@ -366,6 +369,19 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
             .build()
             .expect("failed to build environment"),
+    );
+
+    m.insert(
+        EXEC,
+        FunctionPrototypeBuilder::default()
+            .name(EXEC)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(2))
+            .arg_types(vec![LpcType::Object(false), LpcType::Object(false)])
+            .build()
+            .expect("failed to build exec"),
     );
 
     m.insert(

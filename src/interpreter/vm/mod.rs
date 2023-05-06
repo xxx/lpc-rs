@@ -156,11 +156,15 @@ impl Vm {
                         VmOp::PrioritizeCallOut(idx) => {
                             self.prioritize_call_out(idx).await;
                         }
-                        VmOp::Exec(connection, process, callback) => {
+                        VmOp::Takeover(connection, process, callback) => {
+                            let prev = Self::takeover_process(connection, process).await;
+                            let _ = callback.send(prev);
+                        }
+                        VmOp::Exec(new_ob, old_ob, callback) => {
                             // We do this here in the VM because there are multiple objects
                             // being updated at once, and we don't want to have to deal with
                             // locking them behind a mutex.
-                            let prev = Self::takeover_process(connection, process).await;
+                            let prev = Self::exec_process(new_ob, old_ob).await;
                             let _ = callback.send(prev);
                         }
                         VmOp::RuntimeError(error, proc) => {
@@ -250,8 +254,8 @@ impl Vm {
     ///
     /// # Arguments
     ///
-    /// * `connection` - The [`Connection`] to attach to the [`Process`]
-    /// * `process` - The [`Process`] to attach the [`Connection`] to
+    /// * `new_ob` - The new [`Process`] to put the connect into [`Connection`]
+    /// * `old_ob` - The [`Connection`]'s current [`Process`
     /// * `vm_tx` - The channel to send the `Exec` op to
     ///
     /// # Returns
@@ -259,12 +263,39 @@ impl Vm {
     /// * `Some(Arc<Connection>)` - The previous connection in `process`, if there was one
     /// * `None` - If there was no previous connection
     pub async fn exec(
+        new_ob: Arc<Process>,
+        old_ob: Arc<Process>,
+        vm_tx: Sender<VmOp>,
+    ) -> Option<Arc<Connection>> {
+        let (exec_tx, exec_rx) = tokio::sync::oneshot::channel();
+        let _ = vm_tx.send(VmOp::Exec(new_ob, old_ob, exec_tx)).await;
+        exec_rx.await.ok().flatten()
+    }
+
+    /// Take over a `Process` with a new `Connection`.
+    /// The overall mechanism is to call this function, which will send an `VmOp::Exec` to the VM, and
+    /// await the response. The `Exec` op is picked up, and will call `takeover_process`, which actually
+    /// makes the switch, and then will return the previous connection, if there was one.
+    ///
+    /// # Arguments
+    ///
+    /// * `connection` - The [`Connection`] to attach to the [`Process`]
+    /// * `process` - The [`Process`] to attach the [`Connection`] to
+    /// * `vm_tx` - The channel to send the `Takeover` op to
+    ///
+    /// # Returns
+    ///
+    /// * `Some(Arc<Connection>)` - The previous connection in `process`, if there was one
+    /// * `None` - If there was no previous connection
+    pub async fn takeover(
         connection: Arc<Connection>,
         process: Arc<Process>,
         vm_tx: Sender<VmOp>,
     ) -> Option<Arc<Connection>> {
         let (exec_tx, exec_rx) = tokio::sync::oneshot::channel();
-        let _ = vm_tx.send(VmOp::Exec(connection, process, exec_tx)).await;
+        let _ = vm_tx
+            .send(VmOp::Takeover(connection, process, exec_tx))
+            .await;
         exec_rx.await.ok().flatten()
     }
 
@@ -297,6 +328,17 @@ impl Vm {
         }
 
         previous
+    }
+
+    /// The actual mechanism for `exec`.
+    async fn exec_process(new_ob: Arc<Process>, old_ob: Arc<Process>) -> Option<Arc<Connection>> {
+        let connection = Self::detach_process(old_ob)?;
+        Self::takeover_process(connection, new_ob).await
+    }
+
+    /// Detach a [`Connection`] from its [`Process`].
+    fn detach_process(process: Arc<Process>) -> Option<Arc<Connection>> {
+        process.connection.swap(None)
     }
 }
 
