@@ -16,7 +16,7 @@ Applies do not need to be `public` to be called.
 
 ### `call_other`
 
-`call_other` is is an efun used to call functions in other objects, and in fact is the only
+`call_other` is an efun used to call functions in other objects, and in fact is the only
 way to do so. If the called function is not public, it will return 0.
 
 While it can be called as a normal function, its use is so pervasive that 
