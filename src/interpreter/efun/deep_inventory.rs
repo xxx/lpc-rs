@@ -18,6 +18,8 @@ pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) ->
         return Ok(());
     };
 
+    // [`Process`]' hashes are based solely on their filename, which never changes after creation.
+    #[allow(clippy::mutable_key_type)]
     let mut collection = HashSet::with_capacity(current_env.position.inventory_ids.len());
     recurse_deep_inventory(&current_env, &mut collection);
 
@@ -32,6 +34,7 @@ pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) ->
     Ok(())
 }
 
+#[allow(clippy::mutable_key_type)]
 fn recurse_deep_inventory(env: &Process, collection: &mut HashSet<Arc<Process>>) {
     for item in env.position.inventory_iter() {
         if collection.insert(item.clone()) {

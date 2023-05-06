@@ -274,6 +274,8 @@ impl Eq for Process {}
 impl Hash for Process {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
+        // NOTE: this should not be based on any field with interior mutability. It's used
+        // to prevent infinite looping in numerous places.
         self.filename().as_ref().hash(state)
     }
 }
