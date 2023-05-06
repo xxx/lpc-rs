@@ -55,6 +55,12 @@ mod tests {
             }
         "# };
 
+        let outer = indoc! { r#"
+            void create() {
+                move_object("/foo"); // creates a loop, to ensure we handle them.
+            }
+        "# };
+
         let master = indoc! { r#"
             object *create() {
                 "/foo"->do_moves();
@@ -64,9 +70,9 @@ mod tests {
 
         let vm = Vm::new(test_config());
 
-        let _foo_proc = vm.process_create_from_code("/foo.c", foo).await.unwrap();
+        let foo_proc = vm.process_create_from_code("/foo.c", foo).await.unwrap();
         let outer_proc = vm
-            .process_initialize_from_code("/outer.c", "")
+            .process_initialize_from_code("/outer.c", outer)
             .await
             .unwrap();
         let inner_proc = vm
@@ -93,7 +99,8 @@ mod tests {
             &[
                 &*innermost_proc.context.process,
                 &*inner_proc.context.process,
-                &*outer_proc.context.process
+                &*outer_proc.context.process,
+                &*foo_proc,
             ]
         );
     }
