@@ -477,6 +477,15 @@ impl PartialEq<&Process> for LpcRef {
     }
 }
 
+impl PartialEq<usize> for LpcRef {
+    fn eq(&self, other: &usize) -> bool {
+        match self {
+            LpcRef::Int(x) => x.0 as usize == *other,
+            _ => false,
+        }
+    }
+}
+
 impl PartialOrd for LpcRef {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {

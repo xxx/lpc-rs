@@ -199,6 +199,18 @@ impl PartialEq<Vec<LpcRef>> for LpcArray {
     }
 }
 
+impl<T> PartialEq<[T]> for LpcArray
+where
+    T: Into<LpcRef> + Copy,
+{
+    fn eq(&self, other: &[T]) -> bool {
+        self.array
+            .iter()
+            .zip(other.iter())
+            .all(|(a, b)| a == &Into::<LpcRef>::into(*b))
+    }
+}
+
 impl Add<LpcArray> for LpcArray {
     type Output = LpcArray;
 

@@ -2,6 +2,7 @@ pub mod efun_context;
 
 pub(crate) mod all_environment;
 pub(crate) mod all_inventory;
+pub(crate) mod arrayp;
 pub(crate) mod call_out;
 pub(crate) mod clone_object;
 pub(crate) mod compose;
@@ -16,17 +17,23 @@ pub(crate) mod exec;
 pub(crate) mod explode;
 pub(crate) mod file_name;
 pub(crate) mod find_object;
+pub(crate) mod floatp;
+pub(crate) mod functionp;
 pub(crate) mod implode;
 pub(crate) mod input_to;
 pub(crate) mod interactive;
+pub(crate) mod intp;
 pub(crate) mod living;
+pub(crate) mod mappingp;
 pub(crate) mod move_object;
+pub(crate) mod objectp;
 pub(crate) mod papplyv;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
 pub(crate) mod query_resident_memory;
 pub(crate) mod remove_call_out;
 pub(crate) mod set_this_player;
+pub(crate) mod stringp;
 pub(crate) mod tell_object;
 pub(crate) mod this_object;
 pub(crate) mod this_player;
@@ -62,6 +69,7 @@ pub type AsyncEfun<const N: usize> =
 
 pub const ALL_ENVIRONMENT: &str = "all_environment";
 pub const ALL_INVENTORY: &str = "all_inventory";
+pub const ARRAYP: &str = "arrayp";
 pub const CALL_OUT: &str = "call_out";
 pub const CALL_OTHER: &str = "call_other";
 pub const CATCH: &str = "catch";
@@ -78,11 +86,16 @@ pub const EXEC: &str = "exec";
 pub const EXPLODE: &str = "explode";
 pub const FILE_NAME: &str = "file_name";
 pub const FIND_OBJECT: &str = "find_object";
+pub const FLOATP: &str = "floatp";
+pub const FUNCTIONP: &str = "functionp";
 pub const IMPLODE: &str = "implode";
 pub const INPUT_TO: &str = "input_to";
+pub const INTP: &str = "intp";
 pub const INTERACTIVE: &str = "interactive";
 pub const LIVING: &str = "living";
+pub const MAPPINGP: &str = "mappingp";
 pub const MOVE_OBJECT: &str = "move_object";
+pub const OBJECTP: &str = "objectp";
 pub const PAPPLYV: &str = "papplyv";
 pub const QUERY_CALL_OUT: &str = "query_call_out";
 pub const QUERY_CALL_OUTS: &str = "query_call_outs";
@@ -90,6 +103,7 @@ pub const QUERY_RESIDENT_MEMORY: &str = "query_resident_memory";
 pub const REMOVE_CALL_OUT: &str = "remove_call_out";
 pub const SET_THIS_PLAYER: &str = "set_this_player";
 pub const SIZEOF: &str = "sizeof";
+pub const STRINGP: &str = "stringp";
 pub const TELL_OBJECT: &str = "tell_object";
 pub const THIS_OBJECT: &str = "this_object";
 pub const THIS_PLAYER: &str = "this_player";
@@ -104,6 +118,7 @@ pub async fn call_efun<const STACKSIZE: usize>(
     match efun_name {
         ALL_ENVIRONMENT => all_environment::all_environment(efun_context).await,
         ALL_INVENTORY => all_inventory::all_inventory(efun_context).await,
+        ARRAYP => arrayp::arrayp(efun_context).await,
         CALL_OUT => call_out::call_out(efun_context).await,
         CLONE_OBJECT => clone_object::clone_object(efun_context).await,
         COMPOSE => compose::compose(efun_context).await,
@@ -118,17 +133,23 @@ pub async fn call_efun<const STACKSIZE: usize>(
         EXPLODE => explode::explode(efun_context).await,
         FILE_NAME => file_name::file_name(efun_context).await,
         FIND_OBJECT => find_object::find_object(efun_context).await,
+        FLOATP => floatp::floatp(efun_context).await,
+        FUNCTIONP => functionp::functionp(efun_context).await,
         IMPLODE => implode::implode(efun_context).await,
         INPUT_TO => input_to::input_to(efun_context).await,
         INTERACTIVE => interactive::interactive(efun_context).await,
+        INTP => intp::intp(efun_context).await,
         LIVING => living::living(efun_context).await,
+        MAPPINGP => mappingp::mappingp(efun_context).await,
         MOVE_OBJECT => move_object::move_object(efun_context).await,
+        OBJECTP => objectp::objectp(efun_context).await,
         PAPPLYV => papplyv::papplyv(efun_context).await,
         QUERY_CALL_OUT => query_call_out::query_call_out(efun_context).await,
         QUERY_CALL_OUTS => query_call_outs::query_call_outs(efun_context).await,
         QUERY_RESIDENT_MEMORY => query_resident_memory::query_resident_memory(efun_context).await,
         REMOVE_CALL_OUT => remove_call_out::remove_call_out(efun_context).await,
         SET_THIS_PLAYER => set_this_player::set_this_player(efun_context).await,
+        STRINGP => stringp::stringp(efun_context).await,
         TELL_OBJECT => tell_object::tell_object(efun_context).await,
         THIS_OBJECT => this_object::this_object(efun_context).await,
         THIS_PLAYER => this_player::this_player(efun_context).await,
@@ -179,6 +200,19 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
             .build()
             .expect("failed to build all_inventory"),
+    );
+
+    m.insert(
+        ARRAYP,
+        FunctionPrototypeBuilder::default()
+            .name(ARRAYP)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Mixed(false)])
+            .build()
+            .expect("failed to build arrayp"),
     );
 
     m.insert(
@@ -435,6 +469,32 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
     );
 
     m.insert(
+        FLOATP,
+        FunctionPrototypeBuilder::default()
+            .name(FLOATP)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Mixed(false)])
+            .build()
+            .expect("failed to build floatp"),
+    );
+
+    m.insert(
+        FUNCTIONP,
+        FunctionPrototypeBuilder::default()
+            .name(FUNCTIONP)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Mixed(false)])
+            .build()
+            .expect("failed to build functionp"),
+    );
+
+    m.insert(
         IMPLODE,
         FunctionPrototypeBuilder::default()
             .name(IMPLODE)
@@ -488,6 +548,19 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
     );
 
     m.insert(
+        INTP,
+        FunctionPrototypeBuilder::default()
+            .name(INTP)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Mixed(false)])
+            .build()
+            .expect("failed to build intp"),
+    );
+
+    m.insert(
         LIVING,
         FunctionPrototypeBuilder::default()
             .name(LIVING)
@@ -506,6 +579,19 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
     );
 
     m.insert(
+        MAPPINGP,
+        FunctionPrototypeBuilder::default()
+            .name(MAPPINGP)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Mixed(false)])
+            .build()
+            .expect("failed to build mappingp"),
+    );
+
+    m.insert(
         MOVE_OBJECT,
         FunctionPrototypeBuilder::default()
             .name(MOVE_OBJECT)
@@ -516,6 +602,19 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
             .build()
             .expect("failed to build move_object"),
+    );
+
+    m.insert(
+        OBJECTP,
+        FunctionPrototypeBuilder::default()
+            .name(OBJECTP)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Mixed(false)])
+            .build()
+            .expect("failed to build objectp"),
     );
 
     m.insert(
@@ -619,6 +718,19 @@ pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = La
             .arg_types(vec![LpcType::Mixed(true) | LpcType::Mapping(false)])
             .build()
             .expect("failed to build sizeof"),
+    );
+
+    m.insert(
+        STRINGP,
+        FunctionPrototypeBuilder::default()
+            .name(STRINGP)
+            .filename(LpcPath::InGame("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Mixed(false)])
+            .build()
+            .expect("failed to build stringp"),
     );
 
     m.insert(
