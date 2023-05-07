@@ -81,7 +81,7 @@ impl ObjectSpace {
     // /// table. If a new program with the same filename as an existing one is
     // /// added, the new will overwrite the old in the table.
     // /// Storage keys are the in-game filename
-    // pub fn insert_master(&mut self, program: Program) ->
+    // pub fn insert_prototype(&mut self, program: Program) ->
     // Arc<Process> {     let new = Process::new(program);
     //     let process: Arc<Process> = RwLock::new(new).into();
     //     let name = self.prepare_filename(&process);
@@ -240,10 +240,10 @@ mod tests {
     };
 
     // #[test]
-    // fn test_insert_master() {
+    // fn test_insert_prototype() {
     //     let mut space = ObjectSpace::default();
     //     let prog = Program::default();
-    //     space.insert_master(prog.clone());
+    //     space.insert_prototype(prog.clone());
     //     let filename = prog.filename.to_str().unwrap();
     //
     //     assert_eq!(space.len(), 1);

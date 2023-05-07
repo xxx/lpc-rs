@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-async fn load_master<const N: usize>(
+async fn load_prototype<const N: usize>(
     context: &mut EfunContext<'_, N>,
     path: &str,
 ) -> Result<Arc<Process>> {
@@ -37,23 +37,23 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     if let LpcRef::String(s) = arg {
         let path = s.read().to_string();
 
-        let master = load_master(context, &path).await?;
+        let prototype = load_prototype(context, &path).await?;
 
         debug_assert!(
-            !master.flags.test(ObjectFlags::Clone),
-            "master cannot be a clone"
+            !prototype.flags.test(ObjectFlags::Clone),
+            "prototype cannot be a clone"
         );
 
         {
-            if master.program.pragmas.no_clone() {
+            if prototype.program.pragmas.no_clone() {
                 return Err(context.runtime_error(format!(
                     "{} has `#pragma no_clone` enabled, and so cannot be cloned.",
-                    master.program.filename
+                    prototype.program.filename
                 )));
             }
         }
 
-        let new_prog = master.program.clone();
+        let new_prog = prototype.program.clone();
         let new_clone = context.insert_clone(new_prog);
 
         debug_assert!(
@@ -61,8 +61,8 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
             "new_clone must be a clone"
         );
 
-        // if the master is not initialized, we initialize the clone.
-        let return_val = if !master.flags.test(ObjectFlags::Initialized) {
+        // if the prototype is not initialized, we initialize the clone.
+        let return_val = if !prototype.flags.test(ObjectFlags::Initialized) {
             if context.chain_count() >= MAX_CLONE_CHAIN {
                 return Err(context.runtime_error("infinite clone recursion detected"));
             }
@@ -137,7 +137,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn does_not_create_multiple_master_objects() {
+    async fn does_not_create_multiple_prototype_objects() {
         let prog = indoc! { r#"
             object foo = clone_object("./example");
         "# };
@@ -184,7 +184,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn initializes_clone_if_master_not_initialized() {
+    async fn initializes_clone_if_prototype_not_initialized() {
         let cloned = indoc! { r#"
             int i = 123;
         "# };
@@ -230,21 +230,21 @@ mod tests {
 
     #[tokio::test]
     async fn handles_clone_self_recursion() {
-        // This tests the case where an uninitialized master is cloned, (which
+        // This tests the case where an uninitialized prototype is cloned, (which
         // initializes the clone), and that clone then clones itself. This is
-        // an infinite loop because if the master is _not_ initialized, then
+        // an infinite loop because if the prototype is _not_ initialized, then
         // the clone _will_ be initialized, and then clone itself, and so on.
 
-        // This object will be initialized as a master, and so clones of it will
+        // This object will be initialized as a prototype, and so clones of it will
         // _not_ be initialized. It's not self-cloning, as it has a different path
         // than "self_clone".
-        let master = indoc! { r#"
+        let prototype = indoc! { r#"
             object foo = clone_object("self_clone");
         "# };
 
-        // This is the self-cloning object, which has a different path than the master,
+        // This is the self-cloning object, which has a different path than the prototype,
         // (even though the code is the same, which is just a coincidence). It will
-        // be cloned by the master above, _without_ its master being initialized,
+        // be cloned by the prototype above, _without_ its prototype being initialized,
         // meaning it _will_ be initialized, and start a clone chain.
         let self_clone = indoc! { r#"
             object foo = clone_object("self_clone");
@@ -256,9 +256,9 @@ mod tests {
             .await
             .unwrap();
 
-        let master_proc = vm.process_initialize_from_code("master.c", master).await;
+        let prototype_proc = vm.process_initialize_from_code("prototype.c", prototype).await;
 
-        assert!(master_proc
+        assert!(prototype_proc
             .unwrap_err()
             .to_string()
             .contains("infinite clone recursion detected"));
@@ -266,9 +266,9 @@ mod tests {
 
     #[tokio::test]
     async fn empties_vars_before_initialization() {
-        let master = indoc! { r#"
+        let prototype = indoc! { r#"
             void create() {
-                "/clone"->set_name("master foo");
+                "/clone"->set_name("proto foo");
 
                 // Prototype has been called, and so is initialized.
                 // Clone should not be initialized, and should not have a
@@ -291,8 +291,8 @@ mod tests {
             .await
             .unwrap();
 
-        let _master_proc = vm
-            .process_initialize_from_code("/master.c", master)
+        let _prototype_proc = vm
+            .process_initialize_from_code("/prototype.c", prototype)
             .await
             .unwrap();
 

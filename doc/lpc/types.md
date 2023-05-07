@@ -53,10 +53,11 @@
         and functions defined in that file, along with any files it `inherit`s from.
     - `object` is a single type that encompasses all possible objects.
        Any further differentiation is left to the mudlib.
-    - `object`s can either be a reference to a prototype object, called the master, 
-      or a reference to a copy of the master, called a clone.
+    - `object`s can either be a reference to a prototype object, sometimes called the master, 
+      or a reference to a copy of the prototype, called a clone.
     - Masters are created by the VM when `clone_object` is called on an object where
-      its master object has not been loaded, or a string is used as the receiver for `call_other` (e.g. `"/secure/mail_daemon"->send_all()`)
+      its prototype object has not been loaded, or a string is used as the receiver 
+      for `call_other` (e.g. `"/secure/mail_daemon"->send_all()`)
     - New clones are created with the efun `clone_object`. This is the only way to create them.
     - _Existing_ clones can be found with `find_object`, by using their path, followed by a `#` and
       the clone number. For example, if you have a clone of `/std/goblin` with clone number
