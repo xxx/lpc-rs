@@ -1267,7 +1267,6 @@ dependencies = [
  "regex",
  "rmp-serde",
  "serde",
- "sharded-slab",
  "shared_arena",
  "slab",
  "stable-vec",

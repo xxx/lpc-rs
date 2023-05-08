@@ -99,14 +99,14 @@ mod tests {
         assert!(quux_proc
             .position
             .inventory
-            .contains(foo_clone.position.environment_inventory_id()));
+            .contains(&*foo_clone));
         assert!(!bar_proc
             .position
             .inventory
-            .contains(foo_clone.position.environment_inventory_id()));
+            .contains(&*foo_clone));
         assert!(!baz_proc
             .position
             .inventory
-            .contains(foo_clone.position.environment_inventory_id()));
+            .contains(&*foo_clone));
     }
 }

@@ -53,7 +53,6 @@ readonly = "0.2.3"
 regex = "1"
 rmp-serde = "1.0.0"
 serde = { version = "1.0.123", features = ["derive", "rc"] }
-sharded-slab = "0.1.4"
 shared_arena = "0.8.4"
 slab = "0.4.8"
 stable-vec = "0.4.0"
