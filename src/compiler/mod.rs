@@ -309,7 +309,7 @@ impl Compiler {
             Err(e) => return Err(e),
         };
 
-        println!("{}", program.filename);
+        // println!("{}", program.filename);
         // for s in program.listing() {
         //     println!("{s}");
         // }
