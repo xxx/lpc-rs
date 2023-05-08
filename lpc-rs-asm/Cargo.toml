@@ -15,4 +15,4 @@ lpc-rs-errors = { version = "0.1", path = "../lpc-rs-errors"}
 static_assertions = "1.1.0"
 
 itertools = "0.10.0"
-serde = { version = "1.0.123", features = ["derive"] }
+serde = { version = "1.0.162", features = ["derive"] }
