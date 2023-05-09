@@ -109,7 +109,7 @@ impl<'a> Program {
             None => Cow::Owned(PathBuf::from("/")),
             Some(path) => {
                 let dedotted = path
-                    .parse_dot_from("/".as_ref())
+                    .parse_dot_from("/")
                     .unwrap_or_else(|_| path.into());
 
                 if path.is_absolute() {

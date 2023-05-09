@@ -165,7 +165,7 @@ where
     fn from(pb: T) -> Self {
         let pb = pb.into();
         let dedotted = pb
-            .parse_dot_from("/".as_ref())
+            .parse_dot_from("/")
             .map(|path| path.into_owned())
             .unwrap_or(pb);
         Self::InGame(dedotted)
