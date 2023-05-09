@@ -16,7 +16,7 @@ use crate::{
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         lpc_ref::{LpcRef, NULL},
         object_flags::ObjectFlags,
-        process::Process,
+        process::{process_lock::ProcessLockStatus, Process},
         task::{get_location, set_location, Task},
     },
     set_loc,
@@ -56,6 +56,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let max_arg_length = std::cmp::max(adjusted_num_args, function.arity().num_args);
         let max_arg_length = std::cmp::max(max_arg_length, passed_args_count);
 
+        let owns_process_lock = if function.prototype.flags.synchronized() {
+            let lock_state = proc.lock(self.id).await?;
+            lock_state == ProcessLockStatus::Acquired
+        } else {
+            false
+        };
+
         let mut new_frame = CallFrame::with_minimum_arg_capacity(
             proc,
             function.clone(),
@@ -64,7 +71,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             upvalues,
             self.context.upvalues().clone(),
         );
-        // let pf = function;
+
+        new_frame.owns_process_lock = owns_process_lock;
 
         // for dynamic receivers, skip the first register of the passed args, which contains the receiver itself
         let index = is_dynamic_receiver as usize;
@@ -121,6 +129,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         if function_is_efun {
             self.prepare_and_call_efun(function.name()).await?;
         }
+
+        // TODO: lock the task if necessary
 
         Ok(())
     }

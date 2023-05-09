@@ -1,4 +1,5 @@
 pub mod inventory;
+pub mod process_lock;
 pub mod util;
 
 use std::{
@@ -14,9 +15,10 @@ use arc_swap::ArcSwapAny;
 use bit_set::BitSet;
 use delegate::delegate;
 use if_chain::if_chain;
-use lpc_rs_errors::{Result};
+use lpc_rs_errors::Result;
 use parking_lot::RwLock;
 use tokio::sync::Semaphore;
+use tracing::instrument;
 
 use crate::{
     interpreter::{
@@ -24,12 +26,16 @@ use crate::{
         gc::mark::Mark,
         lpc_ref::{LpcRef, NULL},
         object_flags::{AtomicFlags, ObjectFlags},
-        process::util::AllEnvironment,
+        process::{
+            inventory::Inventory,
+            process_lock::{ProcessLock, ProcessLockStatus},
+            util::AllEnvironment,
+        },
         program::Program,
+        task::task_id::TaskId,
     },
     telnet::connection::Connection,
 };
-use crate::interpreter::process::inventory::Inventory;
 
 #[derive(Debug)]
 /// A type to represent the position of a [`Process`] in the game world.
@@ -49,7 +55,7 @@ pub struct ProcessPosition {
 impl ProcessPosition {
     /// Get an iterator over the inventory of this object, as `Weak<Process>` references.
     pub fn weak_inventory_iter(&self) -> impl Iterator<Item = Weak<Process>> + '_ {
-        self.inventory.iter().map(|x| x.clone())
+        self.inventory.iter()
     }
 
     /// Get an iterator over the inventory of this object, as `Arc<Process>` references.
@@ -92,6 +98,8 @@ pub struct Process {
 
     /// Where are we in the game world?
     pub position: ProcessPosition,
+
+    pub lock: ProcessLock,
 }
 
 impl Process {
@@ -110,6 +118,7 @@ impl Process {
             connection: ArcSwapAny::from(None),
             flags: Default::default(),
             position: Default::default(),
+            lock: Default::default(),
         }
     }
 
@@ -128,6 +137,7 @@ impl Process {
             connection: ArcSwapAny::from(None),
             flags,
             position: Default::default(),
+            lock: Default::default(),
         }
     }
 
@@ -143,8 +153,16 @@ impl Process {
         AllEnvironment::new(object)
     }
 
+    /// Get the lock for this process, for running `synchronized` code.
+    #[instrument]
+    #[inline]
+    pub async fn lock(&self, task_id: TaskId) -> Result<ProcessLockStatus> {
+        self.lock.try_acquire(task_id).await
+    }
+
     /// Move an object to a new environment. This is a transactional operation, so it will
     /// block until it can acquire the semaphore.
+    #[instrument(skip_all)]
     pub async fn move_to(object: &Arc<Process>, new_environment: Arc<Process>) -> Result<()> {
         let current_env = if_chain! {
             if let Some(current_env) = &*object.position.environment.load();
@@ -168,17 +186,10 @@ impl Process {
             // Take the old environment's lock. We remove all object data from it in this block.
             let _old_permit = old_environment.position.move_semaphore.acquire().await;
 
-            old_environment.position.inventory.remove(&Arc::downgrade(&object));
-            // let current_inventory_id = object.position.environment_inventory_id.load();
-            //
-            // old_environment
-            //     .position
-            //     .inventory
-            //     .remove(current_inventory_id);
-            // old_environment
-            //     .position
-            //     .inventory_ids
-            //     .remove(&current_inventory_id);
+            old_environment
+                .position
+                .inventory
+                .remove(&Arc::downgrade(object));
         }
 
         let new_env_weak = Arc::downgrade(&new_environment);
@@ -188,7 +199,10 @@ impl Process {
             // Take the new environment's lock. We add all object data to it in this block.
             let _new_permit = new_environment.position.move_semaphore.acquire().await;
 
-            new_environment.position.inventory.insert(Arc::downgrade(object));
+            new_environment
+                .position
+                .inventory
+                .insert(Arc::downgrade(object));
         }
 
         // ob.environment = new_env

@@ -1,4 +1,4 @@
-use std::ops::{Index, IndexMut};
+use std::ops::{Index, IndexMut, RangeFrom};
 
 use arrayvec::ArrayVec;
 use bit_set::BitSet;
@@ -145,5 +145,13 @@ impl<const STACKSIZE: usize> Index<usize> for CallStack<STACKSIZE> {
 impl<const STACKSIZE: usize> IndexMut<usize> for CallStack<STACKSIZE> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.stack[index]
+    }
+}
+
+impl<const STACKSIZE: usize> Index<RangeFrom<usize>> for CallStack<STACKSIZE> {
+    type Output = [CallFrame];
+
+    fn index(&self, index: RangeFrom<usize>) -> &Self::Output {
+        &self.stack[index]
     }
 }

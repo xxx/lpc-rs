@@ -1,7 +1,11 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Weak};
-use dashmap::{DashSet};
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    sync::{Arc, Weak},
+};
+
+use dashmap::DashSet;
+
 use crate::interpreter::process::Process;
 
 #[derive(Debug, Clone)]
@@ -35,7 +39,7 @@ impl From<Weak<Process>> for HashableProcess {
             0
         };
 
-        Self { process: process.into(), hash }
+        Self { process, hash }
     }
 }
 
@@ -72,7 +76,7 @@ impl Inventory {
 
     pub fn contains<T>(&self, process: T) -> bool
     where
-        T: Into<HashableProcess>
+        T: Into<HashableProcess>,
     {
         self.objects.contains(&process.into())
     }
@@ -85,7 +89,9 @@ impl Inventory {
     }
 
     pub fn remove(&self, process: &Weak<Process>) -> Option<Weak<Process>> {
-        self.objects.remove(&HashableProcess::from(process)).map(|hp| hp.process)
+        self.objects
+            .remove(&HashableProcess::from(process))
+            .map(|hp| hp.process)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = Weak<Process>> + '_ {

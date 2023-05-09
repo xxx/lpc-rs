@@ -96,17 +96,8 @@ mod tests {
                 .unwrap(),
             quux_proc
         );
-        assert!(quux_proc
-            .position
-            .inventory
-            .contains(&*foo_clone));
-        assert!(!bar_proc
-            .position
-            .inventory
-            .contains(&*foo_clone));
-        assert!(!baz_proc
-            .position
-            .inventory
-            .contains(&*foo_clone));
+        assert!(quux_proc.position.inventory.contains(&*foo_clone));
+        assert!(!bar_proc.position.inventory.contains(&*foo_clone));
+        assert!(!baz_proc.position.inventory.contains(&*foo_clone));
     }
 }

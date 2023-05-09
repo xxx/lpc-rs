@@ -5,6 +5,7 @@ use std::sync::Arc;
 use claims::assert_err;
 use if_chain::if_chain;
 use indoc::indoc;
+use itertools::Itertools;
 use lpc_rs::{
     compiler::{Compiler, CompilerBuilder},
     interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, lpc_string::LpcString, vm::Vm},
@@ -446,4 +447,100 @@ async fn test_nomask_grandchildren() {
         grandchild_proc.unwrap_err().to_string(),
         "attempt to redefine nomask function `noooo`"
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_multithread_sync() {
+    let room = indoc! { r#"
+        int weight = 0;
+
+        synchronized void set_weight(int w) {
+            weight = w;
+        }
+
+        int query_weight() {
+            return weight;
+        }
+    "# };
+
+    let mover = indoc! { r#"
+        int weight = 10;
+
+        synchronized void move(object new_env) {
+            object old_env = environment();
+            if (old_env) {
+                old_env->set_weight(old_env->query_weight() - weight);
+            }
+
+            move_object(new_env);
+            new_env->set_weight(new_env->query_weight() + weight);
+        }
+    "# };
+
+    let runner = indoc! { r#"
+        void create() {
+            object room1 = find_object("/room1");
+            object room2 = find_object("/room2");
+
+            object mover1 = find_object("/mover1");
+            object mover2 = find_object("/mover2");
+
+            int i = 50;
+            while(i--) {
+                mover1->move(room2);
+                mover1->move(room1);
+
+                mover2->move(room1);
+                mover2->move(room2);
+            }
+
+        }
+    "# };
+
+    let config = test_config_builder()
+        .max_execution_time(2000_u64)
+        .build()
+        .unwrap();
+
+    let vm = Vm::new(config);
+    let room1_proc = vm
+        .process_initialize_from_code("/room1.c", room)
+        .await
+        .unwrap();
+    let room2_proc = vm
+        .process_initialize_from_code("/room2.c", room)
+        .await
+        .unwrap();
+
+    let _mover1_proc = vm.process_initialize_from_code("/mover1.c", mover).await;
+    let _mover2_proc = vm.process_initialize_from_code("/mover2.c", mover).await;
+
+    let runner1 = vm.process_initialize_from_code("/runner1.c", runner);
+    let runner2 = vm.process_initialize_from_code("/runner2.c", runner);
+    let runner3 = vm.process_initialize_from_code("/runner3.c", runner);
+
+    // run all the tasks simultaneously.
+    let x = futures::future::join_all(vec![runner1, runner2, runner3]).await;
+
+    let (_runner1_proc, _runner2_proc, _runner3_proc) =
+        x.into_iter().map(|x| x.unwrap()).collect_tuple().unwrap();
+
+    let room1 = room1_proc.context.process;
+    let room2 = room2_proc.context.process;
+
+    let room1_weight = room1.globals.read().first().unwrap().clone();
+    let room2_weight = room2.globals.read().first().unwrap().clone();
+
+    // println!("room1: {}", room1_weight);
+    // for item in room1.position.inventory_iter().collect_vec() {
+    //     println!("room1 item: {}", item);
+    // }
+    //
+    // println!("room2: {}", room2_weight);
+    // for item in room2.position.inventory_iter().collect_vec() {
+    //     println!("room2 item: {}", item);
+    // }
+    //
+    assert_eq!(room1_weight, LpcRef::from(10));
+    assert_eq!(room2_weight, LpcRef::from(10));
 }

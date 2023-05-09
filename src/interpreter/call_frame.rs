@@ -23,6 +23,7 @@ use crate::interpreter::{
     gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
     lpc_ref::{LpcRef, NULL},
     process::Process,
+    task::task_id::TaskId,
 };
 
 /// A representation of a local variable name and value.
@@ -84,6 +85,12 @@ pub struct CallFrame {
     /// This object's unique ID, for garbage collection purposes
     #[builder(default)]
     pub unique_id: UniqueId,
+
+    /// Did this frame call a `synchronized` function first, and is the frame
+    /// that owns the `Process`' lock? If so, we need to release the lock when
+    /// the frame is popped.
+    #[builder(default)]
+    pub owns_process_lock: bool,
 }
 
 impl CallFrame {
@@ -125,6 +132,7 @@ impl CallFrame {
             upvalue_ptrs: ups,
             vm_upvalues,
             unique_id: UniqueId::new(),
+            owns_process_lock: false,
         };
 
         instance.populate_upvalues();
@@ -298,6 +306,13 @@ impl CallFrame {
         self.current_debug_span()
             .map(|span| format!("{} in {}()", span, self.function.name()))
             .unwrap_or_else(|| format!("(unknown) in {}()", self.function.name()))
+    }
+
+    /// If this frame is marked as owning the process lock, release it.
+    pub fn maybe_unlock_process(&self, task_id: TaskId) {
+        if self.owns_process_lock {
+            self.process.lock.release(task_id);
+        }
     }
 }
 

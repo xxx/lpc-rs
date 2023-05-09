@@ -218,6 +218,8 @@ pub enum Token {
     Varargs(Span),
     #[token("nomask", track_slice)]
     Nomask(Span),
+    #[token("synchronized", track_slice)]
+    Synchronized(Span),
     #[token("efun", track_slice)]
     Efun(Span),
     #[token("switch", track_slice)]
@@ -493,6 +495,7 @@ impl HasSpan for Token {
             | Token::Static(x)
             | Token::Varargs(x)
             | Token::Nomask(x)
+            | Token::Synchronized(x)
             | Token::Efun(x)
             | Token::LParen(x)
             | Token::RParen(x)
@@ -599,6 +602,7 @@ impl Token {
             | Token::Static(x)
             | Token::Varargs(x)
             | Token::Nomask(x)
+            | Token::Synchronized(x)
             | Token::Efun(x)
             | Token::LParen(x)
             | Token::RParen(x)
@@ -720,6 +724,7 @@ impl Display for Token {
             Token::Static(_) => "static",
             Token::Varargs(_) => "varargs",
             Token::Nomask(_) => "nomask",
+            Token::Synchronized(_) => "synchronized",
             Token::Efun(_) => "efun",
             Token::Switch(_) => "switch",
             Token::Default(_) => "default",

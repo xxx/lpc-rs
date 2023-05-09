@@ -59,7 +59,7 @@ use crate::{
         lpc_string::LpcString,
         object_flags::ObjectFlags,
         object_space::ObjectSpace,
-        process::Process,
+        process::{process_lock::ProcessLockStatus, Process},
         program::Program,
         task::{task_id::TaskId, task_state::TaskState},
         task_context::TaskContext,
@@ -414,12 +414,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Prepare to call a function. This is intended to be used when a Task is first created and enqueued.
-    pub async fn prepare_function_call(
+    #[instrument(skip_all)]
+    async fn prepare_function_call(
         &mut self,
         process: Arc<Process>,
         f: Arc<ProgramFunction>,
         args: &[LpcRef],
     ) -> Result<()> {
+        let owns_process_lock = if f.prototype.flags.synchronized() {
+            let lock_state = process.lock(self.id).await?;
+            lock_state == ProcessLockStatus::Acquired
+        } else {
+            false
+        };
+
         let mut frame = CallFrame::new(
             process,
             f,
@@ -428,6 +436,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             self.context.upvalues().clone(),
         );
 
+        frame.owns_process_lock = owns_process_lock;
+
+        // TODO: This is probably not correct. See behavior in prepare_new_call_frame
         if !args.is_empty() {
             frame.registers[1..=args.len()].clone_from_slice(args);
         }
@@ -542,7 +553,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::Call(name_idx) => {
-                self.handle_call(name_idx)?;
+                self.handle_call(name_idx).await?;
             }
             Instruction::CallEfun(name_idx) => {
                 let process = self.stack.current_frame()?.process.clone();
@@ -552,7 +563,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     (pf.clone(), name)
                 };
 
-                let new_frame = self.prepare_new_call_frame(process, pf)?;
+                let new_frame = self.prepare_new_call_frame(process, pf).await?;
 
                 self.stack.push(new_frame)?;
 
@@ -565,7 +576,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.handle_call_other(receiver, name).await?;
             }
             Instruction::CallSimulEfun(name_idx) => {
-                self.handle_call_simul_efun(name_idx)?;
+                self.handle_call_simul_efun(name_idx).await?;
             }
             Instruction::CatchEnd => {
                 self.catch_points.pop();
@@ -984,7 +995,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     #[instrument(skip_all)]
-    fn handle_call<'task>(&mut self, name_idx: RegisterSize) -> Result<()> {
+    async fn handle_call<'task>(&mut self, name_idx: RegisterSize) -> Result<()> {
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
         let func = {
@@ -1020,7 +1031,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        let new_frame = self.prepare_new_call_frame(process, func)?;
+        let new_frame = self.prepare_new_call_frame(process, func).await?;
 
         trace!("pushing new frame");
 
@@ -1030,11 +1041,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Prepare and populate a new [`CallFrame`] for a call to a static function.
-    fn prepare_new_call_frame(
+    #[instrument(skip_all)]
+    async fn prepare_new_call_frame(
         &mut self,
         process: Arc<Process>,
         func: Arc<ProgramFunction>,
     ) -> Result<CallFrame> {
+        let owns_process_lock = if func.prototype.flags.synchronized() {
+            let lock_state = process.lock(self.id).await?;
+            lock_state == ProcessLockStatus::Acquired
+        } else {
+            false
+        };
+
         let num_args = RegisterSize::try_from(self.args.len())?;
         let mut new_frame = CallFrame::with_minimum_arg_capacity(
             process,
@@ -1044,6 +1063,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             None::<&[Register]>, /* static functions do not inherit upvalues from the calling function */
             self.context.upvalues().clone(),
         );
+
+        new_frame.owns_process_lock = owns_process_lock;
 
         trace!("copying arguments to new frame: {num_args}");
         // copy argument registers from old frame to new
@@ -1361,7 +1382,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
-    fn handle_call_simul_efun(&mut self, name_idx: RegisterSize) -> Result<()> {
+    async fn handle_call_simul_efun(&mut self, name_idx: RegisterSize) -> Result<()> {
         let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().resolve(Self::index_symbol(name_idx)) else {
             return Err(self.runtime_bug("Unable to find the name being pointed to."));
         };
@@ -1377,12 +1398,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             if let Some(func) = simul_efuns.program.lookup_function(func_name) {
                 func.clone()
             } else {
-                let msg = format!("Call to unknown function `{func_name}`");
+                let msg = format!("Call to unknown simul efun `{func_name}`");
                 return Err(self.runtime_error(msg));
             }
         };
 
-        let new_frame = self.prepare_new_call_frame(simul_efuns.clone(), func)?;
+        let new_frame = self
+            .prepare_new_call_frame(simul_efuns.clone(), func)
+            .await?;
 
         self.stack.push(new_frame)?;
 
@@ -1790,13 +1813,24 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let frame_index = catch_point.frame_index;
         let new_pc = catch_point.address;
 
+        // check all the frames we're about to truncate, to see if they
+        // need to drop their `Process`' lock.
+        let truncate_len = frame_index + 2;
+        if self.stack.len() > truncate_len {
+            for frame in &self.stack[truncate_len..] {
+                frame.maybe_unlock_process(self.id);
+            }
+        }
+
         // clear away stack frames that won't be executed any further, which lie between
         // the error and the catch point's stack frame.
         // Does nothing if you're already in the correct stack frame, or one away.
-        self.stack.truncate(frame_index + 2);
+        // The +2 is because truncate takes a length, not an index.
+        self.stack.truncate(truncate_len);
 
         // If these aren't equal, we're already in the correct stack frame.
-        if self.stack.len() == frame_index + 2 {
+        // That only happens when the stack has one frame.
+        if self.stack.len() == truncate_len {
             // Pop the final frame via pop_frame(), to keep other state changes to a single
             // code path, (e.g. changing the current process)
             self.pop_frame();
@@ -1888,10 +1922,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         ))
     }
     /// Pop the top frame from the stack, and return it.
+    /// Use the `pop_frame!` macro instead for most uses.
     #[inline]
     #[allow(clippy::let_and_return)]
     fn pop_frame(&mut self) -> Option<CallFrame> {
         let frame = self.stack.pop();
+
+        if let Some(ref frame) = frame {
+            frame.maybe_unlock_process(self.id);
+        }
 
         #[cfg(test)]
         {
@@ -2797,6 +2836,10 @@ mod tests {
 
         mod test_catch {
             use super::*;
+            use crate::{
+                interpreter::vm::Vm, test_support::test_config,
+                util::process_builder::ProcessInitializer,
+            };
 
             #[tokio::test]
             async fn stores_the_error_string() {
@@ -2848,6 +2891,36 @@ mod tests {
                 ];
 
                 BareVal::assert_vec_equal(&expected, &registers);
+            }
+
+            #[tokio::test]
+            async fn releases_the_lock_on_truncated_frames() {
+                let code = indoc! { r##"
+                    void create() {
+                        catch(foo());
+                    }
+
+                    void foo() {
+                        bar();
+                    }
+
+                    synchronized void bar() {
+                        baz();
+                    }
+
+                    void baz() {
+                        throw("honker");
+                    }
+                "##};
+
+                let vm = Vm::new(test_config());
+
+                let task = vm
+                    .process_initialize_from_code("/test.c", code)
+                    .await
+                    .unwrap();
+
+                assert!(!task.context.process.lock.is_locked());
             }
         }
 

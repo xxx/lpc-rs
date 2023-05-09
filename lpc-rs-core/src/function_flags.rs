@@ -12,6 +12,7 @@ pub struct FunctionFlags {
     pub ellipsis: bool,
     pub varargs: bool,
     pub nomask: bool,
+    pub synchronized: bool,
     #[bits = 2]
     pub visibility: Visibility,
 }
@@ -66,6 +67,10 @@ impl Mangle for FunctionFlags {
             flag_str.push('n');
         }
 
+        if self.synchronized() {
+            flag_str.push('s');
+        }
+
         if !flag_str.is_empty() {
             result.push('_');
             result.push_str(&flag_str);
@@ -88,6 +93,9 @@ where
                 }
                 "nomask" => {
                     flags.set_nomask(true);
+                }
+                "synchronized" => {
+                    flags.set_synchronized(true);
                 }
                 "public" => {
                     flags.set_visibility(Visibility::Public);

@@ -256,7 +256,9 @@ mod tests {
             .await
             .unwrap();
 
-        let prototype_proc = vm.process_initialize_from_code("prototype.c", prototype).await;
+        let prototype_proc = vm
+            .process_initialize_from_code("prototype.c", prototype)
+            .await;
 
         assert!(prototype_proc
             .unwrap_err()
