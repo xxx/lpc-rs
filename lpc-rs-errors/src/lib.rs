@@ -296,7 +296,7 @@ where
     fn from(err: LalrpopParseError<usize, T, LpcError>) -> Self {
         match err {
             LalrpopParseError::InvalidToken { .. } => lpc_error!("Invalid token"),
-            LalrpopParseError::UnrecognizedEOF { ref expected, .. } => {
+            LalrpopParseError::UnrecognizedEof { ref expected, .. } => {
                 LpcError::new("Unexpected EOF").with_note(format_expected(expected))
             }
             LalrpopParseError::UnrecognizedToken {
@@ -321,7 +321,7 @@ where
     fn from(err: LalrpopParseError<usize, T, Box<LpcError>>) -> Self {
         match err {
             LalrpopParseError::InvalidToken { .. } => lpc_error!("Invalid token"),
-            LalrpopParseError::UnrecognizedEOF { ref expected, .. } => {
+            LalrpopParseError::UnrecognizedEof { ref expected, .. } => {
                 LpcError::new("Unexpected EOF").with_note(format_expected(expected))
             }
             LalrpopParseError::UnrecognizedToken {

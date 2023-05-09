@@ -678,7 +678,7 @@ impl Preprocessor {
                         LalrpopParseError::InvalidToken { location } => {
                             LpcError::new(format!("invalid token `{}` at {}", token.1, location))
                         }
-                        LalrpopParseError::UnrecognizedEOF { expected, .. } => {
+                        LalrpopParseError::UnrecognizedEof { expected, .. } => {
                             LpcError::new("unexpected EOF").with_note(format_expected(&expected))
                         }
                         LalrpopParseError::UnrecognizedToken { expected, .. } => {

@@ -11,7 +11,7 @@ keywords = ["lpc", "mud", "driver", "compiler"]
 categories = ["command-line-utilities", "compilers", "game-engines"]
 
 [build-dependencies]
-lalrpop = "0.19.4"
+lalrpop = "0.20.0"
 
 [dependencies]
 lpc-rs-asm = { version = "0.1", path = "./lpc-rs-asm"}
@@ -39,7 +39,7 @@ if_chain = "1.0.1"
 indexmap = { version = "1.8.2", features = ["serde"] }
 indextree = { version = "4.3.1", features = ["deser"] }
 itertools = "0.10.0"
-lalrpop-util = "0.19.4"
+lalrpop-util = "0.20.0"
 lazy_format = "2.0.0"
 logos = "0.13.0"
 nectar = { git = "https://github.com/robertwayne/nectar", branch = "main" }
