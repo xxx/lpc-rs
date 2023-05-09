@@ -6,6 +6,7 @@ pub mod task_state;
 pub mod task_template;
 
 mod handle_call_fp;
+mod handle_call_other;
 
 use std::{
     borrow::Cow,
@@ -1247,161 +1248,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(skip_all)]
     #[inline]
-    #[async_recursion]
-    async fn handle_call_other(
-        &mut self,
-        receiver: RegisterVariant,
-        name_location: RegisterVariant,
-    ) -> Result<()> {
-        // set up result_ref in a block, as `registers` is a long-lived reference that
-        // doesn't work as mutable, but needs to be written to at the very end.
-        let result_ref = {
-            // figure out which function we're calling
-            let receiver_ref = &*get_location(&self.stack, receiver)?;
-            let name_ref = &*get_location(&self.stack, name_location)?;
-            let pool_ref = if let LpcRef::String(r) = name_ref {
-                r
-            } else {
-                let str = format!("Invalid name passed to `call_other`: {}", name_ref);
-                return Err(self.runtime_error(str));
-            };
-
-            let function_name = pool_ref.clone();
-
-            trace!(
-                "Calling call_other: {}->{}",
-                receiver_ref,
-                function_name.read()
-            );
-
-            // An inner helper function to actually calculate the result, for easy re-use
-            // when using `call_other` with arrays and mappings.
-            #[async_recursion]
-            async fn resolve_result<T>(
-                receiver_ref: &LpcRef,
-                function_name: T,
-                args: &[LpcRef],
-                task_context: &TaskContext,
-            ) -> Result<LpcRef>
-            where
-                T: AsRef<str> + Send + Sync,
-            {
-                let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
-                    receiver_ref,
-                    function_name.as_ref(),
-                    task_context,
-                )
-                .await;
-
-                if let Some(receiver) = resolved {
-                    let new_context = task_context.clone().with_process(receiver.clone());
-                    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
-
-                    // unwrap() is ok because resolve_call_other_receiver() checks
-                    // for the function's presence.
-                    let function = receiver
-                        .program
-                        .lookup_function(function_name.as_ref())
-                        .unwrap()
-                        .clone();
-
-                    let result = if function.public() {
-                        let max_execution_time = task_context.config.max_execution_time;
-                        task.timed_eval(function, args, max_execution_time).await?;
-
-                        let Some(r) = task.context.into_result() else {
-                            return Err(lpc_bug!("resolve_result finished the task, but it has no result? wtf."));
-                        };
-
-                        r
-                    } else {
-                        NULL
-                    };
-
-                    Ok(result)
-                } else {
-                    Ok(NULL)
-                }
-            }
-
-            let args = self
-                .args
-                .iter()
-                .map(|i| get_loc!(self, *i).map(|r| r.into_owned()))
-                .collect::<Result<Vec<_>>>()?;
-
-            let function_name = Arc::new(function_name.read().clone());
-
-            match &receiver_ref {
-                LpcRef::String(_) | LpcRef::Object(_) => {
-                    resolve_result(receiver_ref, &*function_name, &args, &self.context).await?
-                }
-                LpcRef::Array(r) => {
-                    let refs = r.read().iter().cloned().collect_vec();
-                    let args = Arc::new(args);
-
-                    let futures = refs.iter().map(|lpc_ref| {
-                        let fname = function_name.clone();
-                        let args = args.clone();
-                        let ctx = &self.context;
-
-                        async move {
-                            resolve_result(lpc_ref, &*fname, args.as_ref(), ctx)
-                                .await
-                                .unwrap_or(NULL)
-                        }
-                    });
-
-                    let array_value = join_all(futures).await;
-                    LpcArray::new(array_value).into_lpc_ref(self.context.memory())
-                }
-                LpcRef::Mapping(m) => {
-                    let map = m
-                        .read()
-                        .iter()
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect_vec();
-                    let args = Arc::new(args);
-
-                    let futures = map.iter().map(|(key_ref, value_ref)| {
-                        let fname = function_name.clone();
-                        let args = args.clone();
-                        let ctx = &self.context;
-
-                        async move {
-                            (
-                                key_ref.clone(),
-                                resolve_result(value_ref, &*fname, &args, ctx)
-                                    .await
-                                    .unwrap_or(NULL),
-                            )
-                        }
-                    });
-
-                    let with_results = join_all(futures)
-                        .await
-                        .into_iter()
-                        .collect::<IndexMap<_, _>>();
-
-                    LpcMapping::new(with_results.into_iter().collect())
-                        .into_lpc_ref(self.context.memory())
-                }
-                _ => {
-                    return Err(self.runtime_error(format!(
-                        "What are you trying to call `{function_name}` on?"
-                    )))
-                }
-            }
-        };
-
-        let registers = &mut self.stack.current_frame_mut()?.registers;
-        registers[0] = result_ref;
-
-        Ok(())
-    }
-
-    #[instrument(skip_all)]
-    #[inline]
     async fn handle_call_simul_efun(&mut self, name_idx: RegisterSize) -> Result<()> {
         let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().resolve(Self::index_symbol(name_idx)) else {
             return Err(self.runtime_bug("Unable to find the name being pointed to."));
@@ -1766,64 +1612,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
     }
 
-    #[instrument(skip_all)]
-    async fn resolve_call_other_receiver<T>(
-        receiver_ref: &LpcRef,
-        name: T,
-        context: &TaskContext,
-    ) -> Option<Arc<Process>>
-    where
-        T: AsRef<str>,
-    {
-        let process = match receiver_ref {
-            LpcRef::String(s) => {
-                let lookup = {
-                    let r = s.read();
-                    let str = r.to_str();
-                    context.lookup_process(str)
-                };
-
-                if let Some(proc) = lookup {
-                    proc
-                } else {
-                    let path = LpcPath::InGame(PathBuf::from(s.read().to_str()));
-                    context.process_create_from_path(&path).await.ok()?
-                }
-            }
-            LpcRef::Object(proc) => {
-                let Some(proc) = proc.upgrade() else {
-                    return None;
-                };
-
-                proc
-            }
-            _ => return None,
-        };
-
-        // If uninitialized, it's time to set that up. Note that we do this regardless
-        // of whether the function exists or not, because this is a primary way of
-        // initializing objects. If you've ever seen a call_other to teleledningsanka()
-        // or some other knowingly undefined function in old lib code, this is why.
-        let result = if !process.flags.test(ObjectFlags::Initialized) {
-            let ctx = context.clone().with_process(process);
-            let Ok(task) = Self::initialize_process(ctx).await else {
-                return None;
-            };
-
-            task.context.process
-        } else {
-            process
-        };
-
-        // Only switch the process if there's actually a function to
-        // call by this name on the other side.
-        if result.program.contains_function(name) {
-            Some(result)
-        } else {
-            None
-        }
-    }
-
     /// Set the state to handle a caught error.
     /// Panics if there aren't actually any catch points.
     #[instrument(skip_all)]
@@ -1993,6 +1781,12 @@ impl<const STACKSIZE: usize> Mark for Task<STACKSIZE> {
         self.stack.mark(marked, processed)
     }
 }
+
+// impl<const STACKSIZE: usize> Drop for Task<STACKSIZE> {
+//     fn drop(&mut self) {
+//         self.context.process.lock.try_release(self.id);
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
