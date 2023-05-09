@@ -130,8 +130,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             self.prepare_and_call_efun(function.name()).await?;
         }
 
-        // TODO: lock the task if necessary
-
         Ok(())
     }
 
