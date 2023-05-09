@@ -383,11 +383,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         .await
         {
             Ok(Ok(_)) => Ok(()),
-            Ok(Err(e)) => Err(e),
-            Err(_) => Err(lpc_error!(
-                "evaluation limit of {}ms has been reached",
-                timeout_ms
-            )),
+            Ok(Err(e)) => {
+                self.context.process.lock.try_release(self.id);
+
+                Err(e)
+            }
+            Err(_) => {
+                self.context.process.lock.try_release(self.id);
+
+                Err(lpc_error!(
+                    "evaluation limit of {}ms has been reached",
+                    timeout_ms
+                ))
+            }
         }
     }
 
@@ -453,11 +461,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.state = TaskState::Running;
 
         let f = &self.stack.current_frame()?.function.clone();
+
         if f.prototype.is_efun() {
             // call the efun, then we're done with this Task
             self.prepare_and_call_efun(f.name()).await?;
-            debug_assert!(self.stack.is_empty());
-            self.state = TaskState::Complete;
         } else {
             let mut halted = false;
 
@@ -468,9 +475,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     Ok(x) => x,
                     Err(mut e) => {
                         if !self.catch_points.is_empty() {
-                            self.catch_error(e)?;
+                            if let Err(e) = self.catch_error(e) {
+                                self.context.process.lock.try_release(self.id);
+                                return Err(e);
+                            }
+
                             false
                         } else {
+                            self.context.process.lock.try_release(self.id);
+
                             let stack_trace = self.stack.stack_trace();
                             return Err({
                                 *e = e.with_stack_trace(stack_trace);
@@ -489,6 +502,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         }
 
+        assert!(self.stack.is_empty());
         self.state = TaskState::Complete;
         Ok(())
     }
@@ -513,15 +527,21 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let frame = match self.stack.current_frame_mut() {
                 Ok(x) => x,
                 Err(_) => {
+                    self.context.process.lock.try_release(self.id);
                     self.state = TaskState::Error;
+
                     warn!("Expected to get an instruction, but there are no more frames.");
+
                     return Ok(true);
                 }
             };
 
             let Some(instruction) = frame.instruction() else {
+                self.context.process.lock.try_release(self.id);
                 self.state = TaskState::Error;
+
                 warn!("No more instructions. Missing Ret instruction?");
+
                 return Ok(true);
             };
             trace!("about to evaluate: {}", instruction);
@@ -4167,7 +4187,7 @@ mod tests {
         mod test_sizeof {
             use std::sync::Arc;
 
-            use lpc_rs_asm::instruction::Instruction::{SConst, Sizeof};
+            use lpc_rs_asm::instruction::Instruction::{Ret, SConst, Sizeof};
             use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, INIT_PROGRAM};
             use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
             use once_cell::sync::OnceCell;
@@ -4253,6 +4273,7 @@ mod tests {
                     instructions: vec![
                         SConst(Register(1).as_local(), 0),
                         Sizeof(Register(1).as_local(), Register(2).as_local()),
+                        Ret,
                     ],
                     debug_spans: vec![None, None],
                     labels: Some(HashMap::new()),
@@ -4282,7 +4303,7 @@ mod tests {
                     .await
                     .expect("failed to initialize");
 
-                let registers = &task.stack.last().unwrap().registers;
+                let registers = &task.popped_frame.unwrap().registers;
 
                 let expected = vec![Int(0), String("Hello, world!".into()), Int(13)];
 

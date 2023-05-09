@@ -95,6 +95,22 @@ impl ProcessLock {
             );
         }
     }
+
+    /// Release the permit if `task_id` matches. This is only used for tasks that error out completely.
+    /// Use `release()` for normal release.
+    pub fn try_release(&self, task_id: TaskId) {
+        let guard = self.pair.load();
+
+        let Some(arc) = &*guard else {
+            return;
+        };
+
+        let (_, permit_task_id) = &**arc;
+
+        if permit_task_id == &task_id {
+            self.pair.store(None);
+        }
+    }
 }
 
 impl Default for ProcessLock {
