@@ -49,6 +49,7 @@ static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "static",
     "string",
     "switch",
+    "synchronized",
     "throw",
     "void",
     "while",
