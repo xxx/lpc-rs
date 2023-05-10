@@ -41,10 +41,10 @@ mod tests {
 
     use std::sync::Arc;
 
-    use parking_lot::RwLock;
-
     use crate::{
-        interpreter::{call_outs::CallOuts, task::initialize_program::InitializeProgramBuilder},
+        interpreter::{
+            task::initialize_program::InitializeProgramBuilder, vm::global_state::GlobalState,
+        },
         test_support::compile_prog,
     };
 
@@ -63,16 +63,15 @@ mod tests {
         "##;
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code).await;
-        let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
+        let (program, config, _) = compile_prog(code).await;
+        let global_state = Arc::new(GlobalState::new(config, tx));
         let result = InitializeProgramBuilder::<10>::default()
             .program(program)
-            .call_outs(call_outs.clone())
-            .tx(tx)
+            .global_state(global_state.clone())
             .build()
             .await;
 
         assert!(result.is_ok());
-        assert!(call_outs.read().is_empty());
+        assert!(global_state.call_outs.read().is_empty());
     }
 }

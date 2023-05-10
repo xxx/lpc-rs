@@ -50,19 +50,17 @@ mod tests {
     use lpc_rs_core::lpc_path::LpcPath;
     use lpc_rs_errors::lazy_files::FILE_CACHE;
     use lpc_rs_utils::config::Config;
-    use parking_lot::RwLock;
 
     use super::*;
     use crate::{
         interpreter::{
-            call_outs::CallOuts,
             heap::Heap,
             object_space::ObjectSpace,
             process::Process,
             program::{Program, ProgramBuilder},
             task::Task,
             task_context::{TaskContext, TaskContextBuilder},
-            vm::{vm_op::VmOp, Vm},
+            vm::{global_state::GlobalStateBuilder, vm_op::VmOp, Vm},
         },
         test_support::{compile_prog, test_config},
         util::process_builder::ProcessInitializer,
@@ -75,12 +73,16 @@ mod tests {
     ) -> TaskContext {
         let process = Process::new(program);
 
-        TaskContextBuilder::default()
+        let global_state = GlobalStateBuilder::default()
             .config(config)
-            .process(process)
-            .memory(Heap::new(10))
-            .call_outs(RwLock::new(CallOuts::new(tx.clone())))
             .tx(tx)
+            .memory(Heap::new(10))
+            .build()
+            .unwrap();
+
+        TaskContextBuilder::default()
+            .global_state(global_state)
+            .process(process)
             .build()
             .unwrap()
     }
@@ -101,7 +103,7 @@ mod tests {
             .build()
             .unwrap();
         let proc = Process::new(to_find);
-        ObjectSpace::insert_process(&context.object_space, proc);
+        ObjectSpace::insert_process(context.object_space(), proc);
 
         let mut task = Task::<10>::new(context.clone());
         task.timed_eval(func.clone(), &[], 500)
@@ -161,6 +163,6 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(master_proc.context.object_space.lookup("/foo").is_some());
+        assert!(master_proc.context.object_space().lookup("/foo").is_some());
     }
 }

@@ -10,7 +10,7 @@ use crate::{
         object_flags::ObjectFlags,
         task::{
             apply_function::apply_runtime_error, into_task_context::IntoTaskContext,
-            task_id::TaskId, task_template::TaskTemplateBuilder, Task,
+            task_id::TaskId, task_template::TaskTemplate, Task,
         },
         task_context::TaskContext,
         vm::{vm_op::VmOp, Vm},
@@ -26,22 +26,17 @@ impl Vm {
     ///
     /// Errors are communicated directly to the [`Vm`] via it's channel.
     pub async fn prioritize_call_out(&self, idx: usize) -> JoinHandle<()> {
-        let call_outs = self.call_outs.clone();
-        let config = self.config.clone();
-        let object_space = self.object_space.clone();
-        let memory = self.memory.clone();
-        let upvalues = self.upvalues.clone();
-        let tx = self.tx.clone();
+        let global_state = self.global_state.clone();
 
         tokio::spawn(async move {
-            if call_outs.read().get(idx).is_none() {
+            if global_state.call_outs.read().get(idx).is_none() {
                 return;
             }
 
             let repeating: bool;
             let pair = {
                 if_chain! {
-                    let b = call_outs.read();
+                    let b = global_state.call_outs.read();
                     let call_out = b.get(idx).unwrap();
                     if let LpcRef::Function(ref func) = call_out.func_ref;
                     then {
@@ -54,39 +49,29 @@ impl Vm {
             };
 
             let Ok((ptr_arc, repeating)) = pair else {
-                call_outs.write().remove(idx);
-                let _ = tx.send(VmOp::TaskError(TaskId(0), Box::new(pair.unwrap_err()))).await;
+                global_state.call_outs.write().remove(idx);
+                let _ = global_state.tx.send(VmOp::TaskError(TaskId(0), Box::new(pair.unwrap_err()))).await;
                 return;
             };
 
-            let triple = FunctionPtr::triple(&ptr_arc, &config, &object_space).await;
+            let triple =
+                FunctionPtr::triple(&ptr_arc, &global_state.config, &global_state.object_space)
+                    .await;
             let Ok((process, function, args)) = triple else {
-                call_outs.write().remove(idx);
-                let _ = tx.send(VmOp::TaskError(TaskId(0), triple.unwrap_err())).await;
+                global_state.call_outs.write().remove(idx);
+                let _ = global_state.tx.send(VmOp::TaskError(TaskId(0), triple.unwrap_err())).await;
                 return;
-            };
-
-            let build_template = || {
-                TaskTemplateBuilder::default()
-                    .config(config.clone())
-                    .object_space(object_space.clone())
-                    .call_outs(call_outs.clone())
-                    .memory(memory.clone())
-                    .vm_upvalues(upvalues.clone())
-                    .tx(tx.clone())
-                    .build()
-                    .unwrap()
             };
 
             if !process.flags.test(ObjectFlags::Initialized) {
-                let template = build_template();
+                let template = TaskTemplate::from(global_state.clone());
 
                 let ctx = template.into_task_context(process.clone());
                 if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_process(ctx).await {
-                    let template = build_template();
+                    let template = TaskTemplate::from(global_state.clone());
 
                     let Some(Ok(_)) = apply_runtime_error(&e, Some(process), template).await else {
-                        config.debug_log(e.diagnostic_string()).await;
+                        global_state.config.debug_log(e.diagnostic_string()).await;
                         return;
                     };
 
@@ -95,7 +80,7 @@ impl Vm {
             }
 
             {
-                let mut call_outs = call_outs.write();
+                let mut call_outs = global_state.call_outs.write();
                 if repeating {
                     call_outs.get_mut(idx).unwrap().refresh();
                 } else {
@@ -103,24 +88,20 @@ impl Vm {
                 }
             }
 
-            let max_execution_time = config.max_execution_time;
+            let max_execution_time = global_state.config.max_execution_time;
             let task_context = TaskContext::new(
-                config,
+                global_state.clone(),
                 process,
-                object_space,
-                memory,
-                upvalues,
-                call_outs,
                 None,
                 Some(&ptr_arc.upvalue_ptrs).cloned(),
-                tx.clone(),
             );
 
             let mut task = Task::<MAX_CALL_STACK_SIZE>::new(task_context);
             let id = task.id;
 
             if let Err(e) = task.timed_eval(function, &args, max_execution_time).await {
-                let _ = tx
+                let _ = global_state
+                    .tx
                     .send(VmOp::TaskError(
                         id,
                         Box::new(e.with_stack_trace(task.stack.stack_trace())),
@@ -175,18 +156,18 @@ mod tests {
 
         let call_out = CallOutBuilder::default()
             .process(Arc::downgrade(&proc))
-            .func_ref(ptr.into_lpc_ref(&vm.memory))
+            .func_ref(ptr.into_lpc_ref(&vm.global_state.memory))
             ._handle(tokio::spawn(async {}))
             .build()
             .unwrap();
 
-        let idx = vm.call_outs.write().push(call_out);
+        let idx = vm.global_state.call_outs.write().push(call_out);
 
         let handle = vm.prioritize_call_out(idx).await;
         handle.await.unwrap();
 
         assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
-        assert!(vm.call_outs.read().get(idx).is_none());
+        assert!(vm.global_state.call_outs.read().get(idx).is_none());
     }
 
     mod test_string_receivers {
@@ -195,26 +176,26 @@ mod tests {
             let ptr = FunctionPtrBuilder::default()
                 .address(FunctionAddress::Dynamic(ustr("foo")))
                 .partial_args(RwLock::new(thin_vec![Some(
-                    "/bar".into_lpc_ref(&vm.memory)
+                    "/bar".into_lpc_ref(&vm.global_state.memory)
                 )]))
                 .build()
                 .unwrap();
 
             let call_out = CallOutBuilder::default()
                 .process(Arc::downgrade(bar_proc))
-                .func_ref(ptr.into_lpc_ref(&vm.memory))
+                .func_ref(ptr.into_lpc_ref(&vm.global_state.memory))
                 ._handle(tokio::spawn(async {}))
                 .build()
                 .unwrap();
 
-            let idx = vm.call_outs.write().push(call_out);
+            let idx = vm.global_state.call_outs.write().push(call_out);
 
             let handle = vm.prioritize_call_out(idx).await;
             handle.await.unwrap();
 
             assert_eq!(bar_proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
             assert!(bar_proc.flags.test(ObjectFlags::Initialized));
-            assert!(vm.call_outs.read().get(idx).is_none());
+            assert!(vm.global_state.call_outs.read().get(idx).is_none());
         }
 
         #[tokio::test]

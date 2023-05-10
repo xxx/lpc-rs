@@ -37,7 +37,6 @@ use crate::{
 pub struct EfunContext<'task, const N: usize> {
     stack: &'task mut CallStack<N>,
     task_context: &'task TaskContext,
-    memory: Arc<Heap>,
 
     /// Allow the user to take a snapshot of the callstack, for testing and
     /// debugging
@@ -46,15 +45,10 @@ pub struct EfunContext<'task, const N: usize> {
 }
 
 impl<'task, const N: usize> EfunContext<'task, N> {
-    pub fn new(
-        stack: &'task mut CallStack<N>,
-        task_context: &'task TaskContext,
-        memory: Arc<Heap>,
-    ) -> Self {
+    pub fn new(stack: &'task mut CallStack<N>, task_context: &'task TaskContext) -> Self {
         Self {
             stack,
             task_context,
-            memory,
 
             #[cfg(test)]
             snapshot: None,
@@ -82,6 +76,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
             /// Get access to the `tx` channel, to talk to the [`Vm`](crate::interpreter::vm::Vm)
             pub fn tx(&self) -> Sender<VmOp>;
+
+            pub fn memory(&self) -> &Heap;
         }
     }
 
@@ -128,12 +124,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     #[inline]
     pub fn frame(&self) -> &CallFrame {
         self.stack.last().unwrap()
-    }
-
-    /// Get a reference to the [`Heap`]
-    #[inline]
-    pub fn memory(&self) -> &Arc<Heap> {
-        &self.memory
     }
 
     /// Place the passed `result` into the correct location to return from an efun.

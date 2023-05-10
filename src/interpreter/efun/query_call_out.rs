@@ -76,7 +76,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        interpreter::{lpc_int::LpcInt, task::initialize_program::InitializeProgramBuilder},
+        interpreter::{
+            lpc_int::LpcInt, task::initialize_program::InitializeProgramBuilder,
+            vm::global_state::GlobalState,
+        },
         test_support::compile_prog,
     };
 
@@ -99,10 +102,11 @@ mod tests {
         "##;
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code).await;
+        let (program, config, _) = compile_prog(code).await;
+        let global_state = GlobalState::new(config, tx);
         let task = InitializeProgramBuilder::<10>::default()
+            .global_state(global_state)
             .program(program)
-            .tx(tx)
             .build()
             .await
             .unwrap();

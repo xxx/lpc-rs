@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
-use parking_lot::RwLock;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -10,11 +9,11 @@ use crate::{
         compilation_context::CompilationContext, semantic::scope_tree::ScopeTree, CompilerBuilder,
     },
     interpreter::{
-        call_outs::CallOuts,
         object_space::ObjectSpace,
         process::Process,
         program::Program,
         task::{initialize_program::InitializeProgramBuilder, Task},
+        vm::global_state::GlobalState,
     },
 };
 
@@ -88,18 +87,13 @@ pub async fn compile_prog(code: &str) -> (Program, Arc<Config>, Arc<Process>) {
 pub async fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
     let (program, config, se_proc) = compile_prog(code).await;
 
-    let object_space = ObjectSpace::default();
-    let object_space: Arc<ObjectSpace> = object_space.into();
     let (tx, _rx) = tokio::sync::mpsc::channel(128);
-    let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
-    ObjectSpace::insert_process(&object_space, se_proc);
+    let global_state = GlobalState::new(config, tx);
+    ObjectSpace::insert_process(&global_state.object_space, se_proc);
 
     InitializeProgramBuilder::default()
         .program(program)
-        .config(config)
-        .object_space(object_space)
-        .call_outs(call_outs)
-        .tx(tx)
+        .global_state(global_state)
         .build()
         .await
         .unwrap_or_else(|e| {

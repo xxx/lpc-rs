@@ -141,19 +141,22 @@ mod tests {
             .await
             .unwrap();
 
-        let master_proc = vm.process_initialize_from_code("master.c", master).await;
+        let master_proc = vm
+            .process_initialize_from_code("master.c", master)
+            .await
+            .unwrap();
 
-        let space = master_proc.unwrap().context.object_space;
+        let space = master_proc.context.object_space();
 
         let enabled = space.lookup("/enabled#0").unwrap();
         let _expected = LpcArray::from(
             [
-                LpcString::from("i herd").into_lpc_ref(&vm.memory),
-                LpcString::from("u liek mudkips?").into_lpc_ref(&vm.memory),
+                LpcString::from("i herd").into_lpc_ref(&vm.global_state.memory),
+                LpcString::from("u liek mudkips?").into_lpc_ref(&vm.global_state.memory),
             ]
             .as_slice(),
         )
-        .into_lpc_ref(&vm.memory);
+        .into_lpc_ref(&vm.global_state.memory);
         let LpcRef::Array(enabled_i_herd) = enabled.globals.read()[0].clone() else {
             panic!("expected array");
         };

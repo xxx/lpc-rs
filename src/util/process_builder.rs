@@ -130,13 +130,13 @@ where
     let ctx = template.into_task_context(process.clone());
 
     // We insert *before* initialization, to prevent infinite loops.
-    ObjectSpace::insert_process(&ctx.object_space, process.clone());
+    ObjectSpace::insert_process(ctx.object_space(), process.clone());
 
     // We mark ourselves as initialized before actually initializing, to avoid
     // infinite loops where this_object() is used in global initialization.
     ctx.process.flags.set(ObjectFlags::Initialized);
 
-    let max_execution_time = ctx.config.max_execution_time;
+    let max_execution_time = ctx.config().max_execution_time;
     let mut task = Task::<MAX_CALL_STACK_SIZE>::new(ctx);
     task.timed_eval(prog_function, &[], max_execution_time)
         .await?;

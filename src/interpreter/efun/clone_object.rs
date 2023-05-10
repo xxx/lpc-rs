@@ -102,18 +102,16 @@ mod tests {
 
     use indoc::indoc;
     use lpc_rs_utils::config::Config;
-    use parking_lot::RwLock;
 
     use super::*;
     use crate::{
         assert_regex,
         interpreter::{
-            call_outs::CallOuts,
             heap::Heap,
             lpc_ref::NULL,
             program::Program,
             task_context::{TaskContext, TaskContextBuilder},
-            vm::{vm_op::VmOp, Vm},
+            vm::{global_state::GlobalStateBuilder, vm_op::VmOp, Vm},
         },
         test_support::{compile_prog, test_config},
         util::process_builder::{ProcessCreator, ProcessInitializer},
@@ -125,13 +123,16 @@ mod tests {
         tx: tokio::sync::mpsc::Sender<VmOp>,
     ) -> TaskContext {
         let process = Process::new(program);
+        let global_state = GlobalStateBuilder::default()
+            .config(config)
+            .tx(tx)
+            .memory(Heap::new(10))
+            .build()
+            .unwrap();
 
         TaskContextBuilder::default()
-            .config(config)
+            .global_state(Arc::new(global_state))
             .process(process)
-            .memory(Heap::new(10))
-            .call_outs(RwLock::new(CallOuts::new(tx.clone())))
-            .tx(tx)
             .build()
             .unwrap()
     }
@@ -298,7 +299,7 @@ mod tests {
             .await
             .unwrap();
 
-        let student = vm.object_space.lookup("/clone#0").unwrap();
+        let student = vm.global_state.object_space.lookup("/clone#0").unwrap();
 
         assert!(student.globals.read().iter().all(|v| v.is_null()));
     }

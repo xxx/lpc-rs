@@ -3,13 +3,9 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use lpc_rs_core::register::Register;
 use lpc_rs_errors::{lpc_error, Result};
-use lpc_rs_utils::config::Config;
-use parking_lot::RwLock;
-use tokio::sync::mpsc::Sender;
 
 use crate::interpreter::{
-    call_outs::CallOuts, gc::gc_bank::GcRefBank, heap::Heap, object_space::ObjectSpace,
-    process::Process, program::Program, task::Task, vm::vm_op::VmOp,
+    process::Process, program::Program, task::Task, vm::global_state::GlobalState,
 };
 
 /// This struct exists solely to allow a Builder to be derived,
@@ -19,25 +15,15 @@ use crate::interpreter::{
 pub struct InitializeProgram<const N: usize> {
     #[builder(setter(into), default = "Arc::new(Program::default())")]
     program: Arc<Program>,
-    #[builder(setter(into), default = "Arc::new(Config::default())")]
-    config: Arc<Config>,
-    #[builder(setter(into), default = "Arc::new(ObjectSpace::default())")]
-    object_space: Arc<ObjectSpace>,
-    #[builder(setter(into), default = "Arc::new(Heap::default())")]
-    memory: Arc<Heap>,
-    #[builder(setter(into), default = "Arc::new(RwLock::new(GcRefBank::default()))")]
-    vm_upvalues: Arc<RwLock<GcRefBank>>,
-    #[builder(
-        setter(into),
-        default = "Arc::new(RwLock::new(CallOuts::new(self.tx.as_ref().unwrap().clone())))"
-    )]
-    call_outs: Arc<RwLock<CallOuts>>,
+
+    #[builder(setter(into))]
+    global_state: Arc<GlobalState>,
+
     #[builder(setter(into), default = "None")]
     this_player: Option<Arc<Process>>,
+
     #[builder(setter(into), default = "None")]
     upvalue_ptrs: Option<Vec<Register>>,
-
-    tx: Sender<VmOp>,
 }
 
 impl<const N: usize> InitializeProgramBuilder<N> {
@@ -49,14 +35,9 @@ impl<const N: usize> InitializeProgramBuilder<N> {
 
         Task::initialize_program(
             init.program,
-            init.config,
-            init.object_space,
-            init.memory,
-            init.vm_upvalues,
-            init.call_outs,
+            init.global_state,
             init.this_player,
             init.upvalue_ptrs.as_deref(),
-            init.tx,
         )
         .await
     }

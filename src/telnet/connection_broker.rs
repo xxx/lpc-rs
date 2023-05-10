@@ -152,11 +152,10 @@ mod tests {
     use std::time::Duration;
 
     use arc_swap::ArcSwapAny;
-    use parking_lot::RwLock;
 
     use super::*;
     use crate::{
-        interpreter::{call_outs::CallOuts, object_space::ObjectSpace},
+        interpreter::{object_space::ObjectSpace, vm::global_state::GlobalState},
         telnet::connection::Connection,
         test_support::test_config,
     };
@@ -168,17 +167,13 @@ mod tests {
         let (connection_tx, mut connection_rx) = tokio::sync::mpsc::channel(10);
         let telnet = Telnet::new(broker_tx.clone());
         let config = Arc::new(test_config());
-        let object_space = Arc::new(ObjectSpace::new(config.clone()));
+        let _object_space = Arc::new(ObjectSpace::new(config.clone()));
         let mut broker = ConnectionBroker::new(vm_tx.clone(), broker_rx.clone(), telnet);
+        let global_state = Arc::new(GlobalState::new(config, vm_tx.clone()));
         let template = TaskTemplate {
-            config,
-            object_space,
-            vm_upvalues: Arc::new(Default::default()),
-            call_outs: Arc::new(RwLock::new(CallOuts::new(vm_tx.clone()))),
-            tx: vm_tx.clone(),
+            global_state,
             this_player: ArcSwapAny::from(None),
             upvalue_ptrs: None,
-            memory: Arc::new(Default::default()),
         };
 
         broker.run("127.0.0.1:6666", template).await;

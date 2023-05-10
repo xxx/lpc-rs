@@ -20,7 +20,6 @@ use async_recursion::async_recursion;
 use bit_set::BitSet;
 use decorum::Total;
 use educe::Educe;
-use futures::future::join_all;
 use if_chain::if_chain;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -34,23 +33,20 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::{lpc_bug, lpc_error, span::Span, LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use string_interner::{DefaultSymbol, Symbol};
 use thin_vec::{thin_vec, ThinVec};
-use tokio::{sync::mpsc::Sender, task::JoinHandle, time::timeout};
+use tokio::{task::JoinHandle, time::timeout};
 use tracing::{error, instrument, trace, warn};
 use ustr::ustr;
 
 use crate::{
-    compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
         call_frame::CallFrame,
-        call_outs::CallOuts,
         call_stack::CallStack,
         efun::{call_efun, efun_context::EfunContext, EFUN_FUNCTIONS},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
-        gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
+        gc::{mark::Mark, unique_id::UniqueId},
         heap::Heap,
         into_lpc_ref::IntoLpcRef,
         lpc_array::LpcArray,
@@ -59,12 +55,11 @@ use crate::{
         lpc_ref::{LpcRef, NULL},
         lpc_string::LpcString,
         object_flags::ObjectFlags,
-        object_space::ObjectSpace,
         process::{process_lock::ProcessLockStatus, Process},
         program::Program,
         task::{task_id::TaskId, task_state::TaskState},
         task_context::TaskContext,
-        vm::vm_op::VmOp,
+        vm::global_state::GlobalState,
     },
     util::process_builder::ProcessCreator,
 };
@@ -253,39 +248,23 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// Convenience helper to get a Program initialized.
     /// This will also insert it into the object space.
-    #[allow(clippy::too_many_arguments)]
     #[instrument(skip_all)]
-    pub async fn initialize_program<P, C, O, M, U, A>(
+    pub async fn initialize_program<P>(
         program: P,
-        config: C,
-        object_space: O,
-        memory: M,
-        vm_upvalues: U,
-        call_outs: A,
+        global_state: Arc<GlobalState>,
         this_player: Option<Arc<Process>>,
         upvalue_ptrs: Option<&[Register]>,
-        tx: Sender<VmOp>,
     ) -> Result<Task<STACKSIZE>>
     where
         P: Into<Arc<Program>>,
-        C: Into<Arc<Config>> + Debug,
-        O: Into<Arc<ObjectSpace>>,
-        M: Into<Arc<Heap>>,
-        U: Into<Arc<RwLock<GcRefBank>>>,
-        A: Into<Arc<RwLock<CallOuts>>>,
     {
         let program = program.into();
         let process: Arc<Process> = Process::new(program).into();
         let context = TaskContext::new(
-            config,
+            global_state,
             process.clone(),
-            object_space,
-            memory.into(),
-            vm_upvalues,
-            call_outs,
             this_player,
             upvalue_ptrs.map(ThinVec::from),
-            tx,
         );
 
         context.insert_process(process);
@@ -329,7 +308,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let args = args.to_vec();
 
         tokio::spawn(async move {
-            let max_execution_time = task.context.config.max_execution_time;
+            let max_execution_time = task.context.config().max_execution_time;
             match task.timed_eval(f, &args, max_execution_time).await {
                 Ok(_) => Ok(task),
                 Err(e) => Err(e),
@@ -649,7 +628,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y)?;
             }
             Instruction::IAdd(r1, r2, r3) => {
-                match get_loc!(self, r1)?.add(&*get_loc!(self, r2)?, &self.context.memory) {
+                match get_loc!(self, r1)?.add(&*get_loc!(self, r2)?, self.context.memory()) {
                     Ok(result) => {
                         set_loc!(self, r3, result)?;
                     }
@@ -686,7 +665,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             },
             Instruction::IMul(r1, r2, r3) => {
-                match get_loc!(self, r1)?.mul(&*get_loc!(self, r2)?, &self.context.memory) {
+                match get_loc!(self, r1)?.mul(&*get_loc!(self, r2)?, self.context.memory()) {
                     Ok(result) => set_loc!(self, r3, result)?,
                     Err(mut e) => {
                         let frame = self.stack.current_frame()?;
@@ -699,7 +678,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 apply_in_location(&mut self.stack, r1, |x| x.inc())?;
             }
             Instruction::ISub(r1, r2, r3) => {
-                match get_loc!(self, r1)?.sub(&*get_loc!(self, r2)?, &self.context.memory) {
+                match get_loc!(self, r1)?.sub(&*get_loc!(self, r2)?, self.context.memory()) {
                     Ok(result) => set_loc!(self, r3, result)?,
                     Err(mut e) => {
                         let frame = self.stack.current_frame()?;
@@ -760,7 +739,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
 
                 let new_ref = LpcMapping::new(register_map.into_iter().collect())
-                    .into_lpc_ref(&self.context.memory);
+                    .into_lpc_ref(self.context.memory());
 
                 set_loc!(self, r, new_ref)?;
             }
@@ -810,7 +789,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 };
 
-                let new_ref = LpcArray::new(refs).into_lpc_ref(&self.context.memory);
+                let new_ref = LpcArray::new(refs).into_lpc_ref(self.context.memory());
 
                 set_location(&mut self.stack, r, new_ref)?;
             }
@@ -870,7 +849,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             let vec = v_ref.read();
 
                             if vec.is_empty() {
-                                return Ok(LpcArray::new(vec![]).into_lpc_ref(&self.context.memory));
+                                return Ok(
+                                    LpcArray::new(vec![]).into_lpc_ref(self.context.memory())
+                                );
                             }
 
                             let index1 = &*get_location(stack, r2)?;
@@ -884,9 +865,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     let slice = &vec[real_start..=real_end];
                                     let mut new_vec = vec![NULL; slice.len()];
                                     new_vec.clone_from_slice(slice);
-                                    Ok(LpcArray::new(new_vec).into_lpc_ref(&self.context.memory))
+                                    Ok(LpcArray::new(new_vec).into_lpc_ref(self.context.memory()))
                                 } else {
-                                    Ok(LpcArray::new(vec![]).into_lpc_ref(&self.context.memory))
+                                    Ok(LpcArray::new(vec![]).into_lpc_ref(self.context.memory()))
                                 }
                             } else {
                                 let frame = self.stack.current_frame()?;
@@ -900,7 +881,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             let string = v_ref.read();
 
                             if string.is_empty() {
-                                return Ok(LpcString::from("").into_lpc_ref(&self.context.memory));
+                                return Ok(LpcString::from("").into_lpc_ref(self.context.memory()));
                             }
 
                             let index1 = &*get_location(stack, r2)?;
@@ -915,9 +896,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     let new_string: String =
                                         string.chars().skip(real_start).take(len).collect();
                                     Ok(LpcString::from(new_string)
-                                        .into_lpc_ref(&self.context.memory))
+                                        .into_lpc_ref(self.context.memory()))
                                 } else {
-                                    Ok(LpcString::from("").into_lpc_ref(&self.context.memory))
+                                    Ok(LpcString::from("").into_lpc_ref(self.context.memory()))
                                 }
                             } else {
                                 let frame = self.stack.current_frame()?;
@@ -1010,7 +991,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .iter()
             .map(|i| get_loc!(self, *i).map(|i| i.into_owned()))
             .collect::<Result<Vec<_>>>()?;
-        let new_ref = LpcArray::new(vars).into_lpc_ref(&self.context.memory);
+        let new_ref = LpcArray::new(vars).into_lpc_ref(self.context.memory());
 
         set_loc!(self, location, new_ref)
     }
@@ -1226,11 +1207,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     where
         S: AsRef<str>,
     {
-        let mut ctx = EfunContext::new(
-            &mut self.stack,
-            &self.context,
-            self.context.memory().clone(),
-        );
+        let mut ctx = EfunContext::new(&mut self.stack, &self.context);
 
         call_efun(name.as_ref(), &mut ctx).await?;
 
@@ -1674,7 +1651,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let ref1 = &*get_location(&self.stack, r1)?;
         let ref2 = &*get_location(&self.stack, r2)?;
 
-        match operation(ref1, ref2, &self.context.memory) {
+        match operation(ref1, ref2, self.context.memory()) {
             Ok(result) => {
                 set_loc!(self, r3, result)?;
             }
@@ -1802,7 +1779,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        interpreter::gc::gc_bank::GcBank,
+        interpreter::object_space::ObjectSpace,
         test_support::{compile_prog, run_prog},
     };
 
@@ -2417,7 +2394,7 @@ mod tests {
                     .await
                     .unwrap();
 
-                let object_space = task.context.object_space;
+                let object_space = task.context.object_space();
 
                 let widget = object_space.lookup("/std/widget").unwrap();
                 assert!(widget.flags.test(ObjectFlags::Initialized));
@@ -2483,23 +2460,15 @@ mod tests {
                     }
                 "##};
 
-                let object_space = ObjectSpace::default();
-                let upvalues = GcBank::default();
-                let (tx, _rx) = mpsc::channel(128);
-                let call_outs = Arc::new(RwLock::new(CallOuts::new(tx.clone())));
-
                 let (program, config, process) = compile_prog(code).await;
-                let space_cell = object_space;
-                ObjectSpace::insert_process(&space_cell, process);
-                let vm_upvalues = Arc::new(RwLock::new(upvalues));
+                let (tx, _rx) = mpsc::channel(128);
+                let global_state = Arc::new(GlobalState::new(config, tx));
+
+                ObjectSpace::insert_process(&global_state.object_space, process);
 
                 let result = InitializeProgramBuilder::<32>::default()
                     .program(program)
-                    .config(config)
-                    .object_space(space_cell.clone())
-                    .vm_upvalues(vm_upvalues.clone())
-                    .call_outs(call_outs.clone())
-                    .tx(tx.clone())
+                    .global_state(global_state.clone())
                     .build()
                     .await;
 
@@ -2518,16 +2487,12 @@ mod tests {
                     }
                 "##};
 
-                let (program, config, process) = compile_prog(code).await;
-                ObjectSpace::insert_process(&space_cell, process);
+                let (program, _config, process) = compile_prog(code).await;
+                ObjectSpace::insert_process(&global_state.object_space, process);
 
                 let result = InitializeProgramBuilder::<10>::default()
                     .program(program)
-                    .config(config)
-                    .object_space(space_cell.clone())
-                    .vm_upvalues(vm_upvalues.clone())
-                    .call_outs(call_outs.clone())
-                    .tx(tx.clone())
+                    .global_state(global_state.clone())
                     .build()
                     .await;
 
@@ -2546,18 +2511,14 @@ mod tests {
                     }
                 "##};
 
-                let (program, config, process) = compile_prog(code).await;
+                let (program, _config, process) = compile_prog(code).await;
                 let object_space = ObjectSpace::default();
                 let space_cell = object_space;
                 ObjectSpace::insert_process(&space_cell, process);
 
                 let result = InitializeProgramBuilder::<20>::default()
                     .program(program)
-                    .config(config)
-                    .object_space(space_cell)
-                    .vm_upvalues(vm_upvalues)
-                    .call_outs(call_outs)
-                    .tx(tx)
+                    .global_state(global_state.clone())
                     .build()
                     .await;
 
@@ -3197,12 +3158,13 @@ mod tests {
                     mixed s = q / r;
                 "##};
 
-                let (program, _, _) = compile_prog(code).await;
+                let (program, config, _) = compile_prog(code).await;
                 let (tx, _rx) = mpsc::channel(128);
+                let global_state = GlobalState::new(config, tx);
 
                 let r = InitializeProgramBuilder::<10>::default()
+                    .global_state(global_state)
                     .program(program)
-                    .tx(tx)
                     .build()
                     .await;
 
@@ -3247,12 +3209,13 @@ mod tests {
                     mixed s = q % r;
                 "##};
 
-                let (program, _, _) = compile_prog(code).await;
+                let (program, config, _) = compile_prog(code).await;
                 let (tx, _rx) = mpsc::channel(128);
+                let global_state = GlobalState::new(config, tx);
 
                 let r = InitializeProgramBuilder::<20>::default()
+                    .global_state(global_state)
                     .program(program)
-                    .tx(tx)
                     .build()
                     .await;
 
@@ -4088,11 +4051,11 @@ mod tests {
                 };
 
                 let (tx, _rx) = mpsc::channel(128);
+                let global_state = GlobalState::new(config, tx);
 
                 let task = InitializeProgramBuilder::<20>::default()
                     .program(program)
-                    .config(config)
-                    .tx(tx)
+                    .global_state(global_state)
                     .build()
                     .await
                     .expect("failed to initialize");
@@ -4194,12 +4157,13 @@ mod tests {
                 }
             "##};
 
-            let (program, _, _) = compile_prog(code).await;
+            let (program, config, _) = compile_prog(code).await;
             let (tx, _rx) = mpsc::channel(128);
+            let global_state = GlobalState::new(config, tx);
 
             let r = InitializeProgramBuilder::<20>::default()
                 .program(program)
-                .tx(tx)
+                .global_state(global_state)
                 .build()
                 .await;
 
@@ -4222,10 +4186,11 @@ mod tests {
                 .build()
                 .unwrap();
 
+            let global_state = GlobalState::new(config, tx);
+
             let r = InitializeProgramBuilder::<20>::default()
-                .config(config)
                 .program(program)
-                .tx(tx)
+                .global_state(global_state)
                 .build()
                 .await;
 

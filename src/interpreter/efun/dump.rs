@@ -141,19 +141,14 @@ pub async fn dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
 
     use crate::{
-        compiler::Compiler,
-        interpreter::{program::Program, task::initialize_program::InitializeProgramBuilder},
+        interpreter::{
+            task::initialize_program::InitializeProgramBuilder, vm::global_state::GlobalState,
+        },
+        test_support::compile_prog,
     };
-
-    async fn compile_prog(code: &str) -> Program {
-        let compiler = Compiler::default();
-        compiler
-            .compile_string("~/my_file.c", code)
-            .await
-            .expect("Failed to compile.")
-    }
 
     #[tokio::test]
     async fn does_not_crash_on_recursive_structures() {
@@ -167,10 +162,11 @@ mod tests {
         "##;
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let program = compile_prog(code).await;
+        let (program, config, _) = compile_prog(code).await;
+        let global_state = Arc::new(GlobalState::new(config, tx));
         let result = InitializeProgramBuilder::<10>::default()
+            .global_state(global_state.clone())
             .program(program)
-            .tx(tx.clone())
             .build()
             .await;
 
@@ -188,10 +184,10 @@ mod tests {
             }
         "##;
 
-        let program = compile_prog(code).await;
+        let (program, _, _) = compile_prog(code).await;
         let result = InitializeProgramBuilder::<5>::default()
+            .global_state(global_state)
             .program(program)
-            .tx(tx)
             .build()
             .await;
 

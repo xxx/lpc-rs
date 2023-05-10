@@ -22,7 +22,7 @@ use crate::{
         process::Process,
         program::Program,
         task::{into_task_context::IntoTaskContext, task_template::TaskTemplate},
-        vm::vm_op::VmOp,
+        vm::{global_state::GlobalState, vm_op::VmOp},
     },
     util::{
         get_simul_efuns,
@@ -35,39 +35,20 @@ use crate::{
 #[derive(Debug, Builder)]
 #[builder(pattern = "owned")]
 pub struct TaskContext {
-    /// The [`Config`] that's in use for the
-    /// [`Task`](crate::interpreter::task::Task).
+    /// The [`GlobalState`] from the [`Vm`](crate::interpreter::vm::Vm).
     #[builder(setter(into))]
-    pub config: Arc<Config>,
+    pub global_state: Arc<GlobalState>,
 
     /// The [`Process`] that owns the function being
     /// called in this [`Task`](crate::interpreter::task::Task).
+    // TODO: this is not accurate in the case of some call_others, or function ptr calls,
+    //       The process in the call frame is more accurate, and this probably should be removed.
     #[builder(setter(into))]
     pub process: Arc<Process>,
-
-    /// The global [`ObjectSpace`]
-    #[builder(default, setter(into))]
-    pub object_space: Arc<ObjectSpace>,
 
     /// Direct pointer to the simul efuns
     #[builder(default, setter(strip_option))]
     pub simul_efuns: Option<Arc<Process>>,
-
-    /// The [`GcBank`](crate::interpreter::gc::gc_bank::GcBank) that stores all of the upvalues in
-    /// the system, from the [`Vm`](crate::interpreter::vm::Vm).
-    #[builder(default, setter(into))]
-    pub vm_upvalues: Arc<RwLock<GcRefBank>>,
-
-    /// Call out handling, passed down from the [`Vm`](crate::interpreter::vm::Vm).
-    #[builder(setter(into))]
-    pub call_outs: Arc<RwLock<CallOuts>>,
-
-    /// The tx channel to send messages back to the [`Vm`](crate::interpreter::vm::Vm).
-    pub tx: Sender<VmOp>,
-
-    /// A pointer to a memory pool to allocate new values from
-    #[builder(default, setter(into))]
-    pub memory: Arc<Heap>,
 
     /// The final result of the original function that was called
     #[builder(default)]
@@ -91,62 +72,42 @@ pub struct TaskContext {
 
 impl TaskContext {
     /// Create a new [`TaskContext`]
-    #[allow(clippy::too_many_arguments)]
-    pub fn new<C, P, O, M, U, A>(
-        config: C,
+    pub fn new<P>(
+        global_state: Arc<GlobalState>,
         process: P,
-        object_space: O,
-        memory: M,
-        vm_upvalues: U,
-        call_outs: A,
         this_player: Option<Arc<Process>>,
         upvalue_ptrs: Option<ThinVec<Register>>,
-        tx: Sender<VmOp>,
     ) -> Self
     where
-        C: Into<Arc<Config>>,
         P: Into<Arc<Process>>,
-        O: Into<Arc<ObjectSpace>>,
-        M: Into<Arc<Heap>>,
-        U: Into<Arc<RwLock<GcRefBank>>>,
-        A: Into<Arc<RwLock<CallOuts>>>,
     {
-        let config = config.into();
-        let object_space = object_space.into();
-        let simul_efuns = get_simul_efuns(&config, &object_space);
+        let simul_efuns = get_simul_efuns(&global_state.config, &global_state.object_space);
 
         Self {
-            config,
+            global_state,
             process: process.into(),
-            object_space,
-            memory: memory.into(),
             result: OnceCell::new(),
             simul_efuns,
-            vm_upvalues: vm_upvalues.into(),
-            call_outs: call_outs.into(),
             this_player: ArcSwapAny::from(this_player),
             upvalue_ptrs,
             chain_count: 0,
-            tx,
         }
     }
 
     /// Create a new [`TaskContext`] from the passed [`TaskTemplate`]
     pub fn from_template(template: TaskTemplate, process: Arc<Process>) -> Self {
-        let simul_efuns = get_simul_efuns(&template.config, &template.object_space);
+        let simul_efuns = get_simul_efuns(
+            &template.global_state.config,
+            &template.global_state.object_space,
+        );
 
         Self {
-            config: template.config,
+            global_state: template.global_state,
             process,
-            object_space: template.object_space,
-            memory: template.memory,
             result: OnceCell::new(),
             simul_efuns,
-            vm_upvalues: template.vm_upvalues,
-            call_outs: template.call_outs,
             this_player: template.this_player,
             upvalue_ptrs: template.upvalue_ptrs,
-            tx: template.tx,
             chain_count: 0,
         }
     }
@@ -167,7 +128,7 @@ impl TaskContext {
     where
         T: AsRef<str>,
     {
-        self.object_space.lookup(path).map(|p| p.clone())
+        self.object_space().lookup(path).map(|p| p.clone())
     }
 
     /// Directly insert the passed [`Process`] into the object space, with
@@ -177,7 +138,7 @@ impl TaskContext {
     where
         P: Into<Arc<Process>>,
     {
-        ObjectSpace::insert_process(&self.object_space, process)
+        ObjectSpace::insert_process(self.object_space(), process)
     }
 
     /// Remove the passed [`Process`] from the object space.
@@ -186,14 +147,14 @@ impl TaskContext {
     where
         P: Into<Arc<Process>>,
     {
-        ObjectSpace::remove_process(&self.object_space, process)
+        ObjectSpace::remove_process(self.object_space(), process)
     }
 
     /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
     /// then insert it into the object space.
     #[inline]
     pub fn insert_clone(&self, program: Arc<Program>) -> Arc<Process> {
-        ObjectSpace::insert_clone(&self.object_space, program)
+        ObjectSpace::insert_clone(self.object_space(), program)
     }
 
     /// Get the in-game directory of the current process.
@@ -201,7 +162,7 @@ impl TaskContext {
     pub fn in_game_cwd(&self) -> PathBuf {
         let current_cwd = self.process.cwd();
 
-        match current_cwd.strip_prefix(&*self.config.lib_dir) {
+        match current_cwd.strip_prefix(&*self.config().lib_dir) {
             Ok(x) => {
                 if x.as_os_str().is_empty() {
                     PathBuf::from("/")
@@ -232,7 +193,7 @@ impl TaskContext {
     /// Return the [`Config`] used for the task
     #[inline]
     pub fn config(&self) -> &Arc<Config> {
-        &self.config
+        &self.global_state.config
     }
 
     /// Return the current pointer to the simul_efuns, if any
@@ -251,19 +212,19 @@ impl TaskContext {
     /// Return the [`ObjectSpace`]
     #[inline]
     pub fn object_space(&self) -> &Arc<ObjectSpace> {
-        &self.object_space
+        &self.global_state.object_space
     }
 
     /// Return the [`Heap`]
     #[inline]
-    pub fn memory(&self) -> &Arc<Heap> {
-        &self.memory
+    pub fn memory(&self) -> &Heap {
+        &self.global_state.memory
     }
 
     /// Return the `upvalues`
     #[inline]
     pub fn upvalues(&self) -> &Arc<RwLock<GcRefBank>> {
-        &self.vm_upvalues
+        &self.global_state.upvalues
     }
 
     /// Get the final result of the Task that this context is for, if it's finished.
@@ -275,44 +236,39 @@ impl TaskContext {
     /// Get the [`CallOuts`] for this task
     #[inline]
     pub fn call_outs(&self) -> &Arc<RwLock<CallOuts>> {
-        &self.call_outs
+        &self.global_state.call_outs
     }
 
     /// Get the `tx` channel for this task
     #[inline]
     pub fn tx(&self) -> Sender<VmOp> {
-        self.tx.clone()
+        self.global_state.tx.clone()
     }
 }
 
 impl Clone for TaskContext {
     fn clone(&self) -> Self {
         Self {
-            config: self.config.clone(),
+            global_state: self.global_state.clone(),
             process: self.process.clone(),
-            object_space: self.object_space.clone(),
-            memory: self.memory.clone(),
             result: OnceCell::new(),
             simul_efuns: self.simul_efuns.clone(),
-            vm_upvalues: self.vm_upvalues.clone(),
-            call_outs: self.call_outs.clone(),
             this_player: ArcSwapAny::from(self.this_player.load_full()),
             upvalue_ptrs: self.upvalue_ptrs.clone(),
             chain_count: self.chain_count,
-            tx: self.tx.clone(),
         }
     }
 }
 
 impl AsRef<Heap> for TaskContext {
     fn as_ref(&self) -> &Heap {
-        &self.memory
+        &self.global_state.memory
     }
 }
 
 impl AsRef<ObjectSpace> for TaskContext {
     fn as_ref(&self) -> &ObjectSpace {
-        &self.object_space
+        &self.global_state.object_space
     }
 }
 
@@ -329,14 +285,19 @@ impl WithCompiler for TaskContext {
         F: FnOnce(Compiler) -> U + Send,
         U: Future<Output = Result<T>> + Send,
     {
-        Self::with_async_compiler_associated(f, &self.config, &self.object_space).await
+        Self::with_async_compiler_associated(
+            f,
+            &self.global_state.config,
+            &self.global_state.object_space,
+        )
+        .await
     }
 }
 
 #[async_trait]
 impl ProcessCreator for TaskContext {
     fn process_creator_data(&self) -> &ObjectSpace {
-        &self.object_space
+        &self.global_state.object_space
     }
 }
 
@@ -350,18 +311,13 @@ impl ProcessInitializer for TaskContext {
 impl From<TaskContext> for TaskContextBuilder {
     fn from(value: TaskContext) -> Self {
         Self {
-            config: Some(value.config),
+            global_state: Some(value.global_state),
             process: Some(value.process),
-            object_space: Some(value.object_space),
-            memory: Some(value.memory),
             simul_efuns: Some(value.simul_efuns),
-            vm_upvalues: Some(value.vm_upvalues),
             result: None,
-            call_outs: Some(value.call_outs),
             this_player: Some(value.this_player),
             upvalue_ptrs: Some(value.upvalue_ptrs),
             chain_count: Some(value.chain_count),
-            tx: Some(value.tx),
         }
     }
 }
@@ -369,18 +325,13 @@ impl From<TaskContext> for TaskContextBuilder {
 impl From<&TaskContext> for TaskContextBuilder {
     fn from(value: &TaskContext) -> Self {
         Self {
-            config: Some(value.config.clone()),
+            global_state: Some(value.global_state.clone()),
             process: Some(value.process.clone()),
-            object_space: Some(value.object_space.clone()),
-            memory: Some(value.memory.clone()),
             simul_efuns: Some(value.simul_efuns.clone()),
-            vm_upvalues: Some(value.vm_upvalues.clone()),
             result: None,
-            call_outs: Some(value.call_outs.clone()),
             this_player: Some(ArcSwapAny::from(value.this_player.load_full())),
             upvalue_ptrs: Some(value.upvalue_ptrs.clone()),
             chain_count: Some(value.chain_count),
-            tx: Some(value.tx.clone()),
         }
     }
 }
@@ -388,32 +339,28 @@ impl From<&TaskContext> for TaskContextBuilder {
 #[cfg(test)]
 mod tests {
     use lpc_rs_core::lpc_path::LpcPath;
-    use lpc_rs_utils::config::ConfigBuilder;
     use tokio::sync::mpsc;
 
     use super::*;
-    use crate::interpreter::program::ProgramBuilder;
+    use crate::{interpreter::program::ProgramBuilder, test_support::test_config};
 
     #[test]
     fn test_in_game_cwd() {
-        let config = ConfigBuilder::default()
-            .lib_dir("./tests/fixtures/code/")
-            .build()
-            .unwrap();
-        let space = ObjectSpace::default();
+        // let config = ConfigBuilder::default()
+        //     .lib_dir("./tests/fixtures/code/")
+        //     .build()
+        //     .unwrap();
+        let config = test_config();
         let program = ProgramBuilder::default()
             .filename(LpcPath::new_server("./tests/fixtures/code/foo/bar/baz.c"))
             .build()
             .unwrap();
         let process = Process::new(program);
         let (tx, _rx) = mpsc::channel(100);
-        let call_outs = RwLock::new(CallOuts::new(tx.clone()));
+        let global_state = GlobalState::new(config, tx);
         let context = TaskContextBuilder::default()
-            .config(config)
+            .global_state(global_state)
             .process(process)
-            .object_space(space)
-            .call_outs(call_outs)
-            .tx(tx)
             .build()
             .unwrap();
 

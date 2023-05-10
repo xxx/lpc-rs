@@ -17,16 +17,11 @@ use crate::{
     compile_time_config::VM_CHANNEL_CAPACITY,
     interpreter::{
         call_outs::CallOuts,
-        gc::{
-            gc_bank::{GcBank, GcRefBank},
-            mark::Mark,
-            sweep::Sweep,
-        },
-        heap::Heap,
-        object_space::ObjectSpace,
+        gc::mark::Mark,
         process::Process,
         task::apply_function::{apply_function_in_master, apply_runtime_error},
         task_context::TaskContext,
+        vm::global_state::GlobalState,
         SHUTDOWN,
     },
     telnet::{
@@ -42,32 +37,33 @@ mod initiate_login;
 mod object_initializers;
 mod prioritize_call_out;
 
+pub mod global_state;
 pub mod vm_op;
 
 #[derive(Debug)]
 #[readonly::make]
 pub struct Vm {
-    /// Our object space, which stores all of the system objects (masters and clones)
-    pub object_space: Arc<ObjectSpace>,
+    pub global_state: Arc<GlobalState>,
 
-    /// Shared VM memory. Reference-type `LpcRef`s are allocated out of this.
-    pub memory: Arc<Heap>,
-
-    /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`](crate::interpreter::task::Task)s
-    pub upvalues: Arc<RwLock<GcRefBank>>,
-
-    /// The [`Config`] that's in use for this [`Vm`]
-    config: Arc<Config>,
-
-    /// Enqueued call outs
-    call_outs: Arc<RwLock<CallOuts>>,
-
+    // /// Our object space, which stores all of the system objects (masters and clones)
+    // pub object_space: Arc<ObjectSpace>,
+    //
+    // /// Shared VM memory. Reference-type `LpcRef`s are allocated out of this.
+    // pub memory: Arc<Heap>,
+    //
+    // /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`](crate::interpreter::task::Task)s
+    // pub upvalues: Arc<RwLock<GcRefBank>>,
+    //
+    // /// The [`Config`] that's in use for this [`Vm`]
+    // config: Arc<Config>,
+    //
+    // /// Enqueued call outs
+    // call_outs: Arc<RwLock<CallOuts>>,
     /// The connection broker, which handles all of the network connections
     connection_broker: ConnectionBroker,
 
-    /// The channel used to send [`VmOp`]s to this [`Vm`]
-    tx: Sender<VmOp>,
-
+    // /// The channel used to send [`VmOp`]s to this [`Vm`]
+    // tx: Sender<VmOp>,
     /// The channel used to receive [`VmOp`]s from other locations
     rx: Receiver<VmOp>,
 
@@ -81,21 +77,14 @@ impl Vm {
     where
         C: Into<Arc<Config>>,
     {
-        let object_space = ObjectSpace::default();
         let (tx, rx) = tokio::sync::mpsc::channel(VM_CHANNEL_CAPACITY);
         let (broker_tx, broker_rx) = flume::bounded(VM_CHANNEL_CAPACITY);
-        let call_outs = RwLock::new(CallOuts::new(tx.clone()));
         let telnet = Telnet::new(broker_tx.clone());
 
         Self {
-            object_space: Arc::new(object_space),
-            memory: Arc::new(Heap::default()),
-            config: config.into(),
-            upvalues: Arc::new(RwLock::new(GcBank::default())),
-            call_outs: Arc::new(call_outs),
-            connection_broker: ConnectionBroker::new(tx.clone(), broker_rx, telnet),
+            global_state: Arc::new(GlobalState::new(config, tx.clone())),
+            connection_broker: ConnectionBroker::new(tx, broker_rx, telnet),
             rx,
-            tx,
             broker_tx,
         }
     }
@@ -108,7 +97,7 @@ impl Vm {
     pub async fn boot(&mut self) -> lpc_rs_errors::Result<()> {
         self.bootstrap().await?;
 
-        let address = format!("{}:{}", self.config.bind_address, self.config.port);
+        let address = format!("{}:{}", self.config().bind_address, self.config().port);
         self.connection_broker
             .run(address, self.new_task_template())
             .await;
@@ -127,7 +116,7 @@ impl Vm {
         }
 
         let master_path =
-            LpcPath::new_in_game(&*self.config.master_object, "/", &*self.config.lib_dir);
+            LpcPath::new_in_game(&*self.config().master_object, "/", &*self.config().lib_dir);
         self.process_initialize_from_path(&master_path)
             .await
             .map(|t| t.context)
@@ -204,7 +193,7 @@ impl Vm {
         let _ = self.broker_tx.send_async(BrokerOp::Shutdown).await;
 
         self.connection_broker.disable_incoming_connections();
-        self.call_outs.write().clear();
+        self.call_outs().write().clear();
 
         match apply_function_in_master(
             SHUTDOWN,
@@ -244,7 +233,28 @@ impl Vm {
 
     /// Send an operation to the VM queue
     pub async fn send_op(&self, msg: VmOp) -> std::result::Result<(), SendError<VmOp>> {
-        self.tx.send(msg).await
+        self.tx().send(msg).await
+    }
+
+    #[instrument(skip(self))]
+    #[inline]
+    pub fn sweep(&self, marked: &BitSet) -> Result<()> {
+        self.global_state.sweep(marked)
+    }
+
+    #[inline]
+    fn config(&self) -> &Config {
+        &self.global_state.config
+    }
+
+    #[inline]
+    fn call_outs(&self) -> &RwLock<CallOuts> {
+        &self.global_state.call_outs
+    }
+
+    #[inline]
+    fn tx(&self) -> &Sender<VmOp> {
+        &self.global_state.tx
     }
 
     /// Serialized public facade for the `exec` efun.
@@ -345,18 +355,7 @@ impl Vm {
 impl Mark for Vm {
     #[instrument(skip(self))]
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
-        // TODO: mark all tasks
-        self.object_space.mark(marked, processed)?;
-
-        self.call_outs.read().mark(marked, processed)
-    }
-}
-
-impl Sweep for Vm {
-    #[instrument(skip(self))]
-    #[inline]
-    fn sweep(&mut self, marked: &BitSet) -> Result<()> {
-        self.upvalues.write().sweep(marked)
+        self.global_state.mark(marked, processed)
     }
 }
 
@@ -427,7 +426,7 @@ mod tests {
 
         assert_eq!(ctx1.upvalues().read().len(), 1);
 
-        vm.object_space.clear();
+        vm.global_state.object_space.clear();
 
         vm.gc().unwrap();
 

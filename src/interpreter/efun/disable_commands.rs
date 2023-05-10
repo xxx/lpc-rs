@@ -56,8 +56,12 @@ mod tests {
             .await
             .unwrap();
 
-        let space = master_proc.context.object_space;
-        let prototype = space.lookup("/maybe_interactive").unwrap();
+        let prototype = master_proc
+            .context
+            .object_space()
+            .lookup("/maybe_interactive")
+            .unwrap()
+            .clone();
 
         assert!(prototype.flags.test(ObjectFlags::CommandsEnabled));
 

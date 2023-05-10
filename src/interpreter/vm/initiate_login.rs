@@ -27,28 +27,27 @@ impl Vm {
     /// already logged in and attached to an object.
     #[instrument(skip_all)]
     pub async fn initiate_login(&self, connection: Arc<Connection>) {
-        let object_space = self.object_space.clone();
+        let global_state = self.global_state.clone();
         let broker_tx = self.broker_tx.clone();
         let task_template = self.new_task_template();
-        let vm_tx = self.tx.clone();
 
         let address = connection.address;
         let (ip, port) = (address.ip().to_string(), address.port());
 
         // call 'connect' in the master object
-        let ip_ref = LpcString::from(ip).into_lpc_ref(&self.memory);
+        let ip_ref = LpcString::from(ip).into_lpc_ref(&global_state.memory);
         let port_ref = LpcRef::from(port as LpcIntInner);
 
         tokio::spawn(async move {
             debug!("initiating login for {}", connection.address);
 
             // get the master object
-            let Some(master) = object_space.master_object() else {
+            let Some(master) = global_state.object_space.master_object() else {
                 Self::fatal_error(
                     &connection,
                     lpc_error!("Fatal server error - Failed to get master object."),
                     None,
-                    vm_tx.clone(),
+                    global_state.tx.clone(),
                     broker_tx.clone()
                 ).await;
                 return;
@@ -59,7 +58,7 @@ impl Vm {
                 &[ip_ref.clone(), port_ref.clone()],
                 master.clone(),
                 task_template.clone(),
-                Some(task_template.config.max_execution_time),
+                Some(task_template.global_state.config.max_execution_time),
             )
             .await
             {
@@ -78,7 +77,7 @@ impl Vm {
                         &connection,
                         lpc_error!("Fatal server error - We didn't receive an object back when calling connect()."),
                         Some(master),
-                        vm_tx.clone(),
+                        global_state.tx.clone(),
                         broker_tx.clone()
                     ).await;
                     return;
@@ -88,7 +87,7 @@ impl Vm {
                         &connection,
                         e,
                         Some(master),
-                        vm_tx.clone(),
+                        global_state.tx.clone(),
                         broker_tx.clone(),
                     )
                     .await;
@@ -99,7 +98,7 @@ impl Vm {
                         &connection,
                         lpc_error!("Fatal server error - Unable to find the `connect` function in the master object."),
                         Some(master),
-                        vm_tx.clone(),
+                        global_state.tx.clone(),
                         broker_tx.clone()
                     ).await;
                     return;
@@ -112,20 +111,25 @@ impl Vm {
                     &connection,
                     lpc_error!("Fatal server error - We received a destructed object back when calling connect()."),
                     Some(master),
-                    vm_tx.clone(),
+                    global_state.tx.clone(),
                     broker_tx.clone()
                 ).await;
                 return;
             };
 
             // This is the initial exec() of the player into a body.
-            Vm::takeover(connection.clone(), login_ob.clone(), vm_tx.clone()).await;
+            Vm::takeover(
+                connection.clone(),
+                login_ob.clone(),
+                global_state.tx.clone(),
+            )
+            .await;
 
             let template = task_template.clone();
             template.set_this_player(Some(login_ob.clone()));
 
             // call 'logon' in the login object
-            let max_execution_time = task_template.config.max_execution_time;
+            let max_execution_time = task_template.global_state.config.max_execution_time;
             match apply_function_by_name(
                 LOGON,
                 &[ip_ref, port_ref],
@@ -149,7 +153,7 @@ impl Vm {
                         &connection,
                         lpc_error!("Fatal server error - We didn't receive an int back when calling logon()."),
                         Some(login_ob),
-                        vm_tx.clone(),
+                        global_state.tx.clone(),
                         broker_tx.clone(),
                     )
                     .await;
@@ -160,7 +164,7 @@ impl Vm {
                         &connection,
                         e,
                         Some(login_ob),
-                        vm_tx.clone(),
+                        global_state.tx.clone(),
                         broker_tx.clone(),
                     )
                     .await;
@@ -171,7 +175,7 @@ impl Vm {
                         &connection,
                         lpc_error!("Fatal server error - Unable to find the `logon` function in the object."),
                         Some(login_ob),
-                        vm_tx.clone(),
+                        global_state.tx.clone(),
                         broker_tx.clone(),
                     )
                     .await;

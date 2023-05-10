@@ -45,7 +45,10 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
 mod tests {
 
     use crate::{
-        interpreter::task::initialize_program::InitializeProgramBuilder, test_support::compile_prog,
+        interpreter::{
+            task::initialize_program::InitializeProgramBuilder, vm::global_state::GlobalState,
+        },
+        test_support::compile_prog,
     };
 
     #[tokio::test]
@@ -60,22 +63,23 @@ mod tests {
         "##;
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code).await;
+        let (program, config, _) = compile_prog(code).await;
+        let global_state = GlobalState::new(config, tx);
         let result = InitializeProgramBuilder::<5>::default()
+            .global_state(global_state)
             .program(program)
-            .tx(tx)
             .build()
             .await
             .unwrap();
 
         let space = result
             .context
-            .object_space
+            .object_space()
             .iter()
             .map(|x| x.key().to_owned())
             .collect::<Vec<_>>();
 
         assert!(space.contains(&"/my_file".to_owned())); // clone is removed
-        assert_eq!(result.context.object_space.len(), 1);
+        assert_eq!(result.context.object_space().len(), 1);
     }
 }

@@ -4,6 +4,7 @@ use lpc_rs::{
     interpreter::{
         program::Program,
         task::{initialize_program::InitializeProgramBuilder, Task},
+        vm::global_state::GlobalState,
     },
 };
 use lpc_rs_core::lpc_path::LpcPath;
@@ -47,11 +48,11 @@ where
 {
     let (tx, _rx) = tokio::sync::mpsc::channel(128);
     let program = compile_prog_custom(code, path, config).await;
+    let global_state = GlobalState::new(test_config(), tx);
 
     InitializeProgramBuilder::default()
         .program(program)
-        .config(test_config())
-        .tx(tx)
+        .global_state(global_state)
         .build()
         .await
         .unwrap_or_else(|e| {

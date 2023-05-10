@@ -147,8 +147,8 @@ where
     let ctx = template.into_task_context(master);
 
     mapping.insert(
-        LpcString::from("error").into_lpc_ref(&ctx.memory),
-        LpcString::from(error.to_string()).into_lpc_ref(&ctx.memory),
+        LpcString::from("error").into_lpc_ref(ctx.memory()),
+        LpcString::from(error.to_string()).into_lpc_ref(ctx.memory()),
     );
 
     // get the path and line number from the span, stripping off the lib dir so
@@ -157,20 +157,20 @@ where
         .span
         .and_then(|s| {
             s.to_string()
-                .strip_prefix(ctx.config.lib_dir.as_str())
+                .strip_prefix(ctx.config().lib_dir.as_str())
                 .map(|s| s.to_string())
         })
         .unwrap_or_else(|| String::from("<unknown>"));
 
     mapping.insert(
-        LpcString::from("location").into_lpc_ref(&ctx.memory),
-        LpcString::from(span_string).into_lpc_ref(&ctx.memory),
+        LpcString::from("location").into_lpc_ref(ctx.memory()),
+        LpcString::from(span_string).into_lpc_ref(ctx.memory()),
     );
 
     let object = proc
-        .map(|pr| Arc::downgrade(&pr).into_lpc_ref(&ctx.memory))
-        .unwrap_or_else(|| LpcString::from("<no object>").into_lpc_ref(&ctx.memory));
-    mapping.insert(LpcString::from("object").into_lpc_ref(&ctx.memory), object);
+        .map(|pr| Arc::downgrade(&pr).into_lpc_ref(ctx.memory()))
+        .unwrap_or_else(|| LpcString::from("<no object>").into_lpc_ref(ctx.memory()));
+    mapping.insert(LpcString::from("object").into_lpc_ref(ctx.memory()), object);
 
     let mut buffer = Buffer::ansi();
     let diagnostics = error.to_diagnostics();
@@ -179,11 +179,11 @@ where
     let s = std::str::from_utf8(buffer.as_slice()).unwrap_or("<diagnostic with invalid utf8?>");
 
     mapping.insert(
-        LpcString::from("diagnostics").into_lpc_ref(&ctx.memory),
-        LpcString::from(s).into_lpc_ref(&ctx.memory),
+        LpcString::from("diagnostics").into_lpc_ref(ctx.memory()),
+        LpcString::from(s).into_lpc_ref(ctx.memory()),
     );
 
-    let args = [LpcMapping::new(mapping).into_lpc_ref(&ctx.memory)];
+    let args = [LpcMapping::new(mapping).into_lpc_ref(ctx.memory())];
     // TODO wire the timeout up to config
     apply_function_in_master(ERROR_HANDLER, &args, ctx, Some(300)).await
 }
@@ -191,11 +191,10 @@ where
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
-    use parking_lot::RwLock;
 
     use super::*;
     use crate::{
-        interpreter::{call_outs::CallOuts, task::task_template::TaskTemplateBuilder},
+        interpreter::{task::task_template::TaskTemplateBuilder, vm::global_state::GlobalState},
         test_support::compile_prog,
     };
 
@@ -214,11 +213,10 @@ mod tests {
             .clone();
         let process = Process::new(prog);
         let (tx, _rx) = tokio::sync::mpsc::channel(10);
+        let global_state = GlobalState::new(config, tx);
 
         let template = TaskTemplateBuilder::default()
-            .config(config)
-            .call_outs(Arc::new(RwLock::new(CallOuts::new(tx.clone()))))
-            .tx(tx)
+            .global_state(global_state)
             .build()
             .unwrap();
 

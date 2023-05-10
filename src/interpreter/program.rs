@@ -108,9 +108,7 @@ impl<'a> Program {
         match self.filename.parent() {
             None => Cow::Owned(PathBuf::from("/")),
             Some(path) => {
-                let dedotted = path
-                    .parse_dot_from("/")
-                    .unwrap_or_else(|_| path.into());
+                let dedotted = path.parse_dot_from("/").unwrap_or_else(|_| path.into());
 
                 if path.is_absolute() {
                     dedotted

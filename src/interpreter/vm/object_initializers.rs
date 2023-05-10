@@ -26,11 +26,11 @@ impl Vm {
     /// * `Some(Err(LpcError))` - If there was an error loading the simul_efun file
     /// * `None` - If there is no simul_efun file configured
     pub async fn initialize_simul_efuns(&mut self) -> Option<Result<()>> {
-        let Some(path) = &self.config.simul_efun_file else {
+        let Some(path) = &self.config().simul_efun_file else {
             return None
         };
 
-        let simul_efun_path = LpcPath::new_in_game(path.as_str(), "/", &*self.config.lib_dir);
+        let simul_efun_path = LpcPath::new_in_game(path.as_str(), "/", &*self.config().lib_dir);
         Some(
             self.process_create_from_path(&simul_efun_path)
                 .await
@@ -74,34 +74,20 @@ impl Vm {
         P: AsRef<Path>,
         S: AsRef<str> + Send + Sync,
     {
-        let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config.lib_dir);
-        self.config.validate_in_game_path(&lpc_path, None)?;
+        let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config().lib_dir);
+        self.config().validate_in_game_path(&lpc_path, None)?;
 
         self.process_initialize_from_code(&lpc_path, code)
             .await
             .map(|t| t.context)
-        // let prog = self
-        //     .with_async_compiler(
-        //         |compiler| async move { compiler.compile_string(lpc_path, code).await },
-        //     )
-        //     .await?;
-        //
-        // Self::process_insert_and_initialize_program(prog, self.new_task_template())
-        //     .await
-        //     .map(|t| t.context)
     }
 
     /// A convenience helper to create a populated [`TaskTemplate`]
     pub fn new_task_template(&self) -> TaskTemplate {
         TaskTemplate {
-            config: self.config.clone(),
-            object_space: self.object_space.clone(),
-            memory: self.memory.clone(),
-            vm_upvalues: self.upvalues.clone(),
-            call_outs: self.call_outs.clone(),
+            global_state: self.global_state.clone(),
             this_player: ArcSwapAny::from(None),
             upvalue_ptrs: None,
-            tx: self.tx.clone(),
         }
     }
 }
@@ -113,7 +99,12 @@ impl WithCompiler for Vm {
         F: FnOnce(Compiler) -> U + Send,
         U: Future<Output = Result<T>> + Send,
     {
-        Self::with_async_compiler_associated(f, &self.config, &self.object_space).await
+        Self::with_async_compiler_associated(
+            f,
+            &self.global_state.config,
+            &self.global_state.object_space,
+        )
+        .await
     }
 }
 
@@ -121,7 +112,7 @@ impl WithCompiler for Vm {
 impl ProcessCreator for Vm {
     #[inline]
     fn process_creator_data(&self) -> &ObjectSpace {
-        &self.object_space
+        &self.global_state.object_space
     }
 }
 

@@ -30,7 +30,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        interpreter::task::initialize_program::InitializeProgramBuilder, test_support::compile_prog,
+        interpreter::{
+            task::initialize_program::InitializeProgramBuilder, vm::global_state::GlobalState,
+        },
+        test_support::compile_prog,
     };
 
     #[tokio::test]
@@ -42,10 +45,11 @@ mod tests {
         "##;
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, _, _) = compile_prog(code).await;
+        let (program, config, _) = compile_prog(code).await;
+        let global_state = GlobalState::new(config, tx);
         let result = InitializeProgramBuilder::<5>::default()
+            .global_state(global_state)
             .program(program)
-            .tx(tx)
             .build()
             .await;
 

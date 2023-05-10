@@ -1,24 +1,28 @@
-use std::path::PathBuf;
-use std::sync::Arc;
-use tracing::{instrument, trace};
-use crate::interpreter::task::{get_location, Task};
+use std::{path::PathBuf, sync::Arc};
+
 use async_recursion::async_recursion;
 use futures::future::join_all;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_core::register::RegisterVariant;
+use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
 use lpc_rs_errors::{lpc_bug, Result};
-use crate::interpreter::lpc_ref::{LpcRef, NULL};
-use crate::interpreter::task_context::TaskContext;
-use crate::compile_time_config::MAX_CALL_STACK_SIZE;
-use crate::get_loc;
-use crate::interpreter::into_lpc_ref::IntoLpcRef;
-use crate::interpreter::lpc_array::LpcArray;
-use crate::interpreter::lpc_mapping::LpcMapping;
-use crate::interpreter::object_flags::ObjectFlags;
-use crate::interpreter::process::Process;
-use crate::util::process_builder::ProcessCreator;
+use tracing::{instrument, trace};
+
+use crate::{
+    compile_time_config::MAX_CALL_STACK_SIZE,
+    get_loc,
+    interpreter::{
+        into_lpc_ref::IntoLpcRef,
+        lpc_array::LpcArray,
+        lpc_mapping::LpcMapping,
+        lpc_ref::{LpcRef, NULL},
+        object_flags::ObjectFlags,
+        process::Process,
+        task::{get_location, Task},
+        task_context::TaskContext,
+    },
+    util::process_builder::ProcessCreator,
+};
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
@@ -60,7 +64,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             match &receiver_ref {
                 LpcRef::String(_) | LpcRef::Object(_) => {
-                    Self::resolve_result(receiver_ref, &*function_name, &args, &self.context).await?
+                    Self::resolve_result(receiver_ref, &*function_name, &args, &self.context)
+                        .await?
                 }
                 LpcRef::Array(r) => {
                     let refs = r.read().iter().cloned().collect_vec();
@@ -133,15 +138,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         args: &[LpcRef],
         task_context: &TaskContext,
     ) -> Result<LpcRef>
-        where
-            T: AsRef<str> + Send + Sync,
+    where
+        T: AsRef<str> + Send + Sync,
     {
         let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
             receiver_ref,
             function_name.as_ref(),
             task_context,
         )
-            .await;
+        .await;
 
         if let Some(receiver) = resolved {
             let new_context = task_context.clone().with_process(receiver.clone());
@@ -156,7 +161,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 .clone();
 
             let result = if function.public() {
-                let max_execution_time = task_context.config.max_execution_time;
+                let max_execution_time = task_context.config().max_execution_time;
                 task.timed_eval(function, args, max_execution_time).await?;
 
                 let Some(r) = task.context.into_result() else {
@@ -180,8 +185,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         name: T,
         context: &TaskContext,
     ) -> Option<Arc<Process>>
-        where
-            T: AsRef<str>,
+    where
+        T: AsRef<str>,
     {
         let process = match receiver_ref {
             LpcRef::String(s) => {

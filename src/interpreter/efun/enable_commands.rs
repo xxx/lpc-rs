@@ -43,9 +43,12 @@ mod tests {
             .await
             .unwrap();
 
-        let master_proc = vm.process_initialize_from_code("master.c", master).await;
+        let master_proc = vm
+            .process_initialize_from_code("master.c", master)
+            .await
+            .unwrap();
 
-        let space = master_proc.unwrap().context.object_space;
+        let space = master_proc.context.object_space();
         let prototype = space.lookup("/maybe_interactive").unwrap();
         let clone = space.lookup("/maybe_interactive#0").unwrap();
 

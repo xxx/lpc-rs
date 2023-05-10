@@ -286,8 +286,8 @@ impl Telnet {
                     return;
                 };
 
-                let arg = LpcString::from(msg).into_lpc_ref(&template.memory);
-                let timeout = Some(template.config.max_execution_time);
+                let arg = LpcString::from(msg).into_lpc_ref(&template.global_state.memory);
+                let timeout = Some(template.global_state.config.max_execution_time);
 
                 let template = template.clone();
                 template.this_player.store(Some(proc.clone()));
@@ -359,8 +359,12 @@ impl Telnet {
             let _ = sink.send(TelnetEvent::Wont(TelnetOption::Echo)).await;
         }
 
-        let triple =
-            FunctionPtr::triple(&input_to.ptr, &template.config, &template.object_space).await;
+        let triple = FunctionPtr::triple(
+            &input_to.ptr,
+            &template.global_state.config,
+            &template.global_state.object_space,
+        )
+        .await;
         let Ok((process, function, mut args)) = triple else {
             let _ = sink.send(TelnetEvent::Message("Canceled.".to_string())).await;
             return;
@@ -372,7 +376,7 @@ impl Telnet {
             let ctx = init_template.into_task_context(process.clone());
             if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_process(ctx).await {
                 let template = template.clone();
-                let config = template.config.clone();
+                let config = template.global_state.config.clone();
 
                 let Some(Ok(_)) = apply_runtime_error(&e, Some(process), template).await else {
                     config.debug_log(e.diagnostic_string()).await;
@@ -389,7 +393,7 @@ impl Telnet {
             .read()
             .iter()
             .position(|x| x.is_none());
-        let input_arg = LpcString::from(msg).into_lpc_ref(&template.memory);
+        let input_arg = LpcString::from(msg).into_lpc_ref(&template.global_state.memory);
         if let Some(idx) = arg_index {
             args[idx] = input_arg;
         } else {
@@ -399,7 +403,7 @@ impl Telnet {
         let apply_template = template.clone();
         apply_template.set_this_player(connection.process.load_full());
 
-        let max_execution_time = apply_template.config.max_execution_time;
+        let max_execution_time = apply_template.global_state.config.max_execution_time;
         let result = apply_function(
             function,
             &args,
@@ -411,7 +415,7 @@ impl Telnet {
 
         if let Err(e) = result {
             let Some(Ok(_)) = apply_runtime_error(&e, Some(process), template.clone()).await else {
-                template.config.debug_log(e.diagnostic_string()).await;
+                template.global_state.config.debug_log(e.diagnostic_string()).await;
                 return;
             };
         };
@@ -510,7 +514,7 @@ mod tests {
         let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
         let connection = Connection::new(addr, connection_tx, broker_tx.clone());
         let input_to = InputTo {
-            ptr: vm.memory.alloc_function_arc(ptr),
+            ptr: vm.global_state.memory.alloc_function_arc(ptr),
             no_echo: false,
         };
 
@@ -534,7 +538,7 @@ mod tests {
             let ptr = FunctionPtrBuilder::default()
                 .address(FunctionAddress::Dynamic("foo".into()))
                 .partial_args(RwLock::new(thin_vec![Some(
-                    "/foo/bar".into_lpc_ref(&vm.memory)
+                    "/foo/bar".into_lpc_ref(&vm.global_state.memory)
                 )]))
                 .build()
                 .unwrap();
@@ -547,7 +551,7 @@ mod tests {
             let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
             let connection = Connection::new(addr, connection_tx, broker_tx.clone());
             let input_to = InputTo {
-                ptr: vm.memory.alloc_function_arc(ptr),
+                ptr: vm.global_state.memory.alloc_function_arc(ptr),
                 no_echo: false,
             };
 
