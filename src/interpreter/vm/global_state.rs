@@ -39,10 +39,10 @@ pub struct GlobalState {
 
     /// Enqueued call outs
     #[builder(
-        default = "Arc::new(RwLock::new(CallOuts::new(self.tx.clone().unwrap())))",
+        default = "RwLock::new(CallOuts::new(self.tx.clone().unwrap()))",
         setter(into)
     )]
-    pub call_outs: Arc<RwLock<CallOuts>>,
+    pub call_outs: RwLock<CallOuts>,
 
     /// The channel used to send [`VmOp`]s to the [`Vm`]
     pub tx: Sender<VmOp>,
@@ -60,7 +60,7 @@ impl GlobalState {
             memory: Heap::default(),
             upvalues: Arc::new(RwLock::new(GcRefBank::default())),
             config: conf,
-            call_outs: Arc::new(RwLock::new(CallOuts::new(tx.clone()))),
+            call_outs: RwLock::new(CallOuts::new(tx.clone())),
             tx,
         }
     }

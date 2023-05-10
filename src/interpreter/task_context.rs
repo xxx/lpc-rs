@@ -235,7 +235,7 @@ impl TaskContext {
 
     /// Get the [`CallOuts`] for this task
     #[inline]
-    pub fn call_outs(&self) -> &Arc<RwLock<CallOuts>> {
+    pub fn call_outs(&self) -> &RwLock<CallOuts> {
         &self.global_state.call_outs
     }
 

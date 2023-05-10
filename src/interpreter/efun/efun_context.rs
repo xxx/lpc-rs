@@ -72,7 +72,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             pub fn vm_upvalues(&self) -> &Arc<RwLock<GcRefBank>>;
 
             /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s call outs
-            pub fn call_outs(&self) -> &Arc<RwLock<CallOuts>>;
+            pub fn call_outs(&self) -> &RwLock<CallOuts>;
 
             /// Get access to the `tx` channel, to talk to the [`Vm`](crate::interpreter::vm::Vm)
             pub fn tx(&self) -> Sender<VmOp>;
