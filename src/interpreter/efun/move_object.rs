@@ -73,13 +73,13 @@ mod tests {
 
         let vm = Vm::new(test_config());
 
-        let _foo_proc = vm.process_create_from_code("/foo.c", foo).await.unwrap();
-        let bar_proc = vm.process_create_from_code("/bar.c", "").await.unwrap();
-        let baz_proc = vm.process_create_from_code("/baz.c", "").await.unwrap();
-        let quux_proc = vm.process_create_from_code("/quux.c", "").await.unwrap();
+        let _foo_proc = vm.create_process_from_code("/foo.c", foo).await.unwrap();
+        let bar_proc = vm.create_process_from_code("/bar.c", "").await.unwrap();
+        let baz_proc = vm.create_process_from_code("/baz.c", "").await.unwrap();
+        let quux_proc = vm.create_process_from_code("/quux.c", "").await.unwrap();
 
         let master_proc = vm
-            .process_initialize_from_code("/master.c", master)
+            .initialize_process_from_code("/master.c", master)
             .await
             .unwrap();
 

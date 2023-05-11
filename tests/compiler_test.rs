@@ -397,11 +397,11 @@ async fn test_nomask_children() {
 
     let vm = Vm::new(test_config());
     let _parent_proc = vm
-        .process_initialize_from_code("/test_parent.c", parent)
+        .initialize_process_from_code("/test_parent.c", parent)
         .await
         .unwrap();
 
-    let child_proc = vm.process_initialize_from_code("/child.c", child).await;
+    let child_proc = vm.initialize_process_from_code("/child.c", child).await;
 
     assert_eq!(
         child_proc.unwrap_err().to_string(),
@@ -431,17 +431,17 @@ async fn test_nomask_grandchildren() {
 
     let vm = Vm::new(test_config());
     let _parent_proc = vm
-        .process_initialize_from_code("/test_parent.c", parent)
+        .initialize_process_from_code("/test_parent.c", parent)
         .await
         .unwrap();
 
     let _child_proc = vm
-        .process_initialize_from_code("/child.c", child)
+        .initialize_process_from_code("/child.c", child)
         .await
         .unwrap();
 
     let grandchild_proc = vm
-        .process_initialize_from_code("/grandchild.c", grandchild)
+        .initialize_process_from_code("/grandchild.c", grandchild)
         .await;
     assert_eq!(
         grandchild_proc.unwrap_err().to_string(),
@@ -504,20 +504,20 @@ async fn test_multithread_sync() {
 
     let vm = Vm::new(config);
     let room1_proc = vm
-        .process_initialize_from_code("/room1.c", room)
+        .initialize_process_from_code("/room1.c", room)
         .await
         .unwrap();
     let room2_proc = vm
-        .process_initialize_from_code("/room2.c", room)
+        .initialize_process_from_code("/room2.c", room)
         .await
         .unwrap();
 
-    let _mover1_proc = vm.process_initialize_from_code("/mover1.c", mover).await;
-    let _mover2_proc = vm.process_initialize_from_code("/mover2.c", mover).await;
+    let _mover1_proc = vm.initialize_process_from_code("/mover1.c", mover).await;
+    let _mover2_proc = vm.initialize_process_from_code("/mover2.c", mover).await;
 
-    let runner1 = vm.process_initialize_from_code("/runner1.c", runner);
-    let runner2 = vm.process_initialize_from_code("/runner2.c", runner);
-    let runner3 = vm.process_initialize_from_code("/runner3.c", runner);
+    let runner1 = vm.initialize_process_from_code("/runner1.c", runner);
+    let runner2 = vm.initialize_process_from_code("/runner2.c", runner);
+    let runner3 = vm.initialize_process_from_code("/runner3.c", runner);
 
     // run all the tasks simultaneously.
     let x = futures::future::join_all(vec![runner1, runner2, runner3]).await;

@@ -64,12 +64,12 @@ mod tests {
 
         let vm = Vm::new(test_config());
         let _maybe_living_proc = vm
-            .process_create_from_code("/maybe_living.c", maybe_living)
+            .create_process_from_code("/maybe_living.c", maybe_living)
             .await
             .unwrap();
 
         let master_proc = vm
-            .process_initialize_from_code("master.c", master)
+            .initialize_process_from_code("master.c", master)
             .await
             .unwrap();
 

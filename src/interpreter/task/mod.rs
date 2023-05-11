@@ -1122,7 +1122,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         } else {
                             let path = LpcPath::InGame(PathBuf::from(string_ref.read().to_str()));
                             // This will be initialized later on, if necessary.
-                            Some(self.context.process_create_from_path(&path).await?)
+                            Some(self.context.create_process_from_path(&path).await?)
                         }
                     }
                     _ => {
@@ -2390,7 +2390,7 @@ mod tests {
 
                 let vm = Vm::new(test_config());
                 let task = vm
-                    .process_initialize_from_code("doody.c", code)
+                    .initialize_process_from_code("doody.c", code)
                     .await
                     .unwrap();
 
@@ -2691,7 +2691,7 @@ mod tests {
                 let vm = Vm::new(test_config());
 
                 let task = vm
-                    .process_initialize_from_code("/test.c", code)
+                    .initialize_process_from_code("/test.c", code)
                     .await
                     .unwrap();
 

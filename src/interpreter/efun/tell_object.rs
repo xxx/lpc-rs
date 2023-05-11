@@ -133,16 +133,16 @@ mod tests {
 
         let vm = Vm::new(test_config());
         let _enabled_proc = vm
-            .process_create_from_code("/enabled.c", enabled)
+            .create_process_from_code("/enabled.c", enabled)
             .await
             .unwrap();
         let _disabled_proc = vm
-            .process_create_from_code("/disabled.c", disabled)
+            .create_process_from_code("/disabled.c", disabled)
             .await
             .unwrap();
 
         let master_proc = vm
-            .process_initialize_from_code("master.c", master)
+            .initialize_process_from_code("master.c", master)
             .await
             .unwrap();
 

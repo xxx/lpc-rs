@@ -159,7 +159,7 @@ mod tests {
         }
 
         let master_proc = vm
-            .process_initialize_from_code("/master.c", master)
+            .initialize_process_from_code("/master.c", master)
             .await
             .unwrap();
 

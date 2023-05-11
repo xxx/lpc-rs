@@ -47,12 +47,12 @@ mod tests {
 
         let vm = Vm::new(test_config());
         let _maybe_interactive_proc = vm
-            .process_create_from_code("/maybe_interactive.c", maybe_interactive)
+            .create_process_from_code("/maybe_interactive.c", maybe_interactive)
             .await
             .unwrap();
 
         let master_proc = vm
-            .process_initialize_from_code("master.c", master)
+            .initialize_process_from_code("master.c", master)
             .await
             .unwrap();
 

@@ -62,7 +62,7 @@ mod tests {
 
         let vm = Vm::new(test_config());
         let master_proc = vm
-            .process_create_from_code("master.c", master)
+            .create_process_from_code("master.c", master)
             .await
             .unwrap();
         let (tx, _rx) = tokio::sync::mpsc::channel(1);

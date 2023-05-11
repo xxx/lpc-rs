@@ -25,7 +25,7 @@ pub trait ProcessCreator: WithCompiler {
 
     /// Compile the passed file, and insert it into the [`ObjectSpace`]
     /// _without_ initialization.
-    async fn process_create_from_path(&self, filename: &LpcPath) -> Result<Arc<Process>> {
+    async fn create_process_from_path(&self, filename: &LpcPath) -> Result<Arc<Process>> {
         let object_space = self.process_creator_data();
 
         let proc = self
@@ -40,7 +40,7 @@ pub trait ProcessCreator: WithCompiler {
 
     /// Compile the passed code, masquerading as the passed filename, and insert it into the [`ObjectSpace`],
     /// _without_ initialization.
-    async fn process_create_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>>
+    async fn create_process_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>>
     where
         P: Into<LpcPath> + Send + Sync,
         S: AsRef<str> + Send + Sync,
@@ -76,7 +76,7 @@ pub trait ProcessInitializer: WithCompiler {
 
     /// Compile the passed file, and insert it into the [`ObjectSpace`]
     /// _with_ initialization.
-    async fn process_initialize_from_path(
+    async fn initialize_process_from_path(
         &self,
         filename: &LpcPath,
     ) -> Result<Task<MAX_CALL_STACK_SIZE>> {
@@ -92,7 +92,7 @@ pub trait ProcessInitializer: WithCompiler {
 
     /// Compile the passed code, masquerading as the passed filename, and insert it into the [`ObjectSpace`]
     /// _with_ initialization.
-    async fn process_initialize_from_code<P, S>(
+    async fn initialize_process_from_code<P, S>(
         &self,
         filename: P,
         code: S,

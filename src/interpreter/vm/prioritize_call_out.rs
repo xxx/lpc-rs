@@ -146,7 +146,7 @@ mod tests {
 
         let vm = Vm::new(test_config());
 
-        let r = vm.process_initialize_from_code("/foo/bar.c", code).await;
+        let r = vm.initialize_process_from_code("/foo/bar.c", code).await;
         let proc = r.unwrap().context.process;
         let func = proc.program.lookup_function("foo").unwrap().clone();
         let ptr = FunctionPtrBuilder::default()
@@ -209,7 +209,7 @@ mod tests {
 
             let vm = Vm::new(test_config());
 
-            let r = vm.process_initialize_from_code("/bar.c", bar).await;
+            let r = vm.initialize_process_from_code("/bar.c", bar).await;
             let bar_proc = r.unwrap().context.process;
 
             check(&vm, &bar_proc).await;
@@ -226,7 +226,7 @@ mod tests {
 
             let vm = Vm::new(test_config());
 
-            let bar_proc = vm.process_create_from_code("/bar.c", bar).await.unwrap();
+            let bar_proc = vm.create_process_from_code("/bar.c", bar).await.unwrap();
 
             check(&vm, &bar_proc).await;
         }

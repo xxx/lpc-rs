@@ -70,22 +70,22 @@ mod tests {
 
         let vm = Vm::new(test_config());
 
-        let foo_proc = vm.process_create_from_code("/foo.c", foo).await.unwrap();
+        let foo_proc = vm.create_process_from_code("/foo.c", foo).await.unwrap();
         let outer_proc = vm
-            .process_initialize_from_code("/outer.c", outer)
+            .initialize_process_from_code("/outer.c", outer)
             .await
             .unwrap();
         let inner_proc = vm
-            .process_initialize_from_code("/inner.c", inner)
+            .initialize_process_from_code("/inner.c", inner)
             .await
             .unwrap();
         let innermost_proc = vm
-            .process_initialize_from_code("/innermost.c", innermost)
+            .initialize_process_from_code("/innermost.c", innermost)
             .await
             .unwrap();
 
         let master_proc = vm
-            .process_initialize_from_code("/master.c", master)
+            .initialize_process_from_code("/master.c", master)
             .await
             .unwrap();
 

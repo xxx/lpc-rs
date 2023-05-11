@@ -59,20 +59,20 @@ mod tests {
         let vm = Vm::new(test_config());
 
         let room_proc = vm
-            .process_initialize_from_code("/room.c", room)
+            .initialize_process_from_code("/room.c", room)
             .await
             .unwrap_or_else(|e| panic!("{}", e.diagnostic_string()));
 
         let _foo_proc = vm
-            .process_initialize_from_code("/all_inv_foo.c", ob)
+            .initialize_process_from_code("/all_inv_foo.c", ob)
             .await
             .unwrap();
         let _bar_proc = vm
-            .process_initialize_from_code("/all_inv_bar.c", ob)
+            .initialize_process_from_code("/all_inv_bar.c", ob)
             .await
             .unwrap();
         let _baz_proc = vm
-            .process_initialize_from_code("/all_inv_baz.c", ob)
+            .initialize_process_from_code("/all_inv_baz.c", ob)
             .await
             .unwrap();
 

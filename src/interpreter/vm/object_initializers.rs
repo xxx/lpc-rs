@@ -32,7 +32,7 @@ impl Vm {
 
         let simul_efun_path = LpcPath::new_in_game(path.as_str(), "/", &*self.config().lib_dir);
         Some(
-            self.process_create_from_path(&simul_efun_path)
+            self.create_process_from_path(&simul_efun_path)
                 .await
                 .map(|_| ()),
         )
@@ -77,7 +77,7 @@ impl Vm {
         let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config().lib_dir);
         self.config().validate_in_game_path(&lpc_path, None)?;
 
-        self.process_initialize_from_code(&lpc_path, code)
+        self.initialize_process_from_code(&lpc_path, code)
             .await
             .map(|t| t.context)
     }

@@ -34,7 +34,7 @@ async fn main() {
     let lpc_path = LpcPath::new_server(&args.filename);
 
     let vm = Vm::new(config);
-    vm.process_initialize_from_path(&lpc_path)
+    vm.initialize_process_from_path(&lpc_path)
         .await
         .map_err(|e| {
             e.emit_diagnostics();

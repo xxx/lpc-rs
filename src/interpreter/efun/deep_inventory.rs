@@ -100,25 +100,25 @@ mod tests {
         let vm = Vm::new(test_config());
 
         let ob_proc = vm
-            .process_initialize_from_code("/deep_inv_ob.c", ob)
+            .initialize_process_from_code("/deep_inv_ob.c", ob)
             .await
             .unwrap_or_else(|e| panic!("{}", e.diagnostic_string()));
 
         let _foo_proc = vm
-            .process_initialize_from_code("/deep_inv_foo.c", foo)
+            .initialize_process_from_code("/deep_inv_foo.c", foo)
             .await
             .unwrap();
         let _bar_proc = vm
-            .process_initialize_from_code("/deep_inv_bar.c", bar)
+            .initialize_process_from_code("/deep_inv_bar.c", bar)
             .await
             .unwrap();
         let _baz_proc = vm
-            .process_initialize_from_code("/deep_inv_baz.c", baz)
+            .initialize_process_from_code("/deep_inv_baz.c", baz)
             .await
             .unwrap();
 
         let _move_proc = vm
-            .process_initialize_from_code("/deep_inv_move.c", move_ob)
+            .initialize_process_from_code("/deep_inv_move.c", move_ob)
             .await
             .unwrap();
 

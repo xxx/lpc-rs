@@ -117,7 +117,7 @@ impl Vm {
 
         let master_path =
             LpcPath::new_in_game(&*self.config().master_object, "/", &*self.config().lib_dir);
-        self.process_initialize_from_path(&master_path)
+        self.initialize_process_from_path(&master_path)
             .await
             .map(|t| t.context)
         // self.initialize_file(&master_path).await

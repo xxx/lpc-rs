@@ -66,7 +66,7 @@ mod tests {
 
         let vm = Vm::new(test_config());
         let master_proc = vm
-            .process_initialize_from_code("master.c", master)
+            .initialize_process_from_code("master.c", master)
             .await
             .unwrap();
 

@@ -180,7 +180,7 @@ impl FunctionPtr {
 
                         let path = LpcPath::InGame(PathBuf::from(string_ref.read().to_str()));
                         // This will be initialized later on, if necessary.
-                        proc = Some(object_space.process_create_from_path(&path).await?);
+                        proc = Some(object_space.create_process_from_path(&path).await?);
                     }
 
                     proc.unwrap()

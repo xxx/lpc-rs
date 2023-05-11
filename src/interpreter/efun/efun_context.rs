@@ -86,7 +86,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         match self.lookup_process(path.to_str().unwrap()) {
             Some(proc) => Ok(proc),
             None => {
-                let process = self.process_create_from_path(path).await.map_err(|mut e| {
+                let process = self.create_process_from_path(path).await.map_err(|mut e| {
                     let debug_span = self.current_debug_span();
 
                     *e = e.with_span(debug_span);
@@ -105,7 +105,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             Some(proc) => Ok(proc),
             None => {
                 let task = self
-                    .process_initialize_from_path(path)
+                    .initialize_process_from_path(path)
                     .await
                     .map_err(|mut e| {
                         let debug_span = self.current_debug_span();

@@ -200,7 +200,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     proc
                 } else {
                     let path = LpcPath::InGame(PathBuf::from(s.read().to_str()));
-                    context.process_create_from_path(&path).await.ok()?
+                    context.create_process_from_path(&path).await.ok()?
                 }
             }
             LpcRef::Object(proc) => {

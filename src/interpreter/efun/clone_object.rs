@@ -196,7 +196,7 @@ mod tests {
 
         let vm = Vm::new(test_config());
         let cloned_proc = vm
-            .process_create_from_code("cloned.c", cloned)
+            .create_process_from_code("cloned.c", cloned)
             .await
             .unwrap();
 
@@ -207,7 +207,7 @@ mod tests {
         assert!(!cloned_proc.flags.test(ObjectFlags::Initialized));
 
         let cloner_proc = vm
-            .process_initialize_from_code("cloner.c", cloner)
+            .initialize_process_from_code("cloner.c", cloner)
             .await
             .unwrap()
             .context
@@ -253,12 +253,12 @@ mod tests {
 
         let vm = Vm::new(test_config());
         let _self_clone_proc = vm
-            .process_create_from_code("self_clone.c", self_clone)
+            .create_process_from_code("self_clone.c", self_clone)
             .await
             .unwrap();
 
         let prototype_proc = vm
-            .process_initialize_from_code("prototype.c", prototype)
+            .initialize_process_from_code("prototype.c", prototype)
             .await;
 
         assert!(prototype_proc
@@ -290,12 +290,12 @@ mod tests {
 
         let vm = Vm::new(test_config());
         let _clone_proc = vm
-            .process_create_from_code("/clone.c", clone)
+            .create_process_from_code("/clone.c", clone)
             .await
             .unwrap();
 
         let _prototype_proc = vm
-            .process_initialize_from_code("/prototype.c", prototype)
+            .initialize_process_from_code("/prototype.c", prototype)
             .await
             .unwrap();
 
