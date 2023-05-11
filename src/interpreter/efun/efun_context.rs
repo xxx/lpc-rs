@@ -81,7 +81,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
     }
 
-    /// Find or create (not don't initialize) an object by path
+    /// Find or create (but don't initialize) an object by path
     pub async fn create_object(&self, path: &LpcPath) -> Result<Arc<Process>> {
         match self.lookup_process(path.to_str().unwrap()) {
             Some(proc) => Ok(proc),
