@@ -4,6 +4,7 @@ use async_recursion::async_recursion;
 use futures::future::join_all;
 use indexmap::IndexMap;
 use itertools::Itertools;
+use thin_vec::ThinVec;
 use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
 use lpc_rs_errors::{lpc_bug, Result};
 use tracing::{instrument, trace};
@@ -23,6 +24,7 @@ use crate::{
     },
     util::process_builder::ProcessCreator,
 };
+use crate::interpreter::task::task_id::TaskId;
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
@@ -64,57 +66,40 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             match &receiver_ref {
                 LpcRef::String(_) | LpcRef::Object(_) => {
-                    Self::resolve_result(receiver_ref, &*function_name, &args, &self.context)
+                    Self::resolve_result(self.id, receiver_ref, &*function_name, &args, &self.context)
                         .await?
                 }
                 LpcRef::Array(r) => {
-                    let refs = r.read().iter().cloned().collect_vec();
-                    let args = Arc::new(args);
+                    let mut refs = r.read().iter().cloned().collect_vec();
 
-                    let futures = refs.iter().map(|lpc_ref| {
-                        let fname = function_name.clone();
-                        let args = args.clone();
+                    for lpc_ref in &mut refs {
                         let ctx = &self.context;
 
-                        async move {
-                            Self::resolve_result(lpc_ref, &*fname, args.as_ref(), ctx)
-                                .await
-                                .unwrap_or(NULL)
-                        }
-                    });
+                        let result = Self::resolve_result(self.id, &lpc_ref, &*function_name, &args, ctx)
+                            .await
+                            .unwrap_or(NULL);
 
-                    let array_value = join_all(futures).await;
-                    LpcArray::new(array_value).into_lpc_ref(self.context.memory())
+                        *lpc_ref = result;
+                    }
+
+                    LpcArray::new(refs).into_lpc_ref(self.context.memory())
                 }
                 LpcRef::Mapping(m) => {
-                    let map = m
+                    let mut map = m
                         .read()
                         .iter()
                         .map(|(k, v)| (k.clone(), v.clone()))
                         .collect_vec();
-                    let args = Arc::new(args);
 
-                    let futures = map.iter().map(|(key_ref, value_ref)| {
-                        let fname = function_name.clone();
-                        let args = args.clone();
-                        let ctx = &self.context;
+                    for (_key_ref, value_ref) in map.iter_mut() {
+                        let result = Self::resolve_result(self.id, value_ref, &*function_name, &args, &self.context)
+                            .await
+                            .unwrap_or(NULL);
 
-                        async move {
-                            (
-                                key_ref.clone(),
-                                Self::resolve_result(value_ref, &*fname, &args, ctx)
-                                    .await
-                                    .unwrap_or(NULL),
-                            )
-                        }
-                    });
+                        *value_ref = result;
+                    }
 
-                    let with_results = join_all(futures)
-                        .await
-                        .into_iter()
-                        .collect::<IndexMap<_, _>>();
-
-                    LpcMapping::new(with_results.into_iter().collect())
+                    LpcMapping::new(map.into_iter().collect())
                         .into_lpc_ref(self.context.memory())
                 }
                 _ => {
@@ -133,6 +118,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[async_recursion]
     async fn resolve_result<T>(
+        task_id: TaskId,
         receiver_ref: &LpcRef,
         function_name: T,
         args: &[LpcRef],
@@ -142,6 +128,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         T: AsRef<str> + Send + Sync,
     {
         let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
+            task_id,
             receiver_ref,
             function_name.as_ref(),
             task_context,
@@ -181,6 +168,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(skip_all)]
     async fn resolve_call_other_receiver<T>(
+        task_id: TaskId,
         receiver_ref: &LpcRef,
         name: T,
         context: &TaskContext,
@@ -219,7 +207,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // undefined function in old lib code, this is why.
         let result = if !process.flags.test(ObjectFlags::Initialized) {
             let ctx = context.clone().with_process(process);
-            let Ok(task) = Self::initialize_process(ctx).await else {
+            let Ok(task) = Self::initialize_sub_process(task_id, ctx).await else {
                 return None;
             };
 

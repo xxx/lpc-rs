@@ -30,11 +30,13 @@ use crate::{
         with_compiler::WithCompiler,
     },
 };
+use crate::interpreter::task::task_id::TaskId;
 
 /// A structure to hold various pieces of interpreter state, to be passed to
 /// Efuns when they're called
 #[derive(Debug)]
 pub struct EfunContext<'task, const N: usize> {
+    task_id: TaskId,
     stack: &'task mut CallStack<N>,
     task_context: &'task TaskContext,
 
@@ -45,8 +47,9 @@ pub struct EfunContext<'task, const N: usize> {
 }
 
 impl<'task, const N: usize> EfunContext<'task, N> {
-    pub fn new(stack: &'task mut CallStack<N>, task_context: &'task TaskContext) -> Self {
+    pub fn new(task_id: TaskId, stack: &'task mut CallStack<N>, task_context: &'task TaskContext) -> Self {
         Self {
+            task_id,
             stack,
             task_context,
 
@@ -120,6 +123,12 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
     }
 
+    /// Return the [`TaskId`] of the current `Task`
+    #[inline]
+    pub fn task_id(&self) -> TaskId {
+        self.task_id
+    }
+
     /// Get a reference to the current [`CallFrame`]
     #[inline]
     pub fn frame(&self) -> &CallFrame {
@@ -149,11 +158,13 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
     }
 
+    /// A helper to generate an [`LpcError`] for runtime errors
     #[inline]
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
         self.frame().runtime_error(msg)
     }
 
+    /// A helper to generate an [`LpcError`] for runtime bugs
     #[inline]
     pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
         self.frame().runtime_bug(msg)

@@ -54,10 +54,10 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         }
 
         let new_prog = prototype.program.clone();
-        let new_clone = context.insert_clone(new_prog);
+        let clone_process = context.insert_clone(new_prog);
 
         debug_assert!(
-            new_clone.flags.test(ObjectFlags::Clone),
+            clone_process.flags.test(ObjectFlags::Clone),
             "new_clone must be a clone"
         );
 
@@ -67,19 +67,19 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
                 return Err(context.runtime_error("infinite clone recursion detected"));
             }
 
-            let new_context = context
+            let new_task_context = context
                 .task_context_builder()
-                .process(new_clone)
+                .process(clone_process)
                 .chain_count(context.chain_count() + 1)
                 .build()
                 .unwrap();
 
-            Task::<N>::initialize_process(new_context)
+            Task::<N>::initialize_sub_process(context.task_id(), new_task_context)
                 .await?
                 .context
                 .process
         } else {
-            new_clone
+            clone_process
         };
 
         let v = Arc::downgrade(&return_val);

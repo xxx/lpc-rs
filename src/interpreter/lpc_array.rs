@@ -54,6 +54,7 @@ impl LpcArray {
 
             pub fn is_empty(&self) -> bool;
             pub fn len(&self) -> usize;
+            pub fn push(&mut self, value: LpcRef);
         }
     }
 }

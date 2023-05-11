@@ -228,8 +228,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Create a new Task
     #[instrument(skip_all)]
     pub fn new(task_context: TaskContext) -> Self {
+        Self::new_sub_task(TaskId::new(), task_context)
+    }
+
+    /// Create a new [`Task`], as a subtask of the given [`TaskId`].
+    /// A subtask should _never_ execute simultaneously with any other Task with
+    /// the same [`TaskId`], as that can lead to deadlocks.
+    pub fn new_sub_task(parent_id: TaskId, task_context: TaskContext) -> Self {
         Self {
-            id: TaskId::new(),
+            id: parent_id,
             stack: CallStack::default(),
             catch_points: thin_vec![],
             args: ThinVec::with_capacity(4),
@@ -273,9 +280,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Initialize a [`Process`] by calling its initializer function, using the
-    /// given [`TaskContext`].
+    /// given [`TaskContext`]. This creates a new unique Task ID.
     /// It's assumed that the process has already been inserted into the [`ObjectSpace`]
     pub async fn initialize_process(context: TaskContext) -> Result<Task<STACKSIZE>> {
+        Self::initialize_sub_process(TaskId::new(), context).await
+    }
+
+    /// Initialize a [`Process`] by calling its initializer function, using the
+    /// given [`TaskContext`], using the specified Task ID.
+    /// It's assumed that the process has already been inserted into the [`ObjectSpace`]
+    pub async fn initialize_sub_process(task_id: TaskId, context: TaskContext) -> Result<Task<STACKSIZE>> {
         debug_assert!(!context.process.flags.test(ObjectFlags::Initialized));
 
         let Some(initializer) = context.process.program.initializer.clone() else {
@@ -290,11 +304,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         context.process.flags.set(ObjectFlags::Initialized);
 
         let max_execution_time = context.config().max_execution_time;
-        let mut task = Task::new(context);
+        let mut task = Task::new_sub_task(task_id, context);
         task.timed_eval(initializer, &[], max_execution_time)
             .await?;
-
-        // TODO: do we need an error flag for initialization failures?
 
         Ok(task)
     }
@@ -1207,7 +1219,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     where
         S: AsRef<str>,
     {
-        let mut ctx = EfunContext::new(&mut self.stack, &self.context);
+        let mut ctx = EfunContext::new(self.id, &mut self.stack, &self.context);
 
         call_efun(name.as_ref(), &mut ctx).await?;
 

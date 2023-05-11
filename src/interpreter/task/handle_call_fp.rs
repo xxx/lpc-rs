@@ -48,7 +48,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         if !proc.flags.test(ObjectFlags::Initialized) {
             let ctx = self.context.clone().with_process(proc.clone());
-            Self::initialize_process(ctx).await?;
+            Self::initialize_sub_process(self.id, ctx).await?;
         }
 
         let adjusted_num_args = num_args - (is_dynamic_receiver as RegisterSize);
@@ -56,6 +56,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let max_arg_length = std::cmp::max(adjusted_num_args, function.arity().num_args);
         let max_arg_length = std::cmp::max(max_arg_length, passed_args_count);
 
+        // take the lock prior to capturing arguments
         let owns_process_lock = if function.prototype.flags.synchronized() {
             let lock_state = proc.lock(self.id).await?;
             lock_state == ProcessLockStatus::Acquired
