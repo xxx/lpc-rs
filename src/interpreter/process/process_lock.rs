@@ -52,6 +52,11 @@ impl ProcessLock {
                     permit.map(|p| p.1)
                 };
 
+                // This works under the assumption that nothing else will drop the lock between loading the task
+                // id and execution, in the case we already have the lock. As it requires the Task ID to release
+                // the lock, and Task IDs are unique, this should be safe.
+                // Another way to put it, is that it is not possible for a single Task ID to be requesting
+                // the lock from multiple threads at the same time.
                 if_chain! {
                     if let Some(permit_task_id) = permit_task_id;
                     if permit_task_id == task_id;
