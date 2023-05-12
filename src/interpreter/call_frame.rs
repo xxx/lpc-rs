@@ -115,29 +115,14 @@ impl CallFrame {
         P: Into<Arc<Process>>,
         V: Into<ThinVec<Register>>,
     {
-        // add +1 for r0 (where return value is stored)
-        let reg_len = std::cmp::max(function.arity().num_args, called_with_num_args)
-            + function.num_locals
-            + 1;
-        let process = process.into();
-        let ups = upvalue_ptrs.map(Into::into).unwrap_or_default();
-
-        let mut instance = Self {
+        Self::with_minimum_arg_capacity(
             process,
             function,
-            arg_locations: ThinVec::with_capacity(called_with_num_args as usize),
-            registers: RefBank::new(vec![NULL; reg_len as usize]),
-            pc: 0,
             called_with_num_args,
-            upvalue_ptrs: ups,
+            called_with_num_args,
+            upvalue_ptrs,
             vm_upvalues,
-            unique_id: UniqueId::new(),
-            owns_process_lock: false,
-        };
-
-        instance.populate_upvalues();
-
-        instance
+        )
     }
 
     /// Create a new [`CallFrame`] instance with space for at least
@@ -165,16 +150,25 @@ impl CallFrame {
         P: Into<Arc<Process>>,
         V: Into<ThinVec<Register>>,
     {
-        Self {
+        let process = process.into();
+        let ups = upvalue_ptrs.map(Into::into).unwrap_or_default();
+
+        let mut instance = Self {
             registers: RefBank::initialized_for_function(&function, arg_capacity),
-            ..Self::new(
-                process,
-                function,
-                called_with_num_args,
-                upvalue_ptrs,
-                vm_upvalues,
-            )
-        }
+            process,
+            function,
+            arg_locations: ThinVec::with_capacity(called_with_num_args as usize),
+            pc: 0,
+            called_with_num_args,
+            upvalue_ptrs: ups,
+            vm_upvalues,
+            unique_id: UniqueId::new(),
+            owns_process_lock: false,
+        };
+
+        instance.populate_upvalues();
+
+        instance
     }
 
     /// Reserve space for the upvalues that this call will initialize
