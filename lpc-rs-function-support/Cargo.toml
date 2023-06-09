@@ -21,7 +21,7 @@ lazy_format = "2.0.0"
 multimap = "0.9.0"
 once_cell = "1.17.1"
 readonly = "0.2.3"
-serde = { version = "1.0.123", features = ["derive", "rc"] }
+serde = { version = "1.0.164", features = ["derive", "rc"] }
 string-interner = "0.14.0"
 tracing = "~0.1"
 ustr = "0.9.0"
