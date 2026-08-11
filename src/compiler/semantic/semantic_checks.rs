@@ -1,3 +1,5 @@
+//! Utility functions for doing various semantic checks.
+
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
 use lpc_rs_errors::{lpc_bug, lpc_error, LpcError, Result};
 use phf::phf_set;
@@ -19,8 +21,6 @@ use crate::compiler::{
     compilation_context::CompilationContext,
     semantic::local_scope::LocalScope,
 };
-
-/// Utility functions for doing various semantic checks.
 
 static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "break",

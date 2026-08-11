@@ -122,14 +122,13 @@ impl SemanticCheckWalker {
             return Ok(());
         }
 
-        if let CallNamespace::Named(namespace) = namespace {
-            if !self.context.inherit_names.contains_key(namespace.as_str())
+        if let CallNamespace::Named(namespace) = namespace
+            && !self.context.inherit_names.contains_key(namespace.as_str())
                 && namespace.as_str() != EFUN
             {
                 let e = lpc_error!(node.span, "unknown namespace `{}`", namespace);
                 self.context.errors.push(e);
             }
-        }
 
         for argument in &mut node.arguments {
             argument.visit(self).await?;

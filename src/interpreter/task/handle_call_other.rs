@@ -189,11 +189,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             LpcRef::Object(proc) => {
-                let Some(proc) = proc.upgrade() else {
-                    return None;
-                };
-
-                proc
+                proc.upgrade()?
             }
             _ => return None,
         };

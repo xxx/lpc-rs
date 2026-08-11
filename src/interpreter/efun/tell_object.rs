@@ -63,7 +63,7 @@ async fn do_tell<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<boo
 
     match apply_function_by_name(
         CATCH_TELL,
-        &[string_ref.clone()],
+        std::slice::from_ref(string_ref),
         proc.clone(),
         TaskTemplate::from(&*context),
         Some(context.config().max_execution_time),

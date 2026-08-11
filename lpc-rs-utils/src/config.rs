@@ -91,7 +91,7 @@ impl ConfigBuilder {
             .and_then(|x| canonicalized_path(x).ok())
             .or(self.lib_dir);
 
-        let new_self = Self {
+        Self {
             auto_include_file: env
                 .get("LPC_AUTO_INCLUDE_FILE")
                 .or_else(|| env.get("AUTO_INCLUDE_FILE"))
@@ -164,9 +164,7 @@ impl ConfigBuilder {
                         .collect::<Vec<_>>()
                 })
                 .or_else(|| self.system_include_dirs.clone()),
-        };
-
-        new_self
+        }
     }
 
     pub fn lib_dir<S>(mut self, lib_dir: S) -> Self

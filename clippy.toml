@@ -1,1 +1,7 @@
-disallowed-types = ["std::sync::mpsc", "std::sync::RwLock", "tokio::sync::RwLock"]
+disallowed-types = [
+    "std::sync::mpsc::Sender",
+    "std::sync::mpsc::SyncSender",
+    "std::sync::mpsc::Receiver",
+    "std::sync::RwLock",
+    "tokio::sync::RwLock"
+]

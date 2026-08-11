@@ -26,7 +26,6 @@ pub type Spanned<T> = (usize, T, usize);
 /// A wrapper for the Lexer to attach our `Iterator` implementation to,
 /// which allows us to output items that match the shape of the tuples
 /// expected by lalrpop.
-
 pub struct LexWrapper<'input> {
     lexer: Lexer<'input, Token>,
 }

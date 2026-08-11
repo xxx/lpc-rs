@@ -1330,8 +1330,8 @@ impl TreeWalker for CodegenWalker {
 
         let declared_arg_locations = self.closure_arg_locations.pop().unwrap();
 
-        if num_default_args > 0 {
-            if let Some(parameters) = &mut node.parameters {
+        if num_default_args > 0
+            && let Some(parameters) = &mut node.parameters {
                 debug_assert!(populate_defaults_index.is_some());
 
                 self.init_default_params(
@@ -1342,7 +1342,6 @@ impl TreeWalker for CodegenWalker {
                 )
                 .await?;
             }
-        }
 
         self.context.scopes.pop();
         self.closure_scope_stack.pop();

@@ -108,7 +108,7 @@ impl Eq for LpcString {}
 impl PartialOrd for LpcString {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.to_str().partial_cmp(other.to_str())
+        Some(self.cmp(other))
     }
 }
 

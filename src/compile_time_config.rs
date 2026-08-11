@@ -1,6 +1,6 @@
-use lpc_rs_core::RegisterSize;
+//! This module contains all compile-time configuration
 
-/// This module contains all compile-time configuration
+use lpc_rs_core::RegisterSize;
 
 /// The maximum size of an execution call stack, in
 /// [`CallFrame`](crate::interpreter::call_frame::CallFrame)s.

@@ -1009,7 +1009,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     #[instrument(skip_all)]
-    async fn handle_call<'task>(&mut self, name_idx: RegisterSize) -> Result<()> {
+    async fn handle_call(&mut self, name_idx: RegisterSize) -> Result<()> {
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
         let func = {
@@ -1737,16 +1737,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         frame
     }
 
-    /// Negotiate how much space needs to be made for a call to a function pointer.
-    ///
-    /// # Arguments
-    ///
-    /// num_args: the number of arguments actually passed to the function for this call
-    /// partial_args: the arguments that were passed to the function when the function pointer was created
-    ///
-    /// # Returns
-    ///
-    /// The maximum number of arguments that space needs to be made for.
+    // /// Negotiate how much space needs to be made for a call to a function pointer.
+    // ///
+    // /// # Arguments
+    // ///
+    // /// num_args: the number of arguments actually passed to the function for this call
+    // /// partial_args: the arguments that were passed to the function when the function pointer was created
+    // ///
+    // /// # Returns
+    // ///
+    // /// The maximum number of arguments that space needs to be made for.
     // #[instrument(skip_all)]
     // #[inline]
     // fn calculate_max_arg_length<T>(num_args: usize, partial_args: &[Option<T>]) -> usize {

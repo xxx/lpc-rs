@@ -91,9 +91,7 @@ where
     S: AsRef<str>,
     T: IntoTaskContext,
 {
-    let Some(f) = proc.program.unmangled_functions.get(name.as_ref()) else {
-        return None;
-    };
+    let f = proc.program.unmangled_functions.get(name.as_ref())?;
 
     Some(apply_function(f.clone(), args, proc, template, timeout).await)
 }
