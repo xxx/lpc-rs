@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use cached::{proc_macro::cached, SizedCache};
+use cached::{macros::cached, LruCache};
 use codespan_reporting::files::{Error, Files, SimpleFile};
 use fs_err as fs;
 use once_cell::sync::Lazy;
@@ -197,9 +197,8 @@ where
 /// # Arguments
 /// `path` - An [`OsStr`] reference representing a full path.
 #[cached(
-    result = true,
-    type = "SizedCache<OsString, SimpleFile<String, String>>",
-    create = "{ SizedCache::with_size(5) }",
+    ty = "LruCache<OsString, SimpleFile<String, String>>",
+    create = "{ LruCache::builder().max_size(5).build().unwrap() }",
     convert = r#"{ OsString::from(path) }"#
 )]
 fn cached_file(path: &OsStr) -> Result<SimpleFile<String, String>, Error> {

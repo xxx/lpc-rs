@@ -663,10 +663,10 @@ PostfixExpression: ExpressionNode = {
             ExpressionNode::from(c)
         }
     },
-    <PostfixExpression> "++" => {
-        let span = <>.span();
+    <e:PostfixExpression> "++" => {
+        let span = e.span();
         let n = UnaryOpNode {
-            expr: Box::new(<>),
+            expr: Box::new(e),
             op: UnaryOperation::Inc,
             is_post: true,
             span
@@ -674,10 +674,10 @@ PostfixExpression: ExpressionNode = {
 
         collapse_unary_op(n)
     },
-    <PostfixExpression> "--" => {
-        let span = <>.span();
+    <e:PostfixExpression> "--" => {
+        let span = e.span();
         let n = UnaryOpNode {
-            expr: Box::new(<>),
+            expr: Box::new(e),
             op: UnaryOperation::Dec,
             is_post: true,
             span
@@ -929,8 +929,8 @@ ArgumentExpressionList: Vec<ExpressionNode> = {
 };
 
 MappingExpressionList: Vec<(ExpressionNode, ExpressionNode)> = {
-    <MappingInitializer> => {
-        vec![(<>.0, <>.1)]
+    <e:MappingInitializer> => {
+        vec![(e.0, e.1)]
     },
     <vec:MappingExpressionList> "," <arg:MappingInitializer> => {
         let mut v = vec;

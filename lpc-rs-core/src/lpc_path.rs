@@ -166,8 +166,9 @@ where
         let pb = pb.into();
         let dedotted = pb
             .parse_dot_from("/")
-            .map(|path| path.into_owned())
-            .unwrap_or(pb);
+            .into_owned();
+            // .map(|path| path.into_owned())
+            // .unwrap_or(pb);
         Self::InGame(dedotted)
     }
 }

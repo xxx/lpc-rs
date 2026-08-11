@@ -102,7 +102,7 @@ impl<'a> Iterator for TokenVecWrapper<'a> {
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(extras = LexState)]
 // Strip whitespace and comments
-#[logos(skip r"[ \t\f\v]+|//[^\n\r]*[\n\r]*|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/")]
+#[logos(skip r"[ \t\f\v]+|//[^\n\r]*?[\n\r]*|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/")]
 #[logos(skip r"\n")]
 pub enum Token {
     #[token("+", track_slice)]
@@ -353,31 +353,31 @@ pub enum Token {
     ClosureArgVar(StringToken),
 
     // Preprocessor "tokens" just grab the entire line
-    #[regex("#[^\n\\S]*include[^\n\\S]+\"[^\"]+\"[^\n]*\n?", string_token)]
+    #[regex("#[^\n\\S]*?include[^\n\\S]+\"[^\"]+\"[^\n]*?\n?", string_token)]
     LocalInclude(StringToken),
 
-    #[regex("#[^\n\\S]*include[^\n\\S]+<[^>]+>[^\n]*\n?", string_token)]
+    #[regex("#[^\n\\S]*?include[^\n\\S]+<[^>]+>[^\n]*?\n?", string_token)]
     SysInclude(StringToken),
 
-    #[regex("#[^\n\\S]*if[^\n]*\n?", string_token)]
+    #[regex("#[^\n\\S]*?if[^\n]*?\n?", string_token)]
     PreprocessorIf(StringToken),
 
-    #[regex("#[^\n\\S]*ifdef[^\n]*\n?", string_token)]
+    #[regex("#[^\n\\S]*?ifdef[^\n]*?\n?", string_token)]
     IfDef(StringToken),
 
-    #[regex("#[^\n\\S]*ifndef[^\n]*\n?", string_token)]
+    #[regex("#[^\n\\S]*?ifndef[^\n]*?\n?", string_token)]
     IfNDef(StringToken),
 
-    #[regex("#[^\n\\S]*else[^\n]*\n?", string_token)]
+    #[regex("#[^\n\\S]*?else[^\n]*?\n?", string_token)]
     PreprocessorElse(StringToken),
 
-    #[regex("#[^\n\\S]*endif[^\n]*\n?", string_token)]
+    #[regex("#[^\n\\S]*?endif[^\n]*?\n?", string_token)]
     Endif(StringToken),
 
-    #[regex("#[^\n\\S]*define[^\n]*\n?", string_token)]
+    #[regex("#[^\n\\S]*?define[^\n]*?\n?", string_token)]
     Define(StringToken),
 
-    #[regex("#[^\n\\S]*undef[^\n]*\n?", string_token)]
+    #[regex("#[^\n\\S]*?undef[^\n]*?\n?", string_token)]
     Undef(StringToken),
 
     #[token("defined", track_slice)]
@@ -388,7 +388,7 @@ pub enum Token {
     #[token("not", track_slice)]
     Not(Span),
 
-    #[regex("#[^\n\\S]*pragma[^\n]*\n?", string_token)]
+    #[regex("#[^\n\\S]*?pragma[^\n]*?\n?", string_token)]
     Pragma(StringToken),
 }
 

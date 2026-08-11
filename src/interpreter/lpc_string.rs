@@ -9,7 +9,7 @@ use std::{
 
 use lpc_rs_errors::{lpc_error, Result};
 use lpc_rs_utils::string::MAX_STRING_LENGTH;
-use string_interner::{DefaultSymbol, StringInterner, Symbol};
+use string_interner::{DefaultBackend, DefaultSymbol, StringInterner, Symbol};
 
 use crate::interpreter::{heap::Heap, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef};
 
@@ -17,7 +17,7 @@ use crate::interpreter::{heap::Heap, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef};
 #[derive(Debug, Clone)]
 pub enum LpcString {
     /// A static string, indexing into its twinned string set.
-    Static(usize, Arc<StringInterner>),
+    Static(usize, Arc<StringInterner<DefaultBackend>>),
 
     /// A dynamically created string.
     Dynamic(String),

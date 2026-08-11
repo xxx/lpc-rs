@@ -4,7 +4,7 @@ use modular_bitfield::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(
-    BitfieldSpecifier, Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Serialize, Deserialize,
+    Specifier, Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Serialize, Deserialize,
 )]
 #[bits = 2]
 #[derive(Default)]

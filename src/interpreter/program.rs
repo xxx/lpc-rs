@@ -14,7 +14,7 @@ use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol}
 use path_dedot::*;
 use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
-use string_interner::StringInterner;
+use string_interner::{DefaultBackend, StringInterner};
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Builder)]
 #[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
@@ -50,7 +50,7 @@ pub struct Program {
 
     /// Interned strings
     #[builder(setter(into))]
-    pub strings: Arc<StringInterner>,
+    pub strings: Arc<StringInterner<DefaultBackend>>,
 }
 
 impl<'a> Program {
@@ -108,7 +108,7 @@ impl<'a> Program {
         match self.filename.parent() {
             None => Cow::Owned(PathBuf::from("/")),
             Some(path) => {
-                let dedotted = path.parse_dot_from("/").unwrap_or_else(|_| path.into());
+                let dedotted = path.parse_dot_from("/");
 
                 if path.is_absolute() {
                     dedotted

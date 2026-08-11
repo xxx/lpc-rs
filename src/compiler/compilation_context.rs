@@ -11,7 +11,7 @@ use lpc_rs_function_support::{
     program_function::ProgramFunction, symbol::Symbol,
 };
 use lpc_rs_utils::config::Config;
-use string_interner::StringInterner;
+use string_interner::{DefaultBackend, StringInterner};
 use ustr::Ustr;
 
 use crate::{
@@ -53,7 +53,7 @@ pub struct CompilationContext {
     pub pragmas: PragmaFlags,
 
     /// Strings table
-    pub strings: StringInterner,
+    pub strings: StringInterner<DefaultBackend>,
 
     /// All of the inherited functions, keyed by their mangled name.
     pub inherited_functions: IndexMap<String, Arc<ProgramFunction>>,

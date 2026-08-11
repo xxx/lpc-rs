@@ -66,7 +66,7 @@ impl Vm {
     ///     ctx.process().globals.read().registers[0],
     ///     LpcRef::Int(LpcInt(5))
     /// );
-    /// assert!(vm.object_space.lookup("/test").is_some());
+    /// assert!(vm.global_state.object_space.lookup("/test").is_some());
     /// # })
     /// ```
     pub async fn initialize_string<P, S>(&mut self, code: S, filename: P) -> Result<TaskContext>
