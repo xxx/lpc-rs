@@ -463,10 +463,10 @@ impl Preprocessor {
 
         self.check_for_previous_newline(span)?;
 
-        let check_duplicate = |key, error_span| {
+        let check_duplicate = |key, error_span| -> Result<()> {
             if !self.skipping_lines() && self.defines.contains_key(key) {
-                return Err(LpcError::new(format!("duplicate `#define`: `{key}`"))
-                    .with_span(Some(error_span)));
+                return Err(Box::new(LpcError::new(format!("duplicate `#define`: `{key}`"))
+                    .with_span(Some(error_span))));
             }
 
             Ok(())
