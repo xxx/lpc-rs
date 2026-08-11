@@ -49,7 +49,7 @@ impl LpcString {
 
     /// Get an iterator over the characters in the string
     #[inline]
-    pub fn chars(&self) -> std::str::Chars {
+    pub fn chars(&self) -> std::str::Chars<'_> {
         self.to_str().chars()
     }
 }

@@ -1,10 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use async_recursion::async_recursion;
-use futures::future::join_all;
-use indexmap::IndexMap;
 use itertools::Itertools;
-use thin_vec::ThinVec;
 use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
 use lpc_rs_errors::{lpc_bug, Result};
 use tracing::{instrument, trace};
@@ -75,7 +72,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     for lpc_ref in &mut refs {
                         let ctx = &self.context;
 
-                        let result = Self::resolve_result(self.id, &lpc_ref, &*function_name, &args, ctx)
+                        let result = Self::resolve_result(self.id, lpc_ref, &*function_name, &args, ctx)
                             .await
                             .unwrap_or(NULL);
 

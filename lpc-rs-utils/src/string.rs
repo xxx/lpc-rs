@@ -11,7 +11,7 @@ pub const MAX_STRING_LENGTH: usize = 8192;
 /// Return an error if there is an overflow.
 pub fn repeat_string(s: &str, i: LpcIntInner) -> Result<String> {
     if i >= 0 {
-        let new_capacity = (i as usize).checked_mul(s.as_bytes().len());
+        let new_capacity = (i as usize).checked_mul(s.len());
         if_chain! {
             if let Some(capacity) = new_capacity;
             if capacity <= MAX_STRING_LENGTH;
@@ -37,7 +37,7 @@ where
     let string1 = s1.into();
     let str2 = s2.as_ref();
 
-    let new_capacity = string1.as_bytes().len() + str2.len();
+    let new_capacity = string1.len() + str2.len();
     if new_capacity <= MAX_STRING_LENGTH {
         Ok(string1 + str2)
     } else {

@@ -36,9 +36,8 @@ async fn main() {
     let vm = Vm::new(config);
     vm.initialize_process_from_path(&lpc_path)
         .await
-        .map_err(|e| {
+        .inspect_err(|e| {
             e.emit_diagnostics();
-            e
         })
         .unwrap();
 }

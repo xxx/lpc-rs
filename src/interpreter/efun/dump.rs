@@ -69,10 +69,7 @@ fn format_array<const N: usize>(
         .map(|var| format_ref(var, context, indent + 2, recurse_level + 1))
         .collect::<Result<Vec<_>>>();
 
-    let inner = match inner {
-        Ok(x) => x,
-        Err(e) => return Err(e),
-    };
+    let inner = inner?;
 
     let inner = inner.join(",\n");
 
@@ -108,10 +105,7 @@ fn format_mapping<const N: usize>(
         })
         .collect::<Result<Vec<_>>>();
 
-    let inner = match inner {
-        Ok(x) => x,
-        Err(e) => return Err(e),
-    };
+    let inner = inner?;
 
     let inner = inner.join(",\n");
 

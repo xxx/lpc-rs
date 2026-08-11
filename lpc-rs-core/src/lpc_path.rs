@@ -73,7 +73,7 @@ impl LpcPath {
     /// # Arguments
     ///
     /// `root` - The root to use for resolving `InGame` variants.
-    pub fn as_server<P>(&self, root: P) -> Cow<Path>
+    pub fn as_server<P>(&self, root: P) -> Cow<'_, Path>
     where
         P: AsRef<Path>,
     {
@@ -92,7 +92,7 @@ impl LpcPath {
     /// # Arguments
     ///
     /// `root` - The root to strip off of `Server` variants.
-    pub fn as_in_game<P>(&self, root: P) -> Cow<Path>
+    pub fn as_in_game<P>(&self, root: P) -> Cow<'_, Path>
     where
         P: AsRef<Path>,
     {
@@ -128,7 +128,7 @@ impl LpcPath {
             LpcPath::Server(x) | LpcPath::InGame(x) => {
                 // a clone ends with "#<number>"
                 let mut parts = x.to_str().unwrap().rsplitn(2, '#');
-                parts.next().map_or(false, |x| x.parse::<u64>().is_ok())
+                parts.next().is_some_and(|x| x.parse::<u64>().is_ok())
             }
         }
     }

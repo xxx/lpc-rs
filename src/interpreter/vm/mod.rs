@@ -226,7 +226,7 @@ impl Vm {
         let mut processed = BitSet::new();
         self.mark(&mut marked, &mut processed).unwrap();
 
-        trace!("Marked {} objects", marked.len());
+        trace!("Marked {} objects", marked.count());
 
         self.sweep(&marked)
     }

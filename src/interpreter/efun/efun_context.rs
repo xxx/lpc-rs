@@ -190,7 +190,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Resolve any RegisterVariant
     #[inline]
-    pub fn resolve_register_variant(&self, variant: RegisterVariant) -> Result<Cow<LpcRef>> {
+    pub fn resolve_register_variant(&self, variant: RegisterVariant) -> Result<Cow<'_, LpcRef>> {
         get_location(self.stack, variant)
     }
 

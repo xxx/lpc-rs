@@ -73,13 +73,13 @@ impl TreeWalker for FunctionPrototypeWalker {
             .parameters
             .as_ref()
             .map(|nodes| nodes.iter().map(|parm| parm.type_).collect::<Vec<_>>())
-            .unwrap_or_else(Vec::new);
+            .unwrap_or_default();
 
         let arg_spans = node
             .parameters
             .as_ref()
             .map(|nodes| nodes.iter().flat_map(|n| n.span).collect::<Vec<_>>())
-            .unwrap_or_else(Vec::new);
+            .unwrap_or_default();
 
         // look for cases of closures-within-closures
         if let Some(parameters) = &mut node.parameters {

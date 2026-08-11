@@ -87,7 +87,7 @@ macro_rules! pop_frame {
 pub fn get_location<const N: usize>(
     stack: &CallStack<N>,
     location: RegisterVariant,
-) -> Result<Cow<LpcRef>> {
+) -> Result<Cow<'_, LpcRef>> {
     let frame = stack.current_frame()?;
 
     get_location_in_frame(frame, location)
@@ -96,7 +96,7 @@ pub fn get_location<const N: usize>(
 /// Resolve any type RegisterVariant into an LpcRef, for the passed frame
 #[instrument(skip(frame))]
 #[inline]
-pub fn get_location_in_frame(frame: &CallFrame, location: RegisterVariant) -> Result<Cow<LpcRef>> {
+pub fn get_location_in_frame(frame: &CallFrame, location: RegisterVariant) -> Result<Cow<'_, LpcRef>> {
     match location {
         RegisterVariant::Local(reg) => {
             let registers = &frame.registers;
@@ -739,7 +739,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let mut register_map = IndexMap::with_capacity(self.array_items.len() / 2);
 
                 debug_assert!(
-                    self.array_items.len() % 2 == 0,
+                    self.array_items.len().is_multiple_of(2),
                     "Odd number of items in `array` when creating a mapping constant"
                 );
                 for chunk in &self.array_items.iter().copied().chunks(2) {
@@ -1391,27 +1391,27 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         set_loc!(self, location, new_ref)
     }
 
-    #[instrument(skip_all)]
-    fn capture_environment(&mut self) -> Result<Vec<Register>> {
-        let frame = self.stack.current_frame_mut()?;
-        let mut upvalues = self.context.upvalues().write();
-
-        trace!("ptrs: {:?}", frame.upvalue_ptrs);
-        trace!("upvalues: {:?}", upvalues);
-
-        frame
-            .upvalue_ptrs
-            .iter()
-            .map(|ptr| {
-                let upvalue = upvalues
-                    .get(ptr.index() as usize)
-                    .cloned()
-                    .unwrap_or_default();
-                let new_index = RegisterSize::try_from(upvalues.insert(upvalue))?;
-                Ok(Register(new_index))
-            })
-            .collect::<Result<Vec<Register>>>()
-    }
+    // #[instrument(skip_all)]
+    // fn capture_environment(&mut self) -> Result<Vec<Register>> {
+    //     let frame = self.stack.current_frame_mut()?;
+    //     let mut upvalues = self.context.upvalues().write();
+    //
+    //     trace!("ptrs: {:?}", frame.upvalue_ptrs);
+    //     trace!("upvalues: {:?}", upvalues);
+    //
+    //     frame
+    //         .upvalue_ptrs
+    //         .iter()
+    //         .map(|ptr| {
+    //             let upvalue = upvalues
+    //                 .get(ptr.index() as usize)
+    //                 .cloned()
+    //                 .unwrap_or_default();
+    //             let new_index = RegisterSize::try_from(upvalues.insert(upvalue))?;
+    //             Ok(Register(new_index))
+    //         })
+    //         .collect::<Result<Vec<Register>>>()
+    // }
 
     #[instrument(skip_all)]
     #[inline]
@@ -1747,12 +1747,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// # Returns
     ///
     /// The maximum number of arguments that space needs to be made for.
-    #[instrument(skip_all)]
-    #[inline]
-    fn calculate_max_arg_length<T>(num_args: usize, partial_args: &[Option<T>]) -> usize {
-        let none_args = partial_args.iter().filter(|a| a.is_none()).count();
-        partial_args.len() + num_args.saturating_sub(none_args)
-    }
+    // #[instrument(skip_all)]
+    // #[inline]
+    // fn calculate_max_arg_length<T>(num_args: usize, partial_args: &[Option<T>]) -> usize {
+    //     let none_args = partial_args.iter().filter(|a| a.is_none()).count();
+    //     partial_args.len() + num_args.saturating_sub(none_args)
+    // }
 
     #[inline]
     fn index_symbol(index: RegisterSize) -> DefaultSymbol {

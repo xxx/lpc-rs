@@ -38,11 +38,11 @@ impl LpcMapping {
             pub fn insert(&mut self, key: LpcRef, value: LpcRef) -> Option<LpcRef>;
             pub fn extend<T>(&mut self, iter: T)
                 where T: IntoIterator<Item = (LpcRef, LpcRef)>;
-            pub fn iter(&self) -> indexmap::map::Iter<LpcRef, LpcRef>;
+            pub fn iter(&self) -> indexmap::map::Iter<'_, LpcRef, LpcRef>;
             pub fn is_empty(&self) -> bool;
             pub fn len(&self) -> usize;
-            pub fn keys(&self) -> indexmap::map::Keys<LpcRef, LpcRef>;
-            pub fn values(&self) -> indexmap::map::Values<LpcRef, LpcRef>;
+            pub fn keys(&self) -> indexmap::map::Keys<'_, LpcRef, LpcRef>;
+            pub fn values(&self) -> indexmap::map::Values<'_, LpcRef, LpcRef>;
         }
     }
 }

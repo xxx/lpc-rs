@@ -226,7 +226,7 @@ impl Process {
     /// Get the filename of this process, including the clone ID suffix if
     /// present.
     #[inline]
-    pub fn filename(&self) -> Cow<str> {
+    pub fn filename(&self) -> Cow<'_, str> {
         let filename: &str = (*self.program.filename).as_ref();
         let name = filename.strip_suffix(".c").unwrap_or(filename);
         match self.clone_id {

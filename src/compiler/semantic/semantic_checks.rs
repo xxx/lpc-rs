@@ -408,10 +408,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
 
             let res: Result<Vec<_>> = node.value.iter().map(|i| node_type(i, context)).collect();
 
-            let value_types = match res {
-                Ok(x) => x,
-                Err(e) => return Err(e),
-            };
+            let value_types = res?;
 
             if value_types.iter().any(|ty| ty.is_array()) {
                 Ok(LpcType::Mixed(true))

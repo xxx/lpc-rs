@@ -549,18 +549,18 @@ mod tests {
 
             frame.mark(&mut marked, &mut processed).unwrap();
 
-            assert_eq!(marked.len(), 2);
+            assert_eq!(marked.count(), 2);
             assert!(marked.contains(5));
             assert!(marked.contains(2));
 
-            assert_eq!(processed.len(), 1);
+            assert_eq!(processed.count(), 1);
             assert!(processed.contains(*frame.unique_id.as_ref() as usize));
 
-            marked.clear();
+            marked.make_empty();
 
             frame.mark(&mut marked, &mut processed).unwrap();
 
-            assert_eq!(marked.len(), 0); // still empty because we already processed the frame
+            assert_eq!(marked.count(), 0); // still empty because we already processed the frame
         }
     }
 }

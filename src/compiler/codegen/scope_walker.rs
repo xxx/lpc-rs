@@ -107,7 +107,7 @@ impl ScopeWalker {
             if self.should_upvalue_symbol(symbol);
             then {
                 trace!("upvaluing called function var {}", name);
-                let mut symbol = self.context.lookup_var_mut(name).unwrap();
+                let symbol = self.context.lookup_var_mut(name).unwrap();
                 symbol.upvalue = true;
             }
         }
@@ -358,7 +358,7 @@ impl TreeWalker for ScopeWalker {
         // check for, and handle upvalues
         if self.should_upvalue_symbol(symbol) {
             trace!("upvaluing {}", &node.name);
-            let mut symbol = self.context.lookup_var_mut(node.name).unwrap();
+            let symbol = self.context.lookup_var_mut(node.name).unwrap();
             // *any* capture requires the symbol to be upvalued
             symbol.upvalue = true;
             // we also mark this specific reference as a non-local capture

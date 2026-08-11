@@ -86,10 +86,7 @@ impl<'a> Iterator for TokenVecWrapper<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let token = self.vec.get(self.count);
 
-        let token = match token {
-            Some(t) => t,
-            None => return None,
-        };
+        let token = token?;
 
         self.count += 1;
 

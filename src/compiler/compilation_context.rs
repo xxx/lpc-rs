@@ -142,7 +142,7 @@ impl CompilationContext {
         &self,
         name: T,
         namespace: &CallNamespace,
-    ) -> Option<FunctionLike>
+    ) -> Option<FunctionLike<'_>>
     where
         T: AsRef<str>,
     {

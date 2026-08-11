@@ -51,7 +51,7 @@ impl<T> Bank<T> {
             pub fn is_empty(&self) -> bool;
 
             /// Get an iterator over the registers.
-            pub fn iter(&self) -> Iter<T>;
+            pub fn iter(&self) -> Iter<'_, T>;
 
             /// Push a new T onto the end of the registers.
             pub fn push(&mut self, value: T);

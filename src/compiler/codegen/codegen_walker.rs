@@ -238,7 +238,7 @@ impl CodegenWalker {
         let mut global_variables = inherits.into_iter().map(|i| i.global_variables).fold(
             HashMap::new(),
             |mut acc, vars| {
-                acc.extend(vars.into_iter());
+                acc.extend(*vars);
                 acc
             },
         );
@@ -262,7 +262,7 @@ impl CodegenWalker {
             .context
             .inherited_functions
             .into_iter()
-            .chain(self.functions.into_iter())
+            .chain(self.functions)
             .collect();
 
         // Note that due to name clashes, only the latest seen version of a function is included,

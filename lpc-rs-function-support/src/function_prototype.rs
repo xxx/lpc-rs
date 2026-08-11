@@ -16,8 +16,10 @@ use serde::{Deserialize, Serialize};
 
 /// Kinds of functions. Used for codegen.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum FunctionKind {
     /// A plain old normal LPC function, defined in a plain old normal LPC object.
+    #[default]
     Local,
 
     /// A simulated efun, which is a plain old normal LPC function,
@@ -29,11 +31,6 @@ pub enum FunctionKind {
     Efun,
 }
 
-impl Default for FunctionKind {
-    fn default() -> Self {
-        Self::Local
-    }
-}
 
 impl Display for FunctionKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

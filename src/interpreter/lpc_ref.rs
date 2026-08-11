@@ -179,7 +179,7 @@ impl LpcRef {
                 LpcRef::Mapping(map2) => {
                     let mut new_map = map.read().clone();
                     let added_map = map2.read().clone();
-                    new_map.extend(added_map.into_iter());
+                    new_map.extend(added_map);
                     Ok(new_map.into_lpc_ref(memory))
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
