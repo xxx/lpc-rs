@@ -2,7 +2,7 @@
 name = "lpc-rs-asm"
 description = "lpc-rs LPC compiler and gamedriver suite assembly language definition."
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 readme = "README.md"
 repository = "https://github.com/xxx/lpc-rs"
 license = "MIT"

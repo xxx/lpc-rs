@@ -850,7 +850,7 @@ impl CodegenWalker {
 
     async fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
         let node_span = node.span();
-        let CallChain::Root { ref mut receiver, ref name, ref namespace } = &mut node.chain else {
+        let CallChain::Root { ref mut receiver, ref name, ref namespace } = node.chain else {
             return Err(lpc_bug!(node.span, "Invalid call chain"));
         };
         let has_receiver = receiver.is_some();
@@ -1077,8 +1077,8 @@ impl TreeWalker for CodegenWalker {
             }
             ExpressionNode::BinaryOp(BinaryOpNode {
                 op: BinaryOperation::Index,
-                ref mut l,
-                ref mut r,
+                l,
+                r,
                 ..
             }) => {
                 l.visit(self).await?;
@@ -1517,14 +1517,14 @@ impl TreeWalker for CodegenWalker {
         push_instruction!(self, instruction, node.span);
 
         let locations = match &mut node.initializer {
-            ForEachInit::Array(ref mut node) | ForEachInit::String(ref mut node) => {
+            ForEachInit::Array(node) | ForEachInit::String(node) => {
                 node.visit(self).await?;
 
                 vec![self.current_result]
             }
             ForEachInit::Mapping {
-                ref mut key,
-                ref mut value,
+                key,
+                value,
             } => {
                 key.visit(self).await?;
                 let key_result = self.current_result;
@@ -3735,10 +3735,10 @@ mod tests {
         #[tokio::test]
         async fn test_visit_block_populates_instructions() {
             let block = "void marf() { { int a = '🏯'; dump(a); } }";
-            let mut prog_node = lpc_parser::ProgramParser::new()
+            let mut prog_node: ProgramNode = lpc_parser::ProgramParser::new()
                 .parse(&mut CompilationContext::default(), LexWrapper::new(block))
                 .unwrap();
-            let node = if let AstNode::FunctionDef(ref mut n) = prog_node.body.first_mut().unwrap()
+            let node = if let AstNode::FunctionDef(n) = prog_node.body.first_mut().unwrap()
             {
                 if let AstNode::Block(n) = n.body.first_mut().unwrap() {
                     n

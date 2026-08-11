@@ -51,9 +51,7 @@ pub struct CallNode {
 impl CallNode {
     pub fn set_receiver(&mut self, new_receiver: ExpressionNode) {
         match &mut self.chain {
-            CallChain::Root {
-                ref mut receiver, ..
-            } => {
+            CallChain::Root { receiver, .. } => {
                 *receiver = Some(Box::new(new_receiver));
             }
             CallChain::Node(node) => {

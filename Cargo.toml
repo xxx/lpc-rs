@@ -2,7 +2,7 @@
 name = "lpc-rs"
 version = "0.1.0"
 authors = ["mpd <mpd@jesters-court.net>"]
-edition = "2021"
+edition = "2024"
 description = "lpc-rs LPC compiler and gamedriver suite."
 readme = "README.md"
 repository = "https://github.com/xxx/lpc-rs"

@@ -94,7 +94,7 @@ impl LpcRef {
 
     pub fn inc(&mut self) -> Result<()> {
         match self {
-            LpcRef::Int(ref mut x) => {
+            LpcRef::Int(x) => {
                 *x = x.wrapping_add(1).into();
 
                 Ok(())
@@ -105,7 +105,7 @@ impl LpcRef {
 
     pub fn dec(&mut self) -> Result<()> {
         match self {
-            LpcRef::Int(ref mut x) => {
+            LpcRef::Int(x) => {
                 *x = x.wrapping_sub(1).into();
                 Ok(())
             }

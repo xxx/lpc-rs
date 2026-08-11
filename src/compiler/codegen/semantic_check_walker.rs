@@ -380,12 +380,12 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         match &mut node.initializer {
-            ForEachInit::Array(ref mut init) | ForEachInit::String(ref mut init) => {
+            ForEachInit::Array(init) | ForEachInit::String(init) => {
                 let _ = init.visit(self).await;
             }
             ForEachInit::Mapping {
-                ref mut key,
-                ref mut value,
+                key,
+                value,
             } => {
                 if key.type_ != LpcType::Mixed(false) || value.type_ != LpcType::Mixed(false) {
                     let e = lpc_error!(

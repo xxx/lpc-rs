@@ -236,12 +236,12 @@ impl TreeWalker for ScopeWalker {
         self.insert_symbol(make_sym(FOREACH_LENGTH));
 
         match &mut node.initializer {
-            ForEachInit::Array(ref mut init) | ForEachInit::String(ref mut init) => {
+            ForEachInit::Array(init) | ForEachInit::String(init) => {
                 let _ = init.visit(self).await;
             }
             ForEachInit::Mapping {
-                ref mut key,
-                ref mut value,
+                key,
+                value,
             } => {
                 let _ = key.visit(self).await;
                 let _ = value.visit(self).await;

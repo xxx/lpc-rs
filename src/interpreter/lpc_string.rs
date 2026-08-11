@@ -31,7 +31,7 @@ impl LpcString {
             LpcString::Static(s, strings) => strings
                 .resolve(DefaultSymbol::try_from_usize(*s).unwrap())
                 .unwrap_or(""),
-            LpcString::Dynamic(ref s) => s.as_str(),
+            LpcString::Dynamic(s) => s.as_str(),
         }
     }
 

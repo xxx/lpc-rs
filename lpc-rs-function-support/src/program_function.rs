@@ -126,7 +126,7 @@ impl ProgramFunction {
     where
         T: Into<String>,
     {
-        if let Some(ref mut labels) = &mut self.labels {
+        if let Some(labels) = &mut self.labels {
             labels.insert(label.into(), address);
         }
     }
