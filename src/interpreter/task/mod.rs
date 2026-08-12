@@ -55,7 +55,7 @@ use crate::{
         lpc_ref::{LpcRef, NULL},
         lpc_string::LpcString,
         object_flags::ObjectFlags,
-        process::{process_lock::ProcessLockStatus, Process},
+        process::Process,
         program::Program,
         task::{task_id::TaskId, task_state::TaskState},
         task_context::TaskContext,
@@ -376,13 +376,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(e)) => {
-                self.context.process.lock.try_release(self.id);
-
                 Err(e)
             }
             Err(_) => {
-                self.context.process.lock.try_release(self.id);
-
                 Err(lpc_error!(
                     "evaluation limit of {}ms has been reached",
                     timeout_ms
@@ -421,13 +417,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         f: Arc<ProgramFunction>,
         args: &[LpcRef],
     ) -> Result<()> {
-        let owns_process_lock = if f.prototype.flags.synchronized() {
-            let lock_state = process.lock(self.id).await?;
-            lock_state == ProcessLockStatus::Acquired
-        } else {
-            false
-        };
-
         let mut frame = CallFrame::new(
             process,
             f,
@@ -435,8 +424,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             self.context.upvalue_ptrs.as_deref(),
             self.context.upvalues().clone(),
         );
-
-        frame.owns_process_lock = owns_process_lock;
 
         // TODO: This is probably not correct. See behavior in prepare_new_call_frame
         if !args.is_empty() {
@@ -468,14 +455,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     Err(mut e) => {
                         if !self.catch_points.is_empty() {
                             if let Err(e) = self.catch_error(e) {
-                                self.context.process.lock.try_release(self.id);
                                 return Err(e);
                             }
 
                             false
                         } else {
-                            self.context.process.lock.try_release(self.id);
-
                             let stack_trace = self.stack.stack_trace();
                             return Err({
                                 *e = e.with_stack_trace(stack_trace);
@@ -519,7 +503,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let frame = match self.stack.current_frame_mut() {
                 Ok(x) => x,
                 Err(_) => {
-                    self.context.process.lock.try_release(self.id);
                     self.state = TaskState::Error;
 
                     warn!("Expected to get an instruction, but there are no more frames.");
@@ -529,7 +512,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             };
 
             let Some(instruction) = frame.instruction() else {
-                self.context.process.lock.try_release(self.id);
                 self.state = TaskState::Error;
 
                 warn!("No more instructions. Missing Ret instruction?");
@@ -1061,13 +1043,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         process: Arc<Process>,
         func: Arc<ProgramFunction>,
     ) -> Result<CallFrame> {
-        let owns_process_lock = if func.prototype.flags.synchronized() {
-            let lock_state = process.lock(self.id).await?;
-            lock_state == ProcessLockStatus::Acquired
-        } else {
-            false
-        };
-
         let num_args = RegisterSize::try_from(self.args.len())?;
         let mut new_frame = CallFrame::with_minimum_arg_capacity(
             process,
@@ -1077,8 +1052,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             None::<&[Register]>, /* static functions do not inherit upvalues from the calling function */
             self.context.upvalues().clone(),
         );
-
-        new_frame.owns_process_lock = owns_process_lock;
 
         trace!("copying arguments to new frame: {num_args}");
         // copy argument registers from old frame to new
@@ -1610,14 +1583,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let frame_index = catch_point.frame_index;
         let new_pc = catch_point.address;
 
-        // check all the frames we're about to truncate, to see if they
-        // need to drop their `Process`' lock.
         let truncate_len = frame_index + 2;
-        if self.stack.len() > truncate_len {
-            for frame in &self.stack[truncate_len..] {
-                frame.maybe_unlock_process(self.id);
-            }
-        }
 
         // clear away stack frames that won't be executed any further, which lie between
         // the error and the catch point's stack frame.
@@ -1724,10 +1690,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[allow(clippy::let_and_return)]
     fn pop_frame(&mut self) -> Option<CallFrame> {
         let frame = self.stack.pop();
-
-        if let Some(ref frame) = frame {
-            frame.maybe_unlock_process(self.id);
-        }
 
         #[cfg(test)]
         {
@@ -2623,10 +2585,6 @@ mod tests {
 
         mod test_catch {
             use super::*;
-            use crate::{
-                interpreter::vm::Vm, test_support::test_config,
-                util::process_builder::ProcessInitializer,
-            };
 
             #[tokio::test]
             async fn stores_the_error_string() {
@@ -2678,36 +2636,6 @@ mod tests {
                 ];
 
                 BareVal::assert_vec_equal(&expected, &registers);
-            }
-
-            #[tokio::test]
-            async fn releases_the_lock_on_truncated_frames() {
-                let code = indoc! { r##"
-                    void create() {
-                        catch(foo());
-                    }
-
-                    void foo() {
-                        bar();
-                    }
-
-                    synchronized void bar() {
-                        baz();
-                    }
-
-                    void baz() {
-                        throw("honker");
-                    }
-                "##};
-
-                let vm = Vm::new(test_config());
-
-                let task = vm
-                    .initialize_process_from_code("/test.c", code)
-                    .await
-                    .unwrap();
-
-                assert!(!task.context.process.lock.is_locked());
             }
         }
 

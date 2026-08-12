@@ -1,5 +1,4 @@
 pub mod inventory;
-pub mod process_lock;
 pub mod util;
 
 use std::{
@@ -28,11 +27,9 @@ use crate::{
         object_flags::{AtomicFlags, ObjectFlags},
         process::{
             inventory::Inventory,
-            process_lock::{ProcessLock, ProcessLockStatus},
             util::AllEnvironment,
         },
         program::Program,
-        task::task_id::TaskId,
     },
     telnet::connection::Connection,
 };
@@ -98,8 +95,6 @@ pub struct Process {
 
     /// Where are we in the game world?
     pub position: ProcessPosition,
-
-    pub lock: ProcessLock,
 }
 
 impl Process {
@@ -118,7 +113,6 @@ impl Process {
             connection: ArcSwapAny::from(None),
             flags: Default::default(),
             position: Default::default(),
-            lock: Default::default(),
         }
     }
 
@@ -137,7 +131,6 @@ impl Process {
             connection: ArcSwapAny::from(None),
             flags,
             position: Default::default(),
-            lock: Default::default(),
         }
     }
 
@@ -151,13 +144,6 @@ impl Process {
     /// Returns an iterator over all of `object`'s environments, starting with their current environment.
     pub fn all_environment(object: Arc<Process>) -> AllEnvironment {
         AllEnvironment::new(object)
-    }
-
-    /// Get the lock for this process, for running `synchronized` code.
-    #[instrument]
-    #[inline]
-    pub async fn lock(&self, task_id: TaskId) -> Result<ProcessLockStatus> {
-        self.lock.try_acquire(task_id).await
     }
 
     /// Move an object to a new environment. This is a transactional operation, so it will
