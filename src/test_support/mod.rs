@@ -1,3 +1,5 @@
+//! Module for various test utilities that are shared among unit tests.
+
 use std::sync::Arc;
 
 use lpc_rs_core::lpc_path::LpcPath;
@@ -19,9 +21,7 @@ use crate::{
 
 pub mod factories;
 
-/// Module for various test utilities that are shared among unit tests.
-
-/// init() acts as a global test setup.
+// /// init() acts as a global test setup.
 // #[ctor::ctor]
 // fn init() {
 // }

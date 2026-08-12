@@ -1180,8 +1180,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         #[cfg(test)]
         {
-            if ctx.snapshot.is_some() {
-                self.snapshots.push(ctx.snapshot.unwrap());
+            if let Some(snap) = ctx.snapshot {
+                self.snapshots.push(snap);
             }
         }
 
