@@ -122,7 +122,6 @@ extern {
         "static" => Token::Static(<Span>),
         "varargs" => Token::Varargs(<Span>),
         "nomask" => Token::Nomask(<Span>),
-        "synchronized" => Token::Synchronized(<Span>),
         "efun" => Token::Efun(<Span>),
         "switch" => Token::Switch(<Span>),
         "default" => Token::Default(<Span>),
@@ -367,7 +366,6 @@ GlobalFlag: (Span, &'static str) = {
     "static" => (<>, "static"),
     "protected" => (<>, "protected"),
     "nomask" => (<>, "nomask"),
-    "synchronized" => (<>, "synchronized"),
 };
 
 Statement: AstNode = {

@@ -456,7 +456,7 @@ async fn test_multithread_sync() {
     let room = indoc! { r#"
         int weight = 0;
 
-        synchronized void set_weight(int w) {
+        void set_weight(int w) {
             weight = w;
         }
 
@@ -468,7 +468,7 @@ async fn test_multithread_sync() {
     let mover = indoc! { r#"
         int weight = 10;
 
-        synchronized void move(object new_env) {
+        void move(object new_env) {
             object old_env = environment();
             if (old_env) {
                 old_env->set_weight(old_env->query_weight() - weight);
