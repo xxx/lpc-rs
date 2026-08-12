@@ -17,8 +17,8 @@ use tracing::{instrument, trace};
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
     interpreter::{
-        function_type::function_ptr::FunctionPtr, gc::mark::Mark, heap::Heap,
-        into_lpc_ref::IntoLpcRef, lpc_array::LpcArray, lpc_float::LpcFloat, lpc_int::LpcInt,
+        function_type::function_ptr::FunctionPtr, gc::mark::Mark,
+        lpc_array::LpcArray, lpc_float::LpcFloat, lpc_int::LpcInt,
         lpc_mapping::LpcMapping, lpc_string::LpcString, process::Process,
     },
 };
@@ -136,7 +136,7 @@ impl LpcRef {
         op(left, right)
     }
 
-    pub fn add(&self, rhs: &Self, memory: &Heap) -> Result<Self> {
+    pub fn add(&self, rhs: &Self) -> Result<Self> {
         match self {
             LpcRef::Float(f) => match rhs {
                 LpcRef::Float(f2) => Ok(Self::from(*f + *f2)),
@@ -150,7 +150,7 @@ impl LpcRef {
                     i.to_string(),
                     s.read().to_str(),
                 )?)
-                .into_lpc_ref(memory)),
+                .into()),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::String(s) => match rhs {
@@ -158,19 +158,19 @@ impl LpcRef {
                     s.read().to_string(),
                     s2.read().to_str(),
                 )?)
-                .into_lpc_ref(memory)),
+                .into()),
                 LpcRef::Int(i) => Ok(LpcString::from(concatenate_strings(
                     s.read().to_string(),
                     i.to_string(),
                 )?)
-                .into_lpc_ref(memory)),
+                .into()),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Array(vec) => match rhs {
                 LpcRef::Array(vec2) => {
                     let new_vec = vec.read();
                     let added_vec = vec2.read();
-                    Ok((new_vec.clone() + added_vec.clone()).into_lpc_ref(memory))
+                    Ok((new_vec.clone() + added_vec.clone()).into())
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
@@ -179,7 +179,7 @@ impl LpcRef {
                     let mut new_map = map.read().clone();
                     let added_map = map2.read().clone();
                     new_map.extend(added_map);
-                    Ok(new_map.into_lpc_ref(memory))
+                    Ok(new_map.into())
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
@@ -189,7 +189,7 @@ impl LpcRef {
         }
     }
 
-    pub fn sub(&self, rhs: &Self, memory: &Heap) -> Result<Self> {
+    pub fn sub(&self, rhs: &Self) -> Result<Self> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(x.wrapping_sub(y.0).into())),
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(Self::Float((x.0 - y.0).into())),
@@ -205,13 +205,13 @@ impl LpcRef {
                     .into_iter()
                     .filter(|x| !removed_vec.contains(x))
                     .collect::<LpcArray>();
-                Ok(result.into_lpc_ref(memory))
+                Ok(result.into())
             }
             _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
         }
     }
 
-    pub fn mul(&self, rhs: &Self, memory: &Heap) -> Result<Self> {
+    pub fn mul(&self, rhs: &Self) -> Result<Self> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(x.0.wrapping_mul(y.0).into())),
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(Self::Float((x.0 * y.0).into())),
@@ -223,14 +223,14 @@ impl LpcRef {
                 let string = x.read();
                 Ok(
                     LpcString::from(string::repeat_string(string.to_str(), y.0)?)
-                        .into_lpc_ref(memory),
+                        .into(),
                 )
             }
             (LpcRef::Int(x), LpcRef::String(y)) => {
                 let string = y.read();
                 Ok(
                     LpcString::from(string::repeat_string(string.to_str(), x.0)?)
-                        .into_lpc_ref(memory),
+                        .into(),
                 )
             }
             _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
@@ -421,6 +421,55 @@ impl From<LpcFloat> for LpcRef {
     }
 }
 
+impl From<&str> for LpcRef {
+    #[inline]
+    fn from(value: &str) -> Self {
+        LpcRef::String(Arc::new(RwLock::new(LpcString::from(value))))
+    }
+}
+
+impl From<String> for LpcRef {
+    #[inline]
+    fn from(value: String) -> Self {
+        LpcRef::String(Arc::new(RwLock::new(LpcString::from(value))))
+    }
+}
+
+impl From<LpcString> for LpcRef {
+    #[inline]
+    fn from(value: LpcString) -> Self {
+        LpcRef::String(Arc::new(RwLock::new(value)))
+    }
+}
+
+impl From<LpcArray> for LpcRef {
+    #[inline]
+    fn from(value: LpcArray) -> Self {
+        LpcRef::Array(Arc::new(RwLock::new(value)))
+    }
+}
+
+impl From<LpcMapping> for LpcRef {
+    #[inline]
+    fn from(value: LpcMapping) -> Self {
+        LpcRef::Mapping(Arc::new(RwLock::new(value)))
+    }
+}
+
+impl From<FunctionPtr> for LpcRef {
+    #[inline]
+    fn from(value: FunctionPtr) -> Self {
+        LpcRef::Function(Arc::new(value))
+    }
+}
+
+impl From<Weak<Process>> for LpcRef {
+    #[inline]
+    fn from(value: Weak<Process>) -> Self {
+        LpcRef::Object(value)
+    }
+}
+
 impl From<bool> for LpcRef {
     #[inline]
     fn from(b: bool) -> Self {
@@ -575,7 +624,7 @@ mod tests {
         fn int_int() {
             let int1 = LpcRef::from(123);
             let int2 = LpcRef::from(456);
-            let result = int1.add(&int2, &Heap::new(5));
+            let result = int1.add(&int2);
             if let Ok(LpcRef::Int(x)) = result {
                 assert_eq!(x, 579)
             } else {
@@ -587,7 +636,7 @@ mod tests {
         fn int_int_overflow_wraps() {
             let int1 = LpcRef::from(LpcIntInner::MAX);
             let int2 = LpcRef::from(1);
-            let result = int1.add(&int2, &Heap::new(5));
+            let result = int1.add(&int2);
             if let Ok(LpcRef::Int(x)) = result {
                 assert_eq!(x, LpcIntInner::MIN)
             } else {
@@ -597,10 +646,9 @@ mod tests {
 
         #[test]
         fn string_string() {
-            let pool = Heap::new(5);
-            let string1 = LpcString::from("foo").into_lpc_ref(&pool);
-            let string2 = LpcString::from("bar").into_lpc_ref(&pool);
-            let result = string1.add(&string2, &Heap::new(5));
+            let string1 = LpcRef::from("foo");
+            let string2 = LpcRef::from(LpcString::from("bar"));
+            let result = string1.add(&string2);
             if let Ok(LpcRef::String(x)) = result {
                 assert_eq!(*x.read(), String::from("foobar"))
             } else {
@@ -610,10 +658,9 @@ mod tests {
 
         #[test]
         fn string_int() {
-            let pool = Heap::new(5);
-            let string = LpcString::from("foo").into_lpc_ref(&pool);
+            let string = LpcRef::from("foo");
             let int = LpcRef::from(123);
-            let result = string.add(&int, &pool);
+            let result = string.add(&int);
             if let Ok(LpcRef::String(x)) = result {
                 assert_eq!(*x.read(), String::from("foo123"))
             } else {
@@ -623,10 +670,9 @@ mod tests {
 
         #[test]
         fn int_string() {
-            let pool = Heap::new(5);
-            let string = LpcString::from("foo").into_lpc_ref(&pool);
+            let string = LpcRef::from("foo");
             let int = LpcRef::from(123);
-            let result = int.add(&string, &Heap::new(5));
+            let result = int.add(&string);
             if let Ok(LpcRef::String(x)) = result {
                 assert_eq!(*x.read(), String::from("123foo"))
             } else {
@@ -638,7 +684,7 @@ mod tests {
         fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = float.add(&int, &Heap::new(5));
+            let result = float.add(&int);
             if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 789.66)
             } else {
@@ -650,14 +696,14 @@ mod tests {
         fn float_int_overflow_does_not_panic() {
             let float = LpcRef::from(BaseFloat::MAX);
             let int = LpcRef::from(1);
-            assert!((float.add(&int, &Heap::new(5))).is_ok());
+            assert!((float.add(&int)).is_ok());
         }
 
         #[test]
         fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = int.add(&float, &Heap::new(5));
+            let result = int.add(&float);
             if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 789.66)
             } else {
@@ -669,18 +715,15 @@ mod tests {
         fn int_float_overflow_does_not_panic() {
             let int = LpcRef::Int(LpcInt(LpcIntInner::MAX));
             let float = LpcRef::from(1.0);
-            assert!((int.add(&float, &Heap::new(5))).is_ok());
+            assert!((int.add(&float)).is_ok());
         }
 
         #[test]
         fn array_array() {
-            let pool = Heap::new(20);
             let array = LpcArray::new(vec![LpcRef::from(123)]);
             let array2 = LpcArray::new(vec![LpcRef::from(4433)]);
-            let result = array
-                .clone()
-                .into_lpc_ref(&pool)
-                .add(&array2.into_lpc_ref(&pool), &pool);
+            let result = LpcRef::from(array.clone())
+                .add(&array2.into());
 
             match &result {
                 Ok(v) => {
@@ -698,10 +741,9 @@ mod tests {
 
         #[test]
         fn mapping_mapping() {
-            let pool = Heap::new(10);
-            let key1 = LpcString::from("key1").into_lpc_ref(&pool);
-            let value1 = LpcString::from("value1").into_lpc_ref(&pool);
-            let key2 = LpcString::from("key2").into_lpc_ref(&pool);
+            let key1 = LpcRef::from(LpcString::from("key1"));
+            let value1 = LpcRef::from(LpcString::from("value1"));
+            let key2 = LpcRef::from(LpcString::from("key2"));
             let value2 = LpcRef::from(666);
 
             let mut hash1 = IndexMap::new();
@@ -710,10 +752,10 @@ mod tests {
             let mut hash2 = IndexMap::new();
             hash2.insert(key2.clone(), value2.clone());
 
-            let map = LpcMapping::new(hash1).into_lpc_ref(&pool);
-            let map2 = LpcMapping::new(hash2).into_lpc_ref(&pool);
+            let map = LpcRef::from(LpcMapping::new(hash1));
+            let map2 = LpcRef::from(LpcMapping::new(hash2));
 
-            let result = map.add(&map2, &Heap::new(5));
+            let result = map.add(&map2);
 
             let mut expected = IndexMap::new();
             expected.insert(key1, value1);
@@ -728,10 +770,9 @@ mod tests {
 
         #[test]
         fn mapping_mapping_duplicate_keys() {
-            let pool = Heap::new(20);
-            let key1 = LpcString::from("key").into_lpc_ref(&pool);
-            let value1 = LpcString::from("value1").into_lpc_ref(&pool);
-            let key2 = LpcString::from("key").into_lpc_ref(&pool);
+            let key1 = LpcRef::from(LpcString::from("key"));
+            let value1 = LpcRef::from(LpcString::from("value1"));
+            let key2 = LpcRef::from(LpcString::from("key"));
             let value2 = LpcRef::from(666);
 
             let mut hash1 = IndexMap::new();
@@ -740,10 +781,10 @@ mod tests {
             let mut hash2 = IndexMap::new();
             hash2.insert(key2.clone(), value2.clone());
 
-            let map = LpcMapping::new(hash1).into_lpc_ref(&pool);
-            let map2 = LpcMapping::new(hash2).into_lpc_ref(&pool);
+            let map = LpcRef::from(LpcMapping::new(hash1));
+            let map2 = LpcRef::from(LpcMapping::new(hash2));
 
-            let result = map.add(&map2, &Heap::new(5));
+            let result = map.add(&map2);
 
             let mut expected = IndexMap::new();
             expected.insert(key2, value2);
@@ -757,10 +798,9 @@ mod tests {
 
         #[test]
         fn add_mismatched() {
-            let pool = Heap::new(5);
             let int = LpcRef::from(123);
-            let array = LpcArray::new(vec![]).into_lpc_ref(&pool);
-            let result = int.add(&array, &pool);
+            let array = LpcRef::from(LpcArray::new(vec![]));
+            let result = int.add(&array);
 
             assert!(result.is_err());
         }
@@ -773,7 +813,7 @@ mod tests {
         fn int_int_underflow_does_not_panic() {
             let int = LpcRef::Int(LpcInt(LpcIntInner::MIN));
             let int2 = LpcRef::from(1);
-            let result = int.sub(&int2, &Heap::new(5));
+            let result = int.sub(&int2);
             assert!(result.is_ok());
         }
 
@@ -781,7 +821,7 @@ mod tests {
         fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = float.sub(&int, &Heap::new(5));
+            let result = float.sub(&int);
             if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 543.66)
             } else {
@@ -793,7 +833,7 @@ mod tests {
         fn float_int_underflow_does_not_panic() {
             let float = LpcRef::from(BaseFloat::MIN);
             let int = LpcRef::Int(LpcInt::MAX);
-            let result = float.sub(&int, &Heap::new(5));
+            let result = float.sub(&int);
             assert!(result.is_ok());
         }
 
@@ -801,7 +841,7 @@ mod tests {
         fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = int.sub(&float, &Heap::new(5));
+            let result = int.sub(&float);
             if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, -543.66)
             } else {
@@ -813,23 +853,22 @@ mod tests {
         fn int_float_underflow_does_not_panic() {
             let int = LpcRef::Int(LpcInt::MIN);
             let float = LpcRef::from(1.0);
-            let result = int.sub(&float, &Heap::new(5));
+            let result = int.sub(&float);
             assert!(result.is_ok());
         }
 
         #[test]
         fn array_array() {
-            let pool = Heap::new(10);
             let to_ref = |i| LpcRef::Int(LpcInt(i));
             let v1 = vec![1, 2, 3, 4, 5, 2, 4, 4, 4]
                 .into_iter()
                 .map(to_ref)
                 .collect::<Vec<_>>();
             let v2 = vec![2, 4].into_iter().map(to_ref).collect::<Vec<_>>();
-            let a1 = LpcArray::new(v1).into_lpc_ref(&pool);
-            let a2 = LpcArray::new(v2).into_lpc_ref(&pool);
+            let a1 = LpcRef::from(LpcArray::new(v1));
+            let a2 = LpcRef::from(LpcArray::new(v2));
 
-            let result = a1.sub(&a2, &pool);
+            let result = a1.sub(&a2);
             let expected = vec![1, 3, 5].into_iter().map(to_ref).collect::<Vec<_>>();
 
             if let Ok(LpcRef::Array(x)) = result {
@@ -845,19 +884,17 @@ mod tests {
 
         #[test]
         fn int_int_overflow_does_not_panic() {
-            let pool = Heap::new(5);
             let int = LpcRef::Int(LpcInt::MAX);
             let int2 = LpcRef::from(2);
-            let result = int.mul(&int2, &pool);
+            let result = int.mul(&int2);
             assert!(result.is_ok());
         }
 
         #[test]
         fn string_int() {
-            let pool = Heap::new(5);
-            let string = LpcString::from("foo").into_lpc_ref(&pool);
+            let string = LpcRef::from("foo");
             let int = LpcRef::from(4);
-            let result = string.mul(&int, &Heap::new(5));
+            let result = string.mul(&int);
             if let Ok(LpcRef::String(x)) = result {
                 assert_eq!(*x.read(), String::from("foofoofoofoo"))
             } else {
@@ -867,10 +904,9 @@ mod tests {
 
         #[test]
         fn int_string() {
-            let pool = Heap::new(5);
-            let string = LpcString::from("foo").into_lpc_ref(&pool);
+            let string = LpcRef::from("foo");
             let int = LpcRef::from(4);
-            let result = int.mul(&string, &Heap::new(5));
+            let result = int.mul(&string);
             if let Ok(LpcRef::String(x)) = result {
                 assert_eq!(*x.read(), String::from("foofoofoofoo"))
             } else {
@@ -880,10 +916,9 @@ mod tests {
 
         #[test]
         fn string_int_overflow_does_not_panic() {
-            let pool = Heap::new(5);
-            let string = LpcString::from("1234567890abcdef").into_lpc_ref(&pool);
+            let string = LpcRef::from(LpcString::from("1234567890abcdef"));
             let int = LpcRef::Int(LpcInt::MAX);
-            let result = string.mul(&int, &pool);
+            let result = string.mul(&int);
             assert_err!(result.clone());
             assert_eq!(
                 result.unwrap_err().to_string().as_str(),
@@ -895,7 +930,7 @@ mod tests {
         fn float_int() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = float.mul(&int, &Heap::new(5));
+            let result = float.mul(&int);
             if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 81999.18)
             } else {
@@ -907,7 +942,7 @@ mod tests {
         fn float_int_overflow_does_not_panic() {
             let float = LpcRef::from(BaseFloat::MAX);
             let int = LpcRef::from(2);
-            let result = float.mul(&int, &Heap::new(5));
+            let result = float.mul(&int);
             assert!(result.is_ok());
         }
 
@@ -915,7 +950,7 @@ mod tests {
         fn int_float() {
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = int.mul(&float, &Heap::new(5));
+            let result = int.mul(&float);
             if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 81999.18)
             } else {
@@ -927,7 +962,7 @@ mod tests {
         fn int_float_overflow_does_not_panic() {
             let int = LpcRef::Int(LpcInt::MAX);
             let float = LpcRef::from(200.0);
-            let result = int.mul(&float, &Heap::new(5));
+            let result = int.mul(&float);
             assert!(result.is_ok());
         }
     }
@@ -1174,8 +1209,7 @@ mod tests {
 
         #[test]
         fn fails_other_types() {
-            let pool = Heap::new(5);
-            let mut string = LpcString::from("foobar").into_lpc_ref(&pool);
+            let mut string = LpcRef::from(LpcString::from("foobar"));
             assert_err!(string.inc());
         }
     }
@@ -1199,8 +1233,7 @@ mod tests {
 
         #[test]
         fn fails_other_types() {
-            let pool = Heap::new(5);
-            let mut string = LpcString::from("foobar").into_lpc_ref(&pool);
+            let mut string = LpcRef::from(LpcString::from("foobar"));
             assert_err!(string.dec());
         }
     }
@@ -1213,10 +1246,9 @@ mod tests {
 
         #[test]
         fn test_array() {
-            let pool = Heap::new(5);
             let array = LpcArray::new(vec![LpcRef::from(1), LpcRef::from(2), LpcRef::from(3)]);
             let array_id = array.unique_id;
-            let array = array.into_lpc_ref(&pool);
+            let array = LpcRef::from(array);
 
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
@@ -1228,10 +1260,9 @@ mod tests {
 
         #[test]
         fn test_mapping() {
-            let pool = Heap::new(5);
             let mapping = LpcMapping::new(IndexMap::new());
             let mapping_id = mapping.unique_id;
-            let mapping = mapping.into_lpc_ref(&pool);
+            let mapping = LpcRef::from(mapping);
 
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
@@ -1243,11 +1274,9 @@ mod tests {
 
         #[test]
         fn test_function() {
-            let pool = Heap::new(5);
-
             let ptr = create!(FunctionPtr);
             let ptr_id = ptr.unique_id;
-            let ptr = ptr.into_lpc_ref(&pool);
+            let ptr = LpcRef::from(ptr);
 
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();

@@ -3,7 +3,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::efun_context::EfunContext,
-    into_lpc_ref::IntoLpcRef,
+
     lpc_ref::{LpcRef, NULL},
     lpc_string::LpcString,
 };
@@ -28,7 +28,7 @@ pub async fn file_name<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
                         .to_string_lossy(),
                 ));
 
-                s.into_lpc_ref(context.memory())
+                s.into()
             } else {
                 NULL
             }

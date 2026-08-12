@@ -6,7 +6,7 @@ use lpc_rs_errors::Result;
 use crate::{
     compile_time_config::MAX_CLONE_CHAIN,
     interpreter::{
-        efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef,
+        efun::efun_context::EfunContext,  lpc_ref::LpcRef,
         object_flags::ObjectFlags, process::Process, task::Task,
     },
 };
@@ -83,7 +83,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         };
 
         let v = Arc::downgrade(&return_val);
-        let result = v.into_lpc_ref(context.memory());
+        let result = v.into();
 
         context.return_efun_result(result);
     } else {
@@ -107,7 +107,6 @@ mod tests {
     use crate::{
         assert_regex,
         interpreter::{
-            heap::Heap,
             lpc_ref::NULL,
             program::Program,
             task_context::{TaskContext, TaskContextBuilder},
@@ -126,7 +125,6 @@ mod tests {
         let global_state = GlobalStateBuilder::default()
             .config(config)
             .tx(tx)
-            .memory(Heap::new(10))
             .build()
             .unwrap();
 

@@ -16,7 +16,6 @@ use crate::{
     interpreter::{
         call_outs::CallOuts,
         gc::gc_bank::GcRefBank,
-        heap::Heap,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
@@ -215,12 +214,6 @@ impl TaskContext {
         &self.global_state.object_space
     }
 
-    /// Return the [`Heap`]
-    #[inline]
-    pub fn memory(&self) -> &Heap {
-        &self.global_state.memory
-    }
-
     /// Return the `upvalues`
     #[inline]
     pub fn upvalues(&self) -> &Arc<RwLock<GcRefBank>> {
@@ -257,12 +250,6 @@ impl Clone for TaskContext {
             upvalue_ptrs: self.upvalue_ptrs.clone(),
             chain_count: self.chain_count,
         }
-    }
-}
-
-impl AsRef<Heap> for TaskContext {
-    fn as_ref(&self) -> &Heap {
-        &self.global_state.memory
     }
 }
 

@@ -47,8 +47,6 @@ use crate::{
         efun::{call_efun, efun_context::EfunContext, EFUN_FUNCTIONS},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{mark::Mark, unique_id::UniqueId},
-        heap::Heap,
-        into_lpc_ref::IntoLpcRef,
         lpc_array::LpcArray,
         lpc_int::LpcInt,
         lpc_mapping::LpcMapping,
@@ -530,7 +528,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.handle_aconst(location)?;
             }
             Instruction::And(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, _memory| x.bitand(y))?;
+                self.binary_operation(r1, r2, r3, |x, y| x.bitand(y))?;
             }
             Instruction::BitwiseNot(r1, r2) => {
                 let frame = self.stack.current_frame().unwrap();
@@ -622,7 +620,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y)?;
             }
             Instruction::IAdd(r1, r2, r3) => {
-                match get_loc!(self, r1)?.add(&*get_loc!(self, r2)?, self.context.memory()) {
+                match get_loc!(self, r1)?.add(&*get_loc!(self, r2)?) {
                     Ok(result) => {
                         set_loc!(self, r3, result)?;
                     }
@@ -659,7 +657,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             },
             Instruction::IMul(r1, r2, r3) => {
-                match get_loc!(self, r1)?.mul(&*get_loc!(self, r2)?, self.context.memory()) {
+                match get_loc!(self, r1)?.mul(&*get_loc!(self, r2)?) {
                     Ok(result) => set_loc!(self, r3, result)?,
                     Err(mut e) => {
                         let frame = self.stack.current_frame()?;
@@ -672,7 +670,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 apply_in_location(&mut self.stack, r1, |x| x.inc())?;
             }
             Instruction::ISub(r1, r2, r3) => {
-                match get_loc!(self, r1)?.sub(&*get_loc!(self, r2)?, self.context.memory()) {
+                match get_loc!(self, r1)?.sub(&*get_loc!(self, r2)?) {
                     Ok(result) => set_loc!(self, r3, result)?,
                     Err(mut e) => {
                         let frame = self.stack.current_frame()?;
@@ -715,7 +713,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x <= y)?;
             }
             Instruction::MAdd(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, memory| x.add(y, memory))?;
+                self.binary_operation(r1, r2, r3, |x, y| x.add(y))?;
             }
             Instruction::MapConst(r) => {
                 let mut register_map = IndexMap::with_capacity(self.array_items.len() / 2);
@@ -733,15 +731,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
 
                 let new_ref = LpcMapping::new(register_map.into_iter().collect())
-                    .into_lpc_ref(self.context.memory());
+                    .into();
 
                 set_loc!(self, r, new_ref)?;
             }
             Instruction::MMul(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, memory| x.mul(y, memory))?;
+                self.binary_operation(r1, r2, r3, |x, y| x.mul(y))?;
             }
             Instruction::MSub(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, memory| x.sub(y, memory))?;
+                self.binary_operation(r1, r2, r3, |x, y| x.sub(y))?;
             }
             Instruction::Not(r1, r2) => {
                 let matched = match &*get_loc!(self, r1)? {
@@ -765,7 +763,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 set_loc!(self, r3, LpcRef::Int(LpcInt(out)))?;
             }
             Instruction::Or(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, _memory| x.bitor(y))?;
+                self.binary_operation(r1, r2, r3, |x, y| x.bitor(y))?;
             }
             Instruction::PopulateArgv(r, num_args, _num_locals) => {
                 let frame = self.stack.current_frame()?;
@@ -783,7 +781,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 };
 
-                let new_ref = LpcArray::new(refs).into_lpc_ref(self.context.memory());
+                let new_ref = LpcArray::new(refs).into();
 
                 set_location(&mut self.stack, r, new_ref)?;
             }
@@ -844,7 +842,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                             if vec.is_empty() {
                                 return Ok(
-                                    LpcArray::new(vec![]).into_lpc_ref(self.context.memory())
+                                    LpcArray::new(vec![]).into()
                                 );
                             }
 
@@ -859,9 +857,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     let slice = &vec[real_start..=real_end];
                                     let mut new_vec = vec![NULL; slice.len()];
                                     new_vec.clone_from_slice(slice);
-                                    Ok(LpcArray::new(new_vec).into_lpc_ref(self.context.memory()))
+                                    Ok(LpcArray::new(new_vec).into())
                                 } else {
-                                    Ok(LpcArray::new(vec![]).into_lpc_ref(self.context.memory()))
+                                    Ok(LpcArray::new(vec![]).into())
                                 }
                             } else {
                                 let frame = self.stack.current_frame()?;
@@ -875,7 +873,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             let string = v_ref.read();
 
                             if string.is_empty() {
-                                return Ok(LpcString::from("").into_lpc_ref(self.context.memory()));
+                                return Ok(LpcString::from("").into());
                             }
 
                             let index1 = &*get_location(stack, r2)?;
@@ -890,9 +888,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     let new_string: String =
                                         string.chars().skip(real_start).take(len).collect();
                                     Ok(LpcString::from(new_string)
-                                        .into_lpc_ref(self.context.memory()))
+                                        .into())
                                 } else {
-                                    Ok(LpcString::from("").into_lpc_ref(self.context.memory()))
+                                    Ok(LpcString::from("").into())
                                 }
                             } else {
                                 let frame = self.stack.current_frame()?;
@@ -964,13 +962,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.handle_sconst(location, index)?;
             }
             Instruction::Shl(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, _memory| x.shl(y))?;
+                self.binary_operation(r1, r2, r3, |x, y| x.shl(y))?;
             }
             Instruction::Shr(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, _memory| x.shr(y))?;
+                self.binary_operation(r1, r2, r3, |x, y| x.shr(y))?;
             }
             Instruction::Xor(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, _memory| x.bitxor(y))?;
+                self.binary_operation(r1, r2, r3, |x, y| x.bitxor(y))?;
             }
         }
 
@@ -985,7 +983,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .iter()
             .map(|i| get_loc!(self, *i).map(|i| i.into_owned()))
             .collect::<Result<Vec<_>>>()?;
-        let new_ref = LpcArray::new(vars).into_lpc_ref(self.context.memory());
+        let new_ref = LpcArray::new(vars).into();
 
         set_loc!(self, location, new_ref)
     }
@@ -1359,7 +1357,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             unique_id: UniqueId::new(),
         };
 
-        let new_ref = fp.into_lpc_ref(self.context.memory());
+        let new_ref = fp.into();
 
         set_loc!(self, location, new_ref)
     }
@@ -1525,7 +1523,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         trace!(?lpc_string, "Storing static string");
 
-        let new_ref = lpc_string.into_lpc_ref(self.context.memory());
+        let new_ref = lpc_string.into();
 
         set_loc!(self, location, new_ref)
     }
@@ -1605,7 +1603,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         // set up the catch point's return value
         let value = LpcString::from(error.to_string());
-        let lpc_ref = value.into_lpc_ref(self.context.memory());
+        let lpc_ref = value.into();
         set_loc!(self, Register(result_index).as_local(), lpc_ref)?;
         let frame = self.stack.current_frame_mut()?;
 
@@ -1624,12 +1622,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         operation: F,
     ) -> Result<()>
     where
-        F: Fn(&LpcRef, &LpcRef, &Heap) -> Result<LpcRef>,
+        F: Fn(&LpcRef, &LpcRef) -> Result<LpcRef>,
     {
         let ref1 = &*get_location(&self.stack, r1)?;
         let ref2 = &*get_location(&self.stack, r2)?;
 
-        match operation(ref1, ref2, self.context.memory()) {
+        match operation(ref1, ref2) {
             Ok(result) => {
                 set_loc!(self, r3, result)?;
             }

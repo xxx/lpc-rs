@@ -8,7 +8,6 @@ use tracing::{debug, instrument};
 
 use crate::{
     interpreter::{
-        into_lpc_ref::IntoLpcRef,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
         process::Process,
@@ -35,7 +34,7 @@ impl Vm {
         let (ip, port) = (address.ip().to_string(), address.port());
 
         // call 'connect' in the master object
-        let ip_ref = LpcString::from(ip).into_lpc_ref(&global_state.memory);
+        let ip_ref = LpcRef::from(LpcString::from(ip));
         let port_ref = LpcRef::from(port as LpcIntInner);
 
         tokio::spawn(async move {

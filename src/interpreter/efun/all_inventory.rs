@@ -2,15 +2,16 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    efun, efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray,
+    efun, efun::efun_context::EfunContext,  lpc_array::LpcArray,
 };
+use crate::interpreter::lpc_ref::LpcRef;
 
 /// `all_inventory`, an efun for returning an object's inventory.
 pub async fn all_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
 
     let Some(current_env) = efun::arg_or_this_object(arg_ref, context) else {
-        let result = LpcArray::default().into_lpc_ref(context.memory());
+        let result = LpcRef::from(LpcArray::default());
         context.return_efun_result(result);
         return Ok(());
     };
@@ -18,9 +19,9 @@ pub async fn all_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> 
     let result = current_env
         .position
         .weak_inventory_iter()
-        .map(|item| item.into_lpc_ref(context.memory()))
+        .map(|item| LpcRef::from(item))
         .collect::<LpcArray>()
-        .into_lpc_ref(context.memory());
+        .into();
 
     context.return_efun_result(result);
 

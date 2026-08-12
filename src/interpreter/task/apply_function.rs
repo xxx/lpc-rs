@@ -8,7 +8,6 @@ use termcolor::Buffer;
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
-        into_lpc_ref::IntoLpcRef,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
@@ -145,8 +144,8 @@ where
     let ctx = template.into_task_context(master);
 
     mapping.insert(
-        LpcString::from("error").into_lpc_ref(ctx.memory()),
-        LpcString::from(error.to_string()).into_lpc_ref(ctx.memory()),
+        LpcString::from("error").into(),
+        LpcString::from(error.to_string()).into(),
     );
 
     // get the path and line number from the span, stripping off the lib dir so
@@ -161,14 +160,14 @@ where
         .unwrap_or_else(|| String::from("<unknown>"));
 
     mapping.insert(
-        LpcString::from("location").into_lpc_ref(ctx.memory()),
-        LpcString::from(span_string).into_lpc_ref(ctx.memory()),
+        LpcString::from("location").into(),
+        LpcString::from(span_string).into(),
     );
 
     let object = proc
-        .map(|pr| Arc::downgrade(&pr).into_lpc_ref(ctx.memory()))
-        .unwrap_or_else(|| LpcString::from("<no object>").into_lpc_ref(ctx.memory()));
-    mapping.insert(LpcString::from("object").into_lpc_ref(ctx.memory()), object);
+        .map(|pr| Arc::downgrade(&pr).into())
+        .unwrap_or_else(|| LpcString::from("<no object>").into());
+    mapping.insert(LpcString::from("object").into(), object);
 
     let mut buffer = Buffer::ansi();
     let diagnostics = error.to_diagnostics();
@@ -177,11 +176,11 @@ where
     let s = std::str::from_utf8(buffer.as_slice()).unwrap_or("<diagnostic with invalid utf8?>");
 
     mapping.insert(
-        LpcString::from("diagnostics").into_lpc_ref(ctx.memory()),
-        LpcString::from(s).into_lpc_ref(ctx.memory()),
+        LpcString::from("diagnostics").into(),
+        LpcString::from(s).into(),
     );
 
-    let args = [LpcMapping::new(mapping).into_lpc_ref(ctx.memory())];
+    let args = [LpcMapping::new(mapping).into()];
     // TODO wire the timeout up to config
     apply_function_in_master(ERROR_HANDLER, &args, ctx, Some(300)).await
 }

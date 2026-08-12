@@ -48,9 +48,6 @@ pub struct Vm {
     // /// Our object space, which stores all of the system objects (masters and clones)
     // pub object_space: Arc<ObjectSpace>,
     //
-    // /// Shared VM memory. Reference-type `LpcRef`s are allocated out of this.
-    // pub memory: Arc<Heap>,
-    //
     // /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`](crate::interpreter::task::Task)s
     // pub upvalues: Arc<RwLock<GcRefBank>>,
     //

@@ -23,7 +23,6 @@ use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
         function_type::function_ptr::FunctionPtr,
-        into_lpc_ref::IntoLpcRef,
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
@@ -285,7 +284,7 @@ impl Telnet {
                     return;
                 };
 
-                let arg = LpcString::from(msg).into_lpc_ref(&template.global_state.memory);
+                let arg = LpcString::from(msg).into();
                 let timeout = Some(template.global_state.config.max_execution_time);
 
                 let template = template.clone();
@@ -392,7 +391,7 @@ impl Telnet {
             .read()
             .iter()
             .position(|x| x.is_none());
-        let input_arg = LpcString::from(msg).into_lpc_ref(&template.global_state.memory);
+        let input_arg = LpcString::from(msg).into();
         if let Some(idx) = arg_index {
             args[idx] = input_arg;
         } else {
@@ -513,7 +512,7 @@ mod tests {
         let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
         let connection = Connection::new(addr, connection_tx, broker_tx.clone());
         let input_to = InputTo {
-            ptr: vm.global_state.memory.alloc_function_arc(ptr),
+            ptr: Arc::new(ptr),
             no_echo: false,
         };
 
@@ -537,7 +536,7 @@ mod tests {
             let ptr = FunctionPtrBuilder::default()
                 .address(FunctionAddress::Dynamic("foo".into()))
                 .partial_args(RwLock::new(thin_vec![Some(
-                    "/foo/bar".into_lpc_ref(&vm.global_state.memory)
+                    "/foo/bar".into()
                 )]))
                 .build()
                 .unwrap();
@@ -550,7 +549,7 @@ mod tests {
             let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
             let connection = Connection::new(addr, connection_tx, broker_tx.clone());
             let input_to = InputTo {
-                ptr: vm.global_state.memory.alloc_function_arc(ptr),
+                ptr: Arc::new(ptr),
                 no_echo: false,
             };
 

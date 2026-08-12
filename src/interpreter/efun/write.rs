@@ -2,7 +2,7 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::{lpc_error, Result};
 
 use crate::interpreter::{
-    efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef,
+    efun::efun_context::EfunContext, lpc_ref::LpcRef,
     lpc_string::LpcString, task::apply_function::apply_function_by_name, CATCH_TELL,
 };
 
@@ -37,7 +37,7 @@ pub async fn apply_catch_tell<const N: usize>(
     let max_execution_time = context.config().max_execution_time;
     let result = apply_function_by_name(
         CATCH_TELL,
-        &[LpcString::from(&msg).into_lpc_ref(context.memory())],
+        &[LpcString::from(&msg).into()],
         this_player.clone(),
         ctx,
         Some(max_execution_time),

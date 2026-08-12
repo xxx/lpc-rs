@@ -2,7 +2,7 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_ref::LpcRef,
+    efun::efun_context::EfunContext, lpc_ref::LpcRef,
 };
 
 /// `papplyv`, an efun to partially apply a function to arguments taken from an array
@@ -18,7 +18,7 @@ pub async fn papplyv<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
     let ptr = func.clone_with_new_id();
     ptr.partially_apply(&arr.read());
 
-    let result = ptr.into_lpc_ref(context.memory());
+    let result = ptr.into();
 
     context.return_efun_result(result);
 

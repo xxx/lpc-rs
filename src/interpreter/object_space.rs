@@ -236,7 +236,7 @@ mod tests {
 
     use super::*;
     use crate::interpreter::{
-        heap::Heap, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray, program::ProgramBuilder,
+        lpc_array::LpcArray, program::ProgramBuilder,
     };
 
     // #[test]
@@ -307,10 +307,9 @@ mod tests {
         let config = Config::default();
         let space = ObjectSpace::new(config);
 
-        let memory = Heap::new(5);
         let array = LpcArray::new(vec![]);
         let array_id = array.unique_id;
-        let lpc_ref = array.into_lpc_ref(&memory);
+        let lpc_ref = array.into();
 
         let process = Process::default();
         process.globals.write().push(lpc_ref);

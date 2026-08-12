@@ -20,8 +20,6 @@ use crate::{
         efun::EFUN_FUNCTIONS,
         function_type::function_address::FunctionAddress,
         gc::{mark::Mark, unique_id::UniqueId},
-        heap::Heap,
-        into_lpc_ref::IntoLpcRef,
         lpc_ref::{LpcRef, NULL},
         object_space::ObjectSpace,
         process::Process,
@@ -278,12 +276,6 @@ impl Display for FunctionPtr {
         s.push('}');
 
         write!(f, "{s}")
-    }
-}
-
-impl IntoLpcRef for FunctionPtr {
-    fn into_lpc_ref(self, memory: &Heap) -> LpcRef {
-        memory.alloc_function(self)
     }
 }
 

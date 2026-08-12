@@ -16,7 +16,6 @@ use crate::{
         call_outs::CallOuts,
         call_stack::CallStack,
         gc::gc_bank::GcRefBank,
-        heap::Heap,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
@@ -79,8 +78,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
             /// Get access to the `tx` channel, to talk to the [`Vm`](crate::interpreter::vm::Vm)
             pub fn tx(&self) -> Sender<VmOp>;
-
-            pub fn memory(&self) -> &Heap;
         }
     }
 

@@ -12,8 +12,6 @@ use tracing::{instrument, trace};
 
 use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
-    heap::Heap,
-    into_lpc_ref::IntoLpcRef,
     lpc_ref::LpcRef,
 };
 
@@ -223,13 +221,6 @@ impl Add<LpcArray> for LpcArray {
     }
 }
 
-impl IntoLpcRef for LpcArray {
-    #[inline]
-    fn into_lpc_ref(self, memory: &Heap) -> LpcRef {
-        memory.alloc_array(self)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use factori::create;
@@ -241,15 +232,13 @@ mod tests {
 
     #[test]
     fn test_mark() {
-        let memory = Heap::new(5);
-
         let ptr = create!(
             FunctionPtr,
             upvalue_ptrs: thin_vec![Register(4), Register(33)]
         );
         let ptr_id = *ptr.unique_id.as_ref();
 
-        let function_ref = ptr.into_lpc_ref(&memory);
+        let function_ref = ptr.into();
 
         let array = LpcArray::new(thin_vec![function_ref]);
 

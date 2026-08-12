@@ -2,7 +2,7 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray,
+    efun::efun_context::EfunContext,  lpc_array::LpcArray,
     lpc_int::LpcInt, lpc_ref::LpcRef,
 };
 
@@ -33,9 +33,9 @@ pub async fn explode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
 
     let result = subject
         .split(&delimiter)
-        .map(|s| s.into_lpc_ref(context.memory()))
+        .map(|s| LpcRef::from(s))
         .collect::<LpcArray>()
-        .into_lpc_ref(context.memory());
+        .into();
 
     context.return_efun_result(result);
 

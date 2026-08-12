@@ -11,7 +11,6 @@ use tracing::instrument;
 use crate::interpreter::{
     call_outs::CallOuts,
     gc::{gc_bank::GcRefBank, mark::Mark, sweep::Sweep},
-    heap::Heap,
     object_space::ObjectSpace,
     vm::vm_op::VmOp,
 };
@@ -24,10 +23,6 @@ pub struct GlobalState {
     /// Our object space, which stores all of the system objects (masters and clones)
     #[builder(default, setter(into))]
     pub object_space: Arc<ObjectSpace>,
-
-    /// Shared VM memory. Reference-type `LpcRef`s are allocated out of this.
-    #[builder(default)]
-    pub memory: Heap,
 
     /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`](crate::interpreter::task::Task)s
     #[builder(default, setter(into))]
@@ -57,7 +52,6 @@ impl GlobalState {
 
         Self {
             object_space: Arc::new(ObjectSpace::new(conf.clone())),
-            memory: Heap::default(),
             upvalues: Arc::new(RwLock::new(GcRefBank::default())),
             config: conf,
             call_outs: RwLock::new(CallOuts::new(tx.clone())),

@@ -88,7 +88,7 @@ mod tests {
     use super::*;
     use crate::{
         interpreter::{
-            into_lpc_ref::IntoLpcRef, lpc_array::LpcArray, lpc_string::LpcString, vm::Vm,
+             lpc_array::LpcArray, lpc_string::LpcString, vm::Vm,
         },
         test_support::test_config,
         util::process_builder::{ProcessCreator, ProcessInitializer},
@@ -149,14 +149,13 @@ mod tests {
         let space = master_proc.context.object_space();
 
         let enabled = space.lookup("/enabled#0").unwrap();
-        let _expected = LpcArray::from(
+        let _expected = LpcRef::from(LpcArray::from(
             [
-                LpcString::from("i herd").into_lpc_ref(&vm.global_state.memory),
-                LpcString::from("u liek mudkips?").into_lpc_ref(&vm.global_state.memory),
+                LpcRef::from(LpcString::from("i herd")),
+                LpcRef::from(LpcString::from("u liek mudkips?")),
             ]
             .as_slice(),
-        )
-        .into_lpc_ref(&vm.global_state.memory);
+        ));
         let LpcRef::Array(enabled_i_herd) = enabled.globals.read()[0].clone() else {
             panic!("expected array");
         };

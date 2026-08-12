@@ -126,7 +126,7 @@ mod tests {
         interpreter::{
             call_outs::CallOutBuilder,
             function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
-            into_lpc_ref::IntoLpcRef,
+
             object_flags::ObjectFlags,
             process::Process,
         },
@@ -156,7 +156,7 @@ mod tests {
 
         let call_out = CallOutBuilder::default()
             .process(Arc::downgrade(&proc))
-            .func_ref(ptr.into_lpc_ref(&vm.global_state.memory))
+            .func_ref(ptr.into())
             ._handle(tokio::spawn(async {}))
             .build()
             .unwrap();
@@ -176,14 +176,14 @@ mod tests {
             let ptr = FunctionPtrBuilder::default()
                 .address(FunctionAddress::Dynamic(ustr("foo")))
                 .partial_args(RwLock::new(thin_vec![Some(
-                    "/bar".into_lpc_ref(&vm.global_state.memory)
+                    "/bar".into()
                 )]))
                 .build()
                 .unwrap();
 
             let call_out = CallOutBuilder::default()
                 .process(Arc::downgrade(bar_proc))
-                .func_ref(ptr.into_lpc_ref(&vm.global_state.memory))
+                .func_ref(ptr.into())
                 ._handle(tokio::spawn(async {}))
                 .build()
                 .unwrap();

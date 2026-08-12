@@ -4,23 +4,24 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    efun, efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray,
+    efun, efun::efun_context::EfunContext, lpc_array::LpcArray,
     process::Process,
 };
+use crate::interpreter::lpc_ref::LpcRef;
 
 /// `all_environment`, an efun for returning all wrapping environments of an object.
 pub async fn all_environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
 
     let Some(current_env) = efun::arg_or_this_object(arg_ref, context) else {
-        let result = LpcArray::default().into_lpc_ref(context.memory());
+        let result = LpcArray::default().into();
         context.return_efun_result(result);
         return Ok(());
     };
 
     let iter = Process::all_environment(current_env)
-        .map(|e| Arc::downgrade(&e).into_lpc_ref(context.memory()));
-    let result = iter.collect::<LpcArray>().into_lpc_ref(context.memory());
+        .map(|e| LpcRef::from(Arc::downgrade(&e)));
+    let result = iter.collect::<LpcArray>().into();
     context.return_efun_result(result);
 
     Ok(())

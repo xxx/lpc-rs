@@ -10,7 +10,6 @@ use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     get_loc,
     interpreter::{
-        into_lpc_ref::IntoLpcRef,
         lpc_array::LpcArray,
         lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
@@ -79,7 +78,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         *lpc_ref = result;
                     }
 
-                    LpcArray::new(refs).into_lpc_ref(self.context.memory())
+                    LpcArray::new(refs).into()
                 }
                 LpcRef::Mapping(m) => {
                     let mut map = m
@@ -97,7 +96,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
 
                     LpcMapping::new(map.into_iter().collect())
-                        .into_lpc_ref(self.context.memory())
+                        .into()
                 }
                 _ => {
                     return Err(self.runtime_error(format!(

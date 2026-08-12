@@ -4,16 +4,17 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    efun, efun::efun_context::EfunContext, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray,
+    efun, efun::efun_context::EfunContext,  lpc_array::LpcArray,
     process::Process,
 };
+use crate::interpreter::lpc_ref::LpcRef;
 
 /// `deep_inventory`, an efun for recursively returning the inventories of all objects contained by an object.
 pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
 
     let Some(current_env) = efun::arg_or_this_object(arg_ref, context) else {
-        let result = LpcArray::default().into_lpc_ref(context.memory());
+        let result = LpcRef::from(LpcArray::default());
         context.return_efun_result(result);
         return Ok(());
     };
@@ -25,9 +26,9 @@ pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) ->
 
     let result = collection
         .into_iter()
-        .map(|arc| Arc::downgrade(&arc).into_lpc_ref(context.memory()))
+        .map(|arc| LpcRef::from(Arc::downgrade(&arc)))
         .collect::<LpcArray>()
-        .into_lpc_ref(context.memory());
+        .into();
 
     context.return_efun_result(result);
 

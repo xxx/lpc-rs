@@ -5,7 +5,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::efun_context::EfunContext,
-    into_lpc_ref::IntoLpcRef,
+
     lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL},
 };
@@ -28,7 +28,7 @@ pub async fn set_this_player<const N: usize>(context: &mut EfunContext<'_, N>) -
 
     if let Some(prev) = prev {
         let prev = Arc::downgrade(&prev);
-        context.return_efun_result(prev.into_lpc_ref(context.memory()));
+        context.return_efun_result(prev.into());
     } else {
         context.return_efun_result(NULL);
     }

@@ -4,7 +4,6 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{
     call_outs::CallOut,
     efun::efun_context::EfunContext,
-    into_lpc_ref::IntoLpcRef,
     lpc_array::LpcArray,
     lpc_ref::{LpcRef, NULL},
 };
@@ -42,7 +41,7 @@ pub fn call_out_array_ref<const N: usize>(
     };
 
     // push the object that the call out was called from
-    arr.push(call_out.process().clone().into_lpc_ref(context.memory()));
+    arr.push(call_out.process().clone().into());
 
     // push the function
     arr.push(LpcRef::Function(f.clone()));
@@ -65,7 +64,7 @@ pub fn call_out_array_ref<const N: usize>(
             .into(),
     ));
 
-    let result = LpcArray::new(arr).into_lpc_ref(context.memory());
+    let result = LpcArray::new(arr).into();
     Ok(result)
 }
 

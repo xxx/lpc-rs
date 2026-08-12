@@ -5,7 +5,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::efun_context::EfunContext,
-    into_lpc_ref::IntoLpcRef,
+
     lpc_ref::{LpcRef, NULL},
 };
 
@@ -27,7 +27,7 @@ pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
             };
 
             if let Ok(proc) = context.load_object(&path).await {
-                Arc::downgrade(&proc).into_lpc_ref(context.memory())
+                Arc::downgrade(&proc).into()
             } else {
                 NULL
             }
@@ -54,7 +54,6 @@ mod tests {
     use super::*;
     use crate::{
         interpreter::{
-            heap::Heap,
             object_space::ObjectSpace,
             process::Process,
             program::{Program, ProgramBuilder},
@@ -76,7 +75,6 @@ mod tests {
         let global_state = GlobalStateBuilder::default()
             .config(config)
             .tx(tx)
-            .memory(Heap::new(10))
             .build()
             .unwrap();
 

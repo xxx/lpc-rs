@@ -5,7 +5,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::{efun_context::EfunContext, query_call_out::call_out_array_ref},
-    into_lpc_ref::IntoLpcRef,
+
     lpc_array::LpcArray,
     lpc_int::LpcInt,
     lpc_ref::LpcRef,
@@ -41,7 +41,7 @@ pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -
         })
         .collect::<Vec<_>>();
 
-    let result = LpcArray::new(vec).into_lpc_ref(context.memory());
+    let result = LpcArray::new(vec).into();
 
     context.return_efun_result(result);
 

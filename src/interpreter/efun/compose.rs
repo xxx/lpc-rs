@@ -22,7 +22,7 @@ use thin_vec::thin_vec;
 use crate::interpreter::{
     efun::{efun_context::EfunContext, EFUN_PROTOTYPES},
     function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
-    into_lpc_ref::IntoLpcRef,
+
     lpc_ref::LpcRef,
 };
 
@@ -121,7 +121,7 @@ pub async fn compose<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
         unique_id: Default::default(),
     };
 
-    let lpc_ref = ptr.into_lpc_ref(context.memory());
+    let lpc_ref = ptr.into();
 
     context.return_efun_result(lpc_ref);
 

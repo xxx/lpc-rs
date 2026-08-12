@@ -276,7 +276,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::interpreter::{heap::Heap, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray};
+    use crate::interpreter::lpc_array::LpcArray;
 
     #[test]
     fn test_filename() {
@@ -304,10 +304,9 @@ mod tests {
 
     #[test]
     fn test_mark() {
-        let memory = Heap::new(5);
         let array = LpcArray::new(vec![]);
         let array_id = array.unique_id;
-        let lpc_ref = array.into_lpc_ref(&memory);
+        let lpc_ref = array.into();
 
         let process = Process::default();
         process.globals.write().push(lpc_ref);

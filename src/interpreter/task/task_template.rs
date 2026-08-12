@@ -10,7 +10,7 @@ use thin_vec::ThinVec;
 use crate::{
     compiler::Compiler,
     interpreter::{
-        heap::Heap, object_space::ObjectSpace, process::Process,
+        object_space::ObjectSpace, process::Process,
         task::into_task_context::IntoTaskContext, task_context::TaskContext,
         vm::global_state::GlobalState,
     },
@@ -51,12 +51,6 @@ impl Clone for TaskTemplate {
             this_player: ArcSwapAny::from(self.this_player.load_full()),
             upvalue_ptrs: self.upvalue_ptrs.clone(),
         }
-    }
-}
-
-impl AsRef<Heap> for TaskTemplate {
-    fn as_ref(&self) -> &Heap {
-        &self.global_state.memory
     }
 }
 

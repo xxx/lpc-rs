@@ -8,8 +8,6 @@ use tracing::{instrument, trace};
 
 use crate::interpreter::{
     gc::{mark::Mark, unique_id::UniqueId},
-    heap::Heap,
-    into_lpc_ref::IntoLpcRef,
     lpc_ref::LpcRef,
 };
 
@@ -134,12 +132,6 @@ impl PartialEq<IndexMap<LpcRef, LpcRef>> for LpcMapping {
     }
 }
 
-impl IntoLpcRef for LpcMapping {
-    fn into_lpc_ref(self, pool: &Heap) -> LpcRef {
-        pool.alloc_mapping(self)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use factori::create;
@@ -151,21 +143,19 @@ mod tests {
 
     #[test]
     fn test_mark() {
-        let memory = Heap::new(5);
-
         let ptr = create!(
             FunctionPtr,
             upvalue_ptrs: thin_vec![Register(4), Register(33)]
         );
         let key_id = *ptr.unique_id.as_ref();
-        let key_ref = ptr.into_lpc_ref(&memory);
+        let key_ref = ptr.into();
 
         let ptr2 = create!(
             FunctionPtr,
             upvalue_ptrs: thin_vec![Register(4), Register(666)]
         );
         let value_id = *ptr2.unique_id.as_ref();
-        let value_ref = ptr2.into_lpc_ref(&memory);
+        let value_ref = ptr2.into();
 
         let mut mapping = LpcMapping::new(IndexMap::new());
 

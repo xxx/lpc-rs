@@ -4,7 +4,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::efun_context::EfunContext,
-    into_lpc_ref::IntoLpcRef,
+
     lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL},
 };
@@ -17,7 +17,7 @@ pub async fn environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
             let proc = &context.frame().process;
 
             if let Some(env) = proc.position.environment.load_full() {
-                env.into_lpc_ref(context.memory())
+                env.into()
             } else {
                 NULL
             }
@@ -27,7 +27,7 @@ pub async fn environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
                 if let Some(proc) = proc.upgrade();
                 if let Some(env) = proc.position.environment.load_full();
                 then {
-                    env.into_lpc_ref(context.memory())
+                    env.into()
                 } else {
                     NULL
                 }
