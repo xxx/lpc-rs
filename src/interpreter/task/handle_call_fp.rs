@@ -9,17 +9,13 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
 
-use crate::{
-    get_loc,
-    interpreter::{
-        call_frame::CallFrame,
-        function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
-        lpc_ref::{LpcRef, NULL},
-        object_flags::ObjectFlags,
-        process::Process,
-        task::{Task, get_location, set_location},
-    },
-    set_loc,
+use crate::interpreter::{
+    call_frame::CallFrame,
+    function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
+    lpc_ref::{LpcRef, NULL},
+    object_flags::ObjectFlags,
+    process::Process,
+    task::{Task, get_location, set_location},
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
@@ -28,7 +24,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub(crate) async fn handle_call_fp(&mut self, location: RegisterVariant) -> Result<()> {
         let num_args = RegisterSize::try_from(self.args.len())?;
         let ptr_arc = {
-            let lpc_ref = &*get_loc!(self, location)?;
+            let lpc_ref = &*get_location(&self.stack, location)?;
 
             if let LpcRef::Function(func) = lpc_ref {
                 func.clone() // this is a cheap clone
@@ -101,7 +97,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     // fill in the next hole in the partial arguments, or
                     // append to the end
 
-                    let lpc_ref = get_loc!(self, *location)?;
+                    let lpc_ref = get_location(&self.stack, *location)?;
                     Self::type_check_and_assign_location(
                         self,
                         &mut new_frame,
@@ -186,7 +182,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 && !pf.is_closure()
                 && (is_call_other || !Arc::ptr_eq(self.context.process(), &receiver))
             {
-                set_loc!(self, Register(0).as_local(), NULL)?;
+                set_location(&mut self.stack, Register(0).as_local(), NULL)?;
                 return Ok(None);
             }
         }

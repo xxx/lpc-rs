@@ -8,7 +8,6 @@ use tracing::{instrument, trace};
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    get_loc,
     interpreter::{
         lpc_array::LpcArray,
         lpc_mapping::LpcMapping,
@@ -54,7 +53,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let args = self
                 .args
                 .iter()
-                .map(|i| get_loc!(self, *i).map(|r| r.into_owned()))
+                .map(|i| get_location(&self.stack, *i).map(|r| r.into_owned()))
                 .collect::<Result<Vec<_>>>()?;
 
             let function_name = Arc::new(function_name.read().clone());

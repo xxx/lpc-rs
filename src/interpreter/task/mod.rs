@@ -1,7 +1,9 @@
 pub mod apply_function;
 pub mod eval_loop;
+mod handle_call;
 mod handle_call_fp;
 mod handle_call_other;
+mod handle_data;
 pub mod initialize_program;
 pub mod into_task_context;
 mod location;
@@ -9,9 +11,11 @@ pub mod task_id;
 pub mod task_state;
 pub mod task_template;
 
+#[cfg(test)]
+mod tests;
+
 use std::{
     fmt::{Debug, Display},
-    path::PathBuf,
     sync::{Arc, Weak},
     time::Duration,
 };
@@ -19,44 +23,32 @@ use std::{
 use async_recursion::async_recursion;
 use bit_set::BitSet;
 use educe::Educe;
-use if_chain::if_chain;
 pub(crate) use location::{apply_in_location, get_location, get_location_in_frame, set_location};
 use lpc_rs_asm::address::Address;
 use lpc_rs_core::{
     LpcIntInner, RegisterSize,
-    function_receiver::FunctionReceiver,
-    lpc_path::LpcPath,
-    lpc_type::LpcType,
     register::{Register, RegisterVariant},
 };
-use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, span::Span};
+use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use parking_lot::RwLock;
 use string_interner::{DefaultSymbol, Symbol};
 use thin_vec::{ThinVec, thin_vec};
 use tokio::{task::JoinHandle, time::timeout};
-use tracing::{error, instrument, trace, warn};
-use ustr::ustr;
+use tracing::{error, instrument, warn};
 
-use crate::{
-    interpreter::{
-        call_frame::CallFrame,
-        call_stack::CallStack,
-        efun::{EFUN_FUNCTIONS, call_efun, efun_context::EfunContext},
-        function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
-        gc::{mark::Mark, unique_id::UniqueId},
-        lpc_array::LpcArray,
-        lpc_int::LpcInt,
-        lpc_ref::{LpcRef, NULL},
-        lpc_string::LpcString,
-        object_flags::ObjectFlags,
-        process::Process,
-        program::Program,
-        task::{task_id::TaskId, task_state::TaskState},
-        task_context::TaskContext,
-        vm::global_state::GlobalState,
-    },
-    util::process_builder::ProcessCreator,
+use crate::interpreter::{
+    call_frame::CallFrame,
+    call_stack::CallStack,
+    gc::mark::Mark,
+    lpc_int::LpcInt,
+    lpc_ref::LpcRef,
+    lpc_string::LpcString,
+    object_flags::ObjectFlags,
+    process::Process,
+    program::Program,
+    task::{task_id::TaskId, task_state::TaskState},
+    task_context::TaskContext,
+    vm::global_state::GlobalState,
 };
 
 // this is just to shut clippy up
@@ -76,16 +68,6 @@ macro_rules! pop_frame {
 
         opt
     }};
-}
-
-#[macro_export]
-macro_rules! get_loc {
-    ($self:expr, $loc:expr) => {{ get_location(&$self.stack, $loc) }};
-}
-
-#[macro_export]
-macro_rules! set_loc {
-    ($self:expr, $loc:expr, $val:expr) => {{ set_location(&mut $self.stack, $loc, $val) }};
 }
 
 /// A type to track where `catch` calls need to go if there is an error
@@ -346,615 +328,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.stack.push(frame)
     }
 
-    #[instrument(skip_all)]
-    #[inline]
-    fn handle_aconst(&mut self, location: RegisterVariant) -> Result<()> {
-        let items = &self.array_items;
-        let vars = items
-            .iter()
-            .map(|i| get_loc!(self, *i).map(|i| i.into_owned()))
-            .collect::<Result<Vec<_>>>()?;
-        let new_ref = LpcArray::new(vars).into();
-
-        set_loc!(self, location, new_ref)
-    }
-
-    #[instrument(skip_all)]
-    async fn handle_call(&mut self, name_idx: RegisterSize) -> Result<()> {
-        let current_frame = self.stack.current_frame()?;
-        let process = current_frame.process.clone();
-        let func = {
-            let name = process
-                .program
-                .strings
-                .resolve(Self::index_symbol(name_idx))
-                .unwrap();
-            let function = process.program.lookup_function(name);
-            if let Some(func) = function {
-                func.clone()
-            } else {
-                // These shouldn't be reachable due to the CallEfun and CallSimulEfun instructions,
-                // but are kept juuuuuust in case.
-                {
-                    let e = LpcError::new_warning(
-                        format!("Call to unknown local function `{name}`. Falling back to legacy SEfun and Efun checks.")
-                    ).with_span(current_frame.current_debug_span());
-                    e.emit_diagnostics();
-                }
-
-                if_chain! {
-                    // See if there is a simul efun with this name
-                    if let Some(se) = self.context.simul_efuns();
-                    if let Some(func) = se.program.lookup_function(name);
-                    then {
-                        func.clone()
-                    } else {
-                        let msg = format!("Call to unknown function `{name}`");
-                        return Err(self.runtime_error(msg));
-                    }
-                }
-            }
-        };
-
-        let new_frame = self.prepare_new_call_frame(process, func).await?;
-
-        trace!("pushing new frame");
-
-        self.stack.push(new_frame)?;
-
-        Ok(())
-    }
-
-    /// Prepare and populate a new [`CallFrame`] for a call to a static function.
-    #[instrument(skip_all)]
-    async fn prepare_new_call_frame(
-        &mut self,
-        process: Arc<Process>,
-        func: Arc<ProgramFunction>,
-    ) -> Result<CallFrame> {
-        let num_args = RegisterSize::try_from(self.args.len())?;
-        let mut new_frame = CallFrame::with_minimum_arg_capacity(
-            process,
-            func.clone(),
-            num_args,
-            num_args,
-            None::<&[Register]>, /* static functions do not inherit upvalues from the calling function */
-            self.context.upvalues().clone(),
-        );
-
-        trace!("copying arguments to new frame: {num_args}");
-        // copy argument registers from old frame to new
-        if num_args > 0 {
-            let mut next_index = 1;
-            for (i, arg) in self.args.iter().enumerate() {
-                let target_location = func.arg_locations.get(i).copied().unwrap_or_else(|| {
-                    // This should only be reached by efun calls, or variables that will go
-                    // into an ellipsis function's `argv`.
-                    Register(next_index).as_local()
-                });
-                if let RegisterVariant::Local(r) = target_location {
-                    next_index = r.index() + 1;
-                }
-
-                let lpc_ref = get_loc!(self, *arg).map(|i| i.into_owned())?;
-
-                trace!(
-                    "Copying argument {} ({}) to {}",
-                    i, lpc_ref, target_location
-                );
-
-                new_frame.arg_locations.push(target_location);
-
-                new_frame.set_location(target_location, lpc_ref)
-            }
-        }
-
-        Ok(new_frame)
-    }
-
-    /// An extracted helper to handle pulling the [`Process`] and [`ProgramFunction`] out of a [`FunctionPtr`].
-    /// This will create a [`Process`] from a path name, in the case of `call_other` receivers that are strings.
-    pub async fn extract_process_and_function(
-        &mut self,
-        ptr: &FunctionPtr,
-    ) -> Result<Option<ProcessFunctionPair>> {
-        let (proc, function) = match &ptr.address {
-            FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
-            FunctionAddress::Dynamic(name) => {
-                let lpc_ref = match &*get_loc!(self, self.args[0])? {
-                    LpcRef::Object(lpc_ref) => lpc_ref.upgrade(),
-                    LpcRef::String(string_ref) => {
-                        let lookup = {
-                            let string = string_ref.read();
-                            self.context.lookup_process(string.to_str())
-                        };
-
-                        if lookup.is_some() {
-                            lookup
-                        } else {
-                            let path = LpcPath::InGame(PathBuf::from(string_ref.read().to_str()));
-                            // This will be initialized later on, if necessary.
-                            Some(self.context.create_process_from_path(&path).await?)
-                        }
-                    }
-                    _ => {
-                        return Err(
-                            self.runtime_error("non-object receiver to function pointer call")
-                        );
-                    }
-                };
-
-                let pair_opt = {
-                    if let Some(proc) = lpc_ref {
-                        proc.program
-                            .lookup_function(name)
-                            .map(|func| (proc.clone(), func.clone()))
-                    } else {
-                        None
-                    }
-                };
-
-                // short-circuit a 0 return if doing a call_other to a
-                // non-existent function, or destructed object
-                let Some(pair) = pair_opt else {
-                    let frame = self.stack.current_frame_mut()?;
-                    frame.registers[0] = NULL;
-                    return Ok(None);
-                };
-
-                (Arc::downgrade(&pair.0), pair.1)
-            }
-            FunctionAddress::Efun(name) => {
-                // unwrap is safe because this should have been checked in an earlier step
-                let pf = EFUN_FUNCTIONS.get(name.as_str()).cloned().unwrap();
-
-                let frame = self.stack.current_frame()?;
-
-                (Arc::downgrade(&frame.process), pf)
-            }
-            FunctionAddress::SimulEfun(name) => {
-                let Some(simul_efuns) = self.context.simul_efuns() else {
-                    return Err(self.runtime_bug("simul_efun called without simul_efuns"));
-                };
-
-                let Some(function) = simul_efuns.program.lookup_function(name) else {
-                    return Err(self.runtime_error(format!("call to unknown simul_efun `{name}`")));
-                };
-
-                (Arc::downgrade(simul_efuns), function.clone())
-            }
-        };
-
-        Ok(Some((proc, function)))
-    }
-
-    /// handle runtime type-checks for function pointer calls
-    fn type_check_call_arg(
-        &self,
-        lpc_ref: &LpcRef,
-        arg_type: Option<&LpcType>,
-        arg_def_span: Option<&Span>,
-        function_name: &str,
-    ) -> Result<()> {
-        if_chain! {
-            if lpc_ref != &NULL; // 0 is always allowed
-            if let Some(arg_type) = arg_type;
-            let ref_type = lpc_ref.as_lpc_type();
-            if !ref_type.matches_type(*arg_type);
-            then {
-                let error = self.runtime_error(format!(
-                    "unexpected argument type to `{function_name}`: {ref_type}. expected {arg_type}."
-                ))
-                .with_label("defined here", arg_def_span.copied());
-
-                return Err(error.into());
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Create a new [`EfunContext`] and called the named efun.
-    async fn prepare_and_call_efun<S>(&mut self, name: S) -> Result<()>
-    where
-        S: AsRef<str>,
-    {
-        let mut ctx = EfunContext::new(self.id, &mut self.stack, &self.context);
-
-        call_efun(name.as_ref(), &mut ctx).await?;
-
-        #[cfg(test)]
-        {
-            if let Some(snap) = ctx.snapshot {
-                self.snapshots.push(snap);
-            }
-        }
-
-        pop_frame!(self);
-
-        Ok(())
-    }
-
-    #[instrument(skip_all)]
-    #[inline]
-    async fn handle_call_simul_efun(&mut self, name_idx: RegisterSize) -> Result<()> {
-        let Some(func_name) = self
-            .stack
-            .current_frame()?
-            .function
-            .strings
-            .get()
-            .unwrap()
-            .resolve(Self::index_symbol(name_idx))
-        else {
-            return Err(self.runtime_bug("Unable to find the name being pointed to."));
-        };
-
-        let Some(simul_efuns) = self.context.simul_efuns() else {
-            // This could be legitimately hit in the case an object was compiled with simul_efuns,
-            // cached to disk, and then later executed without them.
-            // tl;dr objects are dynamically linked.
-            return Err(self.runtime_error("Unable to find simul_efuns. Were they configured?"));
-        };
-
-        let func = {
-            if let Some(func) = simul_efuns.program.lookup_function(func_name) {
-                func.clone()
-            } else {
-                let msg = format!("Call to unknown simul efun `{func_name}`");
-                return Err(self.runtime_error(msg));
-            }
-        };
-
-        let new_frame = self
-            .prepare_new_call_frame(simul_efuns.clone(), func)
-            .await?;
-
-        self.stack.push(new_frame)?;
-
-        Ok(())
-    }
-
-    #[instrument(skip_all)]
-    #[inline]
-    fn handle_functionptrconst(
-        &mut self,
-        location: RegisterVariant,
-        receiver: FunctionReceiver,
-        name_idx: RegisterSize,
-    ) -> Result<()> {
-        let call_other = match receiver {
-            FunctionReceiver::Var(_) | FunctionReceiver::Dynamic => true,
-            FunctionReceiver::Local | FunctionReceiver::Efun | FunctionReceiver::SimulEfun => false,
-        };
-
-        let Some(func_name) = self
-            .stack
-            .current_frame()?
-            .function
-            .strings
-            .get()
-            .unwrap()
-            .resolve(Self::index_symbol(name_idx))
-        else {
-            return Err(self.runtime_bug("Unable to find the name being pointed to."));
-        };
-
-        let address = match receiver {
-            FunctionReceiver::Efun => FunctionAddress::Efun(ustr(func_name)),
-            FunctionReceiver::SimulEfun => FunctionAddress::SimulEfun(ustr(func_name)),
-            FunctionReceiver::Dynamic => FunctionAddress::Dynamic(ustr(func_name)),
-            FunctionReceiver::Local => {
-                let frame = self.stack.current_frame()?;
-                let process = frame.process.clone();
-
-                let func = {
-                    let Some(func) = process.program.lookup_function(func_name) else {
-                        return Err(self.runtime_error(format!(
-                            "Unable to find function `{}` in local process `{}`.",
-                            func_name,
-                            process.filename()
-                        )));
-                    };
-
-                    func.clone()
-                };
-
-                FunctionAddress::Local(Arc::downgrade(&process), func)
-            }
-            FunctionReceiver::Var(location) => {
-                let receiver_ref = &*get_loc!(self, location)?;
-                match receiver_ref {
-                    LpcRef::Object(weak_process) => {
-                        let Some(process) = weak_process.upgrade() else {
-                            return Err(self.runtime_error("called object is no longer available"));
-                        };
-
-                        let func = {
-                            let Some(func) = process.program.lookup_function(func_name) else {
-                                return Err(self.runtime_error(format!(
-                                    "Unable to find function `{}` in remote process `{}`.",
-                                    func_name,
-                                    process.filename()
-                                )));
-                            };
-
-                            func.clone()
-                        };
-                        let weak_process = (*weak_process).clone();
-                        FunctionAddress::Local(weak_process, func)
-                    }
-                    LpcRef::String(s) => {
-                        let process = {
-                            let path = s.read();
-
-                            let Some(process) = self.context.lookup_process(&*path) else {
-                                return Err(self
-                                    .runtime_error(format!("Unable to find object `{}`.", path)));
-                            };
-
-                            process
-                        };
-
-                        let func = {
-                            let Some(func) = process.program.lookup_function(func_name) else {
-                                return Err(self.runtime_error(format!(
-                                    "Unable to find function `{}` in remote process `{}`.",
-                                    func_name,
-                                    process.filename()
-                                )));
-                            };
-
-                            func.clone()
-                        };
-
-                        FunctionAddress::Local(Arc::downgrade(&process), func)
-                    }
-                    _ => {
-                        return Err(self.runtime_error(format!(
-                            "Unable to find the receiver for function `{}`.",
-                            func_name
-                        )));
-                    }
-                }
-            }
-        };
-
-        let partial_args = self
-            .partial_args
-            .iter()
-            .map(|arg| {
-                arg.map(|register| Ok(get_loc!(self, register)?.into_owned()))
-                    .transpose()
-            })
-            .collect::<Result<ThinVec<Option<LpcRef>>>>()?;
-
-        let frame = self.stack.current_frame()?;
-        let fp = FunctionPtr {
-            owner: Arc::downgrade(&frame.process),
-            address,
-            partial_args: RwLock::new(partial_args),
-            call_other,
-            // Function pointers inherit the current upvalue_ptrs
-            upvalue_ptrs: frame.upvalue_ptrs.clone(),
-            unique_id: UniqueId::new(),
-        };
-
-        let new_ref = fp.into();
-
-        set_loc!(self, location, new_ref)
-    }
-
-    // #[instrument(skip_all)]
-    // fn capture_environment(&mut self) -> Result<Vec<Register>> {
-    //     let frame = self.stack.current_frame_mut()?;
-    //     let mut upvalues = self.context.upvalues().write();
-    //
-    //     trace!("ptrs: {:?}", frame.upvalue_ptrs);
-    //     trace!("upvalues: {:?}", upvalues);
-    //
-    //     frame
-    //         .upvalue_ptrs
-    //         .iter()
-    //         .map(|ptr| {
-    //             let upvalue = upvalues
-    //                 .get(ptr.index() as usize)
-    //                 .cloned()
-    //                 .unwrap_or_default();
-    //             let new_index = RegisterSize::try_from(upvalues.insert(upvalue))?;
-    //             Ok(Register(new_index))
-    //         })
-    //         .collect::<Result<Vec<Register>>>()
-    // }
-
-    #[instrument(skip_all)]
-    #[inline]
-    fn handle_load(
-        &mut self,
-        container_loc: RegisterVariant,
-        index_loc: RegisterVariant,
-        destination: RegisterVariant,
-    ) -> Result<()> {
-        let container_ref = get_loc!(self, container_loc)?.into_owned();
-        let lpc_ref = get_loc!(self, index_loc)?.into_owned();
-
-        match container_ref {
-            LpcRef::Array(vec_ref) => {
-                let vec = vec_ref.read();
-
-                if let LpcRef::Int(i) = lpc_ref {
-                    let idx = if i.0 >= 0 {
-                        i.0
-                    } else {
-                        vec.len() as LpcIntInner + i.0
-                    };
-
-                    if idx >= 0 {
-                        if let Some(v) = vec.get(idx as usize) {
-                            set_loc!(self, destination, v.clone())?;
-                        } else {
-                            return Err(self.array_index_error(idx, vec.len()));
-                        }
-                    } else {
-                        return Err(self.array_index_error(idx, vec.len()));
-                    }
-                } else {
-                    return Err(self.array_index_error(lpc_ref, vec.len()));
-                }
-
-                Ok(())
-            }
-            LpcRef::String(string_ref) => {
-                let lock = string_ref.read();
-                let string = lock.to_str();
-
-                if let LpcRef::Int(i) = lpc_ref {
-                    let idx = if i.0 >= 0 {
-                        i.0
-                    } else {
-                        string.len() as LpcIntInner + i.0
-                    };
-
-                    if idx >= 0 {
-                        if let Some(v) = string.chars().nth(idx as usize) {
-                            set_loc!(self, destination, LpcRef::Int(LpcInt(v as LpcIntInner)))?;
-                        } else {
-                            set_loc!(self, destination, NULL)?;
-                        }
-                    } else {
-                        set_loc!(self, destination, NULL)?;
-                    }
-                } else {
-                    return Err(self.runtime_error(format!(
-                        "Attempting to access index {} in a string of length {}",
-                        lpc_ref,
-                        string.len()
-                    )));
-                }
-
-                Ok(())
-            }
-            LpcRef::Mapping(map_ref) => {
-                let map = map_ref.read();
-
-                let var = if let Some(v) = map.get(&lpc_ref) {
-                    v.clone()
-                } else {
-                    NULL
-                };
-
-                set_loc!(self, destination, var)?;
-
-                Ok(())
-            }
-            x => Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x))),
-        }
-    }
-
-    #[instrument(skip_all)]
-    #[inline]
-    fn handle_load_mapping_key(
-        &mut self,
-        container_loc: RegisterVariant,
-        index_loc: RegisterVariant,
-        destination: RegisterVariant,
-    ) -> Result<()> {
-        let var = {
-            let container_ref = &*get_loc!(self, container_loc)?;
-            let lpc_ref = &*get_loc!(self, index_loc)?;
-
-            match container_ref {
-                LpcRef::Mapping(map_ref) => {
-                    let map = map_ref.read();
-
-                    let index = match lpc_ref {
-                        LpcRef::Int(i) => i.0,
-                        _ => {
-                            return Err(
-                                self.runtime_error(format!("Invalid index type: {}", lpc_ref))
-                            );
-                        }
-                    };
-
-                    if let Some((key, _)) = map.get_index(index as usize) {
-                        key.clone()
-                    } else {
-                        NULL
-                    }
-                }
-                x => {
-                    return Err(
-                        self.runtime_error(format!("Invalid attempt to take index of `{}`", x))
-                    );
-                }
-            }
-        };
-
-        set_loc!(self, destination, var)
-    }
-
-    #[instrument(skip_all)]
-    #[inline]
-    fn handle_sconst(&mut self, location: RegisterVariant, index: usize) -> Result<()> {
-        let function_strings = self.stack.current_frame()?.function.strings.get();
-        const MSG: &str = "the `strings` reference was never assigned to the function.";
-        debug_assert!(function_strings.is_some(), "{}", MSG); // This is very bad if it happens.
-        let Some(strings) = function_strings else {
-            return Err(self.runtime_bug(MSG));
-        };
-        let lpc_string = LpcString::Static(index, strings.clone());
-
-        trace!(?lpc_string, "Storing static string");
-
-        let new_ref = lpc_string.into();
-
-        set_loc!(self, location, new_ref)
-    }
-
-    #[instrument(skip_all)]
-    #[inline]
-    fn handle_store(
-        &mut self,
-        value_loc: RegisterVariant,
-        container_loc: RegisterVariant,
-        index_loc: RegisterVariant,
-    ) -> Result<()> {
-        let mut container = get_loc!(self, container_loc)?.into_owned();
-        let index = &*get_loc!(self, index_loc)?;
-        let array_idx = if let LpcRef::Int(i) = index { i.0 } else { 0 };
-
-        match container {
-            LpcRef::Array(vec_ref) => {
-                let mut vec = vec_ref.write();
-
-                let len = vec.len();
-
-                // handle negative indices
-                let idx = if array_idx >= 0 {
-                    array_idx
-                } else {
-                    len as LpcIntInner + array_idx
-                };
-
-                if idx >= 0 && (idx as usize) < len {
-                    vec[idx as usize] = (*get_loc!(self, value_loc)?).clone();
-                } else {
-                    return Err(self.array_index_error(idx, len));
-                }
-
-                Ok(())
-            }
-            LpcRef::Mapping(ref mut map_ref) => {
-                let mut map = map_ref.write();
-
-                map.insert(index.clone(), get_loc!(self, value_loc)?.into_owned());
-
-                Ok(())
-            }
-            x => Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x))),
-        }
-    }
-
     /// Set the state to handle a caught error.
     /// Panics if there aren't actually any catch points.
     #[instrument(skip_all)]
@@ -987,7 +360,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // set up the catch point's return value
         let value = LpcString::from(error.to_string());
         let lpc_ref = value.into();
-        set_loc!(self, Register(result_index).as_local(), lpc_ref)?;
+        set_location(&mut self.stack, Register(result_index).as_local(), lpc_ref)?;
         let frame = self.stack.current_frame_mut()?;
 
         // jump to the corresponding catchend instruction
@@ -1012,7 +385,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         match operation(ref1, ref2) {
             Ok(result) => {
-                set_loc!(self, r3, result)?;
+                set_location(&mut self.stack, r3, result)?;
             }
             Err(mut e) => {
                 let frame = self.stack.current_frame()?;
@@ -1041,7 +414,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let out = operation(ref1, ref2) as LpcIntInner;
 
-        set_loc!(self, r3, LpcRef::Int(LpcInt(out)))
+        set_location(&mut self.stack, r3, LpcRef::Int(LpcInt(out)))
     }
 
     /// convenience helper to generate runtime errors
@@ -1119,6 +492,3 @@ impl<const STACKSIZE: usize> Mark for Task<STACKSIZE> {
 //         self.context.process.lock.try_release(self.id);
 //     }
 // }
-
-#[cfg(test)]
-mod tests;
