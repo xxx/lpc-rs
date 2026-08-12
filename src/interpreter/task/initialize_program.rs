@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 use lpc_rs_core::register::Register;
-use lpc_rs_errors::{lpc_error, Result};
+use lpc_rs_errors::{Result, lpc_error};
 
 use crate::interpreter::{
     process::Process, program::Program, task::Task, vm::global_state::GlobalState,

@@ -1,4 +1,4 @@
-use lpc_rs_core::{lpc_path::LpcPath, RegisterSize};
+use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process};
@@ -27,7 +27,9 @@ pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         }
         LpcRef::Object(proc) => {
             let Some(destination) = proc.upgrade() else {
-                return Err(context.runtime_error("new environment has been destructed. cannot move."));
+                return Err(
+                    context.runtime_error("new environment has been destructed. cannot move.")
+                );
             };
 
             destination

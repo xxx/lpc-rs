@@ -6,7 +6,7 @@ use std::{
 use async_trait::async_trait;
 use itertools::Itertools;
 use lazy_format::lazy_format;
-use lpc_rs_errors::{span::Span, Result};
+use lpc_rs_errors::{Result, span::Span};
 use ustr::Ustr;
 
 use crate::compiler::{

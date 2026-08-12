@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{lpc_bug, Result};
+use lpc_rs_errors::{Result, lpc_bug};
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -11,7 +11,7 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        task::{into_task_context::IntoTaskContext, task_template::TaskTemplate, Task},
+        task::{Task, into_task_context::IntoTaskContext, task_template::TaskTemplate},
     },
     util::with_compiler::WithCompiler,
 };
@@ -124,7 +124,9 @@ where
     let process = Arc::new(Process::new(program));
 
     let Some(prog_function) = process.program.initializer.clone() else {
-        return Err(lpc_bug!("Init function not found? This shouldn't happen. Are you trying to initialize an empty program?"));
+        return Err(lpc_bug!(
+            "Init function not found? This shouldn't happen. Are you trying to initialize an empty program?"
+        ));
     };
 
     let ctx = template.into_task_context(process.clone());

@@ -2,9 +2,9 @@ use async_trait::async_trait;
 use if_chain::if_chain;
 use itertools::Itertools;
 use lpc_rs_core::{
-    call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType, ScopeId,
+    ScopeId, call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType,
 };
-use lpc_rs_errors::{lpc_bug, lpc_error, span::Span, LpcError, Result};
+use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, span::Span};
 use lpc_rs_function_support::symbol::Symbol;
 use tracing::trace;
 
@@ -15,9 +15,9 @@ use crate::compiler::{
         call_node::{CallChain, CallNode},
         closure_node::ClosureNode,
         do_while_node::DoWhileNode,
-        for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
+        for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode},
         for_node::ForNode,
-        function_def_node::{FunctionDefNode, ARGV},
+        function_def_node::{ARGV, FunctionDefNode},
         if_node::IfNode,
         program_node::ProgramNode,
         var_init_node::VarInitNode,
@@ -89,8 +89,16 @@ impl ScopeWalker {
     }
 
     async fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
-        let CallChain::Root { receiver, name, namespace: _ } = &mut node.chain else {
-            return Err(lpc_error!(node.span, "CallNode::chain was not a CallChain::Root"));
+        let CallChain::Root {
+            receiver,
+            name,
+            namespace: _,
+        } = &mut node.chain
+        else {
+            return Err(lpc_error!(
+                node.span,
+                "CallNode::chain was not a CallChain::Root"
+            ));
         };
 
         if let Some(rcvr) = receiver {
@@ -117,7 +125,10 @@ impl ScopeWalker {
 
     async fn visit_call_chain(&mut self, node: &mut CallNode) -> Result<()> {
         let CallChain::Node(chain_node) = &mut node.chain else {
-            return Err(lpc_error!(node.span, "CallNode::chain was not a CallChain::Root"));
+            return Err(lpc_error!(
+                node.span,
+                "CallNode::chain was not a CallChain::Root"
+            ));
         };
 
         chain_node.visit(self).await?;
@@ -239,10 +250,7 @@ impl TreeWalker for ScopeWalker {
             ForEachInit::Array(init) | ForEachInit::String(init) => {
                 let _ = init.visit(self).await;
             }
-            ForEachInit::Mapping {
-                key,
-                value,
-            } => {
+            ForEachInit::Mapping { key, value } => {
                 let _ = key.visit(self).await;
                 let _ = value.visit(self).await;
             }
@@ -551,13 +559,15 @@ mod tests {
 
             let _ = walker.visit_var_init(&mut node).await;
 
-            assert!(walker
-                .context
-                .scopes
-                .current()
-                .unwrap()
-                .lookup("foo")
-                .is_some());
+            assert!(
+                walker
+                    .context
+                    .scopes
+                    .current()
+                    .unwrap()
+                    .lookup("foo")
+                    .is_some()
+            );
         }
     }
 

@@ -5,7 +5,7 @@ use std::{
 
 use async_trait::async_trait;
 use indextree::NodeId;
-use lpc_rs_errors::{span::Span, Result};
+use lpc_rs_errors::{Result, span::Span};
 
 use crate::compiler::{
     ast::{

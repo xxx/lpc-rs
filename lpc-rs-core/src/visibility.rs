@@ -3,9 +3,7 @@ use std::fmt::{Display, Formatter};
 use modular_bitfield::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(
-    Specifier, Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Serialize, Deserialize,
-)]
+#[derive(Specifier, Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Serialize, Deserialize)]
 #[bits = 2]
 #[derive(Default)]
 pub enum Visibility {

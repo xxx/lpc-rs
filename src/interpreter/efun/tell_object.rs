@@ -1,12 +1,12 @@
-use lpc_rs_core::{lpc_path::LpcPath, RegisterSize};
+use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
+    CATCH_TELL,
     efun::efun_context::EfunContext,
     lpc_ref::LpcRef,
     object_flags::ObjectFlags,
     task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
-    CATCH_TELL,
 };
 
 /// `tell_object`, an efun for sending a message to a specific object
@@ -87,9 +87,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        interpreter::{
-             lpc_array::LpcArray, lpc_string::LpcString, vm::Vm,
-        },
+        interpreter::{lpc_array::LpcArray, lpc_string::LpcString, vm::Vm},
         test_support::test_config,
         util::process_builder::{ProcessCreator, ProcessInitializer},
     };

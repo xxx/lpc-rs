@@ -44,7 +44,7 @@ mod tests {
         interpreter::{
             lpc_int::LpcInt,
             lpc_ref::LpcRef,
-            task::{into_task_context::IntoTaskContext, Task},
+            task::{Task, into_task_context::IntoTaskContext},
             vm::Vm,
         },
         telnet::connection::Connection,

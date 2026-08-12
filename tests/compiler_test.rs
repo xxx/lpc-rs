@@ -194,8 +194,8 @@ async fn test_multi_dimensional_arrays() {
         .iter()
         .map(|a| {
             let LpcRef::String(s) = a else {
-            panic!("this shouldn't be reachable.");
-        };
+                panic!("this shouldn't be reachable.");
+            };
             s.read().clone()
         })
         .collect::<Vec<_>>();
@@ -450,7 +450,6 @@ async fn test_nomask_grandchildren() {
 }
 
 #[ignore = "lost-update race; un-ignore at C6 (see local/specs/2026-08-11-stm-design.md)"]
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multithread_sync() {
     let room = indoc! { r#"

@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext, lpc_ref::LpcRef,
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// `this_player`, an efun for returning the command giver for the current Task
 pub async fn this_player<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {

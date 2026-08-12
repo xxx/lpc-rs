@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use derive_builder::Builder;
 use indexmap::IndexMap;
 use lpc_rs_core::{
-    call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags, RegisterSize, EFUN,
+    EFUN, RegisterSize, call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags,
 };
 use lpc_rs_errors::LpcError;
 use lpc_rs_function_support::{

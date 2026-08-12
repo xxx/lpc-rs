@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::{
+    RegisterSize,
     function_arity::FunctionArityBuilder,
     function_flags::FunctionFlags,
     lpc_type::LpcType,
     register::{Register, RegisterVariant},
-    RegisterSize,
 };
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::{
@@ -20,9 +20,8 @@ use string_interner::StringInterner;
 use thin_vec::thin_vec;
 
 use crate::interpreter::{
-    efun::{efun_context::EfunContext, EFUN_PROTOTYPES},
+    efun::{EFUN_PROTOTYPES, efun_context::EfunContext},
     function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
-
     lpc_ref::LpcRef,
 };
 

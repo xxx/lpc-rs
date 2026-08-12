@@ -1,12 +1,12 @@
 use async_trait::async_trait;
-use lpc_rs_core::{lpc_path::LpcPath, EFUN};
-use lpc_rs_errors::{lpc_error, LpcError, Result};
+use lpc_rs_core::{EFUN, lpc_path::LpcPath};
+use lpc_rs_errors::{LpcError, Result, lpc_error};
 
 use crate::compiler::{
+    CompilerBuilder,
     ast::inherit_node::InheritNode,
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
-    CompilerBuilder,
 };
 
 /// A walker to handle compiling and linking inherited files.

@@ -2,9 +2,8 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    efun, efun::efun_context::EfunContext,  lpc_array::LpcArray,
+    efun, efun::efun_context::EfunContext, lpc_array::LpcArray, lpc_ref::LpcRef,
 };
-use crate::interpreter::lpc_ref::LpcRef;
 
 /// `all_inventory`, an efun for returning an object's inventory.
 pub async fn all_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {

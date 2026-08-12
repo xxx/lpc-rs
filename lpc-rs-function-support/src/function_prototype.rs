@@ -15,8 +15,7 @@ use lpc_rs_errors::span::Span;
 use serde::{Deserialize, Serialize};
 
 /// Kinds of functions. Used for codegen.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub enum FunctionKind {
     /// A plain old normal LPC function, defined in a plain old normal LPC object.
     #[default]
@@ -30,7 +29,6 @@ pub enum FunctionKind {
     /// An efun. These are implemented in Rust, and can be called from anywhere.
     Efun,
 }
-
 
 impl Display for FunctionKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

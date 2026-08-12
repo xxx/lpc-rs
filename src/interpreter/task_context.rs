@@ -4,7 +4,7 @@ use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use derive_builder::Builder;
 use lpc_rs_core::register::Register;
-use lpc_rs_errors::{lpc_bug, Result};
+use lpc_rs_errors::{Result, lpc_bug};
 use lpc_rs_utils::config::Config;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;

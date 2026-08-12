@@ -3,6 +3,7 @@ use if_chain::if_chain;
 use indoc::indoc;
 use lpc_rs::{
     compiler::{
+        Compiler,
         ast::{
             assignment_node::AssignmentNode,
             ast_node::AstNode,
@@ -20,15 +21,14 @@ use lpc_rs::{
         },
         compilation_context::CompilationContext,
         lexer::{LexWrapper, TokenVecWrapper},
-        Compiler,
     },
     lpc_parser,
 };
 use lpc_rs_core::{
-    global_var_flags::GlobalVarFlags, lpc_type::LpcType, visibility::Visibility, LpcFloatInner,
-    LpcIntInner,
+    LpcFloatInner, LpcIntInner, global_var_flags::GlobalVarFlags, lpc_type::LpcType,
+    visibility::Visibility,
 };
-use lpc_rs_errors::{span::Span, Result};
+use lpc_rs_errors::{Result, span::Span};
 use ustr::ustr;
 
 // just a helper for a very common pattern

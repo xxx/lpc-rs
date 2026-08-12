@@ -110,9 +110,7 @@ pub trait TreeWalker {
         Self: Sized,
     {
         match &mut node.chain {
-            CallChain::Root {
-                receiver, ..
-            } => {
+            CallChain::Root { receiver, .. } => {
                 if let Some(rcvr) = receiver {
                     rcvr.visit(self).await?;
                 }
@@ -225,10 +223,7 @@ pub trait TreeWalker {
             ForEachInit::Array(init) | ForEachInit::String(init) => {
                 let _ = init.visit(self).await;
             }
-            ForEachInit::Mapping {
-                key,
-                value,
-            } => {
+            ForEachInit::Mapping { key, value } => {
                 let _ = key.visit(self).await;
                 let _ = value.visit(self).await;
             }

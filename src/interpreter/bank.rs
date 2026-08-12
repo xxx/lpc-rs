@@ -7,7 +7,7 @@ use std::{
 
 use bit_set::BitSet;
 use delegate::delegate;
-use lpc_rs_core::{register::Register, RegisterSize};
+use lpc_rs_core::{RegisterSize, register::Register};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::ThinVec;
 

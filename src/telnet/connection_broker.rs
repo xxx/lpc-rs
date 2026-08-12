@@ -8,9 +8,9 @@ use tracing::{error, info, instrument, trace};
 use crate::{
     interpreter::{task::task_template::TaskTemplate, vm::vm_op::VmOp},
     telnet::{
+        Telnet,
         connection::Connection,
         ops::{BrokerOp, ConnectionOp},
-        Telnet,
     },
 };
 
@@ -71,7 +71,10 @@ impl ConnectionBroker {
                         BrokerOp::NewConnection(connection) => {
                             let address = connection.address;
                             let Ok(_) = vm_tx.send(VmOp::InitiateLogin(connection)).await else {
-                                error!("Failed to send VmOp::InitiateLogin for {}. Disconnecting.", address);
+                                error!(
+                                    "Failed to send VmOp::InitiateLogin for {}. Disconnecting.",
+                                    address
+                                );
                                 continue;
                             };
                         }

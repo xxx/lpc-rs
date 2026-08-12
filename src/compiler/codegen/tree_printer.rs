@@ -128,7 +128,11 @@ impl TreeWalker for TreePrinter {
 
     async fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
         match node.chain {
-            CallChain::Root { ref receiver, ref name, .. } => {
+            CallChain::Root {
+                ref receiver,
+                ref name,
+                ..
+            } => {
                 if let Some(rcvr) = receiver {
                     self.println_indented("Call Other");
                     self.indent += 2;

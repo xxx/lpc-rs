@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use lpc_rs_core::{
-    register::{Register, RegisterVariant},
     RegisterSize,
+    register::{Register, RegisterVariant},
 };
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::program_function::ProgramFunction;
@@ -17,7 +17,7 @@ use crate::{
         lpc_ref::{LpcRef, NULL},
         object_flags::ObjectFlags,
         process::Process,
-        task::{get_location, set_location, Task},
+        task::{Task, get_location, set_location},
     },
     set_loc,
 };
@@ -192,7 +192,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         let Some((proc, function)) = self.extract_process_and_function(ptr).await? else {
-            return Ok(None)
+            return Ok(None);
         };
 
         let Some(proc) = proc.upgrade() else {

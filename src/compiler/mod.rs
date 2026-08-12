@@ -13,8 +13,7 @@ use derive_builder::Builder;
 use educe::Educe;
 use lexer::{Spanned, Token, TokenVecWrapper};
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors;
-use lpc_rs_errors::{lpc_error, span::Span, LpcError, LpcErrorSeverity, Result};
+use lpc_rs_errors::{self, LpcError, LpcErrorSeverity, Result, lpc_error, span::Span};
 use lpc_rs_utils::{config::Config, read_lpc_file};
 use preprocessor::Preprocessor;
 use tracing::instrument;
@@ -383,19 +382,23 @@ mod tests {
             let server_path = LpcPath::new_server("../../secure.c");
             let in_game_path = LpcPath::new_in_game("../../secure.c", "/", &*config.lib_dir);
 
-            assert!(compiler
-                .compile_in_game_file(&server_path, None)
-                .await
-                .unwrap_err()
-                .to_string()
-                .starts_with("attempt to access a file outside of lib_dir"));
+            assert!(
+                compiler
+                    .compile_in_game_file(&server_path, None)
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .starts_with("attempt to access a file outside of lib_dir")
+            );
 
-            assert!(compiler
-                .compile_in_game_file(&in_game_path, None)
-                .await
-                .unwrap_err()
-                .to_string()
-                .starts_with("attempt to access a file outside of lib_dir"));
+            assert!(
+                compiler
+                    .compile_in_game_file(&in_game_path, None)
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .starts_with("attempt to access a file outside of lib_dir")
+            );
         }
     }
 

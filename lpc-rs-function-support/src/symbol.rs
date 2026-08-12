@@ -1,8 +1,8 @@
 use std::fmt::{Display, Formatter};
 
 use lpc_rs_core::{
-    global_var_flags::GlobalVarFlags, lpc_type::LpcType, register::RegisterVariant,
-    visibility::Visibility, ScopeId,
+    ScopeId, global_var_flags::GlobalVarFlags, lpc_type::LpcType, register::RegisterVariant,
+    visibility::Visibility,
 };
 use lpc_rs_errors::span::Span;
 use serde::{Deserialize, Serialize};

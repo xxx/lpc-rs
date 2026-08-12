@@ -3,8 +3,8 @@ use std::{borrow::Cow, fmt::Debug, future::Future, path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use delegate::delegate;
-use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant, RegisterSize};
-use lpc_rs_errors::{span::Span, LpcError, Result};
+use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, register::RegisterVariant};
+use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
@@ -20,7 +20,7 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        task::{get_location, task_template::TaskTemplate},
+        task::{get_location, task_id::TaskId, task_template::TaskTemplate},
         task_context::{TaskContext, TaskContextBuilder},
         vm::vm_op::VmOp,
     },
@@ -29,7 +29,6 @@ use crate::{
         with_compiler::WithCompiler,
     },
 };
-use crate::interpreter::task::task_id::TaskId;
 
 /// A structure to hold various pieces of interpreter state, to be passed to
 /// Efuns when they're called
@@ -46,7 +45,11 @@ pub struct EfunContext<'task, const N: usize> {
 }
 
 impl<'task, const N: usize> EfunContext<'task, N> {
-    pub fn new(task_id: TaskId, stack: &'task mut CallStack<N>, task_context: &'task TaskContext) -> Self {
+    pub fn new(
+        task_id: TaskId,
+        stack: &'task mut CallStack<N>,
+        task_context: &'task TaskContext,
+    ) -> Self {
         Self {
             task_id,
             stack,

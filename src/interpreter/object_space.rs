@@ -1,8 +1,8 @@
 use std::{
     future::Future,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
 };
 
@@ -10,8 +10,8 @@ use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use bit_set::BitSet;
 use dashmap::{
-    mapref::{multiple::RefMulti, one::Ref},
     DashMap,
+    mapref::{multiple::RefMulti, one::Ref},
 };
 use delegate::delegate;
 use lpc_rs_utils::config::Config;
@@ -235,9 +235,7 @@ mod tests {
     use ustr::ustr;
 
     use super::*;
-    use crate::interpreter::{
-        lpc_array::LpcArray, program::ProgramBuilder,
-    };
+    use crate::interpreter::{lpc_array::LpcArray, program::ProgramBuilder};
 
     // #[test]
     // fn test_insert_prototype() {
@@ -268,18 +266,26 @@ mod tests {
         ObjectSpace::insert_clone(&object_space, prog.clone());
 
         assert_eq!(object_space.len(), 4);
-        assert!(object_space
-            .processes
-            .contains_key(&format!("{}#{}", filename, 0)));
-        assert!(object_space
-            .processes
-            .contains_key(&format!("{}#{}", filename, 1)));
-        assert!(object_space
-            .processes
-            .contains_key(&format!("{}#{}", filename2, 2)));
-        assert!(object_space
-            .processes
-            .contains_key(&format!("{}#{}", filename, 3)));
+        assert!(
+            object_space
+                .processes
+                .contains_key(&format!("{}#{}", filename, 0))
+        );
+        assert!(
+            object_space
+                .processes
+                .contains_key(&format!("{}#{}", filename, 1))
+        );
+        assert!(
+            object_space
+                .processes
+                .contains_key(&format!("{}#{}", filename2, 2))
+        );
+        assert!(
+            object_space
+                .processes
+                .contains_key(&format!("{}#{}", filename, 3))
+        );
     }
 
     #[test]

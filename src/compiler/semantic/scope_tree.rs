@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use indextree::{Arena, Node, NodeId};
-use lpc_rs_errors::{lpc_bug, Result};
+use lpc_rs_errors::{Result, lpc_bug};
 use lpc_rs_function_support::symbol::Symbol;
 
 use crate::compiler::{compilation_context::CompilationContext, semantic::local_scope::LocalScope};
@@ -137,10 +137,9 @@ impl ScopeTree {
             Ok(())
         } else {
             Err(lpc_bug!(
-                    "Unknown function passed to goto_function `{}`. This likely indicates a driver bug.",
-                    name
-                )
-            )
+                "Unknown function passed to goto_function `{}`. This likely indicates a driver bug.",
+                name
+            ))
         }
     }
 

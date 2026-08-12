@@ -166,13 +166,7 @@ impl BitOr for LpcType {
 
 impl Display for LpcType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let to_star = |array: &bool| -> &str {
-            if *array {
-                " *"
-            } else {
-                ""
-            }
-        };
+        let to_star = |array: &bool| -> &str { if *array { " *" } else { "" } };
 
         let type_ = match self {
             LpcType::Void => String::from("void"),
@@ -299,6 +293,8 @@ mod tests {
         assert!(LpcType::Object(true).matches_type(LpcType::Mixed(true)));
         assert!(LpcType::Mapping(true).matches_type(LpcType::Mixed(true)));
 
-        assert!(LpcType::Mapping(false).matches_type(LpcType::Mapping(false) | LpcType::Mixed(true)))
+        assert!(
+            LpcType::Mapping(false).matches_type(LpcType::Mapping(false) | LpcType::Mixed(true))
+        )
     }
 }

@@ -25,17 +25,17 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_asm::{address::Address, instruction::Instruction};
 use lpc_rs_core::{
+    LpcIntInner, RegisterSize,
     function_receiver::FunctionReceiver,
     lpc_path::LpcPath,
     lpc_type::LpcType,
     register::{Register, RegisterVariant},
-    LpcIntInner, RegisterSize,
 };
-use lpc_rs_errors::{lpc_bug, lpc_error, span::Span, LpcError, Result};
+use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use parking_lot::RwLock;
 use string_interner::{DefaultSymbol, Symbol};
-use thin_vec::{thin_vec, ThinVec};
+use thin_vec::{ThinVec, thin_vec};
 use tokio::{task::JoinHandle, time::timeout};
 use tracing::{error, instrument, trace, warn};
 use ustr::ustr;
@@ -44,7 +44,7 @@ use crate::{
     interpreter::{
         call_frame::CallFrame,
         call_stack::CallStack,
-        efun::{call_efun, efun_context::EfunContext, EFUN_FUNCTIONS},
+        efun::{EFUN_FUNCTIONS, call_efun, efun_context::EfunContext},
         function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{mark::Mark, unique_id::UniqueId},
         lpc_array::LpcArray,
@@ -94,7 +94,10 @@ pub fn get_location<const N: usize>(
 /// Resolve any type RegisterVariant into an LpcRef, for the passed frame
 #[instrument(skip(frame))]
 #[inline]
-pub fn get_location_in_frame(frame: &CallFrame, location: RegisterVariant) -> Result<Cow<'_, LpcRef>> {
+pub fn get_location_in_frame(
+    frame: &CallFrame,
+    location: RegisterVariant,
+) -> Result<Cow<'_, LpcRef>> {
     match location {
         RegisterVariant::Local(reg) => {
             let registers = &frame.registers;
@@ -160,16 +163,12 @@ where
 
 #[macro_export]
 macro_rules! get_loc {
-    ($self:expr, $loc:expr) => {{
-        get_location(&$self.stack, $loc)
-    }};
+    ($self:expr, $loc:expr) => {{ get_location(&$self.stack, $loc) }};
 }
 
 #[macro_export]
 macro_rules! set_loc {
-    ($self:expr, $loc:expr, $val:expr) => {{
-        set_location(&mut $self.stack, $loc, $val)
-    }};
+    ($self:expr, $loc:expr, $val:expr) => {{ set_location(&mut $self.stack, $loc, $val) }};
 }
 
 /// A type to track where `catch` calls need to go if there is an error
@@ -287,7 +286,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Initialize a [`Process`] by calling its initializer function, using the
     /// given [`TaskContext`], using the specified Task ID.
     /// It's assumed that the process has already been inserted into the [`ObjectSpace`]
-    pub async fn initialize_sub_process(task_id: TaskId, context: TaskContext) -> Result<Task<STACKSIZE>> {
+    pub async fn initialize_sub_process(
+        task_id: TaskId,
+        context: TaskContext,
+    ) -> Result<Task<STACKSIZE>> {
         debug_assert!(!context.process.flags.test(ObjectFlags::Initialized));
 
         let Some(initializer) = context.process.program.initializer.clone() else {
@@ -373,15 +375,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         .await
         {
             Ok(Ok(_)) => Ok(()),
-            Ok(Err(e)) => {
-                Err(e)
-            }
-            Err(_) => {
-                Err(lpc_error!(
-                    "evaluation limit of {}ms has been reached",
-                    timeout_ms
-                ))
-            }
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err(lpc_error!(
+                "evaluation limit of {}ms has been reached",
+                timeout_ms
+            )),
         }
     }
 
@@ -619,18 +617,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Gte(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y)?;
             }
-            Instruction::IAdd(r1, r2, r3) => {
-                match get_loc!(self, r1)?.add(&*get_loc!(self, r2)?) {
-                    Ok(result) => {
-                        set_loc!(self, r3, result)?;
-                    }
-                    Err(mut e) => {
-                        let frame = self.stack.current_frame()?;
-                        *e = e.with_span(frame.current_debug_span());
-                        return Err(e);
-                    }
+            Instruction::IAdd(r1, r2, r3) => match get_loc!(self, r1)?.add(&*get_loc!(self, r2)?) {
+                Ok(result) => {
+                    set_loc!(self, r3, result)?;
                 }
-            }
+                Err(mut e) => {
+                    let frame = self.stack.current_frame()?;
+                    *e = e.with_span(frame.current_debug_span());
+                    return Err(e);
+                }
+            },
             Instruction::IConst(r, i) => {
                 set_loc!(self, r, LpcRef::Int(i.into()))?;
             }
@@ -656,29 +652,25 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Err(e);
                 }
             },
-            Instruction::IMul(r1, r2, r3) => {
-                match get_loc!(self, r1)?.mul(&*get_loc!(self, r2)?) {
-                    Ok(result) => set_loc!(self, r3, result)?,
-                    Err(mut e) => {
-                        let frame = self.stack.current_frame()?;
-                        *e = e.with_span(frame.current_debug_span());
-                        return Err(e);
-                    }
+            Instruction::IMul(r1, r2, r3) => match get_loc!(self, r1)?.mul(&*get_loc!(self, r2)?) {
+                Ok(result) => set_loc!(self, r3, result)?,
+                Err(mut e) => {
+                    let frame = self.stack.current_frame()?;
+                    *e = e.with_span(frame.current_debug_span());
+                    return Err(e);
                 }
-            }
+            },
             Instruction::Inc(r1) => {
                 apply_in_location(&mut self.stack, r1, |x| x.inc())?;
             }
-            Instruction::ISub(r1, r2, r3) => {
-                match get_loc!(self, r1)?.sub(&*get_loc!(self, r2)?) {
-                    Ok(result) => set_loc!(self, r3, result)?,
-                    Err(mut e) => {
-                        let frame = self.stack.current_frame()?;
-                        *e = e.with_span(frame.current_debug_span());
-                        return Err(e);
-                    }
+            Instruction::ISub(r1, r2, r3) => match get_loc!(self, r1)?.sub(&*get_loc!(self, r2)?) {
+                Ok(result) => set_loc!(self, r3, result)?,
+                Err(mut e) => {
+                    let frame = self.stack.current_frame()?;
+                    *e = e.with_span(frame.current_debug_span());
+                    return Err(e);
                 }
-            }
+            },
             Instruction::Jmp(address) => {
                 let frame = self.stack.current_frame_mut()?;
                 frame.set_pc(address);
@@ -730,8 +722,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     );
                 }
 
-                let new_ref = LpcMapping::new(register_map.into_iter().collect())
-                    .into();
+                let new_ref = LpcMapping::new(register_map.into_iter().collect()).into();
 
                 set_loc!(self, r, new_ref)?;
             }
@@ -841,9 +832,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             let vec = v_ref.read();
 
                             if vec.is_empty() {
-                                return Ok(
-                                    LpcArray::new(vec![]).into()
-                                );
+                                return Ok(LpcArray::new(vec![]).into());
                             }
 
                             let index1 = &*get_location(stack, r2)?;
@@ -887,8 +876,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     let len = real_end - real_start + 1;
                                     let new_string: String =
                                         string.chars().skip(real_start).take(len).collect();
-                                    Ok(LpcString::from(new_string)
-                                        .into())
+                                    Ok(LpcString::from(new_string).into())
                                 } else {
                                     Ok(LpcString::from("").into())
                                 }
@@ -1069,9 +1057,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 trace!(
                     "Copying argument {} ({}) to {}",
-                    i,
-                    lpc_ref,
-                    target_location
+                    i, lpc_ref, target_location
                 );
 
                 new_frame.arg_locations.push(target_location);
@@ -1209,7 +1195,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
     #[inline]
     async fn handle_call_simul_efun(&mut self, name_idx: RegisterSize) -> Result<()> {
-        let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().resolve(Self::index_symbol(name_idx)) else {
+        let Some(func_name) = self
+            .stack
+            .current_frame()?
+            .function
+            .strings
+            .get()
+            .unwrap()
+            .resolve(Self::index_symbol(name_idx))
+        else {
             return Err(self.runtime_bug("Unable to find the name being pointed to."));
         };
 
@@ -1251,7 +1245,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             FunctionReceiver::Local | FunctionReceiver::Efun | FunctionReceiver::SimulEfun => false,
         };
 
-        let Some(func_name) = self.stack.current_frame()?.function.strings.get().unwrap().resolve(Self::index_symbol(name_idx)) else {
+        let Some(func_name) = self
+            .stack
+            .current_frame()?
+            .function
+            .strings
+            .get()
+            .unwrap()
+            .resolve(Self::index_symbol(name_idx))
+        else {
             return Err(self.runtime_bug("Unable to find the name being pointed to."));
         };
 
@@ -1304,10 +1306,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             let path = s.read();
 
                             let Some(process) = self.context.lookup_process(&*path) else {
-                                return Err(self.runtime_error(format!(
-                                    "Unable to find object `{}`.",
-                                    path
-                                )));
+                                return Err(self
+                                    .runtime_error(format!("Unable to find object `{}`.", path)));
                             };
 
                             process
@@ -1489,7 +1489,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         _ => {
                             return Err(
                                 self.runtime_error(format!("Invalid index type: {}", lpc_ref))
-                            )
+                            );
                         }
                     };
 
@@ -1502,7 +1502,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 x => {
                     return Err(
                         self.runtime_error(format!("Invalid attempt to take index of `{}`", x))
-                    )
+                    );
                 }
             }
         };
@@ -3883,7 +3883,7 @@ mod tests {
             use std::sync::Arc;
 
             use lpc_rs_asm::instruction::Instruction::{Ret, SConst, Sizeof};
-            use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, INIT_PROGRAM};
+            use lpc_rs_core::{INIT_PROGRAM, lpc_path::LpcPath, lpc_type::LpcType};
             use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
             use once_cell::sync::OnceCell;
             use string_interner::StringInterner;

@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
-use lpc_rs_core::{lpc_path::LpcPath, RegisterSize};
+use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::efun_context::EfunContext,
-
     lpc_ref::{LpcRef, NULL},
 };
 
@@ -59,7 +58,7 @@ mod tests {
             program::{Program, ProgramBuilder},
             task::Task,
             task_context::{TaskContext, TaskContextBuilder},
-            vm::{global_state::GlobalStateBuilder, vm_op::VmOp, Vm},
+            vm::{Vm, global_state::GlobalStateBuilder, vm_op::VmOp},
         },
         test_support::{compile_prog, test_config},
         util::process_builder::ProcessInitializer,

@@ -319,8 +319,7 @@ impl Mangle for LpcTypeUnion {
             vec.push(LpcType::Function(true).mangle());
         }
 
-        vec
-            .iter()
+        vec.iter()
             .map(|i| i.to_string())
             .collect::<Vec<_>>()
             .join("|")

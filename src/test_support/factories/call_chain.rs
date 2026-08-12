@@ -1,7 +1,7 @@
 use factori::factori;
 use fake::Fake;
 use lpc_rs_core::call_namespace::CallNamespace;
-use ustr::{ustr, Ustr};
+use ustr::{Ustr, ustr};
 
 use crate::compiler::ast::{
     call_node::{CallChain, CallNode},

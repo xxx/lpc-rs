@@ -4,13 +4,12 @@ use async_recursion::async_recursion;
 use define::{Define, ObjectMacro};
 use lalrpop_util::ParseError as LalrpopParseError;
 use lpc_rs_core::{
-    convert_escapes,
+    LpcIntInner, convert_escapes,
     lpc_path::LpcPath,
     pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
-    LpcIntInner,
 };
 use lpc_rs_errors::{
-    format_expected, lazy_files::FILE_CACHE, lpc_error, span::Span, LpcError, Result,
+    LpcError, Result, format_expected, lazy_files::FILE_CACHE, lpc_error, span::Span,
 };
 use lpc_rs_utils::read_lpc_file;
 use once_cell::sync::Lazy;
@@ -22,8 +21,8 @@ use crate::{
         ast::binary_op_node::BinaryOperation,
         compilation_context::CompilationContext,
         lexer::{
-            logos_token::{IntToken, StringToken},
             LexWrapper, Spanned, Token, TokenVecWrapper,
+            logos_token::{IntToken, StringToken},
         },
         preprocessor::preprocessor_node::PreprocessorNode,
     },
@@ -34,9 +33,7 @@ pub mod define;
 pub mod preprocessor_node;
 
 macro_rules! regex {
-    ($re:literal $(,)?) => {{
-        Lazy::new(|| Regex::new($re).unwrap())
-    }};
+    ($re:literal $(,)?) => {{ Lazy::new(|| Regex::new($re).unwrap()) }};
 }
 
 static SYS_INCLUDE: Lazy<Regex> = regex!(r"\A\s*#\s*include\s+<([^>]+)>\s*\z");
@@ -465,8 +462,10 @@ impl Preprocessor {
 
         let check_duplicate = |key, error_span| -> Result<()> {
             if !self.skipping_lines() && self.defines.contains_key(key) {
-                return Err(Box::new(LpcError::new(format!("duplicate `#define`: `{key}`"))
-                    .with_span(Some(error_span))));
+                return Err(Box::new(
+                    LpcError::new(format!("duplicate `#define`: `{key}`"))
+                        .with_span(Some(error_span)),
+                ));
             }
 
             Ok(())
@@ -526,7 +525,7 @@ impl Preprocessor {
                             "parse error: {}, for expression `{}`",
                             e,
                             &captures[2]
-                        ))
+                        ));
                     }
                 }
             };

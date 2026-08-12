@@ -5,7 +5,6 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::efun_context::EfunContext,
-
     lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL},
 };

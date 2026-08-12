@@ -9,11 +9,11 @@ use crate::{
         lpc_ref::LpcRef,
         object_flags::ObjectFlags,
         task::{
-            apply_function::apply_runtime_error, into_task_context::IntoTaskContext,
-            task_id::TaskId, task_template::TaskTemplate, Task,
+            Task, apply_function::apply_runtime_error, into_task_context::IntoTaskContext,
+            task_id::TaskId, task_template::TaskTemplate,
         },
         task_context::TaskContext,
-        vm::{vm_op::VmOp, Vm},
+        vm::{Vm, vm_op::VmOp},
     },
 };
 
@@ -50,7 +50,10 @@ impl Vm {
 
             let Ok((ptr_arc, repeating)) = pair else {
                 global_state.call_outs.write().remove(idx);
-                let _ = global_state.tx.send(VmOp::TaskError(TaskId(0), Box::new(pair.unwrap_err()))).await;
+                let _ = global_state
+                    .tx
+                    .send(VmOp::TaskError(TaskId(0), Box::new(pair.unwrap_err())))
+                    .await;
                 return;
             };
 
@@ -59,7 +62,10 @@ impl Vm {
                     .await;
             let Ok((process, function, args)) = triple else {
                 global_state.call_outs.write().remove(idx);
-                let _ = global_state.tx.send(VmOp::TaskError(TaskId(0), triple.unwrap_err())).await;
+                let _ = global_state
+                    .tx
+                    .send(VmOp::TaskError(TaskId(0), triple.unwrap_err()))
+                    .await;
                 return;
             };
 
@@ -126,7 +132,6 @@ mod tests {
         interpreter::{
             call_outs::CallOutBuilder,
             function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
-
             object_flags::ObjectFlags,
             process::Process,
         },
@@ -175,9 +180,7 @@ mod tests {
         async fn check(vm: &Vm, bar_proc: &Arc<Process>) {
             let ptr = FunctionPtrBuilder::default()
                 .address(FunctionAddress::Dynamic(ustr("foo")))
-                .partial_args(RwLock::new(thin_vec![Some(
-                    "/bar".into()
-                )]))
+                .partial_args(RwLock::new(thin_vec![Some("/bar".into())]))
                 .build()
                 .unwrap();
 

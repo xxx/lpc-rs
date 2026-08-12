@@ -5,9 +5,9 @@ use std::{
 
 use async_trait::async_trait;
 use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
-use lpc_rs_errors::{span::Span, Result};
+use lpc_rs_errors::{Result, span::Span};
 use lpc_rs_function_support::symbol::Symbol;
-use ustr::{ustr, Ustr};
+use ustr::{Ustr, ustr};
 
 use crate::compiler::{
     ast::{

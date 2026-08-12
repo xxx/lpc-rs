@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use cached::{macros::cached, LruCache};
+use cached::{LruCache, macros::cached};
 use codespan_reporting::files::{Error, Files, SimpleFile};
 use fs_err as fs;
 use once_cell::sync::Lazy;

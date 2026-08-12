@@ -1,7 +1,7 @@
 //! Utility functions for doing various semantic checks.
 
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
-use lpc_rs_errors::{lpc_bug, lpc_error, LpcError, Result};
+use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
 use phf::phf_set;
 
 use crate::compiler::{
@@ -814,52 +814,56 @@ mod tests {
             assert!(mapping_mapping_vars(BinaryOperation::Add, &context).is_ok());
 
             // valid complex tree
-            assert!(get_result(
-                BinaryOperation::Add,
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from("foo")),
-                    r: Box::new(ExpressionNode::from(VarNode::new("string1"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(-123)),
-                        r: Box::new(ExpressionNode::from(82)),
-                        op: BinaryOperation::Mul,
+            assert!(
+                get_result(
+                    BinaryOperation::Add,
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from("foo")),
+                        r: Box::new(ExpressionNode::from(VarNode::new("string1"))),
+                        op: BinaryOperation::Add,
                         span: None
-                    })),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                &context,
-            )
-            .is_ok());
+                    }),
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(BinaryOpNode {
+                            l: Box::new(ExpressionNode::from(-123)),
+                            r: Box::new(ExpressionNode::from(82)),
+                            op: BinaryOperation::Mul,
+                            span: None
+                        })),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                        op: BinaryOperation::Add,
+                        span: None
+                    }),
+                    &context,
+                )
+                .is_ok()
+            );
 
             // invalid complex tree
-            assert!(get_result(
-                BinaryOperation::Add,
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(vec![123])),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
-                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                        op: BinaryOperation::Mul,
+            assert!(
+                get_result(
+                    BinaryOperation::Add,
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(vec![123])),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                        op: BinaryOperation::Add,
                         span: None
-                    })),
-                    r: Box::new(ExpressionNode::from(-123)),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                &context,
-            )
-            .is_err());
+                    }),
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(BinaryOpNode {
+                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                            op: BinaryOperation::Mul,
+                            span: None
+                        })),
+                        r: Box::new(ExpressionNode::from(-123)),
+                        op: BinaryOperation::Add,
+                        span: None
+                    }),
+                    &context,
+                )
+                .is_err()
+            );
         }
 
         #[test]
@@ -891,52 +895,56 @@ mod tests {
             assert!(mapping_mapping_vars(BinaryOperation::Sub, &context).is_err());
 
             // valid complex tree
-            assert!(get_result(
-                BinaryOperation::Sub,
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(123)),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(-123)),
-                        r: Box::new(ExpressionNode::from(82)),
-                        op: BinaryOperation::Mul,
+            assert!(
+                get_result(
+                    BinaryOperation::Sub,
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(123)),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                        op: BinaryOperation::Add,
                         span: None
-                    })),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                &context,
-            )
-            .is_ok());
+                    }),
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(BinaryOpNode {
+                            l: Box::new(ExpressionNode::from(-123)),
+                            r: Box::new(ExpressionNode::from(82)),
+                            op: BinaryOperation::Mul,
+                            span: None
+                        })),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                        op: BinaryOperation::Add,
+                        span: None
+                    }),
+                    &context,
+                )
+                .is_ok()
+            );
 
             // invalid complex tree
-            assert!(get_result(
-                BinaryOperation::Sub,
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(222)),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
-                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                        op: BinaryOperation::Mul,
+            assert!(
+                get_result(
+                    BinaryOperation::Sub,
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(222)),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                        op: BinaryOperation::Add,
                         span: None
-                    })),
-                    r: Box::new(ExpressionNode::from(-123)),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                &context,
-            )
-            .is_err());
+                    }),
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(BinaryOpNode {
+                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                            op: BinaryOperation::Mul,
+                            span: None
+                        })),
+                        r: Box::new(ExpressionNode::from(-123)),
+                        op: BinaryOperation::Add,
+                        span: None
+                    }),
+                    &context,
+                )
+                .is_err()
+            );
         }
 
         #[test]
@@ -968,52 +976,56 @@ mod tests {
             assert!(mapping_mapping_vars(BinaryOperation::Mul, &scope_tree).is_err());
 
             // valid complex tree
-            assert!(get_result(
-                BinaryOperation::Mul,
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(123)),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(-123)),
-                        r: Box::new(ExpressionNode::from(82)),
-                        op: BinaryOperation::Mul,
+            assert!(
+                get_result(
+                    BinaryOperation::Mul,
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(123)),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                        op: BinaryOperation::Add,
                         span: None
-                    })),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                &scope_tree,
-            )
-            .is_ok());
+                    }),
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(BinaryOpNode {
+                            l: Box::new(ExpressionNode::from(-123)),
+                            r: Box::new(ExpressionNode::from(82)),
+                            op: BinaryOperation::Mul,
+                            span: None
+                        })),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                        op: BinaryOperation::Add,
+                        span: None
+                    }),
+                    &scope_tree,
+                )
+                .is_ok()
+            );
 
             // invalid complex tree
-            assert!(get_result(
-                BinaryOperation::Mul,
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(vec![222])),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
-                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                        op: BinaryOperation::Mul,
+            assert!(
+                get_result(
+                    BinaryOperation::Mul,
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(vec![222])),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                        op: BinaryOperation::Add,
                         span: None
-                    })),
-                    r: Box::new(ExpressionNode::from(-123)),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                &scope_tree,
-            )
-            .is_err());
+                    }),
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(BinaryOpNode {
+                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                            op: BinaryOperation::Mul,
+                            span: None
+                        })),
+                        r: Box::new(ExpressionNode::from(-123)),
+                        op: BinaryOperation::Add,
+                        span: None
+                    }),
+                    &scope_tree,
+                )
+                .is_err()
+            );
         }
 
         #[test]
@@ -1045,52 +1057,56 @@ mod tests {
             assert!(mapping_mapping_vars(BinaryOperation::Div, &context).is_err());
 
             // valid complex tree
-            assert!(get_result(
-                BinaryOperation::Div,
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(123)),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(-123)),
-                        r: Box::new(ExpressionNode::from(82)),
-                        op: BinaryOperation::Mul,
+            assert!(
+                get_result(
+                    BinaryOperation::Div,
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(123)),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                        op: BinaryOperation::Add,
                         span: None
-                    })),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                &context,
-            )
-            .is_ok());
+                    }),
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(BinaryOpNode {
+                            l: Box::new(ExpressionNode::from(-123)),
+                            r: Box::new(ExpressionNode::from(82)),
+                            op: BinaryOperation::Mul,
+                            span: None
+                        })),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                        op: BinaryOperation::Add,
+                        span: None
+                    }),
+                    &context,
+                )
+                .is_ok()
+            );
 
             // invalid complex tree
-            assert!(get_result(
-                BinaryOperation::Div,
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(222)),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
-                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                        op: BinaryOperation::Mul,
+            assert!(
+                get_result(
+                    BinaryOperation::Div,
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(222)),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                        op: BinaryOperation::Add,
                         span: None
-                    })),
-                    r: Box::new(ExpressionNode::from(-123)),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                &context,
-            )
-            .is_err());
+                    }),
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(BinaryOpNode {
+                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                            op: BinaryOperation::Mul,
+                            span: None
+                        })),
+                        r: Box::new(ExpressionNode::from(-123)),
+                        op: BinaryOperation::Add,
+                        span: None
+                    }),
+                    &context,
+                )
+                .is_err()
+            );
         }
 
         #[test]
@@ -1122,52 +1138,56 @@ mod tests {
             assert!(mapping_mapping_vars(BinaryOperation::Mod, &context).is_err());
 
             // valid complex tree
-            assert!(get_result(
-                BinaryOperation::Mod,
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(123)),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(-123)),
-                        r: Box::new(ExpressionNode::from(82)),
-                        op: BinaryOperation::Mod,
+            assert!(
+                get_result(
+                    BinaryOperation::Mod,
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(123)),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                        op: BinaryOperation::Add,
                         span: None
-                    })),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                &context,
-            )
-            .is_ok());
+                    }),
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(BinaryOpNode {
+                            l: Box::new(ExpressionNode::from(-123)),
+                            r: Box::new(ExpressionNode::from(82)),
+                            op: BinaryOperation::Mod,
+                            span: None
+                        })),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                        op: BinaryOperation::Add,
+                        span: None
+                    }),
+                    &context,
+                )
+                .is_ok()
+            );
 
             // invalid complex tree
-            assert!(get_result(
-                BinaryOperation::Mod,
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(vec![222])),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
-                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                        op: BinaryOperation::Mod,
+            assert!(
+                get_result(
+                    BinaryOperation::Mod,
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(vec![222])),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                        op: BinaryOperation::Add,
                         span: None
-                    })),
-                    r: Box::new(ExpressionNode::from(-123)),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                &context,
-            )
-            .is_err());
+                    }),
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(BinaryOpNode {
+                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                            op: BinaryOperation::Mod,
+                            span: None
+                        })),
+                        r: Box::new(ExpressionNode::from(-123)),
+                        op: BinaryOperation::Add,
+                        span: None
+                    }),
+                    &context,
+                )
+                .is_err()
+            );
         }
 
         #[test]
@@ -1198,52 +1218,56 @@ mod tests {
             assert!(mixed_any_vars(BinaryOperation::Index, &context).is_ok());
 
             // valid complex tree
-            assert!(get_result(
-                BinaryOperation::Index,
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(vec!["foo"])),
-                    r: Box::new(ExpressionNode::from(VarNode::new("array1"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(-123)),
-                        r: Box::new(ExpressionNode::from(82)),
-                        op: BinaryOperation::Mul,
+            assert!(
+                get_result(
+                    BinaryOperation::Index,
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(vec!["foo"])),
+                        r: Box::new(ExpressionNode::from(VarNode::new("array1"))),
+                        op: BinaryOperation::Add,
                         span: None
-                    })),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                &context,
-            )
-            .is_ok());
+                    }),
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(BinaryOpNode {
+                            l: Box::new(ExpressionNode::from(-123)),
+                            r: Box::new(ExpressionNode::from(82)),
+                            op: BinaryOperation::Mul,
+                            span: None
+                        })),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                        op: BinaryOperation::Add,
+                        span: None
+                    }),
+                    &context,
+                )
+                .is_ok()
+            );
 
             // invalid complex tree
-            assert!(get_result(
-                BinaryOperation::Index,
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(vec![123])),
-                    r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                ExpressionNode::from(BinaryOpNode {
-                    l: Box::new(ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
-                        r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
-                        op: BinaryOperation::Mul,
+            assert!(
+                get_result(
+                    BinaryOperation::Index,
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(vec![123])),
+                        r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                        op: BinaryOperation::Add,
                         span: None
-                    })),
-                    r: Box::new(ExpressionNode::from(-123)),
-                    op: BinaryOperation::Add,
-                    span: None
-                }),
-                &context,
-            )
-            .is_err());
+                    }),
+                    ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::from(BinaryOpNode {
+                            l: Box::new(ExpressionNode::from(VarNode::new("string2"))),
+                            r: Box::new(ExpressionNode::from(VarNode::new("int2"))),
+                            op: BinaryOperation::Mul,
+                            span: None
+                        })),
+                        r: Box::new(ExpressionNode::from(-123)),
+                        op: BinaryOperation::Add,
+                        span: None
+                    }),
+                    &context,
+                )
+                .is_err()
+            );
         }
 
         #[test]

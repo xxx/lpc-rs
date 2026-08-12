@@ -4,10 +4,10 @@ use std::{
 };
 
 use lpc_rs_core::{
-    function_receiver::FunctionReceiver, register::RegisterVariant, LpcFloatInner, LpcIntInner,
-    RegisterSize,
+    LpcFloatInner, LpcIntInner, RegisterSize, function_receiver::FunctionReceiver,
+    register::RegisterVariant,
 };
-use lpc_rs_errors::{lpc_bug, Result};
+use lpc_rs_errors::{Result, lpc_bug};
 use serde::{Deserialize, Serialize};
 
 use crate::address::Address;

@@ -4,10 +4,8 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    efun, efun::efun_context::EfunContext,  lpc_array::LpcArray,
-    process::Process,
+    efun, efun::efun_context::EfunContext, lpc_array::LpcArray, lpc_ref::LpcRef, process::Process,
 };
-use crate::interpreter::lpc_ref::LpcRef;
 
 /// `deep_inventory`, an efun for recursively returning the inventories of all objects contained by an object.
 pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {

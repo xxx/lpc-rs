@@ -6,7 +6,7 @@ use std::{
 use async_trait::async_trait;
 use expression_node::ExpressionNode;
 use int_node::IntNode;
-use lpc_rs_errors::{span::Span, Result};
+use lpc_rs_errors::{Result, span::Span};
 use program_node::ProgramNode;
 
 use crate::compiler::{

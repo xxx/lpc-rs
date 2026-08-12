@@ -9,6 +9,7 @@ use lpc_rs_asm::{
     instruction::Instruction,
 };
 use lpc_rs_core::{
+    CREATE_FUNCTION, INIT_PROGRAM, RegisterSize, ScopeId,
     call_namespace::CallNamespace,
     function_receiver::FunctionReceiver,
     lpc_path::LpcPath,
@@ -16,9 +17,8 @@ use lpc_rs_core::{
     mangle::Mangle,
     register::{Register, RegisterVariant},
     register_counter::RegisterCounter,
-    RegisterSize, ScopeId, CREATE_FUNCTION, INIT_PROGRAM,
 };
-use lpc_rs_errors::{lpc_bug, lpc_error, lpc_warning, span::Span, LpcError, Result};
+use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, lpc_warning, span::Span};
 use lpc_rs_function_support::{
     function_prototype::{FunctionKind, FunctionPrototypeBuilder},
     program_function::{ProgramFunction, ProgramFunctionBuilder},
@@ -46,9 +46,9 @@ use crate::{
             do_while_node::DoWhileNode,
             expression_node::ExpressionNode,
             float_node::FloatNode,
-            for_each_node::{ForEachInit, ForEachNode, FOREACH_INDEX, FOREACH_LENGTH},
+            for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode},
             for_node::ForNode,
-            function_def_node::{FunctionDefNode, ARGV},
+            function_def_node::{ARGV, FunctionDefNode},
             function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
             if_node::IfNode,
             int_node::IntNode,
@@ -540,17 +540,28 @@ impl CodegenWalker {
         function: &mut ProgramFunction,
     ) -> Result<()> {
         let Some(labels) = &function.labels else {
-            return Err(lpc_bug!("No labels found in function `{}`", function.name()));
+            return Err(lpc_bug!(
+                "No labels found in function `{}`",
+                function.name()
+            ));
         };
 
         for (label, addresses) in backpatch_map {
             let Some(label_address) = labels.get(label) else {
-                return Err(lpc_bug!("Label `{}` not found in function `{}", label, function.name()));
+                return Err(lpc_bug!(
+                    "Label `{}` not found in function `{}",
+                    label,
+                    function.name()
+                ));
             };
 
             for address in addresses {
                 let Some(instruction) = function.instructions.get_mut(address) else {
-                    return Err(lpc_bug!("Instruction at address {} not found in function `{}", address, function.name()));
+                    return Err(lpc_bug!(
+                        "Instruction at address {} not found in function `{}",
+                        address,
+                        function.name()
+                    ));
                 };
                 instruction.backpatch(*label_address)?
             }
@@ -850,7 +861,12 @@ impl CodegenWalker {
 
     async fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
         let node_span = node.span();
-        let CallChain::Root { ref mut receiver, ref name, ref namespace } = node.chain else {
+        let CallChain::Root {
+            ref mut receiver,
+            ref name,
+            ref namespace,
+        } = node.chain
+        else {
             return Err(lpc_bug!(node.span, "Invalid call chain"));
         };
         let has_receiver = receiver.is_some();
@@ -1097,7 +1113,7 @@ impl TreeWalker for CodegenWalker {
                     node.span,
                     "Attempt to assign to an invalid lvalue: `{}`",
                     x
-                ))
+                ));
             }
         }
 
@@ -1331,17 +1347,18 @@ impl TreeWalker for CodegenWalker {
         let declared_arg_locations = self.closure_arg_locations.pop().unwrap();
 
         if num_default_args > 0
-            && let Some(parameters) = &mut node.parameters {
-                debug_assert!(populate_defaults_index.is_some());
+            && let Some(parameters) = &mut node.parameters
+        {
+            debug_assert!(populate_defaults_index.is_some());
 
-                self.init_default_params(
-                    parameters,
-                    &declared_arg_locations,
-                    node.span,
-                    populate_defaults_index.unwrap(),
-                )
-                .await?;
-            }
+            self.init_default_params(
+                parameters,
+                &declared_arg_locations,
+                node.span,
+                populate_defaults_index.unwrap(),
+            )
+            .await?;
+        }
 
         self.context.scopes.pop();
         self.closure_scope_stack.pop();
@@ -1521,10 +1538,7 @@ impl TreeWalker for CodegenWalker {
 
                 vec![self.current_result]
             }
-            ForEachInit::Mapping {
-                key,
-                value,
-            } => {
+            ForEachInit::Mapping { key, value } => {
                 key.visit(self).await?;
                 let key_result = self.current_result;
                 value.visit(self).await?;
@@ -2022,7 +2036,7 @@ impl TreeWalker for CodegenWalker {
         }
 
         for case_address in case_addresses {
-            match case_address.0 .0 {
+            match case_address.0.0 {
                 Some(mut case_expr) => {
                     case_expr.visit(self).await?;
                     let case_result = self.current_result;
@@ -2208,15 +2222,19 @@ impl TreeWalker for CodegenWalker {
         }
 
         let Some(sym) = self.context.lookup_var(node.name) else {
-            return Err(
-                lpc_error!(node.span, "Unable to find symbol `{}`", node.name)
-            );
+            return Err(lpc_error!(
+                node.span,
+                "Unable to find symbol `{}`",
+                node.name
+            ));
         };
 
         let Some(sym_loc) = sym.location else {
-            return Err(
-                lpc_error!(node.span, "Symbol `{}` has no location set.", sym.name)
-            );
+            return Err(lpc_error!(
+                node.span,
+                "Symbol `{}` has no location set.",
+                sym.name
+            ));
         };
 
         self.current_result = sym_loc;
@@ -2233,7 +2251,7 @@ impl TreeWalker for CodegenWalker {
                 node.span,
                 "Missing symbol, that somehow passed semantic checks?: {}",
                 node.name
-            ))
+            ));
         };
 
         let global = sym.is_global();
@@ -2370,14 +2388,15 @@ mod tests {
     use claims::assert_some;
     use factori::create;
     use lpc_rs_asm::instruction::Instruction::*;
-    use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, LpcFloatInner};
-    use lpc_rs_errors::{span::Span, LpcErrorSeverity, Result};
+    use lpc_rs_core::{LpcFloatInner, lpc_path::LpcPath, lpc_type::LpcType};
+    use lpc_rs_errors::{LpcErrorSeverity, Result, span::Span};
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
     use crate::{
         apply_walker,
         compiler::{
+            CompilerBuilder,
             ast::{
                 ast_node::AstNode, comma_expression_node::CommaExpressionNode,
                 expression_node::ExpressionNode,
@@ -2389,7 +2408,6 @@ mod tests {
                 semantic_check_walker::SemanticCheckWalker,
             },
             lexer::LexWrapper,
-            CompilerBuilder,
         },
         interpreter::{process::Process, program::Program},
         lpc_parser,
@@ -3737,8 +3755,7 @@ mod tests {
             let mut prog_node: ProgramNode = lpc_parser::ProgramParser::new()
                 .parse(&mut CompilationContext::default(), LexWrapper::new(block))
                 .unwrap();
-            let node = if let AstNode::FunctionDef(n) = prog_node.body.first_mut().unwrap()
-            {
+            let node = if let AstNode::FunctionDef(n) = prog_node.body.first_mut().unwrap() {
                 if let AstNode::Block(n) = n.body.first_mut().unwrap() {
                     n
                 } else {

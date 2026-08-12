@@ -11,8 +11,8 @@ use lpc_rs_asm::{
     instruction::Instruction,
 };
 use lpc_rs_core::{
-    function_arity::FunctionArity, lpc_type::LpcType, mangle::Mangle, register::RegisterVariant,
-    RegisterSize,
+    RegisterSize, function_arity::FunctionArity, lpc_type::LpcType, mangle::Mangle,
+    register::RegisterVariant,
 };
 use lpc_rs_errors::span::Span;
 use multimap::MultiMap;

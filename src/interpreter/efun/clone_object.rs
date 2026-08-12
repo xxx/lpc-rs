@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use lpc_rs_core::{lpc_path::LpcPath, RegisterSize};
+use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::Result;
 
 use crate::{
     compile_time_config::MAX_CLONE_CHAIN,
     interpreter::{
-        efun::efun_context::EfunContext,  lpc_ref::LpcRef,
-        object_flags::ObjectFlags, process::Process, task::Task,
+        efun::efun_context::EfunContext, lpc_ref::LpcRef, object_flags::ObjectFlags,
+        process::Process, task::Task,
     },
 };
 
@@ -110,7 +110,7 @@ mod tests {
             lpc_ref::NULL,
             program::Program,
             task_context::{TaskContext, TaskContextBuilder},
-            vm::{global_state::GlobalStateBuilder, vm_op::VmOp, Vm},
+            vm::{Vm, global_state::GlobalStateBuilder, vm_op::VmOp},
         },
         test_support::{compile_prog, test_config},
         util::process_builder::{ProcessCreator, ProcessInitializer},
@@ -216,7 +216,12 @@ mod tests {
             cloned_proc.global_variable_values().get("i").unwrap(),
             &NULL
         );
-        let LpcRef::Object(foo) = cloner_proc.global_variable_values().get("foo").unwrap().clone() else {
+        let LpcRef::Object(foo) = cloner_proc
+            .global_variable_values()
+            .get("foo")
+            .unwrap()
+            .clone()
+        else {
             panic!("foo is not an object");
         };
 
@@ -259,10 +264,12 @@ mod tests {
             .initialize_process_from_code("prototype.c", prototype)
             .await;
 
-        assert!(prototype_proc
-            .unwrap_err()
-            .to_string()
-            .contains("infinite clone recursion detected"));
+        assert!(
+            prototype_proc
+                .unwrap_err()
+                .to_string()
+                .contains("infinite clone recursion detected")
+        );
     }
 
     #[tokio::test]

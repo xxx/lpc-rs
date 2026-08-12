@@ -8,7 +8,7 @@ use std::{
 };
 
 use bstr::ByteSlice;
-use path_absolutize::{path_dedot::ParseDot, Absolutize};
+use path_absolutize::{Absolutize, path_dedot::ParseDot};
 use serde::{Deserialize, Serialize};
 
 use crate::mangle::Mangle;
@@ -164,11 +164,9 @@ where
 {
     fn from(pb: T) -> Self {
         let pb = pb.into();
-        let dedotted = pb
-            .parse_dot_from("/")
-            .into_owned();
-            // .map(|path| path.into_owned())
-            // .unwrap_or(pb);
+        let dedotted = pb.parse_dot_from("/").into_owned();
+        // .map(|path| path.into_owned())
+        // .unwrap_or(pb);
         Self::InGame(dedotted)
     }
 }

@@ -3,7 +3,7 @@ use lpc_rs::{
     compiler::CompilerBuilder,
     interpreter::{
         program::Program,
-        task::{initialize_program::InitializeProgramBuilder, Task},
+        task::{Task, initialize_program::InitializeProgramBuilder},
         vm::global_state::GlobalState,
     },
 };

@@ -27,7 +27,7 @@ impl Vm {
     /// * `None` - If there is no simul_efun file configured
     pub async fn initialize_simul_efuns(&mut self) -> Option<Result<()>> {
         let Some(path) = &self.config().simul_efun_file else {
-            return None
+            return None;
         };
 
         let simul_efun_path = LpcPath::new_in_game(path.as_str(), "/", &*self.config().lib_dir);

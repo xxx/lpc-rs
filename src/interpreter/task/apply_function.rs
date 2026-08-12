@@ -1,20 +1,20 @@
 use std::sync::Arc;
 
 use indexmap::IndexMap;
-use lpc_rs_errors::{lpc_error, LpcError, Result};
+use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use termcolor::Buffer;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
+        ERROR_HANDLER,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
         object_space::ObjectSpace,
         process::Process,
-        task::{into_task_context::IntoTaskContext, Task},
-        ERROR_HANDLER,
+        task::{Task, into_task_context::IntoTaskContext},
     },
 };
 

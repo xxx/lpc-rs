@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use async_recursion::async_recursion;
 use itertools::Itertools;
 use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
-use lpc_rs_errors::{lpc_bug, Result};
+use lpc_rs_errors::{Result, lpc_bug};
 use tracing::{instrument, trace};
 
 use crate::{
@@ -15,12 +15,11 @@ use crate::{
         lpc_ref::{LpcRef, NULL},
         object_flags::ObjectFlags,
         process::Process,
-        task::{get_location, Task},
+        task::{Task, get_location, task_id::TaskId},
         task_context::TaskContext,
     },
     util::process_builder::ProcessCreator,
 };
-use crate::interpreter::task::task_id::TaskId;
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
@@ -62,8 +61,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             match &receiver_ref {
                 LpcRef::String(_) | LpcRef::Object(_) => {
-                    Self::resolve_result(self.id, receiver_ref, &*function_name, &args, &self.context)
-                        .await?
+                    Self::resolve_result(
+                        self.id,
+                        receiver_ref,
+                        &*function_name,
+                        &args,
+                        &self.context,
+                    )
+                    .await?
                 }
                 LpcRef::Array(r) => {
                     let mut refs = r.read().iter().cloned().collect_vec();
@@ -71,9 +76,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     for lpc_ref in &mut refs {
                         let ctx = &self.context;
 
-                        let result = Self::resolve_result(self.id, lpc_ref, &*function_name, &args, ctx)
-                            .await
-                            .unwrap_or(NULL);
+                        let result =
+                            Self::resolve_result(self.id, lpc_ref, &*function_name, &args, ctx)
+                                .await
+                                .unwrap_or(NULL);
 
                         *lpc_ref = result;
                     }
@@ -88,20 +94,25 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         .collect_vec();
 
                     for (_key_ref, value_ref) in map.iter_mut() {
-                        let result = Self::resolve_result(self.id, value_ref, &*function_name, &args, &self.context)
-                            .await
-                            .unwrap_or(NULL);
+                        let result = Self::resolve_result(
+                            self.id,
+                            value_ref,
+                            &*function_name,
+                            &args,
+                            &self.context,
+                        )
+                        .await
+                        .unwrap_or(NULL);
 
                         *value_ref = result;
                     }
 
-                    LpcMapping::new(map.into_iter().collect())
-                        .into()
+                    LpcMapping::new(map.into_iter().collect()).into()
                 }
                 _ => {
                     return Err(self.runtime_error(format!(
                         "What are you trying to call `{function_name}` on?"
-                    )))
+                    )));
                 }
             }
         };
@@ -148,7 +159,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 task.timed_eval(function, args, max_execution_time).await?;
 
                 let Some(r) = task.context.into_result() else {
-                    return Err(lpc_bug!("resolve_result finished the task, but it has no result? wtf."));
+                    return Err(lpc_bug!(
+                        "resolve_result finished the task, but it has no result? wtf."
+                    ));
                 };
 
                 r
@@ -187,9 +200,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     context.create_process_from_path(&path).await.ok()?
                 }
             }
-            LpcRef::Object(proc) => {
-                proc.upgrade()?
-            }
+            LpcRef::Object(proc) => proc.upgrade()?,
             _ => return None,
         };
 

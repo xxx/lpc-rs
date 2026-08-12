@@ -2,18 +2,18 @@ use std::sync::Arc;
 
 use flume::Sender as FlumeSender;
 use lpc_rs_core::LpcIntInner;
-use lpc_rs_errors::{lpc_error, LpcError};
+use lpc_rs_errors::{LpcError, lpc_error};
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, instrument};
 
 use crate::{
     interpreter::{
+        CONNECT, LOGON,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
         process::Process,
         task::apply_function::apply_function_by_name,
-        vm::{vm_op::VmOp, Vm},
-        CONNECT, LOGON,
+        vm::{Vm, vm_op::VmOp},
     },
     telnet::{
         connection::Connection,
@@ -47,8 +47,9 @@ impl Vm {
                     lpc_error!("Fatal server error - Failed to get master object."),
                     None,
                     global_state.tx.clone(),
-                    broker_tx.clone()
-                ).await;
+                    broker_tx.clone(),
+                )
+                .await;
                 return;
             };
 
@@ -105,7 +106,10 @@ impl Vm {
             };
 
             let Some(login_ob) = maybe_login_ob.upgrade() else {
-                debug_assert!(false, "We received a destructed object back when calling connect(). This should never happen.");
+                debug_assert!(
+                    false,
+                    "We received a destructed object back when calling connect(). This should never happen."
+                );
                 Self::fatal_error(
                     &connection,
                     lpc_error!("Fatal server error - We received a destructed object back when calling connect()."),

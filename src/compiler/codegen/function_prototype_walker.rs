@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use lpc_rs_core::{call_namespace::CallNamespace, function_arity::FunctionArity, RegisterSize};
+use lpc_rs_core::{RegisterSize, call_namespace::CallNamespace, function_arity::FunctionArity};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototypeBuilder};
 use lpc_rs_utils::string::closure_arg_number;

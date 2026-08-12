@@ -21,7 +21,7 @@ use span::HasSpan;
 
 use crate::{
     file_stream::FileStream,
-    lazy_files::{FileId, FILE_CACHE},
+    lazy_files::{FILE_CACHE, FileId},
     span::Span,
 };
 
@@ -441,7 +441,9 @@ pub fn output_diagnostics(diagnostics: &[Diagnostic<FileId>], writer: &mut dyn W
     let config = codespan_reporting::term::Config::default();
 
     for diagnostic in diagnostics {
-        if let Err(e) = codespan_reporting::term::emit_to_write_style(writer, &config, &*files, diagnostic) {
+        if let Err(e) =
+            codespan_reporting::term::emit_to_write_style(writer, &config, &*files, diagnostic)
+        {
             eprintln!(
                 "error attempting to emit diagnostic: {e:?} ::: {diagnostic:?} ::: {files:?}"
             );

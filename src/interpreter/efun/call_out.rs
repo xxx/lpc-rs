@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use lpc_rs_core::{LpcFloatInner, LpcIntInner, RegisterSize};
-use lpc_rs_errors::{lpc_error, Result};
+use lpc_rs_errors::{Result, lpc_error};
 
 use crate::interpreter::{
     efun::efun_context::EfunContext, function_type::function_address::FunctionAddress,

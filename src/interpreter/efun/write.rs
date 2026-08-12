@@ -1,9 +1,9 @@
 use lpc_rs_core::RegisterSize;
-use lpc_rs_errors::{lpc_error, Result};
+use lpc_rs_errors::{Result, lpc_error};
 
 use crate::interpreter::{
-    efun::efun_context::EfunContext, lpc_ref::LpcRef,
-    lpc_string::LpcString, task::apply_function::apply_function_by_name, CATCH_TELL,
+    CATCH_TELL, efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_string::LpcString,
+    task::apply_function::apply_function_by_name,
 };
 
 /// `write`, an efun for writing to this_player().

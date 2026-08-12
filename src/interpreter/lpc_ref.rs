@@ -8,8 +8,8 @@ use std::{
 };
 
 use bit_set::BitSet;
-use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloatInner, LpcIntInner};
-use lpc_rs_errors::{lpc_error, LpcError, Result};
+use lpc_rs_core::{BaseFloat, LpcFloatInner, LpcIntInner, lpc_type::LpcType};
+use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_utils::{string, string::concatenate_strings};
 use parking_lot::RwLock;
 use tracing::{instrument, trace};
@@ -17,9 +17,9 @@ use tracing::{instrument, trace};
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
     interpreter::{
-        function_type::function_ptr::FunctionPtr, gc::mark::Mark,
-        lpc_array::LpcArray, lpc_float::LpcFloat, lpc_int::LpcInt,
-        lpc_mapping::LpcMapping, lpc_string::LpcString, process::Process,
+        function_type::function_ptr::FunctionPtr, gc::mark::Mark, lpc_array::LpcArray,
+        lpc_float::LpcFloat, lpc_int::LpcInt, lpc_mapping::LpcMapping, lpc_string::LpcString,
+        process::Process,
     },
 };
 
@@ -221,17 +221,11 @@ impl LpcRef {
             )),
             (LpcRef::String(x), LpcRef::Int(y)) => {
                 let string = x.read();
-                Ok(
-                    LpcString::from(string::repeat_string(string.to_str(), y.0)?)
-                        .into(),
-                )
+                Ok(LpcString::from(string::repeat_string(string.to_str(), y.0)?).into())
             }
             (LpcRef::Int(x), LpcRef::String(y)) => {
                 let string = y.read();
-                Ok(
-                    LpcString::from(string::repeat_string(string.to_str(), x.0)?)
-                        .into(),
-                )
+                Ok(LpcString::from(string::repeat_string(string.to_str(), x.0)?).into())
             }
             _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
         }
@@ -722,8 +716,7 @@ mod tests {
         fn array_array() {
             let array = LpcArray::new(vec![LpcRef::from(123)]);
             let array2 = LpcArray::new(vec![LpcRef::from(4433)]);
-            let result = LpcRef::from(array.clone())
-                .add(&array2.into());
+            let result = LpcRef::from(array.clone()).add(&array2.into());
 
             match &result {
                 Ok(v) => {

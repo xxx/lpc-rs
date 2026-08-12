@@ -1,9 +1,8 @@
-use lpc_rs_core::{lpc_path::LpcPath, RegisterSize};
+use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun::efun_context::EfunContext,
-
     lpc_ref::{LpcRef, NULL},
     lpc_string::LpcString,
 };

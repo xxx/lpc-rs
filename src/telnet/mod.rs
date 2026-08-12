@@ -6,9 +6,9 @@ use std::{net::SocketAddr, sync::Arc};
 
 use bytes::Bytes;
 use flume::Sender as FlumeSender;
-use futures::{stream::SplitSink, SinkExt, StreamExt};
+use futures::{SinkExt, StreamExt, stream::SplitSink};
 use nectar::{
-    event::TelnetEvent, option::TelnetOption, subnegotiation::SubnegotiationType, TelnetCodec,
+    TelnetCodec, event::TelnetEvent, option::TelnetOption, subnegotiation::SubnegotiationType,
 };
 use once_cell::sync::OnceCell;
 use tokio::{
@@ -22,18 +22,18 @@ use tracing::{error, info, instrument, trace, warn};
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
+        PROCESS_INPUT,
         function_type::function_ptr::FunctionPtr,
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
         object_flags::ObjectFlags,
         task::{
+            Task,
             apply_function::{apply_function, apply_function_by_name, apply_runtime_error},
             into_task_context::IntoTaskContext,
             task_template::TaskTemplate,
-            Task,
         },
-        PROCESS_INPUT,
     },
     telnet::{
         connection::{Connection, InputTo},
@@ -101,8 +101,13 @@ impl Telnet {
                         Self::connection_loop(stream, remote_ip, spawn_broker_tx, template).await;
                     });
 
-                    let Ok(_) = broker_tx.send_async(BrokerOp::NewHandle(remote_ip, handle)).await else {
-                        error!("Failed to send BrokerOp::NewHandle. Please consider restarting the server.");
+                    let Ok(_) = broker_tx
+                        .send_async(BrokerOp::NewHandle(remote_ip, handle))
+                        .await
+                    else {
+                        error!(
+                            "Failed to send BrokerOp::NewHandle. Please consider restarting the server."
+                        );
                         continue;
                     };
                 }
@@ -135,7 +140,10 @@ impl Telnet {
             broker_tx.clone(),
         ));
 
-        let Ok(_) = broker_tx.send_async(BrokerOp::NewConnection(connection.clone())).await else {
+        let Ok(_) = broker_tx
+            .send_async(BrokerOp::NewConnection(connection.clone()))
+            .await
+        else {
             error!("Failed to send BrokerOp::NewConnection. Dropping connection.");
             let msg = TelnetEvent::Message("The server is currently unable to accept new connections. Please try again shortly.".to_string());
             let _ = sink.send(msg).await;
@@ -273,11 +281,12 @@ impl Telnet {
             }
             TelnetEvent::Message(msg) => {
                 if connection.input_to.load().is_some()
-                    && let Some(input_to) = connection.input_to.swap(None) {
-                        Self::resolve_input_to(&input_to, &msg, sink, connection, template).await;
+                    && let Some(input_to) = connection.input_to.swap(None)
+                {
+                    Self::resolve_input_to(&input_to, &msg, sink, connection, template).await;
 
-                        return;
-                    }
+                    return;
+                }
 
                 let Some(proc) = connection.process.load_full() else {
                     warn!("No process for connection. Closing.");
@@ -364,7 +373,9 @@ impl Telnet {
         )
         .await;
         let Ok((process, function, mut args)) = triple else {
-            let _ = sink.send(TelnetEvent::Message("Canceled.".to_string())).await;
+            let _ = sink
+                .send(TelnetEvent::Message("Canceled.".to_string()))
+                .await;
             return;
         };
 
@@ -413,7 +424,11 @@ impl Telnet {
 
         if let Err(e) = result {
             let Some(Ok(_)) = apply_runtime_error(&e, Some(process), template.clone()).await else {
-                template.global_state.config.debug_log(e.diagnostic_string()).await;
+                template
+                    .global_state
+                    .config
+                    .debug_log(e.diagnostic_string())
+                    .await;
                 return;
             };
         };
@@ -535,9 +550,7 @@ mod tests {
         async fn check(vm: &Vm, proc: Arc<Process>) {
             let ptr = FunctionPtrBuilder::default()
                 .address(FunctionAddress::Dynamic("foo".into()))
-                .partial_args(RwLock::new(thin_vec![Some(
-                    "/foo/bar".into()
-                )]))
+                .partial_args(RwLock::new(thin_vec![Some("/foo/bar".into())]))
                 .build()
                 .unwrap();
 

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use if_chain::if_chain;
-use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType, EFUN};
-use lpc_rs_errors::{lpc_error, LpcError, Result};
+use lpc_rs_core::{EFUN, call_namespace::CallNamespace, lpc_type::LpcType};
+use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_utils::string::closure_arg_number;
 
 use crate::{
@@ -20,7 +20,7 @@ use crate::{
             expression_node::ExpressionNode,
             for_each_node::{ForEachInit, ForEachNode},
             for_node::ForNode,
-            function_def_node::{FunctionDefNode, ARGV},
+            function_def_node::{ARGV, FunctionDefNode},
             function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
             int_node::IntNode,
             label_node::LabelNode,
@@ -96,11 +96,11 @@ impl SemanticCheckWalker {
     }
 
     fn can_break(&self) -> bool {
-        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().0 .0
+        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().0.0
     }
 
     fn can_continue(&self) -> bool {
-        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().1 .0
+        !self.valid_jumps.is_empty() && self.valid_jumps.last().unwrap().1.0
     }
 
     fn can_use_labels(&self) -> bool {
@@ -108,7 +108,12 @@ impl SemanticCheckWalker {
     }
 
     async fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
-        let CallChain::Root { receiver, namespace, name } = &mut node.chain else {
+        let CallChain::Root {
+            receiver,
+            namespace,
+            name,
+        } = &mut node.chain
+        else {
             return Err(lpc_error!(node.span, "invalid call chain"));
         };
 
@@ -124,11 +129,11 @@ impl SemanticCheckWalker {
 
         if let CallNamespace::Named(namespace) = namespace
             && !self.context.inherit_names.contains_key(namespace.as_str())
-                && namespace.as_str() != EFUN
-            {
-                let e = lpc_error!(node.span, "unknown namespace `{}`", namespace);
-                self.context.errors.push(e);
-            }
+            && namespace.as_str() != EFUN
+        {
+            let e = lpc_error!(node.span, "unknown namespace `{}`", namespace);
+            self.context.errors.push(e);
+        }
 
         for argument in &mut node.arguments {
             argument.visit(self).await?;
@@ -382,10 +387,7 @@ impl TreeWalker for SemanticCheckWalker {
             ForEachInit::Array(init) | ForEachInit::String(init) => {
                 let _ = init.visit(self).await;
             }
-            ForEachInit::Mapping {
-                key,
-                value,
-            } => {
+            ForEachInit::Mapping { key, value } => {
                 if key.type_ != LpcType::Mixed(false) || value.type_ != LpcType::Mixed(false) {
                     let e = lpc_error!(
                         node.span,
@@ -783,13 +785,13 @@ mod tests {
     use crate::{
         apply_walker,
         compiler::{
+            Compiler,
             ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode},
             codegen::{
                 default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
                 semantic_check_walker::SemanticCheckWalker,
             },
             semantic::scope_tree::ScopeTree,
-            Compiler,
         },
         test_support::factories::*,
     };
@@ -2694,9 +2696,10 @@ mod tests {
             let result = node.visit(&mut walker).await;
 
             if let Err(e) = result {
-                assert!(e
-                    .to_string()
-                    .contains("redeclaration of `argv` in a function with ellipsis arguments"));
+                assert!(
+                    e.to_string()
+                        .contains("redeclaration of `argv` in a function with ellipsis arguments")
+                );
             } else {
                 panic!("didn't error?")
             }

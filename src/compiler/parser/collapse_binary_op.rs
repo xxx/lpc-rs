@@ -1,6 +1,6 @@
 use lalrpop_util::ParseError;
 use lpc_rs_core::LpcIntInner;
-use lpc_rs_errors::{span::Span, LpcError};
+use lpc_rs_errors::{LpcError, span::Span};
 use lpc_rs_utils::{string, string::concatenate_strings};
 
 use crate::compiler::{

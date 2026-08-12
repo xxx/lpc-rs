@@ -10,9 +10,8 @@ use thin_vec::ThinVec;
 use crate::{
     compiler::Compiler,
     interpreter::{
-        object_space::ObjectSpace, process::Process,
-        task::into_task_context::IntoTaskContext, task_context::TaskContext,
-        vm::global_state::GlobalState,
+        object_space::ObjectSpace, process::Process, task::into_task_context::IntoTaskContext,
+        task_context::TaskContext, vm::global_state::GlobalState,
     },
     util::with_compiler::WithCompiler,
 };

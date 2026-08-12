@@ -6,13 +6,13 @@ use lpc_rs_utils::config::{Config, ConfigBuilder};
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::{
-        compilation_context::CompilationContext, semantic::scope_tree::ScopeTree, CompilerBuilder,
+        CompilerBuilder, compilation_context::CompilationContext, semantic::scope_tree::ScopeTree,
     },
     interpreter::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        task::{initialize_program::InitializeProgramBuilder, Task},
+        task::{Task, initialize_program::InitializeProgramBuilder},
         vm::global_state::GlobalState,
     },
 };

@@ -2,11 +2,11 @@ use std::{borrow::Cow, collections::HashMap, fmt::Debug, path::Path};
 
 use derive_builder::Builder;
 use fs_err as fs;
-use lpc_rs_core::lpc_path::{canonicalize_in_game_path, LpcPath};
-use lpc_rs_errors::{lpc_error, span::Span, Result};
+use lpc_rs_core::lpc_path::{LpcPath, canonicalize_in_game_path};
+use lpc_rs_errors::{Result, lpc_error, span::Span};
 use tracing::{info, warn};
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-use ustr::{ustr, Ustr};
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use ustr::{Ustr, ustr};
 
 use crate::debug_log::DebugLog;
 

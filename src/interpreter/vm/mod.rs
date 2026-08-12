@@ -8,7 +8,7 @@ use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::{
     signal,
-    sync::mpsc::{error::SendError, Receiver, Sender},
+    sync::mpsc::{Receiver, Sender, error::SendError},
 };
 use tracing::{debug, error, info, instrument, trace};
 use vm_op::VmOp;
@@ -16,19 +16,19 @@ use vm_op::VmOp;
 use crate::{
     compile_time_config::VM_CHANNEL_CAPACITY,
     interpreter::{
+        SHUTDOWN,
         call_outs::CallOuts,
         gc::mark::Mark,
         process::Process,
         task::apply_function::{apply_function_in_master, apply_runtime_error},
         task_context::TaskContext,
         vm::global_state::GlobalState,
-        SHUTDOWN,
     },
     telnet::{
+        Telnet,
         connection::Connection,
         connection_broker::ConnectionBroker,
         ops::{BrokerOp, ConnectionOp},
-        Telnet,
     },
     util::process_builder::ProcessInitializer,
 };

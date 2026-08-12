@@ -47,10 +47,12 @@ mod tests {
         assert!(with_newline.ends_with('\n'));
 
         let path_without = "./tests/fixtures/newlines/file_not_ending_with_newline.h";
-        assert!(!fs::read_to_string(path_without)
-            .await
-            .unwrap()
-            .ends_with('\n'));
+        assert!(
+            !fs::read_to_string(path_without)
+                .await
+                .unwrap()
+                .ends_with('\n')
+        );
         assert!(read_lpc_file(path_without).await.unwrap().ends_with('\n'));
 
         let eager_path = "./tests/fixtures/newlines/does_not_exist.h";

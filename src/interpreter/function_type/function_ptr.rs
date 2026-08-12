@@ -8,7 +8,7 @@ use bit_set::BitSet;
 use derive_builder::Builder;
 use itertools::Itertools;
 use lpc_rs_core::{lpc_path::LpcPath, register::Register};
-use lpc_rs_errors::{lpc_bug, lpc_error, LpcError, Result};
+use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
@@ -166,14 +166,16 @@ impl FunctionPtr {
                         }
                         _ => {
                             return Err(lpc_error!(
-                            "attempted to call a dynamic receiver that is not an object or string"
-                        ))
+                                "attempted to call a dynamic receiver that is not an object or string"
+                            ));
                         }
                     };
 
                     if string_receiver && proc.is_none() {
                         let Some(Some(LpcRef::String(string_ref))) = &first_arg else {
-                            unreachable!("No other branch should be setting `string_receiver` to true.");
+                            unreachable!(
+                                "No other branch should be setting `string_receiver` to true."
+                            );
                         };
 
                         let path = LpcPath::InGame(PathBuf::from(string_ref.read().to_str()));

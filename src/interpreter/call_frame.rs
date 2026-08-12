@@ -9,10 +9,10 @@ use derive_builder::Builder;
 use educe::Educe;
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::{
-    register::{Register, RegisterVariant},
     RegisterSize,
+    register::{Register, RegisterVariant},
 };
-use lpc_rs_errors::{lpc_bug, lpc_error, span::Span, LpcError, Result};
+use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use parking_lot::RwLock;
 use thin_vec::ThinVec;
@@ -218,9 +218,9 @@ impl CallFrame {
             .iter()
             .map(|var| {
                 let Some(loc) = var.location else {
-                // This should be unreachable.
-                return LocalVariable::new(var.name.clone(), NULL);
-            };
+                    // This should be unreachable.
+                    return LocalVariable::new(var.name.clone(), NULL);
+                };
 
                 let lpc_ref = match loc {
                     RegisterVariant::Local(reg) => self.registers[reg].clone(),

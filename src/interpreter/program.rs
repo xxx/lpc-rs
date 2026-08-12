@@ -9,7 +9,7 @@ use std::{
 use derive_builder::Builder;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use lpc_rs_core::{lpc_path::LpcPath, pragma_flags::PragmaFlags, RegisterSize};
+use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, pragma_flags::PragmaFlags};
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use path_dedot::*;
 use rmp_serde::Serializer;
@@ -134,6 +134,7 @@ impl<'a> Program {
     /// ```
     /// # tokio_test::block_on(async {
     /// use lpc_rs::compiler::{
+    ///     Compiler,
     ///     ast::{
     ///         binary_op_node::{BinaryOpNode, BinaryOperation},
     ///         expression_node::ExpressionNode,
@@ -141,7 +142,6 @@ impl<'a> Program {
     ///     },
     ///     codegen::{codegen_walker::CodegenWalker, tree_walker::TreeWalker},
     ///     compilation_context::CompilationContext,
-    ///     Compiler,
     /// };
     ///
     /// let code = r#"

@@ -37,7 +37,8 @@ pub fn call_out_array_ref<const N: usize>(
 ) -> Result<LpcRef> {
     let mut arr = Vec::new();
     let LpcRef::Function(f) = &call_out.func_ref else {
-        return Err(context.runtime_bug("call out function is not a function. This shouldn't be reachable."));
+        return Err(context
+            .runtime_bug("call out function is not a function. This shouldn't be reachable."));
     };
 
     // push the object that the call out was called from

@@ -25,10 +25,7 @@ use crate::{
         gc::mark::Mark,
         lpc_ref::{LpcRef, NULL},
         object_flags::{AtomicFlags, ObjectFlags},
-        process::{
-            inventory::Inventory,
-            util::AllEnvironment,
-        },
+        process::{inventory::Inventory, util::AllEnvironment},
         program::Program,
     },
     telnet::connection::Connection,

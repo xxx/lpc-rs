@@ -1,5 +1,5 @@
 use lpc_rs_core::RegisterSize;
-use lpc_rs_errors::{lpc_error, Result};
+use lpc_rs_errors::{Result, lpc_error};
 
 use crate::interpreter::efun::efun_context::EfunContext;
 
