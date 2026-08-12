@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn test_from_str_vec() {
-        let vec = vec!["foo", "asdfas", "asdkj", "as"];
+        let vec = ["foo", "asdfas", "asdkj", "as"];
 
         let value = vec
             .iter()
@@ -368,7 +368,7 @@ mod tests {
 
     #[test]
     fn test_from_int_vec() {
-        let vec = vec![123, 31, -4567, 8238];
+        let vec = [123, 31, -4567, 8238];
 
         let value = vec
             .iter()

@@ -100,7 +100,7 @@ mod tests {
 
         let params = walker.context.default_function_params.get("foo").unwrap();
 
-        let expected = vec![None, Some(ExpressionNode::from("marf"))];
+        let expected = [None, Some(ExpressionNode::from("marf"))];
 
         for (idx, param) in params.iter().enumerate() {
             assert_eq!(*param, expected[idx]);
@@ -146,7 +146,7 @@ mod tests {
 
         let params = walker.context.default_function_params.get("foo").unwrap();
 
-        let expected = vec![None, Some(ExpressionNode::from("marf"))];
+        let expected = [None, Some(ExpressionNode::from("marf"))];
 
         for (idx, param) in params.iter().enumerate() {
             assert_eq!(*param, expected[idx]);

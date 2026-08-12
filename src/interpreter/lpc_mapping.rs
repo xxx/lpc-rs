@@ -167,7 +167,7 @@ mod tests {
         mapping.mark(&mut marked, &mut processed).unwrap();
 
         let mut marked_expected = BitSet::new();
-        marked_expected.extend([4_usize, 33_usize, 666_usize].into_iter());
+        marked_expected.extend([4_usize, 33_usize, 666_usize]);
 
         assert_eq!(marked, marked_expected);
 
@@ -177,8 +177,7 @@ mod tests {
                 key_id as usize,
                 value_id as usize,
                 (*mapping.unique_id.as_ref() as usize),
-            ]
-            .into_iter(),
+            ],
         );
 
         assert_eq!(processed, processed_expected);

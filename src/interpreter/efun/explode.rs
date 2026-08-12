@@ -32,7 +32,7 @@ pub async fn explode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
 
     let result = subject
         .split(&delimiter)
-        .map(|s| LpcRef::from(s))
+        .map(LpcRef::from)
         .collect::<LpcArray>()
         .into();
 

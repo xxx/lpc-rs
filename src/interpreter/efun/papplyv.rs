@@ -66,7 +66,7 @@ mod tests {
                 .iter()
                 .map(|a| a.as_ref().unwrap().to_string())
                 .collect::<Vec<_>>(),
-            vec!["foo", "bar"]
+            ["foo", "bar"]
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>()

@@ -248,11 +248,11 @@ mod tests {
         array.mark(&mut marked, &mut processed).unwrap();
 
         let mut marked_expected = BitSet::new();
-        marked_expected.extend([4_usize, 33_usize].into_iter());
+        marked_expected.extend([4_usize, 33_usize]);
 
         let mut processed_expected = BitSet::new();
         processed_expected
-            .extend([ptr_id as usize, *array.unique_id.as_ref() as usize].into_iter());
+            .extend([ptr_id as usize, *array.unique_id.as_ref() as usize]);
 
         assert_eq!(marked, marked_expected);
         assert_eq!(processed, processed_expected);

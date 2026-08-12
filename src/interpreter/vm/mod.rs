@@ -403,17 +403,15 @@ mod tests {
         let ctx1 = vm
             .initialize_string(storage, "storage")
             .await
-            .map_err(|e| {
+            .inspect_err(|e| {
                 e.emit_diagnostics();
-                e
             })
             .unwrap();
         let _ctx2 = vm
             .initialize_string(runner, "runner")
             .await
-            .map_err(|e| {
+            .inspect_err(|e| {
                 e.emit_diagnostics();
-                e
             })
             .unwrap();
 

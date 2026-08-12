@@ -252,9 +252,8 @@ async fn test_inherited_create_called_when_not_overridden() {
             "test_inherited_create_called_when_not_overridden_test_grandparent.c",
         )
         .await
-        .map_err(|e| {
+        .inspect_err(|e| {
             e.emit_diagnostics();
-            e
         })
         .unwrap();
     let _parent_ctx = vm
@@ -263,9 +262,8 @@ async fn test_inherited_create_called_when_not_overridden() {
             "test_inherited_create_called_when_not_overridden_test_parent.c",
         )
         .await
-        .map_err(|e| {
+        .inspect_err(|e| {
             e.emit_diagnostics();
-            e
         })
         .unwrap();
     let _parent2_ctx = vm
@@ -274,9 +272,8 @@ async fn test_inherited_create_called_when_not_overridden() {
             "test_inherited_create_called_when_not_overridden_test_parent2.c",
         )
         .await
-        .map_err(|e| {
+        .inspect_err(|e| {
             e.emit_diagnostics();
-            e
         })
         .unwrap();
     let child_ctx = vm
@@ -285,9 +282,8 @@ async fn test_inherited_create_called_when_not_overridden() {
             "test_inherited_create_called_when_not_overridden_test_child.c",
         )
         .await
-        .map_err(|e| {
+        .inspect_err(|e| {
             e.emit_diagnostics();
-            e
         })
         .unwrap();
 

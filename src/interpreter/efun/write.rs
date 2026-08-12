@@ -83,9 +83,8 @@ mod tests {
         let result = vm
             .initialize_string(code, "test_write.c")
             .await
-            .map_err(|e| {
+            .inspect_err(|e| {
                 e.emit_diagnostics();
-                e
             })
             .unwrap();
 

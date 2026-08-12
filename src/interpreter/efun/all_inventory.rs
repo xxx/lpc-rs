@@ -18,7 +18,7 @@ pub async fn all_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> 
     let result = current_env
         .position
         .weak_inventory_iter()
-        .map(|item| LpcRef::from(item))
+        .map(LpcRef::from)
         .collect::<LpcArray>()
         .into();
 

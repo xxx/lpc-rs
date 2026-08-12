@@ -450,9 +450,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     Ok(x) => x,
                     Err(mut e) => {
                         if !self.catch_points.is_empty() {
-                            if let Err(e) = self.catch_error(e) {
-                                return Err(e);
-                            }
+                            self.catch_error(e)?;
 
                             false
                         } else {
