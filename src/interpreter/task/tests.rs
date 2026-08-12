@@ -4,6 +4,8 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+use decorum::Total;
+use indexmap::IndexMap;
 use indoc::indoc;
 use lpc_rs_core::{LpcFloatInner, LpcIntInner};
 use tokio::sync::mpsc;
