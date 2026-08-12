@@ -4,7 +4,7 @@ use std::{
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     ptr,
-    sync::Weak,
+    sync::{Arc, Weak},
 };
 
 use bit_set::BitSet;
@@ -12,7 +12,6 @@ use lpc_rs_core::{lpc_type::LpcType, BaseFloat, LpcFloatInner, LpcIntInner};
 use lpc_rs_errors::{lpc_error, LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
 use parking_lot::RwLock;
-use shared_arena::ArenaArc;
 use tracing::{instrument, trace};
 
 use crate::{
@@ -36,21 +35,21 @@ pub enum LpcRef {
 
     /// Reference type, and stores a reference-counting pointer to the actual
     /// value
-    String(ArenaArc<RwLock<LpcString>>),
+    String(Arc<RwLock<LpcString>>),
 
     /// Reference type, and stores a reference-counting pointer to the actual
     /// value
-    Array(ArenaArc<RwLock<LpcArray>>),
+    Array(Arc<RwLock<LpcArray>>),
 
     /// Reference type, and stores a reference-counting pointer to the actual
     /// value
-    Mapping(ArenaArc<RwLock<LpcMapping>>),
+    Mapping(Arc<RwLock<LpcMapping>>),
 
     /// Reference type, pointing to an LPC `object`
     Object(Weak<Process>),
 
     /// Reference type, a function pointer or closure
-    Function(ArenaArc<FunctionPtr>),
+    Function(Arc<FunctionPtr>),
 }
 
 impl LpcRef {

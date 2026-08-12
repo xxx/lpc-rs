@@ -1288,7 +1288,6 @@ dependencies = [
  "regex",
  "rmp-serde",
  "serde",
- "shared_arena",
  "slab",
  "stable-vec",
  "string-interner",
@@ -1845,15 +1844,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
-]
-
-[[package]]
-name = "shared_arena"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "453bd8f0fe0f0d13eb13988c314a8bb5c2f8a44960a021e5fdae1c3798804274"
-dependencies = [
- "static_assertions",
 ]
 
 [[package]]

@@ -1,7 +1,6 @@
-use std::sync::Weak;
+use std::sync::{Arc, Weak};
 
 use parking_lot::RwLock;
-use shared_arena::{ArenaArc, SharedArena};
 
 use crate::interpreter::{
     function_type::function_ptr::FunctionPtr, into_lpc_ref::IntoLpcRef, lpc_array::LpcArray,
@@ -15,29 +14,12 @@ const MEMORY_SIZE: usize = 5_000;
 
 /// Encapsulate the shared VM heap.
 #[derive(Debug)]
-pub struct Heap {
-    /// The string arena
-    string_pool: SharedArena<RwLock<LpcString>>,
-
-    /// The array arena
-    array_pool: SharedArena<RwLock<LpcArray>>,
-
-    /// The mapping arena
-    mapping_pool: SharedArena<RwLock<LpcMapping>>,
-
-    /// The function arena
-    function_pool: SharedArena<FunctionPtr>,
-}
+pub struct Heap;
 
 impl Heap {
     /// Create a new [`Heap`], with `size` slots for _each_ type.
     pub fn new(size: usize) -> Self {
-        Self {
-            string_pool: SharedArena::with_capacity(size),
-            array_pool: SharedArena::with_capacity(size),
-            mapping_pool: SharedArena::with_capacity(size),
-            function_pool: SharedArena::with_capacity(size),
-        }
+        Self
     }
 
     /// Allocate a new [`LpcRef`]
@@ -49,21 +31,21 @@ impl Heap {
     /// Allocate a new [`LpcString`]
     #[inline]
     pub fn alloc_string(&self, string: LpcString) -> LpcRef {
-        let arc = self.string_pool.alloc_arc(RwLock::new(string));
+        let arc = Arc::new(RwLock::new(string));
         LpcRef::String(arc)
     }
 
     /// Allocate a new [`LpcArray`]
     #[inline]
     pub fn alloc_array(&self, array: LpcArray) -> LpcRef {
-        let arc = self.array_pool.alloc_arc(RwLock::new(array));
+        let arc = Arc::new(RwLock::new(array));
         LpcRef::Array(arc)
     }
 
     /// Allocate a new [`LpcMapping`]
     #[inline]
     pub fn alloc_mapping(&self, mapping: LpcMapping) -> LpcRef {
-        let arc = self.mapping_pool.alloc_arc(RwLock::new(mapping));
+        let arc = Arc::new(RwLock::new(mapping));
         LpcRef::Mapping(arc)
     }
 
@@ -80,10 +62,10 @@ impl Heap {
         LpcRef::Function(ptr)
     }
 
-    /// Allocate a new [`FunctionPtr`] and return an [`ArenaArc`] to it.
+    /// Wrap a [`FunctionPtr`] directly with an [`Arc`].
     #[inline]
-    pub fn alloc_function_arc(&self, function: FunctionPtr) -> ArenaArc<FunctionPtr> {
-        self.function_pool.alloc_arc(function)
+    pub fn alloc_function_arc(&self, function: FunctionPtr) -> Arc<FunctionPtr> {
+        Arc::new(function)
     }
 }
 

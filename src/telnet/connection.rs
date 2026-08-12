@@ -2,7 +2,6 @@ use std::{net::SocketAddr, sync::Arc};
 
 use arc_swap::{ArcSwapAny, ArcSwapOption};
 use flume::Sender as FlumeSender;
-use shared_arena::ArenaArc;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
@@ -14,7 +13,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct InputTo {
     /// The function to call when we receive input.
-    pub ptr: ArenaArc<FunctionPtr>,
+    pub ptr: Arc<FunctionPtr>,
 
     /// Whether `no_echo` was set when `input_to` was called, so we know
     /// that we need to re-enable it.
