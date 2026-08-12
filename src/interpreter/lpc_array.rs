@@ -251,8 +251,7 @@ mod tests {
         marked_expected.extend([4_usize, 33_usize]);
 
         let mut processed_expected = BitSet::new();
-        processed_expected
-            .extend([ptr_id as usize, *array.unique_id.as_ref() as usize]);
+        processed_expected.extend([ptr_id as usize, *array.unique_id.as_ref() as usize]);
 
         assert_eq!(marked, marked_expected);
         assert_eq!(processed, processed_expected);

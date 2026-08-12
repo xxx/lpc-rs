@@ -172,13 +172,11 @@ mod tests {
         assert_eq!(marked, marked_expected);
 
         let mut processed_expected = BitSet::new();
-        processed_expected.extend(
-            [
-                key_id as usize,
-                value_id as usize,
-                (*mapping.unique_id.as_ref() as usize),
-            ],
-        );
+        processed_expected.extend([
+            key_id as usize,
+            value_id as usize,
+            (*mapping.unique_id.as_ref() as usize),
+        ]);
 
         assert_eq!(processed, processed_expected);
     }
