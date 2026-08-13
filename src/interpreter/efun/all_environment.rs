@@ -29,7 +29,7 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{lpc_ref::LpcRef, vm::Vm},
+        interpreter::{vm::Vm},
         test_support::test_config,
         util::process_builder::{ProcessCreator, ProcessInitializer},
     };
@@ -87,19 +87,16 @@ mod tests {
             .await
             .unwrap();
 
-        let LpcRef::Array(result) = master_proc.result().unwrap() else {
-            panic!("Expected array result");
-        };
-
-        let result = result.read();
-        assert_eq!(
-            result.as_ref(),
-            &[
-                &*innermost_proc.context.process,
-                &*inner_proc.context.process,
-                &*outer_proc.context.process,
-                &*foo_proc,
-            ]
-        );
+        let _ = master_proc.result().unwrap().with_array(|result| {
+            assert_eq!(
+                result.as_ref(),
+                &[
+                    &*innermost_proc.context.process,
+                    &*inner_proc.context.process,
+                    &*outer_proc.context.process,
+                    &*foo_proc,
+                ]
+            );
+        });
     }
 }

@@ -34,64 +34,57 @@ async fn load_prototype<const N: usize>(
 pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg = context.resolve_local_register(1 as RegisterSize);
 
-    if let LpcRef::String(s) = arg {
-        let path = s.read().to_string();
+    let path = arg.with_string(|s| { s.to_string() })?;
 
-        let prototype = load_prototype(context, &path).await?;
+    let prototype = load_prototype(context, &path).await?;
 
-        debug_assert!(
-            !prototype.flags.test(ObjectFlags::Clone),
-            "prototype cannot be a clone"
-        );
+    debug_assert!(
+        !prototype.flags.test(ObjectFlags::Clone),
+        "prototype cannot be a clone"
+    );
 
-        {
-            if prototype.program.pragmas.no_clone() {
-                return Err(context.runtime_error(format!(
-                    "{} has `#pragma no_clone` enabled, and so cannot be cloned.",
-                    prototype.program.filename
-                )));
-            }
+    {
+        if prototype.program.pragmas.no_clone() {
+            return Err(context.runtime_error(format!(
+                "{} has `#pragma no_clone` enabled, and so cannot be cloned.",
+                prototype.program.filename
+            )));
+        }
+    }
+
+    let new_prog = prototype.program.clone();
+    let clone_process = context.insert_clone(new_prog);
+
+    debug_assert!(
+        clone_process.flags.test(ObjectFlags::Clone),
+        "new_clone must be a clone"
+    );
+
+    // if the prototype is not initialized, we initialize the clone.
+    let return_val = if !prototype.flags.test(ObjectFlags::Initialized) {
+        if context.chain_count() >= MAX_CLONE_CHAIN {
+            return Err(context.runtime_error("infinite clone recursion detected"));
         }
 
-        let new_prog = prototype.program.clone();
-        let clone_process = context.insert_clone(new_prog);
+        let new_task_context = context
+            .task_context_builder()
+            .process(clone_process)
+            .chain_count(context.chain_count() + 1)
+            .build()
+            .unwrap();
 
-        debug_assert!(
-            clone_process.flags.test(ObjectFlags::Clone),
-            "new_clone must be a clone"
-        );
-
-        // if the prototype is not initialized, we initialize the clone.
-        let return_val = if !prototype.flags.test(ObjectFlags::Initialized) {
-            if context.chain_count() >= MAX_CLONE_CHAIN {
-                return Err(context.runtime_error("infinite clone recursion detected"));
-            }
-
-            let new_task_context = context
-                .task_context_builder()
-                .process(clone_process)
-                .chain_count(context.chain_count() + 1)
-                .build()
-                .unwrap();
-
-            Task::<N>::initialize_sub_process(context.task_id(), new_task_context)
-                .await?
-                .context
-                .process
-        } else {
-            clone_process
-        };
-
-        let v = Arc::downgrade(&return_val);
-        let result = v.into();
-
-        context.return_efun_result(result);
+        Task::<N>::initialize_sub_process(context.task_id(), new_task_context)
+            .await?
+            .context
+            .process
     } else {
-        return Err(context.runtime_error(format!(
-            "invalid argument passed to `clone_object`: {}",
-            arg
-        )));
-    }
+        clone_process
+    };
+
+    let v = Arc::downgrade(&return_val);
+    let result = v.into();
+
+    context.return_efun_result(result);
 
     Ok(())
 }

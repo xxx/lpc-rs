@@ -29,10 +29,10 @@ fn format_ref<const N: usize>(
     match lpc_ref {
         LpcRef::Float(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::Int(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
-        LpcRef::String(x) => {
-            let s = x.read();
-
-            Ok(format!("{:width$}{}", "", s, width = indent))
+        LpcRef::String(_) => {
+            lpc_ref.with_string(|s| {
+                format!("{:width$}{}", "", s, width = indent)
+            })
         }
         LpcRef::Object(x) => {
             let val = x.upgrade();
@@ -43,13 +43,15 @@ fn format_ref<const N: usize>(
             }
         }
         LpcRef::Function(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
-        LpcRef::Array(x) => {
-            let arr = x.read();
-            format_array(&arr, context, indent, recurse_level + 1)
+        LpcRef::Array(_) => {
+            lpc_ref.with_array(|arr| {
+                format_array(&arr, context, indent, recurse_level + 1)
+            }).flatten()
         }
-        LpcRef::Mapping(x) => {
-            let map = x.read();
-            format_mapping(&map, context, indent, recurse_level + 1)
+        LpcRef::Mapping(_) => {
+            lpc_ref.with_mapping(|map| {
+                format_mapping(&map, context, indent, recurse_level + 1)
+            }).flatten()
         }
     }
 }

@@ -14,19 +14,15 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         | LpcRef::String(_)
         | LpcRef::Mapping(_)
         | LpcRef::Function(_) => {}
-        LpcRef::Array(arr) => {
-            let arr = arr.read();
-
-            for x in arr.iter() {
-                let LpcRef::Object(proc) = x else {
-                    continue;
-                };
-
-                if let Some(proc) = proc.upgrade() {
-                    proc.flags.set(ObjectFlags::Destructed);
-                    context.remove_process(proc);
-                } // else it's already destructed
-            }
+        LpcRef::Array(_) => {
+            lpc_ref.with_array(|arr| {
+                for x in arr.iter() {
+                    if let LpcRef::Object(proc) = x && let Some(proc) = proc.upgrade() {
+                        proc.flags.set(ObjectFlags::Destructed);
+                        context.remove_process(proc);
+                    } // else it's already destructed
+                }
+            })?
         }
         LpcRef::Object(proc) => {
             if let Some(proc) = proc.upgrade() {
