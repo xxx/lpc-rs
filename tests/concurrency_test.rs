@@ -4,7 +4,7 @@ use lpc_rs::{
     interpreter::{
         lpc_ref::LpcRef, process::Process, task::apply_function::apply_function_by_name, vm::Vm,
     },
-    util::process_builder::ProcessCreator,
+    util::process_builder::{ProcessCreator, ProcessInitializer},
 };
 use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::Result;
@@ -149,4 +149,89 @@ async fn lost_update_gil() {
 
     let expected: LpcIntInner = 8 * 500;
     assert_eq!(read_global(&proc, 0), LpcRef::from(expected));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "1981 of 2000 readers saw a torn pair"]
+async fn aliased_array_torn_read_racy() {
+    let code = r#"
+        int *pair = ({ 10, 0 });
+
+        void shift() {
+            pair[0] = pair[0] - 1;
+            pair[1] = pair[1] + 1;
+        }
+
+        void unshift() {
+            pair[0] = pair[0] + 1;
+            pair[1] = pair[1] - 1;
+        }
+
+        int sum() {
+            return pair[0] + pair[1];
+        }
+    "#;
+
+    let vm = boot_vm(race_config(false)).await;
+    let proc = vm
+        .initialize_process_from_code("/arr.c", code)
+        .await
+        .unwrap()
+        .context
+        .process
+        .clone();
+
+    let (writes, reads) = tokio::join!(
+        spawn_applies(&vm, proc.clone(), "shift", 4, 500),
+        spawn_applies(&vm, proc.clone(), "sum", 4, 500),
+    );
+
+    assert_all_ok(&writes);
+    assert_all_ok(&reads);
+
+    let ten = LpcRef::from(10);
+    let torn = reads.iter().filter(|r| r.as_ref().unwrap() != &ten).count();
+    assert_eq!(torn, 0, "{torn} of {} readers saw a torn pair", reads.len());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn aliased_array_torn_read_gil() {
+    let code = r#"
+        int *pair = ({ 10, 0 });
+
+        void shift() {
+            pair[0] = pair[0] - 1;
+            pair[1] = pair[1] + 1;
+        }
+
+        void unshift() {
+            pair[0] = pair[0] + 1;
+            pair[1] = pair[1] - 1;
+        }
+
+        int sum() {
+            return pair[0] + pair[1];
+        }
+    "#;
+
+    let vm = boot_vm(race_config(true)).await;
+    let proc = vm
+        .initialize_process_from_code("/arr.c", code)
+        .await
+        .unwrap()
+        .context
+        .process
+        .clone();
+
+    let (writes, reads) = tokio::join!(
+        spawn_applies(&vm, proc.clone(), "shift", 4, 500),
+        spawn_applies(&vm, proc.clone(), "sum", 4, 500),
+    );
+
+    assert_all_ok(&writes);
+    assert_all_ok(&reads);
+
+    let ten = LpcRef::from(10);
+    let torn = reads.iter().filter(|r| r.as_ref().unwrap() != &ten).count();
+    assert_eq!(torn, 0, "{torn} of {} readers saw a torn pair", reads.len());
 }
