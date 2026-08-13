@@ -101,11 +101,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         let weak_process = (*weak_process).clone();
                         FunctionAddress::Local(weak_process, func)
                     }
-                    LpcRef::String(s) => {
+                    LpcRef::String(_) => {
                         let process = {
-                            let path = s.read();
+                            let path = receiver_ref
+                                .with_string(|s| s.to_string())
+                                .unwrap_or_default();
 
-                            let Some(process) = self.context.lookup_process(&*path) else {
+                            let Some(process) = self.context.lookup_process(&path) else {
                                 return Err(self
                                     .runtime_error(format!("Unable to find object `{}`.", path)));
                             };
@@ -196,34 +198,34 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let lpc_ref = get_location(&self.stack, index_loc)?.into_owned();
 
         match container_ref {
-            LpcRef::Array(vec_ref) => {
-                let vec = vec_ref.read();
-
-                if let LpcRef::Int(i) = lpc_ref {
-                    let idx = if i.0 >= 0 {
-                        i.0
-                    } else {
-                        vec.len() as LpcIntInner + i.0
-                    };
-
-                    if idx >= 0 {
-                        if let Some(v) = vec.get(idx as usize) {
-                            set_location(&mut self.stack, destination, v.clone())?;
+            LpcRef::Array(_) => container_ref
+                .with_array(|vec| {
+                    if let LpcRef::Int(i) = lpc_ref {
+                        let idx = if i.0 >= 0 {
+                            i.0
                         } else {
-                            return Err(self.array_index_error(idx, vec.len()));
+                            vec.len() as LpcIntInner + i.0
+                        };
+
+                        if idx >= 0 {
+                            if let Some(v) = vec.get(idx as usize) {
+                                set_location(&mut self.stack, destination, v.clone())?;
+                                Ok(())
+                            } else {
+                                Err(self.array_index_error(idx, vec.len()))
+                            }
+                        } else {
+                            Err(self.array_index_error(idx, vec.len()))
                         }
                     } else {
-                        return Err(self.array_index_error(idx, vec.len()));
+                        Err(self.array_index_error(lpc_ref, vec.len()))
                     }
-                } else {
-                    return Err(self.array_index_error(lpc_ref, vec.len()));
-                }
-
-                Ok(())
-            }
-            LpcRef::String(string_ref) => {
-                let lock = string_ref.read();
-                let string = lock.to_str();
+                })
+                .flatten(),
+            LpcRef::String(_) => {
+                let string = container_ref
+                    .with_string(|lpc_string| lpc_string.to_string())
+                    .unwrap_or_default();
 
                 if let LpcRef::Int(i) = lpc_ref {
                     let idx = if i.0 >= 0 {
@@ -232,16 +234,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         string.len() as LpcIntInner + i.0
                     };
 
-                    if idx >= 0 {
-                        if let Some(v) = string.chars().nth(idx as usize) {
-                            set_location(
-                                &mut self.stack,
-                                destination,
-                                LpcRef::Int(LpcInt(v as LpcIntInner)),
-                            )?;
-                        } else {
-                            set_location(&mut self.stack, destination, NULL)?;
-                        }
+                    if idx >= 0
+                        && let Some(v) = string.chars().nth(idx as usize)
+                    {
+                        set_location(
+                            &mut self.stack,
+                            destination,
+                            LpcRef::Int(LpcInt(v as LpcIntInner)),
+                        )?;
                     } else {
                         set_location(&mut self.stack, destination, NULL)?;
                     }
@@ -255,14 +255,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 Ok(())
             }
-            LpcRef::Mapping(map_ref) => {
-                let map = map_ref.read();
-
-                let var = if let Some(v) = map.get(&lpc_ref) {
-                    v.clone()
-                } else {
-                    NULL
-                };
+            LpcRef::Mapping(_) => {
+                let var = container_ref
+                    .with_mapping(|map| map.get(&lpc_ref).cloned().unwrap_or(NULL))
+                    .unwrap_or(NULL);
 
                 set_location(&mut self.stack, destination, var)?;
 
@@ -282,12 +278,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ) -> lpc_rs_errors::Result<()> {
         let var = {
             let container_ref = &*get_location(&self.stack, container_loc)?;
-            let lpc_ref = &*get_location(&self.stack, index_loc)?;
 
             match container_ref {
-                LpcRef::Mapping(map_ref) => {
-                    let map = map_ref.read();
-
+                LpcRef::Mapping(_) => {
+                    let lpc_ref = &*get_location(&self.stack, index_loc)?;
                     let index = match lpc_ref {
                         LpcRef::Int(i) => i.0,
                         _ => {
@@ -297,11 +291,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         }
                     };
 
-                    if let Some((key, _)) = map.get_index(index as usize) {
-                        key.clone()
-                    } else {
-                        NULL
-                    }
+                    container_ref
+                        .with_mapping(|map| {
+                            if let Some((key, _)) = map.get_index(index as usize) {
+                                key.clone()
+                            } else {
+                                NULL
+                            }
+                        })
+                        .unwrap_or(NULL)
                 }
                 x => {
                     return Err(
@@ -344,40 +342,37 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         container_loc: RegisterVariant,
         index_loc: RegisterVariant,
     ) -> lpc_rs_errors::Result<()> {
-        let mut container = get_location(&self.stack, container_loc)?.into_owned();
+        let container = get_location(&self.stack, container_loc)?.into_owned();
         let index = &*get_location(&self.stack, index_loc)?;
         let array_idx = if let LpcRef::Int(i) = index { i.0 } else { 0 };
 
         match container {
-            LpcRef::Array(vec_ref) => {
-                let mut vec = vec_ref.write();
+            LpcRef::Array(_) => {
+                container
+                    .with_array_mut(|vec| {
+                        let len = vec.len();
 
-                let len = vec.len();
+                        // handle negative indices
+                        let idx = if array_idx >= 0 {
+                            array_idx
+                        } else {
+                            len as LpcIntInner + array_idx
+                        };
 
-                // handle negative indices
-                let idx = if array_idx >= 0 {
-                    array_idx
-                } else {
-                    len as LpcIntInner + array_idx
-                };
-
-                if idx >= 0 && (idx as usize) < len {
-                    vec[idx as usize] = (*get_location(&self.stack, value_loc)?).clone();
-                } else {
-                    return Err(self.array_index_error(idx, len));
-                }
-
-                Ok(())
+                        if idx >= 0 && (idx as usize) < len {
+                            vec[idx as usize] = (*get_location(&self.stack, value_loc)?).clone();
+                            return Ok(());
+                        } else {
+                            return Err(self.array_index_error(idx, len));
+                        }
+                    })
+                    .flatten()
             }
-            LpcRef::Mapping(ref mut map_ref) => {
-                let mut map = map_ref.write();
-
-                map.insert(
-                    index.clone(),
-                    get_location(&self.stack, value_loc)?.into_owned(),
-                );
-
-                Ok(())
+            LpcRef::Mapping(_) => {
+                let value = get_location(&self.stack, value_loc)?.into_owned();
+                container.with_mapping_mut(|map| {
+                    map.insert(index.clone(), value);
+                })
             }
             x => Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x))),
         }

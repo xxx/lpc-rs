@@ -73,11 +73,22 @@ impl FunctionPtr {
     /// How many arguments do we expect to be called with at runtime?
     #[inline]
     pub fn arity(&self) -> usize {
-        self.partial_args
-            .read()
-            .iter()
-            .filter(|x| x.is_none())
-            .count()
+        self.with_partial_args(|pa| pa.iter().filter(|x| x.is_none()).count())
+            .unwrap_or_default()
+    }
+
+    pub fn with_partial_args<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&[Option<LpcRef>]) -> R,
+    {
+        Ok(f(&self.partial_args.read()))
+    }
+
+    pub fn with_partial_args_mut<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&mut ThinVec<Option<LpcRef>>) -> R, // typed as ThinVec so we can extend it
+    {
+        Ok(f(&mut self.partial_args.write()))
     }
 
     /// Get a clone of this function pointer, with a new unique ID.
@@ -95,15 +106,15 @@ impl FunctionPtr {
     pub fn partially_apply(&self, args: &[LpcRef]) {
         let mut arg_iter = args.iter();
 
-        let mut arg_writer = self.partial_args.write();
-
-        for arg in arg_writer.iter_mut() {
-            if arg.is_none() {
-                *arg = arg_iter.next().cloned();
+        let _ = self.with_partial_args_mut(|partial_args| {
+            for partial_arg in partial_args.iter_mut() {
+                if partial_arg.is_none() {
+                    *partial_arg = arg_iter.next().cloned();
+                }
             }
-        }
 
-        arg_writer.extend(arg_iter.cloned().map(Some));
+            partial_args.extend(arg_iter.cloned().map(Some));
+        });
     }
 
     /// Prepare this function pointer for a call, by getting all of the
@@ -125,15 +136,15 @@ impl FunctionPtr {
         // We won't get any additional args passed to us, so just set up the partial args.
         // Use int 0 for any that haven't been filled-in.
         // TODO: error instead of int 0?
-        let args = ptr
-            .partial_args
-            .read()
-            .iter()
-            .map(|arg| match arg {
-                Some(lpc_ref) => lpc_ref.clone(),
-                None => NULL,
-            })
-            .collect::<Vec<_>>();
+        let args = ptr.with_partial_args(|partial_args| {
+            partial_args
+                .iter()
+                .map(|arg| match arg {
+                    Some(lpc_ref) => lpc_ref.clone(),
+                    None => NULL,
+                })
+                .collect::<Vec<_>>()
+        })?;
 
         match ptr.address {
             FunctionAddress::Local(ref proc, ref function) => {
@@ -147,23 +158,31 @@ impl FunctionPtr {
             }
             FunctionAddress::Dynamic(name) => {
                 let proc = {
-                    let first_arg = ptr.partial_args.read().first().cloned();
+                    let first_arg = ptr.with_partial_args(|args| args.first().cloned())?;
                     let mut string_receiver = false;
                     let mut proc = match &first_arg {
-                        Some(Some(LpcRef::Object(proc))) => {
-                            let Some(proc) = proc.upgrade() else {
-                                return Err(lpc_error!(
-                                    "attempted to call a dynamic receiver that has been destructed",
-                                ));
-                            };
+                        Some(Some(x)) => match x {
+                            LpcRef::Object(proc) => {
+                                let Some(proc) = proc.upgrade() else {
+                                    return Err(lpc_error!(
+                                        "attempted to call a dynamic receiver that has been destructed",
+                                    ));
+                                };
 
-                            Some(proc)
-                        }
-                        Some(Some(LpcRef::String(string_ref))) => {
-                            string_receiver = true;
-                            let string = string_ref.read();
-                            object_space.lookup(string.to_str()).map(|x| x.clone())
-                        }
+                                Some(proc)
+                            }
+                            LpcRef::String(_) => {
+                                string_receiver = true;
+                                x.with_string(|string| {
+                                    object_space.lookup(string.to_str()).map(|x| x.clone())
+                                })?
+                            }
+                            _ => {
+                                return Err(lpc_error!(
+                                    "attempted to call a dynamic receiver that is not an object or string"
+                                ));
+                            }
+                        },
                         _ => {
                             return Err(lpc_error!(
                                 "attempted to call a dynamic receiver that is not an object or string"
@@ -261,15 +280,16 @@ impl Display for FunctionPtr {
         }
         s.push_str(&format!("address: {}, ", self.address));
 
-        let partial_args = &self
-            .partial_args
-            .read()
-            .iter()
-            .map(|arg| match arg {
-                Some(a) => a.to_string(),
-                None => "<None>".to_string(),
-            })
-            .join(", ");
+        let partial_args = self.with_partial_args(|args| {
+            args
+                .iter()
+                .map(|arg| match arg {
+                    Some(a) => a.to_string(),
+                    None => "<None>".to_string(),
+                })
+                .join(", ")
+        }).expect("unreachable");
+
         s.push_str(&format!("partial_args: [{partial_args}], "));
         s.push_str(&format!(
             "upvalues: [{}]",
