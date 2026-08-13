@@ -73,7 +73,7 @@ impl LpcRef {
 
     fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> Box<LpcError> {
         lpc_error!(
-            "runtime error: mismatched types: {} ({}) {} {} ({})",
+            "Runtime Error: mismatched types: {} ({}) {} {} ({})",
             self,
             self.type_name(),
             op,
@@ -84,7 +84,7 @@ impl LpcRef {
 
     fn to_unary_op_error(&self, op: UnaryOperation) -> Box<LpcError> {
         lpc_error!(
-            "runtime error: mismatched types: {} {} ({})",
+            "Runtime Error: mismatched types: {} {} ({})",
             op,
             self,
             self.type_name()
@@ -98,7 +98,7 @@ impl LpcRef {
 
                 Ok(())
             }
-            _ => Err(lpc_error!("runtime error: invalid increment")),
+            _ => Err(lpc_error!("Runtime Error: invalid increment")),
         }
     }
 
@@ -108,7 +108,7 @@ impl LpcRef {
                 *x = x.wrapping_sub(1).into();
                 Ok(())
             }
-            _ => Err(lpc_error!("runtime error: invalid decrement")),
+            _ => Err(lpc_error!("Runtime Error: invalid decrement")),
         }
     }
 
@@ -124,17 +124,175 @@ impl LpcRef {
         }
     }
 
-    /// Convenience to perform a binary operation on a pair of [`LpcRef`]s
-    /// wrapped in RwLocks.
-    pub fn binary_op<F, T>(left: &RwLock<Self>, right: &RwLock<Self>, op: F) -> T
+    pub fn with_string<F, R>(&self, f: F) -> Result<R>
     where
-        F: Fn(&LpcRef, &LpcRef) -> T,
+        F: FnOnce(&LpcString) -> R,
     {
-        let left = &*left.read();
-        let right = &*right.read();
-
-        op(left, right)
+        match self {
+            LpcRef::String(a) => Ok(f(&a.read())),
+            _ => Err(lpc_error!(
+                "Runtime Error: invalid access. Expected string, actually {}",
+                self.type_name()
+            )),
+        }
     }
+
+    // pub fn with_string_mut<F, R>(&self, f: F) -> Result<R>
+    // where
+    //     F: FnOnce(&mut LpcString) -> R
+    // {
+    //     match self {
+    //         LpcRef::String(a) => Ok(f(&mut *a.write())),
+    //         _ => Err(lpc_error!("Runtime Error: invalid access. Expected string, actually {}", self.type_name())),
+    //     }
+    // }
+
+    pub fn with_strings<F, R>(&self, other: &Self, f: F) -> Result<R>
+    where
+        F: FnOnce(&LpcString, &LpcString) -> R,
+    {
+        match (self, other) {
+            (LpcRef::String(a), LpcRef::String(b)) => {
+                if Arc::ptr_eq(a, b) {
+                    // Avoid taking a single lock twice
+                    let g = a.read();
+                    return Ok(f(&g, &g));
+                }
+                // take locks in a deterministic order (lower address first)
+                let (aa, bb) = if Arc::as_ptr(a) < Arc::as_ptr(b) {
+                    (a.read(), b.read())
+                } else {
+                    let bb = b.read();
+                    (a.read(), bb)
+                };
+
+                Ok(f(&aa, &bb))
+            }
+            _ => Err(lpc_error!(
+                "Runtime Error: invalid access. Expected string / string, actually {} / {}",
+                self.type_name(),
+                other.type_name()
+            )),
+        }
+    }
+
+    pub fn with_array<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&LpcArray) -> R,
+    {
+        match self {
+            LpcRef::Array(a) => Ok(f(&a.read())),
+            _ => Err(lpc_error!(
+                "Runtime Error: invalid access. Expected array, actually {}",
+                self.type_name()
+            )),
+        }
+    }
+
+    pub fn with_array_mut<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&mut LpcArray) -> R,
+    {
+        match self {
+            LpcRef::Array(a) => Ok(f(&mut a.write())),
+            _ => Err(lpc_error!(
+                "Runtime Error: invalid access. Expected array, actually {}",
+                self.type_name()
+            )),
+        }
+    }
+
+    pub fn with_arrays<F, R>(&self, other: &Self, f: F) -> Result<R>
+    where
+        F: FnOnce(&LpcArray, &LpcArray) -> R,
+    {
+        match (self, other) {
+            (LpcRef::Array(a), LpcRef::Array(b)) => {
+                if Arc::ptr_eq(a, b) {
+                    let g = a.read();
+                    return Ok(f(&g, &g));
+                }
+                let (aa, bb) = if Arc::as_ptr(a) < Arc::as_ptr(b) {
+                    (a.read(), b.read())
+                } else {
+                    let bb = b.read();
+                    (a.read(), bb)
+                };
+
+                Ok(f(&aa, &bb))
+            }
+            _ => Err(lpc_error!(
+                "Runtime Error: invalid access. Expected array / array, actually {} / {}",
+                self.type_name(),
+                other.type_name()
+            )),
+        }
+    }
+
+    pub fn with_mapping<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&LpcMapping) -> R,
+    {
+        match self {
+            LpcRef::Mapping(m) => Ok(f(&m.read())),
+            _ => Err(lpc_error!(
+                "Runtime Error: invalid access. Expected mapping, actually {}",
+                self.type_name()
+            )),
+        }
+    }
+
+    pub fn with_mapping_mut<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&mut LpcMapping) -> R,
+    {
+        match self {
+            LpcRef::Mapping(m) => Ok(f(&mut m.write())),
+            _ => Err(lpc_error!(
+                "Runtime Error: invalid access. Expected mapping, actually {}",
+                self.type_name()
+            )),
+        }
+    }
+
+    pub fn with_mappings<F, R>(&self, other: &Self, f: F) -> Result<R>
+    where
+        F: FnOnce(&LpcMapping, &LpcMapping) -> R,
+    {
+        match (self, other) {
+            (LpcRef::Mapping(a), LpcRef::Mapping(b)) => {
+                if Arc::ptr_eq(a, b) {
+                    let g = a.read();
+                    return Ok(f(&g, &g));
+                }
+                let (aa, bb) = if Arc::as_ptr(a) < Arc::as_ptr(b) {
+                    (a.read(), b.read())
+                } else {
+                    let bb = b.read();
+                    (a.read(), bb)
+                };
+
+                Ok(f(&aa, &bb))
+            }
+            _ => Err(lpc_error!(
+                "Runtime Error: invalid access. Expected mapping / mapping, actually {} / {}",
+                self.type_name(),
+                other.type_name()
+            )),
+        }
+    }
+
+    // /// Convenience to perform a binary operation on a pair of [`LpcRef`]s
+    // /// wrapped in RwLocks.
+    // pub fn binary_op<F, T>(left: &RwLock<Self>, right: &RwLock<Self>, op: F) -> T
+    // where
+    //     F: Fn(&LpcRef, &LpcRef) -> T,
+    // {
+    //     let left = &*left.read();
+    //     let right = &*right.read();
+    //
+    //     op(left, right)
+    // }
 
     pub fn add(&self, rhs: &Self) -> Result<Self> {
         match self {
@@ -146,31 +304,32 @@ impl LpcRef {
             LpcRef::Int(i) => match rhs {
                 LpcRef::Float(f) => Ok(Self::from(*i + *f)),
                 LpcRef::Int(i2) => Ok(Self::from(*i + *i2)),
-                LpcRef::String(s) => Ok(LpcString::from(concatenate_strings(
-                    i.to_string(),
-                    s.read().to_str(),
-                )?)
-                .into()),
+                LpcRef::String(_) => {
+                    let result = rhs
+                        .with_string(|s| concatenate_strings(i.to_string(), s.to_str()))
+                        .flatten()?;
+                    Ok(LpcString::from(result).into())
+                }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
-            LpcRef::String(s) => match rhs {
-                LpcRef::String(s2) => Ok(LpcString::from(concatenate_strings(
-                    s.read().to_string(),
-                    s2.read().to_str(),
-                )?)
-                .into()),
-                LpcRef::Int(i) => Ok(LpcString::from(concatenate_strings(
-                    s.read().to_string(),
-                    i.to_string(),
-                )?)
-                .into()),
+            LpcRef::String(_) => match rhs {
+                LpcRef::String(_) => {
+                    let result = self
+                        .with_strings(rhs, |a, b| concatenate_strings(a.to_string(), b.to_str()))
+                        .flatten()?;
+                    Ok(LpcString::from(result).into())
+                }
+                LpcRef::Int(i) => {
+                    let result = self
+                        .with_string(|s| concatenate_strings(s.to_string(), i.to_string()))
+                        .flatten()?;
+                    Ok(LpcString::from(result).into())
+                }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
-            LpcRef::Array(vec) => match rhs {
-                LpcRef::Array(vec2) => {
-                    let new_vec = vec.read();
-                    let added_vec = vec2.read();
-                    Ok((new_vec.clone() + added_vec.clone()).into())
+            LpcRef::Array(_) => match rhs {
+                LpcRef::Array(_) => {
+                    self.with_arrays(rhs, |a, b| LpcRef::from(a.clone() + b.clone()))
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
@@ -197,15 +356,16 @@ impl LpcRef {
             (LpcRef::Int(x), LpcRef::Float(y)) => Ok(Self::Float(LpcFloat::from(
                 LpcFloatInner::from(x.0 as BaseFloat) - y.0,
             ))),
-            (LpcRef::Array(vec), LpcRef::Array(vec2)) => {
+            (LpcRef::Array(vec), LpcRef::Array(_)) => {
                 let new_vec = vec.read().clone();
-                let removed_vec = vec2.read().clone();
 
-                let result = new_vec
-                    .into_iter()
-                    .filter(|x| !removed_vec.contains(x))
-                    .collect::<LpcArray>();
-                Ok(result.into())
+                rhs.with_array(|a| {
+                    new_vec
+                        .into_iter()
+                        .filter(|x| !a.contains(x))
+                        .collect::<LpcArray>()
+                        .into()
+                })
             }
             _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
         }
@@ -219,13 +379,17 @@ impl LpcRef {
             (LpcRef::Int(x), LpcRef::Float(y)) => Ok(Self::Float(
                 (LpcFloatInner::from(x.0 as BaseFloat) * y.0).into(),
             )),
-            (LpcRef::String(x), LpcRef::Int(y)) => {
-                let string = x.read();
-                Ok(LpcString::from(string::repeat_string(string.to_str(), y.0)?).into())
+            (LpcRef::String(_), LpcRef::Int(y)) => {
+                let string = self
+                    .with_string(|a| string::repeat_string(a.to_str(), y.0))
+                    .flatten()?;
+                Ok(LpcString::from(string).into())
             }
-            (LpcRef::Int(x), LpcRef::String(y)) => {
-                let string = y.read();
-                Ok(LpcString::from(string::repeat_string(string.to_str(), x.0)?).into())
+            (LpcRef::Int(x), LpcRef::String(_)) => {
+                let string = rhs
+                    .with_string(|a| string::repeat_string(a.to_str(), x.0))
+                    .flatten()?;
+                Ok(LpcString::from(string).into())
             }
             _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
         }
@@ -374,14 +538,8 @@ impl Mark for LpcRef {
 
         match self {
             LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::String(_) | LpcRef::Object(_) => Ok(()),
-            LpcRef::Array(arr) => {
-                let arr = arr.read();
-                arr.mark(marked, processed)
-            }
-            LpcRef::Mapping(map) => {
-                let map = map.read();
-                map.mark(marked, processed)
-            }
+            LpcRef::Array(_) => self.with_array(|a| a.mark(marked, processed)).flatten(),
+            LpcRef::Mapping(_) => self.with_mapping(|m| m.mark(marked, processed)).flatten(),
             LpcRef::Function(fun) => fun.mark(marked, processed),
         }
     }
@@ -492,7 +650,9 @@ impl PartialEq for LpcRef {
         match (self, other) {
             (LpcRef::Float(x), LpcRef::Float(y)) => x == y,
             (LpcRef::Int(x), LpcRef::Int(y)) => x == y,
-            (LpcRef::String(x), LpcRef::String(y)) => *x.read() == *y.read(),
+            (LpcRef::String(_), LpcRef::String(_)) => self
+                .with_strings(other, |a, b| a == b)
+                .expect("Strings should be valid"),
             (LpcRef::Object(x), LpcRef::Object(y)) => ptr::eq(x, y),
             (LpcRef::Array(x), LpcRef::Array(y)) => ptr::eq(&**x, &**y),
             (LpcRef::Mapping(x), LpcRef::Mapping(y)) => ptr::eq(&**x, &**y),
@@ -534,10 +694,8 @@ impl PartialOrd for LpcRef {
         match (self, other) {
             (LpcRef::Float(x), LpcRef::Float(y)) => Some(x.cmp(y)),
             (LpcRef::Int(x), LpcRef::Int(y)) => Some(x.cmp(y)),
-            (LpcRef::String(x), LpcRef::String(y)) => {
-                let a = x.read();
-                let b = y.read();
-                Some(a.cmp(&*b))
+            (LpcRef::String(_), LpcRef::String(_)) => {
+                self.with_strings(other, |a, b| a.cmp(b)).ok()
             }
             _ => None,
         }
@@ -549,15 +707,15 @@ impl Display for LpcRef {
         match self {
             LpcRef::Float(x) => write!(f, "{x}"),
             LpcRef::Int(x) => write!(f, "{x}"),
-            LpcRef::String(x) => {
-                write!(f, "{}", x.read())
-            }
-            LpcRef::Array(x) => {
-                write!(f, "{}", x.read())
-            }
-            LpcRef::Mapping(x) => {
-                write!(f, "{}", x.read())
-            }
+            LpcRef::String(_) => self
+                .with_string(|s| write!(f, "{}", s))
+                .expect("Strings should be valid"),
+            LpcRef::Array(_) => self
+                .with_array(|a| write!(f, "{a}"))
+                .expect("Arrays should be valid"),
+            LpcRef::Mapping(_) => self
+                .with_mapping(|m| write!(f, "{m}"))
+                .expect("Mappings should be valid"),
             LpcRef::Object(x) => match x.upgrade() {
                 Some(x) => write!(f, "{}", x),
                 None => write!(f, "< destructed >"),
@@ -574,15 +732,15 @@ impl Debug for LpcRef {
         match self {
             LpcRef::Float(x) => write!(f, "{x:?}"),
             LpcRef::Int(x) => write!(f, "{x:?}"),
-            LpcRef::String(x) => {
-                write!(f, "{:?}", x.read())
-            }
-            LpcRef::Array(x) => {
-                write!(f, "{:?}", x.read())
-            }
-            LpcRef::Mapping(x) => {
-                write!(f, "{:?}", x.read())
-            }
+            LpcRef::String(_) => self
+                .with_string(|x| write!(f, "{x:?}"))
+                .expect("Strings should be valid"),
+            LpcRef::Array(_) => self
+                .with_array(|x| write!(f, "{x:?}"))
+                .expect("Arrays should be valid"),
+            LpcRef::Mapping(_) => self
+                .with_mapping(|x| write!(f, "{x:?}"))
+                .expect("Mappings should be valid"),
             LpcRef::Object(x) => match x.upgrade() {
                 Some(x) => write!(f, "{:?}", x),
                 None => write!(f, "< destructed >"),
@@ -1277,6 +1435,26 @@ mod tests {
             ptr.mark(&mut marked, &mut processed).unwrap();
 
             assert!(processed.contains(*ptr_id.as_ref() as usize));
+        }
+
+        #[test]
+        fn deadlock_regression_check() {
+            let string = LpcRef::from("test");
+            let string2 = string.clone();
+
+            string
+                .with_strings(&string2, |a, b| {
+                    assert_eq!(a, b);
+                })
+                .expect("unreachable");
+
+            let LpcRef::String(a) = string else {
+                panic!("Expected string")
+            };
+            let LpcRef::String(b) = string2 else {
+                panic!("Expected string")
+            };
+            assert!(Arc::ptr_eq(&a, &b));
         }
     }
 }
