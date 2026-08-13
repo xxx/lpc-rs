@@ -200,8 +200,7 @@ impl Process {
             .global_variables
             .iter()
             .filter_map(|(k, v)| {
-                let value = self
-                    .with_globals(|g| Some(g[v.location?.index()].clone()))?;
+                let value = self.with_globals(|g| Some(g[v.location?.index()].clone()))?;
                 Some((k.as_str(), value))
             })
             .collect()

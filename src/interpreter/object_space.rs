@@ -9,10 +9,7 @@ use std::{
 use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use bit_set::BitSet;
-use dashmap::{
-    DashMap,
-    mapref::{multiple::RefMulti},
-};
+use dashmap::{DashMap, mapref::multiple::RefMulti};
 use delegate::delegate;
 use lpc_rs_utils::config::Config;
 use tracing::{debug, trace};

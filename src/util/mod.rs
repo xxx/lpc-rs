@@ -10,7 +10,7 @@ use crate::interpreter::{object_space::ObjectSpace, process::Process};
 pub fn get_simul_efuns(config: &Config, object_space: &ObjectSpace) -> Option<Arc<Process>> {
     config.simul_efun_file.as_deref().and_then(|f| {
         let file = f.strip_suffix(".c").unwrap_or(f);
-        object_space.lookup(file).map(|p| p.clone())
+        object_space.lookup(file)
     })
 }
 

@@ -172,9 +172,7 @@ impl FunctionPtr {
                             }
                             LpcRef::String(_) => {
                                 string_receiver = true;
-                                x.with_string(|string| {
-                                    object_space.lookup(string.to_str()).map(|x| x.clone())
-                                })?
+                                x.with_string(|string| object_space.lookup(string.to_str()))?
                             }
                             _ => {
                                 return Err(lpc_error!(

@@ -126,7 +126,7 @@ impl TaskContext {
     where
         T: AsRef<str>,
     {
-        self.object_space().lookup(path).map(|p| p.clone())
+        self.object_space().lookup(path)
     }
 
     /// Directly insert the passed [`Process`] into the object space, with

@@ -5,6 +5,7 @@ use std::{
 };
 
 use dashmap::DashSet;
+use itertools::Itertools;
 
 use crate::interpreter::process::Process;
 
@@ -95,6 +96,12 @@ impl Inventory {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = Weak<Process>> + '_ {
-        self.objects.iter().map(|hp| hp.process.clone())
+        // collect to a vector and iterate over that, to avoid accidental deadlock situations where
+        // items are added or removed while the DashMap iterator is open.
+        self.objects
+            .iter()
+            .map(|hp| hp.process.clone())
+            .collect_vec()
+            .into_iter()
     }
 }
