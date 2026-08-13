@@ -67,22 +67,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let mut from_slice_index = 0;
         let mut next_index = 1;
-        {
-            // This read() needs to be dropped before the `await`.
-            let arg_locations = &function.arg_locations;
-            let partial_args = ptr_arc.partial_args.read();
+        let arg_locations = &function.arg_locations;
 
-            for i in 0..max_arg_length {
-                let target_location = arg_locations.get(i as usize).copied().unwrap_or_else(|| {
-                    // This should only be reached by variables that will go
-                    // into an ellipsis function's `argv`.
-                    Register(next_index).as_local()
-                });
+        for i in 0..max_arg_length {
+            let target_location = arg_locations.get(i as usize).copied().unwrap_or_else(|| {
+                // This should only be reached by variables that will go
+                // into an ellipsis function's `argv`.
+                Register(next_index).as_local()
+            });
 
-                if let RegisterVariant::Local(r) = target_location {
-                    next_index = r.index() + 1;
-                }
+            if let RegisterVariant::Local(r) = target_location {
+                next_index = r.index() + 1;
+            }
 
+            ptr_arc.with_partial_args(|partial_args| {
                 if let Some(Some(lpc_ref)) = partial_args.get(i as usize) {
                     // if a partially-applied-to arg is present, use it
                     Self::type_check_and_assign_location(
@@ -91,24 +89,28 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         target_location,
                         lpc_ref.clone(),
                         i,
-                    )?;
+                    )
                 } else if let Some(location) = from_slice.get(from_slice_index) {
                     // check if the user passed an argument, which will either
                     // fill in the next hole in the partial arguments, or
                     // append to the end
 
                     let lpc_ref = get_location(&self.stack, *location)?;
-                    Self::type_check_and_assign_location(
+                    let result = Self::type_check_and_assign_location(
                         self,
                         &mut new_frame,
                         target_location,
                         lpc_ref.into_owned(),
                         i,
-                    )?;
+                    );
 
                     from_slice_index += 1;
+
+                    result
+                } else {
+                    Ok(())
                 }
-            }
+            })?
         }
 
         self.stack.push(new_frame)?;
@@ -161,11 +163,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         trace!("Calling function ptr: {}", ptr);
 
         let passed_args_count = num_args
-            + ptr
-                .partial_args
-                .read()
-                .iter()
-                .fold(0, |sum, arg| sum + arg.is_some() as RegisterSize);
+            + ptr.with_partial_args(|pa| {
+                pa.iter()
+                    .fold(0, |sum, arg| sum + arg.is_some() as RegisterSize)
+            });
         let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
         let is_dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
         let is_call_other = ptr.call_other;

@@ -61,7 +61,7 @@ mod tests {
 
         assert_eq!(func.name(), "dump");
 
-        let _ = func.with_partial_args(|args| {
+        func.with_partial_args(|args| {
             assert_eq!(
                 args.iter()
                     .map(|a| a.as_ref().unwrap().to_string())

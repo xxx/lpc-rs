@@ -147,19 +147,23 @@ mod tests {
             .as_slice(),
         ));
 
-        enabled.globals.read()[0]
-            .with_array(|arr| {
-                assert_eq!(
-                    &arr.iter().map(|s| s.to_string()).collect_vec(),
-                    &["i herd", "u liek mudkips?"]
-                );
+        enabled
+            .with_globals(|g| {
+                g[0].with_array(|arr| {
+                    assert_eq!(
+                        &arr.iter().map(|s| s.to_string()).collect_vec(),
+                        &["i herd", "u liek mudkips?"]
+                    );
+                })
             })
             .unwrap();
 
         let disabled = space.lookup("/disabled#1").unwrap();
-        disabled.globals.read()[0]
-            .with_array(|arr| {
-                assert!(arr.is_empty());
+        disabled
+            .with_globals(|g| {
+                g[0].with_array(|arr| {
+                    assert!(arr.is_empty());
+                })
             })
             .unwrap();
     }

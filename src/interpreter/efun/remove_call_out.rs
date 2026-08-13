@@ -16,9 +16,7 @@ pub async fn remove_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -
         )));
     }
 
-    let removed = context.with_call_outs_mut(|co| {
-        co.remove(idx.0 as usize)
-    })?;
+    let removed = context.with_call_outs_mut(|co| co.remove(idx.0 as usize));
 
     let ret = removed
         .map(|call_out| {
@@ -71,6 +69,8 @@ mod tests {
             .await;
 
         assert!(result.is_ok());
-        assert!(global_state.call_outs.read().is_empty());
+        global_state.with_call_outs(|co| {
+            assert!(co.is_empty());
+        });
     }
 }

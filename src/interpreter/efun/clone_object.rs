@@ -298,6 +298,8 @@ mod tests {
 
         let student = vm.global_state.object_space.lookup("/clone#0").unwrap();
 
-        assert!(student.globals.read().iter().all(|v| v.is_null()));
+        student.with_globals(|g| {
+            assert!(g.iter().all(|v| v.is_null()));
+        });
     }
 }

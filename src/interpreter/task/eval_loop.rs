@@ -433,66 +433,66 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let lpc_ref = &*get_location(stack, r1)?;
 
                     match lpc_ref {
-                        LpcRef::Array(v_ref) => {
-                            let vec = v_ref.read();
-
-                            if vec.is_empty() {
-                                return Ok(LpcArray::new(vec![]).into());
-                            }
-
-                            let index1 = &*get_location(stack, r2)?;
-                            let index2 = &*get_location(stack, r3)?;
-
-                            if let (LpcRef::Int(start), LpcRef::Int(end)) = (&index1, &index2) {
-                                let (real_start, real_end) =
-                                    resolve_range(start.0, end.0, vec.len());
-
-                                if real_start <= real_end {
-                                    let slice = &vec[real_start..=real_end];
-                                    let mut new_vec = vec![NULL; slice.len()];
-                                    new_vec.clone_from_slice(slice);
-                                    Ok(LpcArray::new(new_vec).into())
-                                } else {
-                                    Ok(LpcArray::new(vec![]).into())
+                        LpcRef::Array(_) => lpc_ref
+                            .with_array(|vec| {
+                                if vec.is_empty() {
+                                    return Ok(LpcArray::new(vec![]).into());
                                 }
-                            } else {
-                                let frame = self.stack.current_frame()?;
-                                Err(lpc_error!(
-                                    frame.current_debug_span(),
-                                    "Invalid code was generated for a Range instruction.",
-                                ))
-                            }
-                        }
-                        LpcRef::String(v_ref) => {
-                            let string = v_ref.read();
 
-                            if string.is_empty() {
-                                return Ok(LpcString::from("").into());
-                            }
+                                let index1 = &*get_location(stack, r2)?;
+                                let index2 = &*get_location(stack, r3)?;
 
-                            let index1 = &*get_location(stack, r2)?;
-                            let index2 = &*get_location(stack, r3)?;
+                                if let (LpcRef::Int(start), LpcRef::Int(end)) = (&index1, &index2) {
+                                    let (real_start, real_end) =
+                                        resolve_range(start.0, end.0, vec.len());
 
-                            if let (LpcRef::Int(start), LpcRef::Int(end)) = (&index1, &index2) {
-                                let (real_start, real_end) =
-                                    resolve_range(start.0, end.0, string.len());
-
-                                if real_start <= real_end {
-                                    let len = real_end - real_start + 1;
-                                    let new_string: String =
-                                        string.chars().skip(real_start).take(len).collect();
-                                    Ok(LpcString::from(new_string).into())
+                                    if real_start <= real_end {
+                                        let slice = &vec[real_start..=real_end];
+                                        let mut new_vec = vec![NULL; slice.len()];
+                                        new_vec.clone_from_slice(slice);
+                                        Ok(LpcArray::new(new_vec).into())
+                                    } else {
+                                        Ok(LpcArray::new(vec![]).into())
+                                    }
                                 } else {
-                                    Ok(LpcString::from("").into())
+                                    let frame = self.stack.current_frame()?;
+                                    Err(lpc_error!(
+                                        frame.current_debug_span(),
+                                        "Invalid code was generated for a Range instruction.",
+                                    ))
                                 }
-                            } else {
-                                let frame = self.stack.current_frame()?;
-                                Err(lpc_error!(
-                                    frame.current_debug_span(),
-                                    "Invalid code was generated for a Range instruction.",
-                                ))
-                            }
-                        }
+                            })
+                            .flatten(),
+                        LpcRef::String(_) => lpc_ref
+                            .with_string(|string| {
+                                if string.is_empty() {
+                                    return Ok(LpcString::from("").into());
+                                }
+
+                                let index1 = &*get_location(stack, r2)?;
+                                let index2 = &*get_location(stack, r3)?;
+
+                                if let (LpcRef::Int(start), LpcRef::Int(end)) = (&index1, &index2) {
+                                    let (real_start, real_end) =
+                                        resolve_range(start.0, end.0, string.len());
+
+                                    if real_start <= real_end {
+                                        let len = real_end - real_start + 1;
+                                        let new_string: String =
+                                            string.chars().skip(real_start).take(len).collect();
+                                        Ok(LpcString::from(new_string).into())
+                                    } else {
+                                        Ok(LpcString::from("").into())
+                                    }
+                                } else {
+                                    let frame = self.stack.current_frame()?;
+                                    Err(lpc_error!(
+                                        frame.current_debug_span(),
+                                        "Invalid code was generated for a Range instruction.",
+                                    ))
+                                }
+                            })
+                            .flatten(),
                         LpcRef::Float(_)
                         | LpcRef::Int(_)
                         | LpcRef::Mapping(_)
@@ -525,20 +525,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let lpc_ref = &*get_location(&self.stack, r1)?;
 
                 let new_ref = match lpc_ref {
-                    LpcRef::Array(x) => {
-                        let vec = x.read();
+                    LpcRef::Array(_) => {
+                        let l = lpc_ref.with_array(|a| a.len())?;
 
-                        LpcRef::Int(LpcInt(vec.len() as LpcIntInner))
+                        LpcRef::Int(LpcInt(l as LpcIntInner))
                     }
-                    LpcRef::Mapping(x) => {
-                        let map = x.read();
+                    LpcRef::Mapping(_) => {
+                        let l = lpc_ref.with_mapping(|m| m.len())?;
 
-                        LpcRef::Int(LpcInt(map.len() as LpcIntInner))
+                        LpcRef::Int(LpcInt(l as LpcIntInner))
                     }
-                    LpcRef::String(x) => {
-                        let string = x.read();
+                    LpcRef::String(_) => {
+                        let l = lpc_ref.with_string(|s| s.len())?;
 
-                        LpcRef::Int(LpcInt(string.len() as LpcIntInner))
+                        LpcRef::Int(LpcInt(l as LpcIntInner))
                     }
                     LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Object(_) | LpcRef::Function(_) => {
                         NULL

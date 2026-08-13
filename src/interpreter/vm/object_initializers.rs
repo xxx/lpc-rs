@@ -62,10 +62,10 @@ impl Vm {
     /// let mut vm = Vm::new(Config::default());
     /// let ctx = vm.initialize_string("int x = 5;", "test.c").await.unwrap();
     ///
-    /// assert_eq!(
-    ///     ctx.process().globals.read().registers[0],
-    ///     LpcRef::Int(LpcInt(5))
-    /// );
+    /// ctx.process.with_globals(|g| {
+    ///     assert_eq!(g.registers[0], LpcRef::Int(LpcInt(5)));
+    /// });
+    ///
     /// assert!(vm.global_state.object_space.lookup("/test").is_some());
     /// # })
     /// ```

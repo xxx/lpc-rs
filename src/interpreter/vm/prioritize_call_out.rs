@@ -1,5 +1,5 @@
-use if_chain::if_chain;
-use lpc_rs_errors::LpcError;
+use std::sync::Arc;
+use lpc_rs_errors::{lpc_error, Result};
 use tokio::task::JoinHandle;
 
 use crate::{
@@ -29,30 +29,27 @@ impl Vm {
         let global_state = self.global_state.clone();
 
         tokio::spawn(async move {
-            if global_state.call_outs.read().get(idx).is_none() {
+            if global_state.with_call_outs(|co| co.get(idx).is_none()) {
                 return;
             }
 
-            let repeating: bool;
             let pair = {
-                if_chain! {
-                    let b = global_state.call_outs.read();
-                    let call_out = b.get(idx).unwrap();
-                    if let LpcRef::Function(ref func) = call_out.func_ref;
-                    then {
-                        repeating = call_out.is_repeating();
+                global_state.with_call_outs(|co| -> Result<(Arc<FunctionPtr>, bool)> {
+                    let call_out = co.get(idx).unwrap();
+                    if let LpcRef::Function(ref func) = call_out.func_ref {
+                        let repeating = call_out.is_repeating();
                         Ok((func.clone(), repeating))
                     } else {
-                        Err(LpcError::new("invalid function sent to `call_out`"))
+                        Err(lpc_error!("invalid function sent to `call_out`"))
                     }
-                }
+                })
             };
 
             let Ok((ptr_arc, repeating)) = pair else {
-                global_state.call_outs.write().remove(idx);
+                global_state.with_call_outs_mut(|co| co.remove(idx));
                 let _ = global_state
                     .tx
-                    .send(VmOp::TaskError(TaskId(0), Box::new(pair.unwrap_err())))
+                    .send(VmOp::TaskError(TaskId(0), pair.unwrap_err()))
                     .await;
                 return;
             };
@@ -61,7 +58,7 @@ impl Vm {
                 FunctionPtr::triple(&ptr_arc, &global_state.config, &global_state.object_space)
                     .await;
             let Ok((process, function, args)) = triple else {
-                global_state.call_outs.write().remove(idx);
+                global_state.with_call_outs_mut(|co| co.remove(idx));
                 let _ = global_state
                     .tx
                     .send(VmOp::TaskError(TaskId(0), triple.unwrap_err()))
@@ -85,14 +82,13 @@ impl Vm {
                 }
             }
 
-            {
-                let mut call_outs = global_state.call_outs.write();
+            global_state.with_call_outs_mut(|co| {
                 if repeating {
-                    call_outs.get_mut(idx).unwrap().refresh();
+                    co.get_mut(idx).unwrap().refresh();
                 } else {
-                    call_outs.remove(idx);
+                    co.remove(idx);
                 }
-            }
+            });
 
             let max_execution_time = global_state.config.max_execution_time;
             let task_context = TaskContext::new(
@@ -166,13 +162,16 @@ mod tests {
             .build()
             .unwrap();
 
-        let idx = vm.global_state.call_outs.write().push(call_out);
+        let idx = vm.global_state.with_call_outs_mut(|co| co.push(call_out));
 
         let handle = vm.prioritize_call_out(idx).await;
         handle.await.unwrap();
 
-        assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
-        assert!(vm.global_state.call_outs.read().get(idx).is_none());
+        proc.with_globals(|g| {
+            assert_eq!(g.get(0).unwrap(), &LpcRef::from(165));
+        });
+        vm.global_state
+            .with_call_outs(|co| assert!(co.get(idx).is_none()));
     }
 
     mod test_string_receivers {
@@ -191,14 +190,18 @@ mod tests {
                 .build()
                 .unwrap();
 
-            let idx = vm.global_state.call_outs.write().push(call_out);
+            let idx = vm.global_state.with_call_outs_mut(|co| co.push(call_out));
 
             let handle = vm.prioritize_call_out(idx).await;
             handle.await.unwrap();
 
-            assert_eq!(bar_proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
+            bar_proc.with_globals(|g| {
+                assert_eq!(g.get(0).unwrap(), &LpcRef::from(165));
+            });
             assert!(bar_proc.flags.test(ObjectFlags::Initialized));
-            assert!(vm.global_state.call_outs.read().get(idx).is_none());
+            vm.global_state.with_call_outs(|co| {
+                assert!(co.get(idx).is_none());
+            });
         }
 
         #[tokio::test]

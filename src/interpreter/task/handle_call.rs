@@ -130,18 +130,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let (proc, function) = match &ptr.address {
             FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
             FunctionAddress::Dynamic(name) => {
-                let lpc_ref = match &*get_location(&self.stack, self.args[0])? {
+                let location = &*get_location(&self.stack, self.args[0])?;
+                let lpc_ref = match location {
                     LpcRef::Object(lpc_ref) => lpc_ref.upgrade(),
-                    LpcRef::String(string_ref) => {
-                        let lookup = {
-                            let string = string_ref.read();
-                            self.context.lookup_process(string.to_str())
-                        };
+                    LpcRef::String(_) => {
+                        let lookup = { location.with_string(|s| self.context.lookup_process(s))? };
 
                         if lookup.is_some() {
                             lookup
                         } else {
-                            let path = LpcPath::InGame(PathBuf::from(string_ref.read().to_str()));
+                            let path =
+                                location.with_string(|s| LpcPath::InGame(PathBuf::from(s)))?;
                             // This will be initialized later on, if necessary.
                             Some(self.context.create_process_from_path(&path).await?)
                         }

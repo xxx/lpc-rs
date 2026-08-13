@@ -35,7 +35,7 @@ pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -
                 }
             })
             .collect::<Vec<_>>()
-    })?;
+    });
 
     let result = LpcArray::new(vec).into();
 

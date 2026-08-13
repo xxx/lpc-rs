@@ -67,7 +67,35 @@ impl GlobalState {
     #[instrument(skip(self))]
     #[inline]
     pub fn sweep(&self, marked: &BitSet) -> Result<()> {
-        self.upvalues.write().sweep(marked)
+        self.with_upvalues_mut(|g| g.sweep(marked))
+    }
+
+    pub fn with_call_outs<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&CallOuts) -> R,
+    {
+        f(&self.call_outs.read())
+    }
+
+    pub fn with_call_outs_mut<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut CallOuts) -> R,
+    {
+        f(&mut self.call_outs.write())
+    }
+
+    pub fn with_upvalues<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&GcRefBank) -> R,
+    {
+        f(&self.upvalues.read())
+    }
+
+    pub fn with_upvalues_mut<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut GcRefBank) -> R,
+    {
+        f(&mut self.upvalues.write())
     }
 }
 
@@ -77,6 +105,6 @@ impl Mark for GlobalState {
         // TODO: mark all tasks
         self.object_space.mark(marked, processed)?;
 
-        self.call_outs.read().mark(marked, processed)
+        self.with_call_outs(|co| co.mark(marked, processed))
     }
 }

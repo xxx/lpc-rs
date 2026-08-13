@@ -318,7 +318,9 @@ mod tests {
         let lpc_ref = array.into();
 
         let process = Process::default();
-        process.globals.write().push(lpc_ref);
+        process.with_globals_mut(|g| {
+            g.push(lpc_ref);
+        });
 
         space.insert_process_directly("process", process);
 

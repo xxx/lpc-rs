@@ -2,7 +2,6 @@ use std::fmt::{Debug, Display, Formatter};
 
 use bit_set::BitSet;
 use delegate::delegate;
-use if_chain::if_chain;
 use indexmap::IndexMap;
 use tracing::{instrument, trace};
 
@@ -54,28 +53,20 @@ where
         if i > 0 {
             result.push_str(", ");
         }
-        if_chain! {
-            if let LpcRef::Mapping(other) = &key;
-            if &*other.read() == mapping;
-            then {
-                result.push_str("([ this ])");
-                continue;
-            } else {
-                result.push_str(&fun(key));
-            }
+        let key_is_self = key.with_mapping(|m| m == mapping).unwrap_or(false);
+        if key_is_self {
+            result.push_str("([ self ])");
+        } else {
+            result.push_str(&fun(key));
         }
 
         result.push_str(": ");
 
-        if_chain! {
-            if let LpcRef::Mapping(other) = &value;
-            if &*other.read() == mapping;
-            then {
-                result.push_str("([ this ])");
-                continue;
-            } else {
-                result.push_str(&fun(value));
-            }
+        let val_is_self = value.with_mapping(|m| m == mapping).unwrap_or(false);
+        if val_is_self {
+            result.push_str("([ self ])");
+        } else {
+            result.push_str(&fun(value));
         }
     }
 

@@ -200,8 +200,9 @@ impl Process {
             .global_variables
             .iter()
             .filter_map(|(k, v)| {
-                let value = &self.globals.read()[v.location?.index()];
-                Some((k.as_str(), value.clone()))
+                let value = self
+                    .with_globals(|g| Some(g[v.location?.index()].clone()))?;
+                Some((k.as_str(), value))
             })
             .collect()
     }
@@ -225,6 +226,20 @@ impl Process {
         let filename: &str = &self.filename();
 
         filename.strip_prefix(prefix).unwrap_or(filename).into()
+    }
+
+    pub fn with_globals<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&RefBank) -> R,
+    {
+        f(&self.globals.read())
+    }
+
+    pub fn with_globals_mut<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut RefBank) -> R,
+    {
+        f(&mut self.globals.write())
     }
 }
 
@@ -263,7 +278,7 @@ impl Display for Process {
 
 impl Mark for Process {
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
-        self.globals.read().mark(marked, processed)?;
+        self.with_globals(|g| g.mark(marked, processed))?;
         Ok(())
     }
 }
@@ -306,7 +321,7 @@ mod tests {
         let lpc_ref = array.into();
 
         let process = Process::default();
-        process.globals.write().push(lpc_ref);
+        process.with_globals_mut(|g| g.push(lpc_ref));
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();

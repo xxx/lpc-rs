@@ -23,7 +23,7 @@ pub(crate) fn get_location<const N: usize>(
 pub(crate) fn get_location_in_frame(
     frame: &CallFrame,
     location: RegisterVariant,
-) -> lpc_rs_errors::Result<Cow<'_, LpcRef>> {
+) -> Result<Cow<'_, LpcRef>> {
     match location {
         RegisterVariant::Local(reg) => {
             let registers = &frame.registers;
@@ -31,15 +31,15 @@ pub(crate) fn get_location_in_frame(
         }
         RegisterVariant::Global(reg) => {
             let proc = &frame.process;
-            Ok(Cow::Owned(proc.globals.read()[reg].clone()))
+            Ok(Cow::Owned(proc.with_globals(|g| g[reg].clone())))
         }
         RegisterVariant::Upvalue(upv) => {
             let upvalue_ptrs = &frame.upvalue_ptrs;
             let reg = upvalue_ptrs[upv.index() as usize];
 
-            let vm_upvalues = &frame.vm_upvalues.read();
-            trace!("upvalue data: idx = {}, len = {}", reg, vm_upvalues.len());
-            Ok(Cow::Owned(vm_upvalues[reg].clone()))
+            let (val, len) = frame.with_upvalues(|uv| (uv[reg].clone(), uv.len()));
+            trace!("upvalue data: idx = {}, len = {}", reg, len);
+            Ok(Cow::Owned(val))
         }
     }
 }
@@ -74,15 +74,14 @@ where
             let frame = stack.current_frame()?;
 
             let proc = &frame.process;
-            func(&mut proc.globals.write()[reg])
+            proc.with_globals_mut(|g| func(&mut g[reg]))
         }
         RegisterVariant::Upvalue(reg) => {
             let frame = stack.current_frame()?;
             let upvalues = &frame.upvalue_ptrs;
             let idx = upvalues[reg.index() as usize];
 
-            let vm_upvalues = &mut frame.vm_upvalues.write();
-            func(&mut vm_upvalues[idx])
+            frame.with_upvalues_mut(|uv| func(&mut uv[idx]))
         }
     }
 }

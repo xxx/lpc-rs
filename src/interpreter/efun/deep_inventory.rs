@@ -48,9 +48,7 @@ mod tests {
     use itertools::Itertools;
 
     use crate::{
-        interpreter::{lpc_ref::LpcRef, vm::Vm},
-        test_support::test_config,
-        util::process_builder::ProcessInitializer,
+        interpreter::vm::Vm, test_support::test_config, util::process_builder::ProcessInitializer,
     };
 
     #[tokio::test]
@@ -122,16 +120,13 @@ mod tests {
             .unwrap();
 
         let ob_proc_arc = ob_proc.context.process.clone();
-        let LpcRef::Array(array) = ob_proc_arc.globals.read().first().unwrap().clone() else {
-            panic!("Expected array");
-        };
-
-        let globals = array
-            .read()
-            .iter()
-            .map(|w| w.to_string())
-            .sorted()
-            .collect_vec();
+        let globals = ob_proc_arc
+            .with_globals(|g| {
+                g.first()
+                    .unwrap()
+                    .with_array(|arr| arr.iter().map(|w| w.to_string()).sorted().collect_vec())
+            })
+            .unwrap();
 
         assert_eq!(
             globals,

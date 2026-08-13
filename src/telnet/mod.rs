@@ -398,10 +398,7 @@ impl Telnet {
 
         let arg_index: Option<usize> = input_to
             .ptr
-            .partial_args
-            .read()
-            .iter()
-            .position(|x| x.is_none());
+            .with_partial_args(|pa| pa.iter().position(|x| x.is_none()));
         let input_arg = LpcString::from(msg).into();
         if let Some(idx) = arg_index {
             args[idx] = input_arg;
@@ -540,7 +537,9 @@ mod tests {
         )
         .await;
 
-        assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
+        proc.with_globals(|g| {
+            assert_eq!(g.get(0).unwrap(), &LpcRef::from(165));
+        });
     }
 
     mod test_string_receivers {
@@ -575,7 +574,9 @@ mod tests {
             )
             .await;
 
-            assert_eq!(proc.globals.read().get(0).unwrap(), &LpcRef::from(165));
+            proc.with_globals(|g| {
+                assert_eq!(g.get(0).unwrap(), &LpcRef::from(165));
+            });
             assert!(proc.flags.test(ObjectFlags::Initialized));
         }
 

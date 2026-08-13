@@ -35,20 +35,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             // figure out which function we're calling
             let receiver_ref = &*get_location(&self.stack, receiver)?;
             let name_ref = &*get_location(&self.stack, name_location)?;
-            let pool_ref = if let LpcRef::String(r) = name_ref {
-                r
-            } else {
+
+            let Ok(function_name) = name_ref.with_string(|s| s.clone()) else {
                 let str = format!("Invalid name passed to `call_other`: {}", name_ref);
                 return Err(self.runtime_error(str));
             };
 
-            let function_name = pool_ref.clone();
-
-            trace!(
-                "Calling call_other: {}->{}",
-                receiver_ref,
-                function_name.read()
-            );
+            trace!("Calling call_other: {}->{}", receiver_ref, function_name);
 
             let args = self
                 .args
@@ -56,7 +49,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 .map(|i| get_location(&self.stack, *i).map(|r| r.into_owned()))
                 .collect::<Result<Vec<_>>>()?;
 
-            let function_name = Arc::new(function_name.read().clone());
+            let function_name = Arc::new(function_name);
 
             match &receiver_ref {
                 LpcRef::String(_) | LpcRef::Object(_) => {
@@ -69,8 +62,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     )
                     .await?
                 }
-                LpcRef::Array(r) => {
-                    let mut refs = r.read().iter().cloned().collect_vec();
+                LpcRef::Array(_) => {
+                    let mut refs = receiver_ref.with_array(|a| a.iter().cloned().collect_vec())?;
 
                     for lpc_ref in &mut refs {
                         let ctx = &self.context;
@@ -85,12 +78,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                     LpcArray::new(refs).into()
                 }
-                LpcRef::Mapping(m) => {
-                    let mut map = m
-                        .read()
-                        .iter()
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect_vec();
+                LpcRef::Mapping(_) => {
+                    let mut map = receiver_ref.with_mapping(|m| {
+                        m.iter().map(|(k, v)| (k.clone(), v.clone())).collect_vec()
+                    })?;
 
                     for (_key_ref, value_ref) in map.iter_mut() {
                         let result = Self::resolve_result(
@@ -185,17 +176,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         T: AsRef<str>,
     {
         let process = match receiver_ref {
-            LpcRef::String(s) => {
+            LpcRef::String(_) => {
                 let lookup = {
-                    let r = s.read();
-                    let str = r.to_str();
-                    context.lookup_process(str)
+                    receiver_ref
+                        .with_string(|s| context.lookup_process(s))
+                        .ok()?
                 };
 
                 if let Some(proc) = lookup {
                     proc
                 } else {
-                    let path = LpcPath::InGame(PathBuf::from(s.read().to_str()));
+                    let path = receiver_ref
+                        .with_string(|s| LpcPath::InGame(PathBuf::from(s)))
+                        .ok()?;
                     context.create_process_from_path(&path).await.ok()?
                 }
             }

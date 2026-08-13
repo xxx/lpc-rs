@@ -333,13 +333,13 @@ impl LpcRef {
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
-            LpcRef::Mapping(map) => match rhs {
-                LpcRef::Mapping(map2) => {
-                    let mut new_map = map.read().clone();
-                    let added_map = map2.read().clone();
+            LpcRef::Mapping(_) => match rhs {
+                LpcRef::Mapping(_) => self.with_mappings(rhs, |map1, map2| {
+                    let mut new_map = map1.clone();
+                    let added_map = map2.clone();
                     new_map.extend(added_map);
-                    Ok(new_map.into())
-                }
+                    new_map.into()
+                }),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
             LpcRef::Object(_) | LpcRef::Function(_) => {
@@ -356,8 +356,8 @@ impl LpcRef {
             (LpcRef::Int(x), LpcRef::Float(y)) => Ok(Self::Float(LpcFloat::from(
                 LpcFloatInner::from(x.0 as BaseFloat) - y.0,
             ))),
-            (LpcRef::Array(vec), LpcRef::Array(_)) => {
-                let new_vec = vec.read().clone();
+            (LpcRef::Array(_), LpcRef::Array(_)) => {
+                let new_vec = self.with_array(|a| a.clone())?;
 
                 rhs.with_array(|a| {
                     new_vec
@@ -635,7 +635,7 @@ impl Hash for LpcRef {
         match self {
             LpcRef::Float(x) => x.hash(state),
             LpcRef::Int(x) => x.hash(state),
-            LpcRef::String(x) => x.read().hash(state),
+            LpcRef::String(_) => self.with_string(|s| s.hash(state)).expect("unreachable"),
             LpcRef::Array(x) => ptr::hash(&**x, state),
             LpcRef::Mapping(x) => ptr::hash(&**x, state),
             LpcRef::Object(x) => ptr::hash(x, state),
@@ -800,36 +800,28 @@ mod tests {
         fn string_string() {
             let string1 = LpcRef::from("foo");
             let string2 = LpcRef::from(LpcString::from("bar"));
-            let result = string1.add(&string2);
-            if let Ok(LpcRef::String(x)) = result {
-                assert_eq!(*x.read(), String::from("foobar"))
-            } else {
-                panic!("no match")
-            }
+            let result = string1.add(&string2).unwrap();
+            result.with_string(|x| assert_eq!(x, "foobar")).unwrap();
         }
 
         #[test]
         fn string_int() {
             let string = LpcRef::from("foo");
             let int = LpcRef::from(123);
-            let result = string.add(&int);
-            if let Ok(LpcRef::String(x)) = result {
-                assert_eq!(*x.read(), String::from("foo123"))
-            } else {
-                panic!("no match")
-            }
+            let result = string.add(&int).unwrap();
+            result.with_string(|x| assert_eq!(x, "foo123")).unwrap();
         }
 
         #[test]
         fn int_string() {
             let string = LpcRef::from("foo");
             let int = LpcRef::from(123);
-            let result = int.add(&string);
-            if let Ok(LpcRef::String(x)) = result {
-                assert_eq!(*x.read(), String::from("123foo"))
-            } else {
-                panic!("no match")
-            }
+            let result = int.add(&string).unwrap();
+            result
+                .with_string(|x| {
+                    assert_eq!(x, "123foo");
+                })
+                .unwrap();
         }
 
         #[test]
@@ -874,20 +866,14 @@ mod tests {
         fn array_array() {
             let array = LpcArray::new(vec![LpcRef::from(123)]);
             let array2 = LpcArray::new(vec![LpcRef::from(4433)]);
-            let result = LpcRef::from(array.clone()).add(&array2.into());
+            let result = LpcRef::from(array.clone()).add(&array2.into()).unwrap();
 
-            match &result {
-                Ok(v) => {
-                    if let LpcRef::Array(a) = v {
-                        let a = a.read();
-                        assert_ne!(&*a, &array); // ensure the addition makes a fully new copy
-                        assert_eq!(&*a, &vec![LpcRef::from(123), LpcRef::from(4433)]);
-                    } else {
-                        panic!("no match")
-                    }
-                }
-                _ => panic!("no match"),
-            }
+            result
+                .with_array(|a| {
+                    assert_ne!(a, &array); // ensure the addition makes a fully new copy
+                    assert_eq!(a, &vec![LpcRef::from(123), LpcRef::from(4433)]);
+                })
+                .unwrap();
         }
 
         #[test]
@@ -912,11 +898,12 @@ mod tests {
             expected.insert(key1, value1);
             expected.insert(key2, value2);
 
-            if let Ok(LpcRef::Mapping(m)) = result {
-                assert_eq!(*m.read(), expected)
-            } else {
-                panic!("no match. received: {result:?}")
-            }
+            result
+                .unwrap()
+                .with_mapping(|m| {
+                    assert_eq!(*m, expected);
+                })
+                .unwrap();
         }
 
         #[test]
@@ -940,11 +927,12 @@ mod tests {
             let mut expected = IndexMap::new();
             expected.insert(key2, value2);
 
-            if let Ok(LpcRef::Mapping(m)) = result {
-                assert_eq!(*m.read(), expected)
-            } else {
-                panic!("no match. received: {result:?}")
-            }
+            result
+                .unwrap()
+                .with_mapping(|m| {
+                    assert_eq!(*m, expected);
+                })
+                .unwrap();
         }
 
         #[test]
@@ -1022,11 +1010,12 @@ mod tests {
             let result = a1.sub(&a2);
             let expected = vec![1, 3, 5].into_iter().map(to_ref).collect::<Vec<_>>();
 
-            if let Ok(LpcRef::Array(x)) = result {
-                assert_eq!(*x.read(), expected)
-            } else {
-                panic!("no match")
-            }
+            result
+                .unwrap()
+                .with_array(|a| {
+                    assert_eq!(*a, expected);
+                })
+                .unwrap();
         }
     }
 
@@ -1046,11 +1035,10 @@ mod tests {
             let string = LpcRef::from("foo");
             let int = LpcRef::from(4);
             let result = string.mul(&int);
-            if let Ok(LpcRef::String(x)) = result {
-                assert_eq!(*x.read(), String::from("foofoofoofoo"))
-            } else {
-                panic!("no match")
-            }
+            result
+                .unwrap()
+                .with_string(|s| assert_eq!(*s, "foofoofoofoo"))
+                .unwrap();
         }
 
         #[test]
@@ -1058,11 +1046,12 @@ mod tests {
             let string = LpcRef::from("foo");
             let int = LpcRef::from(4);
             let result = int.mul(&string);
-            if let Ok(LpcRef::String(x)) = result {
-                assert_eq!(*x.read(), String::from("foofoofoofoo"))
-            } else {
-                panic!("no match")
-            }
+            result
+                .unwrap()
+                .with_string(|x| {
+                    assert_eq!(*x, "foofoofoofoo");
+                })
+                .unwrap();
         }
 
         #[test]

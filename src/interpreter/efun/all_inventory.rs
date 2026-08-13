@@ -76,15 +76,14 @@ mod tests {
 
         let room_proc_arc = room_proc.context.process.clone();
 
-        let _ = room_proc_arc
-            .globals
-            .read()
-            .first()
-            .unwrap()
-            .with_array(|array| {
-                let globals = array.iter().map(|w| w.to_string()).sorted().collect_vec();
+        room_proc_arc
+            .with_globals(|g| {
+                g.first().unwrap().with_array(|array| {
+                    let globals = array.iter().map(|w| w.to_string()).sorted().collect_vec();
 
-                assert_eq!(globals, &["/all_inv_bar", "/all_inv_baz", "/all_inv_foo"]);
-            });
+                    assert_eq!(globals, &["/all_inv_bar", "/all_inv_baz", "/all_inv_foo"]);
+                })
+            })
+            .unwrap();
     }
 }

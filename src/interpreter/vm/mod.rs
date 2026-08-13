@@ -5,7 +5,6 @@ use flume::Sender as FlumeSender;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
-use parking_lot::RwLock;
 use tokio::{
     signal,
     sync::mpsc::{Receiver, Sender, error::SendError},
@@ -17,7 +16,6 @@ use crate::{
     compile_time_config::VM_CHANNEL_CAPACITY,
     interpreter::{
         SHUTDOWN,
-        call_outs::CallOuts,
         gc::mark::Mark,
         process::Process,
         task::apply_function::{apply_function_in_master, apply_runtime_error},
@@ -190,7 +188,7 @@ impl Vm {
         let _ = self.broker_tx.send_async(BrokerOp::Shutdown).await;
 
         self.connection_broker.disable_incoming_connections();
-        self.call_outs().write().clear();
+        self.global_state.with_call_outs_mut(|c| c.clear());
 
         match apply_function_in_master(
             SHUTDOWN,
@@ -242,11 +240,6 @@ impl Vm {
     #[inline]
     fn config(&self) -> &Config {
         &self.global_state.config
-    }
-
-    #[inline]
-    fn call_outs(&self) -> &RwLock<CallOuts> {
-        &self.global_state.call_outs
     }
 
     #[inline]
@@ -418,7 +411,7 @@ mod tests {
         let assert_len = |ctx: &TaskContext, len| {
             ctx.with_upvalues(|uv| {
                 assert_eq!(uv.len(), len);
-            }).unwrap();
+            });
         };
 
         assert_len(&ctx1, 1);

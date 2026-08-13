@@ -83,28 +83,28 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
     }
 
-    pub fn with_upvalues<F, R>(&self, f: F) -> Result<R>
+    pub fn with_upvalues<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&GcRefBank) -> R,
     {
         self.task_context.with_upvalues(f)
     }
 
-    pub fn with_upvalues_mut<F, R>(&self, f: F) -> Result<R>
+    pub fn with_upvalues_mut<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut GcRefBank) -> R,
     {
         self.task_context.with_upvalues_mut(f)
     }
 
-    pub fn with_call_outs<F, R>(&self, f: F) -> Result<R>
+    pub fn with_call_outs<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&CallOuts) -> R,
     {
         self.task_context.with_call_outs(f)
     }
 
-    pub fn with_call_outs_mut<F, R>(&self, f: F) -> Result<R>
+    pub fn with_call_outs_mut<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut CallOuts) -> R,
     {

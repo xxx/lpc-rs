@@ -63,19 +63,21 @@ impl Vm {
             .await
             {
                 Some(Ok(LpcRef::Object(ob))) => ob,
-                Some(Ok(LpcRef::String(string_arc))) => {
-                    // Not a runtime error in this case. Just a custom error message.
-                    let message = string_arc.read().to_string();
-                    let _ = connection.tx.send(ConnectionOp::SendMessage(message)).await;
-                    let _ = broker_tx
-                        .send_async(BrokerOp::Disconnect(connection.address))
-                        .await;
-                    return;
-                }
-                Some(Ok(_)) => {
+                Some(Ok(r)) => {
+                    if let LpcRef::String(_) = r {
+                        let message = r
+                            .with_string(|s| s.to_string())
+                            .unwrap_or_else(|_| "No message received?".to_string());
+                        let _ = connection.tx.send(ConnectionOp::SendMessage(message)).await;
+                        let _ = broker_tx
+                            .send_async(BrokerOp::Disconnect(connection.address))
+                            .await;
+                        return;
+                    }
+
                     Self::fatal_error(
                         &connection,
-                        lpc_error!("Fatal server error - We didn't receive an object back when calling connect()."),
+                        lpc_error!("Fatal server error - We didn't receive an object back when calling connect(). Received {}", r.type_name()),
                         Some(master),
                         global_state.tx.clone(),
                         broker_tx.clone()

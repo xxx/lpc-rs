@@ -1,5 +1,6 @@
 use std::{
     cmp::Ordering,
+    ffi::OsStr,
     fmt::Display,
     hash::{Hash, Hasher},
     ops::Add,
@@ -101,6 +102,13 @@ impl PartialEq<&str> for LpcString {
     }
 }
 
+impl PartialEq<&str> for &LpcString {
+    #[inline]
+    fn eq(&self, other: &&str) -> bool {
+        self.to_str() == *other
+    }
+}
+
 impl Eq for LpcString {}
 
 impl PartialOrd for LpcString {
@@ -141,6 +149,13 @@ impl AsRef<str> for &LpcString {
 impl AsRef<Path> for &LpcString {
     #[inline]
     fn as_ref(&self) -> &Path {
+        self.to_str().as_ref()
+    }
+}
+
+impl AsRef<OsStr> for LpcString {
+    #[inline]
+    fn as_ref(&self) -> &OsStr {
         self.to_str().as_ref()
     }
 }

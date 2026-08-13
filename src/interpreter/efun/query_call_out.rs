@@ -20,12 +20,10 @@ pub async fn query_call_out<const N: usize>(context: &mut EfunContext<'_, N>) ->
         )));
     }
 
-    let result = context
-        .with_call_outs(|co| match co.get(idx.0 as usize) {
-            Some(call_out) => call_out_array_ref(context, call_out),
-            None => Ok(NULL),
-        })
-        .flatten()?;
+    let result = context.with_call_outs(|co| match co.get(idx.0 as usize) {
+        Some(call_out) => call_out_array_ref(context, call_out),
+        None => Ok(NULL),
+    })?;
 
     context.return_efun_result(result);
 

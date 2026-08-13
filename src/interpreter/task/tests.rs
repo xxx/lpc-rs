@@ -2916,7 +2916,7 @@ mod test_gc {
         let ctx = &task.context;
         ctx.with_upvalues(|uv| {
             assert!(!uv.is_empty());
-        }).unwrap();
+        });
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
@@ -2925,6 +2925,6 @@ mod test_gc {
             uv.sweep(&marked).unwrap();
 
             assert!(uv.is_empty());
-        }).unwrap();
+        });
     }
 }

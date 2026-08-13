@@ -74,21 +74,20 @@ impl FunctionPtr {
     #[inline]
     pub fn arity(&self) -> usize {
         self.with_partial_args(|pa| pa.iter().filter(|x| x.is_none()).count())
-            .unwrap_or_default()
     }
 
-    pub fn with_partial_args<F, R>(&self, f: F) -> Result<R>
+    pub fn with_partial_args<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&[Option<LpcRef>]) -> R,
     {
-        Ok(f(&self.partial_args.read()))
+        f(&self.partial_args.read())
     }
 
-    pub fn with_partial_args_mut<F, R>(&self, f: F) -> Result<R>
+    pub fn with_partial_args_mut<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut ThinVec<Option<LpcRef>>) -> R, // typed as ThinVec so we can extend it
     {
-        Ok(f(&mut self.partial_args.write()))
+        f(&mut self.partial_args.write())
     }
 
     /// Get a clone of this function pointer, with a new unique ID.
@@ -106,7 +105,7 @@ impl FunctionPtr {
     pub fn partially_apply(&self, args: &[LpcRef]) {
         let mut arg_iter = args.iter();
 
-        let _ = self.with_partial_args_mut(|partial_args| {
+        self.with_partial_args_mut(|partial_args| {
             for partial_arg in partial_args.iter_mut() {
                 if partial_arg.is_none() {
                     *partial_arg = arg_iter.next().cloned();
@@ -144,7 +143,7 @@ impl FunctionPtr {
                     None => NULL,
                 })
                 .collect::<Vec<_>>()
-        })?;
+        });
 
         match ptr.address {
             FunctionAddress::Local(ref proc, ref function) => {
@@ -158,7 +157,7 @@ impl FunctionPtr {
             }
             FunctionAddress::Dynamic(name) => {
                 let proc = {
-                    let first_arg = ptr.with_partial_args(|args| args.first().cloned())?;
+                    let first_arg = ptr.with_partial_args(|args| args.first().cloned());
                     let mut string_receiver = false;
                     let mut proc = match &first_arg {
                         Some(Some(x)) => match x {
@@ -191,13 +190,18 @@ impl FunctionPtr {
                     };
 
                     if string_receiver && proc.is_none() {
-                        let Some(Some(LpcRef::String(string_ref))) = &first_arg else {
-                            unreachable!(
-                                "No other branch should be setting `string_receiver` to true."
-                            );
-                        };
+                        let path = first_arg
+                            .flatten()
+                            .map(|x| -> Result<LpcPath> {
+                                let buf = x.with_string(|s| PathBuf::from(s.to_str()))?;
+                                Ok(LpcPath::InGame(buf))
+                            })
+                            .unwrap_or_else(|| {
+                                unreachable!(
+                                    "No other branch should be setting `string_receiver` to true."
+                                )
+                            })?;
 
-                        let path = LpcPath::InGame(PathBuf::from(string_ref.read().to_str()));
                         // This will be initialized later on, if necessary.
                         proc = Some(object_space.create_process_from_path(&path).await?);
                     }
@@ -235,7 +239,7 @@ impl Clone for FunctionPtr {
         Self {
             owner: self.owner.clone(),
             address: self.address.clone(),
-            partial_args: RwLock::new(self.partial_args.read().clone()),
+            partial_args: RwLock::new(self.with_partial_args(|a| ThinVec::from(a))),
             call_other: self.call_other,
             upvalue_ptrs: self.upvalue_ptrs.clone(),
             unique_id: UniqueId::new(),
@@ -280,16 +284,14 @@ impl Display for FunctionPtr {
         }
         s.push_str(&format!("address: {}, ", self.address));
 
-        let partial_args = self
-            .with_partial_args(|args| {
-                args.iter()
-                    .map(|arg| match arg {
-                        Some(a) => a.to_string(),
-                        None => "<None>".to_string(),
-                    })
-                    .join(", ")
-            })
-            .expect("unreachable");
+        let partial_args = self.with_partial_args(|args| {
+            args.iter()
+                .map(|arg| match arg {
+                    Some(a) => a.to_string(),
+                    None => "<None>".to_string(),
+                })
+                .join(", ")
+        });
 
         s.push_str(&format!("partial_args: [{partial_args}], "));
         s.push_str(&format!(

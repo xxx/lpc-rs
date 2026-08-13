@@ -226,35 +226,35 @@ impl TaskContext {
     }
 
     /// Access upvalues
-    pub fn with_upvalues<F, R>(&self, f: F) -> Result<R>
+    pub fn with_upvalues<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&GcRefBank) -> R,
     {
-        Ok(f(&self.global_state.upvalues.read()))
+        f(&self.global_state.upvalues.read())
     }
 
     /// Access upvalues mutably
-    pub fn with_upvalues_mut<F, R>(&self, f: F) -> Result<R>
+    pub fn with_upvalues_mut<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut GcRefBank) -> R,
     {
-        Ok(f(&mut self.global_state.upvalues.write()))
+        f(&mut self.global_state.upvalues.write())
     }
 
     /// Access call-outs
-    pub fn with_call_outs<F, R>(&self, f: F) -> Result<R>
+    pub fn with_call_outs<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&CallOuts) -> R,
     {
-        Ok(f(&self.global_state.call_outs.read()))
+        f(&self.global_state.call_outs.read())
     }
 
     /// Access call-outs mutably
-    pub fn with_call_outs_mut<F, R>(&self, f: F) -> Result<R>
+    pub fn with_call_outs_mut<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut CallOuts) -> R,
     {
-        Ok(f(&mut self.global_state.call_outs.write()))
+        f(&mut self.global_state.call_outs.write())
     }
 }
 

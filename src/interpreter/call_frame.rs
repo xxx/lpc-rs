@@ -167,21 +167,21 @@ impl CallFrame {
     where
         F: FnOnce(&GcRefBank) -> R,
     {
-        f(&*self.vm_upvalues.read())
+        f(&self.vm_upvalues.read())
     }
 
     pub fn with_upvalues_mut<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut GcRefBank) -> R,
     {
-        f(&mut *self.vm_upvalues.write())
+        f(&mut self.vm_upvalues.write())
     }
 
     pub fn with_upvalues_and_ptrs_mut<F, R>(&mut self, f: F) -> R
     where
         F: FnOnce(&mut GcRefBank, &mut ThinVec<Register>) -> R,
     {
-        f(&mut *self.vm_upvalues.write(), &mut self.upvalue_ptrs)
+        f(&mut self.vm_upvalues.write(), &mut self.upvalue_ptrs)
     }
 
     /// Reserve space for the upvalues that this call will initialize
@@ -218,7 +218,9 @@ impl CallFrame {
                 self.registers[reg] = lpc_ref;
             }
             RegisterVariant::Global(reg) => {
-                self.process.globals.write()[reg] = lpc_ref;
+                self.process.with_globals_mut(|g| {
+                    g[reg] = lpc_ref;
+                });
             }
             RegisterVariant::Upvalue(reg) => {
                 let upvalues = &self.upvalue_ptrs;
@@ -245,14 +247,12 @@ impl CallFrame {
 
                 let lpc_ref = match loc {
                     RegisterVariant::Local(reg) => self.registers[reg].clone(),
-                    RegisterVariant::Global(reg) => self.process.globals.read()[reg].clone(),
+                    RegisterVariant::Global(reg) => self.process.with_globals(|g| g[reg].clone()),
                     RegisterVariant::Upvalue(ptr_reg) => {
                         let upvalues = &self.upvalue_ptrs;
                         let data_reg = upvalues[ptr_reg.index() as usize];
 
-                        self.with_upvalues(|uv| {
-                            uv[data_reg].clone()
-                        })
+                        self.with_upvalues(|uv| uv[data_reg].clone())
                     }
                 };
 
