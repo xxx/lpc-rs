@@ -15,13 +15,13 @@ pub async fn explode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
         | LpcRef::Array(_)
         | LpcRef::Mapping(_)
         | LpcRef::Function(_) => return Ok(()),
-        LpcRef::String(x) => x.read().to_string(),
+        LpcRef::String(_) => subject_ref.with_string(|s| s.to_string())?,
     };
 
     let delimiter_ref = context.resolve_local_register(2 as RegisterSize);
     let delimiter = match delimiter_ref {
         LpcRef::Int(LpcInt(0)) => String::from(" "),
-        LpcRef::String(x) => x.read().to_string(),
+        LpcRef::String(_) => delimiter_ref.with_string(|s| s.to_string())?,
         LpcRef::Float(_)
         | LpcRef::Int(_)
         | LpcRef::Object(_)
@@ -46,7 +46,7 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{lpc_ref::LpcRef, vm::Vm},
+        interpreter::{vm::Vm},
         test_support::test_config,
         util::process_builder::ProcessInitializer,
     };
@@ -66,12 +66,10 @@ mod tests {
             .await
             .unwrap();
 
-        let LpcRef::Array(arr) = master_proc.result().unwrap() else {
-            panic!("Expected array result");
-        };
+        let _ = master_proc.result().unwrap().with_array(|arr| {
+            let result = arr.iter().map(|x| x.to_string()).collect::<Vec<_>>();
 
-        let result = arr.read().iter().map(|x| x.to_string()).collect::<Vec<_>>();
-
-        assert_eq!(result, vec!["the", "quick", "brown", "", "fox"],);
+            assert_eq!(result, vec!["the", "quick", "brown", "", "fox"],);
+        });
     }
 }

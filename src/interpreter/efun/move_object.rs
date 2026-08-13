@@ -16,12 +16,10 @@ pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
                 context.runtime_error(format!("move_object: invalid destination {}", arg_ref))
             );
         }
-        LpcRef::String(string) => {
-            let path = {
-                let lock = string.read();
-
-                LpcPath::new_in_game(&*lock, context.in_game_cwd(), &*context.config().lib_dir)
-            };
+        LpcRef::String(_) => {
+            let path = arg_ref.with_string(|string| {
+                LpcPath::new_in_game(string, context.in_game_cwd(), &*context.config().lib_dir)
+            })?;
 
             context.load_object(&path).await?
         }

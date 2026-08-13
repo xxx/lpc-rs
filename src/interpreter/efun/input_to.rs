@@ -1,4 +1,3 @@
-use if_chain::if_chain;
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 use tracing::trace;
@@ -26,18 +25,15 @@ pub async fn input_to<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
 
     let process = context.this_player().load();
 
-    if_chain! {
-        if let Some(process) = &*process;
-        if let Some(connection) = &*process.connection.load();
-        then {
-            let _ = connection.tx.send(ConnectionOp::InputTo(input_to)).await;
-            context.return_efun_result(LpcRef::from(1));
-            return Ok(());
-        } else {
-            // No connection to receive the message, so do nothing.
-            trace!("input_to on non-interactive process");
-            // 0 is already returned by default
-        }
+    if let Some(process) = &*process &&
+       let Some(connection) = &*process.connection.load() {
+        let _ = connection.tx.send(ConnectionOp::InputTo(input_to)).await;
+        context.return_efun_result(LpcRef::from(1));
+        return Ok(());
+    } else {
+        // No connection to receive the message, so do nothing.
+        trace!("input_to on non-interactive process");
+        // 0 is already returned by default
     }
 
     Ok(())

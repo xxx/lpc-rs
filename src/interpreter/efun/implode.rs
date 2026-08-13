@@ -6,20 +6,11 @@ use crate::interpreter::{efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_r
 /// `implode`, an efun for joining an array of strings into a single string.
 pub async fn implode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let subject_ref = context.resolve_local_register(1 as RegisterSize);
-    let subject = match subject_ref {
-        LpcRef::Float(_)
-        | LpcRef::Int(_)
-        | LpcRef::Object(_)
-        | LpcRef::String(_)
-        | LpcRef::Mapping(_)
-        | LpcRef::Function(_) => return Ok(()),
-        LpcRef::Array(x) => x,
-    };
 
     let delimiter_ref = context.resolve_local_register(2 as RegisterSize);
     let delimiter = match delimiter_ref {
         LpcRef::Int(LpcInt(0)) => String::from(" "),
-        LpcRef::String(x) => x.read().to_string(),
+        LpcRef::String(_) => delimiter_ref.with_string(|x| x.to_string())?,
         LpcRef::Float(_)
         | LpcRef::Int(_)
         | LpcRef::Object(_)
@@ -28,13 +19,13 @@ pub async fn implode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
         | LpcRef::Function(_) => return Ok(()),
     };
 
-    let result = subject
-        .read()
-        .iter()
-        .map(|x| x.to_string())
-        .collect::<Vec<_>>()
-        .join(&delimiter)
-        .into();
+    let result = subject_ref.with_array(|subject| {
+        subject.iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>()
+            .join(&delimiter)
+            .into()
+    })?;
 
     context.return_efun_result(result);
 
@@ -46,7 +37,7 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{lpc_ref::LpcRef, vm::Vm},
+        interpreter::{vm::Vm},
         test_support::test_config,
         util::process_builder::ProcessInitializer,
     };
@@ -66,11 +57,7 @@ mod tests {
             .await
             .unwrap();
 
-        let LpcRef::String(str) = master_proc.result().unwrap() else {
-            panic!("Expected string result");
-        };
-
-        let result = str.read().to_string();
+        let result = master_proc.result().unwrap().with_string(|s| s.to_string()).unwrap();
 
         assert_eq!(result, "the quick brown  fox",);
     }

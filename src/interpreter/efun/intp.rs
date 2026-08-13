@@ -19,7 +19,7 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{lpc_ref::LpcRef, vm::Vm},
+        interpreter::{vm::Vm},
         test_support::test_config,
         util::process_builder::ProcessInitializer,
     };
@@ -75,13 +75,11 @@ mod tests {
             .unwrap();
 
         let result = master_proc.result().unwrap();
-        let LpcRef::Array(arr) = result else {
-            panic!("Expected array result");
-        };
-
-        assert_eq!(
-            &*arr.read(),
-            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0].as_slice()
-        );
+        let _ = result.with_array(|arr| {
+            assert_eq!(
+                arr,
+                [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0].as_slice()
+            );
+        });
     }
 }

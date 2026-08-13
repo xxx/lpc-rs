@@ -19,11 +19,10 @@ pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         | LpcRef::Array(_)
         | LpcRef::Mapping(_)
         | LpcRef::Function(_) => NULL,
-        LpcRef::String(x) => {
-            let path = {
-                let string = x.read();
-                LpcPath::new_in_game(&*string, context.in_game_cwd(), &*context.config().lib_dir)
-            };
+        LpcRef::String(_) => {
+            let path = lpc_ref.with_string(|string| {
+                LpcPath::new_in_game(string, context.in_game_cwd(), &*context.config().lib_dir)
+            })?;
 
             if let Ok(proc) = context.load_object(&path).await {
                 Arc::downgrade(&proc).into()
