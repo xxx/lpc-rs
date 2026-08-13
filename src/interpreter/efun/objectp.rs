@@ -3,7 +3,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
-/// `objectp`, an efun that returns true if the argument is an int.
+/// `objectp`, an efun that returns true if the argument is an object.
 pub async fn objectp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
 
@@ -19,7 +19,7 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{lpc_ref::LpcRef, vm::Vm},
+        interpreter::{vm::Vm},
         test_support::test_config,
         util::process_builder::ProcessInitializer,
     };
@@ -75,13 +75,11 @@ mod tests {
             .unwrap();
 
         let result = master_proc.result().unwrap();
-        let LpcRef::Array(arr) = result else {
-            panic!("Expected array result");
-        };
-
-        assert_eq!(
-            &*arr.read(),
-            [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0].as_slice()
-        );
+        let _ = result.with_array(|arr| {
+            assert_eq!(
+                arr,
+                [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0].as_slice()
+            );
+        });
     }
 }

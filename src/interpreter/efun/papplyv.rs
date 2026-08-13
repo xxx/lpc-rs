@@ -9,14 +9,13 @@ pub async fn papplyv<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
         return Err(context.runtime_error("non-function argument sent to `papplyv`"));
     };
 
-    let LpcRef::Array(arr) = context.resolve_local_register(2 as RegisterSize) else {
-        return Err(context.runtime_error("non-array argument sent to `papplyv`"));
-    };
-
     let ptr = func.clone_with_new_id();
-    ptr.partially_apply(&arr.read());
 
-    let result = ptr.into();
+    let result = context.resolve_local_register(2 as RegisterSize).with_array(|arr| {
+        ptr.partially_apply(arr);
+
+        ptr.into()
+    })?;
 
     context.return_efun_result(result);
 
@@ -60,16 +59,16 @@ mod tests {
 
         assert_eq!(func.name(), "dump");
 
-        assert_eq!(
-            func.partial_args
-                .read()
-                .iter()
-                .map(|a| a.as_ref().unwrap().to_string())
-                .collect::<Vec<_>>(),
-            ["foo", "bar"]
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-        );
+        let _ = func.with_partial_args(|args| {
+            assert_eq!(
+                args.iter()
+                    .map(|a| a.as_ref().unwrap().to_string())
+                    .collect::<Vec<_>>(),
+                ["foo", "bar"]
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+            );
+        });
     }
 }

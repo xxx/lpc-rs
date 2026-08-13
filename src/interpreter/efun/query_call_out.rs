@@ -72,8 +72,6 @@ pub fn call_out_array_ref<const N: usize>(
 #[cfg(test)]
 mod tests {
 
-    use if_chain::if_chain;
-
     use super::*;
     use crate::{
         interpreter::{
@@ -111,19 +109,12 @@ mod tests {
             .await
             .unwrap();
 
-        if_chain! {
-            if let LpcRef::Array(array) = task.result().unwrap();
-            let array = array.read();
-            then {
-                assert_eq!(array.len(), 4);
-                assert!(matches!(array[0], LpcRef::Object(_)));
-                assert!(matches!(array[1], LpcRef::Function(_)));
-                assert!(matches!(array[2], LpcRef::Int(_)));
-                assert_eq!(array[3], LpcRef::Int(LpcInt(0)));
-            }
-            else {
-                panic!("result is not an array");
-            }
-        }
+        task.result().unwrap().with_array(|arr| {
+            assert_eq!(arr.len(), 4);
+            assert!(matches!(arr[0], LpcRef::Object(_)));
+            assert!(matches!(arr[1], LpcRef::Function(_)));
+            assert!(matches!(arr[2], LpcRef::Int(_)));
+            assert_eq!(arr[3], LpcRef::Int(LpcInt(0)));
+        }).unwrap();
     }
 }

@@ -50,8 +50,6 @@ pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -
 #[cfg(test)]
 mod tests {
 
-    use if_chain::if_chain;
-
     use super::*;
     use crate::{
         interpreter::{
@@ -90,32 +88,18 @@ mod tests {
             .await
             .unwrap();
 
-        if_chain! {
-            if let LpcRef::Array(arr) = task.result().unwrap();
-            let array = arr.read();
-            then {
-                assert_eq!(array.len(), 2);
+        task.result().unwrap().with_array(|array| {
+            assert_eq!(array.len(), 2);
 
-                for call_out in array.iter() {
-                    if_chain! {
-                        if let LpcRef::Array(call_out) = call_out;
-                        let call_out = call_out.read();
-                        then {
-                            assert_eq!(call_out.len(), 4);
-                            assert!(matches!(call_out[0], LpcRef::Object(_)));
-                            assert!(matches!(call_out[1], LpcRef::Function(_)));
-                            assert!(matches!(call_out[2], LpcRef::Int(_)));
-                            assert_eq!(call_out[3], LpcRef::Int(0.into()));
-                        }
-                        else {
-                            panic!("inner is not an array");
-                        }
-                    }
-                }
+            for call_out in array.iter() {
+                call_out.with_array(|arr| {
+                    assert_eq!(arr.len(), 4);
+                    assert!(matches!(arr[0], LpcRef::Object(_)));
+                    assert!(matches!(arr[1], LpcRef::Function(_)));
+                    assert!(matches!(arr[2], LpcRef::Int(_)));
+                    assert_eq!(arr[3], LpcRef::Int(0.into()));
+                }).unwrap();
             }
-            else {
-                panic!("result is not an array");
-            }
-        }
+        }).unwrap();
     }
 }

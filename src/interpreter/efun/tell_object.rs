@@ -15,10 +15,9 @@ pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
 
     if should_log {
         let string_ref = context.resolve_local_register(2 as RegisterSize);
-        let LpcRef::String(lpc_string) = string_ref else {
-            return Err(context.runtime_error("expected string as second argument to tell_object"));
-        };
-        let msg = lpc_string.read().to_string();
+        let msg = string_ref.with_string(|s| {
+            s.to_string()
+        })?;
         context.config().debug_log(msg).await;
     }
 
@@ -27,10 +26,6 @@ pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
 
 async fn do_tell<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<bool> {
     let string_ref = context.resolve_local_register(2 as RegisterSize);
-    let LpcRef::String(_lpc_string) = string_ref else {
-        return Err(context.runtime_error("expected string as second argument to tell_object"));
-    };
-
     let ob_ref = context.resolve_local_register(1 as RegisterSize);
     let proc = match ob_ref {
         LpcRef::Float(_)
@@ -40,11 +35,10 @@ async fn do_tell<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<boo
         | LpcRef::Function(_) => {
             return Ok(true);
         }
-        LpcRef::String(path) => {
-            let path = {
-                let string = path.read();
-                LpcPath::new_in_game(&*string, context.in_game_cwd(), &*context.config().lib_dir)
-            };
+        LpcRef::String(_) => {
+            let path = ob_ref.with_string(|str| {
+                LpcPath::new_in_game(str, context.in_game_cwd(), &*context.config().lib_dir)
+            })?;
 
             context.load_object(&path).await?
         }
@@ -154,23 +148,20 @@ mod tests {
             ]
             .as_slice(),
         ));
-        let LpcRef::Array(enabled_i_herd) = enabled.globals.read()[0].clone() else {
-            panic!("expected array");
-        };
-        assert_eq!(
-            &enabled_i_herd
-                .read()
-                .iter()
-                .map(|s| s.to_string())
-                .collect_vec(),
-            &["i herd", "u liek mudkips?"]
-        );
+
+        enabled.globals.read()[0].with_array(|arr| {
+            assert_eq!(
+                &arr
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect_vec(),
+                &["i herd", "u liek mudkips?"]
+            );
+        }).unwrap();
 
         let disabled = space.lookup("/disabled#1").unwrap();
-        let disabled_i_herd = disabled.globals.read()[0].clone();
-        let LpcRef::Array(arr) = disabled_i_herd else {
-            panic!("expected array");
-        };
-        assert!(arr.read().is_empty());
+        disabled.globals.read()[0].with_array(|arr| {
+            assert!(arr.is_empty());
+        }).unwrap();
     }
 }
