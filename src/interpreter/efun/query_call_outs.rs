@@ -88,18 +88,23 @@ mod tests {
             .await
             .unwrap();
 
-        task.result().unwrap().with_array(|array| {
-            assert_eq!(array.len(), 2);
+        task.result()
+            .unwrap()
+            .with_array(|array| {
+                assert_eq!(array.len(), 2);
 
-            for call_out in array.iter() {
-                call_out.with_array(|arr| {
-                    assert_eq!(arr.len(), 4);
-                    assert!(matches!(arr[0], LpcRef::Object(_)));
-                    assert!(matches!(arr[1], LpcRef::Function(_)));
-                    assert!(matches!(arr[2], LpcRef::Int(_)));
-                    assert_eq!(arr[3], LpcRef::Int(0.into()));
-                }).unwrap();
-            }
-        }).unwrap();
+                for call_out in array.iter() {
+                    call_out
+                        .with_array(|arr| {
+                            assert_eq!(arr.len(), 4);
+                            assert!(matches!(arr[0], LpcRef::Object(_)));
+                            assert!(matches!(arr[1], LpcRef::Function(_)));
+                            assert!(matches!(arr[2], LpcRef::Int(_)));
+                            assert_eq!(arr[3], LpcRef::Int(0.into()));
+                        })
+                        .unwrap();
+                }
+            })
+            .unwrap();
     }
 }

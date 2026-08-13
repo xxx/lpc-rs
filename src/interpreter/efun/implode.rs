@@ -20,7 +20,8 @@ pub async fn implode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
     };
 
     let result = subject_ref.with_array(|subject| {
-        subject.iter()
+        subject
+            .iter()
             .map(|x| x.to_string())
             .collect::<Vec<_>>()
             .join(&delimiter)
@@ -37,9 +38,7 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{vm::Vm},
-        test_support::test_config,
-        util::process_builder::ProcessInitializer,
+        interpreter::vm::Vm, test_support::test_config, util::process_builder::ProcessInitializer,
     };
 
     #[tokio::test]
@@ -57,7 +56,11 @@ mod tests {
             .await
             .unwrap();
 
-        let result = master_proc.result().unwrap().with_string(|s| s.to_string()).unwrap();
+        let result = master_proc
+            .result()
+            .unwrap()
+            .with_string(|s| s.to_string())
+            .unwrap();
 
         assert_eq!(result, "the quick brown  fox",);
     }

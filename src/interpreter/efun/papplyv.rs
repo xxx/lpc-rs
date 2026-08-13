@@ -11,11 +11,13 @@ pub async fn papplyv<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
 
     let ptr = func.clone_with_new_id();
 
-    let result = context.resolve_local_register(2 as RegisterSize).with_array(|arr| {
-        ptr.partially_apply(arr);
+    let result = context
+        .resolve_local_register(2 as RegisterSize)
+        .with_array(|arr| {
+            ptr.partially_apply(arr);
 
-        ptr.into()
-    })?;
+            ptr.into()
+        })?;
 
     context.return_efun_result(result);
 

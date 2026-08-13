@@ -25,8 +25,9 @@ pub async fn input_to<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
 
     let process = context.this_player().load();
 
-    if let Some(process) = &*process &&
-       let Some(connection) = &*process.connection.load() {
+    if let Some(process) = &*process
+        && let Some(connection) = &*process.connection.load()
+    {
         let _ = connection.tx.send(ConnectionOp::InputTo(input_to)).await;
         context.return_efun_result(LpcRef::from(1));
         return Ok(());

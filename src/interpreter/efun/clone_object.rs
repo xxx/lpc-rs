@@ -34,7 +34,7 @@ async fn load_prototype<const N: usize>(
 pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg = context.resolve_local_register(1 as RegisterSize);
 
-    let path = arg.with_string(|s| { s.to_string() })?;
+    let path = arg.with_string(|s| s.to_string())?;
 
     let prototype = load_prototype(context, &path).await?;
 

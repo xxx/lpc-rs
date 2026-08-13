@@ -29,7 +29,7 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{vm::Vm},
+        interpreter::vm::Vm,
         test_support::test_config,
         util::process_builder::{ProcessCreator, ProcessInitializer},
     };

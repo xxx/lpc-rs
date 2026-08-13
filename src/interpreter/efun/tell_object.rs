@@ -15,9 +15,7 @@ pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
 
     if should_log {
         let string_ref = context.resolve_local_register(2 as RegisterSize);
-        let msg = string_ref.with_string(|s| {
-            s.to_string()
-        })?;
+        let msg = string_ref.with_string(|s| s.to_string())?;
         context.config().debug_log(msg).await;
     }
 
@@ -149,19 +147,20 @@ mod tests {
             .as_slice(),
         ));
 
-        enabled.globals.read()[0].with_array(|arr| {
-            assert_eq!(
-                &arr
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect_vec(),
-                &["i herd", "u liek mudkips?"]
-            );
-        }).unwrap();
+        enabled.globals.read()[0]
+            .with_array(|arr| {
+                assert_eq!(
+                    &arr.iter().map(|s| s.to_string()).collect_vec(),
+                    &["i herd", "u liek mudkips?"]
+                );
+            })
+            .unwrap();
 
         let disabled = space.lookup("/disabled#1").unwrap();
-        disabled.globals.read()[0].with_array(|arr| {
-            assert!(arr.is_empty());
-        }).unwrap();
+        disabled.globals.read()[0]
+            .with_array(|arr| {
+                assert!(arr.is_empty());
+            })
+            .unwrap();
     }
 }

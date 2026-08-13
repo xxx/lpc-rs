@@ -17,7 +17,9 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         LpcRef::Array(_) => {
             lpc_ref.with_array(|arr| {
                 for x in arr.iter() {
-                    if let LpcRef::Object(proc) = x && let Some(proc) = proc.upgrade() {
+                    if let LpcRef::Object(proc) = x
+                        && let Some(proc) = proc.upgrade()
+                    {
                         proc.flags.set(ObjectFlags::Destructed);
                         context.remove_process(proc);
                     } // else it's already destructed

@@ -280,15 +280,16 @@ impl Display for FunctionPtr {
         }
         s.push_str(&format!("address: {}, ", self.address));
 
-        let partial_args = self.with_partial_args(|args| {
-            args
-                .iter()
-                .map(|arg| match arg {
-                    Some(a) => a.to_string(),
-                    None => "<None>".to_string(),
-                })
-                .join(", ")
-        }).expect("unreachable");
+        let partial_args = self
+            .with_partial_args(|args| {
+                args.iter()
+                    .map(|arg| match arg {
+                        Some(a) => a.to_string(),
+                        None => "<None>".to_string(),
+                    })
+                    .join(", ")
+            })
+            .expect("unreachable");
 
         s.push_str(&format!("partial_args: [{partial_args}], "));
         s.push_str(&format!(

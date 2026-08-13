@@ -19,9 +19,7 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{vm::Vm},
-        test_support::test_config,
-        util::process_builder::ProcessInitializer,
+        interpreter::vm::Vm, test_support::test_config, util::process_builder::ProcessInitializer,
     };
 
     #[tokio::test]
@@ -72,10 +70,7 @@ mod tests {
 
         let result = master_proc.result().unwrap();
         let _ = result.with_array(|arr| {
-            assert_eq!(
-                arr,
-                [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1].as_slice()
-            );
+            assert_eq!(arr, [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1].as_slice());
         });
     }
 }
