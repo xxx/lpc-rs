@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use bit_set::BitSet;
 use dashmap::{
     DashMap,
-    mapref::{multiple::RefMulti, one::Ref},
+    mapref::{multiple::RefMulti},
 };
 use delegate::delegate;
 use lpc_rs_utils::config::Config;
@@ -166,11 +166,11 @@ impl ObjectSpace {
 
     /// Lookup a process from its path.
     /// The path should be absolute, in-game path, without the `.c` extension.
-    pub fn lookup<T>(&self, path: T) -> Option<Ref<'_, String, Arc<Process>>>
+    pub fn lookup<T>(&self, path: T) -> Option<Arc<Process>>
     where
         T: AsRef<str>,
     {
-        self.processes.get(path.as_ref())
+        self.processes.get(path.as_ref()).map(|s| s.clone())
     }
 }
 
