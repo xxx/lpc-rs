@@ -37,7 +37,7 @@ pub struct GlobalState {
         default = "RwLock::new(CallOuts::new(self.tx.clone().unwrap()))",
         setter(into)
     )]
-    pub call_outs: RwLock<CallOuts>,
+    call_outs: RwLock<CallOuts>,
 
     /// Global interpreter lock
     #[builder(default)]

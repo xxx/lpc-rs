@@ -246,7 +246,7 @@ impl TaskContext {
     where
         F: FnOnce(&CallOuts) -> R,
     {
-        f(&self.global_state.call_outs.read())
+        self.global_state.with_call_outs(f)
     }
 
     /// Access call-outs mutably
@@ -254,7 +254,7 @@ impl TaskContext {
     where
         F: FnOnce(&mut CallOuts) -> R,
     {
-        f(&mut self.global_state.call_outs.write())
+        self.global_state.with_call_outs_mut(f)
     }
 }
 
