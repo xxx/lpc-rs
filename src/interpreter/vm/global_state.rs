@@ -5,7 +5,7 @@ use derive_builder::Builder;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::{Mutex, mpsc::Sender};
 use tracing::instrument;
 
 use crate::interpreter::{
@@ -39,6 +39,10 @@ pub struct GlobalState {
     )]
     pub call_outs: RwLock<CallOuts>,
 
+    /// Global interpreter lock
+    #[builder(default)]
+    pub gil: Mutex<()>,
+
     /// The channel used to send [`VmOp`]s to the [`Vm`]
     pub tx: Sender<VmOp>,
 }
@@ -55,6 +59,7 @@ impl GlobalState {
             upvalues: Arc::new(RwLock::new(GcRefBank::default())),
             config: conf,
             call_outs: RwLock::new(CallOuts::new(tx.clone())),
+            gil: Mutex::new(()),
             tx,
         }
     }

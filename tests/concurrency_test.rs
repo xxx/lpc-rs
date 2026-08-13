@@ -105,7 +105,31 @@ fn read_global(proc: &Process, index: usize) -> LpcRef {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "lost update: got ~308k want 400000"]
 async fn lost_update_racy() {
+    let counter = r#"
+        int count = 0;
+
+        void increment() {
+            // do NOT change this to count++ - ++ is atomic and defeats the purpose
+            count = count + 1;
+        }
+    "#;
+
+    let vm = boot_vm(race_config(false)).await;
+    let proc = vm
+        .create_process_from_code("/counter.c", counter)
+        .await
+        .unwrap();
+    let results = spawn_applies(&vm, proc.clone(), "increment", 8, 500).await;
+    assert_all_ok(&results);
+
+    let expected: LpcIntInner = 8 * 500;
+    assert_eq!(read_global(&proc, 0), LpcRef::from(expected));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn lost_update_gil() {
     let counter = r#"
         int count = 0;
 

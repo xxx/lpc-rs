@@ -40,6 +40,7 @@ use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,
     gc::mark::Mark,
+    gil::run_with_gil,
     lpc_int::LpcInt,
     lpc_ref::LpcRef,
     lpc_string::LpcString,
@@ -241,7 +242,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub async fn eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef]) -> Result<()> {
         let process = self.context.process().clone();
 
-        self.eval_function(process, f, args).await
+        let state_clone = self.context.global_state.clone();
+        run_with_gil(&state_clone, self.eval_function(process, f, args)).await
+        // run_with_gil(&self.context.global_state, async move {
+        //     self.eval_function(process, f, args).await
+        // })
+        // self.eval_function(process, f, args).await
     }
 
     /// Evaluate `f` to completion, or an error, with a timeout.
@@ -267,12 +273,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let process = self.context.process().clone();
 
-        match timeout(
-            Duration::from_millis(timeout_ms),
-            self.eval_function(process, f, args),
+        let state_clone = self.context.global_state.clone();
+        let result = run_with_gil(
+            &state_clone,
+            timeout(
+                Duration::from_millis(timeout_ms),
+                self.eval_function(process, f, args),
+            ),
         )
-        .await
-        {
+        .await;
+
+        match result {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(e)) => Err(e),
             Err(_) => Err(lpc_error!(
