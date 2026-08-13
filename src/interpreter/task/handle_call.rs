@@ -88,7 +88,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             num_args,
             num_args,
             None::<&[Register]>, /* static functions do not inherit upvalues from the calling function */
-            self.context.upvalues().clone(),
+            self.context.global_state.upvalues.clone(),
         );
 
         trace!("copying arguments to new frame: {num_args}");

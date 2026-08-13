@@ -11,12 +11,15 @@ use crate::interpreter::{
 
 /// `call_out`, an efun for calling a function at some future point in time
 pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    {
-        let call_outs = context.call_outs().read();
-        if call_outs.next_push_index() > LpcIntInner::MAX as usize {
-            return Err(lpc_error!("too many call outs"));
-        }
-    }
+    context
+        .with_call_outs(|co| {
+            if co.next_push_index() > LpcIntInner::MAX as usize {
+                return Err(lpc_error!("too many call outs"));
+            }
+
+            Ok(())
+        })
+        .flatten()?;
 
     let func_ref = context.resolve_local_register(1 as RegisterSize).clone();
 
@@ -63,10 +66,9 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     };
 
     let process = Arc::downgrade(&context.frame().process);
-    let index = {
-        let mut call_outs = context.call_outs().write();
-        call_outs.schedule_task(process, func_ref, duration, repeat)?
-    };
+    let index = context
+        .with_call_outs_mut(|co| co.schedule_task(process, func_ref, duration, repeat))
+        .flatten()?;
 
     let result = LpcRef::Int(LpcInt(index as LpcIntInner));
     context.return_efun_result(result);

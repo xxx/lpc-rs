@@ -22,23 +22,20 @@ pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -
         return Err(context.runtime_error("object in `query_call_outs` is already destructed"));
     };
 
-    let vec = context
-        .call_outs()
-        .read()
-        .queue()
-        .iter()
-        .filter_map(|(_idx, call_out)| {
-            if let Some(process) = call_out.process().upgrade() {
-                if Arc::ptr_eq(&process, &owner) {
+    let vec = context.with_call_outs(|co| {
+        co.queue()
+            .iter()
+            .filter_map(|(_idx, call_out)| {
+                if let Some(process) = call_out.process().upgrade()
+                    && Arc::ptr_eq(&process, &owner)
+                {
                     Some(call_out_array_ref(context, call_out).unwrap())
                 } else {
                     None
                 }
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>()
+    })?;
 
     let result = LpcArray::new(vec).into();
 

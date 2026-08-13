@@ -16,10 +16,9 @@ pub async fn remove_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -
         )));
     }
 
-    let removed = {
-        let mut call_outs = context.call_outs().write();
-        call_outs.remove(idx.0 as usize)
-    };
+    let removed = context.with_call_outs_mut(|co| {
+        co.remove(idx.0 as usize)
+    })?;
 
     let ret = removed
         .map(|call_out| {

@@ -6,7 +6,6 @@ use delegate::delegate;
 use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, register::RegisterVariant};
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_utils::config::Config;
-use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
@@ -72,16 +71,44 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             /// then insert it into the object space.
             pub fn insert_clone(&self, program: Arc<Program>) -> Arc<Process>;
 
-            /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s upvalues (i.e. all of them)
-            #[call(upvalues)]
-            pub fn vm_upvalues(&self) -> &Arc<RwLock<GcRefBank>>;
-
-            /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s call outs
-            pub fn call_outs(&self) -> &RwLock<CallOuts>;
+            // /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s upvalues (i.e. all of them)
+            // #[call(upvalues)]
+            // pub fn vm_upvalues(&self) -> &Arc<RwLock<GcRefBank>>;
+            //
+            // /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s call outs
+            // pub fn call_outs(&self) -> &RwLock<CallOuts>;
 
             /// Get access to the `tx` channel, to talk to the [`Vm`](crate::interpreter::vm::Vm)
             pub fn tx(&self) -> Sender<VmOp>;
         }
+    }
+
+    pub fn with_upvalues<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&GcRefBank) -> R,
+    {
+        self.task_context.with_upvalues(f)
+    }
+
+    pub fn with_upvalues_mut<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&mut GcRefBank) -> R,
+    {
+        self.task_context.with_upvalues_mut(f)
+    }
+
+    pub fn with_call_outs<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&CallOuts) -> R,
+    {
+        self.task_context.with_call_outs(f)
+    }
+
+    pub fn with_call_outs_mut<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&mut CallOuts) -> R,
+    {
+        self.task_context.with_call_outs_mut(f)
     }
 
     /// Find or create (but don't initialize) an object by path

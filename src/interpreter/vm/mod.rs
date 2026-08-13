@@ -415,16 +415,22 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(ctx1.upvalues().read().len(), 1);
+        let assert_len = |ctx: &TaskContext, len| {
+            ctx.with_upvalues(|uv| {
+                assert_eq!(uv.len(), len);
+            }).unwrap();
+        };
+
+        assert_len(&ctx1, 1);
 
         vm.gc().unwrap();
 
-        assert_eq!(ctx1.upvalues().read().len(), 1);
+        assert_len(&ctx1, 1);
 
         vm.global_state.object_space.clear();
 
         vm.gc().unwrap();
 
-        assert_eq!(ctx1.upvalues().read().len(), 0);
+        assert_len(&ctx1, 0);
     }
 }

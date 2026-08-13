@@ -2914,13 +2914,17 @@ mod test_gc {
 
         let task = run_prog(code).await;
         let ctx = &task.context;
-        assert!(!ctx.upvalues().read().is_empty());
+        ctx.with_upvalues(|uv| {
+            assert!(!uv.is_empty());
+        }).unwrap();
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
         task.mark(&mut marked, &mut processed).unwrap();
-        ctx.upvalues().write().sweep(&marked).unwrap();
+        ctx.with_upvalues_mut(|uv| {
+            uv.sweep(&marked).unwrap();
 
-        assert!(ctx.upvalues().read().is_empty());
+            assert!(uv.is_empty());
+        }).unwrap();
     }
 }

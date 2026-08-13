@@ -7,7 +7,6 @@ use lpc_rs_core::register::Register;
 use lpc_rs_errors::{Result, lpc_bug};
 use lpc_rs_utils::config::Config;
 use once_cell::sync::OnceCell;
-use parking_lot::RwLock;
 use thin_vec::ThinVec;
 use tokio::sync::mpsc::Sender;
 
@@ -214,28 +213,48 @@ impl TaskContext {
         &self.global_state.object_space
     }
 
-    /// Return the `upvalues`
-    #[inline]
-    pub fn upvalues(&self) -> &Arc<RwLock<GcRefBank>> {
-        &self.global_state.upvalues
-    }
-
     /// Get the final result of the Task that this context is for, if it's finished.
     #[inline]
     pub fn result(&self) -> Option<&LpcRef> {
         self.result.get()
     }
 
-    /// Get the [`CallOuts`] for this task
-    #[inline]
-    pub fn call_outs(&self) -> &RwLock<CallOuts> {
-        &self.global_state.call_outs
-    }
-
     /// Get the `tx` channel for this task
     #[inline]
     pub fn tx(&self) -> Sender<VmOp> {
         self.global_state.tx.clone()
+    }
+
+    /// Access upvalues
+    pub fn with_upvalues<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&GcRefBank) -> R,
+    {
+        Ok(f(&self.global_state.upvalues.read()))
+    }
+
+    /// Access upvalues mutably
+    pub fn with_upvalues_mut<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&mut GcRefBank) -> R,
+    {
+        Ok(f(&mut self.global_state.upvalues.write()))
+    }
+
+    /// Access call-outs
+    pub fn with_call_outs<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&CallOuts) -> R,
+    {
+        Ok(f(&self.global_state.call_outs.read()))
+    }
+
+    /// Access call-outs mutably
+    pub fn with_call_outs_mut<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&mut CallOuts) -> R,
+    {
+        Ok(f(&mut self.global_state.call_outs.write()))
     }
 }
 
