@@ -76,7 +76,7 @@ pub struct Process {
     pub program: Arc<Program>,
 
     /// The stored global variable data for this instance.
-    pub globals: RwLock<RefBank>,
+    globals: RwLock<RefBank>,
 
     /// What is the clone ID of this process? If `None`, this is a master
     /// object.

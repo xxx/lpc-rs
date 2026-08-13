@@ -99,11 +99,11 @@ fn assert_all_ok(results: &[Result<LpcRef>]) {
 }
 
 fn read_global(proc: &Process, index: usize) -> LpcRef {
-    proc.globals
-        .read()
-        .get(index)
-        .unwrap_or_else(|| panic!("no global at index {index}"))
-        .clone()
+    proc.with_globals(|g| {
+        g.get(index)
+            .unwrap_or_else(|| panic!("no global at index {index}"))
+            .clone()
+    })
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -317,8 +317,8 @@ async fn multithread_sync_racy() {
     let room1 = room1_proc.context.process;
     let room2 = room2_proc.context.process;
 
-    let room1_weight = room1.globals.read().first().unwrap().clone();
-    let room2_weight = room2.globals.read().first().unwrap().clone();
+    let room1_weight = room1.with_globals(|g| g.first().unwrap().clone());
+    let room2_weight = room2.with_globals(|g| g.first().unwrap().clone());
 
     // println!("room1: {}", room1_weight);
     // for item in room1.position.inventory_iter().collect_vec() {
@@ -411,8 +411,8 @@ async fn multithread_sync_gil() {
     let room1 = room1_proc.context.process;
     let room2 = room2_proc.context.process;
 
-    let room1_weight = room1.globals.read().first().unwrap().clone();
-    let room2_weight = room2.globals.read().first().unwrap().clone();
+    let room1_weight = room1.with_globals(|g| g.first().unwrap().clone());
+    let room2_weight = room2.with_globals(|g| g.first().unwrap().clone());
 
     // println!("room1: {}", room1_weight);
     // for item in room1.position.inventory_iter().collect_vec() {

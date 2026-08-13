@@ -3,7 +3,6 @@ mod support;
 use std::sync::Arc;
 
 use claims::assert_err;
-use if_chain::if_chain;
 use indoc::indoc;
 use lpc_rs::{
     compiler::{Compiler, CompilerBuilder},
@@ -109,28 +108,25 @@ async fn test_duffs_device() {
     let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
-    let b = &proc.globals.read()[1];
+    let b = &proc.with_globals(|g| g[1].clone());
 
-    if_chain! {
-        if let LpcRef::Array(pool_ref) = b;
-        let arr = pool_ref.read();
-        then {
-            assert_eq!(
-                &*arr,
-                &[
-                    LpcRef::Int(LpcInt(0)),
-                    LpcRef::Int(LpcInt(2)),
-                    LpcRef::Int(LpcInt(3)),
-                    LpcRef::Int(LpcInt(4)),
-                    LpcRef::Int(LpcInt(5)),
-                    LpcRef::Int(LpcInt(6)),
-                    LpcRef::Int(LpcInt(7)),
-                    LpcRef::Int(LpcInt(0)),
-                ].to_vec()
-            );
-        } else {
-            panic!("expected array");
-        }
+    if let LpcRef::Array(pool_ref) = b &&
+    let arr = pool_ref.read() {
+        assert_eq!(
+            &*arr,
+            &[
+                LpcRef::Int(LpcInt(0)),
+                LpcRef::Int(LpcInt(2)),
+                LpcRef::Int(LpcInt(3)),
+                LpcRef::Int(LpcInt(4)),
+                LpcRef::Int(LpcInt(5)),
+                LpcRef::Int(LpcInt(6)),
+                LpcRef::Int(LpcInt(7)),
+                LpcRef::Int(LpcInt(0)),
+            ].to_vec()
+        );
+    } else {
+        panic!("expected array");
     }
 }
 
@@ -156,13 +152,14 @@ async fn test_closures() {
     let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
-    let globals = proc.globals.read();
 
-    assert_eq!(globals.len(), 2);
-    assert_eq!(
-        globals.last().unwrap().to_string(),
-        "I'll take 4 tacos with crema on the side, por favor.".to_string()
-    );
+    proc.with_globals(|g| {
+        assert_eq!(g.len(), 2);
+        assert_eq!(
+            g.last().unwrap().to_string(),
+            "I'll take 4 tacos with crema on the side, por favor.".to_string()
+        );
+    })
 }
 
 #[tokio::test]
@@ -181,8 +178,7 @@ async fn test_multi_dimensional_arrays() {
     let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
-    let globals = proc.globals.read();
-    let x_ref = globals.last().unwrap();
+    let x_ref = &proc.with_globals(|g| g.last().unwrap().clone());
     let LpcRef::Array(arr) = x_ref else {
         panic!("this shouldn't be reachable.");
     };

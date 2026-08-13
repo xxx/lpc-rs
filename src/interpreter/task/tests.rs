@@ -984,7 +984,7 @@ mod test_instructions {
 
             BareVal::assert_vec_equal(
                 &expected,
-                &proc.globals.read().iter().cloned().collect::<Vec<_>>(),
+                &proc.with_globals(|g| g.iter().cloned().collect::<Vec<_>>()),
             );
         }
 
@@ -1028,7 +1028,7 @@ mod test_instructions {
 
             BareVal::assert_vec_equal(
                 &expected,
-                &proc.globals.read().iter().cloned().collect::<Vec<_>>(),
+                &proc.with_globals(|g| g.iter().cloned().collect::<Vec<_>>()),
             );
         }
     }
@@ -1543,7 +1543,7 @@ mod test_instructions {
 
             BareVal::assert_vec_equal(
                 &expected,
-                &proc.globals.read().iter().cloned().collect::<Vec<_>>(),
+                &proc.with_globals(|g| g.iter().cloned().collect::<Vec<_>>()),
             );
         }
 
@@ -1587,7 +1587,7 @@ mod test_instructions {
 
             BareVal::assert_vec_equal(
                 &expected,
-                &proc.globals.read().iter().cloned().collect::<Vec<_>>(),
+                &proc.with_globals(|g| g.iter().cloned().collect::<Vec<_>>()),
             );
         }
     }
@@ -2547,7 +2547,7 @@ mod test_globals {
             Int(0),
             Int(1),
         ];
-        BareVal::assert_vec_equal(&expected, &proc.globals.read());
+        proc.with_globals(|g| BareVal::assert_vec_equal(&expected, g));
     }
 }
 
