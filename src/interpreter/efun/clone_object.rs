@@ -6,7 +6,7 @@ use lpc_rs_errors::Result;
 use crate::{
     compile_time_config::MAX_CLONE_CHAIN,
     interpreter::{
-        efun::efun_context::EfunContext, lpc_ref::LpcRef, object_flags::ObjectFlags,
+        efun::efun_context::EfunContext, object_flags::ObjectFlags,
         process::Process, task::Task,
     },
 };
@@ -108,6 +108,7 @@ mod tests {
         test_support::{compile_prog, test_config},
         util::process_builder::{ProcessCreator, ProcessInitializer},
     };
+    use crate::interpreter::lpc_ref::LpcRef;
 
     fn task_context_fixture(
         program: Program,

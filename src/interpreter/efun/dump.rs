@@ -40,10 +40,10 @@ fn format_ref<const N: usize>(
         }
         LpcRef::Function(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::Array(_) => lpc_ref
-            .with_array(|arr| format_array(&arr, context, indent, recurse_level + 1))
+            .with_array(|arr| format_array(arr, context, indent, recurse_level + 1))
             .flatten(),
         LpcRef::Mapping(_) => lpc_ref
-            .with_mapping(|map| format_mapping(&map, context, indent, recurse_level + 1))
+            .with_mapping(|map| format_mapping(map, context, indent, recurse_level + 1))
             .flatten(),
     }
 }

@@ -361,9 +361,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                         if idx >= 0 && (idx as usize) < len {
                             vec[idx as usize] = (*get_location(&self.stack, value_loc)?).clone();
-                            return Ok(());
+                            Ok(())
                         } else {
-                            return Err(self.array_index_error(idx, len));
+                            Err(self.array_index_error(idx, len))
                         }
                     })
                     .flatten()
