@@ -163,6 +163,27 @@ impl CallFrame {
         instance
     }
 
+    pub fn with_upvalues<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&GcRefBank) -> R,
+    {
+        f(&*self.vm_upvalues.read())
+    }
+
+    pub fn with_upvalues_mut<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut GcRefBank) -> R,
+    {
+        f(&mut *self.vm_upvalues.write())
+    }
+
+    pub fn with_upvalues_and_ptrs_mut<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut GcRefBank, &mut ThinVec<Register>) -> R,
+    {
+        f(&mut *self.vm_upvalues.write(), &mut self.upvalue_ptrs)
+    }
+
     /// Reserve space for the upvalues that this call will initialize
     /// Returns the index in the [`Vm`](crate::interpreter::vm::Vm)'s `upvalues` array where the
     ///   newly-populated upvalues will be stored
@@ -175,19 +196,18 @@ impl CallFrame {
             return;
         }
 
-        let mut upvalues = self.vm_upvalues.write();
-
-        // Reserve space in the proc for the actual values
-        upvalues.reserve(num_upvalues as usize);
-
         // Reserve space in me for the indexes
         self.upvalue_ptrs.reserve(num_upvalues as usize);
 
-        for _ in 0..num_upvalues {
-            let idx = upvalues.insert(NULL);
-            self.upvalue_ptrs
-                .push(Register(RegisterSize::try_from(idx).unwrap()));
-        }
+        self.with_upvalues_and_ptrs_mut(|upvalues, ptrs| {
+            // Reserve space in the proc for the actual values
+            upvalues.reserve(num_upvalues as usize);
+
+            for _ in 0..num_upvalues {
+                let idx = upvalues.insert(NULL);
+                ptrs.push(Register(RegisterSize::try_from(idx).unwrap()));
+            }
+        })
     }
 
     /// Assign an [`LpcRef`] to a specific location, based on the [`RegisterVariant`]
@@ -204,8 +224,9 @@ impl CallFrame {
                 let upvalues = &self.upvalue_ptrs;
                 let idx = upvalues[reg.index() as usize];
 
-                let mut upvalues = self.vm_upvalues.write();
-                upvalues[idx] = lpc_ref;
+                self.with_upvalues_mut(|uv| {
+                    uv[idx] = lpc_ref;
+                });
             }
         }
     }
@@ -229,7 +250,9 @@ impl CallFrame {
                         let upvalues = &self.upvalue_ptrs;
                         let data_reg = upvalues[ptr_reg.index() as usize];
 
-                        self.vm_upvalues.read()[data_reg].clone()
+                        self.with_upvalues(|uv| {
+                            uv[data_reg].clone()
+                        })
                     }
                 };
 
@@ -463,7 +486,9 @@ mod tests {
             );
 
             assert_eq!(frame.upvalue_ptrs, vec![Register(0), Register(1)]);
-            assert_eq!(frame.vm_upvalues.read().len(), 2);
+            frame.with_upvalues(|uv| {
+                assert_eq!(uv.len(), 2);
+            });
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_function")
@@ -500,7 +525,9 @@ mod tests {
                 frame.upvalue_ptrs,
                 vec![Register(2), Register(3), Register(4)]
             );
-            assert_eq!(frame.vm_upvalues.read().len(), 5);
+            frame.with_upvalues(|uv| {
+                assert_eq!(uv.len(), 5);
+            });
         }
     }
 
