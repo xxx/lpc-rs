@@ -21,7 +21,7 @@ use thin_vec::thin_vec;
 
 use crate::interpreter::{
     efun::{EFUN_PROTOTYPES, efun_context::EfunContext},
-    function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
+    function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
     lpc_ref::LpcRef,
 };
 
@@ -109,16 +109,17 @@ pub async fn compose<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
     // This will just create and return a pointer to the `COMPOSE_EXECUTOR` function,
     // which, which called, takes care of actually calling one function, and
     // passing the result to the other.
-    let pf = COMPOSE_EXECUTOR.clone();
+    let executor = COMPOSE_EXECUTOR.clone();
 
-    let ptr = FunctionPtr {
-        owner: Arc::downgrade(&context.frame().process),
-        address: FunctionAddress::Local(Arc::downgrade(&context.frame().process), pf),
-        partial_args: RwLock::new(thin_vec![Some(a), Some(b)]),
-        call_other: false,
-        upvalue_ptrs: thin_vec![],
-        unique_id: Default::default(),
-    };
+    let ptr = FunctionPtrBuilder::default()
+        .owner(Arc::downgrade(&context.frame().process))
+        .address(FunctionAddress::Local(
+            Arc::downgrade(&context.frame().process),
+            executor,
+        ))
+        .partial_args(RwLock::new(thin_vec![Some(a), Some(b)]))
+        .build()
+        .unwrap();
 
     let lpc_ref = ptr.into();
 

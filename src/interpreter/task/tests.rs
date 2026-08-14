@@ -95,12 +95,11 @@ impl BareVal {
                 }
             }
             LpcRef::Function(fp) => {
-                let args = fp
-                    .partial_args
-                    .read()
-                    .iter()
-                    .map(|item| item.as_ref().map(BareVal::from_lpc_ref))
-                    .collect::<Vec<_>>();
+                let args = fp.with_partial_args(|pa| {
+                    pa.iter()
+                        .map(|item| item.as_ref().map(BareVal::from_lpc_ref))
+                        .collect::<Vec<_>>()
+                });
 
                 BareVal::Function(fp.name().into(), args)
             }

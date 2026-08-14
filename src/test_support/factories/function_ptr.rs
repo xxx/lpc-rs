@@ -1,23 +1,40 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use factori::factori;
+use lpc_rs_core::register::Register;
 use parking_lot::RwLock;
-use thin_vec::thin_vec;
+use thin_vec::{ThinVec, thin_vec};
 use ustr::ustr;
 
 use crate::interpreter::{
-    function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
+    function_type::{
+        function_address::FunctionAddress,
+        function_ptr::{FunctionPtr, FunctionPtrBuilder},
+    },
     gc::unique_id::UniqueId,
+    lpc_ref::LpcRef,
     process::Process,
 };
 
 factori!(FunctionPtr, {
     default {
-        owner = Arc::downgrade(&Arc::new(Process::default())),
-        address = FunctionAddress::Efun(ustr("dump")),
-        partial_args = RwLock::new(thin_vec![]),
-        call_other = false,
-        upvalue_ptrs = thin_vec![],
-        unique_id = UniqueId::new(),
+        owner: Weak<Process> = Arc::downgrade(&Arc::new(Process::default())),
+        address: FunctionAddress = FunctionAddress::Efun(ustr("dump")),
+        partial_args: ThinVec<Option<LpcRef>> = thin_vec![],
+        call_other: bool = false,
+        upvalue_ptrs: ThinVec<Register> = thin_vec![],
+        unique_id: UniqueId = UniqueId::new(),
+    }
+
+    builder {
+        FunctionPtrBuilder::default()
+            .owner(owner)
+            .address(address)
+            .partial_args(RwLock::new(partial_args))
+            .call_other(call_other)
+            .upvalue_ptrs(upvalue_ptrs)
+            .unique_id(unique_id)
+            .build()
+            .unwrap()
     }
 });

@@ -46,7 +46,7 @@ pub struct FunctionPtr {
     /// are expected to be filled at call time, in the case of pointers that
     /// are partially-applied.
     #[builder(default)]
-    pub partial_args: RwLock<ThinVec<Option<LpcRef>>>,
+    partial_args: RwLock<ThinVec<Option<LpcRef>>>,
 
     /// Does this pointer use `call_other`?
     #[builder(default)]

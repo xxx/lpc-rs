@@ -9,7 +9,7 @@ use tracing::{instrument, trace};
 use ustr::ustr;
 
 use crate::interpreter::{
-    function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
+    function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
     gc::unique_id::UniqueId,
     lpc_array::LpcArray,
     lpc_int::LpcInt,
@@ -149,15 +149,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .collect::<lpc_rs_errors::Result<ThinVec<Option<LpcRef>>>>()?;
 
         let frame = self.stack.current_frame()?;
-        let fp = FunctionPtr {
-            owner: Arc::downgrade(&frame.process),
-            address,
-            partial_args: RwLock::new(partial_args),
-            call_other,
-            // Function pointers inherit the current upvalue_ptrs
-            upvalue_ptrs: frame.upvalue_ptrs.clone(),
-            unique_id: UniqueId::new(),
-        };
+        let fp = FunctionPtrBuilder::default()
+            .owner(Arc::downgrade(&frame.process))
+            .address(address)
+            .partial_args(RwLock::new(partial_args))
+            .call_other(call_other)
+            .upvalue_ptrs(frame.upvalue_ptrs.clone())
+            .unique_id(UniqueId::new())
+            .build()
+            .unwrap();
 
         let new_ref = fp.into();
 

@@ -110,8 +110,9 @@ async fn test_duffs_device() {
     let proc = ctx.process();
     let b = &proc.with_globals(|g| g[1].clone());
 
-    if let LpcRef::Array(pool_ref) = b &&
-    let arr = pool_ref.read() {
+    if let LpcRef::Array(pool_ref) = b
+        && let arr = pool_ref.read()
+    {
         assert_eq!(
             &*arr,
             &[
@@ -123,7 +124,8 @@ async fn test_duffs_device() {
                 LpcRef::Int(LpcInt(6)),
                 LpcRef::Int(LpcInt(7)),
                 LpcRef::Int(LpcInt(0)),
-            ].to_vec()
+            ]
+            .to_vec()
         );
     } else {
         panic!("expected array");
