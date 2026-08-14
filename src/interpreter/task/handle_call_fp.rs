@@ -58,7 +58,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             passed_args_count,
             max_arg_length,
             upvalues,
-            self.context.global_state.upvalues.clone(),
+            self.context.global_state.clone_upvalues(),
         );
 
         // for dynamic receivers, skip the first register of the passed args, which contains the receiver itself

@@ -26,7 +26,7 @@ pub struct GlobalState {
 
     /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`](crate::interpreter::task::Task)s
     #[builder(default, setter(into))]
-    pub upvalues: Arc<RwLock<GcRefBank>>,
+    upvalues: Arc<RwLock<GcRefBank>>,
 
     /// The [`Config`] that's in use for this [`Vm`]
     #[builder(default, setter(into))]
@@ -96,6 +96,10 @@ impl GlobalState {
         F: FnOnce(&mut GcRefBank) -> R,
     {
         f(&mut self.upvalues.write())
+    }
+
+    pub fn clone_upvalues(&self) -> Arc<RwLock<GcRefBank>> {
+        self.upvalues.clone()
     }
 }
 

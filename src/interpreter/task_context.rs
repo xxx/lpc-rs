@@ -230,7 +230,7 @@ impl TaskContext {
     where
         F: FnOnce(&GcRefBank) -> R,
     {
-        f(&self.global_state.upvalues.read())
+        self.global_state.with_upvalues(f)
     }
 
     /// Access upvalues mutably
@@ -238,7 +238,7 @@ impl TaskContext {
     where
         F: FnOnce(&mut GcRefBank) -> R,
     {
-        f(&mut self.global_state.upvalues.write())
+        self.global_state.with_upvalues_mut(f)
     }
 
     /// Access call-outs

@@ -328,7 +328,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             f,
             RegisterSize::try_from(args.len())?,
             self.context.upvalue_ptrs.as_deref(),
-            self.context.global_state.upvalues.clone(),
+            self.context.global_state.clone_upvalues(),
         );
 
         // TODO: This is probably not correct. See behavior in prepare_new_call_frame
