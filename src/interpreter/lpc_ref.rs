@@ -282,18 +282,6 @@ impl LpcRef {
         }
     }
 
-    // /// Convenience to perform a binary operation on a pair of [`LpcRef`]s
-    // /// wrapped in RwLocks.
-    // pub fn binary_op<F, T>(left: &RwLock<Self>, right: &RwLock<Self>, op: F) -> T
-    // where
-    //     F: Fn(&LpcRef, &LpcRef) -> T,
-    // {
-    //     let left = &*left.read();
-    //     let right = &*right.read();
-    //
-    //     op(left, right)
-    // }
-
     pub fn add(&self, rhs: &Self) -> Result<Self> {
         match self {
             LpcRef::Float(f) => match rhs {

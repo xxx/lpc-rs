@@ -43,17 +43,6 @@ pub mod vm_op;
 pub struct Vm {
     pub global_state: Arc<GlobalState>,
 
-    // /// Our object space, which stores all of the system objects (masters and clones)
-    // pub object_space: Arc<ObjectSpace>,
-    //
-    // /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`](crate::interpreter::task::Task)s
-    // pub upvalues: Arc<RwLock<GcRefBank>>,
-    //
-    // /// The [`Config`] that's in use for this [`Vm`]
-    // config: Arc<Config>,
-    //
-    // /// Enqueued call outs
-    // call_outs: Arc<RwLock<CallOuts>>,
     /// The connection broker, which handles all of the network connections
     connection_broker: ConnectionBroker,
 
