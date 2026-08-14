@@ -101,6 +101,10 @@ release_max_level_trace = ["tracing/release_max_level_trace"]
 name = "bench_fib"
 harness = false
 
+[[bench]]
+name = "bench_concurrency"
+harness = false
+
 [workspace]
 members = [
     "lpc-rs-asm",
