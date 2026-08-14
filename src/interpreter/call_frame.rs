@@ -79,7 +79,7 @@ pub struct CallFrame {
 
     /// The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
     #[builder(setter(into))]
-    pub vm_upvalues: Arc<RwLock<GcRefBank>>,
+    vm_upvalues: Arc<RwLock<GcRefBank>>,
 
     /// This object's unique ID, for garbage collection purposes
     #[builder(default)]

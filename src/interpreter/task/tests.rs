@@ -2595,20 +2595,21 @@ mod test_upvalues {
 
         assert_eq!(
             upvalues.len(),
-            frame.vm_upvalues.read().len(),
+            frame.with_upvalues(|uv| uv.len()),
             "frame upvalues: {:?}\nvm upvalues: {:?}",
             upvalues
                 .iter()
                 .map(|i| i.clone().into())
                 .collect::<Vec<BareVal>>(),
-            frame.vm_upvalues.read().iter().collect::<Vec<_>>()
+            frame.with_upvalues(|uv| format!("{:?}", uv.iter().collect::<Vec<_>>()))
         );
 
-        let vm_upvalues = frame.vm_upvalues.read();
-        for (i, v) in upvalues.iter().enumerate() {
-            let v: BareVal = v.clone().into();
-            v.assert_equal(&vm_upvalues[i]);
-        }
+        frame.with_upvalues(|uv| {
+            for (i, v) in upvalues.iter().enumerate() {
+                let v: BareVal = v.clone().into();
+                v.assert_equal(&uv[i]);
+            }
+        })
     }
 
     async fn check_frame_upvalue_ptrs<T>(code: &str, upvalue_ptrs: &[T])
