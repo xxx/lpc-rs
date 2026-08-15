@@ -51,6 +51,41 @@ const CALLER: &str = r#"
     }
 "#;
 
+/// Array payload, light: the array analogue of `increment`. A small global array, a few
+/// index reads and one index write per apply. This is the workload that actually touches
+/// the payload container the persistent-payload swap changes; `fib`/`increment`/`call_other`
+/// do not construct or index any array, so on their own they are a null measurement of the
+/// payload's inner-loop cost.
+const ARR_TOUCH: &str = r#"
+    int *a = ({ 1, 2, 3, 4 });
+
+    void touch() {
+        int x = a[0] + a[1] + a[2] + a[3];
+        a[3] = x;
+    }
+"#;
+
+/// Array payload, heavy: read the whole array, then write a prefix of it, per apply.
+/// Sizes 64 for the array and 8 for the write prefix keep it in the small-array regime
+/// where a persistent structure's constant factors hurt most.
+const ARR_CHURN: &str = r#"
+    int *a = ({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+               16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+               32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+               48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63 });
+
+    void churn() {
+        int i;
+        int s = 0;
+        for (i = 0; i < 64; i += 1) {
+            s = s + a[i];
+        }
+        for (i = 0; i < 8; i += 1) {
+            a[i] = s + i;
+        }
+    }
+"#;
+
 const TARGET: &str = r#"
     int value() {
         return 1;
@@ -178,6 +213,8 @@ fn m1_task_cost(c: &mut Criterion) {
     for (label, path, code, func) in [
         ("fib10", "/bench_fib.c", FIB, "run"),
         ("increment", "/bench_counter.c", COUNTER, "increment"),
+        ("arr_touch", "/bench_arr_touch.c", ARR_TOUCH, "touch"),
+        ("arr_churn", "/bench_arr_churn.c", ARR_CHURN, "churn"),
     ] {
         let (_vm, proc, template, timeout) = rt.block_on(setup(false, path, code));
 
