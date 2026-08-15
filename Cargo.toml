@@ -70,7 +70,9 @@ claims = "0.8.0"
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support", "async_tokio"] }
 factori = "1.1.0"
 fake = "5.1.0"
+imbl = "7.0.1"
 indoc = "2.0.0"
+rpds = "1.2.1"
 tokio-test = "0.4.2"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
@@ -97,12 +99,15 @@ release_max_level_debug = ["tracing/release_max_level_debug"]
 release_max_level_trace = ["tracing/release_max_level_trace"]
 
 [[bench]]
-
 name = "bench_fib"
 harness = false
 
 [[bench]]
 name = "bench_concurrency"
+harness = false
+
+[[bench]]
+name = "bench_payload"
 harness = false
 
 [workspace]
