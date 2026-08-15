@@ -17,6 +17,7 @@ pub mod object_flags;
 pub mod object_space;
 pub mod process;
 pub mod program;
+mod stm;
 pub mod task;
 pub mod task_context;
 pub mod vm;

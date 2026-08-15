@@ -8,8 +8,9 @@ use std::sync::Arc;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use lpc_rs::{
     interpreter::{
-        process::Process, task::apply_function::apply_function_by_name,
-        task::task_template::TaskTemplate, vm::Vm,
+        process::Process,
+        task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
+        vm::Vm,
     },
     util::process_builder::ProcessInitializer,
 };
@@ -193,9 +194,8 @@ fn m0_scaling(c: &mut Criterion) {
                 BenchmarkId::from_parameter(workers),
                 &workers,
                 |b, &workers| {
-                    b.to_async(&rt).iter(|| {
-                        run_workers(&template, &proc, func, workers, per_worker, timeout)
-                    });
+                    b.to_async(&rt)
+                        .iter(|| run_workers(&template, &proc, func, workers, per_worker, timeout));
                 },
             );
         }
@@ -246,8 +246,7 @@ fn m3_gil(c: &mut Criterion) {
 
     for (label, gil) in [("off", false), ("on", true)] {
         let rt = multi_thread_rt(WORKERS);
-        let (_vm, proc, template, timeout) =
-            rt.block_on(setup(gil, "/bench_counter.c", COUNTER));
+        let (_vm, proc, template, timeout) = rt.block_on(setup(gil, "/bench_counter.c", COUNTER));
 
         group.bench_function(label, |b| {
             b.to_async(&rt).iter(|| {
