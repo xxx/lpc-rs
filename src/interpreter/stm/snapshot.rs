@@ -1,39 +1,40 @@
 //! Immutable view of world state at a single [`Version`].
 
-use std::{collections::BTreeMap, sync::Arc};
+use imbl::OrdMap;
 
 use crate::interpreter::{
     lpc_ref::LpcRef,
     stm::{VarId, Version},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Snapshot {
-    pub(crate) version: Version,
-    // BTreeMap, so that all transactions always replay in the same order
-    state: Arc<BTreeMap<VarId, LpcRef>>,
+    version: Version,
+    // OrdMap, so that transactions always replay in the same order, plus O(1) clones
+    state: OrdMap<VarId, LpcRef>,
 }
 
 impl Snapshot {
-    pub(crate) fn new(version: Version, state: Arc<BTreeMap<VarId, LpcRef>>) -> Self {
+    pub(crate) fn new(version: Version, state: OrdMap<VarId, LpcRef>) -> Self {
         Self { version, state }
     }
 
     pub(crate) fn read(&self, var_id: VarId) -> Option<LpcRef> {
         self.state.get(&var_id).cloned()
     }
+
+    pub(crate) fn version(&self) -> Version {
+        self.version
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-    use std::sync::Arc;
-    use crate::interpreter::stm::snapshot::Snapshot;
-    use crate::interpreter::stm::{VarId, Version};
+    use super::*;
 
     #[test]
     fn read_returns_none_for_missing_var_id() {
-        let snapshot = Snapshot::new(Version::new(), Arc::new(BTreeMap::new()));
+        let snapshot = Snapshot::new(Version::new(), OrdMap::new());
         assert_eq!(snapshot.read(VarId::new()), None);
     }
 }

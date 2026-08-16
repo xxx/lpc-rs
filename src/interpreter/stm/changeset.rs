@@ -1,6 +1,4 @@
-//! Tracking for writes accumulated over a task, ie. a transaction log.
-
-#![expect(dead_code)]
+//! Tracking for writes accumulated over a transaction
 
 use std::collections::BTreeMap;
 
@@ -29,6 +27,10 @@ impl Changeset {
 
     pub(crate) fn write(&mut self, var_id: VarId, value: LpcRef) {
         self.writes.insert(var_id, value);
+    }
+
+    pub(crate) fn base_version(&self) -> Version {
+        self.version
     }
 }
 

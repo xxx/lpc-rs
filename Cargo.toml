@@ -36,6 +36,7 @@ educe = "0.7.6"
 flume = "0.12.0"
 futures = "0.3.28"
 if_chain = "1.0.1"
+imbl = "7.0.1"
 indexmap = { version = "2.14.0", features = ["serde"] }
 indextree = { version = "4.3.1", features = ["deser"] }
 itertools = "0.15.0"
@@ -70,7 +71,6 @@ claims = "0.8.0"
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support", "async_tokio"] }
 factori = "1.1.0"
 fake = "5.1.0"
-imbl = "7.0.1"
 indoc = "2.0.0"
 rpds = "1.2.1"
 tokio-test = "0.4.2"

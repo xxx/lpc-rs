@@ -22,8 +22,7 @@ impl VarId {
 
 // _Global_ version counter because this is single-committer.
 static VERSION_COUNT: AtomicU64 = AtomicU64::new(0);
-#[derive(Debug, Copy, Clone)]
-#[expect(dead_code)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct Version(u64);
 
 impl Version {
@@ -40,7 +39,7 @@ pub(crate) struct Transaction {
 
 impl Transaction {
     pub(crate) fn new(snapshot: Snapshot) -> Self {
-        let version = snapshot.version;
+        let version = snapshot.version();
         Self {
             snapshot,
             changeset: Changeset::new(version),
@@ -60,7 +59,7 @@ impl Transaction {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, sync::Arc};
+    use imbl::OrdMap;
 
     use crate::interpreter::{
         lpc_ref::LpcRef,
@@ -68,16 +67,30 @@ mod tests {
     };
 
     #[test]
-    fn read_sees_previous_writes_before_falling_back_to_state() {
+    fn multiple_variables_are_isolated() {
         let var_id = VarId::new();
-        let mut map = BTreeMap::new();
+        let mut map = OrdMap::new();
         map.insert(var_id, LpcRef::from(123));
 
-        let snapshot = Snapshot::new(Version::new(), Arc::new(map));
+        let snapshot = Snapshot::new(Version::new(), map);
+        let mut transaction = Transaction::new(snapshot);
+        let var_id2 = VarId::new();
+        transaction.write(var_id2, LpcRef::from("foo"));
+        assert_eq!(transaction.read(var_id), Some(LpcRef::from(123)));
+        assert_eq!(transaction.read(var_id2), Some(LpcRef::from("foo")));
+    }
+
+    #[test]
+    fn read_sees_previous_writes_before_falling_back_to_state() {
+        let var_id = VarId::new();
+        let mut map = OrdMap::new();
+        map.insert(var_id, LpcRef::from(123));
+
+        let snapshot = Snapshot::new(Version::new(), map);
         let mut transaction = Transaction::new(snapshot);
         assert_eq!(transaction.read(var_id), Some(LpcRef::from(123)));
 
-        let value = LpcRef::from(42);
+        let value = LpcRef::from(42.42);
         transaction.write(var_id, value.clone());
 
         assert_eq!(transaction.read(var_id), Some(value));
