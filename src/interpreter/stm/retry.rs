@@ -2,10 +2,7 @@
 
 use std::time::{Duration, Instant};
 
-use crate::interpreter::stm::{
-    Transaction,
-    committer::{CommitProtocol, send_commit},
-};
+use crate::interpreter::stm::{Transaction, committer::CommitProtocol};
 
 /// Per-attempt statistics, owned by the retry loop: the transaction already
 /// knows its read/write set sizes, so commit size is free, and conflict rate
@@ -47,7 +44,13 @@ pub(crate) fn retry<T>(
         // Hold the release handle until the reply resolves: dropping it
         // earlier can let the committer evict history this commit still
         // needs, spurious-conflicting a sound attempt.
-        let commit_result = send_commit(tx, changeset);
+        let (reply_tx, reply_rx) = flume::bounded(1);
+        tx.send(CommitProtocol::Commit {
+            changeset,
+            reply: reply_tx,
+        })
+        .expect("committer channel closed");
+        let commit_result = reply_rx.recv().expect("no reply from committer");
         drop(live);
 
         if commit_result.is_ok() {
@@ -75,9 +78,7 @@ mod tests {
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         stm::{
-            Transaction, VarId, Version,
-            changeset::Changeset,
-            committer::{CommitProtocol, close_committer, send_commit, start_committer},
+            Transaction, VarId, Version, changeset::Changeset, committer::CommitProtocol, tests::*,
         },
     };
 
@@ -94,7 +95,16 @@ mod tests {
     fn seed(tx: &flume::Sender<CommitProtocol>, v0: Version, var: VarId, value: LpcIntInner) {
         let mut seed = Changeset::new(v0);
         seed.write(var, LpcRef::from(value));
-        send_commit(tx, seed).expect("seed should commit");
+        let (reply_tx, reply_rx) = flume::bounded(1);
+        tx.send(CommitProtocol::Commit {
+            changeset: seed,
+            reply: reply_tx,
+        })
+        .expect("committer channel closed");
+        reply_rx
+            .recv()
+            .expect("no reply from committer")
+            .expect("seed should commit");
     }
 
     #[test]

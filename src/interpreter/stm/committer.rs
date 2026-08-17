@@ -79,7 +79,7 @@ impl Drop for LiveSnapshot {
 /// Represents a `Committer` which is responsible for managing versioning and
 /// tracking changes in data snapshots using a version control mechanism.
 #[derive(Debug)]
-struct Committer {
+pub(crate) struct Committer {
     /// The current snapshot of the world
     snapshot: Snapshot,
     /// The history of written variables by version, used to check for conflicts during commit operations.
@@ -124,7 +124,11 @@ impl Committer {
     }
 
     /// Process one message. Returns `false` on `Close`.
-    fn process(&mut self, msg: CommitProtocol, tx: &flume::Sender<CommitProtocol>) -> bool {
+    pub(crate) fn process(
+        &mut self,
+        msg: CommitProtocol,
+        tx: &flume::Sender<CommitProtocol>,
+    ) -> bool {
         match msg {
             CommitProtocol::Start { reply } => {
                 // Count before hand-out: a failed reply drops the
@@ -246,46 +250,27 @@ impl Committer {
     }
 }
 
-// Test-only channel driver, shared with `retry::tests`.
+#[cfg(test)]
+impl Committer {
+    /// How many versions' write sets are retained.
+    pub(crate) fn retained_versions(&self) -> usize {
+        self.write_history.len()
+    }
 
-/// Spawn the committer thread on a bounded channel. Returns the
-/// protocol sender, the initial world version, and the committer handle.
-pub(crate) fn start_committer() -> (
-    flume::Sender<CommitProtocol>,
-    Version,
-    std::thread::JoinHandle<Snapshot>,
-) {
-    let (tx, rx) = flume::bounded(4);
-    let committer = Committer::new();
-    let version = committer.snapshot.version();
-    let committer_tx = tx.clone();
-    let handle = std::thread::spawn(move || committer.run(committer_tx, rx));
-    (tx, version, handle)
-}
+    /// Whether a version's write set is retained.
+    pub(crate) fn retains_version(&self, version: Version) -> bool {
+        self.write_history.contains_key(&version)
+    }
 
-/// Commit `changeset` and block for the reply.
-pub(crate) fn send_commit(
-    tx: &flume::Sender<CommitProtocol>,
-    changeset: Changeset,
-) -> Result<(), Changeset> {
-    let (reply_tx, reply_rx) = flume::bounded(1);
-    tx.send(CommitProtocol::Commit {
-        changeset,
-        reply: reply_tx,
-    })
-    .expect("committer channel closed");
-    reply_rx.recv().expect("no reply from committer")
-}
+    /// The oldest retained version, i.e. the eviction watermark.
+    pub(crate) fn oldest_retained_version(&self) -> Version {
+        self.oldest_retained
+    }
 
-/// Settle the channel and take the committer's final snapshot.
-pub(crate) fn close_committer(
-    tx: flume::Sender<CommitProtocol>,
-    handle: std::thread::JoinHandle<Snapshot>,
-) -> Snapshot {
-    tx.send(CommitProtocol::Close)
-        .expect("committer channel closed");
-    drop(tx);
-    handle.join().expect("committer panicked")
+    /// The version of the current world snapshot.
+    pub(crate) fn current_version(&self) -> Version {
+        self.snapshot.version()
+    }
 }
 
 #[cfg(test)]
@@ -296,7 +281,11 @@ mod tests {
     use tokio::{sync::Barrier, task::JoinSet};
 
     use super::*;
-    use crate::interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, stm::Transaction};
+    use crate::interpreter::{
+        lpc_int::LpcInt,
+        lpc_ref::LpcRef,
+        stm::{Transaction, tests::*},
+    };
 
     /// Start a transaction against the committer's current world and hand
     /// back the [`LiveSnapshot`] handle.
@@ -684,41 +673,6 @@ mod tests {
         assert_eq!(final_snapshot.read(var_id), Some(LpcRef::from(2)));
     }
 
-    /// Drive one Start/Commit through `process` on a live committer,
-    /// without a thread or runtime, then process the release the drop
-    /// enqueued - the run loop's role, in FIFO order.
-    fn drive(
-        committer: &mut Committer,
-        tx: &flume::Sender<CommitProtocol>,
-        rx: &flume::Receiver<CommitProtocol>,
-        f: impl FnOnce(&mut Transaction),
-    ) -> (Version, Result<(), Changeset>) {
-        let (reply_tx, reply_rx) = flume::bounded(1);
-        assert!(
-            committer.process(CommitProtocol::Start { reply: reply_tx }, tx),
-            "committer stopped unexpectedly"
-        );
-        let live = reply_rx.recv().expect("no reply from committer");
-        let mut transaction = Transaction::new(live.inner.clone());
-        f(&mut transaction);
-        let (world, changeset) = transaction.into_parts();
-        let base = world.version();
-        let (reply_tx, reply_rx) = flume::bounded(1);
-        committer.process(
-            CommitProtocol::Commit {
-                changeset,
-                reply: reply_tx,
-            },
-            tx,
-        );
-        let result = reply_rx.recv().expect("no reply from committer");
-        drop(live);
-        while let Ok(msg) = rx.try_recv() {
-            assert!(committer.process(msg, tx));
-        }
-        (base, result)
-    }
-
     /// Eviction follows the oldest live snapshot, and write history stays
     /// bounded.
     ///
@@ -735,7 +689,7 @@ mod tests {
         // 50 commits, each snapshot released right after its commit.
         // Without eviction, write_history would hold all 50 entries.
         for _ in 0..50 {
-            let (_base, result) = drive(&mut committer, &tx, &rx, |t| {
+            let (_base, result) = drive_txn(&mut committer, &tx, &rx, |t| {
                 t.write(cell, LpcRef::from(1));
             });
             assert!(result.is_ok());
@@ -748,14 +702,13 @@ mod tests {
         committer.process(CommitProtocol::Start { reply: reply_tx }, &tx);
         let live = reply_rx.recv().expect("no reply from committer");
         let pin_version = live.inner.version();
-        let (base, result) = drive(&mut committer, &tx, &rx, |t| t.write(cell, LpcRef::from(2)));
+        let (base, result) =
+            drive_txn(&mut committer, &tx, &rx, |t| t.write(cell, LpcRef::from(2)));
         assert!(result.is_ok());
         assert_eq!(base, pin_version);
         assert_eq!(committer.write_history.len(), 2);
         drop(live);
-        while let Ok(msg) = rx.try_recv() {
-            assert!(committer.process(msg, &tx));
-        }
+        pump(&mut committer, &tx, &rx);
 
         // All live snapshots released: the watermark returns to current.
         assert_eq!(committer.oldest_retained, committer.snapshot.version());
