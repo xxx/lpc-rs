@@ -33,6 +33,7 @@ impl CommitterStats {
 }
 
 /// Channel protocol for communication with [`Committer`]s.
+#[derive(Debug)]
 pub enum CommitProtocol {
     /// Start a transaction against the current world state.
     Start { reply: flume::Sender<LiveSnapshot> },
@@ -49,6 +50,7 @@ pub enum CommitProtocol {
 
 /// A snapshot the committer has handed out. Dropping it releases the
 /// version so write history below it can be evicted.
+#[derive(Debug)]
 pub(crate) struct LiveSnapshot {
     pub(crate) inner: Snapshot,
     release: flume::Sender<CommitProtocol>,
@@ -270,6 +272,30 @@ impl Committer {
     /// The version of the current world snapshot.
     pub(crate) fn current_version(&self) -> Version {
         self.snapshot.version()
+    }
+
+    /// Run the committer loop, rejecting the first `n` `Commit`s it
+    /// receives. The rejection is a synthetic abort with the same
+    /// `Err(changeset)` reply the conflict rule would send.
+    pub(crate) fn run_with_rejections(
+        mut self,
+        tx: flume::Sender<CommitProtocol>,
+        rx: flume::Receiver<CommitProtocol>,
+        rejections: usize,
+    ) -> Snapshot {
+        let mut rejections_left = rejections;
+        while let Ok(msg) = rx.recv() {
+            if rejections_left > 0 &&
+            let CommitProtocol::Commit { changeset, reply } = msg {
+                rejections_left -= 1;
+                let _ = reply.send(Err(changeset));
+                continue;
+            }
+            if !self.process(msg, &tx) {
+                break;
+            }
+        }
+        self.snapshot
     }
 }
 

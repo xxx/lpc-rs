@@ -2,14 +2,17 @@
 
 use std::sync::atomic::AtomicU64;
 
-use crate::interpreter::{
-    lpc_ref::LpcRef,
-    stm::{changeset::Changeset, snapshot::Snapshot},
-};
+use crate::interpreter::lpc_ref::LpcRef;
+
 mod changeset;
 mod committer;
 mod retry;
 mod snapshot;
+
+pub(crate) use changeset::Changeset;
+pub(crate) use committer::{CommitProtocol, Committer, LiveSnapshot};
+pub(crate) use retry::{RetryStats, commit_changeset, retry_async, start_txn};
+pub(crate) use snapshot::Snapshot;
 
 static VAR_ID_COUNT: AtomicU64 = AtomicU64::new(0);
 // Stable ID for transactional cells

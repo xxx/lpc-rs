@@ -2,7 +2,13 @@
 
 use std::time::{Duration, Instant};
 
-use crate::interpreter::stm::{Transaction, committer::CommitProtocol};
+use lpc_rs_errors::{Result, lpc_error};
+
+use crate::interpreter::stm::{
+    Transaction,
+    changeset::Changeset,
+    committer::{CommitProtocol, LiveSnapshot},
+};
 
 /// Per-attempt statistics, owned by the retry loop: the transaction already
 /// knows its read/write set sizes, so commit size is free, and conflict rate
@@ -56,6 +62,111 @@ pub(crate) fn retry<T>(
         if commit_result.is_ok() {
             return (
                 result,
+                RetryStats {
+                    attempts,
+                    conflicts,
+                    duration: started.elapsed(),
+                },
+            );
+        }
+        conflicts += 1;
+    }
+}
+
+/// Start a transaction against the committer's current world and hand back
+/// the release handle. The blocking `flume` recv runs off the runtime via
+/// `spawn_blocking`.
+pub(crate) async fn start_txn(tx: &flume::Sender<CommitProtocol>) -> Result<LiveSnapshot> {
+    let (reply_tx, reply_rx) = flume::bounded(1);
+    tx.send(CommitProtocol::Start { reply: reply_tx })
+        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
+    tokio::task::spawn_blocking(move || reply_rx.recv())
+        .await
+        .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
+            lpc_error!("committer reply task panicked: {e}")
+        })?
+        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
+}
+
+/// Commit a changeset and await the reply. `Ok(())` = committed;
+/// `Ok(Err(_))` = rejected (conflict).
+pub(crate) async fn commit_changeset(
+    tx: &flume::Sender<CommitProtocol>,
+    changeset: Changeset,
+) -> Result<std::result::Result<(), Changeset>> {
+    let (reply_tx, reply_rx) = flume::bounded(1);
+    tx.send(CommitProtocol::Commit {
+        changeset,
+        reply: reply_tx,
+    })
+    .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
+    tokio::task::spawn_blocking(move || reply_rx.recv())
+        .await
+        .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
+            lpc_error!("committer reply task panicked: {e}")
+        })?
+        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
+}
+
+/// Async mirror of [`retry`]: run `f` (one attempt) against a fresh
+/// transaction, commit it, and re-run `f` from scratch on each rejection
+/// until one commits.
+///
+/// `f` opens the attempt's transaction (via [`start_txn`]), does the work,
+/// and returns the `Transaction` plus the attempt's [`LiveSnapshot`]. The
+/// loop commits the changeset and releases the `LiveSnapshot` after
+/// the commit reply resolves.
+pub(crate) async fn retry_async<F, Fut>(
+    tx: &flume::Sender<CommitProtocol>,
+    mut f: F,
+) -> (Result<()>, RetryStats)
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<(Transaction, LiveSnapshot)>>,
+{
+    let started = Instant::now();
+    let mut attempts = 0u64;
+    let mut conflicts = 0u64;
+
+    loop {
+        attempts += 1;
+
+        let transaction = match f().await {
+            Ok(t) => t,
+            Err(e) => {
+                return (
+                    Err(e),
+                    RetryStats {
+                        attempts,
+                        conflicts,
+                        duration: started.elapsed(),
+                    },
+                );
+            }
+        };
+        let (live_txn, live) = transaction;
+        let (_world, changeset) = live_txn.into_parts();
+
+        let commit = match commit_changeset(tx, changeset).await {
+            Ok(c) => c,
+            Err(e) => {
+                drop(live);
+                return (
+                    Err(e),
+                    RetryStats {
+                        attempts,
+                        conflicts,
+                        duration: started.elapsed(),
+                    },
+                );
+            }
+        };
+        // Release the snapshot only after the commit reply has resolved.
+        drop(live);
+
+        if commit.is_ok() {
+            return (
+                Ok(()),
                 RetryStats {
                     attempts,
                     conflicts,
@@ -183,5 +294,96 @@ mod tests {
         );
         // the retry loop timed itself
         assert!(!total_duration.is_zero());
+    }
+}
+
+#[cfg(test)]
+mod async_tests {
+    use lpc_rs_core::LpcIntInner;
+
+    use super::*;
+    use crate::interpreter::{
+        lpc_int::LpcInt,
+        lpc_ref::LpcRef,
+        stm::{Changeset, CommitProtocol, Committer, Transaction, VarId},
+    };
+
+    fn seed(committer: &mut Committer, var: VarId, value: LpcIntInner) {
+        let mut seed = Changeset::new(committer.current_version());
+        seed.write(var, LpcRef::from(value));
+        committer.commit(seed).expect("seed should commit");
+    }
+
+    #[tokio::test]
+    async fn async_clean_attempt_commits_in_one_pass() {
+        let (tx, rx) = flume::bounded(4);
+        let mut committer = Committer::new();
+        let counter = VarId::new();
+        seed(&mut committer, counter, 5);
+        // The committer needs its own sender clone (its `LiveSnapshot`s use
+        // it for releases); keep `tx` so the test can still send `Close`.
+        // (Same pattern as B4's `committer.rs` async tests.)
+        let committer_tx = tx.clone();
+        let handle = std::thread::spawn(move || committer.run(committer_tx, rx));
+
+        let (res, stats) = retry_async(&tx, || async {
+            let live = start_txn(&tx).await?;
+            let mut t = Transaction::new(live.inner.clone());
+            let LpcRef::Int(n) = t.read(counter).expect("counter cell missing") else {
+                panic!("counter cell is not an int");
+            };
+            t.write(counter, LpcRef::from(n + LpcInt(1)));
+            Ok::<_, Box<lpc_rs_errors::LpcError>>((t, live))
+        })
+        .await;
+
+        assert!(res.is_ok());
+        assert_eq!(stats.attempts, 1);
+        assert_eq!(stats.conflicts, 0);
+
+        tx.send(CommitProtocol::Close)
+            .expect("committer channel closed");
+        drop(tx);
+        let final_snapshot = handle.join().expect("committer panicked");
+        assert_eq!(final_snapshot.read(counter), Some(LpcRef::from(6)));
+    }
+
+    #[tokio::test]
+    async fn async_rejection_reruns_until_commit() {
+        let (tx, rx) = flume::bounded(4);
+        let mut committer = Committer::new();
+        let counter = VarId::new();
+        seed(&mut committer, counter, 0);
+        let committer_tx = tx.clone(); // keep `tx` for the final `Close`
+        let handle = std::thread::spawn(move || {
+            // synthetic abort: reject the first commit
+            committer.run_with_rejections(committer_tx, rx, 1)
+        });
+
+        let (res, stats) = retry_async(&tx, || async {
+            let live = start_txn(&tx).await?;
+            let mut t = Transaction::new(live.inner.clone());
+            let LpcRef::Int(n) = t.read(counter).expect("counter cell missing") else {
+                panic!("counter cell is not an int");
+            };
+            t.write(counter, LpcRef::from(n + LpcInt(1)));
+            Ok::<_, Box<lpc_rs_errors::LpcError>>((t, live))
+        })
+        .await;
+
+        assert!(res.is_ok());
+        assert_eq!(
+            stats.attempts, 2,
+            "one forced rejection, then a clean commit"
+        );
+        assert_eq!(stats.conflicts, 1);
+        assert!(!stats.duration.is_zero());
+
+        tx.send(CommitProtocol::Close)
+            .expect("committer channel closed");
+        drop(tx);
+        let final_snapshot = handle.join().expect("committer panicked");
+        // the rejected attempt wrote nothing; the re-run incremented 0 -> 1
+        assert_eq!(final_snapshot.read(counter), Some(LpcRef::from(1)));
     }
 }

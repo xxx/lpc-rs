@@ -1,13 +1,13 @@
 //! Test-only support for the STM module: shared commit-protocol drivers
 //! ([`helpers`]) plus the tests themselves.
 
-mod soak;
 mod helpers;
+mod soak;
 
 // Re-export the shared drivers so sibling test modules can import them
 // with a single `use stm::tests::*`.
-use imbl::OrdMap;
 pub(crate) use helpers::*;
+use imbl::OrdMap;
 
 use crate::interpreter::{
     lpc_ref::LpcRef,
