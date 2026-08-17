@@ -4,7 +4,7 @@ use imbl::OrdMap;
 
 use crate::interpreter::{
     lpc_ref::LpcRef,
-    stm::{VarId, Version},
+    stm::{VarId, Version, changeset::Changeset},
 };
 
 #[derive(Debug, Clone)]
@@ -25,6 +25,15 @@ impl Snapshot {
 
     pub(crate) fn version(&self) -> Version {
         self.version
+    }
+
+    pub(crate) fn apply(&self, version: Version, changeset: Changeset) -> Self {
+        let mut state = self.state.clone();
+
+        for (var_id, lpc_ref) in changeset.into_writes() {
+            state.insert(var_id, lpc_ref);
+        }
+        Self::new(version, state)
     }
 }
 

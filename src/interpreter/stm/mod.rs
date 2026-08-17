@@ -7,6 +7,7 @@ use crate::interpreter::{
     stm::{changeset::Changeset, snapshot::Snapshot},
 };
 mod changeset;
+mod committer;
 mod snapshot;
 
 static VAR_ID_COUNT: AtomicU64 = AtomicU64::new(0);
@@ -46,7 +47,9 @@ impl Transaction {
         }
     }
 
-    pub(crate) fn read(&self, var_id: VarId) -> Option<LpcRef> {
+    pub(crate) fn read(&mut self, var_id: VarId) -> Option<LpcRef> {
+        self.changeset.track_read(var_id);
+
         self.changeset
             .read(var_id)
             .or_else(|| self.snapshot.read(var_id))
@@ -54,6 +57,11 @@ impl Transaction {
 
     pub(crate) fn write(&mut self, var_id: VarId, value: LpcRef) {
         self.changeset.write(var_id, value);
+    }
+
+    /// Dismantle the transaction into its snapshot and changeset for retries, etc.
+    pub(crate) fn into_parts(self) -> (Snapshot, Changeset) {
+        (self.snapshot, self.changeset)
     }
 }
 

@@ -1,6 +1,6 @@
 //! Tracking for writes accumulated over a transaction
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::interpreter::{
     lpc_ref::LpcRef,
@@ -11,6 +11,7 @@ use crate::interpreter::{
 pub(crate) struct Changeset {
     version: Version,
     writes: BTreeMap<VarId, LpcRef>,
+    reads: BTreeSet<VarId>,
 }
 
 impl Changeset {
@@ -18,19 +19,40 @@ impl Changeset {
         Self {
             version,
             writes: BTreeMap::new(),
+            reads: BTreeSet::new(),
         }
     }
 
+    /// Read a variable from the changeset.
     pub(crate) fn read(&self, var_id: VarId) -> Option<LpcRef> {
         self.writes.get(&var_id).cloned()
     }
 
+    /// Write a variable to the changeset.
     pub(crate) fn write(&mut self, var_id: VarId, value: LpcRef) {
         self.writes.insert(var_id, value);
     }
 
+    /// Track the read of a variable. Needed for conflict detection.
+    pub(crate) fn track_read(&mut self, var_id: VarId) {
+        self.reads.insert(var_id);
+    }
+
+    /// The version that was current when this changeset was created.
     pub(crate) fn base_version(&self) -> Version {
         self.version
+    }
+
+    pub(crate) fn read_set(&self) -> &BTreeSet<VarId> {
+        &self.reads
+    }
+
+    pub(crate) fn write_set(&self) -> BTreeSet<VarId> {
+        self.writes.keys().copied().collect()
+    }
+
+    pub(crate) fn into_writes(self) -> BTreeMap<VarId, LpcRef> {
+        self.writes
     }
 }
 
