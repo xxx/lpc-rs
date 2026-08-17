@@ -8,6 +8,7 @@ use crate::interpreter::{
 };
 mod changeset;
 mod committer;
+mod retry;
 mod snapshot;
 
 static VAR_ID_COUNT: AtomicU64 = AtomicU64::new(0);

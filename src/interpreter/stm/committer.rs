@@ -50,7 +50,7 @@ pub enum CommitProtocol {
 /// A snapshot the committer has handed out. Dropping it releases the
 /// version so write history below it can be evicted.
 pub(crate) struct LiveSnapshot {
-    inner: Snapshot,
+    pub(crate) inner: Snapshot,
     release: flume::Sender<CommitProtocol>,
 }
 
@@ -244,6 +244,48 @@ impl Committer {
 
         Ok(())
     }
+}
+
+// Test-only channel driver, shared with `retry::tests`.
+
+/// Spawn the committer thread on a bounded channel. Returns the
+/// protocol sender, the initial world version, and the committer handle.
+pub(crate) fn start_committer() -> (
+    flume::Sender<CommitProtocol>,
+    Version,
+    std::thread::JoinHandle<Snapshot>,
+) {
+    let (tx, rx) = flume::bounded(4);
+    let committer = Committer::new();
+    let version = committer.snapshot.version();
+    let committer_tx = tx.clone();
+    let handle = std::thread::spawn(move || committer.run(committer_tx, rx));
+    (tx, version, handle)
+}
+
+/// Commit `changeset` and block for the reply.
+pub(crate) fn send_commit(
+    tx: &flume::Sender<CommitProtocol>,
+    changeset: Changeset,
+) -> Result<(), Changeset> {
+    let (reply_tx, reply_rx) = flume::bounded(1);
+    tx.send(CommitProtocol::Commit {
+        changeset,
+        reply: reply_tx,
+    })
+    .expect("committer channel closed");
+    reply_rx.recv().expect("no reply from committer")
+}
+
+/// Settle the channel and take the committer's final snapshot.
+pub(crate) fn close_committer(
+    tx: flume::Sender<CommitProtocol>,
+    handle: std::thread::JoinHandle<Snapshot>,
+) -> Snapshot {
+    tx.send(CommitProtocol::Close)
+        .expect("committer channel closed");
+    drop(tx);
+    handle.join().expect("committer panicked")
 }
 
 #[cfg(test)]
