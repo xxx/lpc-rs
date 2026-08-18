@@ -52,11 +52,11 @@ where
     if let Some(timeout) = timeout {
         task.timed_eval(f, args, timeout)
             .await
-            .map(|_| task.result().cloned().unwrap())
+            .map(|_| task.result().unwrap())
     } else {
         task.eval(f, args)
             .await
-            .map(|_| task.result().cloned().unwrap())
+            .map(|_| task.result().unwrap())
     }
 }
 

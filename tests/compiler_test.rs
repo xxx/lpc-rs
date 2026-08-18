@@ -211,7 +211,7 @@ async fn test_positional_vars_into_argv() {
 
     let task = run_prog(code).await;
     let ctx = task.context;
-    assert_eq!(&LpcRef::Int(LpcInt(777)), ctx.result().unwrap());
+    assert_eq!(LpcRef::Int(LpcInt(777)), ctx.result().unwrap());
 }
 
 #[tokio::test]

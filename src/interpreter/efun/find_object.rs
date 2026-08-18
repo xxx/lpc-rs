@@ -133,7 +133,7 @@ mod tests {
             .await
             .expect("task failed");
 
-        assert_eq!(task.result().unwrap(), &NULL);
+        assert_eq!(task.result().unwrap(), NULL);
     }
 
     #[tokio::test]

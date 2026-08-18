@@ -6,7 +6,6 @@ use derive_builder::Builder;
 use lpc_rs_core::register::Register;
 use lpc_rs_errors::{Result, lpc_bug};
 use lpc_rs_utils::config::Config;
-use once_cell::sync::OnceCell;
 use thin_vec::ThinVec;
 use tokio::sync::mpsc::Sender;
 
@@ -29,6 +28,50 @@ use crate::{
     },
 };
 
+/// The task's final result, resettable between retry attempts.
+#[derive(Debug)]
+pub struct TaskResult {
+    inner: std::sync::Mutex<Option<LpcRef>>,
+}
+
+impl TaskResult {
+    pub fn new() -> Self {
+        Self { inner: std::sync::Mutex::new(None) }
+    }
+
+    /// Set the result.
+    pub fn set(&self, new_result: LpcRef) -> Result<()> {
+        let mut g = self.inner.lock().unwrap();
+        if g.is_some() {
+            return Err(lpc_bug!("TaskResult::set result already set"));
+        }
+        *g = Some(new_result);
+        Ok(())
+    }
+
+    /// Return a clone of the stored result. `LpcRef` is cheap to clone
+    /// (small ints, or `Arc`/`Weak` payloads) and avoids borrow-checker handling
+    /// on the hot path.
+    pub fn get(&self) -> Option<LpcRef> {
+        self.inner.lock().unwrap().clone()
+    }
+
+    pub fn into_inner(self) -> Option<LpcRef> {
+        self.inner.into_inner().unwrap()
+    }
+
+    /// Clear the result (for a retry re-run).
+    pub fn reset(&self) {
+        *self.inner.lock().unwrap() = None;
+    }
+}
+
+impl Default for TaskResult {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// A struct to carry context during the evaluation of a single [`Task`](crate::interpreter::task::Task).
 #[derive(Debug, Builder)]
 #[builder(pattern = "owned")]
@@ -48,9 +91,9 @@ pub struct TaskContext {
     #[builder(default, setter(strip_option))]
     pub simul_efuns: Option<Arc<Process>>,
 
-    /// The final result of the original function that was called
+    /// The final result of the original function that was called.
     #[builder(default)]
-    pub result: OnceCell<LpcRef>,
+    pub result: TaskResult,
 
     /// The command giver, if there was one. This might be an NPC, or None.
     // TODO: put this into an Arc so it can shared more easily between multiple contexts.
@@ -84,7 +127,7 @@ impl TaskContext {
         Self {
             global_state,
             process: process.into(),
-            result: OnceCell::new(),
+            result: TaskResult::new(),
             simul_efuns,
             this_player: ArcSwapAny::from(this_player),
             upvalue_ptrs,
@@ -102,7 +145,7 @@ impl TaskContext {
         Self {
             global_state: template.global_state,
             process,
-            result: OnceCell::new(),
+            result: TaskResult::new(),
             simul_efuns,
             this_player: template.this_player,
             upvalue_ptrs: template.upvalue_ptrs,
@@ -177,9 +220,7 @@ impl TaskContext {
     /// Update the context's `result` with the passed [`LpcRef`]
     #[inline]
     pub fn set_result(&self, new_result: LpcRef) -> Result<()> {
-        self.result
-            .set(new_result)
-            .map_err(|_| lpc_bug!("TaskContext::set_result result already set"))
+        self.result.set(new_result)
     }
 
     /// Consume this context, and return its `result` field.
@@ -213,10 +254,17 @@ impl TaskContext {
         &self.global_state.object_space
     }
 
-    /// Get the final result of the Task that this context is for, if it's finished.
+    /// Get the final result of the Task that this context is for, if it's
+    /// finished. Returns an owned clone (see [`TaskResult::get`]).
     #[inline]
-    pub fn result(&self) -> Option<&LpcRef> {
+    pub fn result(&self) -> Option<LpcRef> {
         self.result.get()
+    }
+
+    /// Clear the result so a retry re-run can record a fresh one.
+    #[inline]
+    pub fn reset(&self) {
+        self.result.reset()
     }
 
     /// Get the `tx` channel for this task
@@ -263,7 +311,7 @@ impl Clone for TaskContext {
         Self {
             global_state: self.global_state.clone(),
             process: self.process.clone(),
-            result: OnceCell::new(),
+            result: TaskResult::new(),
             simul_efuns: self.simul_efuns.clone(),
             this_player: ArcSwapAny::from(self.this_player.load_full()),
             upvalue_ptrs: self.upvalue_ptrs.clone(),
@@ -348,7 +396,45 @@ mod tests {
     use tokio::sync::mpsc;
 
     use super::*;
-    use crate::{interpreter::program::ProgramBuilder, test_support::test_config};
+    use crate::{
+        interpreter::{lpc_ref::LpcRef, program::ProgramBuilder},
+        test_support::test_config,
+    };
+
+    fn result_test_ctx() -> TaskContext {
+        let program = ProgramBuilder::default()
+            .filename(LpcPath::new_server("./tests/fixtures/code/foo/bar/baz.c"))
+            .build()
+            .unwrap();
+        let process = Process::new(program);
+        let (tx, _rx) = mpsc::channel(100);
+        let global_state = GlobalState::new(test_config(), tx);
+        TaskContextBuilder::default()
+            .global_state(global_state)
+            .process(process)
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn result_set_get_reset_cycle() {
+        let c = result_test_ctx();
+        assert!(c.result().is_none());
+        c.set_result(LpcRef::from(7i64)).unwrap();
+        assert_eq!(c.result(), Some(LpcRef::from(7i64)));
+        c.reset();
+        assert!(c.result().is_none());
+        c.set_result(LpcRef::from(8i64)).unwrap();
+        assert_eq!(c.result(), Some(LpcRef::from(8i64)));
+    }
+
+    #[test]
+    #[should_panic(expected = "already set")]
+    fn result_double_set_is_a_bug() {
+        let c = result_test_ctx();
+        c.set_result(LpcRef::from(1i64)).unwrap();
+        c.set_result(LpcRef::from(2i64)).unwrap();
+    }
 
     #[test]
     fn test_in_game_cwd() {

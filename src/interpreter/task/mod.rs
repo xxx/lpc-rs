@@ -31,6 +31,7 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
+use parking_lot::RwLock;
 use string_interner::{DefaultSymbol, Symbol};
 use thin_vec::{ThinVec, thin_vec};
 use tokio::{task::JoinHandle, time::timeout};
@@ -39,7 +40,7 @@ use tracing::{error, instrument, warn};
 use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,
-    gc::mark::Mark,
+    gc::{gc_bank::GcRefBank, mark::Mark},
     gil::run_with_gil,
     lpc_int::LpcInt,
     lpc_ref::LpcRef,
@@ -82,6 +83,37 @@ struct CatchPoint {
 
     /// The register to put the error in, within the above [`StackFrame`]
     register: RegisterVariant,
+}
+
+/// The inputs needed to (re)start a task's entry call, hoisted out of the
+/// `CallStack` so a rejected commit can rebuild the task from scratch.
+#[derive(Debug, Clone)]
+pub struct TaskSeed {
+    pub process: Arc<Process>,
+    pub function: Arc<ProgramFunction>,
+    pub args: Vec<LpcRef>,
+}
+
+impl TaskSeed {
+    /// Build the entry [`CallFrame`] for one attempt, copying `self.args`
+    /// into the frame's registers exactly as `prepare_function_call` does.
+    pub fn build_frame(
+        &self,
+        upvalue_ptrs: Option<&[Register]>,
+        vm_upvalues: Arc<RwLock<GcRefBank>>,
+    ) -> Result<CallFrame> {
+        let mut frame = CallFrame::new(
+            self.process.clone(),
+            self.function.clone(),
+            RegisterSize::try_from(self.args.len())?,
+            upvalue_ptrs,
+            vm_upvalues,
+        );
+        if !self.args.is_empty() {
+            frame.registers[1..=self.args.len()].clone_from_slice(&self.args);
+        }
+        Ok(frame)
+    }
 }
 
 /// An abstraction to allow for isolated running to completion of a specified
@@ -147,6 +179,22 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             #[cfg(test)]
             snapshots: thin_vec![],
+        }
+    }
+
+    /// Rebuild the task to a blank slate for a retry re-run
+    fn reset(&mut self) {
+        self.stack = CallStack::default();
+        self.catch_points.clear();
+        self.args.clear();
+        self.partial_args.clear();
+        self.array_items.clear();
+        self.context.reset();
+        self.state = TaskState::New;
+
+        #[cfg(test)]
+        {
+            self.popped_frame = None;
         }
     }
 
@@ -487,7 +535,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     #[inline]
-    pub fn result(&self) -> Option<&LpcRef> {
+    pub fn result(&self) -> Option<LpcRef> {
         self.context.result()
     }
 }

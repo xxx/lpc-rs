@@ -84,6 +84,6 @@ mod tests {
                 .unwrap();
 
         let result = task.result().unwrap();
-        assert_eq!(result, &LpcRef::Int(LpcInt(1)));
+        assert_eq!(result, LpcRef::Int(LpcInt(1)));
     }
 }

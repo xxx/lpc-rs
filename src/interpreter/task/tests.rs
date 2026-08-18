@@ -2072,7 +2072,7 @@ mod test_instructions {
 
             let task = run_prog(code).await;
             let ctx = task.context;
-            BareVal::Array(vec![]).assert_equal(ctx.result().unwrap());
+            BareVal::Array(vec![]).assert_equal(&ctx.result().unwrap());
         }
     }
 
