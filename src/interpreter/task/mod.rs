@@ -35,7 +35,7 @@ use parking_lot::RwLock;
 use string_interner::{DefaultSymbol, Symbol};
 use thin_vec::{ThinVec, thin_vec};
 use tokio::{task::JoinHandle, time::timeout};
-use tracing::{error, instrument, warn};
+use tracing::{error, instrument, trace, warn};
 
 use crate::interpreter::{
     call_frame::CallFrame,
@@ -48,6 +48,9 @@ use crate::interpreter::{
     object_flags::ObjectFlags,
     process::Process,
     program::Program,
+    stm::{
+        commit_changeset, start_txn, CommitProtocol, LiveSnapshot, RetryStats, Transaction,
+    },
     task::{task_id::TaskId, task_state::TaskState},
     task_context::TaskContext,
     vm::global_state::GlobalState,
@@ -97,7 +100,7 @@ pub struct TaskSeed {
 impl TaskSeed {
     /// Build the entry [`CallFrame`] for one attempt, copying `self.args`
     /// into the frame's registers exactly as `prepare_function_call` does.
-    pub fn build_frame(
+    pub fn build_call_frame(
         &self,
         upvalue_ptrs: Option<&[Register]>,
         vm_upvalues: Arc<RwLock<GcRefBank>>,
@@ -276,37 +279,147 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         })
     }
 
+    /// Run one attempt: open a transaction against the current world,
+    /// reset the task to a blank slate, build the entry frame from `seed`,
+    /// and run to completion inside one GIL scope (and one timeout, if
+    /// given).
+    async fn attempt(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+        seed: &TaskSeed,
+        timeout_ms: Option<u64>,
+    ) -> Result<(Transaction, LiveSnapshot)> {
+        let live = start_txn(tx).await?;
+
+        self.reset();
+
+        let frame = seed.build_call_frame(
+            self.context.upvalue_ptrs.as_deref(),
+            self.context.global_state.clone_upvalues(),
+        )?;
+        self.stack.push(frame)?;
+
+        // One GIL scope (and one timeout, if any) per attempt.
+        let state = self.context.global_state.clone();
+        let outcome: std::result::Result<
+            Result<()>,
+            tokio::time::error::Elapsed,
+        > = match timeout_ms {
+            Some(ms) => run_with_gil(
+                &state,
+                timeout(Duration::from_millis(ms), self.resume()),
+            )
+            .await,
+            None => Ok(self.resume().await),
+        };
+        let run_result = match outcome {
+            Ok(run) => run,
+            Err(_) => {
+                return Err(lpc_error!(
+                    "evaluation limit of {}ms has been reached",
+                    timeout_ms.unwrap_or(0)
+                ))
+            }
+        };
+
+        if let Err(e) = run_result {
+            // A failed run holds nothing the committer needs.
+            drop(live);
+            return Err(e);
+        }
+
+        let txn = Transaction::new(live.inner.clone());
+        Ok((txn, live))
+    }
+
+    /// Retry loop: run attempts against the committer until one
+    /// commits. A rejected commit re-runs from the seed. Returns the result
+    /// plus per-loop stats.
+    ///
+    /// Inlined rather than built on `retry_async`: the attempt's future
+    /// borrows `&mut self`, which cannot be returned out of the `FnMut`
+    /// closure `retry_async` takes (self-referential future). Same loop
+    /// shape as `retry_async`; only one loop in the task path.
+    async fn retry_loop(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+        seed: &TaskSeed,
+        timeout_ms: Option<u64>,
+    ) -> (Result<()>, RetryStats) {
+        let started = std::time::Instant::now();
+        let mut attempts = 0u64;
+        let mut conflicts = 0u64;
+
+        loop {
+            attempts += 1;
+
+            let (transaction, live) = match self.attempt(tx, seed, timeout_ms).await {
+                Ok(t) => t,
+                Err(e) => {
+                    return (
+                        Err(e),
+                        RetryStats {
+                            attempts,
+                            conflicts,
+                            duration: started.elapsed(),
+                        },
+                    );
+                }
+            };
+            let (_world, changeset) = transaction.into_parts();
+
+            let commit = match commit_changeset(tx, changeset).await {
+                Ok(c) => c,
+                Err(e) => {
+                    drop(live);
+                    return (
+                        Err(e),
+                        RetryStats {
+                            attempts,
+                            conflicts,
+                            duration: started.elapsed(),
+                        },
+                    );
+                }
+            };
+            // Release the snapshot only after the commit reply has resolved.
+            drop(live);
+
+            if commit.is_ok() {
+                return (
+                    Ok(()),
+                    RetryStats {
+                        attempts,
+                        conflicts,
+                        duration: started.elapsed(),
+                    },
+                );
+            }
+            conflicts += 1;
+        }
+    }
+
     /// Evaluate `f` to completion, or an error. No timeouts are applied.
-    ///
-    /// # Arguments
-    /// `f` - the function to call
-    /// `args` - the slice of arguments to pass to the function
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` if successful, or an [`LpcError`] if not
     #[instrument(skip_all)]
     #[async_recursion]
     pub async fn eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef]) -> Result<()> {
-        let process = self.context.process().clone();
-
-        let state_clone = self.context.global_state.clone();
-        run_with_gil(&state_clone, self.eval_function(process, f, args)).await
-        // run_with_gil(&self.context.global_state, async move {
-        //     self.eval_function(process, f, args).await
-        // })
-        // self.eval_function(process, f, args).await
+        let seed = TaskSeed {
+            process: self.context.process().clone(),
+            function: f,
+            args: args.to_vec(),
+        };
+        let tx = self.context.global_state.committer_tx.clone();
+        let (res, stats) = self.retry_loop(&tx, &seed, None).await;
+        trace!(
+            attempts = stats.attempts,
+            conflicts = stats.conflicts,
+            ?stats.duration,
+            "task eval finished"
+        );
+        res
     }
 
     /// Evaluate `f` to completion, or an error, with a timeout.
-    ///
-    /// # Arguments
-    /// `f` - the function to call
-    /// `args` - the slice of arguments to pass to the function
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` if successful, or an [`LpcError`] if not
     #[instrument(skip_all)]
     #[async_recursion]
     pub async fn timed_eval(
@@ -318,39 +431,23 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         if timeout_ms == 0 {
             return self.eval(f, args).await;
         }
-
-        let process = self.context.process().clone();
-
-        let state_clone = self.context.global_state.clone();
-        let result = run_with_gil(
-            &state_clone,
-            timeout(
-                Duration::from_millis(timeout_ms),
-                self.eval_function(process, f, args),
-            ),
-        )
-        .await;
-
-        match result {
-            Ok(Ok(_)) => Ok(()),
-            Ok(Err(e)) => Err(e),
-            Err(_) => Err(lpc_error!(
-                "evaluation limit of {}ms has been reached",
-                timeout_ms
-            )),
-        }
+        let seed = TaskSeed {
+            process: self.context.process().clone(),
+            function: f,
+            args: args.to_vec(),
+        };
+        let tx = self.context.global_state.committer_tx.clone();
+        let (res, stats) = self.retry_loop(&tx, &seed, Some(timeout_ms)).await;
+        trace!(
+            attempts = stats.attempts,
+            conflicts = stats.conflicts,
+            ?stats.duration,
+            "task timed_eval finished"
+        );
+        res
     }
 
     /// Evaluate `f` to completion, or an error, in the context of an arbitrary process
-    ///
-    /// # Arguments
-    /// `process`: the process that owns the function to call.
-    /// `f` - the function to call
-    /// `args` - the slice of arguments to pass to the function
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` if successful, or an [`LpcError`] if not
     #[async_recursion]
     pub async fn eval_function(
         &mut self,
@@ -538,6 +635,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub fn result(&self) -> Option<LpcRef> {
         self.context.result()
     }
+
+    /// `#[cfg(test)]` entry point: run against an explicit committer (used by
+    /// the synthetic-abort test to inject a rejection) and return the stats.
+    /// `pub(crate)`: only the crate's own tests call it, and `RetryStats` is
+    /// `pub(crate)`, so a `pub` item would leak a more-private type.
+    #[cfg(test)]
+    pub(crate) async fn eval_with_committer(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+        seed: &TaskSeed,
+    ) -> (Result<()>, RetryStats) {
+        self.retry_loop(tx, seed, None).await
+    }
 }
 
 impl<const STACKSIZE: usize> Mark for Task<STACKSIZE> {
@@ -551,3 +661,96 @@ impl<const STACKSIZE: usize> Mark for Task<STACKSIZE> {
 //         self.context.process.lock.try_release(self.id);
 //     }
 // }
+
+#[cfg(test)]
+mod stm_retry_tests {
+    use indoc::indoc;
+
+    use super::*;
+    use crate::{
+        compile_time_config::MAX_CALL_STACK_SIZE,
+        interpreter::{
+            lpc_int::LpcInt,
+            stm::{CommitProtocol, Committer},
+        },
+        test_support::run_prog,
+    };
+
+    /// Run the program's `foo()` through the retry loop against `tx`.
+    async fn eval_foo(
+        task: &mut Task<MAX_CALL_STACK_SIZE>,
+        tx: &flume::Sender<CommitProtocol>,
+    ) -> (Result<()>, RetryStats) {
+        let process = task.context.process().clone();
+        let f = process
+            .program
+            .unmangled_functions
+            .get("foo")
+            .cloned()
+            .expect("program should define foo()");
+        let seed = TaskSeed {
+            process,
+            function: f,
+            args: Vec::new(),
+        };
+        task.eval_with_committer(tx, &seed).await
+    }
+
+    const CODE: &str = indoc! { r##"
+            int foo() { return 10; }
+        "##};
+
+    macro_rules! assert_result_is_ten {
+        ($task:expr) => {
+            let LpcRef::Int(LpcInt(v)) =
+                $task.result().expect("result should be set") else {
+                    panic!("result is not an int");
+                };
+            assert_eq!(v, 10, "foo() must return 10");
+        };
+    }
+
+    #[tokio::test]
+    async fn clean_run_commits_in_one_attempt() {
+        let mut task = run_prog(CODE).await;
+        let (tx, rx) = flume::bounded(4);
+        let committer_tx = tx.clone(); // keep `tx` for the final `Close`
+        let handle = std::thread::spawn(move || Committer::new().run(committer_tx, rx));
+
+        let (res, stats) = eval_foo(&mut task, &tx).await;
+        assert!(res.is_ok());
+        assert_eq!(stats.attempts, 1);
+        assert_eq!(stats.conflicts, 0);
+        assert_result_is_ten!(task);
+
+        tx.send(CommitProtocol::Close).expect("committer channel closed");
+        drop(tx);
+        let _ = handle.join();
+    }
+
+    #[tokio::test]
+    async fn task_reruns_to_same_result_after_synthetic_abort() {
+        let mut task = run_prog(CODE).await;
+        // A committer that rejects the FIRST commit: the task's only commit
+        // in a clean run. With the transaction empty, the rejection can only
+        // come from this hook, so the test isolates the re-run path.
+        let (tx, rx) = flume::bounded(4);
+        let committer_tx = tx.clone(); // keep `tx` for the final `Close`
+        let handle = std::thread::spawn(move || {
+            let committer = Committer::new();
+            committer.run_with_rejections(committer_tx, rx, 1)
+        });
+
+        let (res, stats) = eval_foo(&mut task, &tx).await;
+        assert!(res.is_ok());
+        assert_eq!(stats.attempts, 2, "first commit rejected, re-run commits");
+        assert_eq!(stats.conflicts, 1);
+        // The load-bearing assertion: the re-run from the seed produced the
+        // same result as a clean run (see clean_run_commits_in_one_attempt).
+        assert_result_is_ten!(task);
+
+        tx.send(CommitProtocol::Close).expect("committer channel closed");
+        drop(tx);
+        let _ = handle.join();
+    }
+}

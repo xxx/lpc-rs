@@ -102,7 +102,11 @@ mod tests {
             lpc_ref::{LpcRef, NULL},
             program::Program,
             task_context::{TaskContext, TaskContextBuilder},
-            vm::{Vm, global_state::GlobalStateBuilder, vm_op::VmOp},
+            vm::{
+                Vm,
+                global_state::{GlobalState, GlobalStateBuilder},
+                vm_op::VmOp,
+            },
         },
         test_support::{compile_prog, test_config},
         util::process_builder::{ProcessCreator, ProcessInitializer},
@@ -114,9 +118,12 @@ mod tests {
         tx: tokio::sync::mpsc::Sender<VmOp>,
     ) -> TaskContext {
         let process = Process::new(program);
+        let (committer_tx, committer_handle) = GlobalState::spawn_committer();
         let global_state = GlobalStateBuilder::default()
             .config(config)
             .tx(tx)
+            .committer_tx(committer_tx)
+            .committer_handle(Some(committer_handle))
             .build()
             .unwrap();
 

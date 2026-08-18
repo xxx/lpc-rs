@@ -83,7 +83,7 @@ pub(crate) async fn start_txn(tx: &flume::Sender<CommitProtocol>) -> Result<Live
     tokio::task::spawn_blocking(move || reply_rx.recv())
         .await
         .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
-            lpc_error!("committer reply task panicked: {e}")
+            lpc_error!("committer reply task panicked: {}", e)
         })?
         .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
 }
@@ -103,7 +103,7 @@ pub(crate) async fn commit_changeset(
     tokio::task::spawn_blocking(move || reply_rx.recv())
         .await
         .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
-            lpc_error!("committer reply task panicked: {e}")
+            lpc_error!("committer reply task panicked: {}", e)
         })?
         .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
 }

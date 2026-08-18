@@ -198,6 +198,11 @@ impl Vm {
             }
         }
 
+        // Stop the STM committer deterministically as the VM winds down,
+        // after the master's shutdown hook has run. GlobalState's Drop will also
+        // close + join; this just makes the ordering explicit.
+        self.global_state.close_committer();
+
         self.connection_broker.disconnect_users();
 
         Ok(())
