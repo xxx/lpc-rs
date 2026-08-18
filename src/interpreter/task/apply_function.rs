@@ -54,9 +54,7 @@ where
             .await
             .map(|_| task.result().unwrap())
     } else {
-        task.eval(f, args)
-            .await
-            .map(|_| task.result().unwrap())
+        task.eval(f, args).await.map(|_| task.result().unwrap())
     }
 }
 

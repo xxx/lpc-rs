@@ -48,9 +48,7 @@ use crate::interpreter::{
     object_flags::ObjectFlags,
     process::Process,
     program::Program,
-    stm::{
-        commit_changeset, start_txn, CommitProtocol, LiveSnapshot, RetryStats, Transaction,
-    },
+    stm::{CommitProtocol, LiveSnapshot, RetryStats, Transaction, commit_changeset, start_txn},
     task::{task_id::TaskId, task_state::TaskState},
     task_context::TaskContext,
     vm::global_state::GlobalState,
@@ -301,15 +299,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         // One GIL scope (and one timeout, if any) per attempt.
         let state = self.context.global_state.clone();
-        let outcome: std::result::Result<
-            Result<()>,
-            tokio::time::error::Elapsed,
-        > = match timeout_ms {
-            Some(ms) => run_with_gil(
-                &state,
-                timeout(Duration::from_millis(ms), self.resume()),
-            )
-            .await,
+        let outcome: std::result::Result<Result<()>, tokio::time::error::Elapsed> = match timeout_ms
+        {
+            Some(ms) => {
+                run_with_gil(&state, timeout(Duration::from_millis(ms), self.resume())).await
+            }
             None => Ok(self.resume().await),
         };
         let run_result = match outcome {
@@ -318,7 +312,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 return Err(lpc_error!(
                     "evaluation limit of {}ms has been reached",
                     timeout_ms.unwrap_or(0)
-                ))
+                ));
             }
         };
 
@@ -401,22 +395,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// Evaluate `f` to completion, or an error. No timeouts are applied.
     #[instrument(skip_all)]
-    #[async_recursion]
     pub async fn eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef]) -> Result<()> {
-        let seed = TaskSeed {
-            process: self.context.process().clone(),
-            function: f,
-            args: args.to_vec(),
-        };
-        let tx = self.context.global_state.committer_tx.clone();
-        let (res, stats) = self.retry_loop(&tx, &seed, None).await;
-        trace!(
-            attempts = stats.attempts,
-            conflicts = stats.conflicts,
-            ?stats.duration,
-            "task eval finished"
-        );
-        res
+        self.timed_eval(f, args, 0).await
     }
 
     /// Evaluate `f` to completion, or an error, with a timeout.
@@ -428,16 +408,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         args: &[LpcRef],
         timeout_ms: u64,
     ) -> Result<()> {
-        if timeout_ms == 0 {
-            return self.eval(f, args).await;
-        }
+        let loop_timeout = {
+            if timeout_ms == 0 {
+                None
+            } else {
+                Some(timeout_ms)
+            }
+        };
         let seed = TaskSeed {
             process: self.context.process().clone(),
             function: f,
             args: args.to_vec(),
         };
         let tx = self.context.global_state.committer_tx.clone();
-        let (res, stats) = self.retry_loop(&tx, &seed, Some(timeout_ms)).await;
+        let (res, stats) = self.retry_loop(&tx, &seed, loop_timeout).await;
         trace!(
             attempts = stats.attempts,
             conflicts = stats.conflicts,
@@ -702,10 +686,9 @@ mod stm_retry_tests {
 
     macro_rules! assert_result_is_ten {
         ($task:expr) => {
-            let LpcRef::Int(LpcInt(v)) =
-                $task.result().expect("result should be set") else {
-                    panic!("result is not an int");
-                };
+            let LpcRef::Int(LpcInt(v)) = $task.result().expect("result should be set") else {
+                panic!("result is not an int");
+            };
             assert_eq!(v, 10, "foo() must return 10");
         };
     }
@@ -723,7 +706,8 @@ mod stm_retry_tests {
         assert_eq!(stats.conflicts, 0);
         assert_result_is_ten!(task);
 
-        tx.send(CommitProtocol::Close).expect("committer channel closed");
+        tx.send(CommitProtocol::Close)
+            .expect("committer channel closed");
         drop(tx);
         let _ = handle.join();
     }
@@ -749,7 +733,8 @@ mod stm_retry_tests {
         // same result as a clean run (see clean_run_commits_in_one_attempt).
         assert_result_is_ten!(task);
 
-        tx.send(CommitProtocol::Close).expect("committer channel closed");
+        tx.send(CommitProtocol::Close)
+            .expect("committer channel closed");
         drop(tx);
         let _ = handle.join();
     }

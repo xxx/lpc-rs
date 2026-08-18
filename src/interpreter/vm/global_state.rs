@@ -1,7 +1,4 @@
-use std::{
-    sync::Arc,
-    thread::JoinHandle,
-};
+use std::{sync::Arc, thread::JoinHandle};
 
 use bit_set::BitSet;
 use derive_builder::Builder;
@@ -176,7 +173,7 @@ mod tests {
             let gs = Arc::new(GlobalState::new(test_config(), tx));
             probe = gs.committer_tx.clone();
         } // last Arc released here -> GlobalState::drop sends Close + joins.
-         // If the join ever blocked, this test would hang.
+        // If the join ever blocked, this test would hang.
         assert!(
             probe.is_disconnected(),
             "committer channel should be closed after the committer exited"

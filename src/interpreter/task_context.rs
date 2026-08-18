@@ -36,7 +36,9 @@ pub struct TaskResult {
 
 impl TaskResult {
     pub fn new() -> Self {
-        Self { inner: std::sync::Mutex::new(None) }
+        Self {
+            inner: std::sync::Mutex::new(None),
+        }
     }
 
     /// Set the result.

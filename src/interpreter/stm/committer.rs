@@ -285,8 +285,9 @@ impl Committer {
     ) -> Snapshot {
         let mut rejections_left = rejections;
         while let Ok(msg) = rx.recv() {
-            if rejections_left > 0 &&
-            let CommitProtocol::Commit { changeset, reply } = msg {
+            if rejections_left > 0
+                && let CommitProtocol::Commit { changeset, reply } = msg
+            {
                 rejections_left -= 1;
                 let _ = reply.send(Err(changeset));
                 continue;
