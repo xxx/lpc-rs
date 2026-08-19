@@ -2614,7 +2614,7 @@ mod test_upvalues {
         let expected: Vec<BareVal> = upvalues.iter().map(|i| i.clone().into()).collect();
 
         // The frame's upvalue cells hold transactional identities, not the
-        // values themselves (C6): each slot is a `VarId` whose committed
+        // values themselves: each slot is a `VarId` whose committed
         // value is read through the frame's transaction. Slot order still
         // matches upvalue-creation order, so the original position-based
         // assertions apply to the committed reads.
@@ -3004,7 +3004,7 @@ mod test_gc {
         let mut processed = BitSet::new();
         task.mark(&mut marked, &mut processed).unwrap();
         // Sweep through the GlobalState, which also tells the committer to
-        // forget each culled cell's transactional identity (C6).
+        // forget each culled cell's transactional identity.
         ctx.global_state.sweep(&marked).unwrap();
         ctx.global_state.with_upvalues(|uv| {
             assert_eq!(uv.len(), 0);

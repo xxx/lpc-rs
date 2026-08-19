@@ -36,8 +36,7 @@ pub struct EfunContext<'task, const N: usize> {
     task_id: TaskId,
     stack: &'task mut CallStack<N>,
     task_context: &'task TaskContext,
-    /// The caller task's transaction (C6: efuns read/write globals
-    /// through it).
+    /// The caller task's transaction
     txn: TxnHandle,
 
     /// Allow the user to take a snapshot of the callstack, for testing and

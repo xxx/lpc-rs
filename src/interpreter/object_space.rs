@@ -125,6 +125,8 @@ impl ObjectSpace {
     }
 
     /// Remove the passed [`Process`] from the space.
+    /// the removed process's global `VarId`s keep their
+    /// committed values in the committer world (no `DropVar` for globals);
     pub fn remove_process<P>(object_space: &Arc<Self>, process: P)
     where
         P: Into<Arc<Process>>,

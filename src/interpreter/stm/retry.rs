@@ -1,4 +1,4 @@
-//! D4: unbounded internal re-run of a transaction until it commits.
+//! unbounded internal re-run of a transaction until it commits.
 
 use std::{
     sync::Arc,
@@ -117,8 +117,11 @@ pub(crate) async fn commit_changeset(
         .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
 }
 
-/// Query the committed value of a var (async wrapper over [`CommitProtocol::Query`]).
-/// Absent vars read back as `NULL`.
+/// Query the committed value of a var (async wrapper over
+/// [`CommitProtocol::Query`]). Absent vars read back as `NULL`.
+/// Test-only: production committed reads go through
+/// [`CommittedReader::committed_global`].
+#[cfg(test)]
 pub(crate) async fn query_var(
     tx: &flume::Sender<CommitProtocol>,
     var_id: crate::interpreter::stm::VarId,

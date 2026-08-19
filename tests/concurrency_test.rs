@@ -196,7 +196,7 @@ async fn lost_update_gil() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "1981 of 2000 readers saw a torn pair"]
+#[ignore = "needs: heap payloads (LpcArray/Mapping, ...) are physical Arc<RwLock>, so torn reads survive (1981 of 2000 readers saw a torn pair)."]
 async fn aliased_array_torn_read_racy() {
     let code = r#"
         int *pair = ({ 10, 0 });
@@ -280,7 +280,7 @@ async fn aliased_array_torn_read_gil() {
     assert_eq!(torn, 0, "{torn} of {} readers saw a torn pair", reads.len());
 }
 
-#[ignore = "needs D9: environment()/move_object are physical (non-transactional) world state; concurrent physical moves corrupt the weights before the transaction can act. Revisit at D9 (transactional environment/inventory, move_semaphore deleted). C6 covers the global RMW half (see call_other_cross_object_rmw_is_atomic)."]
+#[ignore = "needs: environment()/move_object are physical (non-transactional) world state; concurrent physical moves corrupt the weights before the transaction can act."]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn multithread_sync_racy() {
     let room = indoc! { r#"

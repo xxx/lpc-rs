@@ -146,8 +146,8 @@ pub struct Task<const STACKSIZE: usize> {
     pub context: TaskContext,
 
     /// This task's transaction handle. One top-level task = one
-    /// transaction; nested sub-tasks join it by cloning the handle (C6,
-    /// ruling A). Re-based onto a fresh transaction per attempt.
+    /// transaction; nested sub-tasks join it by cloning the handle.
+    /// Re-based onto a fresh transaction per attempt.
     pub(crate) txn: TxnHandle,
 
     /// True when `txn` was adopted from a caller's live attempt: this task
@@ -279,6 +279,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         // We mark ourselves as initialized before actually initializing, to avoid
         // infinite loops where this_object() is used in global initialization.
+        // this flag is physical world state, so a rejected
+        // commit (init rolled back) leaves it set and a re-run skips re-init.
         context.process.flags.set(ObjectFlags::Initialized);
 
         let max_execution_time = context.config().max_execution_time;

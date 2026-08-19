@@ -412,7 +412,7 @@ mod tests {
 
         vm.gc().unwrap();
 
-        assert_len(&ctx1, 0); // world values are not mark roots until C7
+        assert_len(&ctx1, 0);
 
         vm.global_state.object_space.clear();
 
