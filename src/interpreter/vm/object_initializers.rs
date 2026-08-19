@@ -8,8 +8,8 @@ use lpc_rs_errors::Result;
 use crate::{
     compiler::Compiler,
     interpreter::{
-        object_space::ObjectSpace, task::task_template::TaskTemplate, task_context::TaskContext,
-        vm::Vm,
+        object_space::ObjectSpace, stm::TxnHandle, task::task_template::TaskTemplate,
+        task_context::TaskContext, vm::Vm,
     },
     util::{
         process_builder::{ProcessCreator, ProcessInitializer},
@@ -56,15 +56,14 @@ impl Vm {
     ///
     /// ```
     /// # tokio_test::block_on(async {
-    /// use lpc_rs::interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, vm::Vm};
+    /// use lpc_rs::interpreter::{CommittedReader, lpc_int::LpcInt, lpc_ref::LpcRef, vm::Vm};
     /// use lpc_rs_utils::config::Config;
     ///
     /// let mut vm = Vm::new(Config::default());
     /// let ctx = vm.initialize_string("int x = 5;", "test.c").await.unwrap();
     ///
-    /// ctx.process.with_globals(|g| {
-    ///     assert_eq!(g.registers[0], LpcRef::Int(LpcInt(5)));
-    /// });
+    /// let value = vm.global_state.committed_global(&ctx.process, 0u16);
+    /// assert_eq!(value, LpcRef::Int(LpcInt(5)));
     ///
     /// assert!(vm.global_state.object_space.lookup("/test").is_some());
     /// # })
@@ -88,6 +87,7 @@ impl Vm {
             global_state: self.global_state.clone(),
             this_player: ArcSwapAny::from(None),
             upvalue_ptrs: None,
+            txn: TxnHandle::default(),
         }
     }
 }

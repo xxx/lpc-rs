@@ -19,6 +19,7 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
+        stm::TxnHandle,
         task::{get_location, task_id::TaskId, task_template::TaskTemplate},
         task_context::{TaskContext, TaskContextBuilder},
         vm::vm_op::VmOp,
@@ -36,6 +37,9 @@ pub struct EfunContext<'task, const N: usize> {
     task_id: TaskId,
     stack: &'task mut CallStack<N>,
     task_context: &'task TaskContext,
+    /// The caller task's transaction (C6: efuns read/write globals
+    /// through it).
+    txn: TxnHandle,
 
     /// Allow the user to take a snapshot of the callstack, for testing and
     /// debugging
@@ -53,6 +57,9 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             task_id,
             stack,
             task_context,
+            // The efun runs inside the caller's transaction: it shares
+            // the handle, so its reads/writes join the caller's attempt.
+            txn: task_context.txn().clone(),
 
             #[cfg(test)]
             snapshot: None,
@@ -215,10 +222,17 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.frame().registers.get(register.into())
     }
 
+    /// The transaction this efun's task runs in. `pub(crate)`:
+    /// `TxnHandle` is not part of the public API.
+    #[inline]
+    pub(crate) fn txn(&self) -> &TxnHandle {
+        &self.txn
+    }
+
     /// Resolve any RegisterVariant
     #[inline]
     pub fn resolve_register_variant(&self, variant: RegisterVariant) -> Result<Cow<'_, LpcRef>> {
-        get_location(self.stack, variant)
+        get_location(self.stack, self.txn(), variant)
     }
 
     /// Lookup the process with the passed path.

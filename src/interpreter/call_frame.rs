@@ -23,6 +23,7 @@ use crate::interpreter::{
     gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
     lpc_ref::{LpcRef, NULL},
     process::Process,
+    stm::TxnHandle,
 };
 
 /// A representation of a local variable name and value.
@@ -212,15 +213,21 @@ impl CallFrame {
 
     /// Assign an [`LpcRef`] to a specific location, based on the [`RegisterVariant`]
     #[inline]
-    pub fn set_location(&mut self, location: RegisterVariant, lpc_ref: LpcRef) {
+    pub(crate) fn set_location(
+        &mut self,
+        txn: &TxnHandle,
+        location: RegisterVariant,
+        lpc_ref: LpcRef,
+    ) {
         match location {
             RegisterVariant::Local(reg) => {
                 self.registers[reg] = lpc_ref;
             }
             RegisterVariant::Global(reg) => {
-                self.process.with_globals_mut(|g| {
-                    g[reg] = lpc_ref;
-                });
+                let var = self.process.var_id(reg.into());
+                // A blind in-txn write: the read that computed `lpc_ref` was
+                // already tracked when the caller read it.
+                txn.with(|t| t.write(var, lpc_ref));
             }
             RegisterVariant::Upvalue(reg) => {
                 let upvalues = &self.upvalue_ptrs;
@@ -235,7 +242,7 @@ impl CallFrame {
 
     /// Convenience to return a list of the local variables in this frame.
     /// Intended for debugging and testing.
-    pub fn local_variables(&self) -> Vec<LocalVariable> {
+    pub(crate) fn local_variables(&self, txn: &TxnHandle) -> Vec<LocalVariable> {
         self.function
             .local_variables
             .iter()
@@ -247,7 +254,10 @@ impl CallFrame {
 
                 let lpc_ref = match loc {
                     RegisterVariant::Local(reg) => self.registers[reg].clone(),
-                    RegisterVariant::Global(reg) => self.process.with_globals(|g| g[reg].clone()),
+                    RegisterVariant::Global(reg) => {
+                        let var = self.process.var_id(reg.into());
+                        txn.with(|t| t.read(var).unwrap_or_else(|| NULL.clone()))
+                    }
                     RegisterVariant::Upvalue(ptr_reg) => {
                         let upvalues = &self.upvalue_ptrs;
                         let data_reg = upvalues[ptr_reg.index() as usize];

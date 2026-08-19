@@ -10,8 +10,9 @@ use thin_vec::ThinVec;
 use crate::{
     compiler::Compiler,
     interpreter::{
-        object_space::ObjectSpace, process::Process, task::into_task_context::IntoTaskContext,
-        task_context::TaskContext, vm::global_state::GlobalState,
+        object_space::ObjectSpace, process::Process, stm::TxnHandle,
+        task::into_task_context::IntoTaskContext, task_context::TaskContext,
+        vm::global_state::GlobalState,
     },
     util::with_compiler::WithCompiler,
 };
@@ -32,6 +33,13 @@ pub struct TaskTemplate {
     /// The upvalue_ptrs to populate the initial frame with, if any.
     #[builder(default)]
     pub upvalue_ptrs: Option<ThinVec<Register>>,
+
+    /// The transaction the task made from this template runs in. A template
+    /// derived from a live task adopts that task's in-flight handle, so the
+    /// spawned task joins it; a fresh top-level template (a `Vm`, a `GlobalState`)
+    /// carries the empty handle, so the spawned task opens its own attempt.
+    #[builder(default)]
+    pub(crate) txn: TxnHandle,
 }
 
 impl TaskTemplate {
@@ -49,6 +57,7 @@ impl Clone for TaskTemplate {
             global_state: self.global_state.clone(),
             this_player: ArcSwapAny::from(self.this_player.load_full()),
             upvalue_ptrs: self.upvalue_ptrs.clone(),
+            txn: self.txn.clone(),
         }
     }
 }
@@ -71,6 +80,7 @@ impl From<TaskContext> for TaskTemplate {
             global_state: task_context.global_state,
             this_player: task_context.this_player,
             upvalue_ptrs: task_context.upvalue_ptrs,
+            txn: task_context.txn,
         }
     }
 }
@@ -81,6 +91,7 @@ impl From<&TaskContext> for TaskTemplate {
             global_state: task_context.global_state.clone(),
             this_player: ArcSwapAny::from(None),
             upvalue_ptrs: task_context.upvalue_ptrs.clone(),
+            txn: task_context.txn.clone(),
         }
     }
 }
@@ -94,6 +105,7 @@ where
             global_state: value.into(),
             this_player: ArcSwapAny::from(None),
             upvalue_ptrs: None,
+            txn: TxnHandle::default(),
         }
     }
 }

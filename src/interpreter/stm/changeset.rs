@@ -7,7 +7,7 @@ use crate::interpreter::{
     stm::{VarId, Version},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Changeset {
     version: Version,
     writes: BTreeMap<VarId, LpcRef>,
@@ -53,6 +53,11 @@ impl Changeset {
 
     pub(crate) fn into_writes(self) -> BTreeMap<VarId, LpcRef> {
         self.writes
+    }
+
+    /// The values this changeset has written, for GC rooting.
+    pub(crate) fn written_values(&self) -> impl Iterator<Item = &LpcRef> {
+        self.writes.values()
     }
 }
 

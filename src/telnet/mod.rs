@@ -456,6 +456,7 @@ mod tests {
     use super::*;
     use crate::{
         interpreter::{
+            CommittedReader,
             function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
             lpc_ref::LpcRef,
             object_flags::ObjectFlags,
@@ -537,9 +538,10 @@ mod tests {
         )
         .await;
 
-        proc.with_globals(|g| {
-            assert_eq!(g.get(0).unwrap(), &LpcRef::from(165));
-        });
+        assert_eq!(
+            vm.global_state.committed_global(&proc, 0u16),
+            LpcRef::from(165)
+        );
     }
 
     mod test_string_receivers {
@@ -574,9 +576,10 @@ mod tests {
             )
             .await;
 
-            proc.with_globals(|g| {
-                assert_eq!(g.get(0).unwrap(), &LpcRef::from(165));
-            });
+            assert_eq!(
+                vm.global_state.committed_global(&proc, 0u16),
+                LpcRef::from(165)
+            );
             assert!(proc.flags.test(ObjectFlags::Initialized));
         }
 

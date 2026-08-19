@@ -33,8 +33,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // doesn't work as mutable, but needs to be written to at the very end.
         let result_ref = {
             // figure out which function we're calling
-            let receiver_ref = &*get_location(&self.stack, receiver)?;
-            let name_ref = &*get_location(&self.stack, name_location)?;
+            let receiver_ref = &*get_location(&self.stack, &self.txn, receiver)?;
+            let name_ref = &*get_location(&self.stack, &self.txn, name_location)?;
 
             let Ok(function_name) = name_ref.with_string(|s| s.clone()) else {
                 let str = format!("Invalid name passed to `call_other`: {}", name_ref);
@@ -46,7 +46,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let args = self
                 .args
                 .iter()
-                .map(|i| get_location(&self.stack, *i).map(|r| r.into_owned()))
+                .map(|i| get_location(&self.stack, &self.txn, *i).map(|r| r.into_owned()))
                 .collect::<Result<Vec<_>>>()?;
 
             let function_name = Arc::new(function_name);

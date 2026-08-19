@@ -25,11 +25,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let items = &self.array_items;
         let vars = items
             .iter()
-            .map(|i| get_location(&self.stack, *i).map(|i| i.into_owned()))
+            .map(|i| get_location(&self.stack, &self.txn, *i).map(|i| i.into_owned()))
             .collect::<lpc_rs_errors::Result<Vec<_>>>()?;
         let new_ref = LpcArray::new(vars).into();
 
-        set_location(&mut self.stack, location, new_ref)
+        set_location(&mut self.stack, &self.txn, location, new_ref)
     }
 
     #[instrument(skip_all)]
@@ -80,7 +80,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 FunctionAddress::Local(Arc::downgrade(&process), func)
             }
             FunctionReceiver::Var(location) => {
-                let receiver_ref = &*get_location(&self.stack, location)?;
+                let receiver_ref = &*get_location(&self.stack, &self.txn, location)?;
                 match receiver_ref {
                     LpcRef::Object(weak_process) => {
                         let Some(process) = weak_process.upgrade() else {
@@ -143,7 +143,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .partial_args
             .iter()
             .map(|arg| {
-                arg.map(|register| Ok(get_location(&self.stack, register)?.into_owned()))
+                arg.map(|register| Ok(get_location(&self.stack, &self.txn, register)?.into_owned()))
                     .transpose()
             })
             .collect::<lpc_rs_errors::Result<ThinVec<Option<LpcRef>>>>()?;
@@ -161,7 +161,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let new_ref = fp.into();
 
-        set_location(&mut self.stack, location, new_ref)
+        set_location(&mut self.stack, &self.txn, location, new_ref)
     }
 
     // #[instrument(skip_all)]
@@ -194,8 +194,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         index_loc: RegisterVariant,
         destination: RegisterVariant,
     ) -> lpc_rs_errors::Result<()> {
-        let container_ref = get_location(&self.stack, container_loc)?.into_owned();
-        let lpc_ref = get_location(&self.stack, index_loc)?.into_owned();
+        let container_ref = get_location(&self.stack, &self.txn, container_loc)?.into_owned();
+        let lpc_ref = get_location(&self.stack, &self.txn, index_loc)?.into_owned();
 
         match container_ref {
             LpcRef::Array(_) => container_ref
@@ -209,7 +209,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                         if idx >= 0 {
                             if let Some(v) = vec.get(idx as usize) {
-                                set_location(&mut self.stack, destination, v.clone())?;
+                                set_location(&mut self.stack, &self.txn, destination, v.clone())?;
                                 Ok(())
                             } else {
                                 Err(self.array_index_error(idx, vec.len()))
@@ -239,11 +239,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     {
                         set_location(
                             &mut self.stack,
+                            &self.txn,
                             destination,
                             LpcRef::Int(LpcInt(v as LpcIntInner)),
                         )?;
                     } else {
-                        set_location(&mut self.stack, destination, NULL)?;
+                        set_location(&mut self.stack, &self.txn, destination, NULL)?;
                     }
                 } else {
                     return Err(self.runtime_error(format!(
@@ -260,7 +261,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     .with_mapping(|map| map.get(&lpc_ref).cloned().unwrap_or(NULL))
                     .unwrap_or(NULL);
 
-                set_location(&mut self.stack, destination, var)?;
+                set_location(&mut self.stack, &self.txn, destination, var)?;
 
                 Ok(())
             }
@@ -277,11 +278,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         destination: RegisterVariant,
     ) -> lpc_rs_errors::Result<()> {
         let var = {
-            let container_ref = &*get_location(&self.stack, container_loc)?;
+            let container_ref = &*get_location(&self.stack, &self.txn, container_loc)?;
 
             match container_ref {
                 LpcRef::Mapping(_) => {
-                    let lpc_ref = &*get_location(&self.stack, index_loc)?;
+                    let lpc_ref = &*get_location(&self.stack, &self.txn, index_loc)?;
                     let index = match lpc_ref {
                         LpcRef::Int(i) => i.0,
                         _ => {
@@ -309,7 +310,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        set_location(&mut self.stack, destination, var)
+        set_location(&mut self.stack, &self.txn, destination, var)
     }
 
     #[instrument(skip_all)]
@@ -331,7 +332,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let new_ref = lpc_string.into();
 
-        set_location(&mut self.stack, location, new_ref)
+        set_location(&mut self.stack, &self.txn, location, new_ref)
     }
 
     #[instrument(skip_all)]
@@ -342,8 +343,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         container_loc: RegisterVariant,
         index_loc: RegisterVariant,
     ) -> lpc_rs_errors::Result<()> {
-        let container = get_location(&self.stack, container_loc)?.into_owned();
-        let index = &*get_location(&self.stack, index_loc)?;
+        let container = get_location(&self.stack, &self.txn, container_loc)?.into_owned();
+        let index = &*get_location(&self.stack, &self.txn, index_loc)?;
         let array_idx = if let LpcRef::Int(i) = index { i.0 } else { 0 };
 
         match container {
@@ -360,7 +361,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         };
 
                         if idx >= 0 && (idx as usize) < len {
-                            vec[idx as usize] = (*get_location(&self.stack, value_loc)?).clone();
+                            vec[idx as usize] =
+                                (*get_location(&self.stack, &self.txn, value_loc)?).clone();
                             Ok(())
                         } else {
                             Err(self.array_index_error(idx, len))
@@ -369,7 +371,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     .flatten()
             }
             LpcRef::Mapping(_) => {
-                let value = get_location(&self.stack, value_loc)?.into_owned();
+                let value = get_location(&self.stack, &self.txn, value_loc)?.into_owned();
                 container.with_mapping_mut(|map| {
                     map.insert(index.clone(), value);
                 })

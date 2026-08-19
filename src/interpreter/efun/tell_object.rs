@@ -79,7 +79,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        interpreter::{lpc_array::LpcArray, lpc_string::LpcString, vm::Vm},
+        interpreter::{CommittedReader, lpc_array::LpcArray, lpc_string::LpcString, vm::Vm},
         test_support::test_config,
         util::process_builder::{ProcessCreator, ProcessInitializer},
     };
@@ -147,23 +147,21 @@ mod tests {
             .as_slice(),
         ));
 
-        enabled
-            .with_globals(|g| {
-                g[0].with_array(|arr| {
-                    assert_eq!(
-                        &arr.iter().map(|s| s.to_string()).collect_vec(),
-                        &["i herd", "u liek mudkips?"]
-                    );
-                })
+        vm.global_state
+            .committed_global(&enabled, 0u16)
+            .with_array(|arr| {
+                assert_eq!(
+                    &arr.iter().map(|s| s.to_string()).collect_vec(),
+                    &["i herd", "u liek mudkips?"]
+                );
             })
             .unwrap();
 
         let disabled = space.lookup("/disabled#1").unwrap();
-        disabled
-            .with_globals(|g| {
-                g[0].with_array(|arr| {
-                    assert!(arr.is_empty());
-                })
+        vm.global_state
+            .committed_global(&disabled, 0u16)
+            .with_array(|arr| {
+                assert!(arr.is_empty());
             })
             .unwrap();
     }

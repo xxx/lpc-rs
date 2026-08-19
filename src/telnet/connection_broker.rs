@@ -154,8 +154,6 @@ impl ConnectionBroker {
 mod tests {
     use std::time::Duration;
 
-    use arc_swap::ArcSwapAny;
-
     use super::*;
     use crate::{
         interpreter::{object_space::ObjectSpace, vm::global_state::GlobalState},
@@ -173,11 +171,9 @@ mod tests {
         let _object_space = Arc::new(ObjectSpace::new(config.clone()));
         let mut broker = ConnectionBroker::new(vm_tx.clone(), broker_rx.clone(), telnet);
         let global_state = Arc::new(GlobalState::new(config, vm_tx.clone()));
-        let template = TaskTemplate {
-            global_state,
-            this_player: ArcSwapAny::from(None),
-            upvalue_ptrs: None,
-        };
+        // A fresh top-level template: no live attempt to join, so the
+        // broker's spawned tasks each open their own transaction.
+        let template = TaskTemplate::from(global_state);
 
         broker.run("127.0.0.1:6666", template).await;
 

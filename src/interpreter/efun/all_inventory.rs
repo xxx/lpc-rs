@@ -33,7 +33,9 @@ mod tests {
     use itertools::Itertools;
 
     use crate::{
-        interpreter::vm::Vm, test_support::test_config, util::process_builder::ProcessInitializer,
+        interpreter::{CommittedReader, vm::Vm},
+        test_support::test_config,
+        util::process_builder::ProcessInitializer,
     };
 
     #[tokio::test]
@@ -76,14 +78,12 @@ mod tests {
 
         let room_proc_arc = room_proc.context.process.clone();
 
-        room_proc_arc
-            .with_globals(|g| {
-                g.first().unwrap().with_array(|array| {
-                    let globals = array.iter().map(|w| w.to_string()).sorted().collect_vec();
+        let g0 = vm.global_state.committed_global(&room_proc_arc, 0u16);
+        g0.with_array(|array| {
+            let globals = array.iter().map(|w| w.to_string()).sorted().collect_vec();
 
-                    assert_eq!(globals, &["/all_inv_bar", "/all_inv_baz", "/all_inv_foo"]);
-                })
-            })
-            .unwrap();
+            assert_eq!(globals, &["/all_inv_bar", "/all_inv_baz", "/all_inv_foo"]);
+        })
+        .unwrap();
     }
 }

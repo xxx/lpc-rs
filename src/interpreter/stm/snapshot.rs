@@ -23,6 +23,12 @@ impl Snapshot {
         self.state.get(&var_id).cloned()
     }
 
+    /// Remove a var from the world (memory hygiene for swept upvalue
+    /// cells; a re-transaction would re-commit the value).
+    pub(crate) fn drop_var(&mut self, var_id: VarId) {
+        self.state.remove(&var_id);
+    }
+
     pub(crate) fn version(&self) -> Version {
         self.version
     }

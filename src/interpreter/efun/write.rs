@@ -62,7 +62,12 @@ pub async fn apply_catch_tell<const N: usize>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{interpreter::vm::Vm, test_support::test_config};
+    use lpc_rs_core::register::RegisterVariant;
+
+    use crate::{
+        interpreter::{CommittedReader, vm::Vm},
+        test_support::test_config,
+    };
 
     #[tokio::test]
     async fn test_write_calls_catch_tell() {
@@ -88,12 +93,13 @@ mod tests {
             })
             .unwrap();
 
+        let name = result.process.program.global_variables.get("name").unwrap();
+        let RegisterVariant::Global(reg) = name.location.unwrap() else {
+            panic!("name is not a global");
+        };
         assert_eq!(
-            result
-                .process
-                .global_variable_values()
-                .get("name")
-                .unwrap()
+            vm.global_state
+                .committed_global(&result.process, reg.index())
                 .to_string(),
             "my name is foobar"
         );

@@ -93,12 +93,14 @@ mod tests {
     use std::sync::Arc;
 
     use indoc::indoc;
+    use lpc_rs_core::{RegisterSize, register::RegisterVariant};
     use lpc_rs_utils::config::Config;
 
     use super::*;
     use crate::{
         assert_regex,
         interpreter::{
+            CommittedReader,
             lpc_ref::{LpcRef, NULL},
             program::Program,
             task_context::{TaskContext, TaskContextBuilder},
@@ -111,6 +113,23 @@ mod tests {
         test_support::{compile_prog, test_config},
         util::process_builder::{ProcessCreator, ProcessInitializer},
     };
+
+    /// Committed global values by name, read through the committer.
+    fn committed_globals_by_name(
+        gs: &Arc<GlobalState>,
+        proc: &Process,
+    ) -> std::collections::HashMap<String, LpcRef> {
+        proc.program
+            .global_variables
+            .iter()
+            .filter_map(|(name, sym)| {
+                let RegisterVariant::Global(reg) = sym.location? else {
+                    return None;
+                };
+                Some((name.clone(), gs.committed_global(proc, reg.index())))
+            })
+            .collect()
+    }
 
     fn task_context_fixture(
         program: Program,
@@ -198,7 +217,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            cloned_proc.global_variable_values().get("i").unwrap(),
+            committed_globals_by_name(&vm.global_state, &cloned_proc)
+                .get("i")
+                .unwrap(),
             &NULL
         );
         assert!(!cloned_proc.flags.test(ObjectFlags::Initialized));
@@ -212,11 +233,12 @@ mod tests {
         assert!(cloner_proc.flags.test(ObjectFlags::Initialized));
 
         assert_eq!(
-            cloned_proc.global_variable_values().get("i").unwrap(),
+            committed_globals_by_name(&vm.global_state, &cloned_proc)
+                .get("i")
+                .unwrap(),
             &NULL
         );
-        let LpcRef::Object(foo) = cloner_proc
-            .global_variable_values()
+        let LpcRef::Object(foo) = committed_globals_by_name(&vm.global_state, &cloner_proc)
             .get("foo")
             .unwrap()
             .clone()
@@ -227,7 +249,10 @@ mod tests {
         let foo = foo.upgrade().unwrap();
         assert!(foo.flags.test(ObjectFlags::Initialized));
 
-        let foo_i = foo.global_variable_values().get("i").unwrap().clone();
+        let foo_i = committed_globals_by_name(&vm.global_state, &foo)
+            .get("i")
+            .unwrap()
+            .clone();
         assert_eq!(foo_i, LpcRef::from(123));
     }
 
@@ -305,8 +330,13 @@ mod tests {
 
         let student = vm.global_state.object_space.lookup("/clone#0").unwrap();
 
-        student.with_globals(|g| {
-            assert!(g.iter().all(|v| v.is_null()));
-        });
+        let slots = vm.global_state.global_slot_count(&student);
+        for i in 0..slots {
+            assert!(
+                vm.global_state
+                    .committed_global(&student, i as RegisterSize)
+                    .is_null()
+            );
+        }
     }
 }

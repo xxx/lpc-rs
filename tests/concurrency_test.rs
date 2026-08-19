@@ -3,8 +3,12 @@ use std::sync::Arc;
 use indoc::indoc;
 use lpc_rs::{
     interpreter::{
-        lpc_int::LpcInt, lpc_ref::LpcRef, process::Process,
-        task::apply_function::apply_function_by_name, vm::Vm,
+        CommittedReader,
+        lpc_int::LpcInt,
+        lpc_ref::LpcRef,
+        process::Process,
+        task::apply_function::apply_function_by_name,
+        vm::{Vm, global_state::GlobalState},
     },
     util::process_builder::{ProcessCreator, ProcessInitializer},
 };
@@ -98,16 +102,11 @@ fn assert_all_ok(results: &[Result<LpcRef>]) {
     }
 }
 
-fn read_global(proc: &Process, index: usize) -> LpcRef {
-    proc.with_globals(|g| {
-        g.get(index)
-            .unwrap_or_else(|| panic!("no global at index {index}"))
-            .clone()
-    })
+fn read_global(gs: &Arc<GlobalState>, proc: &Process, index: usize) -> LpcRef {
+    gs.committed_global(proc, index as u16)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "lost update: got ~2800 want 4000"]
 async fn lost_update_racy() {
     let counter = r#"
         int count = 0;
@@ -127,7 +126,10 @@ async fn lost_update_racy() {
     assert_all_ok(&results);
 
     let expected: LpcIntInner = 8 * 500;
-    assert_eq!(read_global(&proc, 0), LpcRef::from(expected));
+    assert_eq!(
+        read_global(&vm.global_state, &proc, 0),
+        LpcRef::from(expected)
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -150,7 +152,10 @@ async fn lost_update_gil() {
     assert_all_ok(&results);
 
     let expected: LpcIntInner = 8 * 500;
-    assert_eq!(read_global(&proc, 0), LpcRef::from(expected));
+    assert_eq!(
+        read_global(&vm.global_state, &proc, 0),
+        LpcRef::from(expected)
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -317,8 +322,8 @@ async fn multithread_sync_racy() {
     let room1 = room1_proc.context.process;
     let room2 = room2_proc.context.process;
 
-    let room1_weight = room1.with_globals(|g| g.first().unwrap().clone());
-    let room2_weight = room2.with_globals(|g| g.first().unwrap().clone());
+    let room1_weight = vm.global_state.committed_global(&room1, 0u16);
+    let room2_weight = vm.global_state.committed_global(&room2, 0u16);
 
     // println!("room1: {}", room1_weight);
     // for item in room1.position.inventory_iter().collect_vec() {
@@ -411,8 +416,8 @@ async fn multithread_sync_gil() {
     let room1 = room1_proc.context.process;
     let room2 = room2_proc.context.process;
 
-    let room1_weight = room1.with_globals(|g| g.first().unwrap().clone());
-    let room2_weight = room2.with_globals(|g| g.first().unwrap().clone());
+    let room1_weight = vm.global_state.committed_global(&room1, 0u16);
+    let room2_weight = vm.global_state.committed_global(&room2, 0u16);
 
     // println!("room1: {}", room1_weight);
     // for item in room1.position.inventory_iter().collect_vec() {
@@ -457,7 +462,7 @@ async fn no_deadlock_under_load() {
 
     let expected = tasks * iterations;
     assert_eq!(
-        read_global(&proc, 0),
+        read_global(&vm.global_state, &proc, 0),
         LpcRef::from(LpcInt::from(expected as i64))
     );
 }

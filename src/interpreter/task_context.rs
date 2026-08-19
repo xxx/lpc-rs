@@ -18,6 +18,7 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
+        stm::TxnHandle,
         task::{into_task_context::IntoTaskContext, task_template::TaskTemplate},
         vm::{global_state::GlobalState, vm_op::VmOp},
     },
@@ -111,6 +112,11 @@ pub struct TaskContext {
     /// used to prevent infinite recursion among multiple Tasks.
     #[builder(default)]
     pub chain_count: u8,
+
+    /// This task's transaction handle. Top-level tasks re-base it per
+    /// attempt; sub-tasks adopt their caller's handle.
+    #[builder(default)]
+    pub(crate) txn: TxnHandle,
 }
 
 impl TaskContext {
@@ -134,6 +140,7 @@ impl TaskContext {
             this_player: ArcSwapAny::from(this_player),
             upvalue_ptrs,
             chain_count: 0,
+            txn: TxnHandle::default(),
         }
     }
 
@@ -152,6 +159,11 @@ impl TaskContext {
             this_player: template.this_player,
             upvalue_ptrs: template.upvalue_ptrs,
             chain_count: 0,
+            // The template's handle is carried through as-is: a template
+            // derived from a live task holds that task's in-flight attempt,
+            // so this context joins it; a fresh top-level
+            // template holds the empty handle, so this one opens its own.
+            txn: template.txn,
         }
     }
 
@@ -250,6 +262,12 @@ impl TaskContext {
         &self.process
     }
 
+    /// The transaction this task runs in.
+    #[inline]
+    pub(crate) fn txn(&self) -> &TxnHandle {
+        &self.txn
+    }
+
     /// Return the [`ObjectSpace`]
     #[inline]
     pub fn object_space(&self) -> &Arc<ObjectSpace> {
@@ -318,6 +336,8 @@ impl Clone for TaskContext {
             this_player: ArcSwapAny::from(self.this_player.load_full()),
             upvalue_ptrs: self.upvalue_ptrs.clone(),
             chain_count: self.chain_count,
+            // Cloning the handle shares the in-flight transaction.
+            txn: self.txn.clone(),
         }
     }
 }
@@ -374,6 +394,7 @@ impl From<TaskContext> for TaskContextBuilder {
             this_player: Some(value.this_player),
             upvalue_ptrs: Some(value.upvalue_ptrs),
             chain_count: Some(value.chain_count),
+            txn: Some(value.txn),
         }
     }
 }
@@ -388,6 +409,7 @@ impl From<&TaskContext> for TaskContextBuilder {
             this_player: Some(ArcSwapAny::from(value.this_player.load_full())),
             upvalue_ptrs: Some(value.upvalue_ptrs.clone()),
             chain_count: Some(value.chain_count),
+            txn: Some(value.txn.clone()),
         }
     }
 }

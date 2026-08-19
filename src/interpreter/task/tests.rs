@@ -7,14 +7,40 @@ use std::{
 use decorum::Total;
 use indexmap::IndexMap;
 use indoc::indoc;
-use lpc_rs_core::{LpcFloatInner, LpcIntInner};
+use lpc_rs_core::{LpcFloatInner, LpcIntInner, RegisterSize, register::RegisterVariant};
 use tokio::sync::mpsc;
 
 use super::*;
 use crate::{
-    interpreter::{lpc_ref::LpcRef, object_space::ObjectSpace},
+    interpreter::{
+        CommittedReader, lpc_ref::LpcRef, object_space::ObjectSpace, process::Process,
+        vm::global_state::GlobalState,
+    },
     test_support::{compile_prog, run_prog},
 };
+
+/// Committed global values for a process, read through the committer.
+fn committed_global_values(gs: &Arc<GlobalState>, proc: &Process) -> Vec<LpcRef> {
+    let mut values = Vec::new();
+    for i in 0..gs.global_slot_count(proc) {
+        values.push(gs.committed_global(proc, i as RegisterSize));
+    }
+    values
+}
+
+/// Committed global values by name, read through the committer.
+fn committed_globals_by_name(gs: &Arc<GlobalState>, proc: &Process) -> HashMap<String, LpcRef> {
+    proc.program
+        .global_variables
+        .iter()
+        .filter_map(|(name, sym)| {
+            let RegisterVariant::Global(reg) = sym.location? else {
+                return None;
+            };
+            Some((name.clone(), gs.committed_global(proc, reg.index())))
+        })
+        .collect()
+}
 
 #[allow(dead_code)]
 fn format_slice<I>(slice: &[I]) -> String
@@ -347,7 +373,7 @@ mod test_instructions {
             let ctx = task.context;
 
             let proc = ctx.process();
-            let values = proc.global_variable_values();
+            let values = committed_globals_by_name(&ctx.global_state, proc);
             BareVal::String("my public_function".into()).assert_equal(values.get("mine").unwrap());
             BareVal::String("/std/object public".into())
                 .assert_equal(values.get("parents").unwrap());
@@ -369,7 +395,7 @@ mod test_instructions {
             let ctx = task.context;
 
             let proc = ctx.process();
-            let values = proc.global_variable_values();
+            let values = committed_globals_by_name(&ctx.global_state, proc);
             BareVal::String("file_name_override".into())
                 .assert_equal(values.get("this_one").unwrap());
             BareVal::String("/std/object#0".into()).assert_equal(values.get("efun_one").unwrap());
@@ -386,7 +412,7 @@ mod test_instructions {
             let ctx = task.context;
 
             let proc = ctx.process();
-            let values = proc.global_variable_values();
+            let values = committed_globals_by_name(&ctx.global_state, proc);
             BareVal::String("this is a simul_efun: marf".into())
                 .assert_equal(values.get("this_one").unwrap());
         }
@@ -981,10 +1007,7 @@ mod test_instructions {
 
             let proc = ctx.process();
 
-            BareVal::assert_vec_equal(
-                &expected,
-                &proc.with_globals(|g| g.iter().cloned().collect::<Vec<_>>()),
-            );
+            BareVal::assert_vec_equal(&expected, &committed_global_values(&ctx.global_state, proc));
         }
 
         #[tokio::test]
@@ -1025,10 +1048,7 @@ mod test_instructions {
 
             let proc = ctx.process();
 
-            BareVal::assert_vec_equal(
-                &expected,
-                &proc.with_globals(|g| g.iter().cloned().collect::<Vec<_>>()),
-            );
+            BareVal::assert_vec_equal(&expected, &committed_global_values(&ctx.global_state, proc));
         }
     }
 
@@ -1540,10 +1560,7 @@ mod test_instructions {
 
             let proc = ctx.process();
 
-            BareVal::assert_vec_equal(
-                &expected,
-                &proc.with_globals(|g| g.iter().cloned().collect::<Vec<_>>()),
-            );
+            BareVal::assert_vec_equal(&expected, &committed_global_values(&ctx.global_state, proc));
         }
 
         #[tokio::test]
@@ -1584,10 +1601,7 @@ mod test_instructions {
 
             let proc = ctx.process();
 
-            BareVal::assert_vec_equal(
-                &expected,
-                &proc.with_globals(|g| g.iter().cloned().collect::<Vec<_>>()),
-            );
+            BareVal::assert_vec_equal(&expected, &committed_global_values(&ctx.global_state, proc));
         }
     }
 
@@ -2538,7 +2552,8 @@ mod test_globals {
 
         BareVal::assert_vec_equal(&expected, &registers);
 
-        let proc = task.context.process();
+        let ctx = &task.context;
+        let proc = ctx.process();
 
         let expected = vec![
             Int(2),
@@ -2546,7 +2561,7 @@ mod test_globals {
             Int(0),
             Int(1),
         ];
-        proc.with_globals(|g| BareVal::assert_vec_equal(&expected, g));
+        BareVal::assert_vec_equal(&expected, &committed_global_values(&ctx.global_state, proc));
     }
 }
 
@@ -2565,7 +2580,7 @@ mod test_upvalues {
 
         let frame = snapshot.pop().unwrap();
 
-        let frame_vars = frame.local_variables();
+        let frame_vars = frame.local_variables(&task.txn);
 
         for (k, v) in vars {
             let v: BareVal = v.clone().into();

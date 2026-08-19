@@ -3,7 +3,6 @@ pub mod util;
 
 use std::{
     borrow::Cow,
-    collections::HashMap,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     path::Path,
@@ -14,19 +13,19 @@ use arc_swap::ArcSwapAny;
 use bit_set::BitSet;
 use delegate::delegate;
 use if_chain::if_chain;
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
-use parking_lot::RwLock;
 use tokio::sync::Semaphore;
 use tracing::instrument;
 
 use crate::{
     interpreter::{
-        bank::RefBank,
         gc::mark::Mark,
-        lpc_ref::{LpcRef, NULL},
+        lpc_ref::LpcRef,
         object_flags::{AtomicFlags, ObjectFlags},
         process::{inventory::Inventory, util::AllEnvironment},
         program::Program,
+        stm::{SVar, VarId},
     },
     telnet::connection::Connection,
 };
@@ -75,8 +74,10 @@ pub struct Process {
     /// The [`Program`] that this process is running.
     pub program: Arc<Program>,
 
-    /// The stored global variable data for this instance.
-    globals: RwLock<RefBank>,
+    /// One slot per program global; fixed size at construction. The slot is a
+    /// pure identity cell (a `VarId`); the *committed value* lives only in
+    /// the committer's world.
+    globals: Box<[SVar<LpcRef>]>,
 
     /// What is the clone ID of this process? If `None`, this is a master
     /// object.
@@ -105,7 +106,10 @@ impl Process {
 
         Self {
             program,
-            globals: RwLock::new(RefBank::new(vec![NULL; num_globals as usize])),
+            globals: (0..num_globals as usize)
+                .map(|_| SVar::new())
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
             clone_id: None,
             connection: ArcSwapAny::from(None),
             flags: Default::default(),
@@ -123,7 +127,10 @@ impl Process {
 
         Self {
             program,
-            globals: RwLock::new(RefBank::new(vec![NULL; num_globals as usize])),
+            globals: (0..num_globals as usize)
+                .map(|_| SVar::new())
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
             clone_id: Some(clone_id),
             connection: ArcSwapAny::from(None),
             flags,
@@ -194,16 +201,9 @@ impl Process {
         Ok(())
     }
 
-    /// Get a HashMap of global variable names to their current values
-    pub fn global_variable_values(&self) -> HashMap<&str, LpcRef> {
-        self.program
-            .global_variables
-            .iter()
-            .filter_map(|(k, v)| {
-                let value = self.with_globals(|g| Some(g[v.location?.index()].clone()))?;
-                Some((k.as_str(), value))
-            })
-            .collect()
+    /// The committer-world identity of a global slot.
+    pub(crate) fn var_id(&self, reg: RegisterSize) -> VarId {
+        self.globals[reg as usize].id
     }
 
     /// Get the filename of this process, including the clone ID suffix if
@@ -225,20 +225,6 @@ impl Process {
         let filename: &str = &self.filename();
 
         filename.strip_prefix(prefix).unwrap_or(filename).into()
-    }
-
-    pub fn with_globals<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&RefBank) -> R,
-    {
-        f(&self.globals.read())
-    }
-
-    pub fn with_globals_mut<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&mut RefBank) -> R,
-    {
-        f(&mut self.globals.write())
     }
 }
 
@@ -276,8 +262,10 @@ impl Display for Process {
 }
 
 impl Mark for Process {
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
-        self.with_globals(|g| g.mark(marked, processed))?;
+    fn mark(&self, _marked: &mut BitSet, _processed: &mut BitSet) -> Result<()> {
+        // The slot identities own no values. Live values are transaction
+        // roots, marked through the task's in-flight changeset;
+        // committed values live in the committer's world.
         Ok(())
     }
 }
@@ -287,7 +275,6 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::interpreter::lpc_array::LpcArray;
 
     #[test]
     fn test_filename() {
@@ -311,21 +298,5 @@ mod tests {
         assert_eq!(proc.localized_filename("/foo"), "/bar/baz");
 
         assert_eq!(proc.localized_filename("/alksdjf"), "/foo/bar/baz");
-    }
-
-    #[test]
-    fn test_mark() {
-        let array = LpcArray::new(vec![]);
-        let array_id = array.unique_id;
-        let lpc_ref = array.into();
-
-        let process = Process::default();
-        process.with_globals_mut(|g| g.push(lpc_ref));
-
-        let mut marked = BitSet::new();
-        let mut processed = BitSet::new();
-        process.mark(&mut marked, &mut processed).unwrap();
-
-        assert!(processed.contains(*array_id.as_ref() as usize));
     }
 }

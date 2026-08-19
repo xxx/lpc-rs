@@ -48,7 +48,7 @@ pub struct GlobalState {
     pub tx: Sender<VmOp>,
 
     /// Sender to this state's single committer thread.
-    pub committer_tx: flume::Sender<CommitProtocol>,
+    pub(crate) committer_tx: flume::Sender<CommitProtocol>,
 
     /// Handle to the committer thread.
     #[builder(default)]

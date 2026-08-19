@@ -1,13 +1,22 @@
 //! D4: unbounded internal re-run of a transaction until it commits.
 
-use std::time::{Duration, Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::{Result, lpc_error};
 
-use crate::interpreter::stm::{
-    Transaction,
-    changeset::Changeset,
-    committer::{CommitProtocol, LiveSnapshot},
+use crate::interpreter::{
+    lpc_ref::LpcRef,
+    process::Process,
+    stm::{
+        Transaction,
+        changeset::Changeset,
+        committer::{CommitProtocol, LiveSnapshot},
+    },
+    vm::global_state::GlobalState,
 };
 
 /// Per-attempt statistics, owned by the retry loop: the transaction already
@@ -106,6 +115,69 @@ pub(crate) async fn commit_changeset(
             lpc_error!("committer reply task panicked: {}", e)
         })?
         .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
+}
+
+/// Query the committed value of a var (async wrapper over [`CommitProtocol::Query`]).
+/// Absent vars read back as `NULL`.
+pub(crate) async fn query_var(
+    tx: &flume::Sender<CommitProtocol>,
+    var_id: crate::interpreter::stm::VarId,
+) -> Result<LpcRef> {
+    let (reply_tx, reply_rx) = flume::bounded(1);
+    tx.send(CommitProtocol::Query {
+        var_id,
+        reply: reply_tx,
+    })
+    .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
+    tokio::task::spawn_blocking(move || reply_rx.recv())
+        .await
+        .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
+            lpc_error!("committer reply task panicked: {}", e)
+        })?
+        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
+}
+
+/// Fire-and-forget: remove a var from the world. Non-blocking send; safe to
+/// call from sync code (e.g. the GC sweep).
+pub(crate) fn drop_var(tx: &flume::Sender<CommitProtocol>, var_id: crate::interpreter::stm::VarId) {
+    let _ = tx.send(CommitProtocol::DropVar(var_id));
+}
+
+/// A sync "read the latest committed world" API for consistency-agnostic
+/// readers (test/debug/tooling). Do not use from an interpreter transaction.
+pub trait CommittedReader {
+    /// Number of global slots on `process`.
+    fn global_slot_count(&self, process: &Process) -> usize;
+
+    /// The committed value of one global slot (absent = `NULL`).
+    fn committed_global(&self, process: &Process, reg: RegisterSize) -> LpcRef;
+}
+
+impl CommittedReader for Arc<GlobalState> {
+    fn global_slot_count(&self, process: &Process) -> usize {
+        process.program.num_globals as usize
+    }
+
+    fn committed_global(&self, process: &Process, reg: RegisterSize) -> LpcRef {
+        let var = process.var_id(reg);
+        // One synchronous round trip against the committer, exactly like the
+        // sync `retry()` helper's recvs: scope a thread so the blocking recv
+        // can never run on the calling thread.
+        std::thread::scope(|s| {
+            let (reply_tx, reply_rx) = flume::bounded(1);
+            self.committer_tx
+                .send(CommitProtocol::Query {
+                    var_id: var,
+                    reply: reply_tx,
+                })
+                .expect("committer channel closed");
+            let value = s
+                .spawn(move || reply_rx.recv())
+                .join()
+                .expect("query reply thread panicked");
+            value.expect("no reply from committer")
+        })
+    }
 }
 
 /// Async mirror of [`retry`]: run `f` (one attempt) against a fresh
@@ -346,6 +418,28 @@ mod async_tests {
         drop(tx);
         let final_snapshot = handle.join().expect("committer panicked");
         assert_eq!(final_snapshot.read(counter), Some(LpcRef::from(6)));
+    }
+
+    #[tokio::test]
+    async fn query_and_drop_var_roundtrip() {
+        let (tx, rx) = flume::bounded(4);
+        let mut committer = Committer::new();
+        let var = VarId::new();
+        seed(&mut committer, var, 7);
+        let committer_tx = tx.clone();
+        let handle = std::thread::spawn(move || committer.run(committer_tx, rx));
+
+        assert_eq!(query_var(&tx, var).await.unwrap(), LpcRef::from(7));
+
+        drop_var(&tx, var);
+        // The channel is FIFO, so the drop is processed before this query.
+        assert_eq!(query_var(&tx, var).await.unwrap(), LpcRef::Int(LpcInt(0)));
+
+        tx.send(CommitProtocol::Close)
+            .expect("committer channel closed");
+        drop(tx);
+        let final_snapshot = handle.join().expect("committer panicked");
+        assert_eq!(final_snapshot.read(var), None);
     }
 
     #[tokio::test]

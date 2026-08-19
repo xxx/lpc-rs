@@ -4,34 +4,44 @@ use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_errors::Result;
 use tracing::{instrument, trace};
 
-use crate::interpreter::{call_frame::CallFrame, call_stack::CallStack, lpc_ref::LpcRef};
+use crate::interpreter::{
+    call_frame::CallFrame,
+    call_stack::CallStack,
+    lpc_ref::{LpcRef, NULL},
+    stm::TxnHandle,
+};
 
 /// Resolve any type RegisterVariant into an LpcRef, for the current frame
 #[inline]
-pub(crate) fn get_location<const N: usize>(
-    stack: &CallStack<N>,
+pub(crate) fn get_location<'a, const N: usize>(
+    stack: &'a CallStack<N>,
+    txn: &TxnHandle,
     location: RegisterVariant,
-) -> lpc_rs_errors::Result<Cow<'_, LpcRef>> {
+) -> Result<Cow<'a, LpcRef>> {
     let frame = stack.current_frame()?;
 
-    get_location_in_frame(frame, location)
+    get_location_in_frame(frame, txn, location)
 }
 
 /// Resolve any type RegisterVariant into an LpcRef, for the passed frame
 #[instrument(skip(frame))]
 #[inline]
-pub(crate) fn get_location_in_frame(
-    frame: &CallFrame,
+pub(crate) fn get_location_in_frame<'a>(
+    frame: &'a CallFrame,
+    txn: &TxnHandle,
     location: RegisterVariant,
-) -> Result<Cow<'_, LpcRef>> {
+) -> Result<Cow<'a, LpcRef>> {
     match location {
         RegisterVariant::Local(reg) => {
             let registers = &frame.registers;
             Ok(Cow::Borrowed(&registers[reg]))
         }
         RegisterVariant::Global(reg) => {
-            let proc = &frame.process;
-            Ok(Cow::Owned(proc.with_globals(|g| g[reg].clone())))
+            let var = frame.process.var_id(reg.into());
+            // Read through the transaction.
+            Ok(Cow::Owned(
+                txn.with(|t| t.read(var).unwrap_or_else(|| NULL.clone())),
+            ))
         }
         RegisterVariant::Upvalue(upv) => {
             let upvalue_ptrs = &frame.upvalue_ptrs;
@@ -47,17 +57,19 @@ pub(crate) fn get_location_in_frame(
 #[inline]
 pub(crate) fn set_location<const N: usize>(
     stack: &mut CallStack<N>,
+    txn: &TxnHandle,
     location: RegisterVariant,
     lpc_ref: LpcRef,
 ) -> lpc_rs_errors::Result<()> {
     let frame = stack.current_frame_mut()?;
-    frame.set_location(location, lpc_ref);
+    frame.set_location(txn, location, lpc_ref);
     Ok(())
 }
 
 /// Apply an operation to a location, in-place.
 pub(crate) fn apply_in_location<F, const N: usize>(
     stack: &mut CallStack<N>,
+    txn: &TxnHandle,
     location: RegisterVariant,
     func: F,
 ) -> lpc_rs_errors::Result<()>
@@ -72,9 +84,15 @@ where
         }
         RegisterVariant::Global(reg) => {
             let frame = stack.current_frame()?;
-
-            let proc = &frame.process;
-            proc.with_globals_mut(|g| func(&mut g[reg]))
+            // In-txn read-modify-write: the read is tracked, the write
+            // lands in the in-flight changeset — atomic per attempt.
+            let var = frame.process.var_id(reg.into());
+            txn.with(|t| {
+                let mut cur = t.read(var).unwrap_or_else(|| NULL.clone());
+                func(&mut cur)?;
+                t.write(var, cur);
+                Ok(())
+            })
         }
         RegisterVariant::Upvalue(reg) => {
             let frame = stack.current_frame()?;

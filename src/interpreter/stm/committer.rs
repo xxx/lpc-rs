@@ -6,7 +6,10 @@ use std::{
 use imbl::OrdMap;
 use tracing::error;
 
-use crate::interpreter::stm::{VarId, Version, changeset::Changeset, snapshot::Snapshot};
+use crate::interpreter::{
+    lpc_ref::LpcRef,
+    stm::{VarId, Version, changeset::Changeset, snapshot::Snapshot},
+};
 
 #[derive(Debug, Default)]
 struct CommitterStats {
@@ -33,8 +36,11 @@ impl CommitterStats {
 }
 
 /// Channel protocol for communication with [`Committer`]s.
+///
+/// `pub(crate)` (not `pub`): the arms carry `pub(crate)` types, so the enum
+/// cannot be public without leaking them.
 #[derive(Debug)]
-pub enum CommitProtocol {
+pub(crate) enum CommitProtocol {
     /// Start a transaction against the current world state.
     Start { reply: flume::Sender<LiveSnapshot> },
     /// Commit a changeset to the world state
@@ -44,6 +50,15 @@ pub enum CommitProtocol {
     },
     /// Drop the reference count of a [`Version`], called when a [`Snapshot`] is dropped.
     Drop(Version),
+    /// Query the committed value of a var (consistency-agnostic readers:
+    /// test/debug/tooling, Do not use this for normal operations).
+    Query {
+        var_id: VarId,
+        reply: flume::Sender<LpcRef>,
+    },
+    /// Remove a var from the world (swept upvalue cells).
+    /// The var's value would otherwise be retained forever in the heap.
+    DropVar(VarId),
     /// Shutdown.
     Close,
 }
@@ -164,6 +179,19 @@ impl Committer {
                     self.live_versions.remove(&version);
                 }
                 self.evict_old_versions();
+            }
+            CommitProtocol::Query { var_id, reply } => {
+                let value = self
+                    .snapshot
+                    .read(var_id)
+                    .unwrap_or_else(|| LpcRef::from(0));
+                reply.send(value).unwrap_or_else(|e| {
+                    error!("Failed to send query reply: {e}");
+                    self.stats.error()
+                });
+            }
+            CommitProtocol::DropVar(var_id) => {
+                self.snapshot.drop_var(var_id);
             }
             CommitProtocol::Close => {
                 return false;
@@ -746,5 +774,49 @@ mod tests {
         stale.write(cell, LpcRef::from(3));
         assert!(committer.commit(stale).is_err());
         assert_eq!(committer.stats.conflicts, 1);
+    }
+
+    #[test]
+    fn query_returns_committed_value_and_drop_var_removes_it() {
+        let (tx, _rx) = flume::unbounded();
+        let mut committer = Committer::new();
+        let var = VarId::new();
+
+        // absent → NULL
+        let (reply_tx, reply_rx) = flume::bounded(1);
+        committer.process(
+            CommitProtocol::Query {
+                var_id: var,
+                reply: reply_tx,
+            },
+            &tx,
+        );
+        assert_eq!(reply_rx.recv().unwrap(), LpcRef::from(0));
+
+        // committed value is visible
+        let mut seed = Changeset::new(committer.snapshot.version());
+        seed.write(var, LpcRef::from(7));
+        committer.commit(seed).unwrap();
+        let (reply_tx, reply_rx) = flume::bounded(1);
+        committer.process(
+            CommitProtocol::Query {
+                var_id: var,
+                reply: reply_tx,
+            },
+            &tx,
+        );
+        assert_eq!(reply_rx.recv().unwrap(), LpcRef::from(7));
+
+        // DropVar removes it
+        committer.process(CommitProtocol::DropVar(var), &tx);
+        let (reply_tx, reply_rx) = flume::bounded(1);
+        committer.process(
+            CommitProtocol::Query {
+                var_id: var,
+                reply: reply_tx,
+            },
+            &tx,
+        );
+        assert_eq!(reply_rx.recv().unwrap(), LpcRef::from(0));
     }
 }

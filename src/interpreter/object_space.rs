@@ -232,7 +232,7 @@ mod tests {
     use ustr::ustr;
 
     use super::*;
-    use crate::interpreter::{lpc_array::LpcArray, program::ProgramBuilder};
+    use crate::interpreter::program::ProgramBuilder;
 
     // #[test]
     // fn test_insert_prototype() {
@@ -303,29 +303,6 @@ mod tests {
 
         assert_eq!(space_cell.len(), 1);
         assert!(space_cell.processes.contains_key("/foo/bar/baz"));
-    }
-
-    #[test]
-    fn test_mark() {
-        let config = Config::default();
-        let space = ObjectSpace::new(config);
-
-        let array = LpcArray::new(vec![]);
-        let array_id = array.unique_id;
-        let lpc_ref = array.into();
-
-        let process = Process::default();
-        process.with_globals_mut(|g| {
-            g.push(lpc_ref);
-        });
-
-        space.insert_process_directly("process", process);
-
-        let mut marked = BitSet::new();
-        let mut processed = BitSet::new();
-        space.mark(&mut marked, &mut processed).unwrap();
-
-        assert!(processed.contains(*array_id.as_ref() as usize));
     }
 
     #[test]

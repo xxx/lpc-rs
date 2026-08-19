@@ -6,10 +6,13 @@ use claims::assert_err;
 use indoc::indoc;
 use lpc_rs::{
     compiler::{Compiler, CompilerBuilder},
-    interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, lpc_string::LpcString, vm::Vm},
+    interpreter::{
+        CommittedReader, lpc_int::LpcInt, lpc_ref::LpcRef, lpc_string::LpcString, vm::Vm,
+    },
     util::process_builder::ProcessInitializer,
 };
 use lpc_rs_asm::instruction::Instruction;
+use lpc_rs_core::RegisterSize;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 use crate::support::{run_prog, test_config, test_config_builder};
@@ -108,7 +111,7 @@ async fn test_duffs_device() {
     let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
-    let b = &proc.with_globals(|g| g[1].clone());
+    let b = &ctx.global_state.committed_global(proc, 1u16);
 
     if let LpcRef::Array(pool_ref) = b
         && let arr = pool_ref.read()
@@ -155,13 +158,15 @@ async fn test_closures() {
     let ctx = task.context;
     let proc = ctx.process();
 
-    proc.with_globals(|g| {
-        assert_eq!(g.len(), 2);
-        assert_eq!(
-            g.last().unwrap().to_string(),
-            "I'll take 4 tacos with crema on the side, por favor.".to_string()
-        );
-    })
+    let count = ctx.global_state.global_slot_count(proc);
+    let last = ctx
+        .global_state
+        .committed_global(proc, (count - 1) as RegisterSize);
+    assert_eq!(count, 2);
+    assert_eq!(
+        last.to_string(),
+        "I'll take 4 tacos with crema on the side, por favor.".to_string()
+    )
 }
 
 #[tokio::test]
@@ -180,7 +185,10 @@ async fn test_multi_dimensional_arrays() {
     let task = run_prog(code).await;
     let ctx = task.context;
     let proc = ctx.process();
-    let x_ref = &proc.with_globals(|g| g.last().unwrap().clone());
+    let count = ctx.global_state.global_slot_count(proc);
+    let x_ref = ctx
+        .global_state
+        .committed_global(proc, (count - 1) as RegisterSize);
     let LpcRef::Array(arr) = x_ref else {
         panic!("this shouldn't be reachable.");
     };

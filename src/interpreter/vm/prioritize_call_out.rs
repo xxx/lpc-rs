@@ -127,6 +127,7 @@ mod tests {
     use super::*;
     use crate::{
         interpreter::{
+            CommittedReader,
             call_outs::CallOutBuilder,
             function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
             object_flags::ObjectFlags,
@@ -168,9 +169,10 @@ mod tests {
         let handle = vm.prioritize_call_out(idx).await;
         handle.await.unwrap();
 
-        proc.with_globals(|g| {
-            assert_eq!(g.get(0).unwrap(), &LpcRef::from(165));
-        });
+        assert_eq!(
+            vm.global_state.committed_global(&proc, 0u16),
+            LpcRef::from(165)
+        );
         vm.global_state
             .with_call_outs(|co| assert!(co.get(idx).is_none()));
     }
@@ -196,9 +198,10 @@ mod tests {
             let handle = vm.prioritize_call_out(idx).await;
             handle.await.unwrap();
 
-            bar_proc.with_globals(|g| {
-                assert_eq!(g.get(0).unwrap(), &LpcRef::from(165));
-            });
+            assert_eq!(
+                vm.global_state.committed_global(bar_proc, 0u16),
+                LpcRef::from(165)
+            );
             assert!(bar_proc.flags.test(ObjectFlags::Initialized));
             vm.global_state.with_call_outs(|co| {
                 assert!(co.get(idx).is_none());
