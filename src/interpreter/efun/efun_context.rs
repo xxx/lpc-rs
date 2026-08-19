@@ -14,7 +14,6 @@ use crate::{
         call_frame::CallFrame,
         call_outs::CallOuts,
         call_stack::CallStack,
-        gc::gc_bank::GcRefBank,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
@@ -88,20 +87,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             /// Get access to the `tx` channel, to talk to the [`Vm`](crate::interpreter::vm::Vm)
             pub fn tx(&self) -> Sender<VmOp>;
         }
-    }
-
-    pub fn with_upvalues<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&GcRefBank) -> R,
-    {
-        self.task_context.with_upvalues(f)
-    }
-
-    pub fn with_upvalues_mut<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&mut GcRefBank) -> R,
-    {
-        self.task_context.with_upvalues_mut(f)
     }
 
     pub fn with_call_outs<F, R>(&self, f: F) -> R

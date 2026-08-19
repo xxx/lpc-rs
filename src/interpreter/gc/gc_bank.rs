@@ -1,43 +1,45 @@
 use std::ops::{Index, IndexMut};
 
-use bit_set::BitSet;
 use delegate::delegate;
 use lpc_rs_core::register::Register;
-use lpc_rs_errors::Result;
-use slab::{Iter as SlabIter, Slab};
-use tracing::instrument;
+use slab::Slab;
 
-use crate::interpreter::{gc::sweep::Sweep, lpc_ref::LpcRef};
+use crate::interpreter::stm::VarId;
 
-pub type GcRefBank = GcBank<LpcRef>;
+/// The Vm's upvalue bank. Each slot holds a transactional [`VarId`]
+/// (see the note on `SVar` in `crate::interpreter::stm`): the slab owns
+/// only the slot's *identity* for GC-root purposes, while the committed
+/// value lives in the committer's world. Index re-use after a sweep is
+/// harmless — a reused slot simply mints a fresh `VarId`.
+pub(crate) type GcVarIdBank = GcBank<VarId>;
 
 /// A [`Slab`]-backed store that can re-use freed indices.
-#[derive(Debug, Default)]
-pub struct GcBank<T> {
+#[derive(Debug)]
+pub(crate) struct GcBank<T> {
     registers: Slab<T>,
+}
+
+impl<T> Default for GcBank<T> {
+    fn default() -> Self {
+        Self {
+            registers: Slab::new(),
+        }
+    }
 }
 
 impl<T> GcBank<T> {
     delegate! {
         to self.registers {
-            pub fn is_empty(&self) -> bool;
             pub fn len(&self) -> usize;
             pub fn insert(&mut self, value: T) -> usize;
             pub fn reserve(&mut self, additional: usize);
-            pub fn try_remove(&mut self, index: usize) -> Option<T>;
-            pub fn get(&self, index: usize) -> Option<&T>;
-            pub fn iter(&self) -> SlabIter<'_, T>;
+            /// `Slab::retain` with the slot's value handed out so the caller
+            /// can release a removed slot's identity (e.g. `drop_var` on a
+            /// swept upvalue cell).
+            pub fn retain<F>(&mut self, f: F)
+            where
+                F: FnMut(usize, &mut T) -> bool;
         }
-    }
-}
-
-impl<T> Sweep for GcBank<T> {
-    #[instrument(skip(self))]
-    fn sweep(&mut self, marked: &BitSet) -> Result<()> {
-        // `marked` is what's still alive. The rest can be culled.
-        self.registers.retain(|idx, _e| marked.contains(idx));
-
-        Ok(())
     }
 }
 

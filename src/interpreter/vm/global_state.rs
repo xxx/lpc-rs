@@ -10,9 +10,9 @@ use tracing::instrument;
 
 use crate::interpreter::{
     call_outs::CallOuts,
-    gc::{gc_bank::GcRefBank, mark::Mark, sweep::Sweep},
+    gc::{gc_bank::GcVarIdBank, mark::Mark},
     object_space::ObjectSpace,
-    stm::{CommitProtocol, Committer, Snapshot},
+    stm::{CommitProtocol, Committer, Snapshot, VarId, drop_var},
     vm::vm_op::VmOp,
 };
 
@@ -25,9 +25,10 @@ pub struct GlobalState {
     #[builder(default, setter(into))]
     pub object_space: Arc<ObjectSpace>,
 
-    /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`](crate::interpreter::task::Task)s
+    /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`](crate::interpreter::task::Task)s.
+    /// Each slot holds a transactional [`VarId`]; the committed value lives in the committer's world.
     #[builder(default, setter(into))]
-    upvalues: Arc<RwLock<GcRefBank>>,
+    upvalues: Arc<RwLock<GcVarIdBank>>,
 
     /// The [`Config`] that's in use for this [`Vm`]
     #[builder(default, setter(into))]
@@ -65,7 +66,7 @@ impl GlobalState {
 
         Self {
             object_space: Arc::new(ObjectSpace::new(conf.clone())),
-            upvalues: Arc::new(RwLock::new(GcRefBank::default())),
+            upvalues: Arc::new(RwLock::new(GcVarIdBank::default())),
             config: conf,
             call_outs: RwLock::new(CallOuts::new(tx.clone())),
             gil: Mutex::new(()),
@@ -93,10 +94,25 @@ impl GlobalState {
         let _ = self.committer_tx.send(CommitProtocol::Close);
     }
 
+    /// Cull every upvalue slot that wasn't marked, telling the committer
+    /// to forget each culled cell's transactional identity.
     #[instrument(skip(self))]
     #[inline]
     pub fn sweep(&self, marked: &BitSet) -> Result<()> {
-        self.with_upvalues_mut(|g| g.sweep(marked))
+        let mut removed: Vec<VarId> = Vec::new();
+        self.with_upvalues_mut(|cells| {
+            cells.retain(|idx, id| {
+                if marked.contains(idx) {
+                    return true;
+                }
+                removed.push(*id);
+                false
+            });
+        });
+        for id in removed {
+            drop_var(&self.committer_tx, id);
+        }
+        Ok(())
     }
 
     pub fn with_call_outs<F, R>(&self, f: F) -> R
@@ -113,21 +129,24 @@ impl GlobalState {
         f(&mut self.call_outs.write())
     }
 
-    pub fn with_upvalues<F, R>(&self, f: F) -> R
+    /// Read the upvalue bank. Production never reads the cells directly
+    /// (value reads route through the committer), so this is test-only.
+    #[cfg(test)]
+    pub(crate) fn with_upvalues<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&GcRefBank) -> R,
+        F: FnOnce(&GcVarIdBank) -> R,
     {
         f(&self.upvalues.read())
     }
 
-    pub fn with_upvalues_mut<F, R>(&self, f: F) -> R
+    pub(crate) fn with_upvalues_mut<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&mut GcRefBank) -> R,
+        F: FnOnce(&mut GcVarIdBank) -> R,
     {
         f(&mut self.upvalues.write())
     }
 
-    pub fn clone_upvalues(&self) -> Arc<RwLock<GcRefBank>> {
+    pub(crate) fn clone_upvalues(&self) -> Arc<RwLock<GcVarIdBank>> {
         self.upvalues.clone()
     }
 }

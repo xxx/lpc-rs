@@ -40,7 +40,7 @@ use tracing::{error, instrument, trace, warn};
 use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,
-    gc::{gc_bank::GcRefBank, mark::Mark},
+    gc::{gc_bank::GcVarIdBank, mark::Mark},
     gil::run_with_gil,
     lpc_int::LpcInt,
     lpc_ref::LpcRef,
@@ -101,10 +101,10 @@ pub struct TaskSeed {
 impl TaskSeed {
     /// Build the entry [`CallFrame`] for one attempt, copying `self.args`
     /// into the frame's registers exactly as `prepare_function_call` does.
-    pub fn build_call_frame(
+    pub(crate) fn build_call_frame(
         &self,
         upvalue_ptrs: Option<&[Register]>,
-        vm_upvalues: Arc<RwLock<GcRefBank>>,
+        vm_upvalues: Arc<RwLock<GcVarIdBank>>,
     ) -> Result<CallFrame> {
         let mut frame = CallFrame::new(
             self.process.clone(),

@@ -47,9 +47,14 @@ pub(crate) fn get_location_in_frame<'a>(
             let upvalue_ptrs = &frame.upvalue_ptrs;
             let reg = upvalue_ptrs[upv.index() as usize];
 
-            let (val, len) = frame.with_upvalues(|uv| (uv[reg].clone(), uv.len()));
-            trace!("upvalue data: idx = {}, len = {}", reg, len);
-            Ok(Cow::Owned(val))
+            // Read through the transaction, exactly like the Global arm
+            // above: the slab slot holds only the cell's identity, and an
+            // unwritten cell reads NULL.
+            let (cell, bank_len) = frame.with_upvalues(|uv| (uv[reg], uv.len()));
+            trace!("upvalue data: cell = {:?}, bank len = {}", cell, bank_len);
+            Ok(Cow::Owned(
+                txn.with(|t| t.read(cell).unwrap_or_else(|| NULL.clone())),
+            ))
         }
     }
 }
@@ -99,7 +104,16 @@ where
             let upvalues = &frame.upvalue_ptrs;
             let idx = upvalues[reg.index() as usize];
 
-            frame.with_upvalues_mut(|uv| func(&mut uv[idx]))
+            // In-txn read-modify-write through the cell's identity: the
+            // read is tracked, the write lands in the in-flight changeset —
+            // atomic per attempt, exactly like the Global arm above.
+            let cell = frame.with_upvalues(|uv| uv[idx]);
+            txn.with(|t| {
+                let mut cur = t.read(cell).unwrap_or_else(|| NULL.clone());
+                func(&mut cur)?;
+                t.write(cell, cur);
+                Ok(())
+            })
         }
     }
 }

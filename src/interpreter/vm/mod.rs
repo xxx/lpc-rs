@@ -403,7 +403,7 @@ mod tests {
             .unwrap();
 
         let assert_len = |ctx: &TaskContext, len| {
-            ctx.with_upvalues(|uv| {
+            ctx.global_state.with_upvalues(|uv| {
                 assert_eq!(uv.len(), len);
             });
         };

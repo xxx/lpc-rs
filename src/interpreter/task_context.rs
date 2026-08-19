@@ -13,7 +13,6 @@ use crate::{
     compiler::Compiler,
     interpreter::{
         call_outs::CallOuts,
-        gc::gc_bank::GcRefBank,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
@@ -291,22 +290,6 @@ impl TaskContext {
     #[inline]
     pub fn tx(&self) -> Sender<VmOp> {
         self.global_state.tx.clone()
-    }
-
-    /// Access upvalues
-    pub fn with_upvalues<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&GcRefBank) -> R,
-    {
-        self.global_state.with_upvalues(f)
-    }
-
-    /// Access upvalues mutably
-    pub fn with_upvalues_mut<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&mut GcRefBank) -> R,
-    {
-        self.global_state.with_upvalues_mut(f)
     }
 
     /// Access call-outs

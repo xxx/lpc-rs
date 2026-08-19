@@ -20,10 +20,10 @@ use tracing::{instrument, trace};
 
 use crate::interpreter::{
     bank::RefBank,
-    gc::{gc_bank::GcRefBank, mark::Mark, unique_id::UniqueId},
+    gc::{gc_bank::GcVarIdBank, mark::Mark, unique_id::UniqueId},
     lpc_ref::{LpcRef, NULL},
     process::Process,
-    stm::TxnHandle,
+    stm::{TxnHandle, VarId},
 };
 
 /// A representation of a local variable name and value.
@@ -78,9 +78,11 @@ pub struct CallFrame {
     #[builder(default, setter(into))]
     pub upvalue_ptrs: ThinVec<Register>,
 
-    /// The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
+    /// The upvalue data from the [`Vm`](crate::interpreter::vm::Vm).
+    /// Each slot holds a transactional [`VarId`]; the committed value
+    /// lives in the committer's world.
     #[builder(setter(into))]
-    vm_upvalues: Arc<RwLock<GcRefBank>>,
+    vm_upvalues: Arc<RwLock<GcVarIdBank>>,
 
     /// This object's unique ID, for garbage collection purposes
     #[builder(default)]
@@ -98,12 +100,12 @@ impl CallFrame {
     ///   the call to this function?
     /// * `upvalue_ptrs` - The indexes pointing to the real data, contained in `vm_upvalues`
     /// * `vm_upvalues` - The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
-    pub fn new<P, V>(
+    pub(crate) fn new<P, V>(
         process: P,
         function: Arc<ProgramFunction>,
         called_with_num_args: RegisterSize,
         upvalue_ptrs: Option<V>,
-        vm_upvalues: Arc<RwLock<GcRefBank>>,
+        vm_upvalues: Arc<RwLock<GcVarIdBank>>,
     ) -> Self
     where
         P: Into<Arc<Process>>,
@@ -132,13 +134,13 @@ impl CallFrame {
     ///   is used for ellipsis args and `call_other`)
     /// * `upvalue_ptrs` - The indexes pointing to the real data, contained in `vm_upvalues`
     /// * `vm_upvalues` - The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
-    pub fn with_minimum_arg_capacity<P, V>(
+    pub(crate) fn with_minimum_arg_capacity<P, V>(
         process: P,
         function: Arc<ProgramFunction>,
         called_with_num_args: RegisterSize,
         arg_capacity: RegisterSize,
         upvalue_ptrs: Option<V>,
-        vm_upvalues: Arc<RwLock<GcRefBank>>,
+        vm_upvalues: Arc<RwLock<GcVarIdBank>>,
     ) -> Self
     where
         P: Into<Arc<Process>>,
@@ -164,23 +166,16 @@ impl CallFrame {
         instance
     }
 
-    pub fn with_upvalues<F, R>(&self, f: F) -> R
+    pub(crate) fn with_upvalues<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&GcRefBank) -> R,
+        F: FnOnce(&GcVarIdBank) -> R,
     {
         f(&self.vm_upvalues.read())
     }
 
-    pub fn with_upvalues_mut<F, R>(&self, f: F) -> R
+    pub(crate) fn with_upvalues_and_ptrs_mut<F, R>(&mut self, f: F) -> R
     where
-        F: FnOnce(&mut GcRefBank) -> R,
-    {
-        f(&mut self.vm_upvalues.write())
-    }
-
-    pub fn with_upvalues_and_ptrs_mut<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&mut GcRefBank, &mut ThinVec<Register>) -> R,
+        F: FnOnce(&mut GcVarIdBank, &mut ThinVec<Register>) -> R,
     {
         f(&mut self.vm_upvalues.write(), &mut self.upvalue_ptrs)
     }
@@ -205,7 +200,9 @@ impl CallFrame {
             upvalues.reserve(num_upvalues as usize);
 
             for _ in 0..num_upvalues {
-                let idx = upvalues.insert(NULL);
+                // Each cell mints its own transactional identity; the
+                // value itself lives in the committer's world.
+                let idx = upvalues.insert(VarId::new());
                 ptrs.push(Register(RegisterSize::try_from(idx).unwrap()));
             }
         })
@@ -233,9 +230,11 @@ impl CallFrame {
                 let upvalues = &self.upvalue_ptrs;
                 let idx = upvalues[reg.index() as usize];
 
-                self.with_upvalues_mut(|uv| {
-                    uv[idx] = lpc_ref;
-                });
+                // A blind in-txn write through the cell's identity,
+                // exactly like the Global arm above: the slot itself
+                // holds no value.
+                let cell = self.with_upvalues(|uv| uv[idx]);
+                txn.with(|t| t.write(cell, lpc_ref));
             }
         }
     }
@@ -262,7 +261,8 @@ impl CallFrame {
                         let upvalues = &self.upvalue_ptrs;
                         let data_reg = upvalues[ptr_reg.index() as usize];
 
-                        self.with_upvalues(|uv| uv[data_reg].clone())
+                        let cell = self.with_upvalues(|uv| uv[data_reg]);
+                        txn.with(|t| t.read(cell).unwrap_or_else(|| NULL.clone()))
                     }
                 };
 
@@ -556,7 +556,7 @@ mod tests {
                 .unwrap();
 
             let fs = ProgramFunction::new(prototype, 7);
-            let vm_upvalues = RwLock::new(GcBank::<LpcRef>::default());
+            let vm_upvalues = RwLock::new(GcBank::<VarId>::default());
 
             let frame = CallFrameBuilder::default()
                 .process(process)

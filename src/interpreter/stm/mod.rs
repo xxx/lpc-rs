@@ -17,7 +17,7 @@ mod snapshot;
 pub(crate) use changeset::Changeset;
 pub(crate) use committer::{CommitProtocol, Committer, LiveSnapshot};
 pub use retry::CommittedReader;
-pub(crate) use retry::{RetryStats, commit_changeset, start_txn};
+pub(crate) use retry::{RetryStats, commit_changeset, drop_var, start_txn};
 pub(crate) use snapshot::Snapshot;
 
 static VAR_ID_COUNT: AtomicU64 = AtomicU64::new(0);

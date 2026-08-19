@@ -13,7 +13,10 @@ use tokio::sync::mpsc;
 use super::*;
 use crate::{
     interpreter::{
-        CommittedReader, lpc_ref::LpcRef, object_space::ObjectSpace, process::Process,
+        CommittedReader,
+        lpc_ref::{LpcRef, NULL},
+        object_space::ObjectSpace,
+        process::Process,
         vm::global_state::GlobalState,
     },
     test_support::{compile_prog, run_prog},
@@ -2608,23 +2611,36 @@ mod test_upvalues {
 
         let frame = snapshot.pop().unwrap();
 
-        assert_eq!(
-            upvalues.len(),
-            frame.with_upvalues(|uv| uv.len()),
-            "frame upvalues: {:?}\nvm upvalues: {:?}",
-            upvalues
-                .iter()
-                .map(|i| i.clone().into())
-                .collect::<Vec<BareVal>>(),
-            frame.with_upvalues(|uv| format!("{:?}", uv.iter().collect::<Vec<_>>()))
-        );
+        let expected: Vec<BareVal> = upvalues.iter().map(|i| i.clone().into()).collect();
 
+        // The frame's upvalue cells hold transactional identities, not the
+        // values themselves (C6): each slot is a `VarId` whose committed
+        // value is read through the frame's transaction. Slot order still
+        // matches upvalue-creation order, so the original position-based
+        // assertions apply to the committed reads.
         frame.with_upvalues(|uv| {
-            for (i, v) in upvalues.iter().enumerate() {
-                let v: BareVal = v.clone().into();
-                v.assert_equal(&uv[i]);
+            let values: Vec<LpcRef> = (0..uv.len())
+                .map(|i| {
+                    task.txn
+                        .with(|t| t.read(uv[i]).unwrap_or_else(|| NULL.clone()))
+                })
+                .collect();
+
+            assert_eq!(
+                expected.len(),
+                values.len(),
+                "expected upvalues: {:?}\nvm upvalues: {:?}\nbank: {:?}\n",
+                expected,
+                values,
+                (0..uv.len())
+                    .map(|i| format!("{:?}", uv[i]))
+                    .collect::<Vec<_>>()
+            );
+
+            for (v, ev) in values.iter().zip(&expected) {
+                ev.assert_equal(v);
             }
-        })
+        });
     }
 
     async fn check_frame_upvalue_ptrs<T>(code: &str, upvalue_ptrs: &[T])
@@ -2665,6 +2681,58 @@ mod test_upvalues {
 
         let expected: IndexMap<&str, BareVal> = IndexMap::new();
         check_local_vars(code, &expected).await;
+    }
+
+    #[tokio::test]
+    async fn upvalue_writes_survive_gc() {
+        // a closure captures a *local*, so `i++` and `return i`
+        // route through the **Upvalue** arm of `apply_in_location` /
+        // `get_location_in_frame` via the transaction. The cell is committed
+        // during the eval; after the frame that held the closure is gone, the
+        // cell is no longer marked (no live `FunctionPtr` references it), so
+        // a sweep drops its `VarId` out of the committer's world. The txn
+        // must remain usable and consistent afterwards — no torn cell.
+        let code = indoc! { r##"
+                int bump() {
+                    int i = 0;
+                    function inc = (: i++ :);
+                    inc();
+                    inc();
+                    return i;
+                }
+            "##};
+
+        let mut task = run_prog(code).await;
+        let f = task
+            .context
+            .process()
+            .program
+            .unmangled_functions
+            .get("bump")
+            .cloned()
+            .expect("bump");
+        task.eval(f, &[]).await.unwrap();
+        assert_eq!(
+            task.result(),
+            Some(LpcRef::from(2)),
+            "bump() should have incremented the captured local twice"
+        );
+
+        // The frame holding the closure is gone; mark (stack + txn written
+        // values) and sweep the cell bank. The dead cell's VarId is dropped
+        // from the committer's world.
+        let mut marked = BitSet::new();
+        let mut processed = BitSet::new();
+        task.mark(&mut marked, &mut processed).unwrap();
+        task.context.global_state.sweep(&marked).unwrap();
+
+        // The txn remains usable after the sweep: a fresh read through the
+        // committer for the (now-swept) cell falls back to NULL, and no
+        // panic or inconsistency occurs. The dead cell is gone from the
+        // shared bank.
+        task.context.global_state.with_upvalues(|uv| {
+            assert_eq!(uv.len(), 0, "swept cell should be removed from the bank")
+        });
     }
 
     #[tokio::test]
@@ -2903,7 +2971,6 @@ mod test_upvalues {
 
 mod test_gc {
     use super::*;
-    use crate::interpreter::gc::sweep::Sweep;
 
     #[tokio::test]
     async fn test_gc_is_accurate() {
@@ -2929,17 +2996,18 @@ mod test_gc {
 
         let task = run_prog(code).await;
         let ctx = &task.context;
-        ctx.with_upvalues(|uv| {
-            assert!(!uv.is_empty());
+        ctx.global_state.with_upvalues(|uv| {
+            assert!(uv.len() > 0);
         });
 
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
         task.mark(&mut marked, &mut processed).unwrap();
-        ctx.with_upvalues_mut(|uv| {
-            uv.sweep(&marked).unwrap();
-
-            assert!(uv.is_empty());
+        // Sweep through the GlobalState, which also tells the committer to
+        // forget each culled cell's transactional identity (C6).
+        ctx.global_state.sweep(&marked).unwrap();
+        ctx.global_state.with_upvalues(|uv| {
+            assert_eq!(uv.len(), 0);
         });
     }
 }
