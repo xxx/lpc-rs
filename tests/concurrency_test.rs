@@ -132,6 +132,43 @@ async fn lost_update_racy() {
     );
 }
 
+/// A read-modify-write that
+/// crosses two `call_other` boundaries must be atomic. Pre-join
+/// (per-sub-task transactions) `query_count` and `set_count` are separate
+/// transactions → lost updates. Post-join the whole `bump` is one
+/// transaction → the committer's conflict rule converges to exactly
+/// `tasks * iterations`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn call_other_cross_object_rmw_is_atomic() {
+    let counter = r#"
+        int count = 0;
+        int query_count() { return count; }
+        void set_count(int c) { count = c; }
+    "#;
+    let bump = r#"
+        void bump() {
+            object counter = find_object("/counter");
+            int c = counter->query_count();
+            counter->set_count(c + 1);
+        }
+    "#;
+    let vm = boot_vm(race_config(false)).await;
+    let counter_proc = vm
+        .create_process_from_code("/counter.c", counter)
+        .await
+        .unwrap();
+    let bump_proc = vm.create_process_from_code("/bump.c", bump).await.unwrap();
+
+    let results = spawn_applies(&vm, bump_proc, "bump", 8, 500).await;
+    assert_all_ok(&results);
+
+    let expected: LpcIntInner = 8 * 500;
+    assert_eq!(
+        read_global(&vm.global_state, &counter_proc, 0),
+        LpcRef::from(expected)
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn lost_update_gil() {
     let counter = r#"
@@ -243,7 +280,7 @@ async fn aliased_array_torn_read_gil() {
     assert_eq!(torn, 0, "{torn} of {} readers saw a torn pair", reads.len());
 }
 
-#[ignore = "lost-update race: left: LpcInt(810) right: LpcInt(10)"]
+#[ignore = "needs D9: environment()/move_object are physical (non-transactional) world state; concurrent physical moves corrupt the weights before the transaction can act. Revisit at D9 (transactional environment/inventory, move_semaphore deleted). C6 covers the global RMW half (see call_other_cross_object_rmw_is_atomic)."]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn multithread_sync_racy() {
     let room = indoc! { r#"
