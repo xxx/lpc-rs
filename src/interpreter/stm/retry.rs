@@ -125,7 +125,7 @@ pub(crate) async fn commit_changeset(
 pub(crate) async fn query_var(
     tx: &flume::Sender<CommitProtocol>,
     var_id: crate::interpreter::stm::VarId,
-) -> Result<LpcRef> {
+) -> Result<crate::interpreter::stm::WorldValue> {
     let (reply_tx, reply_rx) = flume::bounded(1);
     tx.send(CommitProtocol::Query {
         var_id,
@@ -178,7 +178,7 @@ impl CommittedReader for Arc<GlobalState> {
                 .spawn(move || reply_rx.recv())
                 .join()
                 .expect("query reply thread panicked");
-            value.expect("no reply from committer")
+            value.expect("no reply from committer").lpc_ref()
         })
     }
 }
@@ -264,7 +264,8 @@ mod tests {
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         stm::{
-            Transaction, VarId, Version, changeset::Changeset, committer::CommitProtocol, tests::*,
+            Transaction, VarId, Version, WorldValue, changeset::Changeset,
+            committer::CommitProtocol, tests::*,
         },
     };
 
@@ -280,7 +281,7 @@ mod tests {
 
     fn seed(tx: &flume::Sender<CommitProtocol>, v0: Version, var: VarId, value: LpcIntInner) {
         let mut seed = Changeset::new(v0);
-        seed.write(var, LpcRef::from(value));
+        seed.write(var, WorldValue::ref_of(LpcRef::from(value)));
         let (reply_tx, reply_rx) = flume::bounded(1);
         tx.send(CommitProtocol::Commit {
             changeset: seed,
@@ -353,7 +354,7 @@ mod tests {
         });
 
         let final_snapshot = close_committer(tx, handle);
-        let LpcRef::Int(LpcInt(total)) =
+        let WorldValue::Ref(LpcRef::Int(LpcInt(total))) =
             final_snapshot.read(counter).expect("counter cell missing")
         else {
             panic!("counter cell is not an int");
@@ -380,12 +381,12 @@ mod async_tests {
     use crate::interpreter::{
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
-        stm::{Changeset, CommitProtocol, Committer, Transaction, VarId},
+        stm::{Changeset, CommitProtocol, Committer, Transaction, VarId, WorldValue},
     };
 
     fn seed(committer: &mut Committer, var: VarId, value: LpcIntInner) {
         let mut seed = Changeset::new(committer.current_version());
-        seed.write(var, LpcRef::from(value));
+        seed.write(var, WorldValue::ref_of(LpcRef::from(value)));
         committer.commit(seed).expect("seed should commit");
     }
 
@@ -420,7 +421,10 @@ mod async_tests {
             .expect("committer channel closed");
         drop(tx);
         let final_snapshot = handle.join().expect("committer panicked");
-        assert_eq!(final_snapshot.read(counter), Some(LpcRef::from(6)));
+        assert_eq!(
+            final_snapshot.read(counter),
+            Some(WorldValue::ref_of(LpcRef::from(6)))
+        );
     }
 
     #[tokio::test]
@@ -432,11 +436,17 @@ mod async_tests {
         let committer_tx = tx.clone();
         let handle = std::thread::spawn(move || committer.run(committer_tx, rx));
 
-        assert_eq!(query_var(&tx, var).await.unwrap(), LpcRef::from(7));
+        assert_eq!(
+            query_var(&tx, var).await.unwrap(),
+            WorldValue::ref_of(LpcRef::from(7))
+        );
 
         drop_var(&tx, var);
         // The channel is FIFO, so the drop is processed before this query.
-        assert_eq!(query_var(&tx, var).await.unwrap(), LpcRef::Int(LpcInt(0)));
+        assert_eq!(
+            query_var(&tx, var).await.unwrap(),
+            WorldValue::ref_of(LpcRef::Int(LpcInt(0)))
+        );
 
         tx.send(CommitProtocol::Close)
             .expect("committer channel closed");
@@ -481,6 +491,9 @@ mod async_tests {
         drop(tx);
         let final_snapshot = handle.join().expect("committer panicked");
         // the rejected attempt wrote nothing; the re-run incremented 0 -> 1
-        assert_eq!(final_snapshot.read(counter), Some(LpcRef::from(1)));
+        assert_eq!(
+            final_snapshot.read(counter),
+            Some(WorldValue::ref_of(LpcRef::from(1)))
+        );
     }
 }

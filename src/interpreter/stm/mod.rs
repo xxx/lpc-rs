@@ -13,12 +13,14 @@ mod changeset;
 mod committer;
 mod retry;
 mod snapshot;
+mod world_value;
 
 pub(crate) use changeset::Changeset;
 pub(crate) use committer::{CommitProtocol, Committer, LiveSnapshot};
 pub use retry::CommittedReader;
 pub(crate) use retry::{RetryStats, commit_changeset, drop_var, start_txn};
 pub(crate) use snapshot::Snapshot;
+pub(crate) use world_value::WorldValue;
 
 static VAR_ID_COUNT: AtomicU64 = AtomicU64::new(0);
 // Stable ID for transactional cells
@@ -73,7 +75,15 @@ impl Transaction {
         }
     }
 
+    /// Read a slot value (globals, upvalues) — the changeset first, so an
+    /// attempt sees its own writes, then the committed world.
     pub(crate) fn read(&mut self, var_id: VarId) -> Option<LpcRef> {
+        self.read_value(var_id).map(WorldValue::lpc_ref)
+    }
+
+    /// Read the world value of a var: `Ref` for slots, payload contents for
+    /// payload vars.
+    pub(crate) fn read_value(&mut self, var_id: VarId) -> Option<WorldValue> {
         self.changeset.track_read(var_id);
 
         self.changeset
@@ -81,12 +91,13 @@ impl Transaction {
             .or_else(|| self.snapshot.read(var_id))
     }
 
+    /// Write a slot value to the changeset.
     pub(crate) fn write(&mut self, var_id: VarId, value: LpcRef) {
-        self.changeset.write(var_id, value);
+        self.changeset.write(var_id, WorldValue::ref_of(value));
     }
 
     /// The values this attempt has written (GC roots until commit).
-    pub(crate) fn written_values(&self) -> impl Iterator<Item = &LpcRef> {
+    pub(crate) fn written_values(&self) -> impl Iterator<Item = &WorldValue> {
         self.changeset.written_values()
     }
 

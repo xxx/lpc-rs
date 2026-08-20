@@ -2,15 +2,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::interpreter::{
-    lpc_ref::LpcRef,
-    stm::{VarId, Version},
-};
+use crate::interpreter::stm::{VarId, Version, WorldValue};
 
 #[derive(Debug, Clone)]
 pub(crate) struct Changeset {
     version: Version,
-    writes: BTreeMap<VarId, LpcRef>,
+    writes: BTreeMap<VarId, WorldValue>,
     reads: BTreeSet<VarId>,
 }
 
@@ -24,12 +21,12 @@ impl Changeset {
     }
 
     /// Read a variable from the changeset.
-    pub(crate) fn read(&self, var_id: VarId) -> Option<LpcRef> {
+    pub(crate) fn read(&self, var_id: VarId) -> Option<WorldValue> {
         self.writes.get(&var_id).cloned()
     }
 
     /// Write a variable to the changeset.
-    pub(crate) fn write(&mut self, var_id: VarId, value: LpcRef) {
+    pub(crate) fn write(&mut self, var_id: VarId, value: WorldValue) {
         self.writes.insert(var_id, value);
     }
 
@@ -51,12 +48,12 @@ impl Changeset {
         self.writes.keys().copied().collect()
     }
 
-    pub(crate) fn into_writes(self) -> BTreeMap<VarId, LpcRef> {
+    pub(crate) fn into_writes(self) -> BTreeMap<VarId, WorldValue> {
         self.writes
     }
 
     /// The values this changeset has written, for GC rooting.
-    pub(crate) fn written_values(&self) -> impl Iterator<Item = &LpcRef> {
+    pub(crate) fn written_values(&self) -> impl Iterator<Item = &WorldValue> {
         self.writes.values()
     }
 }
@@ -75,11 +72,11 @@ mod tests {
         let mut changeset = Changeset::new(Version(0));
         let var_id = VarId(0);
 
-        let value1 = LpcRef::from(666);
+        let value1 = WorldValue::ref_of(666.into());
         changeset.write(var_id, value1.clone());
         assert_eq!(changeset.read(var_id), Some(value1));
 
-        let value2 = LpcRef::from(42);
+        let value2 = WorldValue::ref_of(42.into());
         changeset.write(var_id, value2.clone());
         assert_eq!(changeset.read(var_id), Some(value2));
     }

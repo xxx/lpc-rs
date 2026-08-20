@@ -6,9 +6,8 @@ use std::{
 use imbl::OrdMap;
 use tracing::error;
 
-use crate::interpreter::{
-    lpc_ref::LpcRef,
-    stm::{VarId, Version, changeset::Changeset, snapshot::Snapshot},
+use crate::interpreter::stm::{
+    VarId, Version, WorldValue, changeset::Changeset, snapshot::Snapshot,
 };
 
 #[derive(Debug, Default)]
@@ -54,7 +53,7 @@ pub(crate) enum CommitProtocol {
     /// test/debug/tooling, Do not use this for normal operations).
     Query {
         var_id: VarId,
-        reply: flume::Sender<LpcRef>,
+        reply: flume::Sender<WorldValue>,
     },
     /// Remove a var from the world (swept upvalue cells).
     /// The var's value would otherwise be retained forever in the heap.
@@ -181,10 +180,7 @@ impl Committer {
                 self.evict_old_versions();
             }
             CommitProtocol::Query { var_id, reply } => {
-                let value = self
-                    .snapshot
-                    .read(var_id)
-                    .unwrap_or_else(|| LpcRef::from(0));
+                let value = self.snapshot.read(var_id).unwrap_or_else(WorldValue::null);
                 reply.send(value).unwrap_or_else(|e| {
                     error!("Failed to send query reply: {e}");
                     self.stats.error()
@@ -302,6 +298,12 @@ impl Committer {
         self.snapshot.version()
     }
 
+    /// A clone of the current world snapshot (sibling test modules can't
+    /// reach the field directly).
+    pub(crate) fn snapshot_clone(&self) -> Snapshot {
+        self.snapshot.clone()
+    }
+
     /// Run the committer loop, rejecting the first `n` `Commit`s it
     /// receives. The rejection is a synthetic abort with the same
     /// `Err(changeset)` reply the conflict rule would send.
@@ -339,7 +341,7 @@ mod tests {
     use crate::interpreter::{
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
-        stm::{Transaction, tests::*},
+        stm::{Transaction, WorldValue, tests::*},
     };
 
     /// Start a transaction against the committer's current world and hand
@@ -433,7 +435,7 @@ mod tests {
         for (worker, var_id) in committed {
             assert_eq!(
                 final_snapshot.read(var_id),
-                Some(LpcRef::from(worker as LpcIntInner))
+                Some(WorldValue::ref_of(LpcRef::from(worker as LpcIntInner)))
             );
         }
     }
@@ -445,24 +447,30 @@ mod tests {
 
         let mut changeset1 = Changeset::new(version);
         let var_id1 = VarId::new();
-        changeset1.write(var_id1, LpcRef::from(123));
+        changeset1.write(var_id1, WorldValue::ref_of(LpcRef::from(123)));
 
         let mut changeset2 = Changeset::new(version);
         let var_id2 = VarId::new();
-        changeset2.write(var_id2, LpcRef::from(456));
+        changeset2.write(var_id2, WorldValue::ref_of(LpcRef::from(456)));
 
         let mut changeset3 = Changeset::new(version);
         // ID 2 was written after this changeset was created, so we're invalid by the conflict rule.
         changeset3.track_read(var_id2);
-        changeset3.write(var_id1, LpcRef::from("boo!"));
+        changeset3.write(var_id1, WorldValue::ref_of(LpcRef::from("boo!")));
 
         committer.commit(changeset1).unwrap();
         committer.commit(changeset2).unwrap();
         assert!(committer.commit(changeset3).is_err());
 
         assert_eq!(committer.write_history.len(), 2);
-        assert_eq!(committer.snapshot.read(var_id1).unwrap(), LpcRef::from(123));
-        assert_eq!(committer.snapshot.read(var_id2).unwrap(), LpcRef::from(456));
+        assert_eq!(
+            committer.snapshot.read(var_id1).unwrap(),
+            WorldValue::ref_of(LpcRef::from(123))
+        );
+        assert_eq!(
+            committer.snapshot.read(var_id2).unwrap(),
+            WorldValue::ref_of(LpcRef::from(456))
+        );
     }
 
     #[test]
@@ -472,16 +480,19 @@ mod tests {
 
         let mut changeset1 = Changeset::new(version);
         let var_id = VarId::new();
-        changeset1.write(var_id, LpcRef::from(123));
+        changeset1.write(var_id, WorldValue::ref_of(LpcRef::from(123)));
 
         let mut changeset2 = Changeset::new(version);
-        changeset2.write(var_id, LpcRef::from(456));
+        changeset2.write(var_id, WorldValue::ref_of(LpcRef::from(456)));
 
         committer.commit(changeset2).unwrap();
         committer.commit(changeset1).unwrap(); // last commit wins
 
         assert_eq!(committer.write_history.len(), 2);
-        assert_eq!(committer.snapshot.read(var_id).unwrap(), LpcRef::from(123));
+        assert_eq!(
+            committer.snapshot.read(var_id).unwrap(),
+            WorldValue::ref_of(LpcRef::from(123))
+        );
     }
 
     #[test]
@@ -493,7 +504,7 @@ mod tests {
         let mut changeset1 = Changeset::new(Version::new());
 
         let var_id = VarId::new();
-        changeset1.write(var_id, LpcRef::from(123));
+        changeset1.write(var_id, WorldValue::ref_of(LpcRef::from(123)));
 
         assert!(committer.commit(changeset1).is_err());
 
@@ -524,7 +535,7 @@ mod tests {
         let initial_value = 100;
 
         let mut seed = Changeset::new(initial.version());
-        seed.write(counter, LpcRef::from(initial_value));
+        seed.write(counter, WorldValue::ref_of(LpcRef::from(initial_value)));
         committer.commit(seed).unwrap();
 
         let committer_tx = tx.clone();
@@ -587,13 +598,13 @@ mod tests {
             .into_iter()
             .find(|(_, ok)| *ok)
             .expect("one worker should commit");
-        let expected = LpcRef::from(initial_value + 1 + winner as LpcIntInner);
+        let expected = WorldValue::ref_of(LpcRef::from(initial_value + 1 + winner as LpcIntInner));
         assert_eq!(final_snapshot.read(counter), Some(expected));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn concurrent_increments_total_equals_n() {
-        // The B4 mirror of lost_update_racy: 8 tasks x 50 increments of
+        // The incremental mirror of lost_update_racy: 8 tasks x 50 increments of
         // `count = count + 1` with no atomics, each through the full
         // start / commit / retry cycle. Every increment is read-validated,
         // so a lost update is impossible - rejected attempts re-run until
@@ -607,7 +618,7 @@ mod tests {
         let initial = committer.snapshot.clone();
         {
             let mut seed = Changeset::new(initial.version());
-            seed.write(counter, LpcRef::from(0));
+            seed.write(counter, WorldValue::ref_of(LpcRef::from(0)));
             committer.commit(seed).unwrap();
         }
         let committer_tx = tx.clone();
@@ -671,7 +682,7 @@ mod tests {
         drop(tx);
         let final_snapshot = handle.join().expect("committer panicked");
 
-        let LpcRef::Int(LpcInt(total)) =
+        let WorldValue::Ref(LpcRef::Int(LpcInt(total))) =
             final_snapshot.read(counter).expect("counter cell missing")
         else {
             panic!("counter cell is not an int");
@@ -687,7 +698,7 @@ mod tests {
         let initial = committer.snapshot.clone();
         {
             let mut seed = Changeset::new(initial.version());
-            seed.write(var_id, LpcRef::from(1));
+            seed.write(var_id, WorldValue::ref_of(LpcRef::from(1)));
             committer.commit(seed).unwrap();
         }
         let committer_tx = tx.clone();
@@ -724,8 +735,14 @@ mod tests {
 
         // The reader's snapshot is an immutable world: it still sees the
         // pre-commit value, while the latest snapshot shows the new one.
-        assert_eq!(reader_snapshot.read(var_id), Some(LpcRef::from(1)));
-        assert_eq!(final_snapshot.read(var_id), Some(LpcRef::from(2)));
+        assert_eq!(
+            reader_snapshot.read(var_id),
+            Some(WorldValue::ref_of(LpcRef::from(1)))
+        );
+        assert_eq!(
+            final_snapshot.read(var_id),
+            Some(WorldValue::ref_of(LpcRef::from(2)))
+        );
     }
 
     /// Eviction follows the oldest live snapshot, and write history stays
@@ -771,7 +788,7 @@ mod tests {
 
         // A base older than the watermark is rejected, not checked.
         let mut stale = Changeset::new(v0);
-        stale.write(cell, LpcRef::from(3));
+        stale.write(cell, WorldValue::ref_of(LpcRef::from(3)));
         assert!(committer.commit(stale).is_err());
         assert_eq!(committer.stats.conflicts, 1);
     }
@@ -791,11 +808,14 @@ mod tests {
             },
             &tx,
         );
-        assert_eq!(reply_rx.recv().unwrap(), LpcRef::from(0));
+        assert_eq!(
+            reply_rx.recv().unwrap(),
+            WorldValue::ref_of(LpcRef::from(0))
+        );
 
         // committed value is visible
         let mut seed = Changeset::new(committer.snapshot.version());
-        seed.write(var, LpcRef::from(7));
+        seed.write(var, WorldValue::ref_of(LpcRef::from(7)));
         committer.commit(seed).unwrap();
         let (reply_tx, reply_rx) = flume::bounded(1);
         committer.process(
@@ -805,7 +825,10 @@ mod tests {
             },
             &tx,
         );
-        assert_eq!(reply_rx.recv().unwrap(), LpcRef::from(7));
+        assert_eq!(
+            reply_rx.recv().unwrap(),
+            WorldValue::ref_of(LpcRef::from(7))
+        );
 
         // DropVar removes it
         committer.process(CommitProtocol::DropVar(var), &tx);
@@ -817,6 +840,9 @@ mod tests {
             },
             &tx,
         );
-        assert_eq!(reply_rx.recv().unwrap(), LpcRef::from(0));
+        assert_eq!(
+            reply_rx.recv().unwrap(),
+            WorldValue::ref_of(LpcRef::from(0))
+        );
     }
 }
