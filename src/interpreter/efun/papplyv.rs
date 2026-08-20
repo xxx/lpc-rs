@@ -13,11 +13,7 @@ pub async fn papplyv<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
 
     let arg_array = context.resolve_local_register(2 as RegisterSize);
 
-    let result = arg_array.with_array(context.txn(), |arr| {
-        ptr.partially_apply(arr);
-
-        ptr.into()
-    })?;
+    let result = arg_array.with_array(context.txn(), |arr| ptr.partially_apply(arr).into())?;
 
     context.return_efun_result(result);
 
@@ -61,16 +57,15 @@ mod tests {
 
         assert_eq!(func.name(), "dump");
 
-        func.with_partial_args(|args| {
-            assert_eq!(
-                args.iter()
-                    .map(|a| a.as_ref().unwrap().to_string())
-                    .collect::<Vec<_>>(),
-                ["foo", "bar"]
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-            );
-        });
+        let args = func.partial_args();
+        assert_eq!(
+            args.iter()
+                .map(|a| a.as_ref().unwrap().to_string())
+                .collect::<Vec<_>>(),
+            ["foo", "bar"]
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        );
     }
 }

@@ -396,9 +396,7 @@ impl Telnet {
             }
         }
 
-        let arg_index: Option<usize> = input_to
-            .ptr
-            .with_partial_args(|pa| pa.iter().position(|x| x.is_none()));
+        let arg_index: Option<usize> = input_to.ptr.partial_args().iter().position(|x| x.is_none());
         let input_arg = LpcString::from(msg).into();
         if let Some(idx) = arg_index {
             args[idx] = input_arg;
@@ -450,7 +448,6 @@ mod tests {
     };
 
     use indoc::indoc;
-    use parking_lot::RwLock;
     use thin_vec::thin_vec;
 
     use super::*;
@@ -551,7 +548,7 @@ mod tests {
         async fn check(vm: &Vm, proc: Arc<Process>) {
             let ptr = FunctionPtrBuilder::default()
                 .address(FunctionAddress::Dynamic("foo".into()))
-                .partial_args(RwLock::new(thin_vec![Some("/foo/bar".into())]))
+                .partial_args(thin_vec![Some("/foo/bar".into())])
                 .build()
                 .unwrap();
 

@@ -80,37 +80,31 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 next_index = r.index() + 1;
             }
 
-            ptr_arc.with_partial_args(|partial_args| {
-                if let Some(Some(lpc_ref)) = partial_args.get(i as usize) {
-                    // if a partially-applied-to arg is present, use it
-                    Self::type_check_and_assign_location(
-                        self,
-                        &mut new_frame,
-                        target_location,
-                        lpc_ref.clone(),
-                        i,
-                    )
-                } else if let Some(location) = from_slice.get(from_slice_index) {
-                    // check if the user passed an argument, which will either
-                    // fill in the next hole in the partial arguments, or
-                    // append to the end
+            if let Some(Some(lpc_ref)) = ptr_arc.partial_args().get(i as usize) {
+                // if a partially-applied-to arg is present, use it
+                Self::type_check_and_assign_location(
+                    self,
+                    &mut new_frame,
+                    target_location,
+                    lpc_ref.clone(),
+                    i,
+                )?;
+            } else if let Some(location) = from_slice.get(from_slice_index) {
+                // check if the user passed an argument, which will either
+                // fill in the next hole in the partial arguments, or
+                // append to the end
 
-                    let lpc_ref = get_location(&self.stack, &self.txn, *location)?;
-                    let result = Self::type_check_and_assign_location(
-                        self,
-                        &mut new_frame,
-                        target_location,
-                        lpc_ref.into_owned(),
-                        i,
-                    );
+                let lpc_ref = get_location(&self.stack, &self.txn, *location)?;
+                Self::type_check_and_assign_location(
+                    self,
+                    &mut new_frame,
+                    target_location,
+                    lpc_ref.into_owned(),
+                    i,
+                )?;
 
-                    from_slice_index += 1;
-
-                    result
-                } else {
-                    Ok(())
-                }
-            })?
+                from_slice_index += 1;
+            }
         }
 
         self.stack.push(new_frame)?;
@@ -145,7 +139,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
-    /// A broken-out function to avoid the ptr's lock being held across awaits.
     async fn extract_ptr_data(
         &mut self,
         ptr: &FunctionPtr,
@@ -163,10 +156,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         trace!("Calling function ptr: {}", ptr);
 
         let passed_args_count = num_args
-            + ptr.with_partial_args(|pa| {
-                pa.iter()
-                    .fold(0, |sum, arg| sum + arg.is_some() as RegisterSize)
-            });
+            + ptr
+                .partial_args()
+                .iter()
+                .fold(0, |sum, arg| sum + arg.is_some() as RegisterSize);
         let function_is_efun = matches!(&ptr.address, FunctionAddress::Efun(_));
         let is_dynamic_receiver = matches!(&ptr.address, FunctionAddress::Dynamic(_));
         let is_call_other = ptr.call_other;

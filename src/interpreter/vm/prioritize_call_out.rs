@@ -120,7 +120,6 @@ mod tests {
     use std::sync::Arc;
 
     use indoc::indoc;
-    use parking_lot::RwLock;
     use thin_vec::thin_vec;
     use ustr::ustr;
 
@@ -182,7 +181,7 @@ mod tests {
         async fn check(vm: &Vm, bar_proc: &Arc<Process>) {
             let ptr = FunctionPtrBuilder::default()
                 .address(FunctionAddress::Dynamic(ustr("foo")))
-                .partial_args(RwLock::new(thin_vec![Some("/bar".into())]))
+                .partial_args(thin_vec![Some("/bar".into())])
                 .build()
                 .unwrap();
 

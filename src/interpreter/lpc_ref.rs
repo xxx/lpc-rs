@@ -11,7 +11,6 @@ use bit_set::BitSet;
 use lpc_rs_core::{BaseFloat, LpcFloatInner, LpcIntInner, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_utils::{string, string::concatenate_strings};
-use parking_lot::RwLock;
 use tracing::{instrument, trace};
 
 use crate::{
@@ -59,8 +58,8 @@ pub enum LpcRef {
     Int(LpcInt),
 
     /// Reference type, and stores a reference-counting pointer to the actual
-    /// value
-    String(Arc<RwLock<LpcString>>),
+    /// value. Strings are immutable once created, so no interior mutability.
+    String(Arc<LpcString>),
 
     /// An array's identity in the transactional world. The contents live in
     /// the world under this handle's var, not here; the handle is a cheap
@@ -154,7 +153,7 @@ impl LpcRef {
         F: FnOnce(&LpcString) -> R,
     {
         match self {
-            LpcRef::String(a) => Ok(f(&a.read())),
+            LpcRef::String(a) => Ok(f(a)),
             _ => Err(lpc_error!(
                 "Runtime Error: invalid access. Expected string, actually {}",
                 self.type_name()
@@ -162,37 +161,12 @@ impl LpcRef {
         }
     }
 
-    // pub fn with_string_mut<F, R>(&self, f: F) -> Result<R>
-    // where
-    //     F: FnOnce(&mut LpcString) -> R
-    // {
-    //     match self {
-    //         LpcRef::String(a) => Ok(f(&mut *a.write())),
-    //         _ => Err(lpc_error!("Runtime Error: invalid access. Expected string, actually {}", self.type_name())),
-    //     }
-    // }
-
     pub fn with_strings<F, R>(&self, other: &Self, f: F) -> Result<R>
     where
         F: FnOnce(&LpcString, &LpcString) -> R,
     {
         match (self, other) {
-            (LpcRef::String(a), LpcRef::String(b)) => {
-                if Arc::ptr_eq(a, b) {
-                    // Avoid taking a single lock twice
-                    let g = a.read();
-                    return Ok(f(&g, &g));
-                }
-                // take locks in a deterministic order (lower address first)
-                let (aa, bb) = if Arc::as_ptr(a) < Arc::as_ptr(b) {
-                    (a.read(), b.read())
-                } else {
-                    let bb = b.read();
-                    (a.read(), bb)
-                };
-
-                Ok(f(&aa, &bb))
-            }
+            (LpcRef::String(a), LpcRef::String(b)) => Ok(f(a, b)),
             _ => Err(lpc_error!(
                 "Runtime Error: invalid access. Expected string / string, actually {} / {}",
                 self.type_name(),
@@ -573,21 +547,21 @@ impl From<LpcFloat> for LpcRef {
 impl From<&str> for LpcRef {
     #[inline]
     fn from(value: &str) -> Self {
-        LpcRef::String(Arc::new(RwLock::new(LpcString::from(value))))
+        LpcRef::String(Arc::new(LpcString::from(value)))
     }
 }
 
 impl From<String> for LpcRef {
     #[inline]
     fn from(value: String) -> Self {
-        LpcRef::String(Arc::new(RwLock::new(LpcString::from(value))))
+        LpcRef::String(Arc::new(LpcString::from(value)))
     }
 }
 
 impl From<LpcString> for LpcRef {
     #[inline]
     fn from(value: LpcString) -> Self {
-        LpcRef::String(Arc::new(RwLock::new(value)))
+        LpcRef::String(Arc::new(value))
     }
 }
 

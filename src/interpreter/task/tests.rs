@@ -98,10 +98,7 @@ impl BareVal {
         match lpc_ref {
             LpcRef::Float(x) => BareVal::Float(x.0),
             LpcRef::Int(x) => BareVal::Int(x.0),
-            LpcRef::String(x) => {
-                let s = x.read();
-                BareVal::String(s.to_string())
-            }
+            LpcRef::String(x) => BareVal::String(x.to_string()),
             LpcRef::Array(cell) => {
                 let array = gs
                     .committed_array(cell.id)
@@ -131,11 +128,11 @@ impl BareVal {
                 }
             }
             LpcRef::Function(fp) => {
-                let args = fp.with_partial_args(|pa| {
-                    pa.iter()
-                        .map(|item| item.as_ref().map(|r| BareVal::from_lpc_ref(gs, r)))
-                        .collect::<Vec<_>>()
-                });
+                let args = fp
+                    .partial_args()
+                    .iter()
+                    .map(|item| item.as_ref().map(|r| BareVal::from_lpc_ref(gs, r)))
+                    .collect::<Vec<_>>();
 
                 BareVal::Function(fp.name().into(), args)
             }

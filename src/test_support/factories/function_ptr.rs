@@ -2,7 +2,6 @@ use std::sync::{Arc, Weak};
 
 use factori::factori;
 use lpc_rs_core::register::Register;
-use parking_lot::RwLock;
 use thin_vec::{ThinVec, thin_vec};
 use ustr::ustr;
 
@@ -30,7 +29,7 @@ factori!(FunctionPtr, {
         FunctionPtrBuilder::default()
             .owner(owner)
             .address(address)
-            .partial_args(RwLock::new(partial_args))
+            .partial_args(partial_args)
             .call_other(call_other)
             .upvalue_ptrs(upvalue_ptrs)
             .unique_id(unique_id)

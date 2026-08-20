@@ -15,7 +15,6 @@ use lpc_rs_function_support::{
 };
 // use logos::Span;
 use once_cell::sync::{Lazy, OnceCell};
-use parking_lot::RwLock;
 use string_interner::StringInterner;
 use thin_vec::thin_vec;
 
@@ -117,7 +116,7 @@ pub async fn compose<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
             Arc::downgrade(&context.frame().process),
             executor,
         ))
-        .partial_args(RwLock::new(thin_vec![Some(a), Some(b)]))
+        .partial_args(thin_vec![Some(a), Some(b)])
         .build()
         .unwrap();
 

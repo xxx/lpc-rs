@@ -11,7 +11,6 @@ use lpc_rs_core::{lpc_path::LpcPath, register::Register};
 use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
-use parking_lot::RwLock;
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
 
@@ -44,9 +43,10 @@ pub struct FunctionPtr {
 
     /// Arguments to be passed to the call. `None` arguments in this vector
     /// are expected to be filled at call time, in the case of pointers that
-    /// are partially-applied.
+    /// are partially-applied. A published pointer is never mutated: partial
+    /// application builds a new pointer over a cloned list.
     #[builder(default)]
-    partial_args: RwLock<ThinVec<Option<LpcRef>>>,
+    partial_args: ThinVec<Option<LpcRef>>,
 
     /// Does this pointer use `call_other`?
     #[builder(default)]
@@ -73,21 +73,11 @@ impl FunctionPtr {
     /// How many arguments do we expect to be called with at runtime?
     #[inline]
     pub fn arity(&self) -> usize {
-        self.with_partial_args(|pa| pa.iter().filter(|x| x.is_none()).count())
+        self.partial_args.iter().filter(|x| x.is_none()).count()
     }
 
-    pub fn with_partial_args<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&[Option<LpcRef>]) -> R,
-    {
-        f(&self.partial_args.read())
-    }
-
-    pub fn with_partial_args_mut<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&mut ThinVec<Option<LpcRef>>) -> R, // typed as ThinVec so we can extend it
-    {
-        f(&mut self.partial_args.write())
+    pub fn partial_args(&self) -> &[Option<LpcRef>] {
+        &self.partial_args
     }
 
     /// Get a clone of this function pointer, with a new unique ID.
@@ -101,19 +91,20 @@ impl FunctionPtr {
     }
 
     /// partially apply this function pointer to the passed arguments, filling in any existing
-    /// holes first, then appending to the end of the list.
-    pub fn partially_apply(&self, args: &[LpcRef]) {
+    /// holes first, then appending to the end of the list. Consumes the pointer and returns
+    /// it; callers clone first (the published original is immutable).
+    pub fn partially_apply(mut self, args: &[LpcRef]) -> Self {
         let mut arg_iter = args.iter();
 
-        self.with_partial_args_mut(|partial_args| {
-            for partial_arg in partial_args.iter_mut() {
-                if partial_arg.is_none() {
-                    *partial_arg = arg_iter.next().cloned();
-                }
+        for partial_arg in self.partial_args.iter_mut() {
+            if partial_arg.is_none() {
+                *partial_arg = arg_iter.next().cloned();
             }
+        }
 
-            partial_args.extend(arg_iter.cloned().map(Some));
-        });
+        self.partial_args.extend(arg_iter.cloned().map(Some));
+
+        self
     }
 
     /// Prepare this function pointer for a call, by getting all of the
@@ -135,15 +126,14 @@ impl FunctionPtr {
         // We won't get any additional args passed to us, so just set up the partial args.
         // Use int 0 for any that haven't been filled-in.
         // TODO: error instead of int 0?
-        let args = ptr.with_partial_args(|partial_args| {
-            partial_args
-                .iter()
-                .map(|arg| match arg {
-                    Some(lpc_ref) => lpc_ref.clone(),
-                    None => NULL,
-                })
-                .collect::<Vec<_>>()
-        });
+        let args = ptr
+            .partial_args()
+            .iter()
+            .map(|arg| match arg {
+                Some(lpc_ref) => lpc_ref.clone(),
+                None => NULL,
+            })
+            .collect::<Vec<_>>();
 
         match ptr.address {
             FunctionAddress::Local(ref proc, ref function) => {
@@ -157,7 +147,7 @@ impl FunctionPtr {
             }
             FunctionAddress::Dynamic(name) => {
                 let proc = {
-                    let first_arg = ptr.with_partial_args(|args| args.first().cloned());
+                    let first_arg = ptr.partial_args().first().cloned();
                     let mut string_receiver = false;
                     let mut proc = match &first_arg {
                         Some(Some(x)) => match x {
@@ -237,7 +227,7 @@ impl Clone for FunctionPtr {
         Self {
             owner: self.owner.clone(),
             address: self.address.clone(),
-            partial_args: RwLock::new(self.with_partial_args(|a| ThinVec::from(a))),
+            partial_args: self.partial_args.clone(),
             call_other: self.call_other,
             upvalue_ptrs: self.upvalue_ptrs.clone(),
             unique_id: UniqueId::new(),
@@ -282,14 +272,14 @@ impl Display for FunctionPtr {
         }
         s.push_str(&format!("address: {}, ", self.address));
 
-        let partial_args = self.with_partial_args(|args| {
-            args.iter()
-                .map(|arg| match arg {
-                    Some(a) => a.to_string(),
-                    None => "<None>".to_string(),
-                })
-                .join(", ")
-        });
+        let partial_args = self
+            .partial_args()
+            .iter()
+            .map(|arg| match arg {
+                Some(a) => a.to_string(),
+                None => "<None>".to_string(),
+            })
+            .join(", ");
 
         s.push_str(&format!("partial_args: [{partial_args}], "));
         s.push_str(&format!(

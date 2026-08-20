@@ -3,7 +3,6 @@ use std::sync::Arc;
 use lpc_rs_core::{
     LpcIntInner, RegisterSize, function_receiver::FunctionReceiver, register::RegisterVariant,
 };
-use parking_lot::RwLock;
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
 use ustr::ustr;
@@ -153,7 +152,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let fp = FunctionPtrBuilder::default()
             .owner(Arc::downgrade(&frame.process))
             .address(address)
-            .partial_args(RwLock::new(partial_args))
+            .partial_args(partial_args)
             .call_other(call_other)
             .upvalue_ptrs(frame.upvalue_ptrs.clone())
             .unique_id(UniqueId::new())

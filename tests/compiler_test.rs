@@ -205,7 +205,7 @@ async fn test_multi_dimensional_arrays() {
             let LpcRef::String(s) = a else {
                 panic!("this shouldn't be reachable.");
             };
-            s.read().clone()
+            (**s).clone()
         })
         .collect::<Vec<_>>();
 
