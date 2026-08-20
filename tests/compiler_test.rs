@@ -113,26 +113,27 @@ async fn test_duffs_device() {
     let proc = ctx.process();
     let b = &ctx.global_state.committed_global(proc, 1u16);
 
-    if let LpcRef::Array(pool_ref) = b
-        && let arr = pool_ref.read()
-    {
-        assert_eq!(
-            &*arr,
-            &[
-                LpcRef::Int(LpcInt(0)),
-                LpcRef::Int(LpcInt(2)),
-                LpcRef::Int(LpcInt(3)),
-                LpcRef::Int(LpcInt(4)),
-                LpcRef::Int(LpcInt(5)),
-                LpcRef::Int(LpcInt(6)),
-                LpcRef::Int(LpcInt(7)),
-                LpcRef::Int(LpcInt(0)),
-            ]
-            .to_vec()
-        );
-    } else {
+    let LpcRef::Array(cell) = b else {
         panic!("expected array");
-    }
+    };
+    let arr = ctx
+        .global_state
+        .committed_array(cell.id)
+        .expect("array payload committed");
+    assert_eq!(
+        &*arr,
+        &[
+            LpcRef::Int(LpcInt(0)),
+            LpcRef::Int(LpcInt(2)),
+            LpcRef::Int(LpcInt(3)),
+            LpcRef::Int(LpcInt(4)),
+            LpcRef::Int(LpcInt(5)),
+            LpcRef::Int(LpcInt(6)),
+            LpcRef::Int(LpcInt(7)),
+            LpcRef::Int(LpcInt(0)),
+        ]
+        .to_vec()
+    );
 }
 
 #[tokio::test]
@@ -192,7 +193,10 @@ async fn test_multi_dimensional_arrays() {
     let LpcRef::Array(arr) = x_ref else {
         panic!("this shouldn't be reachable.");
     };
-    let lpc_array = arr.read();
+    let lpc_array = ctx
+        .global_state
+        .committed_array(arr.id)
+        .expect("array payload committed");
 
     let vals = lpc_array
         .array

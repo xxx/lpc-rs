@@ -65,12 +65,7 @@ where
         if i > 0 {
             result.push_str(", ");
         }
-        let is_self = item.with_array(|e| e == array).unwrap_or(false);
-        if is_self {
-            result.push_str("({ self })");
-        } else {
-            result.push_str(&fun(item));
-        }
+        result.push_str(&fun(item));
     }
 
     result

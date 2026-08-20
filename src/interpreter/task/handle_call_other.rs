@@ -63,7 +63,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     .await?
                 }
                 LpcRef::Array(_) => {
-                    let mut refs = receiver_ref.with_array(|a| a.iter().cloned().collect_vec())?;
+                    let mut refs =
+                        receiver_ref.with_array(&self.txn, |a| a.iter().cloned().collect_vec())?;
 
                     for lpc_ref in &mut refs {
                         let ctx = &self.context;
@@ -76,10 +77,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         *lpc_ref = result;
                     }
 
-                    LpcArray::new(refs).into()
+                    LpcRef::Array(self.txn.with(|t| t.mint_array(LpcArray::new(refs))))
                 }
                 LpcRef::Mapping(_) => {
-                    let mut map = receiver_ref.with_mapping(|m| {
+                    let mut map = receiver_ref.with_mapping(&self.txn, |m| {
                         m.iter().map(|(k, v)| (k.clone(), v.clone())).collect_vec()
                     })?;
 
@@ -97,7 +98,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         *value_ref = result;
                     }
 
-                    LpcMapping::new(map.into_iter().collect()).into()
+                    LpcRef::Mapping(
+                        self.txn
+                            .with(|t| t.mint_mapping(LpcMapping::new(map.into_iter().collect()))),
+                    )
                 }
                 _ => {
                     return Err(self.runtime_error(format!(

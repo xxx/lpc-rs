@@ -53,21 +53,9 @@ where
         if i > 0 {
             result.push_str(", ");
         }
-        let key_is_self = key.with_mapping(|m| m == mapping).unwrap_or(false);
-        if key_is_self {
-            result.push_str("([ self ])");
-        } else {
-            result.push_str(&fun(key));
-        }
-
+        result.push_str(&fun(key));
         result.push_str(": ");
-
-        let val_is_self = value.with_mapping(|m| m == mapping).unwrap_or(false);
-        if val_is_self {
-            result.push_str("([ self ])");
-        } else {
-            result.push_str(&fun(value));
-        }
+        result.push_str(&fun(value));
     }
 
     result

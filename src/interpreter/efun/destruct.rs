@@ -15,7 +15,7 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         | LpcRef::Mapping(_)
         | LpcRef::Function(_) => {}
         LpcRef::Array(_) => {
-            lpc_ref.with_array(|arr| {
+            lpc_ref.with_array(context.txn(), |arr| {
                 for x in arr.iter() {
                     if let LpcRef::Object(proc) = x
                         && let Some(proc) = proc.upgrade()

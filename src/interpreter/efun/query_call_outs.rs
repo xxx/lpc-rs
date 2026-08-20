@@ -37,7 +37,9 @@ pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -
             .collect::<Vec<_>>()
     });
 
-    let result = LpcArray::new(vec).into();
+    let result = context
+        .txn()
+        .with(|t| LpcRef::Array(t.mint_array(LpcArray::new(vec))));
 
     context.return_efun_result(result);
 
@@ -87,12 +89,12 @@ mod tests {
 
         task.result()
             .unwrap()
-            .with_array(|array| {
+            .with_array(&task.txn, |array| {
                 assert_eq!(array.len(), 2);
 
                 for call_out in array.iter() {
                     call_out
-                        .with_array(|arr| {
+                        .with_array(&task.txn, |arr| {
                             assert_eq!(arr.len(), 4);
                             assert!(matches!(arr[0], LpcRef::Object(_)));
                             assert!(matches!(arr[1], LpcRef::Function(_)));

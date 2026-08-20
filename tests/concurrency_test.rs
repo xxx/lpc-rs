@@ -196,7 +196,6 @@ async fn lost_update_gil() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "needs: heap payloads (LpcArray/Mapping, ...) are physical Arc<RwLock>, so torn reads survive (1981 of 2000 readers saw a torn pair)."]
 async fn aliased_array_torn_read_racy() {
     let code = r#"
         int *pair = ({ 10, 0 });

@@ -77,9 +77,8 @@ mod tests {
     use itertools::Itertools;
     use lpc_rs_errors::lazy_files::FILE_CACHE;
 
-    use super::*;
     use crate::{
-        interpreter::{CommittedReader, lpc_array::LpcArray, lpc_string::LpcString, vm::Vm},
+        interpreter::{CommittedReader, vm::Vm},
         test_support::test_config,
         util::process_builder::{ProcessCreator, ProcessInitializer},
     };
@@ -139,30 +138,29 @@ mod tests {
         let space = master_proc.context.object_space();
 
         let enabled = space.lookup("/enabled#0").unwrap();
-        let _expected = LpcRef::from(LpcArray::from(
-            [
-                LpcRef::from(LpcString::from("i herd")),
-                LpcRef::from(LpcString::from("u liek mudkips?")),
-            ]
-            .as_slice(),
-        ));
 
-        vm.global_state
-            .committed_global(&enabled, 0u16)
-            .with_array(|arr| {
-                assert_eq!(
-                    &arr.iter().map(|s| s.to_string()).collect_vec(),
-                    &["i herd", "u liek mudkips?"]
-                );
-            })
-            .unwrap();
+        let g_enabled = vm.global_state.committed_global(&enabled, 0u16);
+        let crate::interpreter::lpc_ref::LpcRef::Array(cell) = g_enabled else {
+            panic!("global holds an array cell, actually {g_enabled:?}");
+        };
+        let arr = vm
+            .global_state
+            .committed_array(cell.id)
+            .expect("array payload committed");
+        assert_eq!(
+            &arr.iter().map(|s| s.to_string()).collect_vec(),
+            &["i herd", "u liek mudkips?"]
+        );
 
         let disabled = space.lookup("/disabled#1").unwrap();
-        vm.global_state
-            .committed_global(&disabled, 0u16)
-            .with_array(|arr| {
-                assert!(arr.is_empty());
-            })
-            .unwrap();
+        let g_disabled = vm.global_state.committed_global(&disabled, 0u16);
+        let crate::interpreter::lpc_ref::LpcRef::Array(cell) = g_disabled else {
+            panic!("global holds an array cell, actually {g_disabled:?}");
+        };
+        let arr = vm
+            .global_state
+            .committed_array(cell.id)
+            .expect("array payload committed");
+        assert!(arr.is_empty());
     }
 }

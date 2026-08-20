@@ -19,7 +19,7 @@ pub async fn implode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
         | LpcRef::Function(_) => return Ok(()),
     };
 
-    let result = subject_ref.with_array(|subject| {
+    let result = subject_ref.with_array(context.txn(), |subject| {
         subject
             .iter()
             .map(|x| x.to_string())

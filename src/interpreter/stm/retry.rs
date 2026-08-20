@@ -9,10 +9,12 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::{Result, lpc_error};
 
 use crate::interpreter::{
+    lpc_array::LpcArray,
+    lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
     process::Process,
     stm::{
-        Transaction,
+        Transaction, VarId, WorldValue,
         changeset::Changeset,
         committer::{CommitProtocol, LiveSnapshot},
     },
@@ -154,6 +156,14 @@ pub trait CommittedReader {
 
     /// The committed value of one global slot (absent = `NULL`).
     fn committed_global(&self, process: &Process, reg: RegisterSize) -> LpcRef;
+
+    /// The committed contents of one array payload cell; `None` if the var is
+    /// absent or holds a slot value.
+    fn committed_array(&self, var_id: VarId) -> Option<LpcArray>;
+
+    /// The committed contents of one mapping payload cell, as in
+    /// [`committed_array`]([`CommittedReader::committed_array`]).
+    fn committed_mapping(&self, var_id: VarId) -> Option<LpcMapping>;
 }
 
 impl CommittedReader for Arc<GlobalState> {
@@ -162,23 +172,44 @@ impl CommittedReader for Arc<GlobalState> {
     }
 
     fn committed_global(&self, process: &Process, reg: RegisterSize) -> LpcRef {
-        let var = process.var_id(reg);
-        // One synchronous round trip against the committer, exactly like the
-        // sync `retry()` helper's recvs: scope a thread so the blocking recv
-        // can never run on the calling thread.
+        self.committed_value(process.var_id(reg))
+            .map(WorldValue::lpc_ref)
+            .expect("committer always answers a query")
+    }
+
+    fn committed_array(&self, var_id: VarId) -> Option<LpcArray> {
+        match self.committed_value(var_id)? {
+            WorldValue::Array(array) => Some((*array).clone()),
+            WorldValue::Ref(_) | WorldValue::Mapping(_) => None,
+        }
+    }
+
+    fn committed_mapping(&self, var_id: VarId) -> Option<LpcMapping> {
+        match self.committed_value(var_id)? {
+            WorldValue::Mapping(mapping) => Some((*mapping).clone()),
+            WorldValue::Ref(_) | WorldValue::Array(_) => None,
+        }
+    }
+}
+
+impl GlobalState {
+    /// One synchronous round trip against the committer, exactly like the
+    /// sync `retry()` helper's recvs: scope a thread so the blocking recv
+    /// can never run on the calling thread. `None` only if the committer
+    /// never answers (channel dead); absent vars reply as `NULL`.
+    fn committed_value(&self, var_id: VarId) -> Option<WorldValue> {
         std::thread::scope(|s| {
             let (reply_tx, reply_rx) = flume::bounded(1);
             self.committer_tx
                 .send(CommitProtocol::Query {
-                    var_id: var,
+                    var_id,
                     reply: reply_tx,
                 })
                 .expect("committer channel closed");
-            let value = s
-                .spawn(move || reply_rx.recv())
+            s.spawn(move || reply_rx.recv())
                 .join()
-                .expect("query reply thread panicked");
-            value.expect("no reply from committer").lpc_ref()
+                .expect("query reply thread panicked")
+                .ok()
         })
     }
 }

@@ -178,7 +178,9 @@ where
         LpcString::from(s).into(),
     );
 
-    let args = [LpcMapping::new(mapping).into()];
+    let args = [LpcRef::Mapping(
+        ctx.txn().with(|t| t.mint_mapping(LpcMapping::new(mapping))),
+    )];
     // TODO wire the timeout up to config
     apply_function_in_master(ERROR_HANDLER, &args, ctx, Some(300)).await
 }

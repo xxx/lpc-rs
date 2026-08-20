@@ -6,9 +6,9 @@ mod soak;
 
 // Re-export the shared drivers so sibling test modules can import them
 // with a single `use stm::tests::*`.
-pub(crate) use helpers::*;
 use std::sync::Arc;
 
+pub(crate) use helpers::*;
 use imbl::OrdMap;
 use indexmap::IndexMap;
 

@@ -70,7 +70,7 @@ mod tests {
 
         let result = master_proc.result().unwrap();
         result
-            .with_array(|arr| {
+            .with_array(&master_proc.txn, |arr| {
                 assert_eq!(arr, [0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0].as_slice());
             })
             .unwrap();

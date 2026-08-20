@@ -17,13 +17,38 @@ use tracing::{instrument, trace};
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
     interpreter::{
-        function_type::function_ptr::FunctionPtr, gc::mark::Mark, lpc_array::LpcArray,
-        lpc_float::LpcFloat, lpc_int::LpcInt, lpc_mapping::LpcMapping, lpc_string::LpcString,
+        function_type::function_ptr::FunctionPtr,
+        gc::mark::Mark,
+        lpc_array::LpcArray,
+        lpc_float::LpcFloat,
+        lpc_int::LpcInt,
+        lpc_mapping::LpcMapping,
+        lpc_string::LpcString,
         process::Process,
+        stm::{SVar, TxnHandle},
     },
 };
 
 pub const NULL: LpcRef = LpcRef::Int(LpcInt(0));
+
+/// A transaction whose cells the unit tests mint into and read back from;
+/// the payload helpers below need one to resolve array/mapping contents.
+#[cfg(test)]
+fn test_txn() -> TxnHandle {
+    TxnHandle::empty()
+}
+
+/// Mint `array` into the test transaction and return its cell handle.
+#[cfg(test)]
+fn test_array_ref(txn: &TxnHandle, array: LpcArray) -> LpcRef {
+    LpcRef::Array(txn.with(|t| t.mint_array(array)))
+}
+
+/// Mint `mapping` into the test transaction and return its cell handle.
+#[cfg(test)]
+fn test_mapping_ref(txn: &TxnHandle, mapping: LpcMapping) -> LpcRef {
+    LpcRef::Mapping(txn.with(|t| t.mint_mapping(mapping)))
+}
 
 /// Represent a variable stored in a `Register`. Value types store the actual
 /// value. Reference types store a reference to the actual value.
@@ -37,13 +62,13 @@ pub enum LpcRef {
     /// value
     String(Arc<RwLock<LpcString>>),
 
-    /// Reference type, and stores a reference-counting pointer to the actual
-    /// value
-    Array(Arc<RwLock<LpcArray>>),
+    /// An array's identity in the transactional world. The contents live in
+    /// the world under this handle's var, not here; the handle is a cheap
+    /// copy of the `VarId`.
+    Array(SVar<LpcArray>),
 
-    /// Reference type, and stores a reference-counting pointer to the actual
-    /// value
-    Mapping(Arc<RwLock<LpcMapping>>),
+    /// A mapping's identity in the transactional world, as in [`LpcRef::Array`].
+    Mapping(SVar<LpcMapping>),
 
     /// Reference type, pointing to an LPC `object`
     Object(Weak<Process>),
@@ -176,113 +201,86 @@ impl LpcRef {
         }
     }
 
-    pub fn with_array<F, R>(&self, f: F) -> Result<R>
+    /// Resolve this array's contents from the transactional world and run `f`
+    /// over them. The handle holds only the cell's var; the contents live in
+    /// the world, so the transaction is required.
+    pub(crate) fn with_array<F, R>(&self, txn: &TxnHandle, f: F) -> Result<R>
     where
         F: FnOnce(&LpcArray) -> R,
     {
         match self {
-            LpcRef::Array(a) => Ok(f(&a.read())),
-            _ => Err(lpc_error!(
-                "Runtime Error: invalid access. Expected array, actually {}",
-                self.type_name()
-            )),
-        }
-    }
-
-    pub fn with_array_mut<F, R>(&self, f: F) -> Result<R>
-    where
-        F: FnOnce(&mut LpcArray) -> R,
-    {
-        match self {
-            LpcRef::Array(a) => Ok(f(&mut a.write())),
-            _ => Err(lpc_error!(
-                "Runtime Error: invalid access. Expected array, actually {}",
-                self.type_name()
-            )),
-        }
-    }
-
-    pub fn with_arrays<F, R>(&self, other: &Self, f: F) -> Result<R>
-    where
-        F: FnOnce(&LpcArray, &LpcArray) -> R,
-    {
-        match (self, other) {
-            (LpcRef::Array(a), LpcRef::Array(b)) => {
-                if Arc::ptr_eq(a, b) {
-                    let g = a.read();
-                    return Ok(f(&g, &g));
-                }
-                let (aa, bb) = if Arc::as_ptr(a) < Arc::as_ptr(b) {
-                    (a.read(), b.read())
-                } else {
-                    let bb = b.read();
-                    (a.read(), bb)
-                };
-
-                Ok(f(&aa, &bb))
+            LpcRef::Array(cell) => {
+                let array = txn
+                    .with(|t| t.read_array(cell.id))
+                    .ok_or_else(|| self.expected_array_error())?;
+                Ok(f(&array))
             }
-            _ => Err(lpc_error!(
-                "Runtime Error: invalid access. Expected array / array, actually {} / {}",
-                self.type_name(),
-                other.type_name()
-            )),
+            _ => Err(self.expected_array_error()),
         }
     }
 
-    pub fn with_mapping<F, R>(&self, f: F) -> Result<R>
+    /// Resolve this mapping's contents from the transactional world and run
+    /// `f` over them, as in [`with_array`]([`LpcRef::with_array`]).
+    pub(crate) fn with_mapping<F, R>(&self, txn: &TxnHandle, f: F) -> Result<R>
     where
         F: FnOnce(&LpcMapping) -> R,
     {
         match self {
-            LpcRef::Mapping(m) => Ok(f(&m.read())),
-            _ => Err(lpc_error!(
-                "Runtime Error: invalid access. Expected mapping, actually {}",
-                self.type_name()
-            )),
+            LpcRef::Mapping(cell) => {
+                let mapping = txn
+                    .with(|t| t.read_mapping(cell.id))
+                    .ok_or_else(|| self.expected_mapping_error())?;
+                Ok(f(&mapping))
+            }
+            _ => Err(self.expected_mapping_error()),
         }
     }
 
-    pub fn with_mapping_mut<F, R>(&self, f: F) -> Result<R>
+    /// Copy-on-write this array cell: clone the world's contents into the
+    /// attempt's changeset, run `f` on the clone, and write it back under the
+    /// same var. The committed contents are never mutated in place.
+    pub(crate) fn with_array_cow<F>(&self, txn: &TxnHandle, f: F) -> Result<()>
     where
-        F: FnOnce(&mut LpcMapping) -> R,
+        F: FnOnce(&mut LpcArray),
     {
         match self {
-            LpcRef::Mapping(m) => Ok(f(&mut m.write())),
-            _ => Err(lpc_error!(
-                "Runtime Error: invalid access. Expected mapping, actually {}",
-                self.type_name()
-            )),
-        }
-    }
-
-    pub fn with_mappings<F, R>(&self, other: &Self, f: F) -> Result<R>
-    where
-        F: FnOnce(&LpcMapping, &LpcMapping) -> R,
-    {
-        match (self, other) {
-            (LpcRef::Mapping(a), LpcRef::Mapping(b)) => {
-                if Arc::ptr_eq(a, b) {
-                    let g = a.read();
-                    return Ok(f(&g, &g));
-                }
-                let (aa, bb) = if Arc::as_ptr(a) < Arc::as_ptr(b) {
-                    (a.read(), b.read())
-                } else {
-                    let bb = b.read();
-                    (a.read(), bb)
-                };
-
-                Ok(f(&aa, &bb))
+            LpcRef::Array(cell) => {
+                txn.with(|t| t.with_array_cow(cell.id, f));
+                Ok(())
             }
-            _ => Err(lpc_error!(
-                "Runtime Error: invalid access. Expected mapping / mapping, actually {} / {}",
-                self.type_name(),
-                other.type_name()
-            )),
+            _ => Err(self.expected_array_error()),
         }
     }
 
-    pub fn add(&self, rhs: &Self) -> Result<Self> {
+    /// Copy-on-write this mapping cell, as in [`with_array_cow`].
+    pub(crate) fn with_mapping_cow<F>(&self, txn: &TxnHandle, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut LpcMapping),
+    {
+        match self {
+            LpcRef::Mapping(cell) => {
+                txn.with(|t| t.with_mapping_cow(cell.id, f));
+                Ok(())
+            }
+            _ => Err(self.expected_mapping_error()),
+        }
+    }
+
+    fn expected_array_error(&self) -> Box<LpcError> {
+        lpc_error!(
+            "Runtime Error: invalid access. Expected array, actually {}",
+            self.type_name()
+        )
+    }
+
+    fn expected_mapping_error(&self) -> Box<LpcError> {
+        lpc_error!(
+            "Runtime Error: invalid access. Expected mapping, actually {}",
+            self.type_name()
+        )
+    }
+
+    pub(crate) fn add(&self, rhs: &Self, txn: &TxnHandle) -> Result<Self> {
         match self {
             LpcRef::Float(f) => match rhs {
                 LpcRef::Float(f2) => Ok(Self::from(*f + *f2)),
@@ -315,18 +313,27 @@ impl LpcRef {
                 }
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
-            LpcRef::Array(_) => match rhs {
-                LpcRef::Array(_) => {
-                    self.with_arrays(rhs, |a, b| LpcRef::from(a.clone() + b.clone()))
-                }
+            LpcRef::Array(cell) => match rhs {
+                LpcRef::Array(rhs_cell) => txn.with(|t| {
+                    let (a, b) = (t.read_array(cell.id), t.read_array(rhs_cell.id));
+                    let (a, b) = match (a, b) {
+                        (Some(a), Some(b)) => (a, b),
+                        _ => return Err(self.expected_array_error()),
+                    };
+                    Ok(LpcRef::Array(t.mint_array((*a).clone() + (*b).clone())))
+                }),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
-            LpcRef::Mapping(_) => match rhs {
-                LpcRef::Mapping(_) => self.with_mappings(rhs, |map1, map2| {
-                    let mut new_map = map1.clone();
-                    let added_map = map2.clone();
-                    new_map.extend(added_map);
-                    new_map.into()
+            LpcRef::Mapping(cell) => match rhs {
+                LpcRef::Mapping(rhs_cell) => txn.with(|t| {
+                    let (a, b) = (t.read_mapping(cell.id), t.read_mapping(rhs_cell.id));
+                    let (a, b) = match (a, b) {
+                        (Some(a), Some(b)) => (a, b),
+                        _ => return Err(self.expected_mapping_error()),
+                    };
+                    let mut new_map = (*a).clone();
+                    new_map.extend((*b).clone());
+                    Ok(LpcRef::Mapping(t.mint_mapping(new_map)))
                 }),
                 _ => Err(self.to_error(BinaryOperation::Add, rhs)),
             },
@@ -336,7 +343,7 @@ impl LpcRef {
         }
     }
 
-    pub fn sub(&self, rhs: &Self) -> Result<Self> {
+    pub(crate) fn sub(&self, rhs: &Self, txn: &TxnHandle) -> Result<Self> {
         match (&self, &rhs) {
             (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(x.wrapping_sub(y.0).into())),
             (LpcRef::Float(x), LpcRef::Float(y)) => Ok(Self::Float((x.0 - y.0).into())),
@@ -344,17 +351,16 @@ impl LpcRef {
             (LpcRef::Int(x), LpcRef::Float(y)) => Ok(Self::Float(LpcFloat::from(
                 LpcFloatInner::from(x.0 as BaseFloat) - y.0,
             ))),
-            (LpcRef::Array(_), LpcRef::Array(_)) => {
-                let new_vec = self.with_array(|a| a.clone())?;
-
-                rhs.with_array(|a| {
-                    new_vec
-                        .into_iter()
-                        .filter(|x| !a.contains(x))
-                        .collect::<LpcArray>()
-                        .into()
-                })
-            }
+            (LpcRef::Array(cell), LpcRef::Array(rhs_cell)) => txn.with(|t| {
+                let (a, b) = (t.read_array(cell.id), t.read_array(rhs_cell.id));
+                let (a, b) = match (a, b) {
+                    (Some(a), Some(b)) => (a, b),
+                    _ => return Err(self.expected_array_error()),
+                };
+                let kept: Vec<LpcRef> =
+                    (*a).iter().filter(|x| !(*b).contains(x)).cloned().collect();
+                Ok(LpcRef::Array(t.mint_array(LpcArray::from_iter(kept))))
+            }),
             _ => Err(self.to_error(BinaryOperation::Sub, rhs)),
         }
     }
@@ -525,9 +531,12 @@ impl Mark for LpcRef {
         trace!("marking lpc ref of {type}", type = self.as_lpc_type());
 
         match self {
-            LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::String(_) | LpcRef::Object(_) => Ok(()),
-            LpcRef::Array(_) => self.with_array(|a| a.mark(marked, processed)).flatten(),
-            LpcRef::Mapping(_) => self.with_mapping(|m| m.mark(marked, processed)).flatten(),
+            LpcRef::Float(_)
+            | LpcRef::Int(_)
+            | LpcRef::String(_)
+            | LpcRef::Object(_)
+            | LpcRef::Array(_)
+            | LpcRef::Mapping(_) => Ok(()),
             LpcRef::Function(fun) => fun.mark(marked, processed),
         }
     }
@@ -582,20 +591,6 @@ impl From<LpcString> for LpcRef {
     }
 }
 
-impl From<LpcArray> for LpcRef {
-    #[inline]
-    fn from(value: LpcArray) -> Self {
-        LpcRef::Array(Arc::new(RwLock::new(value)))
-    }
-}
-
-impl From<LpcMapping> for LpcRef {
-    #[inline]
-    fn from(value: LpcMapping) -> Self {
-        LpcRef::Mapping(Arc::new(RwLock::new(value)))
-    }
-}
-
 impl From<FunctionPtr> for LpcRef {
     #[inline]
     fn from(value: FunctionPtr) -> Self {
@@ -624,8 +619,8 @@ impl Hash for LpcRef {
             LpcRef::Float(x) => x.hash(state),
             LpcRef::Int(x) => x.hash(state),
             LpcRef::String(_) => self.with_string(|s| s.hash(state)).expect("unreachable"),
-            LpcRef::Array(x) => ptr::hash(&**x, state),
-            LpcRef::Mapping(x) => ptr::hash(&**x, state),
+            LpcRef::Array(x) => x.id.hash(state),
+            LpcRef::Mapping(x) => x.id.hash(state),
             LpcRef::Object(x) => ptr::hash(x, state),
             LpcRef::Function(x) => ptr::hash(&**x, state),
         }
@@ -642,8 +637,8 @@ impl PartialEq for LpcRef {
                 .with_strings(other, |a, b| a == b)
                 .expect("Strings should be valid"),
             (LpcRef::Object(x), LpcRef::Object(y)) => ptr::eq(x, y),
-            (LpcRef::Array(x), LpcRef::Array(y)) => ptr::eq(&**x, &**y),
-            (LpcRef::Mapping(x), LpcRef::Mapping(y)) => ptr::eq(&**x, &**y),
+            (LpcRef::Array(x), LpcRef::Array(y)) => x.id == y.id,
+            (LpcRef::Mapping(x), LpcRef::Mapping(y)) => x.id == y.id,
             (LpcRef::Function(x), LpcRef::Function(y)) => ptr::eq(&**x, &**y),
             _ => false,
         }
@@ -698,12 +693,8 @@ impl Display for LpcRef {
             LpcRef::String(_) => self
                 .with_string(|s| write!(f, "{}", s))
                 .expect("Strings should be valid"),
-            LpcRef::Array(_) => self
-                .with_array(|a| write!(f, "{a}"))
-                .expect("Arrays should be valid"),
-            LpcRef::Mapping(_) => self
-                .with_mapping(|m| write!(f, "{m}"))
-                .expect("Mappings should be valid"),
+            LpcRef::Array(x) => write!(f, "<array#{}>", x.id.as_u64()),
+            LpcRef::Mapping(x) => write!(f, "<mapping#{}>", x.id.as_u64()),
             LpcRef::Object(x) => match x.upgrade() {
                 Some(x) => write!(f, "{}", x),
                 None => write!(f, "< destructed >"),
@@ -723,12 +714,8 @@ impl Debug for LpcRef {
             LpcRef::String(_) => self
                 .with_string(|x| write!(f, "{x:?}"))
                 .expect("Strings should be valid"),
-            LpcRef::Array(_) => self
-                .with_array(|x| write!(f, "{x:?}"))
-                .expect("Arrays should be valid"),
-            LpcRef::Mapping(_) => self
-                .with_mapping(|x| write!(f, "{x:?}"))
-                .expect("Mappings should be valid"),
+            LpcRef::Array(x) => write!(f, "Array({})", x.id.as_u64()),
+            LpcRef::Mapping(x) => write!(f, "Mapping({})", x.id.as_u64()),
             LpcRef::Object(x) => match x.upgrade() {
                 Some(x) => write!(f, "{:?}", x),
                 None => write!(f, "< destructed >"),
@@ -762,9 +749,10 @@ mod tests {
 
         #[test]
         fn int_int() {
+            let txn = test_txn();
             let int1 = LpcRef::from(123);
             let int2 = LpcRef::from(456);
-            let result = int1.add(&int2);
+            let result = int1.add(&int2, &txn);
             if let Ok(LpcRef::Int(x)) = result {
                 assert_eq!(x, 579)
             } else {
@@ -774,9 +762,10 @@ mod tests {
 
         #[test]
         fn int_int_overflow_wraps() {
+            let txn = test_txn();
             let int1 = LpcRef::from(LpcIntInner::MAX);
             let int2 = LpcRef::from(1);
-            let result = int1.add(&int2);
+            let result = int1.add(&int2, &txn);
             if let Ok(LpcRef::Int(x)) = result {
                 assert_eq!(x, LpcIntInner::MIN)
             } else {
@@ -786,25 +775,28 @@ mod tests {
 
         #[test]
         fn string_string() {
+            let txn = test_txn();
             let string1 = LpcRef::from("foo");
             let string2 = LpcRef::from(LpcString::from("bar"));
-            let result = string1.add(&string2).unwrap();
+            let result = string1.add(&string2, &txn).unwrap();
             result.with_string(|x| assert_eq!(x, "foobar")).unwrap();
         }
 
         #[test]
         fn string_int() {
+            let txn = test_txn();
             let string = LpcRef::from("foo");
             let int = LpcRef::from(123);
-            let result = string.add(&int).unwrap();
+            let result = string.add(&int, &txn).unwrap();
             result.with_string(|x| assert_eq!(x, "foo123")).unwrap();
         }
 
         #[test]
         fn int_string() {
+            let txn = test_txn();
             let string = LpcRef::from("foo");
             let int = LpcRef::from(123);
-            let result = int.add(&string).unwrap();
+            let result = int.add(&string, &txn).unwrap();
             result
                 .with_string(|x| {
                     assert_eq!(x, "123foo");
@@ -814,9 +806,10 @@ mod tests {
 
         #[test]
         fn float_int() {
+            let txn = test_txn();
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = float.add(&int);
+            let result = float.add(&int, &txn);
             if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 789.66)
             } else {
@@ -826,16 +819,18 @@ mod tests {
 
         #[test]
         fn float_int_overflow_does_not_panic() {
+            let txn = test_txn();
             let float = LpcRef::from(BaseFloat::MAX);
             let int = LpcRef::from(1);
-            assert!((float.add(&int)).is_ok());
+            assert!((float.add(&int, &txn)).is_ok());
         }
 
         #[test]
         fn int_float() {
+            let txn = test_txn();
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = int.add(&float);
+            let result = int.add(&float, &txn);
             if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 789.66)
             } else {
@@ -845,20 +840,24 @@ mod tests {
 
         #[test]
         fn int_float_overflow_does_not_panic() {
+            let txn = test_txn();
             let int = LpcRef::Int(LpcInt(LpcIntInner::MAX));
             let float = LpcRef::from(1.0);
-            assert!((int.add(&float)).is_ok());
+            assert!((int.add(&float, &txn)).is_ok());
         }
 
         #[test]
         fn array_array() {
+            let txn = test_txn();
             let array = LpcArray::new(vec![LpcRef::from(123)]);
             let array2 = LpcArray::new(vec![LpcRef::from(4433)]);
-            let result = LpcRef::from(array.clone()).add(&array2.into()).unwrap();
+            let result = test_array_ref(&txn, array)
+                .add(&test_array_ref(&txn, array2), &txn)
+                .unwrap();
 
             result
-                .with_array(|a| {
-                    assert_ne!(a, &array); // ensure the addition makes a fully new copy
+                .with_array(&txn, |a| {
+                    assert_ne!(a, &vec![LpcRef::from(123)]); // the addition makes a fully new copy
                     assert_eq!(a, &vec![LpcRef::from(123), LpcRef::from(4433)]);
                 })
                 .unwrap();
@@ -866,6 +865,7 @@ mod tests {
 
         #[test]
         fn mapping_mapping() {
+            let txn = test_txn();
             let key1 = LpcRef::from(LpcString::from("key1"));
             let value1 = LpcRef::from(LpcString::from("value1"));
             let key2 = LpcRef::from(LpcString::from("key2"));
@@ -877,10 +877,10 @@ mod tests {
             let mut hash2 = IndexMap::new();
             hash2.insert(key2.clone(), value2.clone());
 
-            let map = LpcRef::from(LpcMapping::new(hash1));
-            let map2 = LpcRef::from(LpcMapping::new(hash2));
+            let map = test_mapping_ref(&txn, LpcMapping::new(hash1));
+            let map2 = test_mapping_ref(&txn, LpcMapping::new(hash2));
 
-            let result = map.add(&map2);
+            let result = map.add(&map2, &txn);
 
             let mut expected = IndexMap::new();
             expected.insert(key1, value1);
@@ -888,7 +888,7 @@ mod tests {
 
             result
                 .unwrap()
-                .with_mapping(|m| {
+                .with_mapping(&txn, |m| {
                     assert_eq!(*m, expected);
                 })
                 .unwrap();
@@ -896,6 +896,7 @@ mod tests {
 
         #[test]
         fn mapping_mapping_duplicate_keys() {
+            let txn = test_txn();
             let key1 = LpcRef::from(LpcString::from("key"));
             let value1 = LpcRef::from(LpcString::from("value1"));
             let key2 = LpcRef::from(LpcString::from("key"));
@@ -907,17 +908,17 @@ mod tests {
             let mut hash2 = IndexMap::new();
             hash2.insert(key2.clone(), value2.clone());
 
-            let map = LpcRef::from(LpcMapping::new(hash1));
-            let map2 = LpcRef::from(LpcMapping::new(hash2));
+            let map = test_mapping_ref(&txn, LpcMapping::new(hash1));
+            let map2 = test_mapping_ref(&txn, LpcMapping::new(hash2));
 
-            let result = map.add(&map2);
+            let result = map.add(&map2, &txn);
 
             let mut expected = IndexMap::new();
             expected.insert(key2, value2);
 
             result
                 .unwrap()
-                .with_mapping(|m| {
+                .with_mapping(&txn, |m| {
                     assert_eq!(*m, expected);
                 })
                 .unwrap();
@@ -925,9 +926,10 @@ mod tests {
 
         #[test]
         fn add_mismatched() {
+            let txn = test_txn();
             let int = LpcRef::from(123);
-            let array = LpcRef::from(LpcArray::new(vec![]));
-            let result = int.add(&array);
+            let array = test_array_ref(&txn, LpcArray::new(vec![]));
+            let result = int.add(&array, &txn);
 
             assert!(result.is_err());
         }
@@ -938,17 +940,19 @@ mod tests {
 
         #[test]
         fn int_int_underflow_does_not_panic() {
+            let txn = test_txn();
             let int = LpcRef::Int(LpcInt(LpcIntInner::MIN));
             let int2 = LpcRef::from(1);
-            let result = int.sub(&int2);
+            let result = int.sub(&int2, &txn);
             assert!(result.is_ok());
         }
 
         #[test]
         fn float_int() {
+            let txn = test_txn();
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = float.sub(&int);
+            let result = float.sub(&int, &txn);
             if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, 543.66)
             } else {
@@ -958,17 +962,19 @@ mod tests {
 
         #[test]
         fn float_int_underflow_does_not_panic() {
+            let txn = test_txn();
             let float = LpcRef::from(BaseFloat::MIN);
             let int = LpcRef::Int(LpcInt::MAX);
-            let result = float.sub(&int);
+            let result = float.sub(&int, &txn);
             assert!(result.is_ok());
         }
 
         #[test]
         fn int_float() {
+            let txn = test_txn();
             let float = LpcRef::from(666.66);
             let int = LpcRef::from(123);
-            let result = int.sub(&float);
+            let result = int.sub(&float, &txn);
             if let Ok(LpcRef::Float(x)) = result {
                 assert_eq!(x, -543.66)
             } else {
@@ -978,29 +984,31 @@ mod tests {
 
         #[test]
         fn int_float_underflow_does_not_panic() {
+            let txn = test_txn();
             let int = LpcRef::Int(LpcInt::MIN);
             let float = LpcRef::from(1.0);
-            let result = int.sub(&float);
+            let result = int.sub(&float, &txn);
             assert!(result.is_ok());
         }
 
         #[test]
         fn array_array() {
+            let txn = test_txn();
             let to_ref = |i| LpcRef::Int(LpcInt(i));
             let v1 = vec![1, 2, 3, 4, 5, 2, 4, 4, 4]
                 .into_iter()
                 .map(to_ref)
                 .collect::<Vec<_>>();
             let v2 = vec![2, 4].into_iter().map(to_ref).collect::<Vec<_>>();
-            let a1 = LpcRef::from(LpcArray::new(v1));
-            let a2 = LpcRef::from(LpcArray::new(v2));
+            let a1 = test_array_ref(&txn, LpcArray::new(v1));
+            let a2 = test_array_ref(&txn, LpcArray::new(v2));
 
-            let result = a1.sub(&a2);
+            let result = a1.sub(&a2, &txn);
             let expected = vec![1, 3, 5].into_iter().map(to_ref).collect::<Vec<_>>();
 
             result
                 .unwrap()
-                .with_array(|a| {
+                .with_array(&txn, |a| {
                     assert_eq!(*a, expected);
                 })
                 .unwrap();
@@ -1376,7 +1384,6 @@ mod tests {
         fn test_array() {
             let array = LpcArray::new(vec![LpcRef::from(1), LpcRef::from(2), LpcRef::from(3)]);
             let array_id = array.unique_id;
-            let array = LpcRef::from(array);
 
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();
@@ -1390,7 +1397,6 @@ mod tests {
         fn test_mapping() {
             let mapping = LpcMapping::new(IndexMap::new());
             let mapping_id = mapping.unique_id;
-            let mapping = LpcRef::from(mapping);
 
             let mut marked = BitSet::new();
             let mut processed = BitSet::new();

@@ -65,7 +65,9 @@ pub fn call_out_array_ref<const N: usize>(
             .into(),
     ));
 
-    let result = LpcArray::new(arr).into();
+    let result = context
+        .txn()
+        .with(|t| LpcRef::Array(t.mint_array(LpcArray::new(arr))));
     Ok(result)
 }
 
@@ -111,7 +113,7 @@ mod tests {
 
         task.result()
             .unwrap()
-            .with_array(|arr| {
+            .with_array(&task.txn, |arr| {
                 assert_eq!(arr.len(), 4);
                 assert!(matches!(arr[0], LpcRef::Object(_)));
                 assert!(matches!(arr[1], LpcRef::Function(_)));

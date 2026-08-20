@@ -10,17 +10,19 @@ pub async fn all_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> 
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
 
     let Some(current_env) = efun::arg_or_this_object(arg_ref, context) else {
-        let result = LpcRef::from(LpcArray::default());
+        let result = LpcRef::Array(context.txn().with(|t| t.mint_array(LpcArray::default())));
         context.return_efun_result(result);
         return Ok(());
     };
 
-    let result = current_env
-        .position
-        .weak_inventory_iter()
-        .map(LpcRef::from)
-        .collect::<LpcArray>()
-        .into();
+    let result = context.txn().with(|t| {
+        let array = current_env
+            .position
+            .weak_inventory_iter()
+            .map(LpcRef::from)
+            .collect::<LpcArray>();
+        LpcRef::Array(t.mint_array(array))
+    });
 
     context.return_efun_result(result);
 
@@ -79,11 +81,15 @@ mod tests {
         let room_proc_arc = room_proc.context.process.clone();
 
         let g0 = vm.global_state.committed_global(&room_proc_arc, 0u16);
-        g0.with_array(|array| {
-            let globals = array.iter().map(|w| w.to_string()).sorted().collect_vec();
+        let crate::interpreter::lpc_ref::LpcRef::Array(cell) = g0 else {
+            panic!("global holds an array cell, actually {g0:?}");
+        };
+        let array = vm
+            .global_state
+            .committed_array(cell.id)
+            .expect("array payload committed");
+        let globals = array.iter().map(|w| w.to_string()).sorted().collect_vec();
 
-            assert_eq!(globals, &["/all_inv_bar", "/all_inv_baz", "/all_inv_foo"]);
-        })
-        .unwrap();
+        assert_eq!(globals, &["/all_inv_bar", "/all_inv_baz", "/all_inv_foo"]);
     }
 }

@@ -6,6 +6,7 @@ use crate::interpreter::{
     efun::{efun_context::EfunContext, write::apply_catch_tell},
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
+    stm::TxnHandle,
 };
 
 const MAX_RECURSION: usize = 20;
@@ -20,7 +21,8 @@ fn recursion_too_deep<const N: usize>(size: usize, context: &EfunContext<N>) -> 
 
 fn format_ref<const N: usize>(
     lpc_ref: &LpcRef,
-    context: &mut EfunContext<N>,
+    context: &EfunContext<N>,
+    txn: &TxnHandle,
     indent: usize,
     recurse_level: usize,
 ) -> Result<String> {
@@ -40,17 +42,22 @@ fn format_ref<const N: usize>(
         }
         LpcRef::Function(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::Array(_) => lpc_ref
-            .with_array(|arr| format_array(arr, context, indent, recurse_level + 1))
+            .with_array(txn, |arr| {
+                format_array(arr, context, txn, indent, recurse_level + 1)
+            })
             .flatten(),
         LpcRef::Mapping(_) => lpc_ref
-            .with_mapping(|map| format_mapping(map, context, indent, recurse_level + 1))
+            .with_mapping(txn, |map| {
+                format_mapping(map, context, txn, indent, recurse_level + 1)
+            })
             .flatten(),
     }
 }
 
 fn format_array<const N: usize>(
     arr: &[LpcRef],
-    context: &mut EfunContext<N>,
+    context: &EfunContext<N>,
+    txn: &TxnHandle,
     indent: usize,
     recurse_level: usize,
 ) -> Result<String> {
@@ -60,7 +67,7 @@ fn format_array<const N: usize>(
 
     let inner = arr
         .iter()
-        .map(|var| format_ref(var, context, indent + 2, recurse_level + 1))
+        .map(|var| format_ref(var, context, txn, indent + 2, recurse_level + 1))
         .collect::<Result<Vec<_>>>();
 
     let inner = inner?;
@@ -75,7 +82,8 @@ fn format_array<const N: usize>(
 
 fn format_mapping<const N: usize>(
     map: &LpcMapping,
-    context: &mut EfunContext<N>,
+    context: &EfunContext<N>,
+    txn: &TxnHandle,
     indent: usize,
     recurse_level: usize,
 ) -> Result<String> {
@@ -86,8 +94,8 @@ fn format_mapping<const N: usize>(
     let inner = map
         .iter()
         .map(|(key, val)| {
-            let k_format = format_ref(key, context, 0, recurse_level + 1)?;
-            let v_format = format_ref(val, context, 2, recurse_level + 1)?;
+            let k_format = format_ref(key, context, txn, 0, recurse_level + 1)?;
+            let v_format = format_ref(val, context, txn, 2, recurse_level + 1)?;
 
             Ok(format!(
                 "{:width$}{k}: {v}",
@@ -117,7 +125,7 @@ pub async fn dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
         .map(|i| {
             let lpc_ref = context.resolve_local_register(i).clone();
 
-            format_ref(&lpc_ref, context, 0, 0)
+            format_ref(&lpc_ref, context, context.txn(), 0, 0)
         })
         .collect::<Result<Vec<_>>>()?
         .join(" ");

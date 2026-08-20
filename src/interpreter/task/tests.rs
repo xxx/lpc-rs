@@ -94,7 +94,7 @@ enum BareVal {
 }
 
 impl BareVal {
-    pub fn from_lpc_ref(lpc_ref: &LpcRef) -> Self {
+    pub fn from_lpc_ref(gs: &Arc<GlobalState>, lpc_ref: &LpcRef) -> Self {
         match lpc_ref {
             LpcRef::Float(x) => BareVal::Float(x.0),
             LpcRef::Int(x) => BareVal::Int(x.0),
@@ -102,16 +102,23 @@ impl BareVal {
                 let s = x.read();
                 BareVal::String(s.to_string())
             }
-            LpcRef::Array(x) => {
-                let a = x.read();
-                let array = a.iter().map(BareVal::from_lpc_ref).collect::<Vec<_>>();
+            LpcRef::Array(cell) => {
+                let array = gs
+                    .committed_array(cell.id)
+                    .expect("array payload committed with its cell");
+                let array = array
+                    .iter()
+                    .map(|r| BareVal::from_lpc_ref(gs, r))
+                    .collect::<Vec<_>>();
                 BareVal::Array(array)
             }
-            LpcRef::Mapping(x) => {
-                let m = x.read();
-                let mapping = m
+            LpcRef::Mapping(cell) => {
+                let mapping = gs
+                    .committed_mapping(cell.id)
+                    .expect("mapping payload committed with its cell");
+                let mapping = mapping
                     .iter()
-                    .map(|(k, v)| (BareVal::from_lpc_ref(k), BareVal::from_lpc_ref(v)))
+                    .map(|(k, v)| (BareVal::from_lpc_ref(gs, k), BareVal::from_lpc_ref(gs, v)))
                     .collect::<HashMap<_, _>>();
                 BareVal::Mapping(mapping)
             }
@@ -126,7 +133,7 @@ impl BareVal {
             LpcRef::Function(fp) => {
                 let args = fp.with_partial_args(|pa| {
                     pa.iter()
-                        .map(|item| item.as_ref().map(BareVal::from_lpc_ref))
+                        .map(|item| item.as_ref().map(|r| BareVal::from_lpc_ref(gs, r)))
                         .collect::<Vec<_>>()
                 });
 
@@ -135,15 +142,15 @@ impl BareVal {
         }
     }
 
-    pub fn equal_to_lpc_ref(&self, other: &LpcRef) -> bool {
-        self == &BareVal::from_lpc_ref(other)
+    pub fn equal_to_lpc_ref(&self, gs: &Arc<GlobalState>, other: &LpcRef) -> bool {
+        self == &BareVal::from_lpc_ref(gs, other)
     }
 
-    pub fn assert_equal(&self, other: &LpcRef) {
-        assert_eq!(self, &BareVal::from_lpc_ref(other));
+    pub fn assert_equal(&self, gs: &Arc<GlobalState>, other: &LpcRef) {
+        assert_eq!(self, &BareVal::from_lpc_ref(gs, other));
     }
 
-    pub fn assert_vec_equal(a: &[BareVal], b: &[LpcRef]) {
+    pub fn assert_vec_equal(gs: &Arc<GlobalState>, a: &[BareVal], b: &[LpcRef]) {
         assert_eq!(
             a.len(),
             b.len(),
@@ -152,14 +159,8 @@ impl BareVal {
             b
         );
         for (a, b) in a.iter().zip(b.iter()) {
-            a.assert_equal(b);
+            a.assert_equal(gs, b);
         }
-    }
-}
-
-impl PartialEq<&LpcRef> for BareVal {
-    fn eq(&self, lpc_ref: &&LpcRef) -> bool {
-        &BareVal::from_lpc_ref(lpc_ref) == self
     }
 }
 
@@ -222,8 +223,9 @@ mod test_instructions {
     use super::*;
     use crate::interpreter::bank::RefBank;
 
-    async fn snapshot_registers(code: &str) -> RefBank {
+    async fn snapshot_registers(code: &str) -> (Arc<GlobalState>, RefBank) {
         let mut task = run_prog(code).await;
+        let gs = task.context.global_state.clone();
         let mut stack = task.snapshots.pop().unwrap();
 
         // The top of the stack in the snapshot is the object initialization frame,
@@ -231,7 +233,7 @@ mod test_instructions {
         // instead.
         let index = stack.len() - 2;
 
-        std::mem::take(&mut stack[index].registers)
+        (gs, std::mem::take(&mut stack[index].registers))
     }
 
     mod test_aconst {
@@ -262,7 +264,7 @@ mod test_instructions {
                 ]),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -286,7 +288,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -313,7 +315,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -338,7 +340,7 @@ mod test_instructions {
                 BareVal::Int(-8),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -357,7 +359,7 @@ mod test_instructions {
 
             let expected = vec![BareVal::Int(666), BareVal::Int(666)];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -377,9 +379,10 @@ mod test_instructions {
 
             let proc = ctx.process();
             let values = committed_globals_by_name(&ctx.global_state, proc);
-            BareVal::String("my public_function".into()).assert_equal(values.get("mine").unwrap());
+            BareVal::String("my public_function".into())
+                .assert_equal(&ctx.global_state, values.get("mine").unwrap());
             BareVal::String("/std/object public".into())
-                .assert_equal(values.get("parents").unwrap());
+                .assert_equal(&ctx.global_state, values.get("parents").unwrap());
         }
 
         #[tokio::test]
@@ -400,8 +403,9 @@ mod test_instructions {
             let proc = ctx.process();
             let values = committed_globals_by_name(&ctx.global_state, proc);
             BareVal::String("file_name_override".into())
-                .assert_equal(values.get("this_one").unwrap());
-            BareVal::String("/std/object#0".into()).assert_equal(values.get("efun_one").unwrap());
+                .assert_equal(&ctx.global_state, values.get("this_one").unwrap());
+            BareVal::String("/std/object#0".into())
+                .assert_equal(&ctx.global_state, values.get("efun_one").unwrap());
         }
 
         #[tokio::test]
@@ -417,7 +421,7 @@ mod test_instructions {
             let proc = ctx.process();
             let values = committed_globals_by_name(&ctx.global_state, proc);
             BareVal::String("this is a simul_efun: marf".into())
-                .assert_equal(values.get("this_one").unwrap());
+                .assert_equal(&ctx.global_state, values.get("this_one").unwrap());
         }
     }
 
@@ -438,7 +442,7 @@ mod test_instructions {
                 BareVal::Object("/my_file".into()),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -460,7 +464,7 @@ mod test_instructions {
                 BareVal::String("this is a simul_efun: marf".into()),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -493,7 +497,7 @@ mod test_instructions {
                 BareVal::Int(667),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -521,7 +525,7 @@ mod test_instructions {
                 BareVal::String("adding some! 670".into()),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -547,7 +551,7 @@ mod test_instructions {
                 BareVal::String("my_string! awesome!".into()),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -578,7 +582,7 @@ mod test_instructions {
                 BareVal::String("adding some! 223".into()),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -619,7 +623,7 @@ mod test_instructions {
                 BareVal::Int(69),
                 BareVal::Int(69),
             ];
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -654,7 +658,7 @@ mod test_instructions {
                 BareVal::String("widget: 42. awesome!".into()),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -711,7 +715,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -734,7 +738,7 @@ mod test_instructions {
                 BareVal::Int(4),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -833,7 +837,7 @@ mod test_instructions {
                 BareVal::Int(666),
             ];
 
-            BareVal::assert_vec_equal(&expected, registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, registers);
         }
 
         #[tokio::test]
@@ -853,7 +857,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, registers);
         }
 
         #[tokio::test]
@@ -873,7 +877,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, registers);
         }
 
         #[tokio::test]
@@ -892,7 +896,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, registers);
         }
     }
 
@@ -910,7 +914,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let registers = snapshot_registers(code).await;
+            let (gs, registers) = snapshot_registers(code).await;
 
             let expected = vec![
                 BareVal::Int(0),
@@ -922,7 +926,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&gs, &expected, &registers);
         }
 
         #[tokio::test]
@@ -936,7 +940,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let registers = snapshot_registers(code).await;
+            let (gs, registers) = snapshot_registers(code).await;
 
             let expected = vec![
                 BareVal::Int(0),
@@ -948,7 +952,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&gs, &expected, &registers);
         }
     }
 
@@ -984,7 +988,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let registers = snapshot_registers(code).await;
+            let (gs, registers) = snapshot_registers(code).await;
 
             let expected = vec![
                 BareVal::Int(0),
@@ -993,7 +997,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&gs, &expected, &registers);
         }
 
         #[tokio::test]
@@ -1010,7 +1014,11 @@ mod test_instructions {
 
             let proc = ctx.process();
 
-            BareVal::assert_vec_equal(&expected, &committed_global_values(&ctx.global_state, proc));
+            BareVal::assert_vec_equal(
+                &ctx.global_state,
+                &expected,
+                &committed_global_values(&ctx.global_state, proc),
+            );
         }
 
         #[tokio::test]
@@ -1024,7 +1032,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let registers = snapshot_registers(code).await;
+            let (gs, registers) = snapshot_registers(code).await;
 
             let expected = vec![
                 BareVal::Int(0),
@@ -1034,7 +1042,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&gs, &expected, &registers);
         }
 
         #[tokio::test]
@@ -1051,7 +1059,11 @@ mod test_instructions {
 
             let proc = ctx.process();
 
-            BareVal::assert_vec_equal(&expected, &committed_global_values(&ctx.global_state, proc));
+            BareVal::assert_vec_equal(
+                &ctx.global_state,
+                &expected,
+                &committed_global_values(&ctx.global_state, proc),
+            );
         }
     }
 
@@ -1074,7 +1086,7 @@ mod test_instructions {
                 BareVal::Int(1),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1092,7 +1104,7 @@ mod test_instructions {
 
             let expected = vec![BareVal::Int(0), BareVal::Float(4.13.into())];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1113,7 +1125,7 @@ mod test_instructions {
                 BareVal::Function("dump".to_string(), vec![]),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -1130,7 +1142,7 @@ mod test_instructions {
                 BareVal::Function("simul_efun".to_string(), vec![]),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -1152,7 +1164,7 @@ mod test_instructions {
                 BareVal::Function("tacco".to_string(), vec![]),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -1170,7 +1182,7 @@ mod test_instructions {
                 BareVal::Function("simul_efun".to_string(), vec![]),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -1196,7 +1208,7 @@ mod test_instructions {
                 ),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -1228,7 +1240,7 @@ mod test_instructions {
                 ),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -1250,7 +1262,7 @@ mod test_instructions {
                 BareVal::Function("closure-0".to_string(), vec![]),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1281,7 +1293,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1312,7 +1324,7 @@ mod test_instructions {
                 BareVal::Int(1),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1338,7 +1350,7 @@ mod test_instructions {
                 BareVal::Int(58),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1356,7 +1368,7 @@ mod test_instructions {
 
             let expected = vec![BareVal::Int(0), BareVal::Int(666)];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1374,7 +1386,7 @@ mod test_instructions {
 
             let expected = vec![BareVal::Int(0), BareVal::Int(0)];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1392,7 +1404,7 @@ mod test_instructions {
 
             let expected = vec![BareVal::Int(0), BareVal::Int(1)];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1419,7 +1431,7 @@ mod test_instructions {
                 BareVal::Int(-2),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -1470,7 +1482,7 @@ mod test_instructions {
                 BareVal::Int(2),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -1519,7 +1531,7 @@ mod test_instructions {
                 BareVal::Int(-1536),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1537,7 +1549,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let registers = snapshot_registers(code).await;
+            let (gs, registers) = snapshot_registers(code).await;
 
             let expected = vec![
                 BareVal::Int(0),
@@ -1546,7 +1558,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&gs, &expected, &registers);
         }
 
         #[tokio::test]
@@ -1563,7 +1575,11 @@ mod test_instructions {
 
             let proc = ctx.process();
 
-            BareVal::assert_vec_equal(&expected, &committed_global_values(&ctx.global_state, proc));
+            BareVal::assert_vec_equal(
+                &ctx.global_state,
+                &expected,
+                &committed_global_values(&ctx.global_state, proc),
+            );
         }
 
         #[tokio::test]
@@ -1577,7 +1593,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let registers = snapshot_registers(code).await;
+            let (gs, registers) = snapshot_registers(code).await;
 
             let expected = vec![
                 BareVal::Int(0),
@@ -1587,7 +1603,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&gs, &expected, &registers);
         }
 
         #[tokio::test]
@@ -1604,7 +1620,11 @@ mod test_instructions {
 
             let proc = ctx.process();
 
-            BareVal::assert_vec_equal(&expected, &committed_global_values(&ctx.global_state, proc));
+            BareVal::assert_vec_equal(
+                &ctx.global_state,
+                &expected,
+                &committed_global_values(&ctx.global_state, proc),
+            );
         }
     }
 
@@ -1629,7 +1649,7 @@ mod test_instructions {
                 BareVal::Int(-2),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1654,7 +1674,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let registers = snapshot_registers(code).await;
+            let (gs, registers) = snapshot_registers(code).await;
 
             let expected = vec![
                 BareVal::Int(0),
@@ -1668,7 +1688,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&gs, &expected, &registers);
         }
     }
 
@@ -1690,7 +1710,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let registers = snapshot_registers(code).await;
+            let (gs, registers) = snapshot_registers(code).await;
 
             let expected = vec![
                 BareVal::Int(0),
@@ -1703,7 +1723,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&gs, &expected, &registers);
         }
     }
 
@@ -1730,7 +1750,7 @@ mod test_instructions {
                 BareVal::Int(1000),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1757,7 +1777,7 @@ mod test_instructions {
                 BareVal::Int(2),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1788,7 +1808,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1819,7 +1839,7 @@ mod test_instructions {
                 BareVal::Int(1),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1851,7 +1871,7 @@ mod test_instructions {
                 BareVal::Mapping(hashmap),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1876,7 +1896,7 @@ mod test_instructions {
                 BareVal::String("abc123".into()),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1901,7 +1921,7 @@ mod test_instructions {
                 BareVal::String("abcabcabcabc".into()),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1935,7 +1955,7 @@ mod test_instructions {
                 BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)]),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1973,7 +1993,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -1997,7 +2017,7 @@ mod test_instructions {
                 BareVal::Int(31),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -2024,7 +2044,7 @@ mod test_instructions {
                 BareVal::Int(123),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -2044,7 +2064,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let registers = snapshot_registers(code).await;
+            let (gs, registers) = snapshot_registers(code).await;
 
             let mut mapping = HashMap::new();
             mapping.insert(BareVal::String("a".into()), BareVal::Int(123));
@@ -2075,7 +2095,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&gs, &expected, &registers);
         }
 
         #[tokio::test]
@@ -2089,7 +2109,7 @@ mod test_instructions {
 
             let task = run_prog(code).await;
             let ctx = task.context;
-            BareVal::Array(vec![]).assert_equal(&ctx.result().unwrap());
+            BareVal::Array(vec![]).assert_equal(&ctx.global_state, &ctx.result().unwrap());
         }
     }
 
@@ -2108,7 +2128,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let registers = snapshot_registers(code).await;
+            let (gs, registers) = snapshot_registers(code).await;
 
             let mut mapping = HashMap::new();
             mapping.insert(BareVal::String("a".into()), BareVal::Int(123));
@@ -2138,7 +2158,7 @@ mod test_instructions {
                 ]),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&gs, &expected, &registers);
         }
     }
 
@@ -2165,7 +2185,7 @@ mod test_instructions {
                 BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)]),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -2184,7 +2204,7 @@ mod test_instructions {
 
             let expected = vec![BareVal::Int(0), BareVal::Int(4)];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -2205,7 +2225,7 @@ mod test_instructions {
                 BareVal::Int(666), // The copy of the call return value into its own register
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -2229,7 +2249,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -2253,7 +2273,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -2290,7 +2310,7 @@ mod test_instructions {
                 BareVal::Int(3),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -2328,7 +2348,7 @@ mod test_instructions {
                 BareVal::Int(4),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
 
         #[tokio::test]
@@ -2387,7 +2407,7 @@ mod test_instructions {
                 BareVal::Int(13),
             ];
 
-            BareVal::assert_vec_equal(&expected, registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, registers);
         }
     }
 
@@ -2405,7 +2425,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let registers = snapshot_registers(code).await;
+            let (gs, registers) = snapshot_registers(code).await;
 
             let expected = vec![
                 BareVal::Int(0),
@@ -2419,7 +2439,7 @@ mod test_instructions {
                 BareVal::Int(0),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&gs, &expected, &registers);
         }
     }
 
@@ -2437,7 +2457,7 @@ mod test_instructions {
 
             let expected = vec![BareVal::Int(0), BareVal::String("lolwut".into())];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 
@@ -2461,7 +2481,7 @@ mod test_instructions {
                 BareVal::Int(20),
             ];
 
-            BareVal::assert_vec_equal(&expected, &registers);
+            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
         }
     }
 }
@@ -2553,7 +2573,7 @@ mod test_globals {
             Int(1),
         ];
 
-        BareVal::assert_vec_equal(&expected, &registers);
+        BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
 
         let ctx = &task.context;
         let proc = ctx.process();
@@ -2564,7 +2584,11 @@ mod test_globals {
             Int(0),
             Int(1),
         ];
-        BareVal::assert_vec_equal(&expected, &committed_global_values(&ctx.global_state, proc));
+        BareVal::assert_vec_equal(
+            &ctx.global_state,
+            &expected,
+            &committed_global_values(&ctx.global_state, proc),
+        );
     }
 }
 
@@ -2592,7 +2616,9 @@ mod test_upvalues {
                 .filter(|v| &v.name == k)
                 .collect::<Vec<_>>();
             assert!(
-                found.iter().any(|local| v.equal_to_lpc_ref(&local.value)),
+                found
+                    .iter()
+                    .any(|local| v.equal_to_lpc_ref(&task.context.global_state, &local.value)),
                 "key: {k}, value: {v}, found: {:?}",
                 found.iter().map(|v| &v.value).collect::<Vec<_>>()
             );
@@ -2638,7 +2664,7 @@ mod test_upvalues {
             );
 
             for (v, ev) in values.iter().zip(&expected) {
-                ev.assert_equal(v);
+                ev.assert_equal(&task.context.global_state, v);
             }
         });
     }

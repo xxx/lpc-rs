@@ -12,13 +12,16 @@ pub async fn all_environment<const N: usize>(context: &mut EfunContext<'_, N>) -
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
 
     let Some(current_env) = efun::arg_or_this_object(arg_ref, context) else {
-        let result = LpcArray::default().into();
+        let result = LpcRef::Array(context.txn().with(|t| t.mint_array(LpcArray::default())));
         context.return_efun_result(result);
         return Ok(());
     };
 
     let iter = Process::all_environment(current_env).map(|e| LpcRef::from(Arc::downgrade(&e)));
-    let result = iter.collect::<LpcArray>().into();
+    let result = context.txn().with(|t| {
+        let array: LpcArray = iter.collect();
+        LpcRef::Array(t.mint_array(array))
+    });
     context.return_efun_result(result);
 
     Ok(())
@@ -87,16 +90,19 @@ mod tests {
             .await
             .unwrap();
 
-        let _ = master_proc.result().unwrap().with_array(|result| {
-            assert_eq!(
-                result.as_ref(),
-                &[
-                    &*innermost_proc.context.process,
-                    &*inner_proc.context.process,
-                    &*outer_proc.context.process,
-                    &*foo_proc,
-                ]
-            );
-        });
+        let _ = master_proc
+            .result()
+            .unwrap()
+            .with_array(&master_proc.txn, |result| {
+                assert_eq!(
+                    result.as_ref(),
+                    &[
+                        &*innermost_proc.context.process,
+                        &*inner_proc.context.process,
+                        &*outer_proc.context.process,
+                        &*foo_proc,
+                    ]
+                );
+            });
     }
 }

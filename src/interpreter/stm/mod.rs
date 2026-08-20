@@ -7,7 +7,7 @@ use std::{
 
 use parking_lot::RwLock;
 
-use crate::interpreter::lpc_ref::LpcRef;
+use crate::interpreter::{lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef};
 
 mod changeset;
 mod committer;
@@ -25,11 +25,15 @@ pub(crate) use world_value::WorldValue;
 static VAR_ID_COUNT: AtomicU64 = AtomicU64::new(0);
 // Stable ID for transactional cells
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct VarId(u64);
+pub struct VarId(u64);
 
 impl VarId {
     pub(crate) fn new() -> Self {
         Self(VAR_ID_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    }
+
+    pub(crate) const fn as_u64(self) -> u64 {
+        self.0
     }
 }
 
@@ -96,6 +100,75 @@ impl Transaction {
         self.changeset.write(var_id, WorldValue::ref_of(value));
     }
 
+    /// Mint a fresh array cell: a new `VarId` with its contents written into
+    /// the changeset. A fresh id is never in the world, so the write can't
+    /// conflict; the returned handle is the cell's identity.
+    pub(crate) fn mint_array(&mut self, array: LpcArray) -> SVar<LpcArray> {
+        let id = SVar::<LpcArray>::new();
+        self.changeset
+            .write(id.id, WorldValue::Array(Arc::new(array)));
+        id
+    }
+
+    /// Mint a fresh mapping cell, as in [`mint_array`](Self::mint_array).
+    pub(crate) fn mint_mapping(&mut self, mapping: LpcMapping) -> SVar<LpcMapping> {
+        let id = SVar::<LpcMapping>::new();
+        self.changeset
+            .write(id.id, WorldValue::Mapping(Arc::new(mapping)));
+        id
+    }
+
+    /// The committed array contents for a cell var, or `None` if the var is
+    /// absent from both the changeset and the world.
+    pub(crate) fn read_array(&mut self, var_id: VarId) -> Option<Arc<LpcArray>> {
+        match self.read_value(var_id)? {
+            WorldValue::Array(a) => Some(a),
+            _ => None,
+        }
+    }
+
+    /// The committed mapping contents for a cell var, or `None` if the var is
+    /// absent from both the changeset and the world.
+    pub(crate) fn read_mapping(&mut self, var_id: VarId) -> Option<Arc<LpcMapping>> {
+        match self.read_value(var_id)? {
+            WorldValue::Mapping(m) => Some(m),
+            _ => None,
+        }
+    }
+
+    /// Copy-on-write the array cell `var_id`: read its contents, clone into a
+    /// new `Arc`, mutate the clone, and write it back under the same var.
+    /// One read tracked in the changeset (conflict-checked) plus one blind
+    /// write; the contents are never mutated in place in the committed world.
+    pub(crate) fn with_array_cow(&mut self, var_id: VarId, f: impl FnOnce(&mut LpcArray)) {
+        let current = self
+            .read_value(var_id)
+            .and_then(|v| match v {
+                WorldValue::Array(a) => Some(a),
+                _ => None,
+            })
+            .unwrap_or_else(|| Arc::new(LpcArray::default()));
+        let mut clone = (*current).clone();
+        f(&mut clone);
+        self.changeset
+            .write(var_id, WorldValue::Array(Arc::new(clone)));
+    }
+
+    /// Copy-on-write the mapping cell `var_id`, as in [`with_array_cow`].
+    pub(crate) fn with_mapping_cow(&mut self, var_id: VarId, f: impl FnOnce(&mut LpcMapping)) {
+        let current = self
+            .read_value(var_id)
+            .and_then(|v| match v {
+                WorldValue::Mapping(m) => Some(m),
+                _ => None,
+            })
+            .unwrap_or_else(|| Arc::new(LpcMapping::default()));
+        let mut clone = (*current).clone();
+        f(&mut clone);
+        self.changeset
+            .write(var_id, WorldValue::Mapping(Arc::new(clone)));
+    }
+
     /// The values this attempt has written (GC roots until commit).
     pub(crate) fn written_values(&self) -> impl Iterator<Item = &WorldValue> {
         self.changeset.written_values()
@@ -150,7 +223,7 @@ impl Default for TxnHandle {
 /// The slot owns only its [`VarId`]; the *committed value* lives only in
 /// the committer's world.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct SVar<T> {
+pub struct SVar<T> {
     /// The slot's stable identity in the committer's world.
     pub id: VarId,
     _phantom: PhantomData<T>,

@@ -30,11 +30,13 @@ pub async fn explode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
         | LpcRef::Function(_) => return Ok(()),
     };
 
-    let result = subject
-        .split(&delimiter)
-        .map(LpcRef::from)
-        .collect::<LpcArray>()
-        .into();
+    let result = context.txn().with(|t| {
+        let array = subject
+            .split(&delimiter)
+            .map(LpcRef::from)
+            .collect::<LpcArray>();
+        LpcRef::Array(t.mint_array(array))
+    });
 
     context.return_efun_result(result);
 
@@ -64,10 +66,13 @@ mod tests {
             .await
             .unwrap();
 
-        let _ = master_proc.result().unwrap().with_array(|arr| {
-            let result = arr.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let _ = master_proc
+            .result()
+            .unwrap()
+            .with_array(&master_proc.txn, |arr| {
+                let result = arr.iter().map(|x| x.to_string()).collect::<Vec<_>>();
 
-            assert_eq!(result, vec!["the", "quick", "brown", "", "fox"],);
-        });
+                assert_eq!(result, vec!["the", "quick", "brown", "", "fox"],);
+            });
     }
 }

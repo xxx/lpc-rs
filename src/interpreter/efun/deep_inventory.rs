@@ -12,7 +12,7 @@ pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) ->
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
 
     let Some(current_env) = efun::arg_or_this_object(arg_ref, context) else {
-        let result = LpcRef::from(LpcArray::default());
+        let result = LpcRef::Array(context.txn().with(|t| t.mint_array(LpcArray::default())));
         context.return_efun_result(result);
         return Ok(());
     };
@@ -22,11 +22,13 @@ pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) ->
     let mut collection = HashSet::with_capacity(10);
     recurse_deep_inventory(&current_env, &mut collection);
 
-    let result = collection
-        .into_iter()
-        .map(|arc| LpcRef::from(Arc::downgrade(&arc)))
-        .collect::<LpcArray>()
-        .into();
+    let result = context.txn().with(|t| {
+        let array = collection
+            .into_iter()
+            .map(|arc| LpcRef::from(Arc::downgrade(&arc)))
+            .collect::<LpcArray>();
+        LpcRef::Array(t.mint_array(array))
+    });
 
     context.return_efun_result(result);
 
@@ -123,9 +125,17 @@ mod tests {
 
         let ob_proc_arc = ob_proc.context.process.clone();
         let g0 = vm.global_state.committed_global(&ob_proc_arc, 0u16);
-        let globals = g0
-            .with_array(|arr| arr.iter().map(|w| w.to_string()).sorted().collect_vec())
-            .unwrap();
+        let crate::interpreter::lpc_ref::LpcRef::Array(cell) = g0 else {
+            panic!("global holds an array cell, actually {g0:?}");
+        };
+        let globals = vm
+            .global_state
+            .committed_array(cell.id)
+            .expect("array payload committed")
+            .iter()
+            .map(|w| w.to_string())
+            .sorted()
+            .collect_vec();
 
         assert_eq!(
             globals,
