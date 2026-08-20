@@ -50,7 +50,7 @@ use crate::interpreter::{
     program::Program,
     stm::{
         CommitProtocol, LiveSnapshot, RetryStats, Transaction, TxnHandle, commit_changeset,
-        start_txn,
+        flush_effects, start_txn,
     },
     task::{task_id::TaskId, task_state::TaskState},
     task_context::TaskContext,
@@ -440,6 +440,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             drop(live);
 
             if commit.is_ok() {
+                // The commit is permanent, so deliver the physical output this
+                // attempt recorded, exactly once, now. A rejected attempt
+                // never reaches this: its transaction (and its unflushed
+                // effects) is dropped with the attempt, and the re-run
+                // records them fresh.
+                let effects = self.txn.take_effects();
+                if !effects.is_empty() {
+                    flush_effects(self.context.config(), effects).await;
+                }
                 return (
                     Ok(()),
                     RetryStats {
@@ -723,6 +732,7 @@ impl<const STACKSIZE: usize> Mark for Task<STACKSIZE> {
 #[cfg(test)]
 mod stm_retry_tests {
     use indoc::indoc;
+    use lpc_rs_utils::debug_log::DebugLog;
 
     use super::*;
     use crate::{
@@ -731,7 +741,7 @@ mod stm_retry_tests {
             lpc_int::LpcInt,
             stm::{CommitProtocol, Committer},
         },
-        test_support::run_prog,
+        test_support::{run_prog, run_prog_with_config},
     };
 
     /// Run the program's `foo()` through the retry loop against `tx`.
@@ -806,6 +816,99 @@ mod stm_retry_tests {
         // The load-bearing assertion: the re-run from the seed produced the
         // same result as a clean run (see clean_run_commits_in_one_attempt).
         assert_result_is_ten!(task);
+
+        tx.send(CommitProtocol::Close)
+            .expect("committer channel closed");
+        drop(tx);
+        let _ = handle.join();
+    }
+
+    /// Forwards bytes written to it (via `AsyncWriteExt::write_all`) to a
+    /// channel, so a test can read exactly what a [`DebugLog`] emitted.
+    struct CapturingWriter(tokio::sync::mpsc::Sender<Vec<u8>>);
+
+    impl tokio::io::AsyncWrite for CapturingWriter {
+        fn poll_write(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+            buf: &[u8],
+        ) -> std::task::Poll<std::io::Result<usize>> {
+            let _ = self.get_mut().0.try_send(buf.to_vec());
+            std::task::Poll::Ready(Ok(buf.len()))
+        }
+
+        fn poll_flush(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+    }
+
+    /// A retried task's physical output must fire exactly once: the
+    /// first attempt is rejected (and its recorded output discarded), the
+    /// re-run records it again, and only the committed attempt's output is
+    /// delivered.
+    #[tokio::test]
+    async fn retried_task_output_emits_exactly_once() {
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        const CODE: &str = indoc! { r##"
+                int foo() {
+                    write("one\n");
+                    return 10;
+                }
+            "##};
+
+        let (out_tx, mut out_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(16);
+        let log = DebugLog::new(CapturingWriter(out_tx));
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code")
+            .simul_efun_file("/secure/simul_efuns")
+            .debug_log(log)
+            .build()
+            .unwrap();
+
+        let mut task = run_prog_with_config(CODE, std::sync::Arc::new(config)).await;
+
+        // A committer that rejects the FIRST commit, so `foo()` runs twice:
+        // attempt 1 records its output then is discarded, attempt 2 commits.
+        let (tx, rx) = flume::bounded(4);
+        let committer_tx = tx.clone();
+        let handle = std::thread::spawn(move || {
+            let committer = Committer::new();
+            committer.run_with_rejections(committer_tx, rx, 1)
+        });
+
+        let (res, stats) = eval_foo(&mut task, &tx).await;
+        assert!(res.is_ok(), "task failed: {:?}", res);
+        assert_eq!(stats.attempts, 2, "first commit rejected, re-run commits");
+        assert_eq!(stats.conflicts, 1);
+
+        // The load-bearing assertion: the debug log received the write
+        // exactly once, despite the task running to completion twice. The
+        // drain is bounded: the flush happened before `eval_foo` returned,
+        // so the messages are already buffered; the receiver's EOF would
+        // only come when the task's `GlobalState` drops, which we don't do.
+        let mut seen = Vec::new();
+        while let Ok(Some(chunk)) =
+            tokio::time::timeout(Duration::from_millis(100), out_rx.recv()).await
+        {
+            seen.extend(chunk);
+        }
+        let got = String::from_utf8(seen).expect("utf-8 output");
+        assert_eq!(
+            got, "one\n",
+            "aborted attempt's output must not be delivered; the committed \
+            attempt's output must be delivered exactly once"
+        );
 
         tx.send(CommitProtocol::Close)
             .expect("committer channel closed");

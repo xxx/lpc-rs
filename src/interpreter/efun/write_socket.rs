@@ -2,7 +2,11 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
-    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},
+    interpreter::{
+        efun::{efun_context::EfunContext, write::record_output_effect},
+        lpc_ref::LpcRef,
+        stm::Effect,
+    },
     telnet::ops::ConnectionOp,
 };
 
@@ -21,12 +25,18 @@ pub async fn write_socket<const N: usize>(context: &mut EfunContext<'_, N>) -> R
 
     match &*process.connection.load() {
         Some(connection) => {
-            let _ = connection.tx.send(ConnectionOp::SendMessage(result)).await;
+            // Record the socket send against this transaction's effect log,
+            // carrying its own channel so the retry loop can deliver it
+            // after commit without needing the connection again.
+            context.txn().record_effect(Effect::Socket {
+                op: ConnectionOp::SendMessage(result),
+                tx: connection.tx.clone(),
+            });
             context.return_efun_result(LpcRef::from(1));
         }
         None => {
             // No connection to receive the message, so dump it to the debug log.
-            context.config().debug_log(result).await;
+            record_output_effect(context, result);
 
             // 0 is already returned by default
         }

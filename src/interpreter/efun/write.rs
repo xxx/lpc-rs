@@ -3,7 +3,7 @@ use lpc_rs_errors::{Result, lpc_error};
 
 use crate::interpreter::{
     CATCH_TELL, efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_string::LpcString,
-    task::apply_function::apply_function_by_name,
+    stm::Effect, task::apply_function::apply_function_by_name,
 };
 
 /// `write`, an efun for writing to this_player().
@@ -17,6 +17,14 @@ pub async fn write<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
     Ok(())
 }
 
+/// Record a physical write for delivery after this task's transaction
+/// commits, instead of sending it now. Delivery (or its cancellation on a
+/// rejected attempt) is handled by the retry loop; the message is already
+/// materialized, so the effect never observes end-of-transaction state.
+pub(crate) fn record_output_effect<const N: usize>(context: &EfunContext<'_, N>, msg: String) {
+    context.txn().record_effect(Effect::DebugLog(msg));
+}
+
 /// A convenience helper to apply catch_tell to the this_player in a context.
 pub async fn apply_catch_tell<const N: usize>(
     msg: String,
@@ -24,7 +32,7 @@ pub async fn apply_catch_tell<const N: usize>(
 ) -> Result<()> {
     let player_guard = context.this_player().load();
     let Some(this_player) = &*player_guard else {
-        context.config().debug_log(msg.to_string()).await;
+        record_output_effect(context, msg);
         return Ok(());
     };
 
@@ -54,7 +62,7 @@ pub async fn apply_catch_tell<const N: usize>(
             e
         )),
         None => {
-            context.config().debug_log(msg).await;
+            record_output_effect(context, msg);
             Ok(())
         }
     }

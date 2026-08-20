@@ -67,6 +67,13 @@ async fn compile_simul_efuns(config: &Arc<Config>) -> Program {
 
 pub async fn compile_prog(code: &str) -> (Program, Arc<Config>, Arc<Process>) {
     let config = Arc::new(test_config());
+    compile_prog_with_config(code, config).await
+}
+
+pub async fn compile_prog_with_config(
+    code: &str,
+    config: Arc<Config>,
+) -> (Program, Arc<Config>, Arc<Process>) {
     let simul_efuns = compile_simul_efuns(&config).await;
     let se_proc = Arc::new(Process::new(simul_efuns));
 
@@ -85,7 +92,12 @@ pub async fn compile_prog(code: &str) -> (Program, Arc<Config>, Arc<Process>) {
 }
 
 pub async fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
-    let (program, config, se_proc) = compile_prog(code).await;
+    let config = Arc::new(test_config());
+    run_prog_with_config(code, config).await
+}
+
+pub async fn run_prog_with_config(code: &str, config: Arc<Config>) -> Task<MAX_CALL_STACK_SIZE> {
+    let (program, config, se_proc) = compile_prog_with_config(code, config).await;
 
     let (tx, _rx) = tokio::sync::mpsc::channel(128);
     let global_state = GlobalState::new(config, tx);

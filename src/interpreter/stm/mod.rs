@@ -11,12 +11,14 @@ use crate::interpreter::{lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::
 
 mod changeset;
 mod committer;
+mod effects;
 mod retry;
 mod snapshot;
 mod world_value;
 
 pub(crate) use changeset::Changeset;
 pub(crate) use committer::{CommitProtocol, Committer, LiveSnapshot};
+pub(crate) use effects::{Effect, EffectLog, flush_effects};
 pub use retry::CommittedReader;
 pub(crate) use retry::{RetryStats, commit_changeset, drop_var, start_txn};
 pub(crate) use snapshot::Snapshot;
@@ -52,6 +54,10 @@ impl Version {
 pub(crate) struct Transaction {
     snapshot: Snapshot,
     changeset: Changeset,
+    /// Physical output recorded by this attempt, delivered once after a
+    /// successful commit. Dropped with the attempt on conflict, so a
+    /// re-run re-records it; never resolved from a cell at flush time.
+    effects: EffectLog,
     /// True when this transaction was opened by the committer (a live
     /// attempt) and may be joined by a nested sub-task; false for the fresh
     /// empty one minted for top-level contexts, whose holder must open its
@@ -65,6 +71,7 @@ impl Transaction {
         Self {
             snapshot,
             changeset: Changeset::new(version),
+            effects: EffectLog::new(),
             joinable: true,
         }
     }
@@ -75,6 +82,7 @@ impl Transaction {
         Self {
             snapshot,
             changeset: Changeset::new(version),
+            effects: EffectLog::new(),
             joinable,
         }
     }
@@ -103,6 +111,10 @@ impl Transaction {
     /// Mint a fresh array cell: a new `VarId` with its contents written into
     /// the changeset. A fresh id is never in the world, so the write can't
     /// conflict; the returned handle is the cell's identity.
+    ///
+    /// Once committed, the cell keeps its world entry even after the last
+    /// `LpcRef` to it is dropped; reclaiming such `VarId`s is the quiescent
+    /// pass's job (same class as the destructed-object retention).
     pub(crate) fn mint_array(&mut self, array: LpcArray) -> SVar<LpcArray> {
         let id = SVar::<LpcArray>::new();
         self.changeset
@@ -174,6 +186,18 @@ impl Transaction {
         self.changeset.written_values()
     }
 
+    /// Record a physical side effect for delivery after this attempt commits.
+    pub(crate) fn record_effect(&mut self, effect: Effect) {
+        self.effects.record(effect);
+    }
+
+    /// Take out the attempt's recorded side effects for delivery. Called by
+    /// the retry loop after a successful commit; a rejected attempt's log is
+    /// dropped with the attempt instead.
+    pub(crate) fn take_effects(&mut self) -> Vec<Effect> {
+        self.effects.take()
+    }
+
     /// Dismantle the transaction into its snapshot and changeset for retries, etc.
     pub(crate) fn into_parts(self) -> (Snapshot, Changeset) {
         (self.snapshot, self.changeset)
@@ -205,6 +229,18 @@ impl TxnHandle {
     {
         let mut guard = self.0.write();
         f(&mut guard)
+    }
+
+    /// Record a physical side effect on this attempt. A joiner's handle is
+    /// the parent's, so its output folds into the parent's log and rides the
+    /// parent's single commit.
+    pub(crate) fn record_effect(&self, effect: Effect) {
+        self.with(|t| t.record_effect(effect));
+    }
+
+    /// Take out the attempt's recorded side effects for delivery after commit.
+    pub(crate) fn take_effects(&self) -> Vec<Effect> {
+        self.with(|t| t.take_effects())
     }
 
     /// Whether this handle wraps a live attempt that can be joined by a nested task.

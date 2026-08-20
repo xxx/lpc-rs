@@ -3,7 +3,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     CATCH_TELL,
-    efun::efun_context::EfunContext,
+    efun::{efun_context::EfunContext, write::record_output_effect},
     lpc_ref::LpcRef,
     object_flags::ObjectFlags,
     task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
@@ -16,7 +16,7 @@ pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     if should_log {
         let string_ref = context.resolve_local_register(2 as RegisterSize);
         let msg = string_ref.with_string(|s| s.to_string())?;
-        context.config().debug_log(msg).await;
+        record_output_effect(context, msg);
     }
 
     Ok(())
