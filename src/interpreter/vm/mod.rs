@@ -348,7 +348,10 @@ mod tests {
     use indoc::indoc;
 
     use super::*;
-    use crate::test_support::test_config;
+    use crate::{
+        interpreter::{CommittedReader, lpc_ref::LpcRef},
+        test_support::test_config,
+    };
 
     #[tokio::test]
     async fn test_gc() {
@@ -419,5 +422,77 @@ mod tests {
         vm.gc().unwrap();
 
         assert_len(&ctx1, 0);
+    }
+
+    /// One transaction creates and destructs a prototype repeatedly, and
+    /// returns the handles it produced. The destructed ones must not
+    /// resurrect from the physical map or the committed world (the removal is
+    /// deferred to commit, so both still hold the old process until then):
+    /// each re-create is a fresh object, only the last survives the commit,
+    /// and it is the one the physical map and the committed world agree on.
+    #[tokio::test]
+    async fn test_create_destruct_cycles_one_transaction() {
+        let mut vm = Vm::new(test_config());
+
+        let code = indoc! { r##"
+            mixed *create() {
+                object a = find_object("/example2");
+                destruct(a);
+                object b = find_object("/example2");
+                destruct(b);
+                object c = find_object("/example2");
+                destruct(c);
+                object d = find_object("/example2");
+                return ({ a, b, c, d });
+            }
+        "## };
+
+        let ctx = vm
+            .initialize_string(code, "driver.c")
+            .await
+            .inspect_err(|e| e.emit_diagnostics())
+            .expect("driver init failed");
+
+        let LpcRef::Array(cell) = ctx.result().expect("create() must return the array") else {
+            panic!("expected a 4-element array, got {:?}", ctx.result());
+        };
+        let arr = ctx
+            .global_state
+            .committed_array(cell.id)
+            .expect("array payload committed");
+        assert_eq!(arr.len(), 4, "array must hold the four handles");
+
+        let handle = |i: usize| -> std::sync::Weak<Process> {
+            let LpcRef::Object(h) = &arr[i] else {
+                panic!("element {i} is not an object");
+            };
+            h.clone()
+        };
+
+        let physical = ctx
+            .global_state
+            .object_space
+            .lookup("/example2")
+            .expect("committed world must hold the surviving prototype");
+
+        // The three destructed prototypes are gone for good: their only
+        // strong roots were the cell (dropped) and the physical map
+        // (RemoveObject flushed at commit).
+        for i in 0..3 {
+            assert!(
+                handle(i).upgrade().is_none(),
+                "handle {i} (a destructed prototype) must be dead after the commit"
+            );
+        }
+
+        // The last re-created prototype is alive and is exactly the one the
+        // physical map holds: not a resurrection of any earlier cycle.
+        let live = handle(3)
+            .upgrade()
+            .expect("the last-created prototype must still be alive");
+        assert!(
+            std::sync::Arc::ptr_eq(&physical, &live),
+            "the committed /example2 must be the last-created object, not an earlier cycle"
+        );
     }
 }

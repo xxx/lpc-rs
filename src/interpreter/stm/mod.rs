@@ -7,7 +7,9 @@ use std::{
 
 use parking_lot::RwLock;
 
-use crate::interpreter::{lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef};
+use crate::interpreter::{
+    lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, process::Process,
+};
 
 mod changeset;
 mod committer;
@@ -94,10 +96,15 @@ impl Transaction {
     }
 
     /// Read the world value of a var: `Ref` for slots, payload contents for
-    /// payload vars.
+    /// payload vars. A var this attempt removed reads back as absent: the
+    /// committed world still holds its old value until commit, so falling
+    /// through to the snapshot would resurrect a removed var.
     pub(crate) fn read_value(&mut self, var_id: VarId) -> Option<WorldValue> {
         self.changeset.track_read(var_id);
 
+        if self.changeset.is_removed(var_id) {
+            return None;
+        }
         self.changeset
             .read(var_id)
             .or_else(|| self.snapshot.read(var_id))
@@ -106,6 +113,22 @@ impl Transaction {
     /// Write a slot value to the changeset.
     pub(crate) fn write(&mut self, var_id: VarId, value: LpcRef) {
         self.changeset.write(var_id, WorldValue::ref_of(value));
+    }
+
+    /// Write an object-space cell into the changeset. The `Process` is held
+    /// strongly so the object stays alive between this write and the commit
+    /// that makes it resolvable (the physical map is applied after commit).
+    pub(crate) fn write_process(&mut self, var_id: VarId, process: Arc<Process>) {
+        self.changeset.write(var_id, WorldValue::Process(process));
+    }
+
+    /// Record that this attempt removes a var from the world. For an object
+    /// cell this is a transactional `destruct`: the cell reads back as absent
+    /// to this attempt, and the committer removes it on commit (a concurrent
+    /// reader of the cell conflicts and re-runs). A later `write` of the same
+    /// var in this attempt cancels the removal.
+    pub(crate) fn drop_var(&mut self, var_id: VarId) {
+        self.changeset.drop_var(var_id);
     }
 
     /// Mint a fresh array cell: a new `VarId` with its contents written into
@@ -144,6 +167,18 @@ impl Transaction {
     pub(crate) fn read_mapping(&mut self, var_id: VarId) -> Option<Arc<LpcMapping>> {
         match self.read_value(var_id)? {
             WorldValue::Mapping(m) => Some(m),
+            _ => None,
+        }
+    }
+
+    /// The committed object for a cell var, or `None` if the var is absent
+    /// from both the changeset and the world, or the cell holds a non-object
+    /// (e.g. a slot that was written a plain ref). Reading the cell here is
+    /// what a transactional `find_object` uses, and it is the read that makes
+    /// a concurrent create of this cell conflict and re-run.
+    pub(crate) fn read_object(&mut self, var_id: VarId) -> Option<Arc<Process>> {
+        match self.read_value(var_id)? {
+            WorldValue::Process(p) => Some(p),
             _ => None,
         }
     }
@@ -229,6 +264,21 @@ impl TxnHandle {
     {
         let mut guard = self.0.write();
         f(&mut guard)
+    }
+
+    /// Read the object in a cell var (changeset first, then the committed
+    /// world), or `None` if the cell is absent or holds a non-object. A
+    /// joiner's handle is the parent's, so this reads the parent's attempt.
+    pub(crate) fn read_object(&self, var_id: VarId) -> Option<Arc<Process>> {
+        self.with(|t| t.read_object(var_id))
+    }
+
+    /// Whether this attempt removes the var. A removed object cell must not
+    /// be read back from the committed world or from the physical object map
+    /// (the deferred insert/remove effects haven't landed yet): the removal
+    /// is authoritative for this attempt until a re-write cancels it.
+    pub(crate) fn is_removed(&self, var_id: VarId) -> bool {
+        self.with(|t| t.changeset.is_removed(var_id))
     }
 
     /// Record a physical side effect on this attempt. A joiner's handle is

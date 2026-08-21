@@ -255,14 +255,14 @@ impl Committer {
             }
         }
 
-        if changeset.write_set().is_empty() {
+        if changeset.touched_vars().is_empty() {
             // Conflict-free read-only changeset, so we're done.
             // No need for a new version or empty history insert.
             // TODO: track stats for these?
             return Ok(());
         }
 
-        let written_vars = changeset.write_set().clone();
+        let written_vars = changeset.touched_vars();
         let new_version = Version::new();
         let new_snapshot = self.snapshot.apply(new_version, changeset);
         self.snapshot = new_snapshot;

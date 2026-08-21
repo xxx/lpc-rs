@@ -168,4 +168,43 @@ mod tests {
 
         assert!(master_proc.context.object_space().lookup("/foo").is_some());
     }
+
+    // A clone created this transaction is not yet in the physical object map
+    // (its insert is deferred to commit). So the same-transaction
+    // `find_object` can only see it through the transactional cell. This is
+    // the "clone usable immediately" behavior.
+    #[tokio::test]
+    async fn test_finds_clone_created_this_transaction() {
+        let code = indoc! { r#"
+            object clone;
+
+            object create() {
+                clone = clone_object("/example");
+                return find_object("/example#0");
+            }
+        "# };
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
+
+        let (program, config, _) = compile_prog(code).await;
+        let func = program.initializer.clone().expect("no init found?");
+        let context = task_context_fixture(program, config, tx);
+
+        let mut task = Task::<10>::new(context.clone());
+        task.timed_eval(func.clone(), &[], 500)
+            .await
+            .expect("task failed");
+
+        let LpcRef::Object(found) = task.result().unwrap() else {
+            panic!("find_object should have found the just-created clone");
+        };
+
+        // `process.filename()` is the object path (the cell/physical-map key),
+        // e.g. `/example#0` for a clone; `program.filename` is the source `/example.c`.
+        assert_eq!(
+            found.upgrade().unwrap().filename().as_ref(),
+            "/example#0",
+            "same-transaction find_object must see the clone created this txn"
+        );
+    }
 }

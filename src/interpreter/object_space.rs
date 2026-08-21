@@ -16,7 +16,7 @@ use tracing::{debug, trace};
 
 use crate::{
     compiler::Compiler,
-    interpreter::{gc::mark::Mark, process::Process, program::Program},
+    interpreter::{gc::mark::Mark, process::Process, program::Program, stm::VarId},
     util::{process_builder::ProcessCreator, with_compiler::WithCompiler},
 };
 
@@ -28,8 +28,18 @@ const OBJECT_SPACE_SIZE: usize = 100_000;
 /// uses.
 #[derive(Debug)]
 pub struct ObjectSpace {
-    /// The actual mapping of "paths" to processes
+    /// The actual mapping of "paths" to processes. This is the *committed*
+    /// object space: the physical state, read directly by non-transactional
+    /// consumers (GC, the committed reader, function-pointer lookup) and kept
+    /// in sync with the committer's object cells at commit time.
     processes: DashMap<String, Arc<Process>>,
+
+    /// The stable transactional cell for each object path. Minted once on
+    /// first reference to a path and stable for the object's life. This is
+    /// what lets the committer's read-write conflict rule apply to the object
+    /// space: a `find` of a path reads its cell, so a concurrent create
+    /// commits-and-conflicts the finder and makes it re-run.
+    cell_ids: DashMap<String, VarId>,
 
     /// How many clones have been created so far?
     clone_count: AtomicUsize,
@@ -72,6 +82,100 @@ impl ObjectSpace {
     /// Get a reference to the master object.
     pub fn master_object(&self) -> Option<Arc<Process>> {
         self.master_object.load_full()
+    }
+
+    /// The cell a *read* of the object at `key` consults, or `None` if the
+    /// key has no committed/in-flight cell yet. Deliberately does not mint:
+    /// a failed lookup must not claim a `VarId` that the object's create would
+    /// then mint as a second, distinct cell (one object, one cell, for life).
+    pub(crate) fn get_cell_id(&self, key: &str) -> Option<VarId> {
+        self.cell_ids.get(key).map(|cell| *cell)
+    }
+
+    /// The stable transactional cell for the object at `key`, minted on first
+    /// sight and reused for the object's life. Called by the *writing*
+    /// (transactional) insert path; a read must use `get_cell_id` instead so
+    /// a failed lookup does not mint a cell the create would then re-mint.
+    pub(crate) fn cell_id(&self, key: &str) -> VarId {
+        *self
+            .cell_ids
+            .entry(key.to_owned())
+            .or_insert_with(VarId::new)
+    }
+
+    /// The one key under which an object lives in the committed world: the
+    /// in-game filename, `.c` stripped, clone-id suffix, leading `/` forced.
+    /// The same normalization [`process_key`](Self::process_key) applies to a
+    /// process, so a cell, the physical map, and a deferred insert/remove all
+    /// agree on identity.
+    pub(crate) fn path_key(&self, path: &str) -> String {
+        let mut key = Self::with_leading_slash(path);
+        key = key
+            .strip_suffix(".c")
+            .map(ToString::to_string)
+            .unwrap_or(key);
+        key
+    }
+
+    /// The physical-map key for a process: its in-game filename (`.c`
+    /// stripped, clone-id suffix, leading `/` forced). This is the one key
+    /// used by the committed `processes` map, the `cell_ids` registry, and
+    /// the deferred insert/remove, so all three agree on identity.
+    pub fn process_key(&self, process: &Process) -> String {
+        Self::with_leading_slash(process.filename().as_ref())
+    }
+
+    /// Whether `key` is the master object's path. `key` is a [`process_key`]
+    /// (raw in-game filename, leading `/` forced), so the config's master path
+    /// is normalized the same way before comparing (with or without the `.c`
+    /// extension, to mirror the old insert-time check).
+    fn is_master_key(&self, key: &str) -> bool {
+        let master = Self::with_leading_slash(self.config.master_object.as_str());
+        let stripped = master.strip_suffix(".c").unwrap_or(&*master);
+        key == master.as_str() || key == stripped
+    }
+
+    pub fn with_leading_slash(s: &str) -> String {
+        if s.starts_with('/') {
+            s.to_owned()
+        } else {
+            format!("/{s}")
+        }
+    }
+
+    /// Apply a committed deferred insert: place the process in the physical
+    /// map under its key (updating the master pointer if relevant). Called
+    /// by the retry loop when flushing a committed `InsertObject` effect.
+    pub(crate) fn apply_insert(&self, key: &str, process: Arc<Process>) {
+        if self.is_master_key(key) {
+            debug!("Setting new master object: {}", key);
+            self.master_object.swap(Some(process.clone()));
+        }
+        self.processes.insert(key.to_string(), process);
+    }
+
+    /// Apply a committed deferred removal: delete the object from the physical
+    /// map. If it was the master, the master pointer is cleared.
+    pub(crate) fn apply_remove(&self, key: &str) {
+        self.processes.remove(key);
+        if self.is_master_key(key) {
+            self.master_object.store(None);
+        }
+    }
+
+    /// Create a fresh clone process (assigning the next clone id) without
+    /// inserting it into the physical map. The caller performs the (deferred)
+    /// insert, so the clone isn't physically visible until its transaction
+    /// commits.
+    pub(crate) fn create_clone_process(&self, program: Arc<Program>) -> Arc<Process> {
+        let count = self.clone_count.fetch_add(1, Ordering::Relaxed);
+
+        let clone = Process::new_clone(program, count);
+        let process: Arc<Process> = clone.into();
+
+        trace!("Creating clone: {}", process.filename());
+
+        process
     }
 
     // /// Create a [`Process`] from a [`Program`], and add add it to the process
@@ -183,6 +287,7 @@ impl Clone for ObjectSpace {
     fn clone(&self) -> Self {
         Self {
             processes: self.processes.clone(),
+            cell_ids: self.cell_ids.clone(),
             clone_count: AtomicUsize::new(self.clone_count.load(Ordering::Relaxed)),
             config: self.config.clone(),
             master_object: ArcSwapAny::from(None),
@@ -196,6 +301,7 @@ impl Default for ObjectSpace {
 
         Self {
             processes,
+            cell_ids: DashMap::new(),
             clone_count: AtomicUsize::new(0),
             config: Config::default().into(),
             master_object: ArcSwapAny::from(None),

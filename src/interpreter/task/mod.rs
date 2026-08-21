@@ -447,7 +447,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 // records them fresh.
                 let effects = self.txn.take_effects();
                 if !effects.is_empty() {
-                    flush_effects(self.context.config(), effects).await;
+                    flush_effects(self.context.config(), self.context.object_space(), effects)
+                        .await;
                 }
                 return (
                     Ok(()),

@@ -17,7 +17,10 @@
 use lpc_rs_utils::config::Config;
 use tokio::sync::mpsc::Sender;
 
-use crate::telnet::ops::ConnectionOp;
+use crate::{
+    interpreter::{object_space::ObjectSpace, process::Process},
+    telnet::ops::ConnectionOp,
+};
 
 /// One physical side effect pending delivery.
 #[derive(Clone)]
@@ -31,15 +34,34 @@ pub(crate) enum Effect {
         op: ConnectionOp,
         tx: Sender<ConnectionOp>,
     },
+
+    /// A deferred object-space insert: the `Process` and its physical key,
+    /// materialized at record time. Applied to the `ObjectSpace` at commit.
+    InsertObject {
+        key: String,
+        process: std::sync::Arc<Process>,
+    },
+
+    /// A deferred object-space removal: the physical key. Applied to the
+    /// `ObjectSpace` at commit.
+    RemoveObject { key: String },
 }
 
 impl Effect {
-    /// Deliver this effect physically.
-    pub(crate) async fn flush(self, config: &Config) {
+    /// Deliver this effect physically. Object effects go to the passed
+    /// `ObjectSpace` (the committer's physical map); the others to config /
+    /// their own channel.
+    pub(crate) async fn flush(self, config: &Config, object_space: &ObjectSpace) {
         match self {
             Self::DebugLog(msg) => config.debug_log(msg).await,
             Self::Socket { op, tx } => {
                 let _ = tx.send(op).await;
+            }
+            Self::InsertObject { key, process } => {
+                object_space.apply_insert(&key, process);
+            }
+            Self::RemoveObject { key } => {
+                object_space.apply_remove(&key);
             }
         }
     }
@@ -47,9 +69,13 @@ impl Effect {
 
 /// Deliver a batch of effects in order. The retry loop calls this after a
 /// successful commit; a rejected attempt's batch is never delivered.
-pub(crate) async fn flush_effects(config: &Config, effects: Vec<Effect>) {
+pub(crate) async fn flush_effects(
+    config: &Config,
+    object_space: &ObjectSpace,
+    effects: Vec<Effect>,
+) {
     for effect in effects {
-        effect.flush(config).await;
+        effect.flush(config, object_space).await;
     }
 }
 
@@ -85,6 +111,8 @@ impl std::fmt::Debug for Effect {
         match self {
             Self::DebugLog(msg) => f.debug_tuple("DebugLog").field(msg).finish(),
             Self::Socket { op, .. } => f.debug_tuple("Socket").field(op).finish(),
+            Self::InsertObject { key, .. } => f.debug_tuple("InsertObject").field(key).finish(),
+            Self::RemoveObject { key } => f.debug_tuple("RemoveObject").field(key).finish(),
         }
     }
 }
@@ -123,7 +151,8 @@ mod tests {
             tx: tx_b,
         });
 
-        flush_effects(&Config::default(), log.take()).await;
+        let object_space = crate::interpreter::object_space::ObjectSpace::default();
+        flush_effects(&Config::default(), &object_space, log.take()).await;
 
         assert_eq!(rx_a.recv().await, Some(op_a));
         assert_eq!(rx_b.recv().await, Some(op_b));

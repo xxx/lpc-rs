@@ -18,8 +18,8 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        stm::TxnHandle,
-        task::{get_location, task_id::TaskId, task_template::TaskTemplate},
+        stm::{Effect, TxnHandle},
+        task::{Task, get_location, task_id::TaskId, task_template::TaskTemplate},
         task_context::{TaskContext, TaskContextBuilder},
         vm::vm_op::VmOp,
     },
@@ -72,10 +72,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             /// Get pointer to the current [`Config`] that's in-use
             pub fn config(&self) -> &Arc<Config>;
 
-            /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
-            /// then insert it into the object space.
-            pub fn insert_clone(&self, program: Arc<Program>) -> Arc<Process>;
-
             // /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s upvalues (i.e. all of them)
             // #[call(upvalues)]
             // pub fn vm_upvalues(&self) -> &Arc<RwLock<GcRefBank>>;
@@ -102,43 +98,51 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.task_context.with_call_outs_mut(f)
     }
 
-    /// Find or create (but don't initialize) an object by path
+    /// Find or create (but don't initialize) an object by path.
+    /// Transactional: a create writes the object's cell and records a deferred
+    /// physical insert, so the object is usable within this transaction but
+    /// physically visible only after commit.
     pub async fn create_object(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        match self.lookup_process(path.to_str().unwrap()) {
-            Some(proc) => Ok(proc),
-            None => {
-                let process = self.create_process_from_path(path).await.map_err(|mut e| {
-                    let debug_span = self.current_debug_span();
-
-                    *e = e.with_span(debug_span);
-
-                    e
-                })?;
-
-                Ok(process)
-            }
+        if let Some(proc) = self.find_process(path) {
+            return Ok(proc);
         }
+
+        let debug_span = self.current_debug_span();
+        let process = self.create_process_from_path(path).await.map_err(|mut e| {
+            *e = e.with_span(debug_span);
+            e
+        })?;
+
+        self.insert_process_transactional(&process);
+
+        Ok(process)
     }
 
-    /// Find or initialize an object by path
+    /// Find or initialize an object by path.
+    /// Transactional: a new object gets a cell write and deferred physical
+    /// insert, and its initializer runs in a sub-task that joins this
+    /// transaction's commit.
     pub async fn load_object(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        match self.lookup_process(path.to_str().unwrap()) {
-            Some(proc) => Ok(proc),
-            None => {
-                let task = self
-                    .initialize_process_from_path(path)
-                    .await
-                    .map_err(|mut e| {
-                        let debug_span = self.current_debug_span();
-
-                        *e = e.with_span(debug_span);
-
-                        e
-                    })?;
-
-                Ok(task.context.process)
-            }
+        if let Some(proc) = self.find_process(path) {
+            return Ok(proc);
         }
+
+        let debug_span = self.current_debug_span();
+        let process = self.create_process_from_path(path).await.map_err(|mut e| {
+            *e = e.with_span(debug_span);
+            e
+        })?;
+
+        self.insert_process_transactional(&process);
+        self.init_process_transactional(&process)
+            .await
+            .map_err(|mut e| {
+                let span = self.current_debug_span();
+                *e = e.with_span(span);
+                e
+            })?;
+
+        Ok(process)
     }
 
     /// Return the [`TaskId`] of the current `Task`
@@ -213,6 +217,118 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         &self.txn
     }
 
+    /// The object space this efun's task commits into.
+    #[inline]
+    pub(crate) fn object_space(&self) -> &ObjectSpace {
+        self.task_context.object_space()
+    }
+
+    /// Record a physical side effect on this efun's attempt.
+    pub(crate) fn record_effect(&self, effect: Effect) {
+        self.txn.record_effect(effect);
+    }
+
+    /// Find an object by path, transactionally: read the object's cell first
+    /// (a cell read makes a concurrent create of this object conflict this
+    /// transaction and re-run it), then fall back to the physical map for
+    /// objects created outside this transaction (bootstrap). Does not
+    /// initialize or create (use `load_object` for that).
+    pub fn find_process(&self, path: &LpcPath) -> Option<Arc<Process>> {
+        let key = self.object_space().path_key(path.as_ref());
+        let Some(var_id) = self.object_space().get_cell_id(&key) else {
+            // No cell yet (object not created in any committed or in-flight
+            // transaction): the physical map is the only place it could be
+            // (a bootstrap object).
+            return self.task_context.lookup_process(&key);
+        };
+        if self.txn().is_removed(var_id) {
+            // This attempt destructed the object. The physical map still
+            // holds it (the removal is deferred to commit), and the committed
+            // world would likewise still hold it — reading either back would
+            // resurrect it. The object is gone for this attempt until a
+            // re-create (a new cell write) cancels the removal.
+            return None;
+        }
+        self.txn()
+            .read_object(var_id)
+            .or_else(|| self.task_context.lookup_process(&key))
+    }
+
+    /// Create a [`Process`] from `path`, compiling the file but *without*
+    /// inserting it physically. The transactional caller performs the (cell +
+    /// deferred-physical) insert, so the object is not physically visible
+    /// until its transaction commits.
+    pub async fn create_process_from_path(&self, path: &LpcPath) -> Result<Arc<Process>> {
+        let program = self
+            .with_async_compiler(|compiler| async move {
+                compiler.compile_in_game_file(path, None).await
+            })
+            .await?;
+        Ok(Arc::new(Process::new(program)))
+    }
+
+    /// Insert an object transactionally: write its cell and record a deferred
+    /// physical insert. The cell write is what makes the object usable within
+    /// this transaction (and what concurrent readers conflict against); the
+    /// effect is what places it in the physical map at commit.
+    pub(crate) fn insert_process_transactional(&self, process: &Arc<Process>) {
+        let key = self.object_space().process_key(process);
+        let var_id = self.object_space().cell_id(&key);
+        self.txn()
+            .with(|t| t.write_process(var_id, process.clone()));
+        self.record_effect(Effect::InsertObject {
+            key,
+            process: process.clone(),
+        });
+    }
+
+    /// Initialize a newly created object in a sub-task that joins this
+    /// transaction's commit. Mirrors the old `ProcessInitializer` path
+    /// (insert *before* init, to prevent infinite loops, then run the
+    /// initializer in a joined sub-task), but the insert is the transactional
+    /// one, and the sub-task's writes ride this transaction's single commit.
+    pub async fn init_process_transactional(&self, process: &Arc<Process>) -> Result<()> {
+        let new_task_context = self
+            .task_context_builder()
+            .process(process.clone())
+            .chain_count(self.chain_count() + 1)
+            .build()
+            .map_err(|e| -> Box<LpcError> {
+                Box::new(LpcError::new_bug(format!(
+                    "{e}: could not build sub-task context"
+                )))
+            })?;
+
+        Task::<N>::initialize_sub_process(self.task_id(), new_task_context).await?;
+
+        Ok(())
+    }
+
+    /// Convert the passed [`Program`] into a clone [`Process`], write its
+    /// cell, and record a deferred physical insert. The clone is usable
+    /// immediately (via the cell) but physically visible only after commit.
+    pub fn insert_clone(&self, program: Arc<Program>) -> Arc<Process> {
+        let process = self.object_space().create_clone_process(program);
+        self.insert_process_transactional(&process);
+        process
+    }
+
+    /// Remove the passed [`Process`] from the object space, transactionally:
+    /// drop its cell (so it reads back as absent to this attempt, and a
+    /// concurrent reader of the cell conflicts and re-runs) and record a
+    /// deferred physical removal applied at commit.
+    #[inline]
+    pub fn remove_process<P>(&self, process: P)
+    where
+        P: Into<Arc<Process>>,
+    {
+        let process = process.into();
+        let key = self.object_space().process_key(&process);
+        let var_id = self.object_space().cell_id(&key);
+        self.txn().with(|t| t.drop_var(var_id));
+        self.record_effect(Effect::RemoveObject { key });
+    }
+
     /// Resolve any RegisterVariant
     #[inline]
     pub fn resolve_register_variant(&self, variant: RegisterVariant) -> Result<Cow<'_, LpcRef>> {
@@ -242,25 +358,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     #[inline]
     pub fn process(&self) -> &Arc<Process> {
         &self.frame().process
-    }
-
-    /// Directly insert the passed [`Process`] into the object space, with
-    /// in-game local filename.
-    #[inline]
-    pub fn insert_process<P>(&self, process: P)
-    where
-        P: Into<Arc<Process>>,
-    {
-        self.task_context.insert_process(process);
-    }
-
-    ///Remove the passed [`Process`] from the object space
-    #[inline]
-    pub fn remove_process<P>(&self, process: P)
-    where
-        P: Into<Arc<Process>>,
-    {
-        self.task_context.remove_process(process);
     }
 
     /// Get a reference to `this_player` from the context
@@ -312,5 +409,130 @@ impl<'task, const N: usize> ProcessInitializer for EfunContext<'task, N> {
     #[inline]
     fn process_initializer_data(&self) -> TaskTemplate {
         self.task_context.process_initializer_data()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use lpc_rs_core::{lpc_type::LpcType, register::Register};
+    use lpc_rs_function_support::{
+        function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunctionBuilder,
+    };
+
+    use super::*;
+    use crate::{
+        interpreter::{
+            program::ProgramBuilder,
+            vm::global_state::{GlobalState, GlobalStateBuilder},
+        },
+        test_support::test_config,
+    };
+
+    /// A fresh, uncommitted `EfunContext` whose call stack holds one real
+    /// frame. The committer is spawned (as in the other efun fixtures) so
+    /// effect flushing and cell mints behave as in a VM. `frame()` must
+    /// resolve, because `create_object` records the caller's debug span.
+    fn efun_context() -> (TaskContext, CallStack<10>) {
+        let (tx, _rx) = tokio::sync::mpsc::channel::<VmOp>(128);
+        let (committer_tx, committer_handle) = GlobalState::spawn_committer();
+        let global_state = GlobalStateBuilder::default()
+            .config(test_config())
+            .tx(tx)
+            .committer_tx(committer_tx)
+            .committer_handle(Some(committer_handle))
+            .build()
+            .expect("global state builder");
+        let upvalues = global_state.clone_upvalues();
+        let program = ProgramBuilder::default()
+            .filename(LpcPath::InGame("/caller".into()))
+            .build()
+            .expect("program builder");
+        let process = Arc::new(Process::new(program));
+        let task_context = TaskContextBuilder::default()
+            .global_state(global_state)
+            .process(process.clone())
+            .build()
+            .expect("task context builder");
+
+        let function = ProgramFunctionBuilder::default()
+            .prototype(
+                FunctionPrototypeBuilder::default()
+                    .name("efun_test")
+                    .filename(Arc::new(LpcPath::InGame("/caller".into())))
+                    .return_type(LpcType::Void)
+                    .build()
+                    .expect("prototype builder"),
+            )
+            .build()
+            .expect("function builder");
+        let frame = CallFrame::new(
+            process,
+            Arc::new(function),
+            0 as RegisterSize,
+            None::<&[Register]>,
+            upvalues,
+        );
+        let mut stack = CallStack::default();
+        stack.push(frame).expect("push entry frame");
+
+        (task_context, stack)
+    }
+
+    // `destruct` + re-create of a prototype, repeated in one transaction. The
+    // removal is deferred to commit, so until then the physical map and the
+    // committed world both still hold the destructed process; every
+    // re-create must yield a distinct process identity (no resurrection from
+    // either source), and a find with no intervening destruct returns the
+    // same identity again. Object identity is only observable in Rust
+    // (LPC `==` compares the weak handles, not the processes; a prototype
+    // has no clone id to compare), so this asserts `Arc` identity.
+    #[tokio::test]
+    async fn destruct_and_recreate_cycles_yield_fresh_objects() {
+        let (task_context, mut stack) = efun_context();
+        let ctx = EfunContext::new(TaskId::default(), &mut stack, &task_context);
+
+        let path = LpcPath::new_in_game(
+            "/example",
+            task_context.in_game_cwd(),
+            &*test_config().lib_dir,
+        );
+
+        // Baseline: create once, and a second find (no destruct in between)
+        // returns the same object.
+        let p1 = ctx.create_object(&path).await.expect("first create");
+        let p1b = ctx.find_process(&path).expect("second find, no destruct");
+        assert!(
+            Arc::ptr_eq(&p1, &p1b),
+            "find without a destruct returns the same object"
+        );
+
+        // Cycle 1: destruct + re-create. The re-created object must be a
+        // distinct identity, even though the physical map and committed world
+        // still hold `p1` (the effects haven't landed).
+        ctx.remove_process(p1.clone());
+        let p2 = ctx
+            .create_object(&path)
+            .await
+            .expect("re-create after destruct");
+        assert!(
+            !Arc::ptr_eq(&p1, &p2),
+            "re-created object must not resurrect the destructed one"
+        );
+
+        // Cycle 2: the same sequence again; all three identities distinct.
+        ctx.remove_process(p2.clone());
+        let p3 = ctx.create_object(&path).await.expect("second re-create");
+        assert!(
+            !Arc::ptr_eq(&p2, &p3) && !Arc::ptr_eq(&p1, &p3),
+            "second re-create must be a fresh object, distinct from both predecessors"
+        );
+
+        // And a plain find (no destruct) after the cycles returns the live
+        // (most recent) object's identity.
+        let p3b = ctx.find_process(&path).expect("find after the cycles");
+        assert!(
+            Arc::ptr_eq(&p3, &p3b),
+            "find returns the live object's identity"
+        );
     }
 }
