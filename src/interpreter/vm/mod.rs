@@ -22,12 +22,7 @@ use crate::{
         task_context::TaskContext,
         vm::global_state::GlobalState,
     },
-    telnet::{
-        Telnet,
-        connection::Connection,
-        connection_broker::ConnectionBroker,
-        ops::{BrokerOp, ConnectionOp},
-    },
+    telnet::{Telnet, connection::Connection, connection_broker::ConnectionBroker, ops::BrokerOp},
     util::process_builder::ProcessInitializer,
 };
 
@@ -128,17 +123,6 @@ impl Vm {
                         }
                         VmOp::PrioritizeCallOut(idx) => {
                             self.prioritize_call_out(idx).await;
-                        }
-                        VmOp::Takeover(connection, process, callback) => {
-                            let prev = Self::takeover_process(connection, process).await;
-                            let _ = callback.send(prev);
-                        }
-                        VmOp::Exec(new_ob, old_ob, callback) => {
-                            // We do this here in the VM because there are multiple objects
-                            // being updated at once, and we don't want to have to deal with
-                            // locking them behind a mutex.
-                            let prev = Self::exec_process(new_ob, old_ob).await;
-                            let _ = callback.send(prev);
                         }
                         VmOp::RuntimeError(error, proc) => {
                             let template = self.new_task_template();
@@ -241,98 +225,72 @@ impl Vm {
         &self.global_state.tx
     }
 
-    /// Serialized public facade for the `exec` efun.
-    /// The overall mechanism is to call this function, which will send an `VmOp::Exec` to the VM, and
-    /// await the response. The `Exec` op is picked up, and will call `takeover_process`, which actually
-    /// makes the switch, and then will return the previous connection, if there was one.
+    /// Bind a [`Connection`] to a [`Process`], transactionally.
     ///
-    /// # Arguments
-    ///
-    /// * `new_ob` - The new [`Process`] to put the connect into [`Connection`]
-    /// * `old_ob` - The [`Connection`]'s current [`Process`
-    /// * `vm_tx` - The channel to send the `Exec` op to
-    ///
-    /// # Returns
-    ///
-    /// * `Some(Arc<Connection>)` - The previous connection in `process`, if there was one
-    /// * `None` - If there was no previous connection
-    pub async fn exec(
-        new_ob: Arc<Process>,
-        old_ob: Arc<Process>,
-        vm_tx: Sender<VmOp>,
-    ) -> Option<Arc<Connection>> {
-        let (exec_tx, exec_rx) = tokio::sync::oneshot::channel();
-        let _ = vm_tx.send(VmOp::Exec(new_ob, old_ob, exec_tx)).await;
-        exec_rx.await.ok().flatten()
-    }
-
-    /// Take over a `Process` with a new `Connection`.
-    /// The overall mechanism is to call this function, which will send an `VmOp::Exec` to the VM, and
-    /// await the response. The `Exec` op is picked up, and will call `takeover_process`, which actually
-    /// makes the switch, and then will return the previous connection, if there was one.
-    ///
-    /// # Arguments
-    ///
-    /// * `connection` - The [`Connection`] to attach to the [`Process`]
-    /// * `process` - The [`Process`] to attach the [`Connection`] to
-    /// * `vm_tx` - The channel to send the `Takeover` op to
-    ///
-    /// # Returns
-    ///
-    /// * `Some(Arc<Connection>)` - The previous connection in `process`, if there was one
-    /// * `None` - If there was no previous connection
+    /// Used by the login path (`initiate_login`). The connection cell on
+    /// `process` is written in its own transaction against the committer
+    /// (not inside any task's transaction), so it commits independently.
+    /// The physical socket-level handover — the connection's back-reference
+    /// pointing at `process`, and the disconnect of whatever was previously
+    /// bound — is a deferred `Effect::Exec`, flushed only after the commit
+    /// lands.
     pub async fn takeover(
+        global_state: &Arc<GlobalState>,
         connection: Arc<Connection>,
         process: Arc<Process>,
-        vm_tx: Sender<VmOp>,
-    ) -> Option<Arc<Connection>> {
-        let (exec_tx, exec_rx) = tokio::sync::oneshot::channel();
-        let _ = vm_tx
-            .send(VmOp::Takeover(connection, process, exec_tx))
-            .await;
-        exec_rx.await.ok().flatten()
-    }
+    ) {
+        use crate::interpreter::stm::{
+            Effect, Transaction, commit_changeset, flush_effects, start_txn,
+        };
 
-    /// Set the [`Process`] that a [`Connection`] is connected to, and tag the
-    /// [`Process`] with the [`Connection`].
-    /// Drops the previous [`Connection`] that was attached to the [`Process`] if there was one.'
-    /// This is the underlying mechanism of the `exec` efun.
-    ///
-    /// NOTE: No synchronization is done here. It's assumed that this is being called
-    /// from behind a channel for serialization.
-    async fn takeover_process(
-        connection: Arc<Connection>,
-        process: Arc<Process>,
-    ) -> Option<Arc<Connection>> {
-        // These are the swaps that need to be done atomically.
-        connection.process.swap(Some(process.clone()));
-        let previous = process.connection.swap(Some(connection));
+        let committer_tx = &global_state.committer_tx;
 
-        if let Some(conn) = &previous {
-            let _ = conn
-                .tx
-                .send(ConnectionOp::SendMessage(
-                    "You are being disconnected because someone else logged in as you.".to_string(),
-                ))
-                .await;
-            let _ = conn
-                .broker_tx
-                .send_async(BrokerOp::Disconnect(conn.address))
-                .await;
+        loop {
+            let live = match start_txn(committer_tx).await {
+                Ok(l) => l,
+                Err(e) => {
+                    error!("takeover: committer start failed: {e}");
+                    return;
+                }
+            };
+
+            let mut txn = Transaction::new(live.inner.clone());
+
+            // The connection currently bound to `process` (if any); the
+            // handover displaces it.
+            let previous = txn.read_connection(process.connection.id);
+            txn.write_connection(process.connection.id, Some(connection.clone()));
+
+            txn.record_effect(Effect::Exec {
+                new_process: process.clone(),
+                connection: connection.clone(),
+                previous,
+            });
+
+            let effects = txn.take_effects();
+            let (_world, changeset) = txn.into_parts();
+
+            let commit = commit_changeset(committer_tx, changeset).await;
+            drop(live);
+
+            match commit {
+                Ok(Ok(())) => {
+                    flush_effects(
+                        &global_state.config,
+                        &global_state.object_space,
+                        global_state.call_outs(),
+                        effects,
+                    )
+                    .await;
+                    return;
+                }
+                Ok(Err(_)) => continue,
+                Err(e) => {
+                    tracing::error!("takeover: committer commit failed: {e}");
+                    return;
+                }
+            }
         }
-
-        previous
-    }
-
-    /// The actual mechanism for `exec`.
-    async fn exec_process(new_ob: Arc<Process>, old_ob: Arc<Process>) -> Option<Arc<Connection>> {
-        let connection = Self::detach_process(old_ob)?;
-        Self::takeover_process(connection, new_ob).await
-    }
-
-    /// Detach a [`Connection`] from its [`Process`].
-    fn detach_process(process: Arc<Process>) -> Option<Arc<Connection>> {
-        process.connection.swap(None)
     }
 }
 

@@ -1,7 +1,5 @@
 use std::{collections::HashSet, sync::Arc};
 
-use if_chain::if_chain;
-
 use crate::interpreter::{process::Process, stm::TxnHandle};
 
 /// An iterator over all of the environments of a [`Process`]. The chain is

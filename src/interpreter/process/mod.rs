@@ -8,7 +8,6 @@ use std::{
     sync::Arc,
 };
 
-use arc_swap::ArcSwapAny;
 use bit_set::BitSet;
 use delegate::delegate;
 use lpc_rs_core::RegisterSize;
@@ -55,7 +54,7 @@ impl Default for ProcessPosition {
 
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Process {
     /// The [`Program`] that this process is running.
     pub program: Arc<Program>,
@@ -70,15 +69,33 @@ pub struct Process {
     clone_id: Option<usize>,
 
     /// The player [`Connection`] that this [`Process`] is associated with, if any.
-    /// The [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker)
-    /// owns the [`Connection`] with the [`Process`] set on it.
-    pub connection: ArcSwapAny<Option<Arc<Connection>>>,
+    /// A transactional cell: an `exec` or login writes the cell in its own
+    /// transaction (so the rest of that task sees the binding) and records a
+    /// deferred socket-level handover, while the [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker)
+    /// keeps the physical `Connection`. `interactive()`/`this_player()` read
+    /// the cell through the transaction, so they see an in-transaction `exec`.
+    pub connection: SVar<Connection>,
 
     /// Our flags
     pub flags: AtomicFlags<ObjectFlags>,
 
     /// Where are we in the game world?
     pub position: ProcessPosition,
+}
+
+/// A `Process` with an empty `Program`: no globals, no clone id, no
+/// connection, default flags and position. Test fixtures use this.
+impl Default for Process {
+    fn default() -> Self {
+        Self {
+            program: Arc::default(),
+            globals: Vec::new().into_boxed_slice(),
+            clone_id: None,
+            connection: SVar::new(),
+            flags: Default::default(),
+            position: Default::default(),
+        }
+    }
 }
 
 impl Process {
@@ -97,7 +114,7 @@ impl Process {
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
             clone_id: None,
-            connection: ArcSwapAny::from(None),
+            connection: SVar::new(),
             flags: Default::default(),
             position: Default::default(),
         }
@@ -118,7 +135,7 @@ impl Process {
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
             clone_id: Some(clone_id),
-            connection: ArcSwapAny::from(None),
+            connection: SVar::new(),
             flags,
             position: Default::default(),
         }

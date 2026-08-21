@@ -14,6 +14,8 @@
 //! carries its own send channel. Flushing never re-resolves a transactional
 //! cell, so an effect can never observe end-of-transaction state.
 
+use std::sync::Arc;
+
 use lpc_rs_utils::config::Config;
 use tokio::sync::mpsc::Sender;
 
@@ -21,7 +23,10 @@ use crate::{
     interpreter::{
         call_outs::CallOuts, lpc_ref::LpcRef, object_space::ObjectSpace, process::Process,
     },
-    telnet::ops::ConnectionOp,
+    telnet::{
+        connection::Connection,
+        ops::{BrokerOp, ConnectionOp},
+    },
 };
 
 /// A fully materialized, not-yet-scheduled call out. Everything the physical
@@ -89,6 +94,21 @@ pub(crate) enum Effect {
     /// matches this one is removed from the queue at flush. A no-op if it
     /// is already gone (e.g. it already fired and removed itself).
     CancelCallOut { id: u64 },
+
+    /// A deferred socket-level `exec` handover. The transactional part (the
+    /// connection cell on `new_process`) is committed as part of the owning
+    /// task; this effect is the physical part that must not run until that
+    /// commit lands. `connection` is the connection the cell now holds; the
+    /// flush points its back-reference at `new_process`. `previous` is the
+    /// connection that was bound before the handover (if any): the telnet
+    /// input it belongs to now goes to `new_process` instead, so it is
+    /// disconnected. All fields are captured at record time, so the flush
+    /// never re-resolves a cell.
+    Exec {
+        new_process: Arc<Process>,
+        connection: Arc<Connection>,
+        previous: Option<Arc<Connection>>,
+    },
 }
 
 impl Effect {
@@ -118,6 +138,31 @@ impl Effect {
             }
             Self::CancelCallOut { id } => {
                 call_outs.write().remove_by_id(id);
+            }
+            Self::Exec {
+                new_process,
+                connection,
+                previous,
+            } => {
+                // The cell write already committed with the owning task, so
+                // the back-reference is the only physical handover left.
+                connection.process.store(Some(new_process.clone()));
+
+                // The connection moved to `new_process`; its old holder is
+                // disconnected, mirroring the previous `takeover_process`.
+                if let Some(prev_conn) = &previous {
+                    let _ = prev_conn
+                        .tx
+                        .send(ConnectionOp::SendMessage(
+                            "You are being disconnected because someone else logged in as you."
+                                .to_string(),
+                        ))
+                        .await;
+                    let _ = prev_conn
+                        .broker_tx
+                        .send_async(BrokerOp::Disconnect(prev_conn.address))
+                        .await;
+                }
             }
         }
     }
@@ -174,6 +219,7 @@ impl std::fmt::Debug for Effect {
                 f.debug_tuple("ScheduleCallOut").field(schedule).finish()
             }
             Self::CancelCallOut { id } => f.debug_tuple("CancelCallOut").field(id).finish(),
+            Self::Exec { .. } => f.debug_tuple("Exec").finish(),
         }
     }
 }
@@ -214,8 +260,7 @@ mod tests {
 
         let object_space = ObjectSpace::default();
         let (tx_d, _rx_d) = tokio::sync::mpsc::channel(16);
-        let call_outs =
-            parking_lot::RwLock::new(CallOuts::new(tx_d));
+        let call_outs = parking_lot::RwLock::new(CallOuts::new(tx_d));
         flush_effects(&Config::default(), &object_space, &call_outs, log.take()).await;
 
         assert_eq!(rx_a.recv().await, Some(op_a));

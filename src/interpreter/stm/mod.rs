@@ -7,8 +7,11 @@ use std::{
 
 use parking_lot::RwLock;
 
-use crate::interpreter::{
-    lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, process::Process,
+use crate::{
+    interpreter::{
+        lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, process::Process,
+    },
+    telnet::connection::Connection,
 };
 
 mod changeset;
@@ -192,6 +195,28 @@ impl Transaction {
         }
     }
 
+    /// Write the connection-binding cell: the `Connection` attached to a
+    /// `Process`, or `None` to clear it. The `Connection` is held strongly so
+    /// it stays alive between this write and the commit that makes it
+    /// visible, as in [`write_process`](Self::write_process).
+    pub(crate) fn write_connection(&mut self, var_id: VarId, connection: Option<Arc<Connection>>) {
+        self.changeset
+            .write(var_id, WorldValue::Connection(connection));
+    }
+
+    /// The committed connection in a cell var, or `None` if the var is absent
+    /// from both the changeset and the world, or the cell holds a non-connection
+    /// value. An in-transaction `write_connection` is visible to this attempt
+    /// (changeset first), which is what lets `interactive()` and the like see
+    /// an `exec` that has not yet committed.
+    pub(crate) fn read_connection(&mut self, var_id: VarId) -> Option<Arc<Connection>> {
+        match self.read_value(var_id)? {
+            WorldValue::Connection(Some(connection)) => Some(connection),
+            WorldValue::Connection(None) => None,
+            _ => None,
+        }
+    }
+
     /// Copy-on-write the array cell `var_id`: read its contents, clone into a
     /// new `Arc`, mutate the clone, and write it back under the same var.
     /// One read tracked in the changeset (conflict-checked) plus one blind
@@ -304,6 +329,23 @@ impl TxnHandle {
     /// joiner's handle is the parent's, so this reads the parent's attempt.
     pub(crate) fn read_object(&self, var_id: VarId) -> Option<Arc<Process>> {
         self.with(|t| t.read_object(var_id))
+    }
+
+    /// Read the connection in a cell var, as in
+    /// [`Transaction::read_connection`](crate::interpreter::stm::Transaction).
+    /// A joiner's handle is the parent's, so this reads the parent's attempt,
+    /// which is what lets an `exec`'s effect see the binding its transaction
+    /// just wrote.
+    pub(crate) fn read_connection(&self, var_id: VarId) -> Option<Arc<Connection>> {
+        self.with(|t| t.read_connection(var_id))
+    }
+
+    /// Write the connection cell, as in
+    /// [`Transaction::write_connection`](crate::interpreter::stm::Transaction).
+    /// A joiner's handle is the parent's, so the write folds into the
+    /// parent's attempt and rides the parent's single commit.
+    pub(crate) fn write_connection(&self, var_id: VarId, connection: Option<Arc<Connection>>) {
+        self.with(|t| t.write_connection(var_id, connection))
     }
 
     /// Whether this attempt removes the var. A removed object cell must not

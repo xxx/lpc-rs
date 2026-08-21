@@ -11,11 +11,11 @@ pub async fn interactive<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         LpcRef::Int(LpcInt(0)) => {
             let proc = &context.frame().process;
 
-            LpcRef::from(proc.connection.load().is_some())
+            LpcRef::from(context.txn().read_connection(proc.connection.id).is_some())
         }
         LpcRef::Object(proc) => {
             if let Some(proc) = proc.upgrade() {
-                LpcRef::from(proc.connection.load().is_some())
+                LpcRef::from(context.txn().read_connection(proc.connection.id).is_some())
             } else {
                 LpcRef::from(false)
             }
@@ -76,7 +76,9 @@ mod tests {
             input_to: Default::default(),
         };
 
-        master_proc.connection.store(Some(Arc::new(connection)));
+        // Bind the connection through the transactional path (the login
+        // mechanism), so the cell is committed to the world.
+        Vm::takeover(&vm.global_state, Arc::new(connection), master_proc.clone()).await;
 
         let task =
             Task::<16>::initialize_process(vm.new_task_template().into_task_context(master_proc))

@@ -69,3 +69,5 @@ impl PartialEq for Connection {
         self.address == other.address
     }
 }
+
+impl Eq for Connection {}

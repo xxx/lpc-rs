@@ -7,8 +7,12 @@ use std::sync::Arc;
 use bit_set::BitSet;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    gc::mark::Mark, lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, process::Process,
+use crate::{
+    interpreter::{
+        gc::mark::Mark, lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef,
+        process::Process,
+    },
+    telnet::connection::Connection,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,6 +25,12 @@ pub(crate) enum WorldValue {
     /// physical `ObjectSpace` map's timing (the physical map is applied after
     /// commit; this entry is what makes the object resolvable in between).
     Process(Arc<Process>),
+    /// The connection-binding cell on a `Process`: the `Connection` attached
+    /// to it, or absent. `Connection` is a socket handle, not an `LpcRef`, so
+    /// it is carried here as an identity (as `Process` is) rather than in a
+    /// slot. Held strongly so the binding stays alive between an in-transaction
+    /// write and the commit that makes it visible; `None` clears the binding.
+    Connection(Option<Arc<Connection>>),
 }
 
 impl WorldValue {
@@ -29,12 +39,12 @@ impl WorldValue {
     }
 
     /// The slot value. Slot vars (globals, upvalues) are always the `Ref`
-    /// kind; a payload world value here is a bug.
+    /// kind; any other world value here is a bug.
     pub(crate) fn lpc_ref(self) -> LpcRef {
         match self {
             Self::Ref(lpc_ref) => lpc_ref,
-            Self::Array(_) | Self::Mapping(_) | Self::Process(_) => {
-                unreachable!("a payload var read through a slot access")
+            Self::Array(_) | Self::Mapping(_) | Self::Process(_) | Self::Connection(_) => {
+                unreachable!("a payload or identity var read through a slot access")
             }
         }
     }
@@ -48,7 +58,9 @@ impl WorldValue {
 impl Mark for WorldValue {
     /// Mark the values a committed world entry holds. Slot entries mark
     /// their `LpcRef` as usual; payload entries mark their contents, whose
-    /// inner elements are `LpcRef`s.
+    /// inner elements are `LpcRef`s. A connection entry marks its
+    /// `input_to` callback: that `FunctionPtr` keeps the object alive for
+    /// the next input line, so it must survive like any other strong ref.
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
         match self {
             Self::Ref(lpc_ref) => lpc_ref.mark(marked, processed),
@@ -58,6 +70,14 @@ impl Mark for WorldValue {
             // markable payloads); keep the arm so the arm-set stays
             // exhaustive.
             Self::Process(process) => process.mark(marked, processed),
+            Self::Connection(maybe_connection) => {
+                if let Some(connection) = maybe_connection
+                    && let Some(input_to) = connection.input_to.load_full()
+                {
+                    input_to.ptr.mark(marked, processed)?;
+                }
+                Ok(())
+            }
         }
     }
 }

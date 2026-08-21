@@ -187,14 +187,20 @@ impl CommittedReader for Arc<GlobalState> {
     fn committed_array(&self, var_id: VarId) -> Option<LpcArray> {
         match self.committed_value(var_id)? {
             WorldValue::Array(array) => Some((*array).clone()),
-            WorldValue::Ref(_) | WorldValue::Mapping(_) | WorldValue::Process(_) => None,
+            WorldValue::Ref(_)
+            | WorldValue::Mapping(_)
+            | WorldValue::Process(_)
+            | WorldValue::Connection(_) => None,
         }
     }
 
     fn committed_mapping(&self, var_id: VarId) -> Option<LpcMapping> {
         match self.committed_value(var_id)? {
             WorldValue::Mapping(mapping) => Some((*mapping).clone()),
-            WorldValue::Ref(_) | WorldValue::Array(_) | WorldValue::Process(_) => None,
+            WorldValue::Ref(_)
+            | WorldValue::Array(_)
+            | WorldValue::Process(_)
+            | WorldValue::Connection(_) => None,
         }
     }
 

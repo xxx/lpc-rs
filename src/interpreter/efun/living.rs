@@ -13,7 +13,7 @@ pub async fn living<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
         LpcRef::Int(LpcInt(0)) => {
             let proc = &context.frame().process;
 
-            LpcRef::from(proc.connection.load().is_some())
+            LpcRef::from(context.txn().read_connection(proc.connection.id).is_some())
         }
         LpcRef::Object(proc) => {
             if let Some(proc) = proc.upgrade() {

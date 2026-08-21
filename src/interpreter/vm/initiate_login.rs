@@ -123,12 +123,7 @@ impl Vm {
             };
 
             // This is the initial exec() of the player into a body.
-            Vm::takeover(
-                connection.clone(),
-                login_ob.clone(),
-                global_state.tx.clone(),
-            )
-            .await;
+            Vm::takeover(&global_state, connection.clone(), login_ob.clone()).await;
 
             let template = task_template.clone();
             template.set_this_player(Some(login_ob.clone()));
