@@ -1,4 +1,3 @@
-use if_chain::if_chain;
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
@@ -12,25 +11,20 @@ use crate::interpreter::{
 pub async fn environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
     let result = match arg_ref {
-        LpcRef::Int(LpcInt(0)) => {
-            let proc = &context.frame().process;
+        LpcRef::Int(LpcInt(0)) => context
+            .txn()
+            .with(|t| t.read(context.frame().process.position.environment.id))
+            .unwrap_or(NULL),
+        LpcRef::Object(object) => {
+            let Some(object) = object.upgrade() else {
+                context.return_efun_result(NULL);
+                return Ok(());
+            };
 
-            if let Some(env) = proc.position.environment.load_full() {
-                env.into()
-            } else {
-                NULL
-            }
-        }
-        LpcRef::Object(proc) => {
-            if_chain! {
-                if let Some(proc) = proc.upgrade();
-                if let Some(env) = proc.position.environment.load_full();
-                then {
-                    env.into()
-                } else {
-                    NULL
-                }
-            }
+            context
+                .txn()
+                .with(|t| t.read(object.position.environment.id))
+                .unwrap_or(NULL)
         }
         LpcRef::Float(_)
         | LpcRef::Int(_)
@@ -50,7 +44,7 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{lpc_ref::LpcRef, vm::Vm},
+        interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
         test_support::test_config,
         util::process_builder::{ProcessCreator, ProcessInitializer},
     };
@@ -87,14 +81,8 @@ mod tests {
         let result = result.upgrade().unwrap();
 
         assert_eq!(
-            foo_proc
-                .position
-                .environment
-                .swap(None)
-                .unwrap()
-                .upgrade()
-                .unwrap(),
-            result
+            vm.global_state.committed_environment(&foo_proc),
+            Some(result)
         );
     }
 }

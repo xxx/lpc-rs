@@ -279,7 +279,6 @@ async fn aliased_array_torn_read_gil() {
     assert_eq!(torn, 0, "{torn} of {} readers saw a torn pair", reads.len());
 }
 
-#[ignore = "needs: environment()/move_object are physical (non-transactional) world state; concurrent physical moves corrupt the weights before the transaction can act."]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn multithread_sync_racy() {
     let room = indoc! { r#"

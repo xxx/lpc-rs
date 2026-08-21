@@ -5,6 +5,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     efun, efun::efun_context::EfunContext, lpc_array::LpcArray, lpc_ref::LpcRef, process::Process,
+    stm::TxnHandle,
 };
 
 /// `deep_inventory`, an efun for recursively returning the inventories of all objects contained by an object.
@@ -20,7 +21,7 @@ pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) ->
     // [`Process`]' hashes are based solely on their filename, which never changes after creation.
     #[allow(clippy::mutable_key_type)]
     let mut collection = HashSet::with_capacity(10);
-    recurse_deep_inventory(&current_env, &mut collection);
+    recurse_deep_inventory(context.txn(), &current_env, &mut collection);
 
     let result = context.txn().with(|t| {
         let array = collection
@@ -35,11 +36,17 @@ pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) ->
     Ok(())
 }
 
+/// Read the passed transaction's view of `env`'s inventory and recurse into it,
+/// collecting each object into `collection` exactly once.
 #[allow(clippy::mutable_key_type)]
-fn recurse_deep_inventory(env: &Process, collection: &mut HashSet<Arc<Process>>) {
-    for item in env.position.inventory_iter() {
+fn recurse_deep_inventory(
+    txn: &TxnHandle,
+    env: &Arc<Process>,
+    collection: &mut HashSet<Arc<Process>>,
+) {
+    for item in Process::inventory_of(txn, env) {
         if collection.insert(item.clone()) {
-            recurse_deep_inventory(&item, collection);
+            recurse_deep_inventory(txn, &item, collection);
         }
     }
 }

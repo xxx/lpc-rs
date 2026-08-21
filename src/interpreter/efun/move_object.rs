@@ -4,6 +4,12 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process};
 
 /// `move_object`, for moving objects between each other.
+///
+/// A pure transactional read-modify-write over the position cells: the move
+/// is staged into this task's in-flight changeset and becomes visible to other
+/// tasks only when the attempt commits. A conflicting concurrent move makes
+/// one attempt re-run from its snapshot, so the room inventories and
+/// environment pointers always converge to a consistent state.
 pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
     let destination = match arg_ref {
@@ -38,7 +44,9 @@ pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
 
     // TODO: remove old commands
 
-    Process::move_to(this_object, destination).await
+    Process::move_to(context.txn(), this_object, &destination);
+
+    Ok(())
 
     // TODO: add new commands
 }
@@ -48,7 +56,7 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{object_flags::ObjectFlags, vm::Vm},
+        interpreter::{CommittedReader, object_flags::ObjectFlags, vm::Vm},
         test_support::test_config,
         util::process_builder::{ProcessCreator, ProcessInitializer},
     };
@@ -86,18 +94,29 @@ mod tests {
         let foo_clone = master_proc.context.object_space().lookup("/foo#0").unwrap();
         assert!(foo_clone.flags.test(ObjectFlags::Initialized));
 
+        // The committed world is the source of truth: the clone's environment
+        // pointer and the rooms' inventory cells.
         assert_eq!(
-            foo_clone
-                .position
-                .environment
-                .swap(None)
-                .unwrap()
-                .upgrade()
-                .unwrap(),
-            quux_proc
+            vm.global_state.committed_environment(&foo_clone),
+            Some(quux_proc.clone())
         );
-        assert!(quux_proc.position.inventory.contains(&foo_clone));
-        assert!(!bar_proc.position.inventory.contains(&foo_clone));
-        assert!(!baz_proc.position.inventory.contains(&foo_clone));
+        let quux_inventory = vm.global_state.committed_inventory(&quux_proc);
+        assert!(
+            quux_inventory
+                .iter()
+                .any(|item| item.as_ref() == foo_clone.as_ref())
+        );
+        assert!(
+            !vm.global_state
+                .committed_inventory(&bar_proc)
+                .iter()
+                .any(|item| item.as_ref() == foo_clone.as_ref())
+        );
+        assert!(
+            !vm.global_state
+                .committed_inventory(&baz_proc)
+                .iter()
+                .any(|item| item.as_ref() == foo_clone.as_ref())
+        );
     }
 }

@@ -1,4 +1,3 @@
-pub mod inventory;
 pub mod util;
 
 use std::{
@@ -6,63 +5,50 @@ use std::{
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     path::Path,
-    sync::{Arc, Weak},
+    sync::Arc,
 };
 
 use arc_swap::ArcSwapAny;
 use bit_set::BitSet;
 use delegate::delegate;
-use if_chain::if_chain;
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
-use tokio::sync::Semaphore;
-use tracing::instrument;
 
 use crate::{
     interpreter::{
         gc::mark::Mark,
+        lpc_array::LpcArray,
         lpc_ref::LpcRef,
         object_flags::{AtomicFlags, ObjectFlags},
-        process::{inventory::Inventory, util::AllEnvironment},
+        process::util::AllEnvironment,
         program::Program,
-        stm::{SVar, VarId},
+        stm::{SVar, Transaction, TxnHandle, VarId, WorldValue},
     },
     telnet::connection::Connection,
 };
 
 #[derive(Debug)]
 /// A type to represent the position of a [`Process`] in the game world.
+///
+/// Both slots are transactional cells: the process holds only the cell
+/// identities, and the committed values live in the committer's world. A
+/// concurrent `move_object` therefore conflicts at commit and re-runs, instead
+/// of mutating shared state under a semaphore.
 pub struct ProcessPosition {
-    /// The object that contains this object. This object is in that object's `inventory`.
-    pub environment: ArcSwapAny<Option<Weak<Process>>>,
+    /// The cell holding the object that contains this object
+    /// (`LpcRef::Object`, absent when top-level).
+    pub environment: SVar<LpcRef>,
 
-    /// The objects that this object contains. This object is the `environment` for everything in this container.
-    pub inventory: Inventory,
-
-    /// The semaphore that prevents multiple threads from moving this object simultaneously, since it
-    /// needs to happen in a transactional manner. The semaphore is specifically for when this object
-    /// is being moved.
-    move_semaphore: Semaphore,
-}
-
-impl ProcessPosition {
-    /// Get an iterator over the inventory of this object, as `Weak<Process>` references.
-    pub fn weak_inventory_iter(&self) -> impl Iterator<Item = Weak<Process>> + '_ {
-        self.inventory.iter()
-    }
-
-    /// Get an iterator over the inventory of this object, as `Arc<Process>` references.
-    pub fn inventory_iter(&self) -> impl Iterator<Item = Arc<Process>> + '_ {
-        self.inventory.iter().filter_map(|x| x.upgrade())
-    }
+    /// The cell holding the objects that this object contains: an array
+    /// payload of `LpcRef::Object`, one per contained object.
+    pub inventory: SVar<LpcArray>,
 }
 
 impl Default for ProcessPosition {
     fn default() -> Self {
-        ProcessPosition {
-            environment: ArcSwapAny::from(None),
-            inventory: Default::default(),
-            move_semaphore: Semaphore::new(1),
+        Self {
+            environment: SVar::new(),
+            inventory: SVar::new(),
         }
     }
 }
@@ -145,60 +131,104 @@ impl Process {
         }
     }
 
-    /// Returns an iterator over all of `object`'s environments, starting with their current environment.
-    pub fn all_environment(object: Arc<Process>) -> AllEnvironment {
-        AllEnvironment::new(object)
+    /// Returns an iterator over all of `object`'s environments, starting with
+    /// its current one, following the chain through the passed transaction.
+    pub(crate) fn all_environment(txn: TxnHandle, object: Arc<Process>) -> AllEnvironment {
+        AllEnvironment::new(txn, object)
     }
 
-    /// Move an object to a new environment. This is a transactional operation, so it will
-    /// block until it can acquire the semaphore.
-    #[instrument(skip_all)]
-    pub async fn move_to(object: &Arc<Process>, new_environment: Arc<Process>) -> Result<()> {
-        let current_env = if_chain! {
-            if let Some(current_env) = &*object.position.environment.load();
-            if let Some(current_env) = current_env.upgrade();
-            then {
-                if current_env == new_environment {
-                    return Ok(())
-                }
+    /// The committed environment of `process` as seen through `txn`, if any.
+    pub(crate) fn environment_of(txn: &TxnHandle, process: &Arc<Process>) -> Option<Arc<Process>> {
+        txn.with(|t| {
+            t.read(process.position.environment.id)
+                .and_then(|value| match value {
+                    LpcRef::Object(weak) => weak.upgrade(),
+                    _ => None,
+                })
+        })
+    }
 
-                Some(current_env)
-            } else {
-                None
+    /// The committed inventory of `process` as seen through `txn`, destructed
+    /// members filtered out.
+    pub(crate) fn inventory_of(txn: &TxnHandle, process: &Arc<Process>) -> Vec<Arc<Process>> {
+        txn.with(|t| {
+            let Some(WorldValue::Array(inventory)) = t.read_value(process.position.inventory.id)
+            else {
+                return Vec::new();
+            };
+
+            inventory
+                .iter()
+                .filter_map(|item| match item {
+                    LpcRef::Object(weak) => weak.upgrade(),
+                    _ => None,
+                })
+                .collect()
+        })
+    }
+
+    /// Move `object` into `new_environment`, through the caller's transaction.
+    ///
+    /// A pure read-modify-write over the position cells: the old and new
+    /// environments' inventories plus the object's environment pointer are
+    /// read (tracked) and written into the in-flight changeset. No physical
+    /// mutation, no locking — concurrent moves to the same environment
+    /// conflict at commit and the loser re-runs.
+    pub(crate) fn move_to(txn: &TxnHandle, object: &Arc<Process>, new_environment: &Arc<Process>) {
+        let object_cell = object.position.environment.id;
+        let new_cell = new_environment.position.inventory.id;
+        let new_env_ref = LpcRef::Object(Arc::downgrade(new_environment));
+        let new_member = LpcRef::Object(Arc::downgrade(object));
+
+        txn.with(|t| {
+            let current_env = Self::environment_of_inner(t, object);
+
+            // Moving to the current environment is a no-op; without the check
+            // the same reference would be added to the inventory twice.
+            if current_env
+                .as_ref()
+                .is_some_and(|env| std::ptr::eq(env.as_ref(), new_environment.as_ref()))
+            {
+                return;
             }
+
+            // Remove from the current environment's inventory, if it has one.
+            if let Some(old) = current_env {
+                t.with_array_cow(old.position.inventory.id, |inventory| {
+                    inventory
+                        .array
+                        .retain(|item| !Self::is_same_object(item, object));
+                });
+            }
+
+            // Add to the new environment's inventory and point the object at it.
+            t.with_array_cow(new_cell, |inventory| {
+                inventory.array.push(new_member);
+            });
+            t.write(object_cell, new_env_ref);
+        });
+    }
+
+    /// The environment of `process` as seen inside `t` (an in-flight
+    /// transaction), if any.
+    fn environment_of_inner(t: &mut Transaction, process: &Arc<Process>) -> Option<Arc<Process>> {
+        t.read(process.position.environment.id).and_then(|value| {
+            let LpcRef::Object(weak) = value else {
+                return None;
+            };
+            weak.upgrade()
+        })
+    }
+
+    /// Whether an inventory slot holds `object`, compared by referent because
+    /// the cells' `Weak` handles are distinct allocations.
+    fn is_same_object(slot: &LpcRef, object: &Arc<Process>) -> bool {
+        let LpcRef::Object(weak) = slot else {
+            return false;
         };
 
-        // The moving object needs to be locked for the rest of the move.
-        let _object_permit = object.position.move_semaphore.acquire().await;
-
-        // old_env.inventory -= ob
-        if let Some(old_environment) = current_env {
-            // Take the old environment's lock. We remove all object data from it in this block.
-            let _old_permit = old_environment.position.move_semaphore.acquire().await;
-
-            old_environment
-                .position
-                .inventory
-                .remove(&Arc::downgrade(object));
-        }
-
-        let new_env_weak = Arc::downgrade(&new_environment);
-
-        // new_env.inventory += ob
-        {
-            // Take the new environment's lock. We add all object data to it in this block.
-            let _new_permit = new_environment.position.move_semaphore.acquire().await;
-
-            new_environment
-                .position
-                .inventory
-                .insert(Arc::downgrade(object));
-        }
-
-        // ob.environment = new_env
-        object.position.environment.store(Some(new_env_weak));
-
-        Ok(())
+        weak.upgrade()
+            .is_some_and(|upgraded| std::ptr::eq(upgraded.as_ref(), object.as_ref()))
     }
 
     /// The committer-world identity of a global slot.

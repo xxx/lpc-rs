@@ -17,9 +17,11 @@ pub async fn all_environment<const N: usize>(context: &mut EfunContext<'_, N>) -
         return Ok(());
     };
 
-    let iter = Process::all_environment(current_env).map(|e| LpcRef::from(Arc::downgrade(&e)));
+    let entries: Vec<LpcRef> = Process::all_environment(context.txn().clone(), current_env)
+        .map(|e| LpcRef::from(Arc::downgrade(&e)))
+        .collect();
     let result = context.txn().with(|t| {
-        let array: LpcArray = iter.collect();
+        let array: LpcArray = entries.into_iter().collect();
         LpcRef::Array(t.mint_array(array))
     });
     context.return_efun_result(result);

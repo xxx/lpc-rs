@@ -2,11 +2,11 @@ use std::{collections::HashSet, sync::Arc};
 
 use if_chain::if_chain;
 
-use crate::interpreter::process::Process;
+use crate::interpreter::{process::Process, stm::TxnHandle};
 
-/// An iterator over all of the environments of a [`Process`]. The iterator can be created
-/// prior to the object moving to a new environment, and will iterate over the
-/// environment that is current at the time of the call to `next`.
+/// An iterator over all of the environments of a [`Process`]. The chain is
+/// followed through the passed transaction, so a mover's in-flight (not yet
+/// committed) move is what the rest of its task sees.
 #[derive(Debug)]
 pub struct AllEnvironment {
     /// The current environment. Calling `next` will return the environment of this `Process`.
@@ -15,13 +15,17 @@ pub struct AllEnvironment {
     /// The set of environments that have already been returned. This is used to prevent
     /// infinite loops in the case of circular environments.
     seen: HashSet<Arc<Process>>,
+
+    /// The transaction whose view this chain is followed through.
+    txn: TxnHandle,
 }
 
 impl AllEnvironment {
-    pub fn new(starter: Arc<Process>) -> Self {
+    pub(crate) fn new(txn: TxnHandle, starter: Arc<Process>) -> Self {
         Self {
             current: Some(starter),
             seen: HashSet::new(),
+            txn,
         }
     }
 }
@@ -32,17 +36,14 @@ impl Iterator for AllEnvironment {
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current.take()?;
 
-        if_chain! {
-            if let Some(next) = &*current.position.environment.load();
-            if let Some(next) = next.upgrade();
-            if self.seen.insert(next.clone());
-            then {
-                self.current = Some(next.clone());
-                Some(next)
-            } else {
-                self.current = None;
-                None
-            }
+        if let Some(next) = Process::environment_of(&self.txn, &current)
+            && self.seen.insert(next.clone())
+        {
+            self.current = Some(next.clone());
+            Some(next)
+        } else {
+            self.current = None;
+            None
         }
     }
 }

@@ -164,6 +164,13 @@ pub trait CommittedReader {
     /// The committed contents of one mapping payload cell, as in
     /// [`committed_array`]([`CommittedReader::committed_array`]).
     fn committed_mapping(&self, var_id: VarId) -> Option<LpcMapping>;
+
+    /// The committed environment of `process` (`None` if it has none).
+    fn committed_environment(&self, process: &Process) -> Option<Arc<Process>>;
+
+    /// The committed inventory of `process`: its contained objects, destructed
+    /// members filtered out.
+    fn committed_inventory(&self, process: &Process) -> Vec<Arc<Process>>;
 }
 
 impl CommittedReader for Arc<GlobalState> {
@@ -189,6 +196,35 @@ impl CommittedReader for Arc<GlobalState> {
             WorldValue::Mapping(mapping) => Some((*mapping).clone()),
             WorldValue::Ref(_) | WorldValue::Array(_) => None,
         }
+    }
+
+    fn committed_environment(&self, process: &Process) -> Option<Arc<Process>> {
+        let LpcRef::Object(weak) = self
+            .committed_value(process.position.environment.id)
+            .map(WorldValue::lpc_ref)?
+        else {
+            return None;
+        };
+
+        weak.upgrade()
+    }
+
+    fn committed_inventory(&self, process: &Process) -> Vec<Arc<Process>> {
+        let Some(WorldValue::Array(inventory)) =
+            self.committed_value(process.position.inventory.id)
+        else {
+            return Vec::new();
+        };
+
+        inventory
+            .iter()
+            .filter_map(|item| {
+                let LpcRef::Object(weak) = item else {
+                    return None;
+                };
+                weak.upgrade()
+            })
+            .collect()
     }
 }
 
