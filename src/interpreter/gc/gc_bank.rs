@@ -33,9 +33,7 @@ impl<T> GcBank<T> {
             pub fn len(&self) -> usize;
             pub fn insert(&mut self, value: T) -> usize;
             pub fn reserve(&mut self, additional: usize);
-            /// `Slab::retain` with the slot's value handed out so the caller
-            /// can release a removed slot's identity (e.g. `drop_var` on a
-            /// swept upvalue cell).
+            pub fn iter(&self) -> impl Iterator<Item = (usize, &T)>;
             pub fn retain<F>(&mut self, f: F)
             where
                 F: FnMut(usize, &mut T) -> bool;

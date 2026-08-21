@@ -14,7 +14,7 @@ use crate::interpreter::{
     lpc_ref::LpcRef,
     process::Process,
     stm::{
-        Transaction, VarId, WorldValue,
+        Transaction, VarId, WorldValue, WorldRoot,
         changeset::Changeset,
         committer::{CommitProtocol, LiveSnapshot},
     },
@@ -105,6 +105,23 @@ pub(crate) async fn start_txn(tx: &flume::Sender<CommitProtocol>) -> Result<Live
 pub(crate) async fn live_count(tx: &flume::Sender<CommitProtocol>) -> Result<usize> {
     let (reply_tx, reply_rx) = flume::bounded(1);
     tx.send(CommitProtocol::LiveCount { reply: reply_tx })
+        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
+    tokio::task::spawn_blocking(move || reply_rx.recv())
+        .await
+        .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
+            lpc_error!("committer reply task panicked: {}", e)
+        })?
+        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
+}
+
+/// Run the world sweep: the committer marks from `roots` and drops the
+/// unreachable payload vars. Returns how many vars were dropped.
+pub(crate) async fn gc_world(
+    tx: &flume::Sender<CommitProtocol>,
+    roots: Vec<WorldRoot>,
+) -> Result<usize> {
+    let (reply_tx, reply_rx) = flume::bounded(1);
+    tx.send(CommitProtocol::GcWorld { roots, reply: reply_tx })
         .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
     tokio::task::spawn_blocking(move || reply_rx.recv())
         .await

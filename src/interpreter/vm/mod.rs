@@ -201,6 +201,10 @@ impl Vm {
     /// in-flight transaction, so at quiescence the root set (object space + call-outs) is
     /// complete with no task or transaction log to mark. A non-quiescent call is refused
     /// rather than blocked: a concurrent task at a GC point is a caller bug.
+    ///
+    /// Slab half first, then world half. The world half runs second because the
+    /// slab half's cell drops already sit ahead on the committer's channel, so a
+    /// payload orphaned by a swept cell is reclaimable in the same pass.
     #[instrument(skip_all)]
     pub async fn gc(&self) -> Result<()> {
         let live = live_count(&self.global_state.committer_tx).await?;
@@ -216,7 +220,13 @@ impl Vm {
 
         trace!("Marked {} objects", marked.count());
 
-        self.sweep(&marked)
+        self.sweep(&marked)?;
+
+        let reclaimed = self.global_state.sweep_world().await?;
+        if reclaimed != 0 {
+            trace!("Reclaimed {} unreachable world payload vars", reclaimed);
+        }
+        Ok(())
     }
 
     /// Send an operation to the VM queue
@@ -322,7 +332,11 @@ mod tests {
 
     use super::*;
     use crate::{
-        interpreter::{CommittedReader, lpc_ref::LpcRef, stm::start_txn},
+        interpreter::{
+            CommittedReader, lpc_ref::LpcRef,
+            task::apply_function::apply_function_by_name,
+            task::task_template::TaskTemplateBuilder, stm::start_txn,
+        },
         test_support::test_config,
     };
 
@@ -420,6 +434,93 @@ mod tests {
         drop(live);
 
         vm.gc().await.unwrap();
+    }
+
+    /// A committed array still reachable from a live global survives the world
+    /// sweep; one whose last live reference was dropped is reclaimed.
+    #[tokio::test]
+    async fn gc_reclaims_unreachable_committed_payload() {
+        let mut vm = Vm::new(test_config());
+        let code = indoc! { r##"
+            mixed payload_a;
+            mixed payload_b;
+
+            void set_payloads() {
+                payload_a = ({ 1, 2 });
+                payload_b = ({ 3, 4 });
+            }
+
+            void drop_payload_a() {
+                payload_a = 0;
+            }
+        "## };
+
+        let ctx = vm.initialize_string(code, "gc_payload.c").await.unwrap();
+        let proc = ctx.process;
+        let template = TaskTemplateBuilder::default()
+            .global_state(ctx.global_state.clone())
+            .build()
+            .unwrap();
+
+        // Seed two live arrays into the world through a committed call. The
+        // slot vars hold `LpcRef::Array` whose `SVar.id` is the payload cell.
+        apply_function_by_name(
+            "set_payloads",
+            &[],
+            proc.clone(),
+            template.clone(),
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        // Extract each array's committed payload cell id from its slot.
+        let cell_id = |proc: &Process| match vm.global_state.committed_global(proc, 0) {
+            LpcRef::Array(svar) => svar.id,
+            other => panic!("expected an array in slot 0, got {other:?}"),
+        };
+        let cell_a = cell_id(&proc);
+        let cell_b = match vm.global_state.committed_global(&proc, 1) {
+            LpcRef::Array(svar) => svar.id,
+            other => panic!("expected an array in slot 1, got {other:?}"),
+        };
+
+        // Both cells live before any pass.
+        assert!(vm.global_state.committed_array(cell_a).is_some());
+        assert!(vm.global_state.committed_array(cell_b).is_some());
+
+        // Reachable arrays survive the world sweep.
+        vm.gc().await.unwrap();
+        assert!(
+            vm.global_state.committed_array(cell_b).is_some(),
+            "a payload still reachable from a live global must survive gc"
+        );
+        assert!(vm.global_state.committed_array(cell_a).is_some());
+
+        // Orphan the first array: its last live reference is gone.
+        apply_function_by_name(
+            "drop_payload_a",
+            &[],
+            proc.clone(),
+            template.clone(),
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        vm.gc().await.unwrap();
+
+        // The orphaned payload's cell is gone; the live one is not.
+        assert!(
+            vm.global_state.committed_array(cell_a).is_none(),
+            "an orphaned committed array must be reclaimed by gc"
+        );
+        assert!(
+            vm.global_state.committed_array(cell_b).is_some(),
+            "a still-reachable committed array must survive gc"
+        );
     }
 
     /// One transaction creates and destructs a prototype repeatedly, and

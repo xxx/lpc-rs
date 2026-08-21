@@ -22,10 +22,10 @@ mod snapshot;
 mod world_value;
 
 pub(crate) use changeset::Changeset;
-pub(crate) use committer::{CommitProtocol, Committer, LiveSnapshot};
+pub(crate) use committer::{CommitProtocol, Committer, LiveSnapshot, WorldRoot};
 pub(crate) use effects::{CallOutSchedule, Effect, EffectLog, flush_effects};
 pub use retry::CommittedReader;
-pub(crate) use retry::{RetryStats, commit_changeset, drop_var, live_count, start_txn};
+pub(crate) use retry::{RetryStats, commit_changeset, drop_var, gc_world, live_count, start_txn};
 pub(crate) use snapshot::Snapshot;
 pub(crate) use world_value::WorldValue;
 

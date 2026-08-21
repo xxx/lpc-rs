@@ -253,6 +253,14 @@ impl Process {
         self.globals[reg as usize].id
     }
 
+    /// The world ids of every global slot, for the world sweep's root set.
+    /// Slot values (arrays, mappings, function captures) hold payloads, so
+    /// every live object's slots must be rooted even when the object has no
+    /// committed `Process` cell.
+    pub(crate) fn global_cell_ids(&self) -> Vec<VarId> {
+        self.globals.iter().map(|slot| slot.id).collect()
+    }
+
     /// Get the filename of this process, including the clone ID suffix if
     /// present.
     #[inline]

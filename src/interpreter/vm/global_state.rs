@@ -12,7 +12,7 @@ use crate::interpreter::{
     call_outs::CallOuts,
     gc::{gc_bank::GcVarIdBank, mark::Mark},
     object_space::ObjectSpace,
-    stm::{CommitProtocol, Committer, Snapshot, VarId, drop_var},
+    stm::{CommitProtocol, Committer, Snapshot, VarId, WorldRoot, drop_var, gc_world},
     vm::vm_op::VmOp,
 };
 
@@ -115,6 +115,32 @@ impl GlobalState {
         Ok(())
     }
 
+    /// The world half of a GC pass: the committer marks from the client's
+    /// live slots (object cells + surviving upvalue cells) and the function
+    /// refs it holds outside the world (call-outs), and reclaims the
+    /// unreachable payload vars. Must run after [`Self::sweep`] so the slab
+    /// half's `drop_var` sends land ahead on the committer's channel. Returns
+    /// the number of payload vars reclaimed.
+    pub async fn sweep_world(&self) -> Result<usize> {
+        let mut roots: Vec<WorldRoot> =
+            self.object_space.all_cell_ids().into_iter().map(WorldRoot::Var).collect();
+        // Bootstrap objects have no committed cell, so their global slots are
+        // rooted directly: `all_cell_ids` alone would wrongly reclaim them.
+        self.object_space
+            .all_live_object_slots()
+            .into_iter()
+            .for_each(|id| roots.push(WorldRoot::Var(id)));
+        self.slab_cell_ids()
+            .into_iter()
+            .for_each(|id| roots.push(WorldRoot::Var(id)));
+        self.with_call_outs(|co| {
+            for (_, call_out) in co.queue() {
+                roots.push(WorldRoot::Ref(call_out.func_ref.clone()));
+            }
+        });
+        gc_world(&self.committer_tx, roots).await
+    }
+
     pub fn with_call_outs<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&CallOuts) -> R,
@@ -150,6 +176,16 @@ impl GlobalState {
         F: FnOnce(&mut GcVarIdBank) -> R,
     {
         f(&mut self.upvalues.write())
+    }
+
+    /// The upvalue slab's surviving cell ids: the world sweep's root set (a
+    /// swept cell orphans its payload, making it reclaimable).
+    pub(crate) fn slab_cell_ids(&self) -> Vec<crate::interpreter::stm::VarId> {
+        self.upvalues
+            .read()
+            .iter()
+            .map(|(_, id)| *id)
+            .collect()
     }
 
     pub(crate) fn clone_upvalues(&self) -> Arc<RwLock<GcVarIdBank>> {

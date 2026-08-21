@@ -4,11 +4,31 @@ use std::{
 };
 
 use imbl::OrdMap;
+use lpc_rs_core::RegisterSize;
 use tracing::error;
 
-use crate::interpreter::stm::{
-    VarId, Version, WorldValue, changeset::Changeset, snapshot::Snapshot,
+use crate::interpreter::{
+    lpc_ref::LpcRef,
+    stm::{
+        VarId, Version, WorldValue, changeset::Changeset, snapshot::Snapshot,
+    },
 };
+
+/// A unit of work in the world mark: either a var whose contents to read, or
+/// an `LpcRef` whose payload/function captures to follow.
+enum MarkWork {
+    Var(VarId),
+    Ref(LpcRef),
+}
+
+/// A root for the world sweep: a `Var` is a world slot whose committed
+/// contents to follow; a `Ref` is a value held outside the world (a call-out's
+/// function) whose payload refs still count as reachable.
+#[derive(Debug, Clone)]
+pub(crate) enum WorldRoot {
+    Var(VarId),
+    Ref(LpcRef),
+}
 
 #[derive(Debug, Default)]
 struct CommitterStats {
@@ -61,6 +81,12 @@ pub(crate) enum CommitProtocol {
     /// How many transactions are in flight (held [`LiveSnapshot`]s). `0` means
     /// quiescent, the precondition for a GC pass.
     LiveCount { reply: flume::Sender<usize> },
+    /// Reclaim unreachable payload vars in the world: mark from `roots` and
+    /// drop the unreachable `Array`/`Mapping` vars, replying the count.
+    GcWorld {
+        roots: Vec<WorldRoot>,
+        reply: flume::Sender<usize>,
+    },
     /// Shutdown.
     Close,
 }
@@ -200,11 +226,132 @@ impl Committer {
                     self.stats.error()
                 });
             }
+            CommitProtocol::GcWorld { roots, reply } => {
+                let reclaimed = self.mark_world(&roots);
+                reply.send(reclaimed).unwrap_or_else(|e| {
+                    error!("Failed to send gc reply: {e}");
+                    self.stats.error()
+                });
+            }
             CommitProtocol::Close => {
                 return false;
             }
         }
         true
+    }
+
+    /// Mark the world from `roots` and drop the unreachable `Array`/`Mapping`
+    /// payload vars. Returns the number of vars dropped.
+    ///
+    /// The caller must be quiescent: an in-flight changeset might reference a
+    /// var this sweep drops. Only payload vars are reclaimed — object,
+    /// connection, and upvalue-cell vars are never dropped.
+    fn mark_world(&mut self, roots: &[WorldRoot]) -> usize {
+        let mut marked: BTreeSet<VarId> = BTreeSet::new();
+        let mut work: Vec<MarkWork> = Vec::with_capacity(roots.len());
+        for root in roots {
+            match root {
+                WorldRoot::Var(var_id) => {
+                    marked.insert(*var_id);
+                    work.push(MarkWork::Var(*var_id));
+                }
+                WorldRoot::Ref(lpc_ref) => work.push(MarkWork::Ref(lpc_ref.clone())),
+            }
+        }
+
+        while let Some(item) = work.pop() {
+            match item {
+                MarkWork::Var(var_id) => {
+                    let Some(world_value) = self.snapshot.read(var_id) else {
+                        continue;
+                    };
+                    work.extend(Self::edges_of(&world_value));
+                }
+                MarkWork::Ref(lpc_ref) => match lpc_ref {
+                    LpcRef::Array(svar) => {
+                        if marked.insert(svar.id) {
+                            work.push(MarkWork::Var(svar.id));
+                        }
+                    }
+                    LpcRef::Mapping(svar) => {
+                        if marked.insert(svar.id) {
+                            work.push(MarkWork::Var(svar.id));
+                        }
+                    }
+                    LpcRef::Function(fun) => {
+                        for arg_ref in fun.partial_args().iter().flatten() {
+                            work.push(MarkWork::Ref(arg_ref.clone()));
+                        }
+                    }
+                    LpcRef::Float(_)
+                    | LpcRef::Int(_)
+                    | LpcRef::String(_)
+                    | LpcRef::Object(_) => {}
+                },
+            }
+        }
+
+        let to_drop: Vec<VarId> = self
+            .snapshot
+            .state()
+            .filter(|(var_id, world_value)| {
+                !marked.contains(*var_id)
+                    && matches!(
+                        world_value,
+                        WorldValue::Array(_) | WorldValue::Mapping(_)
+                    )
+            })
+            .map(|(var_id, _)| *var_id)
+            .collect();
+        let reclaimed = to_drop.len();
+        for var_id in to_drop {
+            self.snapshot.drop_var(var_id);
+        }
+        reclaimed
+    }
+
+    /// The outgoing edges from one world entry: the payload vars its contents
+    /// name, and the child cells an identity entry owns.
+    fn edges_of(world_value: &WorldValue) -> Vec<MarkWork> {
+        match world_value {
+            WorldValue::Ref(lpc_ref) => vec![MarkWork::Ref(lpc_ref.clone())],
+            WorldValue::Array(array) => array
+                .array
+                .iter()
+                .map(|member| MarkWork::Ref(member.clone()))
+                .collect(),
+            WorldValue::Mapping(mapping) => {
+                let mut out = Vec::with_capacity(mapping.mapping.len() * 2);
+                for (key, value) in mapping.mapping.iter() {
+                    out.push(MarkWork::Ref(key.clone()));
+                    out.push(MarkWork::Ref(value.clone()));
+                }
+                out
+            }
+            WorldValue::Process(process) => {
+                // The object's globals are separate slot vars that must stay alive.
+                let num_globals = process.program.num_globals as usize;
+                let mut out = Vec::with_capacity(num_globals + 3);
+                for reg in 0..num_globals {
+                    out.push(MarkWork::Var(process.var_id(reg as RegisterSize)));
+                }
+                out.push(MarkWork::Var(process.position.environment.id));
+                out.push(MarkWork::Var(process.position.inventory.id));
+                out.push(MarkWork::Var(process.connection.id));
+                out
+            }
+            WorldValue::Connection(maybe_connection) => {
+                // The connection's `input_to` target is a strong ref: it keeps
+                // its function alive for the next input line.
+                if let Some(connection) = maybe_connection
+                    && let Some(input_to) = connection.input_to.load_full()
+                {
+                    vec![MarkWork::Ref(LpcRef::Function(input_to.ptr.clone()))]
+                } else {
+                    Vec::new()
+                }
+            }
+        }
     }
 
     /// Trim write history, and bookkeep oldest retained version.

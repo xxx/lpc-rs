@@ -103,6 +103,25 @@ impl ObjectSpace {
             .or_insert_with(VarId::new)
     }
 
+    /// Every cell id minted for this space, for the quiescent world sweep's
+    /// root set. Stale ids (destructed objects) read back as absent in the
+    /// world, so they add no edges.
+    pub(crate) fn all_cell_ids(&self) -> Vec<VarId> {
+        self.cell_ids.iter().map(|cell| *cell).collect()
+    }
+
+    /// Every global-slot and structural cell of every live object, for the
+    /// world sweep's root set. Complete where [`all_cell_ids`](Self::all_cell_ids)
+    /// is not: bootstrap objects live only in the physical map and have no
+    /// committed `Process` cell, so their globals would otherwise be wrongly
+    /// reclaimed. Destructed objects are safe to skip: not in the physical map.
+    pub(crate) fn all_live_object_slots(&self) -> Vec<VarId> {
+        self.processes
+            .iter()
+            .flat_map(|process| process.global_cell_ids())
+            .collect()
+    }
+
     /// The one key under which an object lives in the committed world: the
     /// in-game filename, `.c` stripped, clone-id suffix, leading `/` forced.
     /// The same normalization [`process_key`](Self::process_key) applies to a

@@ -20,6 +20,11 @@ impl Snapshot {
         self.state.get(&var_id).cloned()
     }
 
+    /// The world's vars by id, for the quiescent sweep.
+    pub(crate) fn state(&self) -> impl Iterator<Item = (&VarId, &WorldValue)> {
+        self.state.iter()
+    }
+
     /// Remove a var from the world (memory hygiene for swept upvalue
     /// cells; a re-transaction would re-commit the value).
     pub(crate) fn drop_var(&mut self, var_id: VarId) {
