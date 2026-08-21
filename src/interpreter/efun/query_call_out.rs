@@ -11,16 +11,16 @@ use crate::interpreter::{
 /// `query_call_out`, an efun for returning information about a single call out.
 pub async fn query_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let LpcRef::Int(idx) = context.resolve_local_register(1 as RegisterSize) else {
-        return Err(context.runtime_bug("non-int call out ID sent to `remove_call_out`"));
+        return Err(context.runtime_bug("non-int call out ID sent to `query_call_out`"));
     };
 
     if idx.0 < 0 {
         return Err(context.runtime_error(format!(
-            "invalid call out ID `{idx}` sent to `remove_call_out`"
+            "invalid call out ID `{idx}` sent to `query_call_out`"
         )));
     }
 
-    let result = context.with_call_outs(|co| match co.get(idx.0 as usize) {
+    let result = context.with_call_outs(|co| match co.get_by_id(idx.0 as u64) {
         Some(call_out) => call_out_array_ref(context, call_out),
         None => Ok(NULL),
     })?;
@@ -85,15 +85,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_query_call_out() {
+        // `create` schedules a call out in
+        // its own transaction, which commits and materializes it. A single
+        // transaction cannot see its own pending call out, so the query runs
+        // in a fresh `timed_eval` over the now-physical queue.
         let code = r##"
-            mixed create() {
-                int id = call_out(call_out_test, 100);
+            void create() {
+                call_out(call_out_test, 100);
+            }
 
-                mixed *result = query_call_out(id);
-
-                remove_call_out(id);
-
-                return result;
+            mixed query() {
+                return query_call_out(0);
             }
 
             void call_out_test() {
@@ -103,13 +105,24 @@ mod tests {
 
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, config, _) = compile_prog(code).await;
-        let global_state = GlobalState::new(config, tx);
-        let task = InitializeProgramBuilder::<10>::default()
-            .global_state(global_state)
+        let query_fn = program
+            .lookup_function("query")
+            .expect("no `query` found")
+            .clone();
+        let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
+        let mut task = InitializeProgramBuilder::<10>::default()
+            .global_state(global_state.clone())
             .program(program)
             .build()
             .await
             .unwrap();
+
+        // The initializer's transaction committed, so the call out is physical.
+        global_state.with_call_outs(|co| assert_eq!(co.len(), 1));
+
+        task.timed_eval(query_fn.clone(), &[], 500)
+            .await
+            .expect("query eval failed");
 
         task.result()
             .unwrap()

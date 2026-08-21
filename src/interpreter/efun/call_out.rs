@@ -6,19 +6,11 @@ use lpc_rs_errors::{Result, lpc_error};
 
 use crate::interpreter::{
     efun::efun_context::EfunContext, function_type::function_address::FunctionAddress,
-    lpc_int::LpcInt, lpc_ref::LpcRef,
+    lpc_int::LpcInt, lpc_ref::LpcRef, stm::CallOutSchedule,
 };
 
 /// `call_out`, an efun for calling a function at some future point in time
 pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    context.with_call_outs(|co| -> Result<()> {
-        if co.next_push_index() > LpcIntInner::MAX as usize {
-            return Err(lpc_error!("too many call outs"));
-        }
-
-        Ok(())
-    })?;
-
     let func_ref = context.resolve_local_register(1 as RegisterSize).clone();
 
     // Some validations
@@ -63,11 +55,20 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         None
     };
 
+    // Scheduling is a deferred effect: the ID is minted now, the timer task
+    // and queue entry materialize only if this attempt commits. The ID is
+    // not the queue's slot, which no one can know before the flush.
+    let id = context.with_call_outs(|co| co.mint_id());
     let process = Arc::downgrade(&context.frame().process);
-    let index =
-        context.with_call_outs_mut(|co| co.schedule_task(process, func_ref, duration, repeat))?;
+    context.txn().record_call_out(CallOutSchedule {
+        id,
+        process,
+        func_ref,
+        delay: duration,
+        repeat,
+    });
 
-    let result = LpcRef::Int(LpcInt(index as LpcIntInner));
+    let result = LpcRef::Int(LpcInt(id as LpcIntInner));
     context.return_efun_result(result);
 
     Ok(())
@@ -123,11 +124,15 @@ mod tests {
         );
     }
 
+    /// Scheduling is a deferred effect: the timer task and the queue entry
+    /// materialize only when the task's transaction commits and its effects
+    /// flush. After the init task commits, the queue holds exactly the one
+    /// call out, and the timer task fires its materialization's slot (0).
     #[tokio::test]
-    async fn test_enqueues_task() {
+    async fn test_enqueues_task_on_commit() {
         let code = r##"
             void create() {
-                call_out(&call_out_test(), 0.001);
+                call_out(call_out_test, 0.001);
             }
 
             void call_out_test() {
@@ -137,16 +142,50 @@ mod tests {
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(128);
         let (program, config, _) = compile_prog(code).await;
-        let global_state = GlobalState::new(config, tx);
-        let result = InitializeProgramBuilder::<5>::default()
-            .global_state(global_state)
+        let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
+        let _ = InitializeProgramBuilder::<5>::default()
+            .global_state(global_state.clone())
             .program(program)
             .build()
-            .await;
+            .await
+            .unwrap();
 
-        assert!(result.is_ok());
+        global_state.with_call_outs(|co| assert_eq!(co.len(), 1));
 
+        // The timer task fires the slot its materialization returned (0),
+        // not the explicit ID.
         let msg = rx.recv().await.unwrap();
         assert_eq!(msg, VmOp::PrioritizeCallOut(0));
+    }
+
+    /// The ID `call_out` returns is the one `remove_call_out` (in the same
+    /// transaction) can cancel: the removed call out never materializes, the
+    /// surviving one does. This is the load-bearing proof that the returned
+    /// ID and the pending list's ID are the same ID.
+    #[tokio::test]
+    async fn test_cancellation_of_own_pending_call_out() {
+        let code = r##"
+            void create() {
+                int a = call_out(call_out_test, 100);
+                int b = call_out(call_out_test, 100);
+                remove_call_out(a);
+            }
+
+            void call_out_test() {
+            }
+        "##;
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
+        let (program, config, _) = compile_prog(code).await;
+        let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
+        let _ = InitializeProgramBuilder::<10>::default()
+            .global_state(global_state.clone())
+            .program(program)
+            .build()
+            .await
+            .unwrap();
+
+        // Only the un-removed call out made it into the physical queue.
+        global_state.with_call_outs(|co| assert_eq!(co.len(), 1));
     }
 }

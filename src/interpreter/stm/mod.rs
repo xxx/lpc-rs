@@ -20,7 +20,7 @@ mod world_value;
 
 pub(crate) use changeset::Changeset;
 pub(crate) use committer::{CommitProtocol, Committer, LiveSnapshot};
-pub(crate) use effects::{Effect, EffectLog, flush_effects};
+pub(crate) use effects::{CallOutSchedule, Effect, EffectLog, flush_effects};
 pub use retry::CommittedReader;
 pub(crate) use retry::{RetryStats, commit_changeset, drop_var, start_txn};
 pub(crate) use snapshot::Snapshot;
@@ -60,6 +60,13 @@ pub(crate) struct Transaction {
     /// successful commit. Dropped with the attempt on conflict, so a
     /// re-run re-records it; never resolved from a cell at flush time.
     effects: EffectLog,
+    /// Call outs recorded by this attempt but not yet materialized. A
+    /// separate list (not an `Effect`) because materialization needs the
+    /// physical `CallOuts` queue at flush time, and cancellation must see
+    /// both a recorded-but-unmaterialized call out and one that already
+    /// fired-into the queue. Dropped with the attempt on conflict: an
+    /// aborted attempt schedules nothing.
+    pending_call_outs: Vec<CallOutSchedule>,
     /// True when this transaction was opened by the committer (a live
     /// attempt) and may be joined by a nested sub-task; false for the fresh
     /// empty one minted for top-level contexts, whose holder must open its
@@ -74,6 +81,7 @@ impl Transaction {
             snapshot,
             changeset: Changeset::new(version),
             effects: EffectLog::new(),
+            pending_call_outs: Vec::new(),
             joinable: true,
         }
     }
@@ -85,6 +93,7 @@ impl Transaction {
             snapshot,
             changeset: Changeset::new(version),
             effects: EffectLog::new(),
+            pending_call_outs: Vec::new(),
             joinable,
         }
     }
@@ -226,10 +235,34 @@ impl Transaction {
         self.effects.record(effect);
     }
 
-    /// Take out the attempt's recorded side effects for delivery. Called by
-    /// the retry loop after a successful commit; a rejected attempt's log is
-    /// dropped with the attempt instead.
+    /// Record a call out for materialization after this attempt commits. The
+    /// physical timer task and queue entry are created only at flush, so an
+    /// aborted attempt schedules nothing.
+    pub(crate) fn record_call_out(&mut self, schedule: CallOutSchedule) {
+        self.pending_call_outs.push(schedule);
+    }
+
+    /// Cancel a call out this attempt recorded, if any. Returns the
+    /// milliseconds it had left (its full delay: it has not run yet). A
+    /// `None` means the ID is not one of this attempt's pending call outs;
+    /// the caller then looks for it among the committed ones.
+    pub(crate) fn cancel_pending_call_out(&mut self, id: u64) -> Option<i64> {
+        let pos = self
+            .pending_call_outs
+            .iter()
+            .position(|schedule| schedule.id == id)?;
+        let schedule = self.pending_call_outs.remove(pos);
+        Some(schedule.delay.num_milliseconds())
+    }
+
+    /// Take out the attempt's recorded side effects for delivery. The
+    /// pending call outs are folded in as scheduling effects first. Called
+    /// by the retry loop after a successful commit; a rejected attempt's log
+    /// is dropped with the attempt instead.
     pub(crate) fn take_effects(&mut self) -> Vec<Effect> {
+        for schedule in self.pending_call_outs.drain(..) {
+            self.effects.record(Effect::ScheduleCallOut(schedule));
+        }
         self.effects.take()
     }
 
@@ -286,6 +319,19 @@ impl TxnHandle {
     /// parent's single commit.
     pub(crate) fn record_effect(&self, effect: Effect) {
         self.with(|t| t.record_effect(effect));
+    }
+
+    /// Record a call out for materialization after this attempt commits.
+    /// A joiner's handle is the parent's, so it folds into the parent's
+    /// pending list and rides the parent's single flush.
+    pub(crate) fn record_call_out(&self, schedule: CallOutSchedule) {
+        self.with(|t| t.record_call_out(schedule));
+    }
+
+    /// Cancel a call out this attempt recorded, as in
+    /// [`Transaction::cancel_pending_call_out`](crate::interpreter::stm::Transaction).
+    pub(crate) fn cancel_pending_call_out(&self, id: u64) -> Option<i64> {
+        self.with(|t| t.cancel_pending_call_out(id))
     }
 
     /// Take out the attempt's recorded side effects for delivery after commit.

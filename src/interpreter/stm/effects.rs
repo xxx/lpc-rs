@@ -18,9 +18,42 @@ use lpc_rs_utils::config::Config;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
-    interpreter::{object_space::ObjectSpace, process::Process},
+    interpreter::{
+        call_outs::CallOuts, lpc_ref::LpcRef, object_space::ObjectSpace, process::Process,
+    },
     telnet::ops::ConnectionOp,
 };
+
+/// A fully materialized, not-yet-scheduled call out. Everything the physical
+/// materialization needs is captured at record time: the owner process, the
+/// function, the timing, and the explicit ID. The flush never re-resolves a
+/// transactional value.
+#[derive(Clone)]
+pub struct CallOutSchedule {
+    /// The call out's explicit ID, minted at record time.
+    pub id: u64,
+    /// The process the `call_out` was called from. Held weakly (as in the
+    /// physical [`CallOut`]); the owner is kept alive by its commit into the
+    /// object space, so no strong ref is needed across the flush.
+    pub process: std::sync::Weak<Process>,
+    /// The function to run.
+    pub func_ref: LpcRef,
+    /// The delay before the first run.
+    pub delay: chrono::Duration,
+    /// The repeat interval, if this is a repeating call out.
+    pub repeat: Option<chrono::Duration>,
+}
+
+impl std::fmt::Debug for CallOutSchedule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CallOutSchedule")
+            .field("id", &self.id)
+            .field("func_ref", &self.func_ref)
+            .field("delay", &self.delay)
+            .field("repeat", &self.repeat)
+            .finish()
+    }
+}
 
 /// One physical side effect pending delivery.
 #[derive(Clone)]
@@ -45,13 +78,30 @@ pub(crate) enum Effect {
     /// A deferred object-space removal: the physical key. Applied to the
     /// `ObjectSpace` at commit.
     RemoveObject { key: String },
+
+    /// A deferred call-out scheduling: the timer task is spawned and the
+    /// entry pushed into the queue only when the attempt commits. An
+    /// aborted attempt's record is dropped with the attempt, so no timer
+    /// is spawned and nothing is enqueued for work that never happened.
+    ScheduleCallOut(CallOutSchedule),
+
+    /// A deferred call-out cancellation: a committed call out whose ID
+    /// matches this one is removed from the queue at flush. A no-op if it
+    /// is already gone (e.g. it already fired and removed itself).
+    CancelCallOut { id: u64 },
 }
 
 impl Effect {
     /// Deliver this effect physically. Object effects go to the passed
     /// `ObjectSpace` (the committer's physical map); the others to config /
-    /// their own channel.
-    pub(crate) async fn flush(self, config: &Config, object_space: &ObjectSpace) {
+    /// their own channel. The call-out lock is held only for the synchronous
+    /// materialize/remove, never across an await.
+    pub(crate) async fn flush(
+        self,
+        config: &Config,
+        object_space: &ObjectSpace,
+        call_outs: &parking_lot::RwLock<CallOuts>,
+    ) {
         match self {
             Self::DebugLog(msg) => config.debug_log(msg).await,
             Self::Socket { op, tx } => {
@@ -63,6 +113,12 @@ impl Effect {
             Self::RemoveObject { key } => {
                 object_space.apply_remove(&key);
             }
+            Self::ScheduleCallOut(schedule) => {
+                call_outs.write().materialize(schedule);
+            }
+            Self::CancelCallOut { id } => {
+                call_outs.write().remove_by_id(id);
+            }
         }
     }
 }
@@ -72,10 +128,11 @@ impl Effect {
 pub(crate) async fn flush_effects(
     config: &Config,
     object_space: &ObjectSpace,
+    call_outs: &parking_lot::RwLock<CallOuts>,
     effects: Vec<Effect>,
 ) {
     for effect in effects {
-        effect.flush(config, object_space).await;
+        effect.flush(config, object_space, call_outs).await;
     }
 }
 
@@ -113,6 +170,10 @@ impl std::fmt::Debug for Effect {
             Self::Socket { op, .. } => f.debug_tuple("Socket").field(op).finish(),
             Self::InsertObject { key, .. } => f.debug_tuple("InsertObject").field(key).finish(),
             Self::RemoveObject { key } => f.debug_tuple("RemoveObject").field(key).finish(),
+            Self::ScheduleCallOut(schedule) => {
+                f.debug_tuple("ScheduleCallOut").field(schedule).finish()
+            }
+            Self::CancelCallOut { id } => f.debug_tuple("CancelCallOut").field(id).finish(),
         }
     }
 }
@@ -151,8 +212,11 @@ mod tests {
             tx: tx_b,
         });
 
-        let object_space = crate::interpreter::object_space::ObjectSpace::default();
-        flush_effects(&Config::default(), &object_space, log.take()).await;
+        let object_space = ObjectSpace::default();
+        let (tx_d, _rx_d) = tokio::sync::mpsc::channel(16);
+        let call_outs =
+            parking_lot::RwLock::new(CallOuts::new(tx_d));
+        flush_effects(&Config::default(), &object_space, &call_outs, log.take()).await;
 
         assert_eq!(rx_a.recv().await, Some(op_a));
         assert_eq!(rx_b.recv().await, Some(op_b));

@@ -157,6 +157,7 @@ mod tests {
             .unwrap();
 
         let call_out = CallOutBuilder::default()
+            .id(0)
             .process(Arc::downgrade(&proc))
             .func_ref(ptr.into())
             ._handle(tokio::spawn(async {}))
@@ -186,6 +187,7 @@ mod tests {
                 .unwrap();
 
             let call_out = CallOutBuilder::default()
+                .id(0)
                 .process(Arc::downgrade(bar_proc))
                 .func_ref(ptr.into())
                 ._handle(tokio::spawn(async {}))

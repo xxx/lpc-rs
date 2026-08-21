@@ -1,4 +1,7 @@
-use std::sync::Weak;
+use std::sync::{
+    Weak,
+    atomic::{AtomicU64, Ordering::Relaxed},
+};
 
 use bit_set::BitSet;
 use chrono::{DateTime, Duration, Utc};
@@ -10,13 +13,21 @@ use lpc_rs_errors::Result;
 use stable_vec::StableVec;
 use tokio::{sync::mpsc::Sender, task::JoinHandle, time::Instant};
 
-use crate::interpreter::{gc::mark::Mark, lpc_ref::LpcRef, process::Process, vm::vm_op::VmOp};
+use crate::interpreter::{
+    gc::mark::Mark, lpc_ref::LpcRef, process::Process, stm::CallOutSchedule, vm::vm_op::VmOp,
+};
 
 /// A single call out to a function, to be run at a later time, potentially on an interval.
 #[derive(Educe, Builder)]
 #[educe(Debug)]
 #[builder(pattern = "owned")]
 pub struct CallOut {
+    /// The explicit call out ID, minted when the `call_out` was recorded.
+    /// Not the queue's slot: scheduling is a deferred effect, so the ID must
+    /// be addressable before the physical insert (and survive a slot shift
+    /// from an intervening removal).
+    pub id: u64,
+
     /// The process where `call_out` was called from.
     process: Weak<Process>,
 
@@ -91,6 +102,11 @@ pub struct CallOuts {
 
     /// A channel to talk to the [`Vm`](crate::interpreter::vm::Vm)
     tx: Sender<VmOp>,
+
+    /// The next explicit call out ID. Per-VM (not process-global) so tests
+    /// running in parallel mint disjoint ID sequences. `u64`, so collisions
+    /// are effectively impossible even across many VMs.
+    next_call_out_id: AtomicU64,
 }
 
 impl CallOuts {
@@ -99,7 +115,15 @@ impl CallOuts {
         Self {
             queue: StableVec::with_capacity(512),
             tx,
+            next_call_out_id: AtomicU64::new(0),
         }
+    }
+
+    /// Mint the next explicit call out ID. `&self` + atomic: the `call_out`
+    /// efun records its schedule before the flush, when it only holds a
+    /// shared view of the queue.
+    pub fn mint_id(&self) -> u64 {
+        self.next_call_out_id.fetch_add(1, Relaxed)
     }
 
     /// Clear all [`CallOut`]s from the queue
@@ -116,20 +140,20 @@ impl CallOuts {
             /// Is the queue empty?
             pub fn is_empty(&self) -> bool;
 
-            /// Get a reference to a [`CallOut`] by its index
+            /// Get a reference to a [`CallOut`] by its queue slot. Only the
+            /// call-out fire path uses this: it already holds the slot index
+            /// its timer task was spawned with.
             pub fn get(&self, index: usize) -> Option<&CallOut>;
 
-            /// Get a mutable reference to a [`CallOut`] by its index
+            /// Get a mutable reference to a [`CallOut`] by its queue slot,
+            /// as in `get`.
             pub fn get_mut(&mut self, index: usize) -> Option<&mut CallOut>;
 
-            /// Remove a [`CallOut`] by its index
+            /// Remove a [`CallOut`] by its queue slot, as in `get`.
             pub fn remove(&mut self, index: usize) -> Option<CallOut>;
 
             /// Push a [`CallOut`] to the end of the queue
             pub fn push(&mut self, value: CallOut) -> usize;
-
-            /// Get the index of the next [`CallOut`] to be pushed
-            pub fn next_push_index(&self) -> usize;
         }
     }
 
@@ -142,18 +166,44 @@ impl CallOuts {
         &self.queue
     }
 
-    /// Schedule a [`CallOut`] to be run after a given delay
-    pub fn schedule_task(
-        &mut self,
-        process: Weak<Process>,
-        func_ref: LpcRef,
-        delay: Duration,
-        repeat: Option<Duration>,
-    ) -> Result<usize> {
+    /// Get a reference to a [`CallOut`] by its explicit ID.
+    pub fn get_by_id(&self, id: u64) -> Option<&CallOut> {
+        self.queue
+            .iter()
+            .find(|(_idx, call_out)| call_out.id == id)
+            .map(|(_idx, call_out)| call_out)
+    }
+
+    /// Remove a [`CallOut`] by its explicit ID, returning it.
+    pub fn remove_by_id(&mut self, id: u64) -> Option<CallOut> {
+        let idx = self
+            .queue
+            .iter()
+            .find_map(|(idx, call_out)| (call_out.id == id).then_some(idx))?;
+        self.queue.remove(idx)
+    }
+
+    /// Physically materialize a recorded call out: spawn its timer task and
+    /// push itself into the queue. The flush calls this after a successful
+    /// commit, so an aborted attempt spawns no timer and enqueues nothing.
+    /// The ID travels on the [`CallOut`] itself, so the queue slot the
+    /// insert lands in is irrelevant to the ID.
+    ///
+    /// TODO: Unclear if there's a race condition for the 0 delay case.
+    ///       Hand testing doesn't show one, but it's possible that
+    ///       something shows up under load.
+    pub fn materialize(&mut self, schedule: CallOutSchedule) -> usize {
+        let CallOutSchedule {
+            id,
+            process,
+            func_ref,
+            delay,
+            repeat,
+        } = schedule;
         let index = self.queue.next_push_index();
         let tx = self.tx.clone();
 
-        if_chain! {
+        let handle = if_chain! {
             if let Some(repeat) = repeat;
             if repeat.num_milliseconds() > 0;
             then {
@@ -163,42 +213,30 @@ impl CallOuts {
                     Instant::now() + delay.to_std().unwrap()
                 };
 
-                let handle = tokio::spawn(async move {
+                tokio::spawn(async move {
                     let mut i = tokio::time::interval_at(start, repeat.to_std().unwrap());
 
                     loop {
                         i.tick().await;
                         let _ = tx.send(VmOp::PrioritizeCallOut(index)).await;
                     }
-                });
-
-                // TODO: Unclear if this is a race condition for the 0 delay case.
-                //       Hand testing doesn't show one, but it's possible that
-                //       something shows up under load.
-                self.queue.push(CallOut {
-                    process,
-                    func_ref,
-                    repeat_duration: Some(repeat),
-                    next_run: Utc::now() + delay,
-                    _handle: handle,
-                });
+                })
             } else {
-                let handle = tokio::spawn(async move {
+                tokio::spawn(async move {
                     tokio::time::sleep(delay.to_std().unwrap()).await;
                     let _ = tx.send(VmOp::PrioritizeCallOut(index)).await;
-                });
-
-                self.queue.push(CallOut {
-                    process,
-                    func_ref,
-                    repeat_duration: None,
-                    next_run: Utc::now() + delay,
-                    _handle: handle,
-                });
+                })
             }
-        }
+        };
 
-        Ok(index)
+        self.queue.push(CallOut {
+            id,
+            process,
+            func_ref,
+            repeat_duration: repeat,
+            next_run: Utc::now() + delay,
+            _handle: handle,
+        })
     }
 }
 

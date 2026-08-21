@@ -122,6 +122,12 @@ impl GlobalState {
         f(&self.call_outs.read())
     }
 
+    /// The call-out queue's lock, for flushing deferred scheduling effects
+    /// (the flush needs a `&RwLock`, not a closure, because it spans awaits).
+    pub(crate) fn call_outs(&self) -> &RwLock<CallOuts> {
+        &self.call_outs
+    }
+
     pub fn with_call_outs_mut<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut CallOuts) -> R,
