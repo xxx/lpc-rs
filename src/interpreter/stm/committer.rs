@@ -58,6 +58,9 @@ pub(crate) enum CommitProtocol {
     /// Remove a var from the world (swept upvalue cells).
     /// The var's value would otherwise be retained forever in the heap.
     DropVar(VarId),
+    /// How many transactions are in flight (held [`LiveSnapshot`]s). `0` means
+    /// quiescent, the precondition for a GC pass.
+    LiveCount { reply: flume::Sender<usize> },
     /// Shutdown.
     Close,
 }
@@ -188,6 +191,14 @@ impl Committer {
             }
             CommitProtocol::DropVar(var_id) => {
                 self.snapshot.drop_var(var_id);
+            }
+            CommitProtocol::LiveCount { reply } => {
+                // Total held snapshots across versions; `0` = quiescent.
+                let live: usize = self.live_versions.values().map(|&c| c as usize).sum();
+                reply.send(live).unwrap_or_else(|e| {
+                    error!("Failed to send live count: {e}");
+                    self.stats.error()
+                });
             }
             CommitProtocol::Close => {
                 return false;

@@ -176,12 +176,13 @@ impl Drop for GlobalState {
 impl Mark for GlobalState {
     #[instrument(skip(self))]
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
-        // The committer world is not a GC root here: payload vars committed
-        // into it are unmarked (only upvalue cells get culled by the sweep),
-        // so a payload reachable only through a committed slot is retained
-        // instead of freed. Rooting the world and its in-flight changesets
-        // and reclaiming its dead payload vars are the quiescent pass's job.
-        // TODO: mark all tasks
+        // The committer world is not a GC root here: payload vars committed into
+        // it are unmarked and the sweep only culls upvalue cells, so a payload
+        // reachable only through a committed slot is retained. Reclaiming the
+        // dead ones is the quiescent pass's job (`Vm::gc`).
+        //
+        // No live tasks are marked: the pass runs only at quiescence, when no
+        // transaction is in flight.
         self.object_space.mark(marked, processed)?;
 
         self.with_call_outs(|co| co.mark(marked, processed))

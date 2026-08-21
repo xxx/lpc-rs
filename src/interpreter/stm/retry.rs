@@ -99,6 +99,21 @@ pub(crate) async fn start_txn(tx: &flume::Sender<CommitProtocol>) -> Result<Live
         .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
 }
 
+/// How many transactions are currently in flight against the committer, i.e.
+/// how many [`LiveSnapshot`]s are held. `0` means the committer is quiescent
+/// (no live task holds a transaction).
+pub(crate) async fn live_count(tx: &flume::Sender<CommitProtocol>) -> Result<usize> {
+    let (reply_tx, reply_rx) = flume::bounded(1);
+    tx.send(CommitProtocol::LiveCount { reply: reply_tx })
+        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
+    tokio::task::spawn_blocking(move || reply_rx.recv())
+        .await
+        .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
+            lpc_error!("committer reply task panicked: {}", e)
+        })?
+        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
+}
+
 /// Commit a changeset and await the reply. `Ok(())` = committed;
 /// `Ok(Err(_))` = rejected (conflict).
 pub(crate) async fn commit_changeset(

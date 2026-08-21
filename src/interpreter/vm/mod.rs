@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bit_set::BitSet;
 use flume::Sender as FlumeSender;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{Result, lpc_error};
 use lpc_rs_utils::config::Config;
 use tokio::{
     signal,
@@ -18,6 +18,7 @@ use crate::{
         SHUTDOWN,
         gc::mark::Mark,
         process::Process,
+        stm::live_count,
         task::apply_function::{apply_function_in_master, apply_runtime_error},
         task_context::TaskContext,
         vm::global_state::GlobalState,
@@ -193,11 +194,25 @@ impl Vm {
     }
 
     /// Do a full garbage collection cycle.
+    ///
+    /// # Precondition
+    ///
+    /// The committer must be **quiescent** — no transaction in flight. A live task *is* an
+    /// in-flight transaction, so at quiescence the root set (object space + call-outs) is
+    /// complete with no task or transaction log to mark. A non-quiescent call is refused
+    /// rather than blocked: a concurrent task at a GC point is a caller bug.
     #[instrument(skip_all)]
-    pub fn gc(&mut self) -> Result<()> {
+    pub async fn gc(&self) -> Result<()> {
+        let live = live_count(&self.global_state.committer_tx).await?;
+        if live != 0 {
+            return Err(lpc_error!(
+                "gc refused: committer not quiescent ({live} transaction(s) in flight)"
+            ));
+        }
+
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
-        self.mark(&mut marked, &mut processed).unwrap();
+        self.mark(&mut marked, &mut processed)?;
 
         trace!("Marked {} objects", marked.count());
 
@@ -307,7 +322,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        interpreter::{CommittedReader, lpc_ref::LpcRef},
+        interpreter::{CommittedReader, lpc_ref::LpcRef, stm::start_txn},
         test_support::test_config,
     };
 
@@ -371,15 +386,40 @@ mod tests {
 
         assert_len(&ctx1, 1);
 
-        vm.gc().unwrap();
+        vm.gc().await.unwrap();
 
         assert_len(&ctx1, 0);
 
         vm.global_state.object_space.clear();
 
-        vm.gc().unwrap();
+        vm.gc().await.unwrap();
 
         assert_len(&ctx1, 0);
+    }
+
+    /// A GC pass is refused while a transaction is in flight. The transaction
+    /// is pinned by holding a [`crate::interpreter::stm::LiveSnapshot`] across
+    /// the `gc` call.
+    #[tokio::test]
+    async fn gc_refuses_while_transaction_in_flight() {
+        let vm = Vm::new(test_config());
+        let tx = vm.global_state.committer_tx.clone();
+
+        // Baseline: nothing in flight, so a sweep goes through.
+        vm.gc().await.unwrap();
+
+        // Pin a transaction so the committer is not quiescent.
+        let live = start_txn(&tx).await.unwrap();
+
+        let err = vm.gc().await.unwrap_err();
+        assert!(
+            err.to_string().contains("not quiescent"),
+            "expected a non-quiescent refusal, got: {err}"
+        );
+
+        drop(live);
+
+        vm.gc().await.unwrap();
     }
 
     /// One transaction creates and destructs a prototype repeatedly, and
