@@ -79,8 +79,8 @@ pub(crate) enum CommitProtocol {
     /// quiescent, the precondition for a GC pass.
     LiveCount { reply: flume::Sender<usize> },
     /// One GC pass, atomic: refuse unless quiescent, else drop the swept
-    /// upvalue cells and mark the world from `roots` in this one message, so
-    /// the cell drops cannot be reordered past the sweep. Replies the report.
+    /// upvalue cells and mark the world from `roots` in this one message.
+    /// Replies the report.
     GcPass {
         dropped: Vec<VarId>,
         roots: Vec<WorldRoot>,

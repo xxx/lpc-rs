@@ -23,9 +23,8 @@ use crate::interpreter::{
     vm::global_state::GlobalState,
 };
 
-/// Per-attempt statistics, owned by the attempt loop: the transaction
-/// already knows its read/write set sizes, so commit size is free, and
-/// conflict rate is a property of this loop, not the committer.
+/// Per-attempt statistics, owned by the attempt loop: the committer can't
+/// see retries, only this loop can.
 #[derive(Debug, Default)]
 pub(crate) struct RetryStats {
     /// The first attempt plus one per conflict.
