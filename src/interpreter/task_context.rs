@@ -3,6 +3,7 @@ use std::{future::Future, path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
 use derive_builder::Builder;
+use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_core::register::Register;
 use lpc_rs_errors::{Result, lpc_bug};
 use lpc_rs_utils::config::Config;
@@ -17,7 +18,7 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        stm::TxnHandle,
+        stm::{Effect, TxnHandle},
         task::{into_task_context::IntoTaskContext, task_template::TaskTemplate},
         vm::{global_state::GlobalState, vm_op::VmOp},
     },
@@ -72,6 +73,22 @@ impl Default for TaskResult {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// The outcome of a transactional object lookup.
+///
+/// `create-on-miss` (re-compiling and inserting) is only legal on
+/// `NotCreated`: on `Removed` it would resurrect an object this attempt
+/// destructed.
+#[derive(Debug)]
+pub enum ObjectLookup {
+    /// Live for this attempt — its cell holds it, or the physical map does
+    /// (objects created outside any transaction: bootstrap, `clone_object`).
+    Found(Arc<Process>),
+    /// This attempt destructed it.
+    Removed,
+    /// No cell exists.
+    NotCreated,
 }
 
 /// A struct to carry context during the evaluation of a single [`Task`](crate::interpreter::task::Task).
@@ -176,13 +193,56 @@ impl TaskContext {
         self
     }
 
-    /// Lookup the process with the passed path.
-    #[inline]
-    pub fn lookup_process<T>(&self, path: T) -> Option<Arc<Process>>
-    where
-        T: AsRef<str>,
-    {
-        self.object_space().lookup(path)
+    /// Find an object by path, transactionally: read the object's cell first
+    /// (a cell read makes a concurrent create of this object conflict this
+    /// transaction and re-run it), then fall back to the physical map for
+    /// objects created outside this transaction (bootstrap, `clone_object`).
+    /// Does not initialize or create (use `load_object` / the site's own
+    /// create step for that).
+    pub fn find_object(&self, path: &LpcPath) -> ObjectLookup {
+        let key = self.object_space().path_key(path.as_ref());
+        match self.object_space().get_cell_id(&key) {
+            Some(var_id) if self.txn().is_removed(var_id) => ObjectLookup::Removed,
+            Some(var_id) => match self
+                .txn()
+                .read_object(var_id)
+                .or_else(|| self.object_space().lookup(&key))
+            {
+                Some(process) => ObjectLookup::Found(process),
+                None => ObjectLookup::NotCreated,
+            },
+            None => match self.object_space().lookup(&key) {
+                Some(process) => ObjectLookup::Found(process),
+                None => ObjectLookup::NotCreated,
+            },
+        }
+    }
+
+    /// Compile the file at `path` into a [`Process`], without inserting it;
+    /// the caller performs the insert (and any initialization), so the
+    /// object is not visible until placed.
+    pub async fn compile_process(&self, path: &LpcPath) -> Result<Arc<Process>> {
+        let program = self
+            .with_async_compiler(|compiler| async move {
+                compiler.compile_in_game_file(path, None).await
+            })
+            .await?;
+        Ok(Arc::new(Process::new(program)))
+    }
+
+    /// Insert an object transactionally: write its cell and record a deferred
+    /// physical insert. The cell write is what makes the object usable within
+    /// this transaction (and what concurrent readers conflict against); the
+    /// effect is what places it in the physical map at commit.
+    pub fn insert_process_transactional(&self, process: &Arc<Process>) {
+        let key = self.object_space().process_key(process);
+        let var_id = self.object_space().cell_id(&key);
+        self.txn()
+            .with(|t| t.write_process(var_id, process.clone()));
+        self.txn().record_effect(Effect::InsertObject {
+            key,
+            process: process.clone(),
+        });
     }
 
     /// Directly insert the passed [`Process`] into the object space, with

@@ -15,9 +15,8 @@ use crate::{
         object_flags::ObjectFlags,
         process::Process,
         task::{Task, get_location, task_id::TaskId},
-        task_context::TaskContext,
+        task_context::{ObjectLookup, TaskContext},
     },
-    util::process_builder::ProcessCreator,
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
@@ -181,19 +180,21 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     {
         let process = match receiver_ref {
             LpcRef::String(_) => {
-                let lookup = {
-                    receiver_ref
-                        .with_string(|s| context.lookup_process(s))
-                        .ok()?
-                };
+                let path = receiver_ref
+                    .with_string(|s| LpcPath::InGame(PathBuf::from(s)))
+                    .ok()?;
 
-                if let Some(proc) = lookup {
-                    proc
-                } else {
-                    let path = receiver_ref
-                        .with_string(|s| LpcPath::InGame(PathBuf::from(s)))
-                        .ok()?;
-                    context.create_process_from_path(&path).await.ok()?
+                match context.find_object(&path) {
+                    ObjectLookup::Found(proc) => proc,
+                    // A destructed object: don't create (that would resurrect
+                    // it); the call below short-circuits.
+                    ObjectLookup::Removed => return None,
+                    // NotCreated: create-on-miss, transactionally.
+                    ObjectLookup::NotCreated => {
+                        let process = context.compile_process(&path).await.ok()?;
+                        context.insert_process_transactional(&process);
+                        process
+                    }
                 }
             }
             LpcRef::Object(proc) => proc.upgrade()?,

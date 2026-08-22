@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use lpc_rs_core::{
-    LpcIntInner, RegisterSize, function_receiver::FunctionReceiver, register::RegisterVariant,
+    LpcIntInner, RegisterSize, function_receiver::FunctionReceiver, lpc_path::LpcPath,
+    register::RegisterVariant,
 };
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
@@ -16,6 +17,7 @@ use crate::interpreter::{
     lpc_string::LpcString,
     stm::WorldValue,
     task::{Task, get_location, set_location},
+    task_context::ObjectLookup,
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
@@ -102,17 +104,21 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         FunctionAddress::Local(weak_process, func)
                     }
                     LpcRef::String(_) => {
-                        let process = {
-                            let path = receiver_ref
-                                .with_string(|s| s.to_string())
-                                .unwrap_or_default();
+                        let path_str = receiver_ref
+                            .with_string(|s| s.to_string())
+                            .unwrap_or_default();
+                        let path = LpcPath::InGame(PathBuf::from(path_str.as_str()));
 
-                            let Some(process) = self.context.lookup_process(&path) else {
-                                return Err(self
-                                    .runtime_error(format!("Unable to find object `{}`.", path)));
-                            };
-
-                            process
+                        let process = match self.context.find_object(&path) {
+                            ObjectLookup::Found(process) => process,
+                            // A miss (removed, or never created) is a runtime
+                            // error: this site does not create-on-miss.
+                            ObjectLookup::Removed | ObjectLookup::NotCreated => {
+                                return Err(self.runtime_error(format!(
+                                    "Unable to find object `{}`.",
+                                    path_str
+                                )));
+                            }
                         };
 
                         let func = {

@@ -20,7 +20,7 @@ use crate::{
         program::Program,
         stm::{Effect, TxnHandle},
         task::{Task, get_location, task_id::TaskId, task_template::TaskTemplate},
-        task_context::{TaskContext, TaskContextBuilder},
+        task_context::{ObjectLookup, TaskContext, TaskContextBuilder},
         vm::vm_op::VmOp,
     },
     util::{
@@ -103,7 +103,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// physical insert, so the object is usable within this transaction but
     /// physically visible only after commit.
     pub async fn create_object(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        if let Some(proc) = self.find_process(path) {
+        if let ObjectLookup::Found(proc) = self.find_object(path) {
             return Ok(proc);
         }
 
@@ -123,7 +123,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// insert, and its initializer runs in a sub-task that joins this
     /// transaction's commit.
     pub async fn load_object(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        if let Some(proc) = self.find_process(path) {
+        if let ObjectLookup::Found(proc) = self.find_object(path) {
             return Ok(proc);
         }
 
@@ -228,30 +228,10 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.txn.record_effect(effect);
     }
 
-    /// Find an object by path, transactionally: read the object's cell first
-    /// (a cell read makes a concurrent create of this object conflict this
-    /// transaction and re-run it), then fall back to the physical map for
-    /// objects created outside this transaction (bootstrap). Does not
-    /// initialize or create (use `load_object` for that).
-    pub fn find_process(&self, path: &LpcPath) -> Option<Arc<Process>> {
-        let key = self.object_space().path_key(path.as_ref());
-        let Some(var_id) = self.object_space().get_cell_id(&key) else {
-            // No cell yet (object not created in any committed or in-flight
-            // transaction): the physical map is the only place it could be
-            // (a bootstrap object).
-            return self.task_context.lookup_process(&key);
-        };
-        if self.txn().is_removed(var_id) {
-            // This attempt destructed the object. The physical map still
-            // holds it (the removal is deferred to commit), and the committed
-            // world would likewise still hold it — reading either back would
-            // resurrect it. The object is gone for this attempt until a
-            // re-create (a new cell write) cancels the removal.
-            return None;
-        }
-        self.txn()
-            .read_object(var_id)
-            .or_else(|| self.task_context.lookup_process(&key))
+    /// Find an object by path, transactionally. Delegates to
+    /// [`TaskContext::find_object`]; does not initialize or create.
+    pub fn find_object(&self, path: &LpcPath) -> ObjectLookup {
+        self.task_context.find_object(path)
     }
 
     /// Create a [`Process`] from `path`, compiling the file but *without*
@@ -259,27 +239,13 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// deferred-physical) insert, so the object is not physically visible
     /// until its transaction commits.
     pub async fn create_process_from_path(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        let program = self
-            .with_async_compiler(|compiler| async move {
-                compiler.compile_in_game_file(path, None).await
-            })
-            .await?;
-        Ok(Arc::new(Process::new(program)))
+        self.task_context.compile_process(path).await
     }
 
-    /// Insert an object transactionally: write its cell and record a deferred
-    /// physical insert. The cell write is what makes the object usable within
-    /// this transaction (and what concurrent readers conflict against); the
-    /// effect is what places it in the physical map at commit.
+    /// Insert an object transactionally (cell write + deferred physical
+    /// insert). Delegates to [`TaskContext::insert_process_transactional`].
     pub(crate) fn insert_process_transactional(&self, process: &Arc<Process>) {
-        let key = self.object_space().process_key(process);
-        let var_id = self.object_space().cell_id(&key);
-        self.txn()
-            .with(|t| t.write_process(var_id, process.clone()));
-        self.record_effect(Effect::InsertObject {
-            key,
-            process: process.clone(),
-        });
+        self.task_context.insert_process_transactional(process);
     }
 
     /// Initialize a newly created object in a sub-task that joins this
@@ -333,15 +299,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     #[inline]
     pub fn resolve_register_variant(&self, variant: RegisterVariant) -> Result<Cow<'_, LpcRef>> {
         get_location(self.stack, self.txn(), variant)
-    }
-
-    /// Lookup the process with the passed path.
-    #[inline]
-    pub fn lookup_process<T>(&self, path: T) -> Option<Arc<Process>>
-    where
-        T: AsRef<str>,
-    {
-        self.task_context.lookup_process(path)
     }
 
     /// Get a clone of the task context
@@ -500,7 +457,9 @@ mod tests {
         // Baseline: create once, and a second find (no destruct in between)
         // returns the same object.
         let p1 = ctx.create_object(&path).await.expect("first create");
-        let p1b = ctx.find_process(&path).expect("second find, no destruct");
+        let ObjectLookup::Found(p1b) = ctx.find_object(&path) else {
+            panic!("second find, no destruct, should be Found");
+        };
         assert!(
             Arc::ptr_eq(&p1, &p1b),
             "find without a destruct returns the same object"
@@ -529,7 +488,9 @@ mod tests {
 
         // And a plain find (no destruct) after the cycles returns the live
         // (most recent) object's identity.
-        let p3b = ctx.find_process(&path).expect("find after the cycles");
+        let ObjectLookup::Found(p3b) = ctx.find_object(&path) else {
+            panic!("find after the cycles, should be Found");
+        };
         assert!(
             Arc::ptr_eq(&p3, &p3b),
             "find returns the live object's identity"

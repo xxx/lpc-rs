@@ -19,9 +19,9 @@ use crate::{
         lpc_ref::{LpcRef, NULL},
         process::Process,
         task::{ProcessFunctionPair, Task, get_location},
+        task_context::ObjectLookup,
     },
     pop_frame,
-    util::process_builder::ProcessCreator,
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
@@ -134,15 +134,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let lpc_ref = match location {
                     LpcRef::Object(lpc_ref) => lpc_ref.upgrade(),
                     LpcRef::String(_) => {
-                        let lookup = { location.with_string(|s| self.context.lookup_process(s))? };
+                        let path = location.with_string(|s| LpcPath::InGame(PathBuf::from(s)))?;
 
-                        if lookup.is_some() {
-                            lookup
-                        } else {
-                            let path =
-                                location.with_string(|s| LpcPath::InGame(PathBuf::from(s)))?;
-                            // This will be initialized later on, if necessary.
-                            Some(self.context.create_process_from_path(&path).await?)
+                        match self.context.find_object(&path) {
+                            ObjectLookup::Found(process) => Some(process),
+                            // A destructed object: don't create (that would
+                            // resurrect it); the call below short-circuits.
+                            ObjectLookup::Removed => None,
+                            // NotCreated: create-on-miss, transactionally.
+                            ObjectLookup::NotCreated => {
+                                let process = self.context.compile_process(&path).await?;
+                                self.context.insert_process_transactional(&process);
+                                Some(process)
+                            }
                         }
                     }
                     _ => {
