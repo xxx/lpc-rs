@@ -15,7 +15,7 @@ The information returned is an array, with the following members:
 })
 ```
 
-If the call out was not found, 0 is returned.
+If the call out was not found, `NULL` is returned.
 
 ### Examples
 

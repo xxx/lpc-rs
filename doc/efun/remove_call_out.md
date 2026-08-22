@@ -4,6 +4,10 @@
 
 Remove a call out by its ID.
 
+Call outs scheduled by the same transaction can be removed; the removal
+cancels their deferred scheduling, so they never materialize. Call outs
+already committed are removed when this transaction commits.
+
 If the call out was successfully removed, milliseconds left before the call
 would have been made are returned. If the call out was not found, or already removed,
 -1 is returned.

@@ -1,12 +1,10 @@
-use std::sync::Arc;
-
 use chrono::Duration;
 use lpc_rs_core::{LpcFloatInner, LpcIntInner, RegisterSize};
 use lpc_rs_errors::{Result, lpc_error};
 
 use crate::interpreter::{
     efun::efun_context::EfunContext, function_type::function_address::FunctionAddress,
-    lpc_int::LpcInt, lpc_ref::LpcRef, stm::CallOutSchedule,
+    lpc_int::LpcInt, lpc_ref::LpcRef,
 };
 
 /// `call_out`, an efun for calling a function at some future point in time
@@ -55,18 +53,7 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         None
     };
 
-    // Scheduling is a deferred effect: the ID is minted now, the timer task
-    // and queue entry materialize only if this attempt commits. The ID is
-    // not the queue's slot, which no one can know before the flush.
-    let id = context.with_call_outs(|co| co.mint_id());
-    let process = Arc::downgrade(&context.frame().process);
-    context.txn().record_call_out(CallOutSchedule {
-        id,
-        process,
-        func_ref,
-        delay: duration,
-        repeat,
-    });
+    let id = context.schedule_call_out(&context.frame().process, func_ref, duration, repeat);
 
     let result = LpcRef::Int(LpcInt(id as LpcIntInner));
     context.return_efun_result(result);
@@ -91,6 +78,8 @@ mod tests {
 
     use crate::{
         interpreter::{
+            lpc_int::LpcInt,
+            lpc_ref::LpcRef,
             task::initialize_program::InitializeProgramBuilder,
             vm::{global_state::GlobalState, vm_op::VmOp},
         },
@@ -186,6 +175,47 @@ mod tests {
             .unwrap();
 
         // Only the un-removed call out made it into the physical queue.
+        global_state.with_call_outs(|co| assert_eq!(co.len(), 1));
+    }
+
+    /// The query sees this attempt's own pending call out: the schedule is
+    /// recorded but not yet in the physical queue.
+    #[tokio::test]
+    async fn test_same_attempt_query_sees_pending() {
+        let code = r##"
+            mixed create() {
+                int id = call_out(call_out_test, 100);
+                return query_call_out(id);
+            }
+
+            void call_out_test() {
+            }
+        "##;
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
+        let (program, config, _) = compile_prog(code).await;
+        let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
+        let task = InitializeProgramBuilder::<10>::default()
+            .global_state(global_state.clone())
+            .program(program)
+            .build()
+            .await
+            .expect("init failed");
+
+        task.result()
+            .unwrap()
+            .with_array(&task.txn, |arr| {
+                assert_eq!(arr.len(), 4);
+                assert!(matches!(arr[0], LpcRef::Object(_)));
+                assert!(matches!(arr[1], LpcRef::Function(_)));
+                // A pending entry's timer has not started: the full delay is
+                // the remaining time.
+                assert_eq!(arr[2], LpcRef::Int(LpcInt(100_000)));
+                assert_eq!(arr[3], LpcRef::Int(LpcInt(0)));
+            })
+            .expect("expected an array result");
+
+        // The schedule materialized when the attempt committed.
         global_state.with_call_outs(|co| assert_eq!(co.len(), 1));
     }
 }

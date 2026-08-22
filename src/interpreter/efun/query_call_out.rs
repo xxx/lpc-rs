@@ -2,7 +2,6 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    call_outs::CallOut,
     efun::efun_context::EfunContext,
     lpc_array::LpcArray,
     lpc_ref::{LpcRef, NULL},
@@ -20,75 +19,76 @@ pub async fn query_call_out<const N: usize>(context: &mut EfunContext<'_, N>) ->
         )));
     }
 
-    let result = context.with_call_outs(|co| match co.get_by_id(idx.0 as u64) {
-        Some(call_out) => call_out_array_ref(context, call_out),
-        None => Ok(NULL),
-    })?;
+    // The interface returns owned fields; the result cell is minted after
+    // the queue scan, so no call-out lock is held across it.
+    let fields = context.query_call_out(idx.0 as u64);
+    let result = match fields {
+        Some(fields) => context
+            .txn()
+            .with(|t| LpcRef::Array(t.mint_array(LpcArray::new(fields)))),
+        None => NULL,
+    };
 
     context.return_efun_result(result);
 
     Ok(())
 }
 
-/// get the result Array reference to returning from `query_call_out` and `query_call_outs`
-pub fn call_out_array_ref<const N: usize>(
-    context: &EfunContext<N>,
-    call_out: &CallOut,
-) -> Result<LpcRef> {
-    let mut arr = Vec::new();
-    let LpcRef::Function(f) = &call_out.func_ref else {
-        return Err(context
-            .runtime_bug("call out function is not a function. This shouldn't be reachable."));
-    };
-
-    // push the object that the call out was called from
-    arr.push(call_out.process().clone().into());
-
-    // push the function
-    arr.push(LpcRef::Function(f.clone()));
-
-    // push the number of milliseconds remaining until the function runs
-    arr.push(LpcRef::Int(
-        call_out
-            .time_remaining()
-            .map(|duration| duration.num_milliseconds())
-            .unwrap_or(0)
-            .into(),
-    ));
-
-    // push the number of milliseconds between repeats
-    arr.push(LpcRef::Int(
-        call_out
-            .repeat_duration()
-            .map(|duration| duration.num_milliseconds())
-            .unwrap_or(0)
-            .into(),
-    ));
-
-    let result = context
-        .txn()
-        .with(|t| LpcRef::Array(t.mint_array(LpcArray::new(arr))));
-    Ok(result)
-}
-
 #[cfg(test)]
 mod tests {
 
-    use super::*;
     use crate::{
         interpreter::{
-            lpc_int::LpcInt, task::initialize_program::InitializeProgramBuilder,
+            lpc_int::LpcInt, lpc_ref::LpcRef, task::initialize_program::InitializeProgramBuilder,
             vm::global_state::GlobalState,
         },
         test_support::compile_prog,
     };
 
+    /// The query sees this attempt's own pending call out: the schedule is
+    /// recorded but not yet in the physical queue.
+    #[tokio::test]
+    async fn test_query_call_out_sees_own_pending() {
+        let code = r##"
+            mixed create() {
+                int id = call_out(call_out_test, 100);
+                return query_call_out(id);
+            }
+
+            void call_out_test() {
+                dump("foobar");
+            }
+        "##;
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
+        let (program, config, _) = compile_prog(code).await;
+        let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
+        let task = InitializeProgramBuilder::<10>::default()
+            .global_state(global_state.clone())
+            .program(program)
+            .build()
+            .await
+            .unwrap();
+
+        task.result()
+            .unwrap()
+            .with_array(&task.txn, |arr| {
+                assert_eq!(arr.len(), 4);
+                assert!(matches!(arr[0], LpcRef::Object(_)));
+                assert!(matches!(arr[1], LpcRef::Function(_)));
+                assert_eq!(arr[2], LpcRef::Int(LpcInt(100_000)));
+                assert_eq!(arr[3], LpcRef::Int(LpcInt(0)));
+            })
+            .expect("expected an array result");
+
+        // The initializer's transaction committed, so the call out is physical.
+        global_state.with_call_outs(|co| assert_eq!(co.len(), 1));
+    }
+
+    /// A committed call out is visible from a fresh transaction over the
+    /// physical queue.
     #[tokio::test]
     async fn test_query_call_out() {
-        // `create` schedules a call out in
-        // its own transaction, which commits and materializes it. A single
-        // transaction cannot see its own pending call out, so the query runs
-        // in a fresh `timed_eval` over the now-physical queue.
         let code = r##"
             void create() {
                 call_out(call_out_test, 100);

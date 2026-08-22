@@ -1,6 +1,7 @@
 //! Software transactional memory implementation
 
 use std::{
+    collections::HashMap,
     marker::PhantomData,
     sync::{Arc, atomic::AtomicU64},
 };
@@ -75,6 +76,9 @@ pub(crate) struct Transaction {
     /// fired-into the queue. Dropped with the attempt on conflict: an
     /// aborted attempt schedules nothing.
     pending_call_outs: Vec<CallOutSchedule>,
+    /// Committed call outs this attempt canceled. The queries subtract this
+    /// shadow; same lifetime as `pending_call_outs`.
+    cancelled_call_outs: HashMap<u64, ()>,
     /// True when this transaction was opened by the committer (a live
     /// attempt) and may be joined by a nested sub-task; false for the fresh
     /// empty one minted for top-level contexts, whose holder must open its
@@ -90,6 +94,7 @@ impl Transaction {
             changeset: Changeset::new(version),
             effects: EffectLog::new(),
             pending_call_outs: Vec::new(),
+            cancelled_call_outs: HashMap::new(),
             joinable: true,
         }
     }
@@ -102,6 +107,7 @@ impl Transaction {
             changeset: Changeset::new(version),
             effects: EffectLog::new(),
             pending_call_outs: Vec::new(),
+            cancelled_call_outs: HashMap::new(),
             joinable,
         }
     }
@@ -272,6 +278,12 @@ impl Transaction {
         self.pending_call_outs.push(schedule);
     }
 
+    /// The call outs this attempt has recorded (for the transactional query
+    /// view).
+    pub(crate) fn pending_call_outs(&self) -> &[CallOutSchedule] {
+        &self.pending_call_outs
+    }
+
     /// Cancel a call out this attempt recorded, if any. Returns the
     /// milliseconds it had left (its full delay: it has not run yet). A
     /// `None` means the ID is not one of this attempt's pending call outs;
@@ -283,6 +295,18 @@ impl Transaction {
             .position(|schedule| schedule.id == id)?;
         let schedule = self.pending_call_outs.remove(pos);
         Some(schedule.delay.num_milliseconds())
+    }
+
+    /// Cancel a committed call out: record the deferred physical removal
+    /// and add the ID to the shadow.
+    pub(crate) fn cancel_committed_call_out(&mut self, id: u64) {
+        self.cancelled_call_outs.insert(id, ());
+        self.record_effect(Effect::CancelCallOut { id });
+    }
+
+    /// Whether this attempt canceled the committed call out with `id`.
+    pub(crate) fn is_cancelled_call_out(&self, id: u64) -> bool {
+        self.cancelled_call_outs.contains_key(&id)
     }
 
     /// Take out the attempt's recorded side effects for delivery. The
@@ -379,6 +403,16 @@ impl TxnHandle {
     /// [`Transaction::cancel_pending_call_out`](crate::interpreter::stm::Transaction).
     pub(crate) fn cancel_pending_call_out(&self, id: u64) -> Option<i64> {
         self.with(|t| t.cancel_pending_call_out(id))
+    }
+
+    pub(crate) fn cancel_committed_call_out(&self, id: u64) {
+        self.with(|t| t.cancel_committed_call_out(id))
+    }
+
+    /// Whether this attempt canceled the committed call out with `id`, as in
+    /// [`Transaction::is_cancelled_call_out`](crate::interpreter::stm::Transaction).
+    pub(crate) fn is_cancelled_call_out(&self, id: u64) -> bool {
+        self.with(|t| t.is_cancelled_call_out(id))
     }
 
     /// Take out the attempt's recorded side effects for delivery after commit.

@@ -2,6 +2,7 @@ use std::{future::Future, path::PathBuf, sync::Arc};
 
 use arc_swap::ArcSwapAny;
 use async_trait::async_trait;
+use chrono::Duration;
 use derive_builder::Builder;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_core::register::Register;
@@ -13,12 +14,11 @@ use tokio::sync::mpsc::Sender;
 use crate::{
     compiler::Compiler,
     interpreter::{
-        call_outs::CallOuts,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        stm::{Effect, TxnHandle},
+        stm::{CallOutSchedule, Effect, TxnHandle},
         task::{into_task_context::IntoTaskContext, task_template::TaskTemplate},
         vm::{global_state::GlobalState, vm_op::VmOp},
     },
@@ -245,6 +245,150 @@ impl TaskContext {
         });
     }
 
+    /// The one call-out interface: schedule a call out transactionally. The
+    /// ID is minted from the per-VM counter (a physical read); the scheduling
+    /// is a deferred effect.
+    pub fn schedule_call_out(
+        &self,
+        owner: &Arc<Process>,
+        func_ref: LpcRef,
+        delay: Duration,
+        repeat: Option<Duration>,
+    ) -> u64 {
+        let id = self.global_state.with_call_outs(|co| co.mint_id());
+        self.txn().record_call_out(CallOutSchedule {
+            id,
+            process: Arc::downgrade(owner),
+            func_ref,
+            delay,
+            repeat,
+        });
+        id
+    }
+
+    /// Query a call out transactionally: `(pending - shadow) ∪ (physical - shadow)`.
+    /// Returns an owned 4-field array
+    /// (`[object, function, ms remaining, ms repeat]`), or `None` when the ID is
+    /// unknown or this attempt canceled it. The caller mints the result cell
+    /// after the scan.
+    pub fn query_call_out(&self, id: u64) -> Option<Vec<LpcRef>> {
+        if self.txn().is_cancelled_call_out(id) {
+            return None;
+        }
+        let pending = self
+            .txn()
+            .with(|t| t.pending_call_outs().iter().find(|s| s.id == id).cloned());
+        let pending_view = pending.map(|s| {
+            vec![
+                s.process.clone().into(),
+                s.func_ref,
+                LpcRef::Int(s.delay.num_milliseconds().into()),
+                LpcRef::Int(s.repeat.map(|d| d.num_milliseconds()).unwrap_or(0).into()),
+            ]
+        });
+        if pending_view.is_some() {
+            return pending_view;
+        }
+        self.global_state.with_call_outs(|co| {
+            co.get_by_id(id).map(|call_out| {
+                vec![
+                    call_out.process().clone().into(),
+                    call_out.func_ref.clone(),
+                    LpcRef::Int(
+                        call_out
+                            .time_remaining()
+                            .map(|d| d.num_milliseconds())
+                            .unwrap_or(0)
+                            .into(),
+                    ),
+                    LpcRef::Int(
+                        call_out
+                            .repeat_duration()
+                            .map(|d| d.num_milliseconds())
+                            .unwrap_or(0)
+                            .into(),
+                    ),
+                ]
+            })
+        })
+    }
+
+    /// Query all call outs owned by `owner`, as in
+    /// [`TaskContext::query_call_out`].
+    pub fn query_call_outs(&self, owner: &Arc<Process>) -> Vec<Vec<LpcRef>> {
+        let mut out = Vec::new();
+        let pending = self.txn().with(|t| t.pending_call_outs().to_vec());
+        for s in pending {
+            if self.txn().is_cancelled_call_out(s.id) {
+                continue;
+            }
+            if let Some(p) = s.process.upgrade()
+                && Arc::ptr_eq(&p, owner)
+            {
+                out.push(vec![
+                    Arc::downgrade(&p).into(),
+                    s.func_ref,
+                    LpcRef::Int(s.delay.num_milliseconds().into()),
+                    LpcRef::Int(s.repeat.map(|d| d.num_milliseconds()).unwrap_or(0).into()),
+                ]);
+            }
+        }
+        self.global_state.with_call_outs(|co| {
+            for (_idx, call_out) in co.queue().iter() {
+                if self.txn().is_cancelled_call_out(call_out.id) {
+                    continue;
+                }
+                if let Some(p) = call_out.process().upgrade()
+                    && Arc::ptr_eq(&p, owner)
+                {
+                    out.push(vec![
+                        Arc::downgrade(&p).into(),
+                        call_out.func_ref.clone(),
+                        LpcRef::Int(
+                            call_out
+                                .time_remaining()
+                                .map(|d| d.num_milliseconds())
+                                .unwrap_or(0)
+                                .into(),
+                        ),
+                        LpcRef::Int(
+                            call_out
+                                .repeat_duration()
+                                .map(|d| d.num_milliseconds())
+                                .unwrap_or(0)
+                                .into(),
+                        ),
+                    ]);
+                }
+            }
+            out
+        })
+    }
+
+    /// Cancel a call out transactionally. One tier: pending entries drop
+    /// from the attempt; committed entries get a deferred removal plus the
+    /// shadow. Returns the milliseconds left, or -1 if unknown.
+    pub fn cancel_call_out(&self, id: u64) -> i64 {
+        if let Some(ms) = self.txn().cancel_pending_call_out(id) {
+            return ms;
+        }
+        let remaining = self.global_state.with_call_outs(|co| {
+            co.get_by_id(id).map(|call_out| {
+                call_out
+                    .time_remaining()
+                    .map(|d| d.num_milliseconds())
+                    .unwrap_or(0)
+            })
+        });
+        match remaining {
+            Some(ms) => {
+                self.txn().cancel_committed_call_out(id);
+                ms
+            }
+            None => -1,
+        }
+    }
+
     /// Directly insert the passed [`Process`] into the object space, with
     /// in-game local filename.
     #[inline]
@@ -350,22 +494,6 @@ impl TaskContext {
     #[inline]
     pub fn tx(&self) -> Sender<VmOp> {
         self.global_state.tx.clone()
-    }
-
-    /// Access call-outs
-    pub fn with_call_outs<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&CallOuts) -> R,
-    {
-        self.global_state.with_call_outs(f)
-    }
-
-    /// Access call-outs mutably
-    pub fn with_call_outs_mut<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&mut CallOuts) -> R,
-    {
-        self.global_state.with_call_outs_mut(f)
     }
 }
 

@@ -12,7 +12,6 @@ use crate::{
     compiler::Compiler,
     interpreter::{
         call_frame::CallFrame,
-        call_outs::CallOuts,
         call_stack::CallStack,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
@@ -72,30 +71,27 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             /// Get pointer to the current [`Config`] that's in-use
             pub fn config(&self) -> &Arc<Config>;
 
-            // /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s upvalues (i.e. all of them)
-            // #[call(upvalues)]
-            // pub fn vm_upvalues(&self) -> &Arc<RwLock<GcRefBank>>;
-            //
-            // /// Get access to the [`Vm`](crate::interpreter::vm::Vm)'s call outs
-            // pub fn call_outs(&self) -> &RwLock<CallOuts>;
-
             /// Get access to the `tx` channel, to talk to the [`Vm`](crate::interpreter::vm::Vm)
             pub fn tx(&self) -> Sender<VmOp>;
+
+            /// Schedule a call out transactionally.
+            pub fn schedule_call_out(
+                &self,
+                owner: &Arc<Process>,
+                func_ref: LpcRef,
+                delay: chrono::Duration,
+                repeat: Option<chrono::Duration>,
+            ) -> u64;
+
+            /// Query a call out transactionally.
+            pub fn query_call_out(&self, id: u64) -> Option<Vec<LpcRef>>;
+
+            /// Query all call outs of `owner` transactionally.
+            pub fn query_call_outs(&self, owner: &Arc<Process>) -> Vec<Vec<LpcRef>>;
+
+            /// Cancel a call out transactionally.
+            pub fn cancel_call_out(&self, id: u64) -> i64;
         }
-    }
-
-    pub fn with_call_outs<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&CallOuts) -> R,
-    {
-        self.task_context.with_call_outs(f)
-    }
-
-    pub fn with_call_outs_mut<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&mut CallOuts) -> R,
-    {
-        self.task_context.with_call_outs_mut(f)
     }
 
     /// Find or create (but don't initialize) an object by path.
