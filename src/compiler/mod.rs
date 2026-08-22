@@ -162,7 +162,8 @@ impl Compiler {
     ) -> Result<Program> {
         self.config.validate_in_game_path(path, span)?;
 
-        self.compile_file(path).await
+        // owned here, not a reference: a &LpcPath would take the blanket `T: Into<PathBuf>` From impl and drop the Server variant
+        self.compile_file(path.clone()).await
     }
 
     /// Take a str and preprocess it into a vector of Span tuples, and also
