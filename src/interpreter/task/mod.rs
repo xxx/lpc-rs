@@ -41,7 +41,6 @@ use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,
     gc::{gc_bank::GcVarIdBank, mark::Mark},
-    gil::run_with_gil,
     lpc_int::LpcInt,
     lpc_ref::LpcRef,
     lpc_string::LpcString,
@@ -318,11 +317,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         })
     }
 
-    /// Run one attempt: open a transaction against the current world,
-    /// and run to completion
-    /// inside one GIL scope (and one timeout, if given). Returns the
-    /// attempt's [`LiveSnapshot`] (release it only after the commit reply
-    /// resolves), or `None` for a joiner.
+    /// Run one attempt: open a transaction against the current world, and
+    /// run to completion (one timeout, if given). Returns the attempt's
+    /// [`LiveSnapshot`] (release it only after the commit reply resolves),
+    /// or `None` for a joiner.
     async fn open_attempt(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
@@ -356,12 +354,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
         self.context.txn = self.txn.clone();
 
-        // One GIL scope (and one timeout, if any) per attempt.
-        let state = self.context.global_state.clone();
+        // One timeout per attempt; the committer's conflict rule is the sole
+        // serialization control.
         let outcome = match timeout_ms {
-            Some(ms) => {
-                run_with_gil(&state, timeout(Duration::from_millis(ms), self.resume())).await
-            }
+            Some(ms) => timeout(Duration::from_millis(ms), self.resume()).await,
             None => Ok(self.resume().await),
         };
         let run_result = match outcome {
@@ -384,8 +380,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// One task's attempts through the shared runner
-    /// ([`stm::run_attempts`]): GIL scope, timeout, and effect flush stay
-    /// here; the committer protocol lives in the runner.
+    /// ([`stm::run_attempts`]): timeout and effect flush stay here; the
+    /// committer protocol lives in the runner.
     async fn retry_loop(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,

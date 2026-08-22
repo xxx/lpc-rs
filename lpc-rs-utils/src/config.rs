@@ -33,9 +33,6 @@ pub struct Config {
     #[builder(setter(into, strip_option), default = "None")]
     pub debug_log: Option<DebugLog>,
 
-    #[builder(default = "false")]
-    pub gil: bool,
-
     #[builder(setter(custom), default = "ustr(\"\")")]
     pub lib_dir: Ustr,
 
@@ -122,7 +119,6 @@ impl ConfigBuilder {
                 .map(|x| canonicalized_path(x).ok())
                 .or(self.server_log_file),
             debug_log: Some(Some(debug_log)),
-            gil: self.gil,
             lib_dir,
             master_object: env
                 .get("LPC_MASTER_OBJECT")

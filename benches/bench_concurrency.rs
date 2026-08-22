@@ -103,11 +103,10 @@ fn multi_thread_rt(threads: usize) -> Runtime {
 }
 
 /// Boot a VM and initialize one object
-async fn setup(gil: bool, path: &str, code: &str) -> (Arc<Vm>, Arc<Process>, TaskTemplate, u64) {
+async fn setup(path: &str, code: &str) -> (Arc<Vm>, Arc<Process>, TaskTemplate, u64) {
     let config = ConfigBuilder::default()
         .lib_dir("./tests/fixtures/code")
         .max_execution_time(300_000_u64)
-        .gil(gil)
         .build()
         .unwrap();
 
@@ -121,8 +120,8 @@ async fn setup(gil: bool, path: &str, code: &str) -> (Arc<Vm>, Arc<Process>, Tas
 }
 
 /// Include a second object for `call_other`
-async fn setup_pair(gil: bool) -> (Arc<Vm>, Arc<Process>, TaskTemplate, u64) {
-    let (vm, _target, _t, _to) = setup(gil, "/bench_target.c", TARGET).await;
+async fn setup_pair() -> (Arc<Vm>, Arc<Process>, TaskTemplate, u64) {
+    let (vm, _target, _t, _to) = setup("/bench_target.c", TARGET).await;
 
     let task = vm
         .as_ref()
@@ -176,20 +175,19 @@ fn contention(c: &mut Criterion) {
     let mut group = c.benchmark_group("contention");
     group.sample_size(10);
 
-    // (name, func, total, gil); `setup_for` dispatches by name.
-    let workloads: [(&str, &str, usize, bool); 5] = [
-        ("counter", "increment", 8192, false),
-        ("counter_gil", "increment", 8192, true),
-        ("call_other", "bump", 2048, false),
-        ("arr_touch", "touch", 4096, false),
-        ("arr_churn", "churn", 1024, false),
+    // (name, func, total); `setup_for` dispatches by name.
+    let workloads: [(&str, &str, usize); 4] = [
+        ("counter", "increment", 8192),
+        ("call_other", "bump", 2048),
+        ("arr_touch", "touch", 4096),
+        ("arr_churn", "churn", 1024),
     ];
 
     // Criterion list mode runs the group body to register IDs but skips the bench closures.
     // Keep setup and stats out of that path: their stdout breaks nextest's test listing.
     let listing = std::env::args().any(|arg| arg == "--list");
 
-    for (name, func, total, gil) in workloads {
+    for (name, func, total) in workloads {
         for &workers in &WORKERS {
             if listing {
                 // Register the same ID the real path registers, with a no-op body.
@@ -200,7 +198,7 @@ fn contention(c: &mut Criterion) {
             let rt = multi_thread_rt(workers);
             // Fresh Vm per block, so a before/after stats diff is unambiguous; per-sample printing inside
             // the closure would interleave criterion's stderr headers and misattribute the deltas.
-            let (vm, proc, template, timeout) = rt.block_on(setup_for(name, gil));
+            let (vm, proc, template, timeout) = rt.block_on(setup_for(name));
             let per_worker = total / workers;
             let before: CommitterStats = rt.block_on(vm.committer_stats()).unwrap();
 
@@ -228,12 +226,12 @@ fn contention(c: &mut Criterion) {
 }
 
 /// Dispatch to the right setup by workload name.
-async fn setup_for(name: &str, gil: bool) -> (Arc<Vm>, Arc<Process>, TaskTemplate, u64) {
+async fn setup_for(name: &str) -> (Arc<Vm>, Arc<Process>, TaskTemplate, u64) {
     match name {
-        "counter" | "counter_gil" => setup(gil, "/bench_counter.c", COUNTER).await,
-        "call_other" => setup_pair(gil).await,
-        "arr_touch" => setup(gil, "/bench_arr_touch.c", ARR_TOUCH).await,
-        "arr_churn" => setup(gil, "/bench_arr_churn.c", ARR_CHURN).await,
+        "counter" => setup("/bench_counter.c", COUNTER).await,
+        "call_other" => setup_pair().await,
+        "arr_touch" => setup("/bench_arr_touch.c", ARR_TOUCH).await,
+        "arr_churn" => setup("/bench_arr_churn.c", ARR_CHURN).await,
         _ => panic!("unknown workload {name}"),
     }
 }
@@ -258,7 +256,7 @@ fn m0_scaling(c: &mut Criterion) {
 
         for workers in [1usize, 2, 4, 8, 16] {
             let rt = multi_thread_rt(workers.max(1));
-            let (_vm, proc, template, timeout) = rt.block_on(setup(false, path, code));
+            let (_vm, proc, template, timeout) = rt.block_on(setup(path, code));
             let per_worker = total / workers;
 
             group.bench_with_input(
@@ -287,7 +285,7 @@ fn m1_task_cost(c: &mut Criterion) {
         ("arr_touch", "/bench_arr_touch.c", ARR_TOUCH, "touch"),
         ("arr_churn", "/bench_arr_churn.c", ARR_CHURN, "churn"),
     ] {
-        let (_vm, proc, template, timeout) = rt.block_on(setup(false, path, code));
+        let (_vm, proc, template, timeout) = rt.block_on(setup(path, code));
 
         group.bench_function(label, |b| {
             b.to_async(&rt).iter(|| {
@@ -296,7 +294,7 @@ fn m1_task_cost(c: &mut Criterion) {
         });
     }
 
-    let (_vm, proc, template, timeout) = rt.block_on(setup_pair(false));
+    let (_vm, proc, template, timeout) = rt.block_on(setup_pair());
     group.bench_function("call_other", |b| {
         b.to_async(&rt).iter(|| {
             apply_function_by_name("bump", &[], proc.clone(), template.clone(), Some(timeout))
@@ -306,35 +304,5 @@ fn m1_task_cost(c: &mut Criterion) {
     group.finish();
 }
 
-/// M3: GIL serialization cost. GIL serializes whole tasks; single committer serializes just the commit.
-fn m3_gil(c: &mut Criterion) {
-    const TOTAL: usize = 8192;
-    const WORKERS: usize = 8;
-
-    let mut group = c.benchmark_group("m3_gil");
-    group.throughput(Throughput::Elements(TOTAL as u64));
-    group.sample_size(20);
-
-    for (label, gil) in [("off", false), ("on", true)] {
-        let rt = multi_thread_rt(WORKERS);
-        let (_vm, proc, template, timeout) = rt.block_on(setup(gil, "/bench_counter.c", COUNTER));
-
-        group.bench_function(label, |b| {
-            b.to_async(&rt).iter(|| {
-                run_workers(
-                    &template,
-                    &proc,
-                    "increment",
-                    WORKERS,
-                    TOTAL / WORKERS,
-                    timeout,
-                )
-            });
-        });
-    }
-
-    group.finish();
-}
-
-criterion_group!(benches, m0_scaling, m1_task_cost, contention, m3_gil);
+criterion_group!(benches, m0_scaling, m1_task_cost, contention);
 criterion_main!(benches);
