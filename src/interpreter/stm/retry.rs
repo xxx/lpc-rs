@@ -298,8 +298,6 @@ impl GlobalState {
 }
 
 #[cfg(test)]
-use crate::interpreter::lpc_int::LpcInt;
-#[cfg(test)]
 use crate::interpreter::stm::Transaction;
 
 #[cfg(test)]
@@ -331,7 +329,7 @@ impl AttemptBody for IncBody {
         let LpcRef::Int(n) = t.read(self.counter).expect("counter cell missing") else {
             panic!("counter cell is not an int");
         };
-        t.write(self.counter, LpcRef::from(n + LpcInt(1)));
+        t.write(self.counter, LpcRef::from(n.wrapping_add(1)));
         self.attempt = Some(t);
         Ok(Some(live))
     }

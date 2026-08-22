@@ -565,7 +565,7 @@ mod tests {
         let LpcRef::Int(n) = t.read(counter).expect("counter cell missing") else {
             panic!("counter cell is not an int");
         };
-        t.write(counter, LpcRef::from(n + LpcInt(1)));
+        t.write(counter, LpcRef::from(n.wrapping_add(1)));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

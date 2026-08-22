@@ -3,7 +3,6 @@
 //! anomaly is attributable to the mechanism rather than the bench.
 
 use crate::interpreter::{
-    lpc_int::LpcInt,
     lpc_ref::LpcRef,
     stm::{
         CommitProtocol, Committer, CommitterStats, Snapshot, Transaction, VarId, WorldValue,
@@ -18,7 +17,7 @@ async fn increment_once(tx: &flume::Sender<CommitProtocol>, counter: VarId) -> R
     let LpcRef::Int(n) = txn.read(counter).expect("counter cell missing") else {
         panic!("counter cell is not an int");
     };
-    txn.write(counter, LpcRef::from(n + LpcInt(1)));
+    txn.write(counter, LpcRef::from(n.wrapping_add(1)));
     let (_snap, changeset) = txn.clone().into_parts();
     let res = commit_changeset(tx, changeset)
         .await

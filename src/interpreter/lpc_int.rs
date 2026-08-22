@@ -1,13 +1,8 @@
-use std::{
-    fmt::{Display, Formatter},
-    ops::Add,
-};
+use std::fmt::{Display, Formatter};
 
 use delegate::delegate;
-use lpc_rs_core::{BaseFloat, LpcFloatInner, LpcIntInner};
+use lpc_rs_core::LpcIntInner;
 use serde::{Deserialize, Serialize};
-
-use crate::interpreter::lpc_float::LpcFloat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct LpcInt(pub LpcIntInner);
@@ -57,21 +52,5 @@ impl From<LpcInt> for bool {
 impl From<bool> for LpcInt {
     fn from(b: bool) -> Self {
         Self::from(if b { 1 } else { 0 })
-    }
-}
-
-impl Add<LpcInt> for LpcInt {
-    type Output = LpcInt;
-
-    fn add(self, rhs: LpcInt) -> Self::Output {
-        Self::Output::from(self.0.wrapping_add(rhs.0))
-    }
-}
-
-impl Add<LpcFloat> for LpcInt {
-    type Output = LpcFloat;
-
-    fn add(self, rhs: LpcFloat) -> Self::Output {
-        Self::Output::from(LpcFloatInner::from(self.0 as BaseFloat) + rhs.0)
     }
 }

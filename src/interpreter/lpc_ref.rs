@@ -76,6 +76,28 @@ pub enum LpcRef {
     Function(Arc<FunctionPtr>),
 }
 
+/// A numeric operand pair after promotion: both ints, or both floats.
+enum Numeric {
+    Ints(LpcIntInner, LpcIntInner),
+    Floats(LpcFloatInner, LpcFloatInner),
+}
+
+/// Zero to the tolerance the float divisor checks use.
+fn is_zero(f: LpcFloatInner) -> bool {
+    f.into_inner().abs() < BaseFloat::EPSILON
+}
+
+/// The shift count `y` names, modulo the word width; a negative count is
+/// taken from the width.
+fn shift_amount(y: LpcIntInner) -> u32 {
+    let modulo = y % (LpcIntInner::BITS as LpcIntInner);
+    if modulo < 0 {
+        LpcIntInner::BITS - (modulo.unsigned_abs() as u32)
+    } else {
+        modulo as u32
+    }
+}
+
 impl LpcRef {
     /// Get the type name of the underlying data of this var.
     pub fn type_name(&self) -> &str {
@@ -178,20 +200,6 @@ impl LpcRef {
         }
     }
 
-    pub fn with_strings<F, R>(&self, other: &Self, f: F) -> Result<R>
-    where
-        F: FnOnce(&LpcString, &LpcString) -> R,
-    {
-        match (self, other) {
-            (LpcRef::String(a), LpcRef::String(b)) => Ok(f(a, b)),
-            _ => Err(lpc_error!(
-                "Runtime Error: invalid access. Expected string / string, actually {} / {}",
-                self.type_name(),
-                other.type_name()
-            )),
-        }
-    }
-
     /// Resolve this array's contents from the transactional world and run `f`
     /// over them. The handle holds only the cell's var; the contents live in
     /// the world, so the transaction is required.
@@ -271,77 +279,82 @@ impl LpcRef {
         )
     }
 
-    pub(crate) fn add(&self, rhs: &Self, txn: &TxnHandle) -> Result<Self> {
-        match self {
-            LpcRef::Float(f) => match rhs {
-                LpcRef::Float(f2) => Ok(Self::from(*f + *f2)),
-                LpcRef::Int(i) => Ok(Self::from(*f + *i)),
-                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
-            },
-            LpcRef::Int(i) => match rhs {
-                LpcRef::Float(f) => Ok(Self::from(*i + *f)),
-                LpcRef::Int(i2) => Ok(Self::from(*i + *i2)),
-                LpcRef::String(_) => {
-                    let result = rhs
-                        .with_string(|s| concatenate_strings(i.to_string(), s.to_str()))
-                        .flatten()?;
-                    Ok(LpcString::from(result).into())
-                }
-                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
-            },
-            LpcRef::String(_) => match rhs {
-                LpcRef::String(_) => {
-                    let result = self
-                        .with_strings(rhs, |a, b| concatenate_strings(a.to_string(), b.to_str()))
-                        .flatten()?;
-                    Ok(LpcString::from(result).into())
-                }
-                LpcRef::Int(i) => {
-                    let result = self
-                        .with_string(|s| concatenate_strings(s.to_string(), i.to_string()))
-                        .flatten()?;
-                    Ok(LpcString::from(result).into())
-                }
-                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
-            },
-            LpcRef::Array(cell) => match rhs {
-                LpcRef::Array(rhs_cell) => txn.with(|t| {
-                    let (a, b) = (t.read_array(cell.id), t.read_array(rhs_cell.id));
-                    let (a, b) = match (a, b) {
-                        (Some(a), Some(b)) => (a, b),
-                        _ => return Err(self.expected_array_error()),
-                    };
-                    Ok(LpcRef::Array(t.mint_array((*a).clone() + (*b).clone())))
-                }),
-                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
-            },
-            LpcRef::Mapping(cell) => match rhs {
-                LpcRef::Mapping(rhs_cell) => txn.with(|t| {
-                    let (a, b) = (t.read_mapping(cell.id), t.read_mapping(rhs_cell.id));
-                    let (a, b) = match (a, b) {
-                        (Some(a), Some(b)) => (a, b),
-                        _ => return Err(self.expected_mapping_error()),
-                    };
-                    let mut new_map = (*a).clone();
-                    new_map.extend((*b).clone());
-                    Ok(LpcRef::Mapping(t.mint_mapping(new_map)))
-                }),
-                _ => Err(self.to_error(BinaryOperation::Add, rhs)),
-            },
-            LpcRef::Object(_) | LpcRef::Function(_) => {
-                Err(self.to_error(BinaryOperation::Add, rhs))
+    /// The numeric pair `self`/`rhs` form, the int promoted when the kinds
+    /// differ; `None` when either side is not a number.
+    fn promote(&self, rhs: &Self) -> Option<Numeric> {
+        match (self, rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => Some(Numeric::Ints(x.0, y.0)),
+            (LpcRef::Float(x), LpcRef::Float(y)) => Some(Numeric::Floats(x.0, y.0)),
+            (LpcRef::Float(x), LpcRef::Int(y)) => {
+                Some(Numeric::Floats(x.0, LpcFloatInner::from(y.0 as BaseFloat)))
             }
+            (LpcRef::Int(x), LpcRef::Float(y)) => {
+                Some(Numeric::Floats(LpcFloatInner::from(x.0 as BaseFloat), y.0))
+            }
+            _ => None,
+        }
+    }
+
+    /// Apply an int-only operator, or fail with `op`'s mismatch error.
+    fn int_binop<F>(&self, rhs: &Self, op: BinaryOperation, f: F) -> Result<Self>
+    where
+        F: FnOnce(LpcIntInner, LpcIntInner) -> LpcIntInner,
+    {
+        match (self, rhs) {
+            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(LpcInt(f(x.0, y.0)))),
+            _ => Err(self.to_error(op, rhs)),
+        }
+    }
+
+    pub(crate) fn add(&self, rhs: &Self, txn: &TxnHandle) -> Result<Self> {
+        if let Some(numeric) = self.promote(rhs) {
+            return Ok(match numeric {
+                Numeric::Ints(x, y) => Self::from(x.wrapping_add(y)),
+                Numeric::Floats(x, y) => Self::Float(LpcFloat(x + y)),
+            });
+        }
+
+        match (self, rhs) {
+            (LpcRef::Int(i), LpcRef::String(s)) => {
+                Ok(LpcString::from(concatenate_strings(i.to_string(), s.to_str())?).into())
+            }
+            (LpcRef::String(a), LpcRef::String(b)) => {
+                Ok(LpcString::from(concatenate_strings(a.to_string(), b.to_str())?).into())
+            }
+            (LpcRef::String(s), LpcRef::Int(i)) => {
+                Ok(LpcString::from(concatenate_strings(s.to_string(), i.to_string())?).into())
+            }
+            (LpcRef::Array(cell), LpcRef::Array(rhs_cell)) => txn.with(|t| {
+                let (a, b) = (t.read_array(cell.id), t.read_array(rhs_cell.id));
+                let (a, b) = match (a, b) {
+                    (Some(a), Some(b)) => (a, b),
+                    _ => return Err(self.expected_array_error()),
+                };
+                Ok(LpcRef::Array(t.mint_array((*a).clone() + (*b).clone())))
+            }),
+            (LpcRef::Mapping(cell), LpcRef::Mapping(rhs_cell)) => txn.with(|t| {
+                let (a, b) = (t.read_mapping(cell.id), t.read_mapping(rhs_cell.id));
+                let (a, b) = match (a, b) {
+                    (Some(a), Some(b)) => (a, b),
+                    _ => return Err(self.expected_mapping_error()),
+                };
+                let mut new_map = (*a).clone();
+                new_map.extend((*b).clone());
+                Ok(LpcRef::Mapping(t.mint_mapping(new_map)))
+            }),
+            _ => Err(self.to_error(BinaryOperation::Add, rhs)),
         }
     }
 
     pub(crate) fn sub(&self, rhs: &Self, txn: &TxnHandle) -> Result<Self> {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(x.wrapping_sub(y.0).into())),
-            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(Self::Float((x.0 - y.0).into())),
-            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(Self::Float((x.0 - y.0 as BaseFloat).into())),
-            (LpcRef::Int(x), LpcRef::Float(y)) => Ok(Self::Float(LpcFloat::from(
-                LpcFloatInner::from(x.0 as BaseFloat) - y.0,
-            ))),
+        if let Some(numeric) = self.promote(rhs) {
+            return Ok(match numeric {
+                Numeric::Ints(x, y) => Self::from(x.wrapping_sub(y)),
+                Numeric::Floats(x, y) => Self::Float(LpcFloat(x - y)),
+            });
+        }
+
+        match (self, rhs) {
             (LpcRef::Array(cell), LpcRef::Array(rhs_cell)) => txn.with(|t| {
                 let (a, b) = (t.read_array(cell.id), t.read_array(rhs_cell.id));
                 let (a, b) = match (a, b) {
@@ -357,154 +370,75 @@ impl LpcRef {
     }
 
     pub fn mul(&self, rhs: &Self) -> Result<Self> {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(x.0.wrapping_mul(y.0).into())),
-            (LpcRef::Float(x), LpcRef::Float(y)) => Ok(Self::Float((x.0 * y.0).into())),
-            (LpcRef::Float(x), LpcRef::Int(y)) => Ok(Self::Float((x.0 * y.0 as BaseFloat).into())),
-            (LpcRef::Int(x), LpcRef::Float(y)) => Ok(Self::Float(
-                (LpcFloatInner::from(x.0 as BaseFloat) * y.0).into(),
-            )),
-            (LpcRef::String(_), LpcRef::Int(y)) => {
-                let string = self
-                    .with_string(|a| string::repeat_string(a.to_str(), y.0))
-                    .flatten()?;
-                Ok(LpcString::from(string).into())
+        if let Some(numeric) = self.promote(rhs) {
+            return Ok(match numeric {
+                Numeric::Ints(x, y) => Self::from(x.wrapping_mul(y)),
+                Numeric::Floats(x, y) => Self::Float(LpcFloat(x * y)),
+            });
+        }
+
+        match (self, rhs) {
+            (LpcRef::String(s), LpcRef::Int(y)) => {
+                Ok(LpcString::from(string::repeat_string(s.to_str(), y.0)?).into())
             }
-            (LpcRef::Int(x), LpcRef::String(_)) => {
-                let string = rhs
-                    .with_string(|a| string::repeat_string(a.to_str(), x.0))
-                    .flatten()?;
-                Ok(LpcString::from(string).into())
+            (LpcRef::Int(x), LpcRef::String(s)) => {
+                Ok(LpcString::from(string::repeat_string(s.to_str(), x.0)?).into())
             }
             _ => Err(self.to_error(BinaryOperation::Mul, rhs)),
         }
     }
 
     pub fn div(&self, rhs: &Self) -> Result<Self> {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => {
-                if y.0 == 0 {
-                    Err(lpc_error!("Runtime Error: Division by zero"))
-                } else {
-                    Ok(Self::Int(LpcInt(x.0.wrapping_div(y.0))))
-                }
-            }
-            (LpcRef::Float(x), LpcRef::Float(y)) => {
-                if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
-                    Err(lpc_error!("Runtime Error: Division by zero"))
-                } else {
-                    Ok(Self::Float(LpcFloat(x.0 / y.0)))
-                }
-            }
-            (LpcRef::Float(x), LpcRef::Int(y)) => {
-                if y.0 == 0 {
-                    Err(lpc_error!("Runtime Error: Division by zero"))
-                } else {
-                    Ok(Self::Float(LpcFloat(x.0 / y.0 as BaseFloat)))
-                }
-            }
-            (LpcRef::Int(x), LpcRef::Float(y)) => {
-                if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
-                    Err(lpc_error!("Runtime Error: Division by zero"))
-                } else {
-                    Ok(Self::Float(LpcFloat(
-                        LpcFloatInner::from(x.0 as BaseFloat) / y.0,
-                    )))
-                }
-            }
-            _ => Err(self.to_error(BinaryOperation::Div, rhs)),
+        let zero = || lpc_error!("Runtime Error: Division by zero");
+
+        match self.promote(rhs) {
+            Some(Numeric::Ints(_, 0)) => Err(zero()),
+            Some(Numeric::Ints(x, y)) => Ok(Self::Int(LpcInt(x.wrapping_div(y)))),
+            Some(Numeric::Floats(_, y)) if is_zero(y) => Err(zero()),
+            Some(Numeric::Floats(x, y)) => Ok(Self::Float(LpcFloat(x / y))),
+            None => Err(self.to_error(BinaryOperation::Div, rhs)),
         }
     }
 
     pub fn rem(&self, rhs: &Self) -> Result<Self> {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => {
-                if y.0 == 0 {
-                    Err(lpc_error!("Runtime Error: Remainder division by zero"))
-                } else {
-                    Ok(Self::Int(LpcInt(x.0.wrapping_rem(y.0))))
-                }
-            }
-            (LpcRef::Float(x), LpcRef::Float(y)) => {
-                if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
-                    Err(lpc_error!("Runtime Error: Division by zero"))
-                } else {
-                    Ok(Self::Float(LpcFloat(x.0 % y.0)))
-                }
-            }
-            (LpcRef::Float(x), LpcRef::Int(y)) => {
-                if y.0 == 0 {
-                    Err(lpc_error!("Runtime Error: Division by zero"))
-                } else {
-                    Ok(Self::Float(LpcFloat(x.0 % y.0 as BaseFloat)))
-                }
-            }
-            (LpcRef::Int(x), LpcRef::Float(y)) => {
-                if (y.0 - LpcFloatInner::from(0.0)).into_inner().abs() < BaseFloat::EPSILON {
-                    Err(lpc_error!("Runtime Error: Remainder division by zero"))
-                } else {
-                    Ok(Self::Float(LpcFloat(
-                        LpcFloatInner::from(x.0 as BaseFloat) % y.0,
-                    )))
-                }
-            }
-            _ => Err(self.to_error(BinaryOperation::Mod, rhs)),
+        // Preserved: the message follows the left operand's kind, whatever
+        // the divisor.
+        let zero = || match self {
+            LpcRef::Int(_) => lpc_error!("Runtime Error: Remainder division by zero"),
+            _ => lpc_error!("Runtime Error: Division by zero"),
+        };
+
+        match self.promote(rhs) {
+            Some(Numeric::Ints(_, 0)) => Err(zero()),
+            Some(Numeric::Ints(x, y)) => Ok(Self::Int(LpcInt(x.wrapping_rem(y)))),
+            Some(Numeric::Floats(_, y)) if is_zero(y) => Err(zero()),
+            Some(Numeric::Floats(x, y)) => Ok(Self::Float(LpcFloat(x % y))),
+            None => Err(self.to_error(BinaryOperation::Mod, rhs)),
         }
     }
 
     pub fn bitand(&self, rhs: &Self) -> Result<Self> {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(LpcInt(x.0 & y.0))),
-            _ => Err(self.to_error(BinaryOperation::And, rhs)),
-        }
+        self.int_binop(rhs, BinaryOperation::And, |x, y| x & y)
     }
 
     pub fn bitor(&self, rhs: &Self) -> Result<Self> {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(LpcInt(x.0 | y.0))),
-            _ => Err(self.to_error(BinaryOperation::Or, rhs)),
-        }
+        self.int_binop(rhs, BinaryOperation::Or, |x, y| x | y)
     }
 
     pub fn bitxor(&self, rhs: &Self) -> Result<Self> {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => Ok(Self::Int(LpcInt(x.0 ^ y.0))),
-            _ => Err(self.to_error(BinaryOperation::Xor, rhs)),
-        }
+        self.int_binop(rhs, BinaryOperation::Xor, |x, y| x ^ y)
     }
 
     pub fn shl(&self, rhs: &Self) -> Result<Self> {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => {
-                let modulo: LpcIntInner = y.0 % (LpcIntInner::BITS as LpcIntInner);
-
-                let shift_by: u32 = if modulo < 0 {
-                    LpcIntInner::BITS - (modulo.unsigned_abs() as u32)
-                } else {
-                    modulo as u32
-                };
-
-                Ok(Self::Int(LpcInt(x.0.checked_shl(shift_by).unwrap_or(0))))
-            }
-            _ => Err(self.to_error(BinaryOperation::Shl, rhs)),
-        }
+        self.int_binop(rhs, BinaryOperation::Shl, |x, y| {
+            x.checked_shl(shift_amount(y)).unwrap_or(0)
+        })
     }
 
     pub fn shr(&self, rhs: &Self) -> Result<Self> {
-        match (&self, &rhs) {
-            (LpcRef::Int(x), LpcRef::Int(y)) => {
-                let modulo: LpcIntInner = y.0 % (LpcIntInner::BITS as LpcIntInner);
-
-                let shift_by: u32 = if modulo < 0 {
-                    LpcIntInner::BITS - (modulo.unsigned_abs() as u32)
-                } else {
-                    modulo as u32
-                };
-
-                Ok(Self::Int(LpcInt(x.0.checked_shr(shift_by).unwrap_or(0))))
-            }
-            _ => Err(self.to_error(BinaryOperation::Shr, rhs)),
-        }
+        self.int_binop(rhs, BinaryOperation::Shr, |x, y| {
+            x.checked_shr(shift_amount(y)).unwrap_or(0)
+        })
     }
 
     /// Logical not (the unary `!` operator): 1 for `0` and `0.0`, else 0.
@@ -624,7 +558,7 @@ impl Hash for LpcRef {
         match self {
             LpcRef::Float(x) => x.hash(state),
             LpcRef::Int(x) => x.hash(state),
-            LpcRef::String(_) => self.with_string(|s| s.hash(state)).expect("unreachable"),
+            LpcRef::String(s) => s.hash(state),
             LpcRef::Array(x) => x.id.hash(state),
             LpcRef::Mapping(x) => x.id.hash(state),
             LpcRef::Object(x) => ptr::hash(x, state),
@@ -639,9 +573,7 @@ impl PartialEq for LpcRef {
         match (self, other) {
             (LpcRef::Float(x), LpcRef::Float(y)) => x == y,
             (LpcRef::Int(x), LpcRef::Int(y)) => x == y,
-            (LpcRef::String(_), LpcRef::String(_)) => self
-                .with_strings(other, |a, b| a == b)
-                .expect("Strings should be valid"),
+            (LpcRef::String(a), LpcRef::String(b)) => a == b,
             (LpcRef::Object(x), LpcRef::Object(y)) => ptr::eq(x, y),
             (LpcRef::Array(x), LpcRef::Array(y)) => x.id == y.id,
             (LpcRef::Mapping(x), LpcRef::Mapping(y)) => x.id == y.id,
@@ -683,9 +615,7 @@ impl PartialOrd for LpcRef {
         match (self, other) {
             (LpcRef::Float(x), LpcRef::Float(y)) => Some(x.cmp(y)),
             (LpcRef::Int(x), LpcRef::Int(y)) => Some(x.cmp(y)),
-            (LpcRef::String(_), LpcRef::String(_)) => {
-                self.with_strings(other, |a, b| a.cmp(b)).ok()
-            }
+            (LpcRef::String(a), LpcRef::String(b)) => Some(a.cmp(b)),
             _ => None,
         }
     }
@@ -696,9 +626,7 @@ impl Display for LpcRef {
         match self {
             LpcRef::Float(x) => write!(f, "{x}"),
             LpcRef::Int(x) => write!(f, "{x}"),
-            LpcRef::String(_) => self
-                .with_string(|s| write!(f, "{}", s))
-                .expect("Strings should be valid"),
+            LpcRef::String(s) => write!(f, "{s}"),
             LpcRef::Array(x) => write!(f, "<array#{}>", x.id.as_u64()),
             LpcRef::Mapping(x) => write!(f, "<mapping#{}>", x.id.as_u64()),
             LpcRef::Object(x) => match x.upgrade() {
@@ -717,9 +645,7 @@ impl Debug for LpcRef {
         match self {
             LpcRef::Float(x) => write!(f, "{x:?}"),
             LpcRef::Int(x) => write!(f, "{x:?}"),
-            LpcRef::String(_) => self
-                .with_string(|x| write!(f, "{x:?}"))
-                .expect("Strings should be valid"),
+            LpcRef::String(s) => write!(f, "{s:?}"),
             LpcRef::Array(x) => write!(f, "Array({})", x.id.as_u64()),
             LpcRef::Mapping(x) => write!(f, "Mapping({})", x.id.as_u64()),
             LpcRef::Object(x) => match x.upgrade() {
@@ -1261,6 +1187,34 @@ mod tests {
         }
     }
 
+    mod test_zero_divisor_messages {
+        use super::*;
+
+        #[test]
+        fn each_pairing_keeps_its_message() {
+            let int = LpcRef::from(1);
+            let float = LpcRef::from(1.0);
+            let zero = LpcRef::from(0);
+            let fzero = LpcRef::from(0.0);
+            let division = "Runtime Error: Division by zero";
+            let remainder = "Runtime Error: Remainder division by zero";
+            let cases = [
+                ("int / int", int.div(&zero), division),
+                ("float / float", float.div(&fzero), division),
+                ("float / int", float.div(&zero), division),
+                ("int / float", int.div(&fzero), division),
+                ("int % int", int.rem(&zero), remainder),
+                ("float % float", float.rem(&fzero), division),
+                ("float % int", float.rem(&zero), division),
+                ("int % float", int.rem(&fzero), remainder),
+            ];
+
+            for (label, result, message) in cases {
+                assert_eq!(result.unwrap_err().to_string(), message, "{label}");
+            }
+        }
+    }
+
     mod test_and {
         use super::*;
 
@@ -1448,26 +1402,6 @@ mod tests {
             ptr.mark(&mut marked, &mut processed).unwrap();
 
             assert!(processed.contains(*ptr_id.as_ref() as usize));
-        }
-
-        #[test]
-        fn deadlock_regression_check() {
-            let string = LpcRef::from("test");
-            let string2 = string.clone();
-
-            string
-                .with_strings(&string2, |a, b| {
-                    assert_eq!(a, b);
-                })
-                .expect("unreachable");
-
-            let LpcRef::String(a) = string else {
-                panic!("Expected string")
-            };
-            let LpcRef::String(b) = string2 else {
-                panic!("Expected string")
-            };
-            assert!(Arc::ptr_eq(&a, &b));
         }
     }
 }
