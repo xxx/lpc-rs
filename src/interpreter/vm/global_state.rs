@@ -122,8 +122,12 @@ impl GlobalState {
     /// half's `drop_var` sends land ahead on the committer's channel. Returns
     /// the number of payload vars reclaimed.
     pub async fn sweep_world(&self) -> Result<usize> {
-        let mut roots: Vec<WorldRoot> =
-            self.object_space.all_cell_ids().into_iter().map(WorldRoot::Var).collect();
+        let mut roots: Vec<WorldRoot> = self
+            .object_space
+            .all_cell_ids()
+            .into_iter()
+            .map(WorldRoot::Var)
+            .collect();
         // Bootstrap objects have no committed cell, so their global slots are
         // rooted directly: `all_cell_ids` alone would wrongly reclaim them.
         self.object_space
@@ -181,11 +185,7 @@ impl GlobalState {
     /// The upvalue slab's surviving cell ids: the world sweep's root set (a
     /// swept cell orphans its payload, making it reclaimable).
     pub(crate) fn slab_cell_ids(&self) -> Vec<crate::interpreter::stm::VarId> {
-        self.upvalues
-            .read()
-            .iter()
-            .map(|(_, id)| *id)
-            .collect()
+        self.upvalues.read().iter().map(|(_, id)| *id).collect()
     }
 
     pub(crate) fn clone_upvalues(&self) -> Arc<RwLock<GcVarIdBank>> {

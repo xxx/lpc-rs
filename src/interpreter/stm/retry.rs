@@ -14,9 +14,9 @@ use crate::interpreter::{
     lpc_ref::LpcRef,
     process::Process,
     stm::{
-        Transaction, VarId, WorldValue, WorldRoot,
+        Transaction, VarId, WorldRoot, WorldValue,
         changeset::Changeset,
-        committer::{CommitProtocol, LiveSnapshot},
+        committer::{CommitProtocol, CommitterStats, LiveSnapshot},
     },
     vm::global_state::GlobalState,
 };
@@ -121,7 +121,23 @@ pub(crate) async fn gc_world(
     roots: Vec<WorldRoot>,
 ) -> Result<usize> {
     let (reply_tx, reply_rx) = flume::bounded(1);
-    tx.send(CommitProtocol::GcWorld { roots, reply: reply_tx })
+    tx.send(CommitProtocol::GcWorld {
+        roots,
+        reply: reply_tx,
+    })
+    .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
+    tokio::task::spawn_blocking(move || reply_rx.recv())
+        .await
+        .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
+            lpc_error!("committer reply task panicked: {}", e)
+        })?
+        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
+}
+
+/// The committer's lifetime commit totals; for bench measurement and tooling, not the hot path.
+pub(crate) async fn committer_stats(tx: &flume::Sender<CommitProtocol>) -> Result<CommitterStats> {
+    let (reply_tx, reply_rx) = flume::bounded(1);
+    tx.send(CommitProtocol::Stats { reply: reply_tx })
         .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
     tokio::task::spawn_blocking(move || reply_rx.recv())
         .await

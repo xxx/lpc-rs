@@ -9,9 +9,7 @@ use tracing::error;
 
 use crate::interpreter::{
     lpc_ref::LpcRef,
-    stm::{
-        VarId, Version, WorldValue, changeset::Changeset, snapshot::Snapshot,
-    },
+    stm::{VarId, Version, WorldValue, changeset::Changeset, snapshot::Snapshot},
 };
 
 /// A unit of work in the world mark: either a var whose contents to read, or
@@ -30,14 +28,15 @@ pub(crate) enum WorldRoot {
     Ref(LpcRef),
 }
 
-#[derive(Debug, Default)]
-struct CommitterStats {
+/// Committer's lifetime commit totals, read back over the `Stats` protocol message.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct CommitterStats {
     /// Successful commits
-    commits: usize,
+    pub commits: usize,
     /// Commits that failed due to conflicts
-    conflicts: usize,
+    pub conflicts: usize,
     /// Non-conflict errors that occurred during all operations.
-    errors: usize,
+    pub errors: usize,
 }
 
 impl CommitterStats {
@@ -86,6 +85,10 @@ pub(crate) enum CommitProtocol {
     GcWorld {
         roots: Vec<WorldRoot>,
         reply: flume::Sender<usize>,
+    },
+    /// Lifetime commit totals; for bench measurement and tooling, not the hot path.
+    Stats {
+        reply: flume::Sender<CommitterStats>,
     },
     /// Shutdown.
     Close,
@@ -233,6 +236,12 @@ impl Committer {
                     self.stats.error()
                 });
             }
+            CommitProtocol::Stats { reply } => {
+                reply.send(self.stats).unwrap_or_else(|e| {
+                    error!("Failed to send stats: {e}");
+                    self.stats.error()
+                });
+            }
             CommitProtocol::Close => {
                 return false;
             }
@@ -283,10 +292,7 @@ impl Committer {
                             work.push(MarkWork::Ref(arg_ref.clone()));
                         }
                     }
-                    LpcRef::Float(_)
-                    | LpcRef::Int(_)
-                    | LpcRef::String(_)
-                    | LpcRef::Object(_) => {}
+                    LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::String(_) | LpcRef::Object(_) => {}
                 },
             }
         }
@@ -296,10 +302,7 @@ impl Committer {
             .state()
             .filter(|(var_id, world_value)| {
                 !marked.contains(*var_id)
-                    && matches!(
-                        world_value,
-                        WorldValue::Array(_) | WorldValue::Mapping(_)
-                    )
+                    && matches!(world_value, WorldValue::Array(_) | WorldValue::Mapping(_))
             })
             .map(|(var_id, _)| *var_id)
             .collect();

@@ -25,6 +25,7 @@ pub mod vm;
 /// Sync "read the latest committed world" API for non-transactional
 /// readers (test/debug/tooling).
 pub use stm::CommittedReader;
+pub use stm::CommitterStats;
 
 // Applies - functions in LPC objects that are called directly by the driver at various times.
 pub const CATCH_TELL: &str = "catch_tell";

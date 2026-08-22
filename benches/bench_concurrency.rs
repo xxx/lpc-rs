@@ -8,6 +8,7 @@ use std::sync::Arc;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use lpc_rs::{
     interpreter::{
+        CommitterStats,
         process::Process,
         task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
         vm::Vm,
@@ -102,7 +103,7 @@ fn multi_thread_rt(threads: usize) -> Runtime {
 }
 
 /// Boot a VM and initialize one object
-async fn setup(gil: bool, path: &str, code: &str) -> (Vm, Arc<Process>, TaskTemplate, u64) {
+async fn setup(gil: bool, path: &str, code: &str) -> (Arc<Vm>, Arc<Process>, TaskTemplate, u64) {
     let config = ConfigBuilder::default()
         .lib_dir("./tests/fixtures/code")
         .max_execution_time(300_000_u64)
@@ -116,19 +117,20 @@ async fn setup(gil: bool, path: &str, code: &str) -> (Vm, Arc<Process>, TaskTemp
     let template = vm.new_task_template();
     let timeout = vm.global_state.config.max_execution_time;
 
-    (vm, proc, template, timeout)
+    (Arc::new(vm), proc, template, timeout)
 }
 
 /// Include a second object for `call_other`
-async fn setup_pair(gil: bool) -> (Vm, Arc<Process>, TaskTemplate, u64) {
+async fn setup_pair(gil: bool) -> (Arc<Vm>, Arc<Process>, TaskTemplate, u64) {
     let (vm, _target, _t, _to) = setup(gil, "/bench_target.c", TARGET).await;
 
     let task = vm
+        .as_ref()
         .initialize_process_from_code("/bench_caller.c", CALLER)
         .await
         .unwrap();
     let proc = task.context.process.clone();
-    let template = vm.new_task_template();
+    let template = vm.as_ref().new_task_template();
     let timeout = vm.global_state.config.max_execution_time;
 
     (vm, proc, template, timeout)
@@ -165,6 +167,65 @@ async fn run_workers(
     }
 
     while set.join_next().await.is_some() {}
+}
+
+/// Contention: fixed total work per (workload, workers); prints the committer's conflict rate beside criterion's throughput.
+fn contention(c: &mut Criterion) {
+    const WORKERS: [usize; 3] = [1, 4, 8];
+
+    let mut group = c.benchmark_group("contention");
+    group.sample_size(10);
+
+    // (name, func, total, gil); `setup_for` dispatches by name.
+    let workloads: [(&str, &str, usize, bool); 5] = [
+        ("counter", "increment", 8192, false),
+        ("counter_gil", "increment", 8192, true),
+        ("call_other", "bump", 2048, false),
+        ("arr_touch", "touch", 4096, false),
+        ("arr_churn", "churn", 1024, false),
+    ];
+
+    for (name, func, total, gil) in workloads {
+        for &workers in &WORKERS {
+            let rt = multi_thread_rt(workers);
+            // Fresh Vm per block, so a before/after stats diff is unambiguous; per-sample printing inside
+            // the closure would interleave criterion's stderr headers and misattribute the deltas.
+            let (vm, proc, template, timeout) = rt.block_on(setup_for(name, gil));
+            let per_worker = total / workers;
+            let before: CommitterStats = rt.block_on(vm.committer_stats()).unwrap();
+
+            group.bench_with_input(BenchmarkId::new(name, workers), &workers, |b, &workers| {
+                b.to_async(&rt)
+                    .iter(|| run_workers(&template, &proc, func, workers, per_worker, timeout));
+            });
+
+            let after: CommitterStats = rt.block_on(vm.committer_stats()).unwrap();
+            let commits = after.commits.saturating_sub(before.commits);
+            let conflicts = after.conflicts.saturating_sub(before.conflicts);
+            let errors = after.errors.saturating_sub(before.errors);
+            let rate = if commits > 0 {
+                conflicts as f64 / commits as f64
+            } else {
+                0.0
+            };
+            println!(
+                "[{name} w={workers}] commits={commits} conflicts={conflicts} errors={errors} rate={rate:.4}"
+            );
+        }
+    }
+
+    group.finish();
+}
+
+/// Dispatch to the right setup by workload name.
+async fn setup_for(name: &str, gil: bool) -> (Arc<Vm>, Arc<Process>, TaskTemplate, u64) {
+    match name {
+        "counter" | "counter_gil" => setup(gil, "/bench_counter.c", COUNTER).await,
+        "call_other" => setup_pair(gil).await,
+        "arr_touch" => setup(gil, "/bench_arr_touch.c", ARR_TOUCH).await,
+        "arr_churn" => setup(gil, "/bench_arr_churn.c", ARR_CHURN).await,
+        _ => panic!("unknown workload {name}"),
+    }
 }
 
 /// M0: fixed total work, varying worker count. Throughput is reported per apply, so a
@@ -265,5 +326,5 @@ fn m3_gil(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, m0_scaling, m1_task_cost, m3_gil);
+criterion_group!(benches, m0_scaling, m1_task_cost, contention, m3_gil);
 criterion_main!(benches);

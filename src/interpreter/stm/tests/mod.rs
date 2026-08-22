@@ -1,6 +1,7 @@
 //! Test-only support for the STM module: shared commit-protocol drivers
 //! ([`helpers`]) plus the tests themselves.
 
+mod conflict_probes;
 mod helpers;
 mod soak;
 

@@ -18,7 +18,7 @@ use crate::{
         SHUTDOWN,
         gc::mark::Mark,
         process::Process,
-        stm::live_count,
+        stm::{CommitterStats, committer_stats, live_count},
         task::apply_function::{apply_function_in_master, apply_runtime_error},
         task_context::TaskContext,
         vm::global_state::GlobalState,
@@ -229,6 +229,12 @@ impl Vm {
         Ok(())
     }
 
+    /// The committer's lifetime commit totals (commits/conflicts/errors).
+    /// For bench measurement and tooling; not part of the hot path.
+    pub async fn committer_stats(&self) -> Result<CommitterStats> {
+        committer_stats(&self.global_state.committer_tx).await
+    }
+
     /// Send an operation to the VM queue
     pub async fn send_op(&self, msg: VmOp) -> std::result::Result<(), SendError<VmOp>> {
         self.tx().send(msg).await
@@ -333,9 +339,8 @@ mod tests {
     use super::*;
     use crate::{
         interpreter::{
-            CommittedReader, lpc_ref::LpcRef,
-            task::apply_function::apply_function_by_name,
-            task::task_template::TaskTemplateBuilder, stm::start_txn,
+            CommittedReader, lpc_ref::LpcRef, stm::start_txn,
+            task::apply_function::apply_function_by_name, task::task_template::TaskTemplateBuilder,
         },
         test_support::test_config,
     };
@@ -464,16 +469,10 @@ mod tests {
 
         // Seed two live arrays into the world through a committed call. The
         // slot vars hold `LpcRef::Array` whose `SVar.id` is the payload cell.
-        apply_function_by_name(
-            "set_payloads",
-            &[],
-            proc.clone(),
-            template.clone(),
-            None,
-        )
-        .await
-        .unwrap()
-        .unwrap();
+        apply_function_by_name("set_payloads", &[], proc.clone(), template.clone(), None)
+            .await
+            .unwrap()
+            .unwrap();
 
         // Extract each array's committed payload cell id from its slot.
         let cell_id = |proc: &Process| match vm.global_state.committed_global(proc, 0) {
@@ -499,16 +498,10 @@ mod tests {
         assert!(vm.global_state.committed_array(cell_a).is_some());
 
         // Orphan the first array: its last live reference is gone.
-        apply_function_by_name(
-            "drop_payload_a",
-            &[],
-            proc.clone(),
-            template.clone(),
-            None,
-        )
-        .await
-        .unwrap()
-        .unwrap();
+        apply_function_by_name("drop_payload_a", &[], proc.clone(), template.clone(), None)
+            .await
+            .unwrap()
+            .unwrap();
 
         vm.gc().await.unwrap();
 
@@ -593,5 +586,196 @@ mod tests {
             std::sync::Arc::ptr_eq(&physical, &live),
             "the committed /example2 must be the last-created object, not an earlier cycle"
         );
+    }
+
+    /// The real `apply_function_by_name` path the bench drives, one worker: the committer-level
+    /// probe already pinned 0 conflicts and lossless; this isolates the task layer.
+    #[tokio::test]
+    async fn contention_probe_sequential_increment_is_conflict_free() {
+        const N: usize = 400;
+        let mut vm = Vm::new(test_config());
+        let code = indoc! { r#"
+            int count = 0;
+
+            void increment() {
+                count = count + 1;
+            }
+        "# };
+        let ctx = vm
+            .initialize_string(code, "contention_probe_counter.c")
+            .await
+            .unwrap();
+        let proc = ctx.process;
+        let template = vm.new_task_template();
+
+        let before = vm.committer_stats().await.unwrap();
+        for _ in 0..N {
+            apply_function_by_name("increment", &[], proc.clone(), template.clone(), None)
+                .await
+                .unwrap()
+                .unwrap();
+        }
+        let after = vm.committer_stats().await.unwrap();
+        let final_val = match vm.global_state.committed_global(&proc, 0) {
+            LpcRef::Int(n) => n,
+            other => panic!("counter not an int: {other:?}"),
+        };
+
+        let commits = after.commits - before.commits;
+        let conflicts = after.conflicts - before.conflicts;
+        println!(
+            "[probe:task-seq] commits={commits} conflicts={conflicts} final={final_val} (expect 0 conflicts, final={N})"
+        );
+
+        assert_eq!(commits, N, "one commit per apply");
+        assert_eq!(conflicts, 0, "sequential applies must not conflict");
+        assert_eq!(final_val.0, N as i64, "no lost updates");
+    }
+
+    /// The bench's 8-worker shape through the real task layer: conflicts must happen, and no updates
+    /// may be lost (the invariant a throughput number can never show).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn contention_probe_concurrent_increment_loses_nothing() {
+        const N: usize = 200; // per worker
+        const WORKERS: usize = 8;
+        let mut vm = Vm::new(test_config());
+        let code = indoc! { r#"
+            int count = 0;
+
+            void increment() {
+                count = count + 1;
+            }
+        "# };
+        let ctx = vm
+            .initialize_string(code, "contention_probe_counter.c")
+            .await
+            .unwrap();
+        let proc = ctx.process;
+        let template = vm.new_task_template();
+
+        let before = vm.committer_stats().await.unwrap();
+
+        let mut set = tokio::task::JoinSet::new();
+        for _ in 0..WORKERS {
+            let proc = proc.clone();
+            let template = template.clone();
+            set.spawn(async move {
+                for _ in 0..N {
+                    apply_function_by_name("increment", &[], proc.clone(), template.clone(), None)
+                        .await
+                        .unwrap()
+                        .unwrap();
+                }
+            });
+        }
+        while set.join_next().await.is_some() {}
+
+        let after = vm.committer_stats().await.unwrap();
+        let final_val = match vm.global_state.committed_global(&proc, 0) {
+            LpcRef::Int(n) => n,
+            other => panic!("counter not an int: {other:?}"),
+        };
+
+        let commits = after.commits - before.commits;
+        let conflicts = after.conflicts - before.conflicts;
+        let total = WORKERS * N;
+        println!(
+            "[probe:task-conc] commits={commits} conflicts={conflicts} final={final_val} (expect commits>={total}, conflicts>0, final={total})"
+        );
+
+        assert!(commits >= total, "every apply commits at least once");
+        assert!(
+            conflicts > 0,
+            "8 concurrent global increments MUST conflict; 0 means contention is invisible"
+        );
+        assert_eq!(final_val.0, total as i64, "no lost updates");
+    }
+
+    /// The bench's `measure` pattern exactly — a fresh `multi_thread` runtime per worker count, N worker
+    /// tasks of `apply_function_by_name` increments, a before/after `committer_stats` diff — plus the
+    /// final committed counter (the lost-update check a throughput number can never show).
+    #[test]
+    fn contention_probe_measure_pattern_across_worker_counts() {
+        const PER_WORKER: usize = 8192;
+        for &workers in &[1usize, 4, 8] {
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(workers)
+                .enable_all()
+                .build()
+                .unwrap();
+
+            rt.block_on(async {
+                let mut vm = Vm::new(test_config());
+                let code = indoc! { r#"
+                    int count = 0;
+
+                    void increment() {
+                        count = count + 1;
+                    }
+                "# };
+                let ctx = vm
+                    .initialize_string(code, "contention_probe_benchpat.c")
+                    .await
+                    .unwrap();
+                let proc = ctx.process;
+                let template = vm.new_task_template();
+
+                let before = vm.committer_stats().await.unwrap();
+
+                let mut set = tokio::task::JoinSet::new();
+                for _ in 0..workers {
+                    let proc = proc.clone();
+                    let template = template.clone();
+                    set.spawn(async move {
+                        for _ in 0..PER_WORKER {
+                            apply_function_by_name(
+                                "increment",
+                                &[],
+                                proc.clone(),
+                                template.clone(),
+                                None,
+                            )
+                            .await
+                            .unwrap()
+                            .unwrap();
+                        }
+                    });
+                }
+                while set.join_next().await.is_some() {}
+
+                let after = vm.committer_stats().await.unwrap();
+                let final_val = match vm.global_state.committed_global(&proc, 0) {
+                    LpcRef::Int(n) => n,
+                    other => panic!("counter not an int: {other:?}"),
+                };
+
+                let commits = after.commits.saturating_sub(before.commits);
+                let conflicts = after.conflicts.saturating_sub(before.conflicts);
+                let total = workers * PER_WORKER;
+                let rate = if commits > 0 {
+                    conflicts as f64 / commits as f64
+                } else {
+                    0.0
+                };
+                println!(
+                    "[probe:benchpat/{workers}] commits={commits} conflicts={conflicts} rate={rate:.4} final={0} (total_work={total})",
+                    final_val.0
+                );
+
+                // The invariant the bench never checked: no lost updates.
+                assert_eq!(
+                    final_val.0,
+                    total as i64,
+                    "workers={workers}: counter must equal total work, not {total}"
+                );
+                // A single worker is sequential: zero conflicts expected.
+                if workers == 1 {
+                    assert_eq!(
+                        conflicts, 0,
+                        "1 worker is sequential; conflicts must be 0"
+                    );
+                }
+            });
+        }
     }
 }
