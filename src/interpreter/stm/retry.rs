@@ -2,8 +2,11 @@
 
 use std::{
     sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
+
+#[cfg(test)]
+use std::time::Instant;
 
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::{Result, lpc_error};
@@ -14,12 +17,14 @@ use crate::interpreter::{
     lpc_ref::LpcRef,
     process::Process,
     stm::{
-        Transaction, VarId, WorldRoot, WorldValue,
+        VarId, WorldRoot, WorldValue,
         changeset::Changeset,
         committer::{CommitProtocol, CommitterStats, LiveSnapshot},
     },
     vm::global_state::GlobalState,
 };
+#[cfg(test)]
+use crate::interpreter::stm::Transaction;
 
 /// Per-attempt statistics, owned by the retry loop: the transaction already
 /// knows its read/write set sizes, so commit size is free, and conflict rate
@@ -36,7 +41,8 @@ pub(crate) struct RetryStats {
 
 /// Runs `f` against a fresh transaction, commits, and re-runs from scratch
 /// on each conflict until one commits.
-pub(crate) fn retry<T>(
+#[cfg(test)]
+fn retry<T>(
     tx: &flume::Sender<CommitProtocol>,
     mut f: impl FnMut(&mut Transaction) -> T,
 ) -> (T, RetryStats) {
@@ -312,7 +318,8 @@ impl GlobalState {
 /// and returns the `Transaction` plus the attempt's [`LiveSnapshot`]. The
 /// loop commits the changeset and releases the `LiveSnapshot` after
 /// the commit reply resolves.
-pub(crate) async fn retry_async<F, Fut>(
+#[cfg(test)]
+async fn retry_async<F, Fut>(
     tx: &flume::Sender<CommitProtocol>,
     mut f: F,
 ) -> (Result<()>, RetryStats)

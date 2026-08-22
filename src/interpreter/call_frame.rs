@@ -79,7 +79,7 @@ pub struct CallFrame {
     pub upvalue_ptrs: ThinVec<Register>,
 
     /// The upvalue data from the [`Vm`](crate::interpreter::vm::Vm).
-    /// Each slot holds a transactional [`VarId`]; the committed value
+    /// Each slot holds a transactional `VarId`; the committed value
     /// lives in the committer's world.
     #[builder(setter(into))]
     vm_upvalues: Arc<RwLock<GcVarIdBank>>,

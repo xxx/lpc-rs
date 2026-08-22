@@ -25,12 +25,12 @@ pub struct GlobalState {
     #[builder(default, setter(into))]
     pub object_space: Arc<ObjectSpace>,
 
-    /// All upvalues are stored in the [`Vm`], and are shared between all [`Task`](crate::interpreter::task::Task)s.
-    /// Each slot holds a transactional [`VarId`]; the committed value lives in the committer's world.
+    /// All upvalues are stored in the [`Vm`](crate::interpreter::vm::Vm), and are shared between all [`Task`](crate::interpreter::task::Task)s.
+    /// Each slot holds a transactional `VarId`; the committed value lives in the committer's world.
     #[builder(default, setter(into))]
     upvalues: Arc<RwLock<GcVarIdBank>>,
 
-    /// The [`Config`] that's in use for this [`Vm`]
+    /// The [`Config`] that's in use for this [`Vm`](crate::interpreter::vm::Vm)
     #[builder(default, setter(into))]
     pub config: Arc<Config>,
 
@@ -45,7 +45,7 @@ pub struct GlobalState {
     #[builder(default)]
     pub gil: Mutex<()>,
 
-    /// The channel used to send [`VmOp`]s to the [`Vm`]
+    /// The channel used to send [`VmOp`]s to the [`Vm`](crate::interpreter::vm::Vm)
     pub tx: Sender<VmOp>,
 
     /// Sender to this state's single committer thread.

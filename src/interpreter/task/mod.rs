@@ -133,7 +133,7 @@ pub struct Task<const STACKSIZE: usize> {
     /// Stack of [`CatchPoint`]s
     catch_points: ThinVec<CatchPoint>,
 
-    /// The arg vector, populated prior to executing any of the `Call`-family [`Instruction`]s
+    /// The arg vector, populated prior to executing any of the `Call`-family [`Instruction`](lpc_rs_asm::instruction::Instruction)s
     pub args: ThinVec<RegisterVariant>,
 
     /// The vector used to collect arguments when creating a partially-applied function pointer
@@ -256,14 +256,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// Initialize a [`Process`] by calling its initializer function, using the
     /// given [`TaskContext`]. This creates a new unique Task ID.
-    /// It's assumed that the process has already been inserted into the [`ObjectSpace`]
+    /// It's assumed that the process has already been inserted into the [`ObjectSpace`](crate::interpreter::object_space::ObjectSpace)
     pub async fn initialize_process(context: TaskContext) -> Result<Task<STACKSIZE>> {
         Self::initialize_sub_process(TaskId::new(), context).await
     }
 
     /// Initialize a [`Process`] by calling its initializer function, using the
     /// given [`TaskContext`], using the specified Task ID.
-    /// It's assumed that the process has already been inserted into the [`ObjectSpace`]
+    /// It's assumed that the process has already been inserted into the [`ObjectSpace`](crate::interpreter::object_space::ObjectSpace)
     pub async fn initialize_sub_process(
         task_id: TaskId,
         context: TaskContext,
