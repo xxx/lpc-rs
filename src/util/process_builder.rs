@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use async_trait::async_trait;
 use lpc_rs_core::lpc_path::LpcPath;
@@ -6,123 +6,99 @@ use lpc_rs_errors::{Result, lpc_bug};
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
+    compiler::Compiler,
     interpreter::{
         object_flags::ObjectFlags,
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        task::{Task, into_task_context::IntoTaskContext, task_template::TaskTemplate},
+        task::{Task, into_task_context::IntoTaskContext},
     },
     util::with_compiler::WithCompiler,
 };
 
-/// A convenience trait for creating [`Process`]es without initialization.
+/// The one compile core: `compile` runs inside the single shared
+/// `with_async_compiler` block and yields a [`Program`], which is wrapped in a
+/// fresh, un-inserted [`Process`]. Compile only: no placement happens here.
+async fn compile_to_process<W, F, Fut>(w: &W, compile: F) -> Result<Arc<Process>>
+where
+    W: WithCompiler + ?Sized,
+    F: FnOnce(Compiler) -> Fut + Send,
+    Fut: Future<Output = Result<Program>> + Send,
+{
+    let program = w.with_async_compiler(compile).await?;
+    Ok(Arc::new(Process::new(program)))
+}
+
+/// Compile the in-game file at `path` into an un-inserted [`Process`] (no
+/// placement), in `w`'s compiler.
+pub(crate) async fn compile_process_from_path<W: WithCompiler + ?Sized>(
+    w: &W,
+    path: &LpcPath,
+) -> Result<Arc<Process>> {
+    compile_to_process(w, |compiler| async move {
+        compiler.compile_in_game_file(path, None).await
+    })
+    .await
+}
+
+/// Compile `code` (masquerading as `filename`) into an un-inserted
+/// [`Process`] (no placement), in `w`'s compiler.
+pub(crate) async fn compile_process_from_code<W: WithCompiler + ?Sized, P, S>(
+    w: &W,
+    filename: P,
+    code: S,
+) -> Result<Arc<Process>>
+where
+    P: Into<LpcPath> + Send + Sync,
+    S: AsRef<str> + Send + Sync,
+{
+    compile_to_process(w, |compiler| async move {
+        compiler.compile_string(filename, code).await
+    })
+    .await
+}
+
+/// A convenience trait for creating [`Process`]es **physically** (blind, no
+/// cell, no initialization), for bootstrap and fixture use. In-game creation
+/// must use `insert_process_transactional` instead.
 #[async_trait]
 pub trait ProcessCreator: WithCompiler {
-    /// Return the data that's required to create a [`Process`], and insert it
-    /// into the [`ObjectSpace`] without any initialization.
+    /// The [`ObjectSpace`] to physically insert into.
     fn process_creator_data(&self) -> &ObjectSpace;
 
-    /// Compile the passed file, and insert it into the [`ObjectSpace`]
-    /// _without_ initialization.
+    /// Compile the passed file and physically insert it into the
+    /// [`ObjectSpace`] (blind, no cell, no initialization). Bootstrap only.
     async fn create_process_from_path(&self, filename: &LpcPath) -> Result<Arc<Process>> {
-        let object_space = self.process_creator_data();
-
-        let proc = self
-            .with_async_compiler(|compiler| async move {
-                compiler.compile_in_game_file(filename, None).await
-            })
-            .await
-            .map(|prog| process_insert_program(prog, object_space))?;
-
-        Ok(proc)
+        let process = compile_process_from_path(self, filename).await?;
+        ObjectSpace::insert_process_physical(self.process_creator_data(), process.clone());
+        Ok(process)
     }
 
-    /// Compile the passed code, masquerading as the passed filename, and insert it into the [`ObjectSpace`],
-    /// _without_ initialization.
+    /// Compile the passed code (masquerading as `filename`) and physically
+    /// insert it into the [`ObjectSpace`] (blind, no cell, no
+    /// initialization). Bootstrap only.
     async fn create_process_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>>
     where
         P: Into<LpcPath> + Send + Sync,
         S: AsRef<str> + Send + Sync,
     {
-        let object_space = self.process_creator_data();
-
-        let proc = self
-            .with_async_compiler(
-                |compiler| async move { compiler.compile_string(filename, code).await },
-            )
-            .await
-            .map(|prog| process_insert_program(prog, object_space))?;
-
-        Ok(proc)
+        let process = compile_process_from_code(self, filename, code).await?;
+        ObjectSpace::insert_process_physical(self.process_creator_data(), process.clone());
+        Ok(process)
     }
 }
 
-/// Helper to directly insert a [`Program`] into the [`ObjectSpace`], _without_ initialization
-#[inline]
-fn process_insert_program(program: Program, object_space: &ObjectSpace) -> Arc<Process> {
-    let process = Arc::new(Process::new(program));
-    ObjectSpace::insert_process(object_space, process.clone());
-    process
-}
-
-/// A convenience trait for creating and initializing [`Process`]es.
-#[async_trait]
-pub trait ProcessInitializer: WithCompiler {
-    /// Return the data that's required to create a [`Process`], and insert it
-    /// into the [`ObjectSpace`], and initialize it (i.e. initialize global variables,
-    /// and apply create()).
-    fn process_initializer_data(&self) -> TaskTemplate;
-
-    /// Compile the passed file, and insert it into the [`ObjectSpace`]
-    /// _with_ initialization.
-    async fn initialize_process_from_path(
-        &self,
-        filename: &LpcPath,
-    ) -> Result<Task<MAX_CALL_STACK_SIZE>> {
-        let program = self
-            .with_async_compiler(|compiler| async move {
-                compiler.compile_in_game_file(filename, None).await
-            })
-            .await?;
-
-        let template = self.process_initializer_data();
-        process_insert_and_initialize_program(program, template).await
-    }
-
-    /// Compile the passed code, masquerading as the passed filename, and insert it into the [`ObjectSpace`]
-    /// _with_ initialization.
-    async fn initialize_process_from_code<P, S>(
-        &self,
-        filename: P,
-        code: S,
-    ) -> Result<Task<MAX_CALL_STACK_SIZE>>
-    where
-        P: Into<LpcPath> + Send + Sync,
-        S: AsRef<str> + Send + Sync,
-    {
-        let template = self.process_initializer_data();
-
-        let program = self
-            .with_async_compiler(
-                |compiler| async move { compiler.compile_string(filename, code).await },
-            )
-            .await?;
-
-        process_insert_and_initialize_program(program, template).await
-    }
-}
-
-/// Helper to directly insert a [`Program`] into the [`ObjectSpace`], _with_ initialization.
-async fn process_insert_and_initialize_program<T>(
-    program: Program,
+/// Physically insert `process` into the space it was compiled for (blind, no
+/// cell, **before** its initializer runs, to prevent infinite loops), then
+/// run the initializer in a fresh task. Bootstrap only.
+pub(crate) async fn process_insert_and_initialize_program<T>(
+    process: Arc<Process>,
     template: T,
 ) -> Result<Task<MAX_CALL_STACK_SIZE>>
 where
     T: IntoTaskContext + Send,
 {
-    let process = Arc::new(Process::new(program));
-
     let Some(prog_function) = process.program.initializer.clone() else {
         return Err(lpc_bug!(
             "Init function not found? This shouldn't happen. Are you trying to initialize an empty program?"
@@ -131,11 +107,10 @@ where
 
     let ctx = template.into_task_context(process.clone());
 
-    // We insert *before* initialization, to prevent infinite loops.
-    ObjectSpace::insert_process(ctx.object_space(), process.clone());
+    ObjectSpace::insert_process_physical(ctx.object_space(), process.clone());
 
-    // We mark ourselves as initialized before actually initializing, to avoid
-    // infinite loops where this_object() is used in global initialization.
+    // The Initialized flag is set before the initializer runs so an
+    // initializer that calls `this_object()` cannot re-enter initialization.
     ctx.process.flags.set(ObjectFlags::Initialized);
 
     let max_execution_time = ctx.config().max_execution_time;

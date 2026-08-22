@@ -55,11 +55,9 @@ impl Vm {
                 return;
             };
 
-            // Pre-resolve a dynamic string receiver through the transactional seam so
-            // a create-on-miss goes through the committer (cell write + deferred physical
-            // insert) instead of a blind physical insert, and a committed-but-unflushed
-            // destruct is an error instead of a resurrection. For non-string receivers the
-            // seam is a no-op (`Ok(None)`), so `triple` handles object/simul/efun receivers.
+            // The transactional seam: a create-on-miss goes through the
+            // committer, and a destruct in the committed-unflushed window is an
+            // error instead of a resurrection.
             if let Err(e) = global_state.resolve_dynamic_string_receiver(&ptr_arc).await {
                 global_state.with_call_outs_mut(|co| co.remove(idx));
                 let _ = global_state.tx.send(VmOp::TaskError(TaskId(0), e)).await;
@@ -143,7 +141,7 @@ mod tests {
             process::Process,
         },
         test_support::test_config,
-        util::process_builder::{ProcessCreator, ProcessInitializer},
+        util::process_builder::ProcessCreator,
     };
 
     #[tokio::test]

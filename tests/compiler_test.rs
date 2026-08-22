@@ -9,7 +9,6 @@ use lpc_rs::{
     interpreter::{
         CommittedReader, lpc_int::LpcInt, lpc_ref::LpcRef, lpc_string::LpcString, vm::Vm,
     },
-    util::process_builder::ProcessInitializer,
 };
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::RegisterSize;

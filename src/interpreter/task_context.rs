@@ -17,15 +17,12 @@ use crate::{
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
-        program::Program,
         stm::{CallOutSchedule, TxnHandle, txn_find_object, txn_insert_process},
         task::{into_task_context::IntoTaskContext, task_template::TaskTemplate},
         vm::{global_state::GlobalState, vm_op::VmOp},
     },
     util::{
-        get_simul_efuns,
-        process_builder::{ProcessCreator, ProcessInitializer},
-        with_compiler::WithCompiler,
+        get_simul_efuns, process_builder::compile_process_from_path, with_compiler::WithCompiler,
     },
 };
 
@@ -207,12 +204,7 @@ impl TaskContext {
     /// the caller performs the insert (and any initialization), so the
     /// object is not visible until placed.
     pub async fn compile_process(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        let program = self
-            .with_async_compiler(|compiler| async move {
-                compiler.compile_in_game_file(path, None).await
-            })
-            .await?;
-        Ok(Arc::new(Process::new(program)))
+        compile_process_from_path(self, path).await
     }
 
     /// Insert an object transactionally: write its cell and record a deferred
@@ -367,14 +359,15 @@ impl TaskContext {
         }
     }
 
-    /// Directly insert the passed [`Process`] into the object space, with
-    /// in-game local filename.
+    /// Blindly insert the passed [`Process`] into the physical process map
+    /// (no cell, no transaction). Bootstrap only; in-game creation uses
+    /// `insert_process_transactional`.
     #[inline]
-    pub fn insert_process<P>(&self, process: P)
+    pub fn insert_process_physical<P>(&self, process: P)
     where
         P: Into<Arc<Process>>,
     {
-        ObjectSpace::insert_process(self.object_space(), process)
+        ObjectSpace::insert_process_physical(self.object_space(), process)
     }
 
     /// Remove the passed [`Process`] from the object space.
@@ -384,13 +377,6 @@ impl TaskContext {
         P: Into<Arc<Process>>,
     {
         ObjectSpace::remove_process(self.object_space(), process)
-    }
-
-    /// Convert the passed [`Program`] into a [`Process`], set its clone ID,
-    /// then insert it into the object space.
-    #[inline]
-    pub fn insert_clone(&self, program: Arc<Program>) -> Arc<Process> {
-        ObjectSpace::insert_clone(self.object_space(), program)
     }
 
     /// Get the in-game directory of the current process.
@@ -516,20 +502,6 @@ impl WithCompiler for TaskContext {
             &self.global_state.object_space,
         )
         .await
-    }
-}
-
-#[async_trait]
-impl ProcessCreator for TaskContext {
-    fn process_creator_data(&self) -> &ObjectSpace {
-        &self.global_state.object_space
-    }
-}
-
-#[async_trait]
-impl ProcessInitializer for TaskContext {
-    fn process_initializer_data(&self) -> TaskTemplate {
-        TaskTemplate::from(self)
     }
 }
 

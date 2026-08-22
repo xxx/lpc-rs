@@ -22,10 +22,7 @@ use crate::{
         task_context::{ObjectLookup, TaskContext, TaskContextBuilder},
         vm::vm_op::VmOp,
     },
-    util::{
-        process_builder::{ProcessCreator, ProcessInitializer},
-        with_compiler::WithCompiler,
-    },
+    util::with_compiler::WithCompiler,
 };
 
 /// A structure to hold various pieces of interpreter state, to be passed to
@@ -245,10 +242,9 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     }
 
     /// Initialize a newly created object in a sub-task that joins this
-    /// transaction's commit. Mirrors the old `ProcessInitializer` path
-    /// (insert *before* init, to prevent infinite loops, then run the
-    /// initializer in a joined sub-task), but the insert is the transactional
-    /// one, and the sub-task's writes ride this transaction's single commit.
+    /// transaction's commit. Insert (transactional) happens *before* init, to
+    /// prevent infinite loops, and the sub-task's writes ride this
+    /// transaction's single commit.
     pub async fn init_process_transactional(&self, process: &Arc<Process>) -> Result<()> {
         let new_task_context = self
             .task_context_builder()
@@ -346,22 +342,6 @@ impl<'task, const N: usize> WithCompiler for EfunContext<'task, N> {
 impl<'task, const N: usize> From<&EfunContext<'task, N>> for TaskTemplate {
     fn from(value: &EfunContext<'task, N>) -> Self {
         TaskTemplate::from(value.task_context)
-    }
-}
-
-#[async_trait]
-impl<'task, const N: usize> ProcessCreator for EfunContext<'task, N> {
-    #[inline]
-    fn process_creator_data(&self) -> &ObjectSpace {
-        self.task_context.process_creator_data()
-    }
-}
-
-#[async_trait]
-impl<'task, const N: usize> ProcessInitializer for EfunContext<'task, N> {
-    #[inline]
-    fn process_initializer_data(&self) -> TaskTemplate {
-        self.task_context.process_initializer_data()
     }
 }
 

@@ -16,7 +16,7 @@ use crate::{
         process::Process, task_context::ObjectLookup, vm::global_state::GlobalState,
     },
     telnet::connection::Connection,
-    util::with_compiler::WithCompiler,
+    util::process_builder::compile_process_from_path,
 };
 
 mod changeset;
@@ -520,13 +520,7 @@ pub(crate) async fn resolve_or_create_object(
     }
 
     // True miss: compile the file and create the object in this transaction.
-    let program = (&gs.config, object_space)
-        .with_async_compiler(
-            |compiler| async move { compiler.compile_in_game_file(path, None).await },
-        )
-        .await?;
-
-    let process = Arc::new(Process::new(program));
+    let process = compile_process_from_path(&(&gs.config, object_space), path).await?;
     txn_insert_process(&txn, object_space, &process);
 
     let (_world, changeset) = txn.with(|t| t.clone()).into_parts();

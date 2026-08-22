@@ -209,25 +209,11 @@ impl ObjectSpace {
     //     process
     // }
 
-    /// Insert a clone of the passed [`Program`] into the space.
-    pub fn insert_clone(space_cell: &Arc<Self>, program: Arc<Program>) -> Arc<Process> {
-        let count = space_cell.clone_count.fetch_add(1, Ordering::Relaxed);
-
-        let clone = Process::new_clone(program, count);
-
-        let filename = clone.filename().into_owned();
-
-        let process: Arc<Process> = clone.into();
-
-        trace!("Inserting clone: {}", filename);
-
-        space_cell.insert_process_directly(filename, process.clone());
-        process
-    }
-
-    /// Directly insert the passed [`Process`] into the space, with in-game
-    /// local filename.
-    pub fn insert_process<P>(object_space: &Self, process: P)
+    /// Blindly insert the passed [`Process`] into the physical process map,
+    /// with in-game local filename. No cell is written and no transaction is
+    /// involved: this is the bootstrap/fixture placement. In-game creation
+    /// must use the transactional insert instead.
+    pub fn insert_process_physical<P>(object_space: &Self, process: P)
     where
         P: Into<Arc<Process>>,
     {
@@ -373,46 +359,6 @@ mod tests {
     // }
 
     #[test]
-    fn test_insert_clone() {
-        let space = ObjectSpace::default();
-        let prog: Arc<Program> = Program::default().into();
-        let filename = prog.filename.to_str().unwrap();
-
-        let mut prog2: Program = Program::default();
-        let filename2: Arc<LpcPath> = Arc::new("/foo/bar/baz".into());
-        prog2.filename = filename2.clone();
-
-        let object_space = space.into();
-
-        ObjectSpace::insert_clone(&object_space, prog.clone());
-        ObjectSpace::insert_clone(&object_space, prog.clone());
-        ObjectSpace::insert_clone(&object_space, prog2.into());
-        ObjectSpace::insert_clone(&object_space, prog.clone());
-
-        assert_eq!(object_space.len(), 4);
-        assert!(
-            object_space
-                .processes
-                .contains_key(&format!("{}#{}", filename, 0))
-        );
-        assert!(
-            object_space
-                .processes
-                .contains_key(&format!("{}#{}", filename, 1))
-        );
-        assert!(
-            object_space
-                .processes
-                .contains_key(&format!("{}#{}", filename2, 2))
-        );
-        assert!(
-            object_space
-                .processes
-                .contains_key(&format!("{}#{}", filename, 3))
-        );
-    }
-
-    #[test]
     fn test_insert_process() {
         let config = ConfigBuilder::default()
             .lib_dir("./tests/fixtures/code/")
@@ -426,7 +372,7 @@ mod tests {
 
         let process = Process::new(prog);
         let space_cell = space;
-        ObjectSpace::insert_process(&space_cell, process);
+        ObjectSpace::insert_process_physical(&space_cell, process);
 
         assert_eq!(space_cell.len(), 1);
         assert!(space_cell.processes.contains_key("/foo/bar/baz"));
@@ -448,7 +394,7 @@ mod tests {
             .build()
             .unwrap();
         let proc = Arc::new(Process::new(prog));
-        ObjectSpace::insert_process(&space, proc.clone());
+        ObjectSpace::insert_process_physical(&space, proc.clone());
 
         let master = space.master_object();
         assert_eq!(master.unwrap(), proc);

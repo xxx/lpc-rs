@@ -42,7 +42,7 @@ mod tests {
     use crate::{
         interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, vm::Vm},
         test_support::test_config,
-        util::process_builder::{ProcessCreator, ProcessInitializer},
+        util::process_builder::ProcessCreator,
     };
 
     #[tokio::test]

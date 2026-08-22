@@ -59,7 +59,6 @@ mod tests {
     use crate::{
         interpreter::{CommittedReader, vm::Vm},
         test_support::test_config,
-        util::process_builder::ProcessInitializer,
     };
 
     #[tokio::test]

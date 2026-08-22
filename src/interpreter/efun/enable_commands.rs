@@ -18,7 +18,7 @@ mod tests {
     use crate::{
         interpreter::{object_flags::ObjectFlags, vm::Vm},
         test_support::test_config,
-        util::process_builder::{ProcessCreator, ProcessInitializer},
+        util::process_builder::ProcessCreator,
     };
 
     #[tokio::test]

@@ -473,7 +473,6 @@ mod test_instructions {
         use crate::{
             interpreter::{task::initialize_program::InitializeProgramBuilder, vm::Vm},
             test_support::test_config,
-            util::process_builder::ProcessInitializer,
         };
 
         #[tokio::test]
@@ -752,7 +751,7 @@ mod test_instructions {
             let (tx, _rx) = mpsc::channel(128);
             let global_state = Arc::new(GlobalState::new(config, tx));
 
-            ObjectSpace::insert_process(&global_state.object_space, process);
+            ObjectSpace::insert_process_physical(&global_state.object_space, process);
 
             let result = InitializeProgramBuilder::<32>::default()
                 .program(program)
@@ -776,7 +775,7 @@ mod test_instructions {
                 "##};
 
             let (program, _config, process) = compile_prog(code).await;
-            ObjectSpace::insert_process(&global_state.object_space, process);
+            ObjectSpace::insert_process_physical(&global_state.object_space, process);
 
             let result = InitializeProgramBuilder::<10>::default()
                 .program(program)
@@ -802,7 +801,7 @@ mod test_instructions {
             let (program, _config, process) = compile_prog(code).await;
             let object_space = ObjectSpace::default();
             let space_cell = object_space;
-            ObjectSpace::insert_process(&space_cell, process);
+            ObjectSpace::insert_process_physical(&space_cell, process);
 
             let result = InitializeProgramBuilder::<20>::default()
                 .program(program)

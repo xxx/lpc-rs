@@ -64,7 +64,6 @@ mod tests {
             },
         },
         test_support::{compile_prog, test_config},
-        util::process_builder::ProcessInitializer,
     };
 
     fn task_context_fixture(
@@ -106,7 +105,7 @@ mod tests {
             .build()
             .unwrap();
         let proc = Process::new(to_find);
-        ObjectSpace::insert_process(context.object_space(), proc);
+        ObjectSpace::insert_process_physical(context.object_space(), proc);
 
         let mut task = Task::<10>::new(context.clone());
         task.timed_eval(func.clone(), &[], 500)

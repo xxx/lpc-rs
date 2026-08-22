@@ -6,14 +6,11 @@
 use std::sync::Arc;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use lpc_rs::{
-    interpreter::{
-        CommitterStats,
-        process::Process,
-        task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
-        vm::Vm,
-    },
-    util::process_builder::ProcessInitializer,
+use lpc_rs::interpreter::{
+    CommitterStats,
+    process::Process,
+    task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
+    vm::Vm,
 };
 use lpc_rs_utils::config::ConfigBuilder;
 use tokio::{runtime::Runtime, task::JoinSet};

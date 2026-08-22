@@ -6,13 +6,20 @@ use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 
 use crate::{
+    compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::Compiler,
     interpreter::{
-        object_space::ObjectSpace, stm::TxnHandle, task::task_template::TaskTemplate,
-        task_context::TaskContext, vm::Vm,
+        object_space::ObjectSpace,
+        stm::TxnHandle,
+        task::{self, task_template::TaskTemplate},
+        task_context::TaskContext,
+        vm::Vm,
     },
     util::{
-        process_builder::{ProcessCreator, ProcessInitializer},
+        process_builder::{
+            ProcessCreator, compile_process_from_code, compile_process_from_path,
+            process_insert_and_initialize_program,
+        },
         with_compiler::WithCompiler,
     },
 };
@@ -81,6 +88,33 @@ impl Vm {
             .map(|t| t.context)
     }
 
+    /// Compile the in-game file at `path` and initialize it (insert it into the
+    /// [`ObjectSpace`], then run its initializer in a fresh task).
+    pub async fn initialize_process_from_path(
+        &self,
+        path: &LpcPath,
+    ) -> Result<task::Task<MAX_CALL_STACK_SIZE>> {
+        let process = compile_process_from_path(self, path).await?;
+        let template = self.new_task_template();
+        process_insert_and_initialize_program(process, template).await
+    }
+
+    /// Compile `code` (masquerading as `filename`) and initialize it (insert it
+    /// into the [`ObjectSpace`], then run its initializer in a fresh task).
+    pub async fn initialize_process_from_code<P, S>(
+        &self,
+        filename: P,
+        code: S,
+    ) -> Result<task::Task<MAX_CALL_STACK_SIZE>>
+    where
+        P: Into<LpcPath> + Send + Sync,
+        S: AsRef<str> + Send + Sync,
+    {
+        let process = compile_process_from_code(self, filename, code).await?;
+        let template = self.new_task_template();
+        process_insert_and_initialize_program(process, template).await
+    }
+
     /// A convenience helper to create a populated [`TaskTemplate`]
     pub fn new_task_template(&self) -> TaskTemplate {
         TaskTemplate {
@@ -113,13 +147,5 @@ impl ProcessCreator for Vm {
     #[inline]
     fn process_creator_data(&self) -> &ObjectSpace {
         &self.global_state.object_space
-    }
-}
-
-#[async_trait]
-impl ProcessInitializer for Vm {
-    #[inline]
-    fn process_initializer_data(&self) -> TaskTemplate {
-        self.new_task_template()
     }
 }

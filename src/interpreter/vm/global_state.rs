@@ -100,15 +100,12 @@ impl GlobalState {
     /// argument is an object path as a string (`call_out` / `input_to` targets).
     ///
     /// Runs the cell-first find + create-on-miss in its own short-lived
-    /// transaction (committed before this returns), so a create goes through
-    /// the committer (cell write + deferred physical insert) instead of a
-    /// blind physical insert, and a committed-but-unflushed destruct is an
-    /// error instead of a physical resurrection.
+    /// transaction (committed before this returns). A committed-but-unflushed
+    /// destruct is an error, not a resurrection.
     ///
     /// Returns `Ok(None)` when `ptr` is not a dynamic string receiver (a
-    /// different address kind, or a missing / non-string first partial arg):
-    /// the caller falls through to [`FunctionPtr::triple`], which handles
-    /// object receivers, simul efuns, and efuns.
+    /// different address kind, or a missing / non-string first partial arg);
+    /// the caller falls through to [`FunctionPtr::triple`].
     pub async fn resolve_dynamic_string_receiver(
         &self,
         ptr: &FunctionPtr,
@@ -136,9 +133,7 @@ impl GlobalState {
     ///
     /// The committer must be **quiescent** — a non-quiescent call is refused
     /// rather than blocked: a concurrent task at a GC point is a caller bug.
-    ///
-    /// The bank cull happens only after the pass commits; a refused pass
-    /// leaves the bank untouched.
+    /// A refused pass leaves the bank untouched.
     #[instrument(skip_all)]
     pub async fn gc(&self) -> Result<GcReport> {
         let live = live_count(&self.committer_tx).await?;
@@ -392,7 +387,7 @@ mod tests {
                 .build()
                 .unwrap(),
         ));
-        ObjectSpace::insert_process(&gs.object_space, process.clone());
+        ObjectSpace::insert_process_physical(&gs.object_space, process.clone());
 
         let got = gs
             .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver"))
@@ -423,7 +418,7 @@ mod tests {
         let cell_id = gs.object_space.cell_id(&key);
 
         commit_object_cell(&gs, process.clone()).await.unwrap();
-        ObjectSpace::insert_process(&gs.object_space, process.clone());
+        ObjectSpace::insert_process_physical(&gs.object_space, process.clone());
 
         // Commit a destruct: drop the cell, but never flush the physical
         // removal, leaving the destruct window open.

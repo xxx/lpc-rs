@@ -258,7 +258,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             upvalue_ptrs.map(ThinVec::from),
         );
 
-        context.insert_process(process);
+        context.insert_process_physical(process);
 
         Self::initialize_process(context).await
     }

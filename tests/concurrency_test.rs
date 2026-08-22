@@ -9,7 +9,7 @@ use lpc_rs::{
         task::apply_function::apply_function_by_name,
         vm::{Vm, global_state::GlobalState},
     },
-    util::process_builder::{ProcessCreator, ProcessInitializer},
+    util::process_builder::ProcessCreator,
 };
 use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::Result;

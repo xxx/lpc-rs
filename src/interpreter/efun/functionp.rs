@@ -18,9 +18,7 @@ pub async fn functionp<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
 mod tests {
     use indoc::indoc;
 
-    use crate::{
-        interpreter::vm::Vm, test_support::test_config, util::process_builder::ProcessInitializer,
-    };
+    use crate::{interpreter::vm::Vm, test_support::test_config};
 
     #[tokio::test]
     async fn test_functionp() {

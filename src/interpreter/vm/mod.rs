@@ -22,7 +22,6 @@ use crate::{
         vm::global_state::GlobalState,
     },
     telnet::{Telnet, connection::Connection, connection_broker::ConnectionBroker, ops::BrokerOp},
-    util::process_builder::ProcessInitializer,
 };
 
 mod initiate_login;

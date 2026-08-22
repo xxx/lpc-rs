@@ -101,7 +101,7 @@ pub async fn run_prog_with_config(code: &str, config: Arc<Config>) -> Task<MAX_C
 
     let (tx, _rx) = tokio::sync::mpsc::channel(128);
     let global_state = GlobalState::new(config, tx);
-    ObjectSpace::insert_process(&global_state.object_space, se_proc);
+    ObjectSpace::insert_process_physical(&global_state.object_space, se_proc);
 
     InitializeProgramBuilder::default()
         .program(program)

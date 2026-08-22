@@ -111,7 +111,7 @@ mod tests {
             },
         },
         test_support::{compile_prog, test_config},
-        util::process_builder::{ProcessCreator, ProcessInitializer},
+        util::process_builder::ProcessCreator,
     };
 
     /// Committed global values by name, read through the committer.

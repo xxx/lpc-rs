@@ -45,7 +45,7 @@ mod tests {
             .unwrap();
         let proc = Process::new(prog);
         let space_cell: Arc<ObjectSpace> = object_space.into();
-        ObjectSpace::insert_process(&space_cell, proc);
+        ObjectSpace::insert_process_physical(&space_cell, proc);
 
         let simul_efuns = get_simul_efuns(&config, &space_cell).unwrap();
         assert_eq!(

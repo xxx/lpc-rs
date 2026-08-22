@@ -366,10 +366,9 @@ impl Telnet {
             let _ = sink.send(TelnetEvent::Wont(TelnetOption::Echo)).await;
         }
 
-        // Pre-resolve a dynamic string receiver through the transactional seam so a
-        // create-on-miss goes through the committer and a committed-but-unflushed
-        // destruct is an error instead of a physical resurrection. For non-string
-        // receivers the seam is a no-op, so `triple` handles them as before.
+        // The transactional seam: a create-on-miss goes through the committer,
+        // and a destruct in the committed-unflushed window is an error instead
+        // of a resurrection.
         if template
             .global_state
             .resolve_dynamic_string_receiver(&input_to.ptr)
@@ -475,7 +474,7 @@ mod tests {
             vm::Vm,
         },
         test_support::test_config,
-        util::process_builder::{ProcessCreator, ProcessInitializer},
+        util::process_builder::ProcessCreator,
     };
 
     struct FakeSink;
