@@ -115,9 +115,14 @@ impl FunctionPtr {
     /// [`Task`](crate::interpreter::task::Task) already exists, you should use
     /// set it up to simply [`resume`](crate::interpreter::task::Task::resume) instead.
     ///
-    /// In the case of a [`FunctionPtr`] with a `Dynamic` [`FunctionAddress`], this will also
-    /// create (but not initialize) the object, if necessary (such as in the case of a
-    /// string path receiver).
+    /// In the case of a [`FunctionPtr`] with a `Dynamic` [`FunctionAddress`],
+    /// a string path receiver is normally pre-resolved by
+    /// [`GlobalState::resolve_dynamic_string_receiver`](crate::interpreter::vm::global_state::GlobalState::resolve_dynamic_string_receiver)
+    /// (a transactional create through the committer) before `triple` is
+    /// called, so `triple` finds it already in place. The physical create
+    /// below remains as a fallback for the narrow case of a receiver
+    /// destructed (committed and flushed) between that resolution and this
+    /// lookup.
     pub async fn triple(
         ptr: &FunctionPtr,
         config: &Config,

@@ -257,6 +257,10 @@ pub trait CommittedReader {
     /// [`committed_array`]([`CommittedReader::committed_array`]).
     fn committed_mapping(&self, var_id: VarId) -> Option<LpcMapping>;
 
+    /// The committed object for a cell var, or `None` if the var is absent or
+    /// the cell holds a non-object.
+    fn committed_object(&self, var_id: VarId) -> Option<Arc<Process>>;
+
     /// The committed environment of `process` (`None` if it has none).
     fn committed_environment(&self, process: &Process) -> Option<Arc<Process>>;
 
@@ -292,6 +296,16 @@ impl CommittedReader for Arc<GlobalState> {
             WorldValue::Ref(_)
             | WorldValue::Array(_)
             | WorldValue::Process(_)
+            | WorldValue::Connection(_) => None,
+        }
+    }
+
+    fn committed_object(&self, var_id: VarId) -> Option<Arc<Process>> {
+        match self.committed_value(var_id)? {
+            WorldValue::Process(process) => Some(process),
+            WorldValue::Ref(_)
+            | WorldValue::Array(_)
+            | WorldValue::Mapping(_)
             | WorldValue::Connection(_) => None,
         }
     }

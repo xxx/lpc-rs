@@ -366,6 +366,21 @@ impl Telnet {
             let _ = sink.send(TelnetEvent::Wont(TelnetOption::Echo)).await;
         }
 
+        // Pre-resolve a dynamic string receiver through the transactional seam so a
+        // create-on-miss goes through the committer and a committed-but-unflushed
+        // destruct is an error instead of a physical resurrection. For non-string
+        // receivers the seam is a no-op, so `triple` handles them as before.
+        if template
+            .global_state
+            .resolve_dynamic_string_receiver(&input_to.ptr)
+            .await
+            .is_err()
+        {
+            let _ = sink
+                .send(TelnetEvent::Message("Canceled.".to_string()))
+                .await;
+            return;
+        }
         let triple = FunctionPtr::triple(
             &input_to.ptr,
             &template.global_state.config,

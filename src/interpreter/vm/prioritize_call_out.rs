@@ -55,6 +55,16 @@ impl Vm {
                 return;
             };
 
+            // Pre-resolve a dynamic string receiver through the transactional seam so
+            // a create-on-miss goes through the committer (cell write + deferred physical
+            // insert) instead of a blind physical insert, and a committed-but-unflushed
+            // destruct is an error instead of a resurrection. For non-string receivers the
+            // seam is a no-op (`Ok(None)`), so `triple` handles object/simul/efun receivers.
+            if let Err(e) = global_state.resolve_dynamic_string_receiver(&ptr_arc).await {
+                global_state.with_call_outs_mut(|co| co.remove(idx));
+                let _ = global_state.tx.send(VmOp::TaskError(TaskId(0), e)).await;
+                return;
+            }
             let triple =
                 FunctionPtr::triple(&ptr_arc, &global_state.config, &global_state.object_space)
                     .await;

@@ -6,13 +6,17 @@ use std::{
     sync::{Arc, atomic::AtomicU64},
 };
 
+use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_errors::{Result, lpc_error};
 use parking_lot::RwLock;
 
 use crate::{
     interpreter::{
-        lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, process::Process,
+        lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, object_space::ObjectSpace,
+        process::Process, task_context::ObjectLookup, vm::global_state::GlobalState,
     },
     telnet::connection::Connection,
+    util::with_compiler::WithCompiler,
 };
 
 mod changeset;
@@ -429,6 +433,128 @@ impl TxnHandle {
 impl Default for TxnHandle {
     fn default() -> Self {
         Self::empty()
+    }
+}
+
+/// Find the object at `path` in the committed world seen by `txn`, with a
+/// physical-map tie-breaker for objects created outside this transaction
+/// (bootstrap, `clone_object`). The cell read is what makes a concurrent
+/// create of the same cell conflict this transaction and re-run it.
+pub(crate) fn txn_find_object(
+    txn: &TxnHandle,
+    object_space: &ObjectSpace,
+    path: &LpcPath,
+) -> ObjectLookup {
+    let key = object_space.path_key(path.as_ref());
+    match object_space.get_cell_id(&key) {
+        Some(var_id) if txn.is_removed(var_id) => ObjectLookup::Removed,
+        Some(var_id) => match txn
+            .read_object(var_id)
+            .or_else(|| object_space.lookup(&key))
+        {
+            Some(process) => ObjectLookup::Found(process),
+            None => ObjectLookup::NotCreated,
+        },
+        None => match object_space.lookup(&key) {
+            Some(process) => ObjectLookup::Found(process),
+            None => ObjectLookup::NotCreated,
+        },
+    }
+}
+
+/// Insert `process` into the committed world seen by `txn`: mint its cell,
+/// write the cell, and record the deferred physical insert. The cell write is
+/// what makes the object usable within this transaction (and what a
+/// concurrent reader conflicts against); the effect places it in the
+/// physical map at commit.
+pub(crate) fn txn_insert_process(
+    txn: &TxnHandle,
+    object_space: &ObjectSpace,
+    process: &Arc<Process>,
+) {
+    let key = object_space.process_key(process);
+    let var_id = object_space.cell_id(&key);
+    txn.with(|t| t.write_process(var_id, process.clone()));
+    txn.record_effect(Effect::InsertObject {
+        key,
+        process: process.clone(),
+    });
+}
+
+/// Resolve an object path in its own short-lived transaction: cell-first find;
+/// on a true miss, compile + transactional insert, committed (with the
+/// physical insert flushed) before this returns. On rejection (a concurrent
+/// writer to the same cell committed first), re-read the cell and adopt the
+/// winner.
+pub(crate) async fn resolve_or_create_object(
+    gs: &GlobalState,
+    path: &LpcPath,
+) -> Result<Arc<Process>> {
+    let object_space = gs.object_space.as_ref();
+    let key = object_space.path_key(path.as_ref());
+
+    let live = start_txn(&gs.committer_tx).await?;
+    let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+
+    // Cell-first find with a physical tie-breaker.
+    let cell = object_space.get_cell_id(&key);
+    if let Some(process) = cell.and_then(|var_id| txn.read_object(var_id)) {
+        return Ok(process);
+    }
+
+    if cell.is_some() {
+        // A cell exists but reads back empty in the committed world. A
+        // physical object still present means a committed, not-yet-flushed
+        // destruct: an error, not a resurrection. Otherwise (a fully flushed
+        // destruct, or an in-flight create) it is a true miss: create below.
+        if object_space.lookup(&key).is_some() {
+            return Err(lpc_error!(
+                "attempted to call a dynamic receiver that has been destructed"
+            ));
+        }
+    } else if let Some(process) = object_space.lookup(&key) {
+        // No cell but a physical object: a bootstrap object (created outside a
+        // transaction) or a create whose cell the compaction pass has not
+        // recorded yet. Hand it out as-is.
+        return Ok(process);
+    }
+
+    // True miss: compile the file and create the object in this transaction.
+    let program = (&gs.config, object_space)
+        .with_async_compiler(
+            |compiler| async move { compiler.compile_in_game_file(path, None).await },
+        )
+        .await?;
+
+    let process = Arc::new(Process::new(program));
+    txn_insert_process(&txn, object_space, &process);
+
+    let (_world, changeset) = txn.with(|t| t.clone()).into_parts();
+    let commit = commit_changeset(&gs.committer_tx, changeset).await?;
+    let effects = txn.take_effects();
+    drop(live);
+
+    match commit {
+        Ok(()) => {
+            if !effects.is_empty() {
+                flush_effects(&gs.config, object_space, gs.call_outs(), effects).await;
+            }
+            Ok(process)
+        }
+        Err(_rejected) => {
+            // A concurrent writer to this cell committed first: adopt the winner.
+            let live2 = start_txn(&gs.committer_tx).await?;
+            let txn2 = TxnHandle::new(Transaction::new(live2.inner.clone()));
+            match object_space
+                .get_cell_id(&key)
+                .and_then(|v| txn2.read_object(v))
+            {
+                Some(winner) => Ok(winner),
+                None => Err(lpc_error!(
+                    "attempted to call a dynamic receiver that has been destructed"
+                )),
+            }
+        }
     }
 }
 

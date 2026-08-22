@@ -18,7 +18,7 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        stm::{CallOutSchedule, Effect, TxnHandle},
+        stm::{CallOutSchedule, TxnHandle, txn_find_object, txn_insert_process},
         task::{into_task_context::IntoTaskContext, task_template::TaskTemplate},
         vm::{global_state::GlobalState, vm_op::VmOp},
     },
@@ -200,22 +200,7 @@ impl TaskContext {
     /// Does not initialize or create (use `load_object` / the site's own
     /// create step for that).
     pub fn find_object(&self, path: &LpcPath) -> ObjectLookup {
-        let key = self.object_space().path_key(path.as_ref());
-        match self.object_space().get_cell_id(&key) {
-            Some(var_id) if self.txn().is_removed(var_id) => ObjectLookup::Removed,
-            Some(var_id) => match self
-                .txn()
-                .read_object(var_id)
-                .or_else(|| self.object_space().lookup(&key))
-            {
-                Some(process) => ObjectLookup::Found(process),
-                None => ObjectLookup::NotCreated,
-            },
-            None => match self.object_space().lookup(&key) {
-                Some(process) => ObjectLookup::Found(process),
-                None => ObjectLookup::NotCreated,
-            },
-        }
+        txn_find_object(self.txn(), self.object_space(), path)
     }
 
     /// Compile the file at `path` into a [`Process`], without inserting it;
@@ -235,14 +220,7 @@ impl TaskContext {
     /// this transaction (and what concurrent readers conflict against); the
     /// effect is what places it in the physical map at commit.
     pub fn insert_process_transactional(&self, process: &Arc<Process>) {
-        let key = self.object_space().process_key(process);
-        let var_id = self.object_space().cell_id(&key);
-        self.txn()
-            .with(|t| t.write_process(var_id, process.clone()));
-        self.txn().record_effect(Effect::InsertObject {
-            key,
-            process: process.clone(),
-        });
+        txn_insert_process(self.txn(), self.object_space(), process)
     }
 
     /// The one call-out interface: schedule a call out transactionally. The

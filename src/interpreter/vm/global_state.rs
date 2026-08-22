@@ -1,7 +1,8 @@
-use std::{sync::Arc, thread::JoinHandle};
+use std::{path::PathBuf, sync::Arc, thread::JoinHandle};
 
 use bit_set::BitSet;
 use derive_builder::Builder;
+use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{Result, lpc_error};
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
@@ -10,9 +11,15 @@ use tracing::instrument;
 
 use crate::interpreter::{
     call_outs::CallOuts,
+    function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
     gc::{gc_bank::GcVarIdBank, mark::Mark},
+    lpc_ref::LpcRef,
     object_space::ObjectSpace,
-    stm::{CommitProtocol, Committer, GcReport, Snapshot, VarId, WorldRoot, gc_pass, live_count},
+    process::Process,
+    stm::{
+        CommitProtocol, Committer, GcReport, Snapshot, VarId, WorldRoot, gc_pass, live_count,
+        resolve_or_create_object,
+    },
     vm::vm_op::VmOp,
 };
 
@@ -87,6 +94,37 @@ impl GlobalState {
     /// the first `Close`; later sends just fail (channel closed).
     pub fn close_committer(&self) {
         let _ = self.committer_tx.send(CommitProtocol::Close);
+    }
+
+    /// Resolve the receiver of a dynamic function pointer whose first partial
+    /// argument is an object path as a string (`call_out` / `input_to` targets).
+    ///
+    /// Runs the cell-first find + create-on-miss in its own short-lived
+    /// transaction (committed before this returns), so a create goes through
+    /// the committer (cell write + deferred physical insert) instead of a
+    /// blind physical insert, and a committed-but-unflushed destruct is an
+    /// error instead of a physical resurrection.
+    ///
+    /// Returns `Ok(None)` when `ptr` is not a dynamic string receiver (a
+    /// different address kind, or a missing / non-string first partial arg):
+    /// the caller falls through to [`FunctionPtr::triple`], which handles
+    /// object receivers, simul efuns, and efuns.
+    pub async fn resolve_dynamic_string_receiver(
+        &self,
+        ptr: &FunctionPtr,
+    ) -> Result<Option<Arc<Process>>> {
+        let FunctionAddress::Dynamic(_) = &ptr.address else {
+            return Ok(None);
+        };
+        let Some(first) = ptr.partial_args().first().cloned().flatten() else {
+            return Ok(None);
+        };
+        let LpcRef::String(_) = &first else {
+            return Ok(None);
+        };
+        let path_buf = first.with_string(|s| PathBuf::from(s.to_str()))?;
+        let path = LpcPath::InGame(path_buf);
+        Ok(Some(resolve_or_create_object(self, &path).await?))
     }
 
     /// One GC pass, atomic on the committer: refuse unless quiescent, else
@@ -240,7 +278,21 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::test_support::test_config;
+    use crate::{
+        interpreter::{
+            function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
+            lpc_ref::LpcRef,
+            object_flags::ObjectFlags,
+            object_space::ObjectSpace,
+            stm::{
+                CommittedReader, Transaction, TxnHandle, commit_changeset, flush_effects, start_txn,
+            },
+        },
+        test_support::test_config,
+    };
+    use lpc_rs_core::lpc_path::LpcPath;
+    use thin_vec::thin_vec;
+    use ustr::ustr;
 
     #[test]
     fn committer_thread_exits_when_global_state_drops() {
@@ -254,6 +306,261 @@ mod tests {
         assert!(
             probe.is_disconnected(),
             "committer channel should be closed after the committer exited"
+        );
+    }
+
+    /// A `GlobalState` with a live committer and the in-game test config
+    /// (whose code root is `tests/fixtures/code`).
+    fn state_for_receiver() -> Arc<GlobalState> {
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
+        Arc::new(GlobalState::new(test_config(), tx))
+    }
+
+    /// A `FunctionPtr` whose dynamic receiver is the string at `path`.
+    fn string_receiver_ptr(path: &str) -> FunctionPtr {
+        FunctionPtrBuilder::default()
+            .address(FunctionAddress::Dynamic(ustr("foo")))
+            .partial_args(thin_vec![Some(LpcRef::String(Arc::new(
+                path.to_string().into()
+            )))])
+            .build()
+            .unwrap()
+    }
+
+    /// Commit one object cell through the committer protocol, so the cell is
+    /// visible to a later `resolve_or_create_object`. (A raw
+    /// `Changeset::new(Version::new())` would be rejected: it is seeded at a
+    /// version ahead of the committer's current one.)
+    async fn commit_object_cell(
+        gs: &GlobalState,
+        process: Arc<Process>,
+    ) -> std::result::Result<(), Box<lpc_rs_errors::LpcError>> {
+        let key = gs
+            .object_space
+            .path_key(LpcPath::InGame(std::path::PathBuf::from("/dynamic_receiver")).as_ref());
+        let cell_id = gs.object_space.cell_id(&key);
+        let live = start_txn(&gs.committer_tx).await?;
+        let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+        txn.with(|t| t.write_process(cell_id, process));
+        let (_world, changeset) = txn.with(|t| t.clone()).into_parts();
+        let commit = commit_changeset(&gs.committer_tx, changeset).await?;
+        let effects = txn.take_effects();
+        drop(live);
+        commit.expect("object cell commit must succeed");
+        if !effects.is_empty() {
+            flush_effects(&gs.config, &gs.object_space, gs.call_outs(), effects).await;
+        }
+        Ok(())
+    }
+
+    /// The committed cell is the single source of truth: a receiver whose
+    /// cell is already committed resolves to that exact `Arc`.
+    #[tokio::test]
+    async fn string_receiver_finds_committed() {
+        let gs = state_for_receiver();
+        let process = Arc::new(Process::new(
+            crate::interpreter::program::ProgramBuilder::default()
+                .filename(LpcPath::InGame(std::path::PathBuf::from(
+                    "/dynamic_receiver",
+                )))
+                .build()
+                .unwrap(),
+        ));
+        commit_object_cell(&gs, process.clone()).await.unwrap();
+
+        let got = gs
+            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver"))
+            .await
+            .unwrap()
+            .expect("a committed string receiver should resolve");
+        assert!(
+            Arc::ptr_eq(&got, &process),
+            "should hand back the committed process"
+        );
+    }
+
+    /// An object in the physical map but with no committed cell (a bootstrap
+    /// object, created outside a transaction) resolves to that same `Arc`.
+    #[tokio::test]
+    async fn string_receiver_finds_physical_only() {
+        let gs = state_for_receiver();
+        let process = Arc::new(Process::new(
+            crate::interpreter::program::ProgramBuilder::default()
+                .filename(LpcPath::InGame(std::path::PathBuf::from(
+                    "/dynamic_receiver",
+                )))
+                .build()
+                .unwrap(),
+        ));
+        ObjectSpace::insert_process(&gs.object_space, process.clone());
+
+        let got = gs
+            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver"))
+            .await
+            .unwrap()
+            .expect("a physical-only string receiver should resolve");
+        assert!(
+            Arc::ptr_eq(&got, &process),
+            "should hand back the physical process"
+        );
+    }
+
+    /// A committed cell that reads back absent while the physical object is
+    /// still present (a committed, not-yet-flushed destruct) is an error, not
+    /// a physical resurrection.
+    #[tokio::test]
+    async fn string_receiver_unflushed_destruct_errors() {
+        let gs = state_for_receiver();
+        let process = Arc::new(Process::new(
+            crate::interpreter::program::ProgramBuilder::default()
+                .filename(LpcPath::InGame(std::path::PathBuf::from(
+                    "/dynamic_receiver",
+                )))
+                .build()
+                .unwrap(),
+        ));
+        let key = gs.object_space.path_key("/dynamic_receiver");
+        let cell_id = gs.object_space.cell_id(&key);
+
+        commit_object_cell(&gs, process.clone()).await.unwrap();
+        ObjectSpace::insert_process(&gs.object_space, process.clone());
+
+        // Commit a destruct: drop the cell, but never flush the physical
+        // removal, leaving the destruct window open.
+        let live = start_txn(&gs.committer_tx).await.unwrap();
+        let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+        txn.with(|t| t.drop_var(cell_id));
+        let (_world, changeset) = txn.with(|t| t.clone()).into_parts();
+        let commit = commit_changeset(&gs.committer_tx, changeset).await.unwrap();
+        drop(live);
+        commit.expect("destruct commit must succeed");
+
+        assert!(
+            gs.committed_object(cell_id).is_none(),
+            "cell must read back absent"
+        );
+        assert!(
+            gs.object_space.lookup(&key).is_some(),
+            "physical entry still present"
+        );
+
+        let err = gs
+            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver"))
+            .await
+            .expect_err("a committed-but-unflushed destruct must be an error");
+        assert!(
+            err.to_string().contains("destructed"),
+            "expected a destructed-receiver error, got: {err}"
+        );
+    }
+
+    /// A true miss compiles the file, commits the cell, and flushes the
+    /// physical insert, so the receiver is usable (and not pre-initialized)
+    /// when this returns.
+    #[tokio::test]
+    async fn string_receiver_miss_creates_transactionally() {
+        let gs = state_for_receiver();
+
+        let got = gs
+            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver"))
+            .await
+            .unwrap()
+            .expect("a miss should create the receiver");
+
+        let key = gs.object_space.process_key(&got);
+        assert!(
+            gs.object_space.lookup(&key).is_some(),
+            "created receiver must be physically present"
+        );
+        let cell_id = gs
+            .object_space
+            .get_cell_id(&key)
+            .expect("cell must be minted");
+        assert!(
+            gs.committed_object(cell_id).is_some(),
+            "created receiver's cell must be committed"
+        );
+        assert!(
+            !got.flags.test(ObjectFlags::Initialized),
+            "a create-on-miss leaves the receiver uninitialized"
+        );
+    }
+
+    /// Two concurrent creates of the same unknown path both succeed and the
+    /// committed cell holds the receiver: the create is serialized through the
+    /// committer on a single cell for the path.
+    #[tokio::test]
+    async fn string_receiver_concurrent_creates_converge() {
+        let gs = state_for_receiver();
+
+        let ptr = string_receiver_ptr("/dynamic_receiver");
+        let (ra, rb) = tokio::join!(
+            gs.resolve_dynamic_string_receiver(&ptr),
+            gs.resolve_dynamic_string_receiver(&ptr)
+        );
+        let a = ra.unwrap().expect("concurrent create A should succeed");
+        let b = rb.unwrap().expect("concurrent create B should succeed");
+
+        let key = gs.object_space.process_key(&a);
+        assert_eq!(
+            key,
+            gs.object_space.process_key(&b),
+            "both must target the same path"
+        );
+        let cell_id = gs.object_space.get_cell_id(&key).expect("cell must exist");
+        assert!(
+            gs.committed_object(cell_id).is_some(),
+            "cell must hold a committed process"
+        );
+        assert!(
+            gs.object_space.lookup(&key).is_some(),
+            "receiver must be physically present"
+        );
+    }
+
+    /// A non-dynamic address, a missing first partial arg, or a non-string
+    /// first arg all return `Ok(None)`: the caller falls through to `triple`.
+    #[tokio::test]
+    async fn string_receiver_non_dynamic_or_non_string_returns_none() {
+        let gs = state_for_receiver();
+
+        let efun = FunctionPtrBuilder::default()
+            .address(FunctionAddress::Efun(ustr("find_object")))
+            .build()
+            .unwrap();
+        assert!(
+            gs.resolve_dynamic_string_receiver(&efun)
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        let no_args = FunctionPtrBuilder::default()
+            .address(FunctionAddress::Dynamic(ustr("foo")))
+            .build()
+            .unwrap();
+        assert!(
+            gs.resolve_dynamic_string_receiver(&no_args)
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        let dummy = Arc::new(Process::new(
+            crate::interpreter::program::ProgramBuilder::default()
+                .build()
+                .unwrap(),
+        ));
+        let obj_arg = FunctionPtrBuilder::default()
+            .address(FunctionAddress::Dynamic(ustr("foo")))
+            .partial_args(thin_vec![Some(LpcRef::Object(Arc::downgrade(&dummy)))])
+            .build()
+            .unwrap();
+        assert!(
+            gs.resolve_dynamic_string_receiver(&obj_arg)
+                .await
+                .unwrap()
+                .is_none()
         );
     }
 }
