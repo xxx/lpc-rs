@@ -339,8 +339,10 @@ mod tests {
     use super::*;
     use crate::{
         interpreter::{
-            CommittedReader, lpc_ref::LpcRef, stm::start_txn,
-            task::apply_function::apply_function_by_name, task::task_template::TaskTemplateBuilder,
+            CommittedReader,
+            lpc_ref::LpcRef,
+            stm::start_txn,
+            task::{apply_function::apply_function_by_name, task_template::TaskTemplateBuilder},
         },
         test_support::test_config,
     };

@@ -65,15 +65,16 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use std::net::ToSocketAddrs;
-    use std::sync::Arc;
+    use std::{net::ToSocketAddrs, sync::Arc};
 
     use arc_swap::ArcSwapAny;
     use indoc::indoc;
 
     use crate::{
         interpreter::{
-            lpc_int::LpcInt, lpc_ref::LpcRef, task::Task, task::into_task_context::IntoTaskContext,
+            lpc_int::LpcInt,
+            lpc_ref::LpcRef,
+            task::{Task, into_task_context::IntoTaskContext},
             vm::Vm,
         },
         telnet::connection::Connection,
