@@ -2674,8 +2674,8 @@ mod test_upvalues {
     #[tokio::test]
     async fn upvalue_writes_survive_gc() {
         // a closure captures a *local*, so `i++` and `return i`
-        // route through the **Upvalue** arm of `apply_in_location` /
-        // `get_location_in_frame` via the transaction. The cell is committed
+        // route through the cell arm of `CallFrame::apply_in_location` /
+        // `CallFrame::get_location` via the transaction. The cell is committed
         // during the eval; after the frame that held the closure is gone, the
         // cell is no longer marked (no live `FunctionPtr` references it), so
         // a sweep drops its `VarId` out of the committer's world. The txn

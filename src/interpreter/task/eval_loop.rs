@@ -16,8 +16,7 @@ use crate::{
         lpc_ref::{LpcRef, NULL},
         lpc_string::LpcString,
         task::{
-            CatchPoint, Task, apply_in_location, get_location, get_location_in_frame, set_location,
-            task_state::TaskState,
+            CatchPoint, Task, apply_in_location, get_location, set_location, task_state::TaskState,
         },
     },
     pop_frame,
@@ -305,11 +304,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         let ellipsis_vars = &arg_locations[num_args..];
                         ellipsis_vars
                             .iter()
-                            .map(|x| {
-                                get_location_in_frame(frame, &self.context.txn, *x)
-                                    .map(|v| v.into_owned())
-                            })
-                            .collect::<lpc_rs_errors::Result<Vec<_>>>()?
+                            .map(|x| frame.get_location(&self.context.txn, *x).into_owned())
+                            .collect::<Vec<_>>()
                     }
                 };
 

@@ -22,7 +22,7 @@ use std::{
 use async_recursion::async_recursion;
 use bit_set::BitSet;
 use educe::Educe;
-pub(crate) use location::{apply_in_location, get_location, get_location_in_frame, set_location};
+pub(crate) use location::{apply_in_location, get_location, set_location};
 use lpc_rs_asm::address::Address;
 use lpc_rs_core::{
     LpcIntInner, RegisterSize,

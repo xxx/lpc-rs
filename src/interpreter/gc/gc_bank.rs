@@ -30,6 +30,7 @@ impl<T> Default for GcBank<T> {
 impl<T> GcBank<T> {
     delegate! {
         to self.registers {
+            #[cfg(test)]
             pub fn len(&self) -> usize;
             pub fn insert(&mut self, value: T) -> usize;
             pub fn reserve(&mut self, additional: usize);

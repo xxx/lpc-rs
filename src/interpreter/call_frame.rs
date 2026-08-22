@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     fmt,
     fmt::{Display, Formatter},
     sync::Arc,
@@ -21,13 +22,18 @@ use tracing::{instrument, trace};
 use crate::interpreter::{
     bank::RefBank,
     gc::{gc_bank::GcVarIdBank, mark::Mark, unique_id::UniqueId},
-    lpc_ref::LpcRef,
+    lpc_ref::{LpcRef, NULL},
     process::Process,
     stm::{TxnHandle, VarId},
 };
 
-#[cfg(test)]
-use crate::interpreter::lpc_ref::NULL;
+/// Where a [`RegisterVariant`] resolves in a frame: a local register, or the
+/// world cell behind a global or an upvalue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Slot {
+    Register(Register),
+    Cell(VarId),
+}
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for
@@ -213,6 +219,32 @@ impl CallFrame {
         })
     }
 
+    /// Resolve `location` to its slot in this frame.
+    pub(crate) fn slot(&self, location: RegisterVariant) -> Slot {
+        match location {
+            RegisterVariant::Local(reg) => Slot::Register(reg),
+            RegisterVariant::Global(reg) => Slot::Cell(self.process.var_id(reg.into())),
+            RegisterVariant::Upvalue(reg) => {
+                let idx = self.upvalue_ptrs[reg.index() as usize];
+                Slot::Cell(self.with_upvalues(|uv| uv[idx]))
+            }
+        }
+    }
+
+    /// Read the [`LpcRef`] at `location`; an unwritten cell reads `NULL`.
+    #[instrument(skip(self))]
+    #[inline]
+    pub(crate) fn get_location(
+        &self,
+        txn: &TxnHandle,
+        location: RegisterVariant,
+    ) -> Cow<'_, LpcRef> {
+        match self.slot(location) {
+            Slot::Register(reg) => Cow::Borrowed(&self.registers[reg]),
+            Slot::Cell(cell) => Cow::Owned(txn.with(|t| t.read(cell).unwrap_or(NULL))),
+        }
+    }
+
     /// Assign an [`LpcRef`] to a specific location, based on the [`RegisterVariant`]
     #[inline]
     pub(crate) fn set_location(
@@ -221,26 +253,34 @@ impl CallFrame {
         location: RegisterVariant,
         lpc_ref: LpcRef,
     ) {
-        match location {
-            RegisterVariant::Local(reg) => {
-                self.registers[reg] = lpc_ref;
-            }
-            RegisterVariant::Global(reg) => {
-                let var = self.process.var_id(reg.into());
-                // A blind in-txn write: the read that computed `lpc_ref` was
-                // already tracked when the caller read it.
-                txn.with(|t| t.write(var, lpc_ref));
-            }
-            RegisterVariant::Upvalue(reg) => {
-                let upvalues = &self.upvalue_ptrs;
-                let idx = upvalues[reg.index() as usize];
+        match self.slot(location) {
+            Slot::Register(reg) => self.registers[reg] = lpc_ref,
+            // A blind in-txn write: the read that computed `lpc_ref` was
+            // already tracked when the caller read it.
+            Slot::Cell(cell) => txn.with(|t| t.write(cell, lpc_ref)),
+        }
+    }
 
-                // A blind in-txn write through the cell's identity,
-                // exactly like the Global arm above: the slot itself
-                // holds no value.
-                let cell = self.with_upvalues(|uv| uv[idx]);
-                txn.with(|t| t.write(cell, lpc_ref));
-            }
+    /// Apply `func` to the [`LpcRef`] at `location`, in place.
+    pub(crate) fn apply_in_location<F>(
+        &mut self,
+        txn: &TxnHandle,
+        location: RegisterVariant,
+        func: F,
+    ) -> Result<()>
+    where
+        F: FnOnce(&mut LpcRef) -> Result<()>,
+    {
+        match self.slot(location) {
+            Slot::Register(reg) => func(&mut self.registers[reg]),
+            // In-txn read-modify-write: the read is tracked, the write
+            // lands in the in-flight changeset.
+            Slot::Cell(cell) => txn.with(|t| {
+                let mut cur = t.read(cell).unwrap_or(NULL);
+                func(&mut cur)?;
+                t.write(cell, cur);
+                Ok(())
+            }),
         }
     }
 
@@ -257,22 +297,7 @@ impl CallFrame {
                     return LocalVariable::new(var.name.clone(), NULL);
                 };
 
-                let lpc_ref = match loc {
-                    RegisterVariant::Local(reg) => self.registers[reg].clone(),
-                    RegisterVariant::Global(reg) => {
-                        let var = self.process.var_id(reg.into());
-                        txn.with(|t| t.read(var).unwrap_or_else(|| NULL.clone()))
-                    }
-                    RegisterVariant::Upvalue(ptr_reg) => {
-                        let upvalues = &self.upvalue_ptrs;
-                        let data_reg = upvalues[ptr_reg.index() as usize];
-
-                        let cell = self.with_upvalues(|uv| uv[data_reg]);
-                        txn.with(|t| t.read(cell).unwrap_or_else(|| NULL.clone()))
-                    }
-                };
-
-                LocalVariable::new(var.name.clone(), lpc_ref)
+                LocalVariable::new(var.name.clone(), self.get_location(txn, loc).into_owned())
             })
             .collect()
     }
@@ -375,7 +400,7 @@ mod tests {
     use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
 
     use super::*;
-    use crate::interpreter::gc::gc_bank::GcBank;
+    use crate::interpreter::{gc::gc_bank::GcBank, program::Program};
 
     #[test]
     fn new_sets_up_registers() {
@@ -402,6 +427,41 @@ mod tests {
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &NULL));
+    }
+
+    #[test]
+    fn slot_resolves_each_variant() {
+        let program = Program {
+            num_globals: 1,
+            ..Program::default()
+        };
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("my_function")
+            .filename(Arc::new("my_function".into()))
+            .return_type(LpcType::Void)
+            .build()
+            .unwrap();
+        let mut pf = ProgramFunction::new(prototype, 0);
+        pf.num_upvalues = 1;
+
+        let frame = CallFrame::new(
+            Process::new(program),
+            Arc::new(pf),
+            0,
+            None::<&[Register]>,
+            Arc::new(RwLock::new(GcBank::default())),
+        );
+
+        assert_eq!(
+            frame.slot(Register(2).as_local()),
+            Slot::Register(Register(2))
+        );
+        assert_eq!(
+            frame.slot(Register(0).as_global()),
+            Slot::Cell(frame.process.var_id(0))
+        );
+        let cell = frame.with_upvalues(|uv| uv[frame.upvalue_ptrs[0]]);
+        assert_eq!(frame.slot(Register(0).as_upvalue()), Slot::Cell(cell));
     }
 
     mod test_with_minimum_arg_capacity {
