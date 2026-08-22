@@ -22,15 +22,13 @@ use crate::{
 /// information from `template`.
 /// Returns the result of the function.
 ///
-/// This function uses timed evaluation, and will timeout if execution takes too long.
-///
 /// # Arguments
 ///
 /// * `f` - The [`ProgramFunction`] to apply.
 /// * `args` - A slice of [`LpcRef`]s to apply the function to.
 /// * `proc` - The [`Process`] to apply the function in.
 /// * `template` - The template that holds the rest of the context information.
-/// * `timeout` - The maximum amount of time to allow the function to execute, in milliseconds.
+/// * `timeout` - The execution limit in milliseconds; `None` for no limit.
 ///
 /// # Returns
 ///
@@ -49,13 +47,9 @@ where
     let ctx = template.into_task_context(proc);
     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(ctx);
 
-    if let Some(timeout) = timeout {
-        task.timed_eval(f, args, timeout)
-            .await
-            .map(|_| task.result().unwrap())
-    } else {
-        task.eval(f, args).await.map(|_| task.result().unwrap())
-    }
+    task.timed_eval(f, args, timeout.unwrap_or(0))
+        .await
+        .map(|_| task.result().unwrap())
 }
 
 /// Apply function named `name`, in process `proc`, to arguments `args`, using context

@@ -2699,7 +2699,7 @@ mod test_upvalues {
             .get("bump")
             .cloned()
             .expect("bump");
-        task.eval(f, &[]).await.unwrap();
+        task.timed_eval(f, &[], 0).await.unwrap();
         assert_eq!(
             task.result(),
             Some(LpcRef::from(2)),

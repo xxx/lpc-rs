@@ -27,7 +27,7 @@ async fn increment_once(tx: &flume::Sender<CommitProtocol>, counter: VarId) -> R
     res.map_err(|_| ())
 }
 
-/// Retry the RMW until it commits, counting attempts/conflicts like `Task::retry_loop`.
+/// Retry the RMW until it commits, counting attempts/conflicts like `run_attempts`.
 async fn increment_with_retry(tx: &flume::Sender<CommitProtocol>, counter: VarId) -> (u64, u64) {
     let mut attempts = 0u64;
     let mut conflicts = 0u64;

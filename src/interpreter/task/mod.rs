@@ -33,9 +33,11 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use parking_lot::RwLock;
 use string_interner::{DefaultSymbol, Symbol};
 use thin_vec::{ThinVec, thin_vec};
-use tokio::{task::JoinHandle, time::timeout};
+use tokio::time::timeout;
 use tracing::{error, instrument, trace, warn};
 
+#[cfg(test)]
+use crate::interpreter::stm::RetryStats;
 use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,
@@ -46,7 +48,7 @@ use crate::interpreter::{
     object_flags::ObjectFlags,
     process::Process,
     stm::{
-        AttemptBody, CommitProtocol, Effect, LiveSnapshot, RetryStats, Transaction, TxnHandle,
+        AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, TxnHandle,
         commit_changeset, flush_effects, run_attempts, start_txn,
     },
     task::{task_id::TaskId, task_state::TaskState},
@@ -95,8 +97,8 @@ pub struct TaskSeed {
 }
 
 impl TaskSeed {
-    /// Build the entry [`CallFrame`] for one attempt, copying `self.args`
-    /// into the frame's registers exactly as `prepare_function_call` does.
+    /// Build the entry [`CallFrame`] for one attempt; `self.args` land in
+    /// registers `1..=len`.
     pub(crate) fn build_call_frame(
         &self,
         upvalue_ptrs: Option<&[Register]>,
@@ -258,31 +260,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(task)
     }
 
-    /// Spawn a new tokio task to evaluate `f` to completion, or an error, with timeout.
-    pub async fn spawn_eval<const N: usize>(
-        mut task: Task<N>,
-        f: Arc<ProgramFunction>,
-        args: &[LpcRef],
-    ) -> JoinHandle<Result<Task<N>>> {
-        let args = args.to_vec();
-
-        tokio::spawn(async move {
-            let max_execution_time = task.context.config().max_execution_time;
-            match task.timed_eval(f, &args, max_execution_time).await {
-                Ok(_) => Ok(task),
-                Err(e) => Err(e),
-            }
-        })
-    }
-
-    /// Run one attempt: open a transaction against the current world, and
-    /// run to completion (one timeout, if given). Returns the attempt's
-    /// [`LiveSnapshot`] (release it only after the commit reply resolves),
-    /// or `None` for a joiner.
+    /// Open a transaction against the current world and run one attempt to
+    /// completion under `self.timeout_ms`. Returns the attempt's
+    /// [`LiveSnapshot`], to be released only after the commit reply, or
+    /// `None` for a joiner.
     async fn open_attempt(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
-        timeout_ms: Option<u64>,
     ) -> Result<Option<LiveSnapshot>> {
         let live = if self.joins_parent {
             None
@@ -309,7 +293,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         // One timeout per attempt; the committer's conflict rule is the sole
         // serialization control.
-        let outcome = match timeout_ms {
+        let outcome = match self.timeout_ms {
             Some(ms) => timeout(Duration::from_millis(ms), self.resume()).await,
             None => Ok(self.resume().await),
         };
@@ -318,7 +302,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Err(_) => {
                 return Err(lpc_error!(
                     "evaluation limit of {}ms has been reached",
-                    timeout_ms.unwrap_or(0)
+                    self.timeout_ms.unwrap_or(0)
                 ));
             }
         };
@@ -332,25 +316,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(live)
     }
 
-    /// One task's attempts through the shared runner
-    /// ([`stm::run_attempts`]): timeout and effect flush stay here; the
-    /// committer protocol lives in the runner.
-    async fn retry_loop(
-        &mut self,
-        tx: &flume::Sender<CommitProtocol>,
-        timeout_ms: Option<u64>,
-    ) -> (Result<()>, RetryStats) {
-        self.timeout_ms = timeout_ms;
-        run_attempts(tx, self).await
-    }
-
-    /// Evaluate `f` to completion, or an error. No timeouts are applied.
-    #[instrument(skip_all)]
-    pub async fn eval(&mut self, f: Arc<ProgramFunction>, args: &[LpcRef]) -> Result<()> {
-        self.timed_eval(f, args, 0).await
-    }
-
-    /// Evaluate `f` to completion, or an error, with a timeout.
+    /// Evaluate `f` to completion, or an error; a `timeout_ms` of 0 means
+    /// no timeout.
     #[instrument(skip_all)]
     #[async_recursion]
     pub async fn timed_eval(
@@ -359,21 +326,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         args: &[LpcRef],
         timeout_ms: u64,
     ) -> Result<()> {
-        let loop_timeout = {
-            if timeout_ms == 0 {
-                None
-            } else {
-                Some(timeout_ms)
-            }
-        };
-        let seed = TaskSeed {
+        self.timeout_ms = (timeout_ms != 0).then_some(timeout_ms);
+        self.seed = Some(TaskSeed {
             process: self.context.process().clone(),
             function: f,
             args: args.to_vec(),
-        };
-        self.seed = Some(seed);
+        });
         let tx = self.context.global_state.committer_tx.clone();
-        let (res, stats) = self.retry_loop(&tx, loop_timeout).await;
+        let (res, stats) = run_attempts(&tx, self).await;
         trace!(
             attempts = stats.attempts,
             conflicts = stats.conflicts,
@@ -381,43 +341,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             "task timed_eval finished"
         );
         res
-    }
-
-    /// Evaluate `f` to completion, or an error, in the context of an arbitrary process
-    #[async_recursion]
-    pub async fn eval_function(
-        &mut self,
-        process: Arc<Process>,
-        f: Arc<ProgramFunction>,
-        args: &[LpcRef],
-    ) -> Result<()> {
-        self.prepare_function_call(process, f, args).await?;
-
-        self.resume().await
-    }
-
-    /// Prepare to call a function. This is intended to be used when a Task is first created and enqueued.
-    #[instrument(skip_all)]
-    async fn prepare_function_call(
-        &mut self,
-        process: Arc<Process>,
-        f: Arc<ProgramFunction>,
-        args: &[LpcRef],
-    ) -> Result<()> {
-        let mut frame = CallFrame::new(
-            process,
-            f,
-            RegisterSize::try_from(args.len())?,
-            self.context.upvalue_ptrs.as_deref(),
-            self.context.global_state.clone_upvalues(),
-        );
-
-        // TODO: This is probably not correct. See behavior in prepare_new_call_frame
-        if !args.is_empty() {
-            frame.registers[1..=args.len()].clone_from_slice(args);
-        }
-
-        self.stack.push(frame)
     }
 
     /// Set the state to handle a caught error.
@@ -582,10 +505,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.context.result()
     }
 
-    /// `#[cfg(test)]` entry point: run against an explicit committer (used by
-    /// the synthetic-abort test to inject a rejection) and return the stats.
-    /// `pub(crate)`: only the crate's own tests call it, and `RetryStats` is
-    /// `pub(crate)`, so a `pub` item would leak a more-private type.
+    /// Run against an explicit committer, so a test can inject a rejection,
+    /// and return the stats.
     #[cfg(test)]
     pub(crate) async fn eval_with_committer(
         &mut self,
@@ -593,7 +514,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         seed: &TaskSeed,
     ) -> (Result<()>, RetryStats) {
         self.seed = Some(seed.clone());
-        self.retry_loop(tx, None).await
+        self.timeout_ms = None;
+        run_attempts(tx, self).await
     }
 }
 
@@ -603,7 +525,7 @@ impl<const STACKSIZE: usize> AttemptBody for Task<STACKSIZE> {
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
     ) -> Result<Option<LiveSnapshot>> {
-        self.open_attempt(tx, self.timeout_ms).await
+        self.open_attempt(tx).await
     }
 
     async fn commit_phase(

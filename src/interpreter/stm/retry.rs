@@ -80,77 +80,40 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
     let mut attempts = 0u64;
     let mut conflicts = 0u64;
 
-    loop {
+    let result = loop {
         attempts += 1;
 
         let live = match body.begin_attempt(tx).await {
             Ok(live) => live,
-            Err(e) => {
-                return (
-                    Err(e),
-                    RetryStats {
-                        attempts,
-                        conflicts,
-                        duration: started.elapsed(),
-                    },
-                );
-            }
+            Err(e) => break Err(e),
         };
 
         // A joiner: the caller's commit carries the writes.
         let Some(live) = live else {
-            return (
-                Ok(()),
-                RetryStats {
-                    attempts,
-                    conflicts,
-                    duration: started.elapsed(),
-                },
-            );
+            break Ok(());
         };
 
         let (commit, effects) = match body.commit_phase(tx, live).await {
             Ok(c) => c,
-            Err(e) => {
-                return (
-                    Err(e),
-                    RetryStats {
-                        attempts,
-                        conflicts,
-                        duration: started.elapsed(),
-                    },
-                );
-            }
+            Err(e) => break Err(e),
         };
 
         // The commit is permanent, so deliver now. A rejected attempt never
         // reaches this: its recorded output is dropped with the attempt.
         if commit.is_ok() {
-            match body.deliver(effects).await {
-                Ok(()) => {
-                    return (
-                        Ok(()),
-                        RetryStats {
-                            attempts,
-                            conflicts,
-                            duration: started.elapsed(),
-                        },
-                    );
-                }
-                Err(e) => {
-                    return (
-                        Err(e),
-                        RetryStats {
-                            attempts,
-                            conflicts,
-                            duration: started.elapsed(),
-                        },
-                    );
-                }
-            }
+            break body.deliver(effects).await;
         }
         conflicts += 1;
-    }
+    };
+
+    (
+        result,
+        RetryStats {
+            attempts,
+            conflicts,
+            duration: started.elapsed(),
+        },
+    )
 }
 
 /// Start a transaction against the committer's current world and hand back

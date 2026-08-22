@@ -32,9 +32,10 @@ pub use committer::CommitterStats;
 pub(crate) use committer::{CommitProtocol, Committer, GcReport, LiveSnapshot, WorldRoot};
 pub(crate) use effects::{CallOutSchedule, Effect, EffectLog, flush_effects};
 pub use retry::CommittedReader;
+#[cfg(test)]
+pub(crate) use retry::RetryStats;
 pub(crate) use retry::{
-    AttemptBody, RetryStats, commit_changeset, committer_stats, gc_pass, live_count, run_attempts,
-    start_txn,
+    AttemptBody, commit_changeset, committer_stats, gc_pass, live_count, run_attempts, start_txn,
 };
 pub(crate) use snapshot::Snapshot;
 pub(crate) use world_value::WorldValue;
