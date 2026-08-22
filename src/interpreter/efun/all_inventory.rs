@@ -1,33 +1,10 @@
-use std::sync::Arc;
-
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun, efun::efun_context::EfunContext, lpc_array::LpcArray, lpc_ref::LpcRef, process::Process,
-};
+use crate::interpreter::{efun, efun::efun_context::EfunContext, process::Process};
 
 /// `all_inventory`, an efun for returning an object's inventory.
 pub async fn all_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let arg_ref = context.resolve_local_register(1 as RegisterSize);
-
-    let Some(current_env) = efun::arg_or_this_object(arg_ref, context) else {
-        let result = LpcRef::Array(context.txn().with(|t| t.mint_array(LpcArray::default())));
-        context.return_efun_result(result);
-        return Ok(());
-    };
-
-    let inventory = Process::inventory_of(context.txn(), &current_env);
-    let result = context.txn().with(|t| {
-        let array = inventory
-            .into_iter()
-            .map(|item| LpcRef::from(Arc::downgrade(&item)))
-            .collect::<LpcArray>();
-        LpcRef::Array(t.mint_array(array))
-    });
-
-    context.return_efun_result(result);
-
+    efun::return_objects_of(context, |txn, object| Process::inventory_of(txn, &object));
     Ok(())
 }
 

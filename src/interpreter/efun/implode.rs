@@ -1,22 +1,17 @@
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef};
+use crate::interpreter::efun::efun_context::EfunContext;
 
-/// `implode`, an efun for joining an array of strings into a single string.
 pub async fn implode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let subject_ref = context.resolve_local_register(1 as RegisterSize);
-
     let delimiter_ref = context.resolve_local_register(2 as RegisterSize);
-    let delimiter = match delimiter_ref {
-        LpcRef::Int(LpcInt(0)) => String::from(" "),
-        LpcRef::String(_) => delimiter_ref.with_string(|x| x.to_string())?,
-        LpcRef::Float(_)
-        | LpcRef::Int(_)
-        | LpcRef::Object(_)
-        | LpcRef::Array(_)
-        | LpcRef::Mapping(_)
-        | LpcRef::Function(_) => return Ok(()),
+    let delimiter = if delimiter_ref.is_null() {
+        " "
+    } else if let Some(delimiter) = delimiter_ref.as_str() {
+        delimiter
+    } else {
+        return Ok(());
     };
 
     let result = subject_ref.with_array(context.txn(), |subject| {
@@ -24,7 +19,7 @@ pub async fn implode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
             .iter()
             .map(|x| x.to_string())
             .collect::<Vec<_>>()
-            .join(&delimiter)
+            .join(delimiter)
             .into()
     })?;
 

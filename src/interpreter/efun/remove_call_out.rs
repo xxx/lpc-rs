@@ -3,23 +3,11 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
-/// `remove_call_out`, an efun for removing a call out.
-/// This will cancel both upcoming and repeating call outs.
 pub async fn remove_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let LpcRef::Int(idx) = context.resolve_local_register(1 as RegisterSize) else {
-        return Err(context.runtime_bug("non-int call out ID sent to `remove_call_out`"));
-    };
+    let id = context.call_out_id(1 as RegisterSize, "remove_call_out")?;
+    let ret = context.cancel_call_out(id);
 
-    if idx.0 < 0 {
-        return Err(context.runtime_error(format!(
-            "invalid call out ID `{idx}` sent to `remove_call_out`"
-        )));
-    }
-
-    let ret = context.cancel_call_out(idx.0 as u64);
-
-    let result = LpcRef::Int(ret.into());
-    context.return_efun_result(result);
+    context.return_efun_result(LpcRef::Int(ret.into()));
 
     Ok(())
 }

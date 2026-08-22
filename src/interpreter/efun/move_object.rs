@@ -1,4 +1,4 @@
-use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process};
@@ -23,9 +23,7 @@ pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
             );
         }
         LpcRef::String(_) => {
-            let path = arg_ref.with_string(|string| {
-                LpcPath::new_in_game(string, context.in_game_cwd(), &*context.config().lib_dir)
-            })?;
+            let path = arg_ref.with_string(|string| context.in_game_path(string.to_str()))?;
 
             context.load_object(&path).await?
         }

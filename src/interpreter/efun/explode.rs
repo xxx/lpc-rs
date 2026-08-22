@@ -1,44 +1,25 @@
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext, lpc_array::LpcArray, lpc_int::LpcInt, lpc_ref::LpcRef,
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
-/// `explode`, an efun for splitting a string into an array of strings.
 pub async fn explode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let subject_ref = context.resolve_local_register(1 as RegisterSize);
-    let subject = match subject_ref {
-        LpcRef::Float(_)
-        | LpcRef::Int(_)
-        | LpcRef::Object(_)
-        | LpcRef::Array(_)
-        | LpcRef::Mapping(_)
-        | LpcRef::Function(_) => return Ok(()),
-        LpcRef::String(_) => subject_ref.with_string(|s| s.to_string())?,
+    let Some(subject) = subject_ref.as_str() else {
+        return Ok(());
     };
 
     let delimiter_ref = context.resolve_local_register(2 as RegisterSize);
-    let delimiter = match delimiter_ref {
-        LpcRef::Int(LpcInt(0)) => String::from(" "),
-        LpcRef::String(_) => delimiter_ref.with_string(|s| s.to_string())?,
-        LpcRef::Float(_)
-        | LpcRef::Int(_)
-        | LpcRef::Object(_)
-        | LpcRef::Array(_)
-        | LpcRef::Mapping(_)
-        | LpcRef::Function(_) => return Ok(()),
+    let delimiter = if delimiter_ref.is_null() {
+        " "
+    } else if let Some(delimiter) = delimiter_ref.as_str() {
+        delimiter
+    } else {
+        return Ok(());
     };
 
-    let result = context.txn().with(|t| {
-        let array = subject
-            .split(&delimiter)
-            .map(LpcRef::from)
-            .collect::<LpcArray>();
-        LpcRef::Array(t.mint_array(array))
-    });
-
-    context.return_efun_result(result);
+    let parts: Vec<LpcRef> = subject.split(delimiter).map(LpcRef::from).collect();
+    context.return_array(parts);
 
     Ok(())
 }

@@ -1,28 +1,22 @@
-use std::{borrow::Cow, fmt::Debug, future::Future, path::PathBuf, sync::Arc};
+use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use arc_swap::ArcSwapAny;
-use async_trait::async_trait;
 use delegate::delegate;
-use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, register::RegisterVariant};
+use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_utils::config::Config;
-use tokio::sync::mpsc::Sender;
 
-use crate::{
-    compiler::Compiler,
-    interpreter::{
-        call_frame::CallFrame,
-        call_stack::CallStack,
-        lpc_ref::LpcRef,
-        object_space::ObjectSpace,
-        process::Process,
-        program::Program,
-        stm::{Effect, TxnHandle},
-        task::{Task, get_location, task_id::TaskId, task_template::TaskTemplate},
-        task_context::{ObjectLookup, TaskContext, TaskContextBuilder},
-        vm::vm_op::VmOp,
-    },
-    util::with_compiler::WithCompiler,
+use crate::interpreter::{
+    call_frame::CallFrame,
+    call_stack::CallStack,
+    lpc_array::LpcArray,
+    lpc_ref::LpcRef,
+    object_space::ObjectSpace,
+    process::Process,
+    program::Program,
+    stm::{Effect, TxnHandle},
+    task::{Task, task_id::TaskId, task_template::TaskTemplate},
+    task_context::{ObjectLookup, TaskContext, TaskContextBuilder},
 };
 
 /// A structure to hold various pieces of interpreter state, to be passed to
@@ -62,9 +56,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
             /// Get pointer to the current [`Config`] that's in-use
             pub fn config(&self) -> &Arc<Config>;
-
-            /// Get access to the `tx` channel, to talk to the [`Vm`](crate::interpreter::vm::Vm)
-            pub fn tx(&self) -> Sender<VmOp>;
 
             /// Schedule a call out transactionally.
             pub fn schedule_call_out(
@@ -150,6 +141,45 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     pub fn return_efun_result(&mut self, result: LpcRef) {
         let frame = self.stack.last_mut().unwrap();
         frame.registers[0] = result;
+    }
+
+    /// Mint `items` as an array in this efun's transaction.
+    pub(crate) fn mint_array<I>(&self, items: I) -> LpcRef
+    where
+        I: IntoIterator<Item = LpcRef>,
+    {
+        let array = items.into_iter().collect::<LpcArray>();
+        LpcRef::Array(self.txn().with(|t| t.mint_array(array)))
+    }
+
+    /// Mint `items` as an array and return it from the efun.
+    pub(crate) fn return_array<I>(&mut self, items: I)
+    where
+        I: IntoIterator<Item = LpcRef>,
+    {
+        let result = self.mint_array(items);
+        self.return_efun_result(result);
+    }
+
+    /// Resolve `path` against the current process's in-game directory.
+    pub fn in_game_path(&self, path: &str) -> LpcPath {
+        LpcPath::new_in_game(path, self.in_game_cwd(), &*self.config().lib_dir)
+    }
+
+    /// Read a call-out id argument: a non-int is a bug, a negative id an error.
+    pub fn call_out_id<I>(&self, register: I, efun_name: &str) -> Result<u64>
+    where
+        I: Into<RegisterSize>,
+    {
+        let LpcRef::Int(idx) = self.resolve_local_register(register) else {
+            return Err(self.runtime_bug(format!("non-int call out ID sent to `{efun_name}`")));
+        };
+        if idx.0 < 0 {
+            return Err(
+                self.runtime_error(format!("invalid call out ID `{idx}` sent to `{efun_name}`"))
+            );
+        }
+        Ok(idx.0 as u64)
     }
 
     /// Get the current debug span
@@ -281,20 +311,10 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.record_effect(Effect::RemoveObject { key });
     }
 
-    /// Resolve any RegisterVariant
-    #[inline]
-    pub fn resolve_register_variant(&self, variant: RegisterVariant) -> Result<Cow<'_, LpcRef>> {
-        get_location(self.stack, self.txn(), variant)
-    }
-
     /// Get a clone of the task context
     #[inline]
     pub fn task_context_builder(&self) -> TaskContextBuilder {
         TaskContextBuilder::from(self.task_context)
-    }
-
-    pub fn new_task_template(&self) -> TaskTemplate {
-        TaskTemplate::from(self.task_context)
     }
 
     /// Get a reference to the [`Process`] that contains the call to this efun
@@ -322,17 +342,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     }
 }
 
-#[async_trait]
-impl<'task, const N: usize> WithCompiler for EfunContext<'task, N> {
-    async fn with_async_compiler<F, U, T>(&self, f: F) -> Result<T>
-    where
-        F: FnOnce(Compiler) -> U + Send,
-        U: Future<Output = Result<T>> + Send,
-    {
-        self.task_context.with_async_compiler(f).await
-    }
-}
-
 impl<'task, const N: usize> From<&EfunContext<'task, N>> for TaskTemplate {
     fn from(value: &EfunContext<'task, N>) -> Self {
         TaskTemplate::from(value.task_context)
@@ -350,7 +359,10 @@ mod tests {
     use crate::{
         interpreter::{
             program::ProgramBuilder,
-            vm::global_state::{GlobalState, GlobalStateBuilder},
+            vm::{
+                global_state::{GlobalState, GlobalStateBuilder},
+                vm_op::VmOp,
+            },
         },
         test_support::test_config,
     };

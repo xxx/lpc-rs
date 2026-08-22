@@ -1,31 +1,12 @@
-use std::sync::Arc;
-
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun, efun::efun_context::EfunContext, lpc_array::LpcArray, lpc_ref::LpcRef, process::Process,
-};
+use crate::interpreter::{efun, efun::efun_context::EfunContext, process::Process};
 
 /// `all_environment`, an efun for returning all wrapping environments of an object.
 pub async fn all_environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let arg_ref = context.resolve_local_register(1 as RegisterSize);
-
-    let Some(current_env) = efun::arg_or_this_object(arg_ref, context) else {
-        let result = LpcRef::Array(context.txn().with(|t| t.mint_array(LpcArray::default())));
-        context.return_efun_result(result);
-        return Ok(());
-    };
-
-    let entries: Vec<LpcRef> = Process::all_environment(context.txn().clone(), current_env)
-        .map(|e| LpcRef::from(Arc::downgrade(&e)))
-        .collect();
-    let result = context.txn().with(|t| {
-        let array: LpcArray = entries.into_iter().collect();
-        LpcRef::Array(t.mint_array(array))
+    efun::return_objects_of(context, |txn, object| {
+        Process::all_environment(txn.clone(), object)
     });
-    context.return_efun_result(result);
-
     Ok(())
 }
 

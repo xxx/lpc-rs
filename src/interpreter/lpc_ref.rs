@@ -95,6 +95,23 @@ impl LpcRef {
         matches!(self, LpcRef::Int(LpcInt(0)))
     }
 
+    /// The live object this ref points to; `None` for a non-object or a
+    /// destructed one.
+    pub fn as_object(&self) -> Option<Arc<Process>> {
+        match self {
+            LpcRef::Object(proc) => proc.upgrade(),
+            _ => None,
+        }
+    }
+
+    /// The string payload, or `None` for a non-string.
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            LpcRef::String(s) => Some(s.to_str()),
+            _ => None,
+        }
+    }
+
     fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> Box<LpcError> {
         lpc_error!(
             "Runtime Error: mismatched types: {} ({}) {} {} ({})",
@@ -730,6 +747,30 @@ mod tests {
 
     use super::*;
     use crate::{interpreter::lpc_array::LpcArray, test_support::factories::*};
+
+    mod test_accessors {
+        use super::*;
+        use crate::interpreter::program::Program;
+
+        #[test]
+        fn as_object_upgrades_only_a_live_object() {
+            let process = Arc::new(Process::new(Program::default()));
+            let live = LpcRef::from(Arc::downgrade(&process));
+            assert!(Arc::ptr_eq(&live.as_object().unwrap(), &process));
+
+            drop(process);
+            assert!(live.as_object().is_none());
+            assert!(LpcRef::from(0).as_object().is_none());
+            assert!(LpcRef::from("object").as_object().is_none());
+        }
+
+        #[test]
+        fn as_str_binds_only_a_string() {
+            assert_eq!(LpcRef::from("hi").as_str(), Some("hi"));
+            assert_eq!(LpcRef::from(0).as_str(), None);
+            assert_eq!(LpcRef::from(1.5).as_str(), None);
+        }
+    }
 
     mod test_add {
         use indexmap::IndexMap;

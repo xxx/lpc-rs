@@ -28,7 +28,7 @@ pub async fn write_socket<const N: usize>(context: &mut EfunContext<'_, N>) -> R
             // Record the socket send against this transaction's effect log,
             // carrying its own channel so the retry loop can deliver it
             // after commit without needing the connection again.
-            context.txn().record_effect(Effect::Socket {
+            context.record_effect(Effect::Socket {
                 op: ConnectionOp::SendMessage(result),
                 tx: connection.tx.clone(),
             });

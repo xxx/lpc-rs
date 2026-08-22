@@ -1,4 +1,4 @@
-use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -9,66 +9,43 @@ use crate::interpreter::{
     task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
 };
 
-/// `tell_object`, an efun for sending a message to a specific object
 pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let should_log = do_tell(context).await?;
+    let string_ref = context.resolve_local_register(2 as RegisterSize).clone();
+    let ob_ref = context.resolve_local_register(1 as RegisterSize);
+    let proc = if let Some(path) = ob_ref.as_str() {
+        let path = context.in_game_path(path);
+        Some(context.load_object(&path).await?)
+    } else {
+        ob_ref.as_object()
+    };
 
-    if should_log {
-        let string_ref = context.resolve_local_register(2 as RegisterSize);
+    let delivered = match proc {
+        Some(proc) if proc.flags.test(ObjectFlags::CommandsEnabled) => {
+            match apply_function_by_name(
+                CATCH_TELL,
+                std::slice::from_ref(&string_ref),
+                proc,
+                TaskTemplate::from(&*context),
+                Some(context.config().max_execution_time),
+            )
+            .await
+            {
+                Some(Ok(_)) => true,
+                Some(Err(e)) => return Err(e),
+                None => false,
+            }
+        }
+        _ => false,
+    };
+
+    if delivered {
+        context.return_efun_result(LpcRef::from(1));
+    } else {
         let msg = string_ref.with_string(|s| s.to_string())?;
         record_output_effect(context, msg);
     }
 
     Ok(())
-}
-
-async fn do_tell<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<bool> {
-    let string_ref = context.resolve_local_register(2 as RegisterSize);
-    let ob_ref = context.resolve_local_register(1 as RegisterSize);
-    let proc = match ob_ref {
-        LpcRef::Float(_)
-        | LpcRef::Int(_)
-        | LpcRef::Array(_)
-        | LpcRef::Mapping(_)
-        | LpcRef::Function(_) => {
-            return Ok(true);
-        }
-        LpcRef::String(_) => {
-            let path = ob_ref.with_string(|str| {
-                LpcPath::new_in_game(str, context.in_game_cwd(), &*context.config().lib_dir)
-            })?;
-
-            context.load_object(&path).await?
-        }
-        LpcRef::Object(proc) => {
-            let Some(proc) = proc.upgrade() else {
-                return Ok(true);
-            };
-
-            proc
-        }
-    };
-
-    if !proc.flags.test(ObjectFlags::CommandsEnabled) {
-        return Ok(true);
-    }
-
-    match apply_function_by_name(
-        CATCH_TELL,
-        std::slice::from_ref(string_ref),
-        proc.clone(),
-        TaskTemplate::from(&*context),
-        Some(context.config().max_execution_time),
-    )
-    .await
-    {
-        Some(Ok(_)) => {
-            context.return_efun_result(LpcRef::from(1));
-            Ok(false)
-        }
-        Some(Err(e)) => Err(e),
-        None => Ok(true),
-    }
 }
 
 #[cfg(test)]

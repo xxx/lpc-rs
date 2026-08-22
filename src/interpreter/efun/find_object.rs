@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -12,24 +12,15 @@ use crate::interpreter::{
 /// from its path and clone number.
 pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let lpc_ref = context.resolve_local_register(1 as RegisterSize);
-    let result = match lpc_ref {
-        LpcRef::Float(_)
-        | LpcRef::Int(_)
-        | LpcRef::Object(_)
-        | LpcRef::Array(_)
-        | LpcRef::Mapping(_)
-        | LpcRef::Function(_) => NULL,
-        LpcRef::String(_) => {
-            let path = lpc_ref.with_string(|string| {
-                LpcPath::new_in_game(string, context.in_game_cwd(), &*context.config().lib_dir)
-            })?;
-
-            if let Ok(proc) = context.load_object(&path).await {
-                Arc::downgrade(&proc).into()
-            } else {
-                NULL
+    let result = match lpc_ref.as_str() {
+        Some(path) => {
+            let path = context.in_game_path(path);
+            match context.load_object(&path).await {
+                Ok(proc) => LpcRef::from(Arc::downgrade(&proc)),
+                Err(_) => NULL,
             }
         }
+        None => NULL,
     };
 
     context.return_efun_result(result);

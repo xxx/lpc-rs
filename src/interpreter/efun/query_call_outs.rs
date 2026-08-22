@@ -1,11 +1,8 @@
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext, lpc_array::LpcArray, lpc_int::LpcInt, lpc_ref::LpcRef,
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef};
 
-/// `query_call_outs`, an efun for returning information about all call outs in a specific object
 pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let owner = match context.resolve_local_register(1 as RegisterSize) {
         LpcRef::Object(process) => process.upgrade(),
@@ -17,16 +14,12 @@ pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -
         return Err(context.runtime_error("object in `query_call_outs` is already destructed"));
     };
 
-    let vec = context.query_call_outs(&owner);
-    let result = context.txn().with(|t| {
-        let inner: Vec<LpcRef> = vec
-            .into_iter()
-            .map(|fields| LpcRef::Array(t.mint_array(LpcArray::new(fields))))
-            .collect();
-        LpcRef::Array(t.mint_array(LpcArray::new(inner)))
-    });
-
-    context.return_efun_result(result);
+    let rows: Vec<LpcRef> = context
+        .query_call_outs(&owner)
+        .into_iter()
+        .map(|fields| context.mint_array(fields))
+        .collect();
+    context.return_array(rows);
 
     Ok(())
 }

@@ -1,38 +1,18 @@
 use std::{collections::HashSet, sync::Arc};
 
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun, efun::efun_context::EfunContext, lpc_array::LpcArray, lpc_ref::LpcRef, process::Process,
-    stm::TxnHandle,
-};
+use crate::interpreter::{efun, efun::efun_context::EfunContext, process::Process, stm::TxnHandle};
 
 /// `deep_inventory`, an efun for recursively returning the inventories of all objects contained by an object.
 pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let arg_ref = context.resolve_local_register(1 as RegisterSize);
-
-    let Some(current_env) = efun::arg_or_this_object(arg_ref, context) else {
-        let result = LpcRef::Array(context.txn().with(|t| t.mint_array(LpcArray::default())));
-        context.return_efun_result(result);
-        return Ok(());
-    };
-
-    // [`Process`]' hashes are based solely on their filename, which never changes after creation.
-    #[allow(clippy::mutable_key_type)]
-    let mut collection = HashSet::with_capacity(10);
-    recurse_deep_inventory(context.txn(), &current_env, &mut collection);
-
-    let result = context.txn().with(|t| {
-        let array = collection
-            .into_iter()
-            .map(|arc| LpcRef::from(Arc::downgrade(&arc)))
-            .collect::<LpcArray>();
-        LpcRef::Array(t.mint_array(array))
+    efun::return_objects_of(context, |txn, object| {
+        // [`Process`]' hashes are based solely on their filename, which never changes after creation.
+        #[allow(clippy::mutable_key_type)]
+        let mut collection = HashSet::with_capacity(10);
+        recurse_deep_inventory(txn, &object, &mut collection);
+        collection
     });
-
-    context.return_efun_result(result);
-
     Ok(())
 }
 

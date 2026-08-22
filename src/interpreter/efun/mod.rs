@@ -39,7 +39,7 @@ use std::sync::Arc;
 
 use indexmap::IndexMap;
 use lpc_rs_core::{
-    function_arity::FunctionArity, function_flags::FunctionFlags, lpc_path::LpcPath,
+    RegisterSize, function_arity::FunctionArity, function_flags::FunctionFlags, lpc_path::LpcPath,
     lpc_type::LpcType,
 };
 use lpc_rs_errors::Result;
@@ -51,6 +51,7 @@ use once_cell::sync::Lazy;
 
 use crate::interpreter::{
     efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef, process::Process,
+    stm::TxnHandle,
 };
 
 /// Special forms: typechecked against an efun prototype, compiled to their
@@ -378,21 +379,34 @@ pub static EFUN_FUNCTIONS: Lazy<IndexMap<&'static str, Arc<ProgramFunction>>> = 
         .collect()
 });
 
-/// Helper for efuns with an `ob = this_object()` default argument
+/// The object an optional argument names: `0` is the caller; a destructed or
+/// non-object argument is `None`.
 fn arg_or_this_object<const N: usize>(
     arg_ref: &LpcRef,
     context: &EfunContext<'_, N>,
 ) -> Option<Arc<Process>> {
     match arg_ref {
         LpcRef::Int(LpcInt(0)) => Some(context.frame().process.clone()),
-        LpcRef::Object(proc) => proc.upgrade(),
-        LpcRef::Float(_)
-        | LpcRef::Int(_)
-        | LpcRef::String(_)
-        | LpcRef::Array(_)
-        | LpcRef::Mapping(_)
-        | LpcRef::Function(_) => None,
+        _ => arg_ref.as_object(),
     }
+}
+
+/// Return `f`'s objects for the object register 1 names (per
+/// [`arg_or_this_object`]) as an array of weak references, empty when it
+/// names nothing.
+fn return_objects_of<const N: usize, I, F>(context: &mut EfunContext<'_, N>, f: F)
+where
+    I: IntoIterator<Item = Arc<Process>>,
+    F: FnOnce(&TxnHandle, Arc<Process>) -> I,
+{
+    let arg_ref = context.resolve_local_register(1 as RegisterSize);
+    let objects = arg_or_this_object(arg_ref, context).map(|env| f(context.txn(), env));
+    let refs: Vec<LpcRef> = objects
+        .into_iter()
+        .flatten()
+        .map(|object| LpcRef::from(Arc::downgrade(&object)))
+        .collect();
+    context.return_array(refs);
 }
 
 #[cfg(test)]

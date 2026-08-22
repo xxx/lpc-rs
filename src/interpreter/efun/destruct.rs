@@ -1,40 +1,26 @@
+use std::sync::Arc;
+
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    efun::efun_context::EfunContext, lpc_ref::LpcRef, object_flags::ObjectFlags,
+    efun::efun_context::EfunContext, lpc_ref::LpcRef, object_flags::ObjectFlags, process::Process,
 };
 
-/// `destruct`, an efun for deleting objects from the [`ObjectSpace`]
 pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let lpc_ref = context.resolve_local_register(1 as RegisterSize);
-    match lpc_ref {
-        LpcRef::Float(_)
-        | LpcRef::Int(_)
-        | LpcRef::String(_)
-        | LpcRef::Mapping(_)
-        | LpcRef::Function(_) => {}
-        LpcRef::Array(_) => {
-            lpc_ref.with_array(context.txn(), |arr| {
-                for x in arr.iter() {
-                    if let LpcRef::Object(proc) = x
-                        && let Some(proc) = proc.upgrade()
-                    {
-                        proc.flags.set(ObjectFlags::Destructed);
-                        context.remove_process(proc);
-                    } // else it's already destructed
-                }
-            })?
-        }
-        LpcRef::Object(proc) => {
-            if let Some(proc) = proc.upgrade() {
-                proc.flags.set(ObjectFlags::Destructed);
-                context.remove_process(proc);
-            } // else it's already destructed
-        }
-    }
+    let destruct = |proc: Arc<Process>| {
+        proc.flags.set(ObjectFlags::Destructed);
+        context.remove_process(proc);
+    };
 
-    // destruct() returns void, so no need to set up a return value
+    if matches!(lpc_ref, LpcRef::Array(_)) {
+        lpc_ref.with_array(context.txn(), |arr| {
+            arr.iter().filter_map(LpcRef::as_object).for_each(&destruct)
+        })?;
+    } else if let Some(proc) = lpc_ref.as_object() {
+        destruct(proc);
+    }
 
     Ok(())
 }

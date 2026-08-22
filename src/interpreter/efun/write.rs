@@ -22,7 +22,7 @@ pub async fn write<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
 /// rejected attempt) is handled by the retry loop; the message is already
 /// materialized, so the effect never observes end-of-transaction state.
 pub(crate) fn record_output_effect<const N: usize>(context: &EfunContext<'_, N>, msg: String) {
-    context.txn().record_effect(Effect::DebugLog(msg));
+    context.record_effect(Effect::DebugLog(msg));
 }
 
 /// A convenience helper to apply catch_tell to the this_player in a context.

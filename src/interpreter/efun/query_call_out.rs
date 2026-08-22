@@ -1,31 +1,12 @@
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext,
-    lpc_array::LpcArray,
-    lpc_ref::{LpcRef, NULL},
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::NULL};
 
-/// `query_call_out`, an efun for returning information about a single call out.
 pub async fn query_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let LpcRef::Int(idx) = context.resolve_local_register(1 as RegisterSize) else {
-        return Err(context.runtime_bug("non-int call out ID sent to `query_call_out`"));
-    };
-
-    if idx.0 < 0 {
-        return Err(context.runtime_error(format!(
-            "invalid call out ID `{idx}` sent to `query_call_out`"
-        )));
-    }
-
-    // The interface returns owned fields; the result cell is minted after
-    // the queue scan, so no call-out lock is held across it.
-    let fields = context.query_call_out(idx.0 as u64);
-    let result = match fields {
-        Some(fields) => context
-            .txn()
-            .with(|t| LpcRef::Array(t.mint_array(LpcArray::new(fields)))),
+    let id = context.call_out_id(1 as RegisterSize, "query_call_out")?;
+    let result = match context.query_call_out(id) {
+        Some(fields) => context.mint_array(fields),
         None => NULL,
     };
 

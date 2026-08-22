@@ -1,34 +1,14 @@
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef};
+use crate::interpreter::{efun, efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
-/// `interactive`, an efun that returns whether an object is actively controlled by a person.
 pub async fn interactive<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
+    let result = efun::arg_or_this_object(arg_ref, context)
+        .is_some_and(|proc| context.txn().read_connection(proc.connection.id).is_some());
 
-    let result = match arg_ref {
-        LpcRef::Int(LpcInt(0)) => {
-            let proc = &context.frame().process;
-
-            LpcRef::from(context.txn().read_connection(proc.connection.id).is_some())
-        }
-        LpcRef::Object(proc) => {
-            if let Some(proc) = proc.upgrade() {
-                LpcRef::from(context.txn().read_connection(proc.connection.id).is_some())
-            } else {
-                LpcRef::from(false)
-            }
-        }
-        LpcRef::Float(_)
-        | LpcRef::Int(LpcInt(_))
-        | LpcRef::String(_)
-        | LpcRef::Array(_)
-        | LpcRef::Mapping(_)
-        | LpcRef::Function(_) => LpcRef::from(false),
-    };
-
-    context.return_efun_result(result);
+    context.return_efun_result(LpcRef::from(result));
 
     Ok(())
 }

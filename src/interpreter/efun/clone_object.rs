@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
-use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
     compile_time_config::MAX_CLONE_CHAIN,
     interpreter::{
-        efun::efun_context::EfunContext, object_flags::ObjectFlags, process::Process, task::Task,
+        efun::efun_context::EfunContext, lpc_ref::LpcRef, object_flags::ObjectFlags,
+        process::Process,
     },
 };
 
@@ -14,7 +15,7 @@ async fn load_prototype<const N: usize>(
     context: &mut EfunContext<'_, N>,
     path: &str,
 ) -> Result<Arc<Process>> {
-    let full_path = LpcPath::new_in_game(path, context.in_game_cwd(), &*context.config().lib_dir);
+    let full_path = context.in_game_path(path);
 
     if full_path.is_clone() {
         return Err(context.runtime_error(format!("Cannot clone a clone: {}", full_path)));
@@ -60,29 +61,15 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     );
 
     // if the prototype is not initialized, we initialize the clone.
-    let return_val = if !prototype.flags.test(ObjectFlags::Initialized) {
+    if !prototype.flags.test(ObjectFlags::Initialized) {
         if context.chain_count() >= MAX_CLONE_CHAIN {
             return Err(context.runtime_error("infinite clone recursion detected"));
         }
 
-        let new_task_context = context
-            .task_context_builder()
-            .process(clone_process)
-            .chain_count(context.chain_count() + 1)
-            .build()
-            .unwrap();
+        context.init_process_transactional(&clone_process).await?;
+    }
 
-        Task::<N>::initialize_sub_process(context.task_id(), new_task_context)
-            .await?
-            .context
-            .process
-    } else {
-        clone_process
-    };
-
-    let v = Arc::downgrade(&return_val);
-    let result = v.into();
-
+    let result = LpcRef::from(Arc::downgrade(&clone_process));
     context.return_efun_result(result);
 
     Ok(())
@@ -103,6 +90,7 @@ mod tests {
             CommittedReader,
             lpc_ref::{LpcRef, NULL},
             program::Program,
+            task::Task,
             task_context::{TaskContext, TaskContextBuilder},
             vm::{
                 Vm,

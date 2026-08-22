@@ -1,38 +1,17 @@
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext,
-    lpc_int::LpcInt,
-    lpc_ref::{LpcRef, NULL},
-};
+use crate::interpreter::{efun, efun::efun_context::EfunContext, lpc_ref::NULL};
 
-/// `environment`, an efun for returning the environment of an object
 pub async fn environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
-    let result = match arg_ref {
-        LpcRef::Int(LpcInt(0)) => context
-            .txn()
-            .with(|t| t.read(context.frame().process.position.environment.id))
-            .unwrap_or(NULL),
-        LpcRef::Object(object) => {
-            let Some(object) = object.upgrade() else {
-                context.return_efun_result(NULL);
-                return Ok(());
-            };
-
+    let result = efun::arg_or_this_object(arg_ref, context)
+        .and_then(|object| {
             context
                 .txn()
                 .with(|t| t.read(object.position.environment.id))
-                .unwrap_or(NULL)
-        }
-        LpcRef::Float(_)
-        | LpcRef::Int(_)
-        | LpcRef::String(_)
-        | LpcRef::Array(_)
-        | LpcRef::Mapping(_)
-        | LpcRef::Function(_) => NULL,
-    };
+        })
+        .unwrap_or(NULL);
 
     context.return_efun_result(result);
 
