@@ -116,12 +116,14 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
     )
 }
 
-/// Start a transaction against the committer's current world and hand back
-/// the release handle. The blocking `flume` recv runs off the runtime via
-/// `spawn_blocking`.
-pub(crate) async fn start_txn(tx: &flume::Sender<CommitProtocol>) -> Result<LiveSnapshot> {
+/// Send one request to the committer and await its reply; the blocking
+/// `flume` recv runs off the runtime via `spawn_blocking`.
+async fn request<R: Send + 'static>(
+    tx: &flume::Sender<CommitProtocol>,
+    message: impl FnOnce(flume::Sender<R>) -> CommitProtocol,
+) -> Result<R> {
     let (reply_tx, reply_rx) = flume::bounded(1);
-    tx.send(CommitProtocol::Start { reply: reply_tx })
+    tx.send(message(reply_tx))
         .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
     tokio::task::spawn_blocking(move || reply_rx.recv())
         .await
@@ -131,19 +133,17 @@ pub(crate) async fn start_txn(tx: &flume::Sender<CommitProtocol>) -> Result<Live
         .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
 }
 
+/// Start a transaction against the committer's current world and hand back
+/// the release handle.
+pub(crate) async fn start_txn(tx: &flume::Sender<CommitProtocol>) -> Result<LiveSnapshot> {
+    request(tx, |reply| CommitProtocol::Start { reply }).await
+}
+
 /// How many transactions are currently in flight against the committer, i.e.
 /// how many [`LiveSnapshot`]s are held. `0` means the committer is quiescent
 /// (no live task holds a transaction).
 pub(crate) async fn live_count(tx: &flume::Sender<CommitProtocol>) -> Result<usize> {
-    let (reply_tx, reply_rx) = flume::bounded(1);
-    tx.send(CommitProtocol::LiveCount { reply: reply_tx })
-        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
-    tokio::task::spawn_blocking(move || reply_rx.recv())
-        .await
-        .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
-            lpc_error!("committer reply task panicked: {}", e)
-        })?
-        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
+    request(tx, |reply| CommitProtocol::LiveCount { reply }).await
 }
 
 /// Client side of a GC pass: send the [`CommitProtocol::GcPass`] message
@@ -153,34 +153,18 @@ pub(crate) async fn gc_pass(
     dropped: Vec<VarId>,
     roots: Vec<WorldRoot>,
 ) -> std::result::Result<GcReport, Box<lpc_rs_errors::LpcError>> {
-    let (reply_tx, reply_rx) = flume::bounded(1);
-    tx.send(CommitProtocol::GcPass {
+    // The reply payload is the pass's own Ok/Err.
+    request(tx, |reply| CommitProtocol::GcPass {
         dropped,
         roots,
-        reply: reply_tx,
+        reply,
     })
-    .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
-    // The channel payload is the pass's Ok/Err; unwrap the reply envelope,
-    // then the payload, in one tail expression.
-    tokio::task::spawn_blocking(move || reply_rx.recv())
-        .await
-        .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
-            lpc_error!("committer reply task panicked: {}", e)
-        })?
-        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })?
+    .await?
 }
 
 /// The committer's lifetime commit totals; for bench measurement and tooling, not the hot path.
 pub(crate) async fn committer_stats(tx: &flume::Sender<CommitProtocol>) -> Result<CommitterStats> {
-    let (reply_tx, reply_rx) = flume::bounded(1);
-    tx.send(CommitProtocol::Stats { reply: reply_tx })
-        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
-    tokio::task::spawn_blocking(move || reply_rx.recv())
-        .await
-        .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
-            lpc_error!("committer reply task panicked: {}", e)
-        })?
-        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
+    request(tx, |reply| CommitProtocol::Stats { reply }).await
 }
 
 /// Commit a changeset and await the reply. `Ok(())` = committed;
@@ -189,18 +173,7 @@ pub(crate) async fn commit_changeset(
     tx: &flume::Sender<CommitProtocol>,
     changeset: Changeset,
 ) -> Result<std::result::Result<(), Changeset>> {
-    let (reply_tx, reply_rx) = flume::bounded(1);
-    tx.send(CommitProtocol::Commit {
-        changeset,
-        reply: reply_tx,
-    })
-    .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
-    tokio::task::spawn_blocking(move || reply_rx.recv())
-        .await
-        .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
-            lpc_error!("committer reply task panicked: {}", e)
-        })?
-        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
+    request(tx, |reply| CommitProtocol::Commit { changeset, reply }).await
 }
 
 /// A sync "read the latest committed world" API for consistency-agnostic
@@ -304,10 +277,9 @@ impl CommittedReader for Arc<GlobalState> {
 }
 
 impl GlobalState {
-    /// One synchronous round trip against the committer, exactly like the
-    /// sync `retry()` helper's recvs: scope a thread so the blocking recv
-    /// can never run on the calling thread. `None` only if the committer
-    /// never answers (channel dead); absent vars reply as `NULL`.
+    /// One synchronous round trip against the committer; the blocking recv
+    /// runs on a scoped thread, never the caller's. `None` only if the
+    /// committer never answers; absent vars reply as `NULL`.
     fn committed_value(&self, var_id: VarId) -> Option<WorldValue> {
         std::thread::scope(|s| {
             let (reply_tx, reply_rx) = flume::bounded(1);
