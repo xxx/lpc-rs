@@ -2568,7 +2568,7 @@ mod test_upvalues {
 
         let frame = snapshot.pop().unwrap();
 
-        let frame_vars = frame.local_variables(&task.txn);
+        let frame_vars = frame.local_variables(task.context.txn());
 
         for (k, v) in vars {
             let v: BareVal = v.clone().into();
@@ -2608,7 +2608,8 @@ mod test_upvalues {
         frame.with_upvalues(|uv| {
             let values: Vec<LpcRef> = (0..uv.len())
                 .map(|i| {
-                    task.txn
+                    task.context
+                        .txn()
                         .with(|t| t.read(uv[i]).unwrap_or_else(|| NULL.clone()))
                 })
                 .collect();

@@ -191,7 +191,7 @@ mod tests {
 
         task.result()
             .unwrap()
-            .with_array(&task.txn, |arr| {
+            .with_array(task.context.txn(), |arr| {
                 assert_eq!(arr.len(), 4);
                 assert!(matches!(arr[0], LpcRef::Object(_)));
                 assert!(matches!(arr[1], LpcRef::Function(_)));

@@ -172,10 +172,8 @@ impl TaskContext {
             this_player: template.this_player,
             upvalue_ptrs: template.upvalue_ptrs,
             chain_count: 0,
-            // The template's handle is carried through as-is: a template
-            // derived from a live task holds that task's in-flight attempt,
-            // so this context joins it; a fresh top-level
-            // template holds the empty handle, so this one opens its own.
+            // A template from a live task carries its in-flight attempt, so
+            // this context joins it.
             txn: template.txn,
         }
     }

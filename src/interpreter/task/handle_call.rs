@@ -105,7 +105,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     next_index = r.index() + 1;
                 }
 
-                let lpc_ref = get_location(&self.stack, &self.txn, *arg).map(|i| i.into_owned())?;
+                let lpc_ref =
+                    get_location(&self.stack, &self.context.txn, *arg).map(|i| i.into_owned())?;
 
                 trace!(
                     "Copying argument {} ({}) to {}",
@@ -114,7 +115,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 new_frame.arg_locations.push(target_location);
 
-                new_frame.set_location(&self.txn, target_location, lpc_ref)
+                new_frame.set_location(&self.context.txn, target_location, lpc_ref)
             }
         }
 
@@ -130,7 +131,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let (proc, function) = match &ptr.address {
             FunctionAddress::Local(proc, function) => (proc.clone(), function.clone()),
             FunctionAddress::Dynamic(name) => {
-                let location = &*get_location(&self.stack, &self.txn, self.args[0])?;
+                let location = &*get_location(&self.stack, &self.context.txn, self.args[0])?;
                 let lpc_ref = match location {
                     LpcRef::Object(lpc_ref) => lpc_ref.upgrade(),
                     LpcRef::String(_) => {

@@ -67,7 +67,7 @@ mod tests {
         let _ = master_proc
             .result()
             .unwrap()
-            .with_array(&master_proc.txn, |arr| {
+            .with_array(master_proc.context.txn(), |arr| {
                 let result = arr.iter().map(|x| x.to_string()).collect::<Vec<_>>();
 
                 assert_eq!(result, vec!["the", "quick", "brown", "", "fox"],);

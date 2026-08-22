@@ -71,7 +71,7 @@ mod tests {
             .unwrap();
 
         let result = master_proc.result().unwrap();
-        let _ = result.with_array(&master_proc.txn, |arr| {
+        let _ = result.with_array(master_proc.context.txn(), |arr| {
             assert_eq!(
                 arr,
                 [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0].as_slice()

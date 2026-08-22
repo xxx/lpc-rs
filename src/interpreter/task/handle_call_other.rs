@@ -32,8 +32,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // doesn't work as mutable, but needs to be written to at the very end.
         let result_ref = {
             // figure out which function we're calling
-            let receiver_ref = &*get_location(&self.stack, &self.txn, receiver)?;
-            let name_ref = &*get_location(&self.stack, &self.txn, name_location)?;
+            let receiver_ref = &*get_location(&self.stack, &self.context.txn, receiver)?;
+            let name_ref = &*get_location(&self.stack, &self.context.txn, name_location)?;
 
             let Ok(function_name) = name_ref.with_string(|s| s.clone()) else {
                 let str = format!("Invalid name passed to `call_other`: {}", name_ref);
@@ -45,7 +45,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let args = self
                 .args
                 .iter()
-                .map(|i| get_location(&self.stack, &self.txn, *i).map(|r| r.into_owned()))
+                .map(|i| get_location(&self.stack, &self.context.txn, *i).map(|r| r.into_owned()))
                 .collect::<Result<Vec<_>>>()?;
 
             let function_name = Arc::new(function_name);
@@ -62,8 +62,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     .await?
                 }
                 LpcRef::Array(_) => {
-                    let mut refs =
-                        receiver_ref.with_array(&self.txn, |a| a.iter().cloned().collect_vec())?;
+                    let mut refs = receiver_ref
+                        .with_array(&self.context.txn, |a| a.iter().cloned().collect_vec())?;
 
                     for lpc_ref in &mut refs {
                         let ctx = &self.context;
@@ -76,10 +76,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         *lpc_ref = result;
                     }
 
-                    LpcRef::Array(self.txn.with(|t| t.mint_array(LpcArray::new(refs))))
+                    LpcRef::Array(self.context.txn.with(|t| t.mint_array(LpcArray::new(refs))))
                 }
                 LpcRef::Mapping(_) => {
-                    let mut map = receiver_ref.with_mapping(&self.txn, |m| {
+                    let mut map = receiver_ref.with_mapping(&self.context.txn, |m| {
                         m.iter().map(|(k, v)| (k.clone(), v.clone())).collect_vec()
                     })?;
 
@@ -98,7 +98,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
 
                     LpcRef::Mapping(
-                        self.txn
+                        self.context
+                            .txn
                             .with(|t| t.mint_mapping(LpcMapping::new(map.into_iter().collect()))),
                     )
                 }

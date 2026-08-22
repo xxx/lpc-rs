@@ -24,7 +24,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub(crate) async fn handle_call_fp(&mut self, location: RegisterVariant) -> Result<()> {
         let num_args = RegisterSize::try_from(self.args.len())?;
         let ptr_arc = {
-            let lpc_ref = &*get_location(&self.stack, &self.txn, location)?;
+            let lpc_ref = &*get_location(&self.stack, &self.context.txn, location)?;
 
             if let LpcRef::Function(func) = lpc_ref {
                 func.clone() // this is a cheap clone
@@ -94,7 +94,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 // fill in the next hole in the partial arguments, or
                 // append to the end
 
-                let lpc_ref = get_location(&self.stack, &self.txn, *location)?;
+                let lpc_ref = get_location(&self.stack, &self.context.txn, *location)?;
                 Self::type_check_and_assign_location(
                     self,
                     &mut new_frame,
@@ -134,7 +134,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         trace!("Copying argument {} ({}) to {}", i, r, loc);
 
         new_frame.arg_locations.push(loc);
-        new_frame.set_location(&task.txn, loc, r);
+        new_frame.set_location(task.context.txn(), loc, r);
 
         Ok(())
     }
@@ -176,7 +176,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 && !pf.is_closure()
                 && (is_call_other || !Arc::ptr_eq(self.context.process(), &receiver))
             {
-                set_location(&mut self.stack, &self.txn, Register(0).as_local(), NULL)?;
+                set_location(
+                    &mut self.stack,
+                    &self.context.txn,
+                    Register(0).as_local(),
+                    NULL,
+                )?;
                 return Ok(None);
             }
         }

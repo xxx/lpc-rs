@@ -124,10 +124,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::BitwiseNot(r1, r2) => {
                 let frame = self.stack.current_frame().unwrap();
                 let debug_span = frame.current_debug_span();
-                let lpc_ref = &*get_location(&self.stack, &self.txn, r1)?;
+                let lpc_ref = &*get_location(&self.stack, &self.context.txn, r1)?;
                 match lpc_ref.bitnot() {
                     Ok(result) => {
-                        set_location(&mut self.stack, &self.txn, r2, result)?;
+                        set_location(&mut self.stack, &self.context.txn, r2, result)?;
                     }
                     Err(mut e) => {
                         *e = e.with_span(debug_span);
@@ -183,21 +183,31 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.partial_args.clear();
             }
             Instruction::Copy(r1, r2) => {
-                let new_ref = get_location(&self.stack, &self.txn, r1)?.into_owned();
-                set_location(&mut self.stack, &self.txn, r2, new_ref)?;
+                let new_ref = get_location(&self.stack, &self.context.txn, r1)?.into_owned();
+                set_location(&mut self.stack, &self.context.txn, r2, new_ref)?;
             }
             Instruction::Dec(r1) => {
-                apply_in_location(&mut self.stack, &self.txn, r1, |x| x.dec())?;
+                apply_in_location(&mut self.stack, &self.context.txn, r1, |x| x.dec())?;
             }
             Instruction::EqEq(r1, r2, r3) => {
-                let out = (get_location(&self.stack, &self.txn, r1)?
-                    == get_location(&self.stack, &self.txn, r2)?)
+                let out = (get_location(&self.stack, &self.context.txn, r1)?
+                    == get_location(&self.stack, &self.context.txn, r2)?)
                     as LpcIntInner;
 
-                set_location(&mut self.stack, &self.txn, r3, LpcRef::Int(out.into()))?;
+                set_location(
+                    &mut self.stack,
+                    &self.context.txn,
+                    r3,
+                    LpcRef::Int(out.into()),
+                )?;
             }
             Instruction::FConst(r, f) => {
-                set_location(&mut self.stack, &self.txn, r, LpcRef::Float(f.into()))?;
+                set_location(
+                    &mut self.stack,
+                    &self.context.txn,
+                    r,
+                    LpcRef::Float(f.into()),
+                )?;
             }
             Instruction::FunctionPtrConst {
                 location,
@@ -213,11 +223,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y)?;
             }
             Instruction::IAdd(r1, r2, r3) => {
-                match get_location(&self.stack, &self.txn, r1)?
-                    .add(&*get_location(&self.stack, &self.txn, r2)?, &self.txn)
-                {
+                match get_location(&self.stack, &self.context.txn, r1)?.add(
+                    &*get_location(&self.stack, &self.context.txn, r2)?,
+                    &self.context.txn,
+                ) {
                     Ok(result) => {
-                        set_location(&mut self.stack, &self.txn, r3, result)?;
+                        set_location(&mut self.stack, &self.context.txn, r3, result)?;
                     }
                     Err(mut e) => {
                         let frame = self.stack.current_frame()?;
@@ -227,21 +238,21 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::IConst(r, i) => {
-                set_location(&mut self.stack, &self.txn, r, LpcRef::Int(i.into()))?;
+                set_location(&mut self.stack, &self.context.txn, r, LpcRef::Int(i.into()))?;
             }
             Instruction::IConst0(r) => {
-                set_location(&mut self.stack, &self.txn, r, NULL)?;
+                set_location(&mut self.stack, &self.context.txn, r, NULL)?;
             }
             Instruction::IConst1(r) => {
-                set_location(&mut self.stack, &self.txn, r, LpcRef::Int(1.into()))?;
+                set_location(&mut self.stack, &self.context.txn, r, LpcRef::Int(1.into()))?;
             }
             Instruction::IDiv(r1, r2, r3) => {
-                match get_location(&self.stack, &self.txn, r1)?.div(&*get_location(
+                match get_location(&self.stack, &self.context.txn, r1)?.div(&*get_location(
                     &self.stack,
-                    &self.txn,
+                    &self.context.txn,
                     r2,
                 )?) {
-                    Ok(result) => set_location(&mut self.stack, &self.txn, r3, result)?,
+                    Ok(result) => set_location(&mut self.stack, &self.context.txn, r3, result)?,
                     Err(mut e) => {
                         let frame = self.stack.current_frame()?;
                         *e = e.with_span(frame.current_debug_span());
@@ -250,12 +261,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::IMod(r1, r2, r3) => {
-                match get_location(&self.stack, &self.txn, r1)?.rem(&*get_location(
+                match get_location(&self.stack, &self.context.txn, r1)?.rem(&*get_location(
                     &self.stack,
-                    &self.txn,
+                    &self.context.txn,
                     r2,
                 )?) {
-                    Ok(result) => set_location(&mut self.stack, &self.txn, r3, result)?,
+                    Ok(result) => set_location(&mut self.stack, &self.context.txn, r3, result)?,
                     Err(mut e) => {
                         let frame = self.stack.current_frame()?;
                         *e = e.with_span(frame.current_debug_span());
@@ -264,12 +275,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::IMul(r1, r2, r3) => {
-                match get_location(&self.stack, &self.txn, r1)?.mul(&*get_location(
+                match get_location(&self.stack, &self.context.txn, r1)?.mul(&*get_location(
                     &self.stack,
-                    &self.txn,
+                    &self.context.txn,
                     r2,
                 )?) {
-                    Ok(result) => set_location(&mut self.stack, &self.txn, r3, result)?,
+                    Ok(result) => set_location(&mut self.stack, &self.context.txn, r3, result)?,
                     Err(mut e) => {
                         let frame = self.stack.current_frame()?;
                         *e = e.with_span(frame.current_debug_span());
@@ -278,13 +289,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::Inc(r1) => {
-                apply_in_location(&mut self.stack, &self.txn, r1, |x| x.inc())?;
+                apply_in_location(&mut self.stack, &self.context.txn, r1, |x| x.inc())?;
             }
             Instruction::ISub(r1, r2, r3) => {
-                match get_location(&self.stack, &self.txn, r1)?
-                    .sub(&*get_location(&self.stack, &self.txn, r2)?, &self.txn)
-                {
-                    Ok(result) => set_location(&mut self.stack, &self.txn, r3, result)?,
+                match get_location(&self.stack, &self.context.txn, r1)?.sub(
+                    &*get_location(&self.stack, &self.context.txn, r2)?,
+                    &self.context.txn,
+                ) {
+                    Ok(result) => set_location(&mut self.stack, &self.context.txn, r3, result)?,
                     Err(mut e) => {
                         let frame = self.stack.current_frame()?;
                         *e = e.with_span(frame.current_debug_span());
@@ -297,7 +309,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 frame.set_pc(address);
             }
             Instruction::Jnz(r1, address) => {
-                let v = &*get_location(&self.stack, &self.txn, r1)?;
+                let v = &*get_location(&self.stack, &self.context.txn, r1)?;
 
                 // TODO: re-decide of 0.0 floats should match here and with Jz
                 if v != &NULL && v != &LpcRef::Float(Total::from(0.0).into()) {
@@ -306,7 +318,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::Jz(r1, address) => {
-                let v = &*get_location(&self.stack, &self.txn, r1)?;
+                let v = &*get_location(&self.stack, &self.context.txn, r1)?;
 
                 if v == &NULL || v == &LpcRef::Float(Total::from(0.0).into()) {
                     let frame = self.stack.current_frame_mut()?;
@@ -338,17 +350,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 for chunk in &self.array_items.iter().copied().chunks(2) {
                     let (key, value) = chunk.into_iter().collect_tuple().unwrap();
                     register_map.insert(
-                        get_location(&self.stack, &self.txn, key)?.into_owned(),
-                        get_location(&self.stack, &self.txn, value)?.into_owned(),
+                        get_location(&self.stack, &self.context.txn, key)?.into_owned(),
+                        get_location(&self.stack, &self.context.txn, value)?.into_owned(),
                     );
                 }
 
                 let new_ref = LpcRef::Mapping(
-                    self.txn
+                    self.context
+                        .txn
                         .with(|t| t.mint_mapping(LpcMapping::new(register_map))),
                 );
 
-                set_location(&mut self.stack, &self.txn, r, new_ref)?;
+                set_location(&mut self.stack, &self.context.txn, r, new_ref)?;
             }
             Instruction::MMul(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.mul(y))?;
@@ -357,7 +370,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.binary_operation(r1, r2, r3, |x, y, txn| x.sub(y, txn))?;
             }
             Instruction::Not(r1, r2) => {
-                let matched = match &*get_location(&self.stack, &self.txn, r1)? {
+                let matched = match &*get_location(&self.stack, &self.context.txn, r1)? {
                     LpcRef::Int(x) => LpcRef::Int(LpcInt((*x == 0) as LpcIntInner)),
                     LpcRef::Float(x) => LpcRef::Int(LpcInt((*x == 0.0) as LpcIntInner)),
 
@@ -370,14 +383,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     | LpcRef::Function(_) => NULL,
                 };
 
-                set_location(&mut self.stack, &self.txn, r2, matched)?;
+                set_location(&mut self.stack, &self.context.txn, r2, matched)?;
             }
             Instruction::NotEq(r1, r2, r3) => {
-                let out = (get_location(&self.stack, &self.txn, r1)?
-                    != get_location(&self.stack, &self.txn, r2)?)
+                let out = (get_location(&self.stack, &self.context.txn, r1)?
+                    != get_location(&self.stack, &self.context.txn, r2)?)
                     as LpcIntInner;
 
-                set_location(&mut self.stack, &self.txn, r3, LpcRef::Int(LpcInt(out)))?;
+                set_location(
+                    &mut self.stack,
+                    &self.context.txn,
+                    r3,
+                    LpcRef::Int(LpcInt(out)),
+                )?;
             }
             Instruction::Or(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.bitor(y))?;
@@ -394,15 +412,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         ellipsis_vars
                             .iter()
                             .map(|x| {
-                                get_location_in_frame(frame, &self.txn, *x).map(|v| v.into_owned())
+                                get_location_in_frame(frame, &self.context.txn, *x)
+                                    .map(|v| v.into_owned())
                             })
                             .collect::<lpc_rs_errors::Result<Vec<_>>>()?
                     }
                 };
 
-                let new_ref = LpcRef::Array(self.txn.with(|t| t.mint_array(LpcArray::new(refs))));
+                let new_ref =
+                    LpcRef::Array(self.context.txn.with(|t| t.mint_array(LpcArray::new(refs))));
 
-                set_location(&mut self.stack, &self.txn, r, new_ref)?;
+                set_location(&mut self.stack, &self.context.txn, r, new_ref)?;
             }
             Instruction::PopulateDefaults => {
                 // let default_addresses = &self.defaults;
@@ -447,25 +467,27 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
 
                 let return_value = |new_ref, stack| -> lpc_rs_errors::Result<()> {
-                    set_location(stack, &self.txn, r4, new_ref)?;
+                    set_location(stack, &self.context.txn, r4, new_ref)?;
 
                     Ok(())
                 };
 
                 let get_new_value = |stack| -> lpc_rs_errors::Result<LpcRef> {
-                    let lpc_ref = &*get_location(stack, &self.txn, r1)?;
+                    let lpc_ref = &*get_location(stack, &self.context.txn, r1)?;
 
                     match lpc_ref {
                         LpcRef::Array(_) => lpc_ref
-                            .with_array(&self.txn, |vec| {
+                            .with_array(&self.context.txn, |vec| {
                                 if vec.is_empty() {
                                     return Ok(LpcRef::Array(
-                                        self.txn.with(|t| t.mint_array(LpcArray::new(vec![]))),
+                                        self.context
+                                            .txn
+                                            .with(|t| t.mint_array(LpcArray::new(vec![]))),
                                     ));
                                 }
 
-                                let index1 = &*get_location(stack, &self.txn, r2)?;
-                                let index2 = &*get_location(stack, &self.txn, r3)?;
+                                let index1 = &*get_location(stack, &self.context.txn, r2)?;
+                                let index2 = &*get_location(stack, &self.context.txn, r3)?;
 
                                 if let (LpcRef::Int(start), LpcRef::Int(end)) = (&index1, &index2) {
                                     let (real_start, real_end) =
@@ -476,11 +498,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                         let mut new_vec = vec![NULL; slice.len()];
                                         new_vec.clone_from_slice(slice);
                                         Ok(LpcRef::Array(
-                                            self.txn.with(|t| t.mint_array(LpcArray::new(new_vec))),
+                                            self.context
+                                                .txn
+                                                .with(|t| t.mint_array(LpcArray::new(new_vec))),
                                         ))
                                     } else {
                                         Ok(LpcRef::Array(
-                                            self.txn.with(|t| t.mint_array(LpcArray::new(vec![]))),
+                                            self.context
+                                                .txn
+                                                .with(|t| t.mint_array(LpcArray::new(vec![]))),
                                         ))
                                     }
                                 } else {
@@ -498,8 +524,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     return Ok(LpcString::from("").into());
                                 }
 
-                                let index1 = &*get_location(stack, &self.txn, r2)?;
-                                let index2 = &*get_location(stack, &self.txn, r3)?;
+                                let index1 = &*get_location(stack, &self.context.txn, r2)?;
+                                let index2 = &*get_location(stack, &self.context.txn, r3)?;
 
                                 if let (LpcRef::Int(start), LpcRef::Int(end)) = (&index1, &index2) {
                                     let (real_start, real_end) =
@@ -551,16 +577,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::Sizeof(r1, r2) => {
-                let lpc_ref = &*get_location(&self.stack, &self.txn, r1)?;
+                let lpc_ref = &*get_location(&self.stack, &self.context.txn, r1)?;
 
                 let new_ref = match lpc_ref {
                     LpcRef::Array(_) => {
-                        let l = lpc_ref.with_array(&self.txn, |a| a.len())?;
+                        let l = lpc_ref.with_array(&self.context.txn, |a| a.len())?;
 
                         LpcRef::Int(LpcInt(l as LpcIntInner))
                     }
                     LpcRef::Mapping(_) => {
-                        let l = lpc_ref.with_mapping(&self.txn, |m| m.len())?;
+                        let l = lpc_ref.with_mapping(&self.context.txn, |m| m.len())?;
 
                         LpcRef::Int(LpcInt(l as LpcIntInner))
                     }
@@ -574,7 +600,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 };
 
-                set_location(&mut self.stack, &self.txn, r2, new_ref)?;
+                set_location(&mut self.stack, &self.context.txn, r2, new_ref)?;
             }
             Instruction::Store(value_loc, container_loc, index_loc) => {
                 // r2[r3] = r1;

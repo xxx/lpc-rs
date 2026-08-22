@@ -138,15 +138,10 @@ pub struct Task<const STACKSIZE: usize> {
     /// The vector used to collect members of a soon-to-be-created array
     array_items: ThinVec<RegisterVariant>,
 
-    /// The context of this task
+    /// The context of this task; its `txn` is the transaction this task runs in.
     pub context: TaskContext,
 
-    /// This task's transaction handle. One top-level task = one
-    /// transaction; nested sub-tasks join it by cloning the handle.
-    /// Re-based onto a fresh transaction per attempt.
-    pub(crate) txn: TxnHandle,
-
-    /// True when `txn` was adopted from a caller's live attempt: this task
+    /// True when the handle was adopted from a caller's live attempt: this task
     /// joins it and must never open, re-base, or commit a transaction of
     /// its own. Decided at construction — a top-level task's own attempts
     /// re-base its handle onto a joinable one, so the handle's state can't
@@ -184,12 +179,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// A subtask should _never_ execute simultaneously with any other Task with
     /// the same [`TaskId`], as that can lead to deadlocks.
     pub fn new_sub_task(parent_id: TaskId, task_context: TaskContext) -> Self {
-        // Adopt the caller's transaction handle: a sub-task joins its
-        // caller's transaction, not a fresh one. A
-        // joinable handle is a live attempt; the empty default is not,
-        // so this also distinguishes top-level tasks.
-        let txn = task_context.txn().clone();
-        let joins_parent = txn.joinable();
+        // A joinable handle is a caller's live attempt; the empty default is not.
+        let joins_parent = task_context.txn().joinable();
         Self {
             id: parent_id,
             stack: CallStack::default(),
@@ -198,7 +189,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             partial_args: thin_vec![],
             array_items: ThinVec::with_capacity(10),
             context: task_context,
-            txn,
             joins_parent,
             seed: None,
             timeout_ms: None,
@@ -220,12 +210,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.partial_args.clear();
         self.array_items.clear();
         self.context.reset();
-        // A joiner keeps the parent's live handle (its run defers to the
-        // parent's commit); a top-level task resets to an empty handle,
-        // which `open_attempt` re-bases onto a fresh attempt.
-        if !self.joins_parent {
-            self.txn = TxnHandle::empty();
-        }
         self.state = TaskState::New;
 
         #[cfg(test)]
@@ -319,14 +303,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         )?;
         self.stack.push(frame)?;
 
-        // Re-base both the task's handle and the context's handle onto
-        // this attempt's fresh transaction (same `Arc`): contexts derived
-        // from this one (sub-task spawn sites) see the live attempt. A
-        // joiner keeps the adopted parent handle instead.
         if let Some(live) = &live {
-            self.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+            self.context.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
         }
-        self.context.txn = self.txn.clone();
 
         // One timeout per attempt; the committer's conflict rule is the sole
         // serialization control.
@@ -475,7 +454,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let lpc_ref = value.into();
         set_location(
             &mut self.stack,
-            &self.txn,
+            &self.context.txn,
             Register(result_index).as_local(),
             lpc_ref,
         )?;
@@ -498,12 +477,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     where
         F: Fn(&LpcRef, &LpcRef, &TxnHandle) -> Result<LpcRef>,
     {
-        let ref1 = &*get_location(&self.stack, &self.txn, r1)?;
-        let ref2 = &*get_location(&self.stack, &self.txn, r2)?;
+        let ref1 = &*get_location(&self.stack, &self.context.txn, r1)?;
+        let ref2 = &*get_location(&self.stack, &self.context.txn, r2)?;
 
-        match operation(ref1, ref2, &self.txn) {
+        match operation(ref1, ref2, &self.context.txn) {
             Ok(result) => {
-                set_location(&mut self.stack, &self.txn, r3, result)?;
+                set_location(&mut self.stack, &self.context.txn, r3, result)?;
             }
             Err(mut e) => {
                 let frame = self.stack.current_frame()?;
@@ -527,12 +506,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     where
         F: Fn(&LpcRef, &LpcRef) -> bool,
     {
-        let ref1 = &*get_location(&self.stack, &self.txn, r1)?;
-        let ref2 = &*get_location(&self.stack, &self.txn, r2)?;
+        let ref1 = &*get_location(&self.stack, &self.context.txn, r1)?;
+        let ref2 = &*get_location(&self.stack, &self.context.txn, r2)?;
 
         let out = operation(ref1, ref2) as LpcIntInner;
 
-        set_location(&mut self.stack, &self.txn, r3, LpcRef::Int(LpcInt(out)))
+        set_location(
+            &mut self.stack,
+            &self.context.txn,
+            r3,
+            LpcRef::Int(LpcInt(out)),
+        )
     }
 
     /// convenience helper to generate runtime errors
@@ -630,11 +614,11 @@ impl<const STACKSIZE: usize> AttemptBody for Task<STACKSIZE> {
         std::result::Result<(), crate::interpreter::stm::Changeset>,
         Vec<Effect>,
     )> {
-        // Clone the attempt's transaction out of the handle; the task
-        // keeps its copy for the next re-run.
-        let (_world, changeset) = self.txn.with(|t| t.clone()).into_parts();
+        // Clone rather than take: `take_effects` still reads the handle after
+        // the commit reply.
+        let (_world, changeset) = self.context.txn.with(|t| t.clone()).into_parts();
         let commit = commit_changeset(tx, changeset).await?;
-        let effects = self.txn.take_effects();
+        let effects = self.context.txn.take_effects();
         Ok((commit, effects))
     }
 
@@ -658,7 +642,7 @@ impl<const STACKSIZE: usize> Mark for Task<STACKSIZE> {
 
         // Uncommitted (and committed-through-us) values in the in-flight
         // changeset are roots: they may not exist anywhere else yet.
-        self.txn.with(|t| {
+        self.context.txn.with(|t| {
             for value in t.written_values() {
                 value.mark(marked, processed)?;
             }

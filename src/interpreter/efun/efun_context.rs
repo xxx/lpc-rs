@@ -32,8 +32,6 @@ pub struct EfunContext<'task, const N: usize> {
     task_id: TaskId,
     stack: &'task mut CallStack<N>,
     task_context: &'task TaskContext,
-    /// The caller task's transaction
-    txn: TxnHandle,
 
     /// Allow the user to take a snapshot of the callstack, for testing and
     /// debugging
@@ -51,9 +49,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             task_id,
             stack,
             task_context,
-            // The efun runs inside the caller's transaction: it shares
-            // the handle, so its reads/writes join the caller's attempt.
-            txn: task_context.txn().clone(),
 
             #[cfg(test)]
             snapshot: None,
@@ -203,11 +198,10 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.frame().registers.get(register.into())
     }
 
-    /// The transaction this efun's task runs in. `pub(crate)`:
-    /// `TxnHandle` is not part of the public API.
+    /// The transaction this efun's task runs in.
     #[inline]
     pub(crate) fn txn(&self) -> &TxnHandle {
-        &self.txn
+        self.task_context.txn()
     }
 
     /// The object space this efun's task commits into.
@@ -218,7 +212,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Record a physical side effect on this efun's attempt.
     pub(crate) fn record_effect(&self, effect: Effect) {
-        self.txn.record_effect(effect);
+        self.txn().record_effect(effect);
     }
 
     /// Find an object by path, transactionally. Delegates to

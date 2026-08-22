@@ -63,12 +63,12 @@ mod tests {
 
         task.result()
             .unwrap()
-            .with_array(&task.txn, |array| {
+            .with_array(task.context.txn(), |array| {
                 assert_eq!(array.len(), 2);
 
                 for call_out in array.iter() {
                     call_out
-                        .with_array(&task.txn, |arr| {
+                        .with_array(task.context.txn(), |arr| {
                             assert_eq!(arr.len(), 4);
                             assert!(matches!(arr[0], LpcRef::Object(_)));
                             assert!(matches!(arr[1], LpcRef::Function(_)));
@@ -122,12 +122,12 @@ mod tests {
 
         task.result()
             .unwrap()
-            .with_array(&task.txn, |array| {
+            .with_array(task.context.txn(), |array| {
                 assert_eq!(array.len(), 2);
 
                 for call_out in array.iter() {
                     call_out
-                        .with_array(&task.txn, |arr| {
+                        .with_array(task.context.txn(), |arr| {
                             assert_eq!(arr.len(), 4);
                             assert!(matches!(arr[0], LpcRef::Object(_)));
                             assert!(matches!(arr[1], LpcRef::Function(_)));

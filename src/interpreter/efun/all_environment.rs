@@ -93,7 +93,7 @@ mod tests {
         let _ = master_proc
             .result()
             .unwrap()
-            .with_array(&master_proc.txn, |result| {
+            .with_array(master_proc.context.txn(), |result| {
                 assert_eq!(
                     result.as_ref(),
                     &[
