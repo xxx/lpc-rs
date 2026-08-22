@@ -490,6 +490,21 @@ impl LpcRef {
         }
     }
 
+    /// Logical not (the unary `!` operator): 1 for `0` and `0.0`, else 0.
+    pub fn not(&self) -> Self {
+        match self {
+            LpcRef::Int(x) => LpcRef::Int(LpcInt((*x == 0) as LpcIntInner)),
+            LpcRef::Float(x) => LpcRef::Int(LpcInt((*x == 0.0) as LpcIntInner)),
+
+            // Null is always an `LpcRef::Int`, so every other variant is truthy.
+            LpcRef::String(_)
+            | LpcRef::Array(_)
+            | LpcRef::Mapping(_)
+            | LpcRef::Object(_)
+            | LpcRef::Function(_) => NULL,
+        }
+    }
+
     /// Impl _bitwise_ Not for ints, (i.e. the unary `~` operator)
     pub fn bitnot(&self) -> Result<Self> {
         match &self {

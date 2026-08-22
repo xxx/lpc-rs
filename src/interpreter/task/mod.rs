@@ -417,6 +417,32 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
+    #[instrument(skip_all)]
+    fn unary_operation<F>(
+        &mut self,
+        r1: RegisterVariant,
+        r2: RegisterVariant,
+        operation: F,
+    ) -> Result<()>
+    where
+        F: Fn(&LpcRef) -> Result<LpcRef>,
+    {
+        let ref1 = &*get_location(&self.stack, &self.context.txn, r1)?;
+
+        match operation(ref1) {
+            Ok(result) => {
+                set_location(&mut self.stack, &self.context.txn, r2, result)?;
+            }
+            Err(mut e) => {
+                let frame = self.stack.current_frame()?;
+                *e = e.with_span(frame.current_debug_span());
+                return Err(e);
+            }
+        }
+
+        Ok(())
+    }
+
     /// Binary operations that return a boolean value (e.g. comparisons)
     #[instrument(skip_all)]
     fn binary_boolean_operation<F>(

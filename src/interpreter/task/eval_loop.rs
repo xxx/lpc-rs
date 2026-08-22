@@ -122,18 +122,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.bitand(y))?;
             }
             Instruction::BitwiseNot(r1, r2) => {
-                let frame = self.stack.current_frame().unwrap();
-                let debug_span = frame.current_debug_span();
-                let lpc_ref = &*get_location(&self.stack, &self.context.txn, r1)?;
-                match lpc_ref.bitnot() {
-                    Ok(result) => {
-                        set_location(&mut self.stack, &self.context.txn, r2, result)?;
-                    }
-                    Err(mut e) => {
-                        *e = e.with_span(debug_span);
-                        return Err(e);
-                    }
-                }
+                self.unary_operation(r1, r2, |x| x.bitnot())?;
             }
             Instruction::Call(name_idx) => {
                 self.handle_call(name_idx).await?;
@@ -190,16 +179,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 apply_in_location(&mut self.stack, &self.context.txn, r1, |x| x.dec())?;
             }
             Instruction::EqEq(r1, r2, r3) => {
-                let out = (get_location(&self.stack, &self.context.txn, r1)?
-                    == get_location(&self.stack, &self.context.txn, r2)?)
-                    as LpcIntInner;
-
-                set_location(
-                    &mut self.stack,
-                    &self.context.txn,
-                    r3,
-                    LpcRef::Int(out.into()),
-                )?;
+                self.binary_boolean_operation(r1, r2, r3, |x, y| x == y)?;
             }
             Instruction::FConst(r, f) => {
                 set_location(
@@ -222,21 +202,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Gte(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y)?;
             }
-            Instruction::IAdd(r1, r2, r3) => {
-                match get_location(&self.stack, &self.context.txn, r1)?.add(
-                    &*get_location(&self.stack, &self.context.txn, r2)?,
-                    &self.context.txn,
-                ) {
-                    Ok(result) => {
-                        set_location(&mut self.stack, &self.context.txn, r3, result)?;
-                    }
-                    Err(mut e) => {
-                        let frame = self.stack.current_frame()?;
-                        *e = e.with_span(frame.current_debug_span());
-                        return Err(e);
-                    }
-                }
-            }
             Instruction::IConst(r, i) => {
                 set_location(&mut self.stack, &self.context.txn, r, LpcRef::Int(i.into()))?;
             }
@@ -247,62 +212,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 set_location(&mut self.stack, &self.context.txn, r, LpcRef::Int(1.into()))?;
             }
             Instruction::IDiv(r1, r2, r3) => {
-                match get_location(&self.stack, &self.context.txn, r1)?.div(&*get_location(
-                    &self.stack,
-                    &self.context.txn,
-                    r2,
-                )?) {
-                    Ok(result) => set_location(&mut self.stack, &self.context.txn, r3, result)?,
-                    Err(mut e) => {
-                        let frame = self.stack.current_frame()?;
-                        *e = e.with_span(frame.current_debug_span());
-                        return Err(e);
-                    }
-                }
+                self.binary_operation(r1, r2, r3, |x, y, _| x.div(y))?;
             }
             Instruction::IMod(r1, r2, r3) => {
-                match get_location(&self.stack, &self.context.txn, r1)?.rem(&*get_location(
-                    &self.stack,
-                    &self.context.txn,
-                    r2,
-                )?) {
-                    Ok(result) => set_location(&mut self.stack, &self.context.txn, r3, result)?,
-                    Err(mut e) => {
-                        let frame = self.stack.current_frame()?;
-                        *e = e.with_span(frame.current_debug_span());
-                        return Err(e);
-                    }
-                }
-            }
-            Instruction::IMul(r1, r2, r3) => {
-                match get_location(&self.stack, &self.context.txn, r1)?.mul(&*get_location(
-                    &self.stack,
-                    &self.context.txn,
-                    r2,
-                )?) {
-                    Ok(result) => set_location(&mut self.stack, &self.context.txn, r3, result)?,
-                    Err(mut e) => {
-                        let frame = self.stack.current_frame()?;
-                        *e = e.with_span(frame.current_debug_span());
-                        return Err(e);
-                    }
-                }
+                self.binary_operation(r1, r2, r3, |x, y, _| x.rem(y))?;
             }
             Instruction::Inc(r1) => {
                 apply_in_location(&mut self.stack, &self.context.txn, r1, |x| x.inc())?;
-            }
-            Instruction::ISub(r1, r2, r3) => {
-                match get_location(&self.stack, &self.context.txn, r1)?.sub(
-                    &*get_location(&self.stack, &self.context.txn, r2)?,
-                    &self.context.txn,
-                ) {
-                    Ok(result) => set_location(&mut self.stack, &self.context.txn, r3, result)?,
-                    Err(mut e) => {
-                        let frame = self.stack.current_frame()?;
-                        *e = e.with_span(frame.current_debug_span());
-                        return Err(e);
-                    }
-                }
             }
             Instruction::Jmp(address) => {
                 let frame = self.stack.current_frame_mut()?;
@@ -337,7 +253,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Lte(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y| x <= y)?;
             }
-            Instruction::MAdd(r1, r2, r3) => {
+            Instruction::IAdd(r1, r2, r3) | Instruction::MAdd(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, txn| x.add(y, txn))?;
             }
             Instruction::MapConst(r) => {
@@ -363,39 +279,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 set_location(&mut self.stack, &self.context.txn, r, new_ref)?;
             }
-            Instruction::MMul(r1, r2, r3) => {
+            Instruction::IMul(r1, r2, r3) | Instruction::MMul(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.mul(y))?;
             }
-            Instruction::MSub(r1, r2, r3) => {
+            Instruction::ISub(r1, r2, r3) | Instruction::MSub(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, txn| x.sub(y, txn))?;
             }
             Instruction::Not(r1, r2) => {
-                let matched = match &*get_location(&self.stack, &self.context.txn, r1)? {
-                    LpcRef::Int(x) => LpcRef::Int(LpcInt((*x == 0) as LpcIntInner)),
-                    LpcRef::Float(x) => LpcRef::Int(LpcInt((*x == 0.0) as LpcIntInner)),
-
-                    // These rest always have a value at runtime.
-                    // Any null / undefined values would be LpcRef::Ints, handled above.
-                    LpcRef::String(_)
-                    | LpcRef::Array(_)
-                    | LpcRef::Mapping(_)
-                    | LpcRef::Object(_)
-                    | LpcRef::Function(_) => NULL,
-                };
-
-                set_location(&mut self.stack, &self.context.txn, r2, matched)?;
+                self.unary_operation(r1, r2, |x| Ok(x.not()))?;
             }
             Instruction::NotEq(r1, r2, r3) => {
-                let out = (get_location(&self.stack, &self.context.txn, r1)?
-                    != get_location(&self.stack, &self.context.txn, r2)?)
-                    as LpcIntInner;
-
-                set_location(
-                    &mut self.stack,
-                    &self.context.txn,
-                    r3,
-                    LpcRef::Int(LpcInt(out)),
-                )?;
+                self.binary_boolean_operation(r1, r2, r3, |x, y| x != y)?;
             }
             Instruction::Or(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.bitor(y))?;
