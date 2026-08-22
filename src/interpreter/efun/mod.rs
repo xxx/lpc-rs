@@ -2,7 +2,6 @@ pub mod efun_context;
 
 pub(crate) mod all_environment;
 pub(crate) mod all_inventory;
-pub(crate) mod arrayp;
 pub(crate) mod call_out;
 pub(crate) mod clone_object;
 pub(crate) mod compose;
@@ -17,38 +16,30 @@ pub(crate) mod exec;
 pub(crate) mod explode;
 pub(crate) mod file_name;
 pub(crate) mod find_object;
-pub(crate) mod floatp;
-pub(crate) mod functionp;
 pub(crate) mod implode;
 pub(crate) mod input_to;
 pub(crate) mod interactive;
-pub(crate) mod intp;
 pub(crate) mod living;
-pub(crate) mod mappingp;
 pub(crate) mod move_object;
-pub(crate) mod objectp;
 pub(crate) mod papplyv;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
 pub(crate) mod query_resident_memory;
 pub(crate) mod remove_call_out;
 pub(crate) mod set_this_player;
-pub(crate) mod stringp;
 pub(crate) mod tell_object;
 pub(crate) mod this_object;
 pub(crate) mod this_player;
 pub(crate) mod throw;
+pub(crate) mod type_predicates;
 pub(crate) mod write;
 pub(crate) mod write_socket;
 
 use std::sync::Arc;
 
-use futures::future::BoxFuture;
 use indexmap::IndexMap;
 use lpc_rs_core::{
-    function_arity::{FunctionArity, FunctionArityBuilder},
-    function_flags::FunctionFlags,
-    lpc_path::LpcPath,
+    function_arity::FunctionArity, function_flags::FunctionFlags, lpc_path::LpcPath,
     lpc_type::LpcType,
 };
 use lpc_rs_errors::Result;
@@ -62,758 +53,319 @@ use crate::interpreter::{
     efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef, process::Process,
 };
 
-/// Signature for Efuns
-pub type Efun<const N: usize> = fn(&mut EfunContext<N>) -> Result<()>;
-pub type AsyncEfun<const N: usize> =
-    Box<dyn Send + Sync + for<'a> Fn(&'a mut EfunContext<N>) -> BoxFuture<'a, Result<()>>>;
-
-pub const ALL_ENVIRONMENT: &str = "all_environment";
-pub const ALL_INVENTORY: &str = "all_inventory";
-pub const ARRAYP: &str = "arrayp";
-pub const CALL_OUT: &str = "call_out";
+/// Special forms: typechecked against an efun prototype, compiled to their
+/// own instructions.
 pub const CALL_OTHER: &str = "call_other";
 pub const CATCH: &str = "catch";
-pub const CLONE_OBJECT: &str = "clone_object";
-pub const COMPOSE: &str = "compose";
-pub const DEBUG: &str = "debug";
-pub const DEEP_INVENTORY: &str = "deep_inventory";
-pub const DESTRUCT: &str = "destruct";
-pub const DISABLE_COMMANDS: &str = "disable_commands";
-pub const DUMP: &str = "dump";
-pub const ENABLE_COMMANDS: &str = "enable_commands";
-pub const ENVIRONMENT: &str = "environment";
-pub const EXEC: &str = "exec";
-pub const EXPLODE: &str = "explode";
-pub const FILE_NAME: &str = "file_name";
-pub const FIND_OBJECT: &str = "find_object";
-pub const FLOATP: &str = "floatp";
-pub const FUNCTIONP: &str = "functionp";
-pub const IMPLODE: &str = "implode";
-pub const INPUT_TO: &str = "input_to";
-pub const INTP: &str = "intp";
-pub const INTERACTIVE: &str = "interactive";
-pub const LIVING: &str = "living";
-pub const MAPPINGP: &str = "mappingp";
-pub const MOVE_OBJECT: &str = "move_object";
-pub const OBJECTP: &str = "objectp";
-pub const PAPPLYV: &str = "papplyv";
-pub const QUERY_CALL_OUT: &str = "query_call_out";
-pub const QUERY_CALL_OUTS: &str = "query_call_outs";
-pub const QUERY_RESIDENT_MEMORY: &str = "query_resident_memory";
-pub const REMOVE_CALL_OUT: &str = "remove_call_out";
-pub const SET_THIS_PLAYER: &str = "set_this_player";
 pub const SIZEOF: &str = "sizeof";
-pub const STRINGP: &str = "stringp";
-pub const TELL_OBJECT: &str = "tell_object";
-pub const THIS_OBJECT: &str = "this_object";
-pub const THIS_PLAYER: &str = "this_player";
-pub const THROW: &str = "throw";
-pub const WRITE: &str = "write";
-pub const WRITE_SOCKET: &str = "write_socket";
 
-pub async fn call_efun<const STACKSIZE: usize>(
-    efun_name: &str,
-    efun_context: &mut EfunContext<'_, STACKSIZE>,
-) -> Result<()> {
-    match efun_name {
-        ALL_ENVIRONMENT => all_environment::all_environment(efun_context).await,
-        ALL_INVENTORY => all_inventory::all_inventory(efun_context).await,
-        ARRAYP => arrayp::arrayp(efun_context).await,
-        CALL_OUT => call_out::call_out(efun_context).await,
-        CLONE_OBJECT => clone_object::clone_object(efun_context).await,
-        COMPOSE => compose::compose(efun_context).await,
-        DEBUG => debug::debug(efun_context).await,
-        DEEP_INVENTORY => deep_inventory::deep_inventory(efun_context).await,
-        DESTRUCT => destruct::destruct(efun_context).await,
-        DISABLE_COMMANDS => disable_commands::disable_commands(efun_context).await,
-        DUMP => dump::dump(efun_context).await,
-        ENABLE_COMMANDS => enable_commands::enable_commands(efun_context).await,
-        ENVIRONMENT => environment::environment(efun_context).await,
-        EXEC => exec::exec(efun_context).await,
-        EXPLODE => explode::explode(efun_context).await,
-        FILE_NAME => file_name::file_name(efun_context).await,
-        FIND_OBJECT => find_object::find_object(efun_context).await,
-        FLOATP => floatp::floatp(efun_context).await,
-        FUNCTIONP => functionp::functionp(efun_context).await,
-        IMPLODE => implode::implode(efun_context).await,
-        INPUT_TO => input_to::input_to(efun_context).await,
-        INTERACTIVE => interactive::interactive(efun_context).await,
-        INTP => intp::intp(efun_context).await,
-        LIVING => living::living(efun_context).await,
-        MAPPINGP => mappingp::mappingp(efun_context).await,
-        MOVE_OBJECT => move_object::move_object(efun_context).await,
-        OBJECTP => objectp::objectp(efun_context).await,
-        PAPPLYV => papplyv::papplyv(efun_context).await,
-        QUERY_CALL_OUT => query_call_out::query_call_out(efun_context).await,
-        QUERY_CALL_OUTS => query_call_outs::query_call_outs(efun_context).await,
-        QUERY_RESIDENT_MEMORY => query_resident_memory::query_resident_memory(efun_context).await,
-        REMOVE_CALL_OUT => remove_call_out::remove_call_out(efun_context).await,
-        SET_THIS_PLAYER => set_this_player::set_this_player(efun_context).await,
-        STRINGP => stringp::stringp(efun_context).await,
-        TELL_OBJECT => tell_object::tell_object(efun_context).await,
-        THIS_OBJECT => this_object::this_object(efun_context).await,
-        THIS_PLAYER => this_player::this_player(efun_context).await,
-        THROW => throw::throw(efun_context).await,
-        WRITE => write::write(efun_context).await,
-        WRITE_SOCKET => write_socket::write_socket(efun_context).await,
-        _ => Err(efun_context.runtime_error(format!("Unknown efun: {}", efun_name))),
-    }
+/// The efun table: one row per efun expands to its dispatch arm and its
+/// [`EFUN_PROTOTYPES`] entry.
+///
+/// Row: `name [option] => { returns: <LpcType>, arity: <arity>, args: [<LpcType>, ..], flags: ellipsis }`.
+/// `arity` is `n` (n arguments), `(n, d)` (the last `d` defaulted) or
+/// `(n, d, ellipsis)`; `arity`, `args` and `flags` may be omitted.
+/// `[in module]` dispatches to `module::name` instead of `name::name`;
+/// `[prototype only]` marks a special form: no module, no dispatch.
+macro_rules! efuns {
+    (@dispatch $name:ident, $context:ident) => {
+        $name::$name($context).await
+    };
+    (@dispatch $name:ident [in $module:ident], $context:ident) => {
+        $module::$name($context).await
+    };
+    // Unreachable: the compiler never emits `CallEfun` for a special form.
+    (@dispatch $name:ident [prototype only], $context:ident) => {
+        Err($context.runtime_error(format!("Unknown efun: {}", stringify!($name))))
+    };
+
+    (@arity) => {
+        FunctionArity::default()
+    };
+    (@arity $n:literal) => {
+        FunctionArity::new($n)
+    };
+    (@arity ($n:literal, $d:literal)) => {
+        FunctionArity {
+            num_args: $n,
+            num_default_args: $d,
+            varargs: false,
+            ellipsis: false,
+        }
+    };
+    (@arity ($n:literal, $d:literal, ellipsis)) => {
+        FunctionArity {
+            num_args: $n,
+            num_default_args: $d,
+            varargs: false,
+            ellipsis: true,
+        }
+    };
+
+    (@flags) => {
+        FunctionFlags::default()
+    };
+    (@flags ellipsis) => {
+        FunctionFlags::default().with_ellipsis(true)
+    };
+
+    (@prototype $name:ident {
+        returns: $returns:expr
+        $(, arity: $arity:tt)?
+        $(, args: [$($arg:expr),* $(,)?])?
+        $(, flags: $flags:ident)?
+        $(,)?
+    }) => {
+        FunctionPrototypeBuilder::default()
+            .name(stringify!($name))
+            .filename(LpcPath::InGame("".into()))
+            .return_type($returns)
+            .kind(FunctionKind::Efun)
+            .arity(efuns!(@arity $($arity)?))
+            .arg_types(vec![$($($arg),*)?])
+            .flags(efuns!(@flags $($flags)?))
+            .build()
+            .expect(concat!("failed to build ", stringify!($name)))
+    };
+
+    ($( $name:ident $([$($option:tt)*])? => { $($row:tt)* } ),+ $(,)?) => {
+        /// Run the efun named `efun_name` against `efun_context`.
+        pub async fn call_efun<const STACKSIZE: usize>(
+            efun_name: &str,
+            efun_context: &mut EfunContext<'_, STACKSIZE>,
+        ) -> Result<()> {
+            match efun_name {
+                $( stringify!($name) => efuns!(@dispatch $name $([$($option)*])?, efun_context), )+
+                _ => Err(efun_context.runtime_error(format!("Unknown efun: {}", efun_name))),
+            }
+        }
+
+        /// Every efun prototype, in table order.
+        /// [`Instruction::CallEfun`](lpc_rs_asm::instruction::Instruction::CallEfun)
+        /// indexes into this map; a reorder invalidates compiled code.
+        pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = Lazy::new(|| {
+            let mut m = IndexMap::new();
+            $( m.insert(stringify!($name), efuns!(@prototype $name { $($row)* })); )+
+            m
+        });
+    };
 }
 
-/// Global static mapping of all efun names to their prototype.
-/// [`Instruction::CallEfun`](lpc_rs_asm::instruction::Instruction::CallEfun) indexes into this map,
-/// so changes to the insert order will invalidate previously-compiled code, and break tests.
-pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = Lazy::new(|| {
-    let mut m = IndexMap::new();
-
-    m.insert(
-        ALL_ENVIRONMENT,
-        FunctionPrototypeBuilder::default()
-            .name(ALL_ENVIRONMENT)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Object(true))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 1,
-                num_default_args: 1,
-                varargs: false,
-                ellipsis: false,
-            })
-            .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
-            .build()
-            .expect("failed to build all_environment"),
-    );
-
-    m.insert(
-        ALL_INVENTORY,
-        FunctionPrototypeBuilder::default()
-            .name(ALL_INVENTORY)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Object(true))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 1,
-                num_default_args: 1,
-                varargs: false,
-                ellipsis: false,
-            })
-            .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
-            .build()
-            .expect("failed to build all_inventory"),
-    );
-
-    m.insert(
-        ARRAYP,
-        FunctionPrototypeBuilder::default()
-            .name(ARRAYP)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Mixed(false)])
-            .build()
-            .expect("failed to build arrayp"),
-    );
-
-    m.insert(
-        CALL_OUT,
-        FunctionPrototypeBuilder::default()
-            .name(CALL_OUT)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 2,
-                num_default_args: 0,
-                varargs: false,
-                ellipsis: true,
-            })
-            .arg_types(vec![
-                LpcType::Function(false),
-                LpcType::Int(false) | LpcType::Float(false),
-            ])
-            .build()
-            .expect("failed to build call_out"),
-    );
-    m.insert(
-        CALL_OTHER,
-        FunctionPrototypeBuilder::default()
-            .name(CALL_OTHER)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Mixed(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 2,
-                num_default_args: 0,
-                varargs: false,
-                ellipsis: true,
-            })
-            .arg_types(vec![
-                LpcType::Object(false)
-                    | LpcType::Object(true)
-                    | LpcType::String(false)
-                    | LpcType::String(true)
-                    | LpcType::Mapping(false),
-                LpcType::String(false),
-            ])
-            .flags(FunctionFlags::default().with_ellipsis(true))
-            .build()
-            .expect("failed to build call_other"),
-    );
-
-    // "catch" is a special form of the language, implemented with custom
-    // [`Instruction`]s.   A prototype is defined here to enforce type checks,
-    //   as `catch` looks and acts like a function call.
-    m.insert(
-        CATCH,
-        FunctionPrototypeBuilder::default()
-            .name(CATCH)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Mixed(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Mixed(false) | LpcType::Void])
-            .build()
-            .expect("failed to build catch"),
-    );
-
-    m.insert(
-        CLONE_OBJECT,
-        FunctionPrototypeBuilder::default()
-            .name(CLONE_OBJECT)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Object(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::String(false)])
-            .build()
-            .expect("failed to build clone_object"),
-    );
-
-    m.insert(
-        COMPOSE,
-        FunctionPrototypeBuilder::default()
-            .name(COMPOSE)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Function(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(2))
-            .arg_types(vec![LpcType::Function(false), LpcType::Function(false)])
-            .build()
-            .expect("failed to build compose"),
-    );
-
-    m.insert(
-        DEBUG,
-        FunctionPrototypeBuilder::default()
-            .name(DEBUG)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Mixed(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 2,
-                num_default_args: 1,
-                varargs: false,
-                ellipsis: false,
-            })
-            .arg_types(vec![LpcType::String(false), LpcType::Mixed(false)])
-            .build()
-            .expect("failed to build debug"),
-    );
-
-    m.insert(
-        DEEP_INVENTORY,
-        FunctionPrototypeBuilder::default()
-            .name(DEEP_INVENTORY)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Object(true))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 1,
-                num_default_args: 1,
-                varargs: false,
-                ellipsis: false,
-            })
-            .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
-            .build()
-            .expect("failed to build deep_inventory"),
-    );
-
-    m.insert(
-        DESTRUCT,
-        FunctionPrototypeBuilder::default()
-            .name(DESTRUCT)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Void)
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Object(false) | LpcType::Object(true)])
-            .build()
-            .expect("failed to build destruct"),
-    );
-
-    m.insert(
-        DISABLE_COMMANDS,
-        FunctionPrototypeBuilder::default()
-            .name(DISABLE_COMMANDS)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Void)
-            .kind(FunctionKind::Efun)
-            .build()
-            .expect("failed to build disable_commands"),
-    );
-
-    m.insert(
-        DUMP,
-        FunctionPrototypeBuilder::default()
-            .name(DUMP)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Void)
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 1,
-                num_default_args: 0,
-                varargs: false,
-                ellipsis: true,
-            })
-            .arg_types(vec![LpcType::Mixed(false)])
-            .flags(FunctionFlags::default().with_ellipsis(true))
-            .build()
-            .expect("failed to build dump"),
-    );
-
-    m.insert(
-        ENABLE_COMMANDS,
-        FunctionPrototypeBuilder::default()
-            .name(ENABLE_COMMANDS)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Void)
-            .kind(FunctionKind::Efun)
-            .build()
-            .expect("failed to build enable_commands"),
-    );
-
-    m.insert(
-        ENVIRONMENT,
-        FunctionPrototypeBuilder::default()
-            .name(ENVIRONMENT)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Object(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 1,
-                num_default_args: 1,
-                ellipsis: false,
-                varargs: false,
-            })
-            .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
-            .build()
-            .expect("failed to build environment"),
-    );
-
-    m.insert(
-        EXEC,
-        FunctionPrototypeBuilder::default()
-            .name(EXEC)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(2))
-            .arg_types(vec![LpcType::Object(false), LpcType::Object(false)])
-            .build()
-            .expect("failed to build exec"),
-    );
-
-    m.insert(
-        EXPLODE,
-        FunctionPrototypeBuilder::default()
-            .name(EXPLODE)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::String(true))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 2,
-                num_default_args: 1,
-                ellipsis: false,
-                varargs: false,
-            })
-            .arg_types(vec![LpcType::String(false), LpcType::String(false)])
-            .build()
-            .expect("failed to build explode"),
-    );
-
-    m.insert(
-        FILE_NAME,
-        FunctionPrototypeBuilder::default()
-            .name(FILE_NAME)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::String(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Object(false)])
-            .build()
-            .expect("failed to build file_name"),
-    );
-
-    m.insert(
-        FIND_OBJECT,
-        FunctionPrototypeBuilder::default()
-            .name(FIND_OBJECT)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Object(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::String(false)])
-            .build()
-            .expect("failed to build find_object"),
-    );
-
-    m.insert(
-        FLOATP,
-        FunctionPrototypeBuilder::default()
-            .name(FLOATP)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Mixed(false)])
-            .build()
-            .expect("failed to build floatp"),
-    );
-
-    m.insert(
-        FUNCTIONP,
-        FunctionPrototypeBuilder::default()
-            .name(FUNCTIONP)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Mixed(false)])
-            .build()
-            .expect("failed to build functionp"),
-    );
-
-    m.insert(
-        IMPLODE,
-        FunctionPrototypeBuilder::default()
-            .name(IMPLODE)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::String(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 2,
-                num_default_args: 1,
-                ellipsis: false,
-                varargs: false,
-            })
-            .arg_types(vec![LpcType::String(true), LpcType::String(false)])
-            .build()
-            .expect("failed to build implode"),
-    );
-
-    m.insert(
-        INPUT_TO,
-        FunctionPrototypeBuilder::default()
-            .name(INPUT_TO)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Void)
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 2,
-                num_default_args: 1,
-                varargs: false,
-                ellipsis: false,
-            })
-            .arg_types(vec![LpcType::Function(false), LpcType::Int(false)])
-            .build()
-            .expect("failed to build input_to"),
-    );
-
-    m.insert(
-        INTERACTIVE,
-        FunctionPrototypeBuilder::default()
-            .name(INTERACTIVE)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 1,
-                num_default_args: 1,
-                ellipsis: false,
-                varargs: false,
-            })
-            .build()
-            .expect("failed to build interactive"),
-    );
-
-    m.insert(
-        INTP,
-        FunctionPrototypeBuilder::default()
-            .name(INTP)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Mixed(false)])
-            .build()
-            .expect("failed to build intp"),
-    );
-
-    m.insert(
-        LIVING,
-        FunctionPrototypeBuilder::default()
-            .name(LIVING)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 1,
-                num_default_args: 1,
-                ellipsis: false,
-                varargs: false,
-            })
-            .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
-            .build()
-            .expect("failed to build living"),
-    );
-
-    m.insert(
-        MAPPINGP,
-        FunctionPrototypeBuilder::default()
-            .name(MAPPINGP)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Mixed(false)])
-            .build()
-            .expect("failed to build mappingp"),
-    );
-
-    m.insert(
-        MOVE_OBJECT,
-        FunctionPrototypeBuilder::default()
-            .name(MOVE_OBJECT)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Void)
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::String(false) | LpcType::Object(false)])
-            .build()
-            .expect("failed to build move_object"),
-    );
-
-    m.insert(
-        OBJECTP,
-        FunctionPrototypeBuilder::default()
-            .name(OBJECTP)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Mixed(false)])
-            .build()
-            .expect("failed to build objectp"),
-    );
-
-    m.insert(
-        PAPPLYV,
-        FunctionPrototypeBuilder::default()
-            .name(PAPPLYV)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Function(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity {
-                num_args: 2,
-                num_default_args: 0,
-                varargs: false,
-                ellipsis: false,
-            })
-            .arg_types(vec![LpcType::Function(false), LpcType::Mixed(true)])
-            .build()
-            .expect("failed to build papplyv"),
-    );
-
-    m.insert(
-        QUERY_CALL_OUT,
-        FunctionPrototypeBuilder::default()
-            .name(QUERY_CALL_OUT)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Mixed(true))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Int(false)])
-            .build()
-            .expect("failed to build query_call_out"),
-    );
-
-    m.insert(
-        QUERY_CALL_OUTS,
-        FunctionPrototypeBuilder::default()
-            .name(QUERY_CALL_OUTS)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Mixed(true))
-            .kind(FunctionKind::Efun)
-            .arity(
-                FunctionArityBuilder::default()
-                    .num_args(1)
-                    .num_default_args(1)
-                    .build()
-                    .unwrap(),
-            )
-            .arg_types(vec![LpcType::Object(false)])
-            .build()
-            .expect("failed to build query_call_out_info"),
-    );
-
-    m.insert(
-        QUERY_RESIDENT_MEMORY,
-        FunctionPrototypeBuilder::default()
-            .name(QUERY_RESIDENT_MEMORY)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(0))
-            .arg_types(vec![])
-            .build()
-            .expect("failed to build query_resident_memory"),
-    );
-
-    m.insert(
-        REMOVE_CALL_OUT,
-        FunctionPrototypeBuilder::default()
-            .name(REMOVE_CALL_OUT)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Int(false)])
-            .build()
-            .expect("failed to build remove_call_out"),
-    );
-
-    m.insert(
-        SET_THIS_PLAYER,
-        FunctionPrototypeBuilder::default()
-            .name(SET_THIS_PLAYER)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Object(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Object(false)])
-            .build()
-            .expect("failed to build set_this_player"),
-    );
-
-    // sizeof is handled with its own instruction, but is typechecked as normal
-    m.insert(
-        SIZEOF,
-        FunctionPrototypeBuilder::default()
-            .name(SIZEOF)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Mixed(true) | LpcType::Mapping(false)])
-            .build()
-            .expect("failed to build sizeof"),
-    );
-
-    m.insert(
-        STRINGP,
-        FunctionPrototypeBuilder::default()
-            .name(STRINGP)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Mixed(false)])
-            .build()
-            .expect("failed to build stringp"),
-    );
-
-    m.insert(
-        TELL_OBJECT,
-        FunctionPrototypeBuilder::default()
-            .name(TELL_OBJECT)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(2))
-            .arg_types(vec![
-                LpcType::Object(false) | LpcType::String(false),
-                LpcType::String(false),
-            ])
-            .build()
-            .expect("failed to build tell_object"),
-    );
-
-    m.insert(
-        THIS_OBJECT,
-        FunctionPrototypeBuilder::default()
-            .name(THIS_OBJECT)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Object(false))
-            .kind(FunctionKind::Efun)
-            .build()
-            .expect("failed to build this_object"),
-    );
-
-    m.insert(
-        THIS_PLAYER,
-        FunctionPrototypeBuilder::default()
-            .name(THIS_PLAYER)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Object(false))
-            .kind(FunctionKind::Efun)
-            .build()
-            .expect("failed to build this_player"),
-    );
-
-    m.insert(
-        THROW,
-        FunctionPrototypeBuilder::default()
-            .name(THROW)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Void)
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Mixed(false)])
-            .build()
-            .expect("failed to build throw"),
-    );
-
-    m.insert(
-        WRITE,
-        FunctionPrototypeBuilder::default()
-            .name(WRITE)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![LpcType::Mixed(false)])
-            .build()
-            .expect("failed to build write"),
-    );
-
-    m.insert(
-        WRITE_SOCKET,
-        FunctionPrototypeBuilder::default()
-            .name(WRITE_SOCKET)
-            .filename(LpcPath::InGame("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(1))
-            .arg_types(vec![
-                LpcType::Int(false) | LpcType::Float(false) | LpcType::String(false),
-            ])
-            .build()
-            .expect("failed to build write_socket"),
-    );
-
-    m
-});
+efuns! {
+    all_environment => {
+        returns: LpcType::Object(true),
+        arity: (1, 1),
+        args: [LpcType::String(false) | LpcType::Object(false)],
+    },
+    all_inventory => {
+        returns: LpcType::Object(true),
+        arity: (1, 1),
+        args: [LpcType::String(false) | LpcType::Object(false)],
+    },
+    arrayp [in type_predicates] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    call_out => {
+        returns: LpcType::Int(false),
+        arity: (2, 0, ellipsis),
+        args: [LpcType::Function(false), LpcType::Int(false) | LpcType::Float(false)],
+    },
+    call_other [prototype only] => {
+        returns: LpcType::Mixed(false),
+        arity: (2, 0, ellipsis),
+        args: [
+            LpcType::Object(false)
+                | LpcType::Object(true)
+                | LpcType::String(false)
+                | LpcType::String(true)
+                | LpcType::Mapping(false),
+            LpcType::String(false),
+        ],
+        flags: ellipsis,
+    },
+    catch [prototype only] => {
+        returns: LpcType::Mixed(false),
+        arity: 1,
+        args: [LpcType::Mixed(false) | LpcType::Void],
+    },
+    clone_object => {
+        returns: LpcType::Object(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
+    compose => {
+        returns: LpcType::Function(false),
+        arity: 2,
+        args: [LpcType::Function(false), LpcType::Function(false)],
+    },
+    debug => {
+        returns: LpcType::Mixed(false),
+        arity: (2, 1),
+        args: [LpcType::String(false), LpcType::Mixed(false)],
+    },
+    deep_inventory => {
+        returns: LpcType::Object(true),
+        arity: (1, 1),
+        args: [LpcType::String(false) | LpcType::Object(false)],
+    },
+    destruct => {
+        returns: LpcType::Void,
+        arity: 1,
+        args: [LpcType::Object(false) | LpcType::Object(true)],
+    },
+    disable_commands => {
+        returns: LpcType::Void,
+    },
+    dump => {
+        returns: LpcType::Void,
+        arity: (1, 0, ellipsis),
+        args: [LpcType::Mixed(false)],
+        flags: ellipsis,
+    },
+    enable_commands => {
+        returns: LpcType::Void,
+    },
+    environment => {
+        returns: LpcType::Object(false),
+        arity: (1, 1),
+        args: [LpcType::String(false) | LpcType::Object(false)],
+    },
+    exec => {
+        returns: LpcType::Int(false),
+        arity: 2,
+        args: [LpcType::Object(false), LpcType::Object(false)],
+    },
+    explode => {
+        returns: LpcType::String(true),
+        arity: (2, 1),
+        args: [LpcType::String(false), LpcType::String(false)],
+    },
+    file_name => {
+        returns: LpcType::String(false),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
+    find_object => {
+        returns: LpcType::Object(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
+    floatp [in type_predicates] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    functionp [in type_predicates] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    implode => {
+        returns: LpcType::String(false),
+        arity: (2, 1),
+        args: [LpcType::String(true), LpcType::String(false)],
+    },
+    input_to => {
+        returns: LpcType::Void,
+        arity: (2, 1),
+        args: [LpcType::Function(false), LpcType::Int(false)],
+    },
+    interactive => {
+        returns: LpcType::Int(false),
+        arity: (1, 1),
+    },
+    intp [in type_predicates] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    living => {
+        returns: LpcType::Int(false),
+        arity: (1, 1),
+        args: [LpcType::String(false) | LpcType::Object(false)],
+    },
+    mappingp [in type_predicates] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    move_object => {
+        returns: LpcType::Void,
+        arity: 1,
+        args: [LpcType::String(false) | LpcType::Object(false)],
+    },
+    objectp [in type_predicates] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    papplyv => {
+        returns: LpcType::Function(false),
+        arity: (2, 0),
+        args: [LpcType::Function(false), LpcType::Mixed(true)],
+    },
+    query_call_out => {
+        returns: LpcType::Mixed(true),
+        arity: 1,
+        args: [LpcType::Int(false)],
+    },
+    query_call_outs => {
+        returns: LpcType::Mixed(true),
+        arity: (1, 1),
+    },
+    query_resident_memory => {
+        returns: LpcType::Int(false),
+        arity: 0,
+    },
+    remove_call_out => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Int(false)],
+    },
+    set_this_player => {
+        returns: LpcType::Object(false),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
+    sizeof [prototype only] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(true) | LpcType::Mapping(false)],
+    },
+    stringp [in type_predicates] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    tell_object => {
+        returns: LpcType::Int(false),
+        arity: 2,
+        args: [LpcType::Object(false) | LpcType::String(false), LpcType::String(false)],
+    },
+    this_object => {
+        returns: LpcType::Object(false),
+    },
+    this_player => {
+        returns: LpcType::Object(false),
+    },
+    throw => {
+        returns: LpcType::Void,
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    write => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    write_socket => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Int(false) | LpcType::Float(false) | LpcType::String(false)],
+    },
+}
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
 pub static EFUN_FUNCTIONS: Lazy<IndexMap<&'static str, Arc<ProgramFunction>>> = Lazy::new(|| {
@@ -840,5 +392,65 @@ fn arg_or_this_object<const N: usize>(
         | LpcRef::Array(_)
         | LpcRef::Mapping(_)
         | LpcRef::Function(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `CallEfun(u8)` is a position in this list; a reorder breaks every
+    /// compiled program.
+    #[test]
+    fn prototype_order_is_the_abi() {
+        let names: Vec<&str> = EFUN_PROTOTYPES.keys().copied().collect();
+        assert_eq!(
+            names,
+            [
+                "all_environment",
+                "all_inventory",
+                "arrayp",
+                "call_out",
+                "call_other",
+                "catch",
+                "clone_object",
+                "compose",
+                "debug",
+                "deep_inventory",
+                "destruct",
+                "disable_commands",
+                "dump",
+                "enable_commands",
+                "environment",
+                "exec",
+                "explode",
+                "file_name",
+                "find_object",
+                "floatp",
+                "functionp",
+                "implode",
+                "input_to",
+                "interactive",
+                "intp",
+                "living",
+                "mappingp",
+                "move_object",
+                "objectp",
+                "papplyv",
+                "query_call_out",
+                "query_call_outs",
+                "query_resident_memory",
+                "remove_call_out",
+                "set_this_player",
+                "sizeof",
+                "stringp",
+                "tell_object",
+                "this_object",
+                "this_player",
+                "throw",
+                "write",
+                "write_socket",
+            ]
+        );
     }
 }
