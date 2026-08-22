@@ -1,6 +1,6 @@
 use std::{
     fmt,
-    fmt::{Debug, Display, Formatter},
+    fmt::{Display, Formatter},
     sync::Arc,
 };
 
@@ -21,20 +21,25 @@ use tracing::{instrument, trace};
 use crate::interpreter::{
     bank::RefBank,
     gc::{gc_bank::GcVarIdBank, mark::Mark, unique_id::UniqueId},
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     process::Process,
     stm::{TxnHandle, VarId},
 };
+
+#[cfg(test)]
+use crate::interpreter::lpc_ref::NULL;
 
 /// A representation of a local variable name and value.
 /// This exists only so we can stick a `Display` impl on it for
 /// testing and debugging.
 #[derive(Debug, Clone)]
+#[cfg(test)]
 pub struct LocalVariable {
     pub name: String,
     pub value: LpcRef,
 }
 
+#[cfg(test)]
 impl LocalVariable {
     fn new(name: String, value: LpcRef) -> Self {
         Self { name, value }
@@ -241,6 +246,7 @@ impl CallFrame {
 
     /// Convenience to return a list of the local variables in this frame.
     /// Intended for debugging and testing.
+    #[cfg(test)]
     pub(crate) fn local_variables(&self, txn: &TxnHandle) -> Vec<LocalVariable> {
         self.function
             .local_variables
