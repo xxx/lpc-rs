@@ -42,12 +42,8 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        interpreter::{
-            task::initialize_program::InitializeProgramBuilder, vm::global_state::GlobalState,
-        },
-        test_support::compile_prog,
-    };
+    use crate::test_support::initialize_program;
+    use crate::{interpreter::vm::global_state::GlobalState, test_support::compile_prog};
 
     #[tokio::test]
     async fn test_destruct() {
@@ -63,10 +59,7 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, config, _) = compile_prog(code).await;
         let global_state = GlobalState::new(config, tx);
-        let result = InitializeProgramBuilder::<5>::default()
-            .global_state(global_state)
-            .program(program)
-            .build()
+        let result = initialize_program::<5>(program, global_state)
             .await
             .unwrap();
 

@@ -197,18 +197,6 @@ impl ObjectSpace {
         process
     }
 
-    // /// Create a [`Process`] from a [`Program`], and add add it to the process
-    // /// table. If a new program with the same filename as an existing one is
-    // /// added, the new will overwrite the old in the table.
-    // /// Storage keys are the in-game filename
-    // pub fn insert_prototype(&mut self, program: Program) ->
-    // Arc<Process> {     let new = Process::new(program);
-    //     let process: Arc<Process> = RwLock::new(new).into();
-    //     let name = self.prepare_filename(&process);
-    //     self.insert_process_directly(name, process.clone());
-    //     process
-    // }
-
     /// Blindly insert the passed [`Process`] into the physical process map,
     /// with in-game local filename. No cell is written and no transaction is
     /// involved: this is the bootstrap/fixture placement. In-game creation
@@ -218,58 +206,7 @@ impl ObjectSpace {
         P: Into<Arc<Process>>,
     {
         let process = process.into();
-
-        let filename = process.filename().into_owned();
-
-        let master_path = object_space.config.master_object.as_str();
-        let stripped_master_path = master_path.strip_suffix(".c").unwrap_or(master_path);
-        if filename.as_str() == master_path || filename.as_str() == stripped_master_path {
-            debug!("Setting new master object: {}", filename);
-            object_space.master_object.swap(Some(process.clone()));
-        }
-
-        trace!("Inserting process: {}", filename);
-
-        object_space.insert_process_directly(filename, process);
-    }
-
-    /// Remove the passed [`Process`] from the space.
-    /// the removed process's global `VarId`s keep their
-    /// committed values in the committer world (no `DropVar` for globals);
-    pub fn remove_process<P>(object_space: &Arc<Self>, process: P)
-    where
-        P: Into<Arc<Process>>,
-    {
-        let process = process.into();
-        let name = { object_space.prepare_process_filename(&process) };
-
-        object_space.processes.remove(&name);
-    }
-
-    fn prepare_process_filename(&self, process: &Process) -> String {
-        let name = process.localized_filename(&self.config.lib_dir);
-        Self::prepare_filename(&name)
-    }
-
-    fn prepare_filename(filename: &str) -> String {
-        filename
-            .strip_suffix(".c")
-            .map(ToString::to_string)
-            .unwrap_or(filename.to_string())
-    }
-
-    #[inline]
-    fn insert_process_directly<P, S>(&self, name: S, process: P)
-    where
-        P: Into<Arc<Process>>,
-        S: Into<String>,
-    {
-        let mut k = name.into();
-        if !k.starts_with('/') {
-            k = format!("/{}", k);
-        }
-
-        self.processes.insert(k, process.into());
+        object_space.apply_insert(&object_space.process_key(&process), process);
     }
 
     /// Lookup a process from its path.
@@ -285,18 +222,6 @@ impl ObjectSpace {
 impl ProcessCreator for ObjectSpace {
     fn process_creator_data(&self) -> &Self {
         self
-    }
-}
-
-impl Clone for ObjectSpace {
-    fn clone(&self) -> Self {
-        Self {
-            processes: self.processes.clone(),
-            cell_ids: self.cell_ids.clone(),
-            clone_count: AtomicUsize::new(self.clone_count.load(Ordering::Relaxed)),
-            config: self.config.clone(),
-            master_object: ArcSwapAny::from(None),
-        }
     }
 }
 

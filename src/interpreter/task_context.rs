@@ -359,26 +359,6 @@ impl TaskContext {
         }
     }
 
-    /// Blindly insert the passed [`Process`] into the physical process map
-    /// (no cell, no transaction). Bootstrap only; in-game creation uses
-    /// `insert_process_transactional`.
-    #[inline]
-    pub fn insert_process_physical<P>(&self, process: P)
-    where
-        P: Into<Arc<Process>>,
-    {
-        ObjectSpace::insert_process_physical(self.object_space(), process)
-    }
-
-    /// Remove the passed [`Process`] from the object space.
-    #[inline]
-    pub fn remove_process<P>(&self, process: P)
-    where
-        P: Into<Arc<Process>>,
-    {
-        ObjectSpace::remove_process(self.object_space(), process)
-    }
-
     /// Get the in-game directory of the current process.
     /// This assumes an already-dedotted path
     pub fn in_game_cwd(&self) -> PathBuf {

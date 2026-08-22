@@ -35,12 +35,8 @@ pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -
 mod tests {
 
     use super::*;
-    use crate::{
-        interpreter::{
-            task::initialize_program::InitializeProgramBuilder, vm::global_state::GlobalState,
-        },
-        test_support::compile_prog,
-    };
+    use crate::test_support::initialize_program;
+    use crate::{interpreter::vm::global_state::GlobalState, test_support::compile_prog};
 
     /// The query sees this attempt's own pending call outs: the schedules
     /// are recorded but not yet in the physical queue.
@@ -61,10 +57,7 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, config, _) = compile_prog(code).await;
         let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
-        let task = InitializeProgramBuilder::<10>::default()
-            .global_state(global_state.clone())
-            .program(program)
-            .build()
+        let task = initialize_program::<10>(program, global_state.clone())
             .await
             .unwrap();
 
@@ -116,10 +109,7 @@ mod tests {
             .expect("no `query` found")
             .clone();
         let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
-        let mut task = InitializeProgramBuilder::<10>::default()
-            .global_state(global_state.clone())
-            .program(program)
-            .build()
+        let mut task = initialize_program::<10>(program, global_state.clone())
             .await
             .unwrap();
 

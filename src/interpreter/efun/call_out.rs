@@ -76,11 +76,11 @@ fn to_millis(x: LpcFloatInner) -> Duration {
 #[cfg(test)]
 mod tests {
 
+    use crate::test_support::initialize_program;
     use crate::{
         interpreter::{
             lpc_int::LpcInt,
             lpc_ref::LpcRef,
-            task::initialize_program::InitializeProgramBuilder,
             vm::{global_state::GlobalState, vm_op::VmOp},
         },
         test_support::compile_prog,
@@ -101,11 +101,7 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, config, _) = compile_prog(code).await;
         let global_state = GlobalState::new(config, tx);
-        let result = InitializeProgramBuilder::<10>::default()
-            .global_state(global_state)
-            .program(program)
-            .build()
-            .await;
+        let result = initialize_program::<10>(program, global_state).await;
 
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -132,10 +128,7 @@ mod tests {
         let (tx, mut rx) = tokio::sync::mpsc::channel(128);
         let (program, config, _) = compile_prog(code).await;
         let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
-        let _ = InitializeProgramBuilder::<5>::default()
-            .global_state(global_state.clone())
-            .program(program)
-            .build()
+        let _ = initialize_program::<5>(program, global_state.clone())
             .await
             .unwrap();
 
@@ -167,10 +160,7 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, config, _) = compile_prog(code).await;
         let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
-        let _ = InitializeProgramBuilder::<10>::default()
-            .global_state(global_state.clone())
-            .program(program)
-            .build()
+        let _ = initialize_program::<10>(program, global_state.clone())
             .await
             .unwrap();
 
@@ -195,10 +185,7 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, config, _) = compile_prog(code).await;
         let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
-        let task = InitializeProgramBuilder::<10>::default()
-            .global_state(global_state.clone())
-            .program(program)
-            .build()
+        let task = initialize_program::<10>(program, global_state.clone())
             .await
             .expect("init failed");
 

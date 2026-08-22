@@ -1,11 +1,15 @@
+use std::sync::Arc;
+
 use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
     interpreter::{
+        process::Process,
         program::Program,
-        task::{Task, initialize_program::InitializeProgramBuilder},
+        task::{Task, task_template::TaskTemplate},
         vm::global_state::GlobalState,
     },
+    util::process_builder::process_insert_and_initialize_program,
 };
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
@@ -50,15 +54,15 @@ where
     let program = compile_prog_custom(code, path, config).await;
     let global_state = GlobalState::new(test_config(), tx);
 
-    InitializeProgramBuilder::default()
-        .program(program)
-        .global_state(global_state)
-        .build()
-        .await
-        .unwrap_or_else(|e| {
-            e.emit_diagnostics();
-            panic!("failed to initialize");
-        })
+    process_insert_and_initialize_program(
+        Arc::new(Process::new(program)),
+        TaskTemplate::from(global_state),
+    )
+    .await
+    .unwrap_or_else(|e| {
+        e.emit_diagnostics();
+        panic!("failed to initialize");
+    })
 }
 
 pub async fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {

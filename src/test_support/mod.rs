@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_errors::Result;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 use crate::{
@@ -14,9 +15,10 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         program::Program,
-        task::{Task, initialize_program::InitializeProgramBuilder},
+        task::{Task, task_template::TaskTemplate},
         vm::global_state::GlobalState,
     },
+    util::process_builder::process_insert_and_initialize_program,
 };
 
 pub mod factories;
@@ -103,16 +105,23 @@ pub async fn run_prog_with_config(code: &str, config: Arc<Config>) -> Task<MAX_C
     let global_state = GlobalState::new(config, tx);
     ObjectSpace::insert_process_physical(&global_state.object_space, se_proc);
 
-    InitializeProgramBuilder::default()
-        .program(program)
-        .global_state(global_state)
-        .build()
+    initialize_program(program, global_state)
         .await
         .unwrap_or_else(|e| {
             e.emit_diagnostics();
             eprintln!("{:?}", e);
             panic!("failed to initialize");
         })
+}
+
+/// Bootstrap `program` the way the driver does (physical insert, then its
+/// initializer in a fresh task), on a call stack of `N` frames.
+pub async fn initialize_program<const N: usize>(
+    program: impl Into<Arc<Program>>,
+    global_state: impl Into<Arc<GlobalState>>,
+) -> Result<Task<N>> {
+    let process = Arc::new(Process::new(program.into()));
+    process_insert_and_initialize_program(process, TaskTemplate::from(global_state.into())).await
 }
 
 /// A helper to make an empty [`CompilationContext`] with a single empty scope.

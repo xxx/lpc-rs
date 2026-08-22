@@ -2,13 +2,11 @@ use std::{future::Future, sync::Arc};
 
 use async_trait::async_trait;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{Result, lpc_bug};
+use lpc_rs_errors::Result;
 
 use crate::{
-    compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::Compiler,
     interpreter::{
-        object_flags::ObjectFlags,
         object_space::ObjectSpace,
         process::Process,
         program::Program,
@@ -92,31 +90,16 @@ pub trait ProcessCreator: WithCompiler {
 /// Physically insert `process` into the space it was compiled for (blind, no
 /// cell, **before** its initializer runs, to prevent infinite loops), then
 /// run the initializer in a fresh task. Bootstrap only.
-pub(crate) async fn process_insert_and_initialize_program<T>(
+pub async fn process_insert_and_initialize_program<const N: usize, T>(
     process: Arc<Process>,
     template: T,
-) -> Result<Task<MAX_CALL_STACK_SIZE>>
+) -> Result<Task<N>>
 where
     T: IntoTaskContext + Send,
 {
-    let Some(prog_function) = process.program.initializer.clone() else {
-        return Err(lpc_bug!(
-            "Init function not found? This shouldn't happen. Are you trying to initialize an empty program?"
-        ));
-    };
-
     let ctx = template.into_task_context(process.clone());
 
-    ObjectSpace::insert_process_physical(ctx.object_space(), process.clone());
+    ObjectSpace::insert_process_physical(ctx.object_space(), process);
 
-    // The Initialized flag is set before the initializer runs so an
-    // initializer that calls `this_object()` cannot re-enter initialization.
-    ctx.process.flags.set(ObjectFlags::Initialized);
-
-    let max_execution_time = ctx.config().max_execution_time;
-    let mut task = Task::<MAX_CALL_STACK_SIZE>::new(ctx);
-    task.timed_eval(prog_function, &[], max_execution_time)
-        .await?;
-
-    Ok(task)
+    Task::initialize_process(ctx).await
 }

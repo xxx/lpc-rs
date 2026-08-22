@@ -29,11 +29,9 @@ mod tests {
 
     use std::sync::Arc;
 
+    use crate::test_support::initialize_program;
     use crate::{
-        interpreter::{
-            lpc_int::LpcInt, lpc_ref::LpcRef, task::initialize_program::InitializeProgramBuilder,
-            vm::global_state::GlobalState,
-        },
+        interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, vm::global_state::GlobalState},
         test_support::compile_prog,
     };
 
@@ -54,10 +52,7 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, config, _) = compile_prog(code).await;
         let global_state = Arc::new(GlobalState::new(config, tx));
-        let task = InitializeProgramBuilder::<10>::default()
-            .program(program)
-            .global_state(global_state.clone())
-            .build()
+        let task = initialize_program::<10>(program, global_state.clone())
             .await
             .expect("init failed");
 
@@ -101,10 +96,7 @@ mod tests {
             .expect("no `query` found")
             .clone();
         let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
-        let mut task = InitializeProgramBuilder::<10>::default()
-            .global_state(global_state.clone())
-            .program(program)
-            .build()
+        let mut task = initialize_program::<10>(program, global_state.clone())
             .await
             .expect("init failed");
 

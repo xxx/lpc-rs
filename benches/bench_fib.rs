@@ -4,8 +4,9 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use lpc_rs::{
     compiler::Compiler,
     interpreter::{
-        task::initialize_program::InitializeProgramBuilder, vm::global_state::GlobalState,
+        process::Process, task::task_template::TaskTemplate, vm::global_state::GlobalState,
     },
+    util::process_builder::process_insert_and_initialize_program,
 };
 use lpc_rs_utils::config::Config;
 
@@ -35,11 +36,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("fib 20", |b| {
         b.to_async(&runtime).iter(|| async {
-            let _ = InitializeProgramBuilder::<64>::default()
-                .program(program.clone())
-                .global_state(global_state.clone())
-                .build()
-                .await;
+            let _ = process_insert_and_initialize_program::<64, _>(
+                Arc::new(Process::new(program.clone())),
+                TaskTemplate::from(global_state.clone()),
+            )
+            .await;
         })
     });
 }

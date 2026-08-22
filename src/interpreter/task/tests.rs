@@ -470,10 +470,8 @@ mod test_instructions {
         use tokio::sync::mpsc;
 
         use super::*;
-        use crate::{
-            interpreter::{task::initialize_program::InitializeProgramBuilder, vm::Vm},
-            test_support::test_config,
-        };
+        use crate::test_support::initialize_program;
+        use crate::{interpreter::vm::Vm, test_support::test_config};
 
         #[tokio::test]
         async fn stores_the_value() {
@@ -753,11 +751,7 @@ mod test_instructions {
 
             ObjectSpace::insert_process_physical(&global_state.object_space, process);
 
-            let result = InitializeProgramBuilder::<32>::default()
-                .program(program)
-                .global_state(global_state.clone())
-                .build()
-                .await;
+            let result = initialize_program::<32>(program, global_state.clone()).await;
 
             assert_eq!(
                 result.unwrap_err().to_string(),
@@ -777,11 +771,7 @@ mod test_instructions {
             let (program, _config, process) = compile_prog(code).await;
             ObjectSpace::insert_process_physical(&global_state.object_space, process);
 
-            let result = InitializeProgramBuilder::<10>::default()
-                .program(program)
-                .global_state(global_state.clone())
-                .build()
-                .await;
+            let result = initialize_program::<10>(program, global_state.clone()).await;
 
             assert_eq!(
                 result.unwrap_err().to_string(),
@@ -803,11 +793,7 @@ mod test_instructions {
             let space_cell = object_space;
             ObjectSpace::insert_process_physical(&space_cell, process);
 
-            let result = InitializeProgramBuilder::<20>::default()
-                .program(program)
-                .global_state(global_state.clone())
-                .build()
-                .await;
+            let result = initialize_program::<20>(program, global_state.clone()).await;
 
             assert_ok!(result);
         }
@@ -1406,7 +1392,7 @@ mod test_instructions {
 
     mod test_idiv {
         use super::*;
-        use crate::interpreter::task::initialize_program::InitializeProgramBuilder;
+        use crate::test_support::initialize_program;
 
         #[tokio::test]
         async fn stores_the_value() {
@@ -1442,11 +1428,7 @@ mod test_instructions {
             let (tx, _rx) = mpsc::channel(128);
             let global_state = GlobalState::new(config, tx);
 
-            let r = InitializeProgramBuilder::<10>::default()
-                .global_state(global_state)
-                .program(program)
-                .build()
-                .await;
+            let r = initialize_program::<10>(program, global_state).await;
 
             assert_eq!(
                 r.unwrap_err().to_string(),
@@ -1457,7 +1439,7 @@ mod test_instructions {
 
     mod test_imod {
         use super::*;
-        use crate::interpreter::task::initialize_program::InitializeProgramBuilder;
+        use crate::test_support::initialize_program;
 
         #[tokio::test]
         async fn stores_the_value() {
@@ -1493,11 +1475,7 @@ mod test_instructions {
             let (tx, _rx) = mpsc::channel(128);
             let global_state = GlobalState::new(config, tx);
 
-            let r = InitializeProgramBuilder::<20>::default()
-                .global_state(global_state)
-                .program(program)
-                .build()
-                .await;
+            let r = initialize_program::<20>(program, global_state).await;
 
             assert_eq!(
                 r.unwrap_err().to_string(),
@@ -2283,10 +2261,9 @@ mod test_instructions {
         use string_interner::StringInterner;
 
         use super::*;
-        use crate::{
-            interpreter::task::initialize_program::InitializeProgramBuilder,
-            test_support::test_config,
-        };
+        use crate::interpreter::program::Program;
+        use crate::test_support::initialize_program;
+        use crate::test_support::test_config;
 
         #[tokio::test]
         async fn stores_the_value_for_arrays() {
@@ -2388,10 +2365,7 @@ mod test_instructions {
             let (tx, _rx) = mpsc::channel(128);
             let global_state = GlobalState::new(config, tx);
 
-            let task = InitializeProgramBuilder::<20>::default()
-                .program(program)
-                .global_state(global_state)
-                .build()
+            let task = initialize_program::<20>(program, global_state)
                 .await
                 .expect("failed to initialize");
 
@@ -2487,9 +2461,8 @@ mod test_limits {
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
-    use crate::{
-        interpreter::task::initialize_program::InitializeProgramBuilder, test_config_builder,
-    };
+    use crate::test_config_builder;
+    use crate::test_support::initialize_program;
 
     #[tokio::test]
     async fn errors_on_stack_overflow() {
@@ -2505,11 +2478,7 @@ mod test_limits {
         let (tx, _rx) = mpsc::channel(128);
         let global_state = GlobalState::new(config, tx);
 
-        let r = InitializeProgramBuilder::<20>::default()
-            .program(program)
-            .global_state(global_state)
-            .build()
-            .await;
+        let r = initialize_program::<20>(program, global_state).await;
 
         assert_eq!(r.unwrap_err().to_string(), "stack overflow");
     }
@@ -2532,11 +2501,7 @@ mod test_limits {
 
         let global_state = GlobalState::new(config, tx);
 
-        let r = InitializeProgramBuilder::<20>::default()
-            .program(program)
-            .global_state(global_state)
-            .build()
-            .await;
+        let r = initialize_program::<20>(program, global_state).await;
 
         assert_eq!(
             r.unwrap_err().to_string(),

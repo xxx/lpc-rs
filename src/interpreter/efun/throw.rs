@@ -19,12 +19,8 @@ pub async fn throw<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        interpreter::{
-            task::initialize_program::InitializeProgramBuilder, vm::global_state::GlobalState,
-        },
-        test_support::compile_prog,
-    };
+    use crate::test_support::initialize_program;
+    use crate::{interpreter::vm::global_state::GlobalState, test_support::compile_prog};
 
     #[tokio::test]
     async fn test_throw() {
@@ -37,11 +33,7 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let (program, config, _) = compile_prog(code).await;
         let global_state = GlobalState::new(config, tx);
-        let result = InitializeProgramBuilder::<10>::default()
-            .global_state(global_state)
-            .program(program)
-            .build()
-            .await;
+        let result = initialize_program::<10>(program, global_state).await;
 
         assert_eq!(result.unwrap_err().to_string(), "foo bar baz error!");
     }

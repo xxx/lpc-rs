@@ -4,7 +4,6 @@ mod handle_call;
 mod handle_call_fp;
 mod handle_call_other;
 mod handle_data;
-pub mod initialize_program;
 pub mod into_task_context;
 mod location;
 pub mod task_id;
@@ -46,14 +45,12 @@ use crate::interpreter::{
     lpc_string::LpcString,
     object_flags::ObjectFlags,
     process::Process,
-    program::Program,
     stm::{
         AttemptBody, CommitProtocol, Effect, LiveSnapshot, RetryStats, Transaction, TxnHandle,
         commit_changeset, flush_effects, run_attempts, start_txn,
     },
     task::{task_id::TaskId, task_state::TaskState},
     task_context::TaskContext,
-    vm::global_state::GlobalState,
 };
 
 // this is just to shut clippy up
@@ -237,32 +234,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
     }
 
-    /// Convenience helper to get a Program initialized.
-    /// This will also insert it into the object space.
-    #[instrument(skip_all)]
-    pub async fn initialize_program<P>(
-        program: P,
-        global_state: Arc<GlobalState>,
-        this_player: Option<Arc<Process>>,
-        upvalue_ptrs: Option<&[Register]>,
-    ) -> Result<Task<STACKSIZE>>
-    where
-        P: Into<Arc<Program>>,
-    {
-        let program = program.into();
-        let process: Arc<Process> = Process::new(program).into();
-        let context = TaskContext::new(
-            global_state,
-            process.clone(),
-            this_player,
-            upvalue_ptrs.map(ThinVec::from),
-        );
-
-        context.insert_process_physical(process);
-
-        Self::initialize_process(context).await
-    }
-
     /// Initialize a [`Process`] by calling its initializer function, using the
     /// given [`TaskContext`]. This creates a new unique Task ID.
     /// It's assumed that the process has already been inserted into the [`ObjectSpace`](crate::interpreter::object_space::ObjectSpace)
@@ -280,10 +251,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         debug_assert!(!context.process.flags.test(ObjectFlags::Initialized));
 
         let Some(initializer) = context.process.program.initializer.clone() else {
-            let msg = "Init function not found on cloned object? This should never happen.";
+            let msg = format!(
+                "Init function not found for `{}`. This should never happen.",
+                context.process.filename()
+            );
 
-            error!(msg);
-            return Err(lpc_bug!(msg));
+            error!("{msg}");
+            return Err(lpc_bug!("{}", msg));
         };
 
         // We mark ourselves as initialized before actually initializing, to avoid
