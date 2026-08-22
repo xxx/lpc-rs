@@ -16,7 +16,7 @@ use crate::interpreter::{
     lpc_ref::LpcRef,
     process::Process,
     stm::{
-        VarId, WorldRoot, WorldValue,
+        GcReport, VarId, WorldRoot, WorldValue,
         changeset::Changeset,
         committer::{CommitProtocol, CommitterStats, LiveSnapshot},
     },
@@ -184,24 +184,29 @@ pub(crate) async fn live_count(tx: &flume::Sender<CommitProtocol>) -> Result<usi
         .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
 }
 
-/// Run the world sweep: the committer marks from `roots` and drops the
-/// unreachable payload vars. Returns how many vars were dropped.
-pub(crate) async fn gc_world(
+/// Run one GC pass: the committer re-checks quiescence, drops the swept
+/// upvalue cells, and marks the world from `roots`, all in one message.
+/// Returns the pass report, or the committer's refusal.
+pub(crate) async fn gc_pass(
     tx: &flume::Sender<CommitProtocol>,
+    dropped: Vec<VarId>,
     roots: Vec<WorldRoot>,
-) -> Result<usize> {
+) -> std::result::Result<GcReport, Box<lpc_rs_errors::LpcError>> {
     let (reply_tx, reply_rx) = flume::bounded(1);
-    tx.send(CommitProtocol::GcWorld {
+    tx.send(CommitProtocol::GcPass {
+        dropped,
         roots,
         reply: reply_tx,
     })
     .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
+    // The channel payload is the pass's Ok/Err; unwrap the reply envelope,
+    // then the payload, in one tail expression.
     tokio::task::spawn_blocking(move || reply_rx.recv())
         .await
         .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
             lpc_error!("committer reply task panicked: {}", e)
         })?
-        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
+        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })?
 }
 
 /// The committer's lifetime commit totals; for bench measurement and tooling, not the hot path.
@@ -235,35 +240,6 @@ pub(crate) async fn commit_changeset(
             lpc_error!("committer reply task panicked: {}", e)
         })?
         .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
-}
-
-/// Query the committed value of a var (async wrapper over
-/// [`CommitProtocol::Query`]). Absent vars read back as `NULL`.
-/// Test-only: production committed reads go through
-/// [`CommittedReader::committed_global`].
-#[cfg(test)]
-pub(crate) async fn query_var(
-    tx: &flume::Sender<CommitProtocol>,
-    var_id: crate::interpreter::stm::VarId,
-) -> Result<crate::interpreter::stm::WorldValue> {
-    let (reply_tx, reply_rx) = flume::bounded(1);
-    tx.send(CommitProtocol::Query {
-        var_id,
-        reply: reply_tx,
-    })
-    .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
-    tokio::task::spawn_blocking(move || reply_rx.recv())
-        .await
-        .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
-            lpc_error!("committer reply task panicked: {}", e)
-        })?
-        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
-}
-
-/// Fire-and-forget: remove a var from the world. Non-blocking send; safe to
-/// call from sync code (e.g. the GC sweep).
-pub(crate) fn drop_var(tx: &flume::Sender<CommitProtocol>, var_id: crate::interpreter::stm::VarId) {
-    let _ = tx.send(CommitProtocol::DropVar(var_id));
 }
 
 /// A sync "read the latest committed world" API for consistency-agnostic
@@ -562,7 +538,6 @@ mod async_tests {
 
     use super::*;
     use crate::interpreter::{
-        lpc_int::LpcInt,
         lpc_ref::LpcRef,
         stm::{Changeset, CommitProtocol, Committer, VarId, WorldValue},
     };
@@ -602,34 +577,6 @@ mod async_tests {
             final_snapshot.read(counter),
             Some(WorldValue::ref_of(LpcRef::from(6)))
         );
-    }
-
-    #[tokio::test]
-    async fn query_and_drop_var_roundtrip() {
-        let (tx, rx) = flume::bounded(4);
-        let mut committer = Committer::new();
-        let var = VarId::new();
-        seed(&mut committer, var, 7);
-        let committer_tx = tx.clone();
-        let handle = std::thread::spawn(move || committer.run(committer_tx, rx));
-
-        assert_eq!(
-            query_var(&tx, var).await.unwrap(),
-            WorldValue::ref_of(LpcRef::from(7))
-        );
-
-        drop_var(&tx, var);
-        // The channel is FIFO, so the drop is processed before this query.
-        assert_eq!(
-            query_var(&tx, var).await.unwrap(),
-            WorldValue::ref_of(LpcRef::Int(LpcInt(0)))
-        );
-
-        tx.send(CommitProtocol::Close)
-            .expect("committer channel closed");
-        drop(tx);
-        let final_snapshot = handle.join().expect("committer panicked");
-        assert_eq!(final_snapshot.read(var), None);
     }
 
     #[tokio::test]

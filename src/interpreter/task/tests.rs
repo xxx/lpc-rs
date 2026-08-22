@@ -2741,13 +2741,9 @@ mod test_upvalues {
             "bump() should have incremented the captured local twice"
         );
 
-        // The frame holding the closure is gone; mark (stack + txn written
-        // values) and sweep the cell bank. The dead cell's VarId is dropped
-        // from the committer's world.
-        let mut marked = BitSet::new();
-        let mut processed = BitSet::new();
-        task.mark(&mut marked, &mut processed).unwrap();
-        task.context.global_state.sweep(&marked).unwrap();
+        // The frame holding the closure is gone; the full pass drops the dead
+        // cell's VarId from the committer's world.
+        task.context.global_state.gc().await.unwrap();
 
         // The txn remains usable after the sweep: a fresh read through the
         // committer for the (now-swept) cell falls back to NULL, and no
@@ -3023,12 +3019,9 @@ mod test_gc {
             assert!(uv.len() > 0);
         });
 
-        let mut marked = BitSet::new();
-        let mut processed = BitSet::new();
-        task.mark(&mut marked, &mut processed).unwrap();
-        // Sweep through the GlobalState, which also tells the committer to
-        // forget each culled cell's transactional identity.
-        ctx.global_state.sweep(&marked).unwrap();
+        // The full pass drops the dead cells' VarIds out of the committer's
+        // world.
+        ctx.global_state.gc().await.unwrap();
         ctx.global_state.with_upvalues(|uv| {
             assert_eq!(uv.len(), 0);
         });

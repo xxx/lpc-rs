@@ -2,7 +2,7 @@ use std::{sync::Arc, thread::JoinHandle};
 
 use bit_set::BitSet;
 use derive_builder::Builder;
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{Result, lpc_error};
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
@@ -12,7 +12,7 @@ use crate::interpreter::{
     call_outs::CallOuts,
     gc::{gc_bank::GcVarIdBank, mark::Mark},
     object_space::ObjectSpace,
-    stm::{CommitProtocol, Committer, Snapshot, VarId, WorldRoot, drop_var, gc_world},
+    stm::{CommitProtocol, Committer, GcReport, Snapshot, VarId, WorldRoot, gc_pass, live_count},
     vm::vm_op::VmOp,
 };
 
@@ -89,34 +89,49 @@ impl GlobalState {
         let _ = self.committer_tx.send(CommitProtocol::Close);
     }
 
-    /// Cull every upvalue slot that wasn't marked, telling the committer
-    /// to forget each culled cell's transactional identity.
-    #[instrument(skip(self))]
-    #[inline]
-    pub fn sweep(&self, marked: &BitSet) -> Result<()> {
-        let mut removed: Vec<VarId> = Vec::new();
-        self.with_upvalues_mut(|cells| {
-            cells.retain(|idx, id| {
-                if marked.contains(idx) {
-                    return true;
-                }
-                removed.push(*id);
-                false
-            });
-        });
-        for id in removed {
-            drop_var(&self.committer_tx, id);
+    /// One GC pass, atomic on the committer: refuse unless quiescent, else
+    /// cull the unmarked upvalue cells and reclaim the unreachable world
+    /// payload vars. The cells travel inside the pass message, so their drops
+    /// cannot be reordered past the sweep, and the committer's re-check closes
+    /// the gap after the client's fast-refuse probe.
+    ///
+    /// # Precondition
+    ///
+    /// The committer must be **quiescent** — a non-quiescent call is refused
+    /// rather than blocked: a concurrent task at a GC point is a caller bug.
+    ///
+    /// The bank cull happens only after the pass commits; a refused pass
+    /// leaves the bank untouched.
+    #[instrument(skip_all)]
+    pub async fn gc(&self) -> Result<GcReport> {
+        let live = live_count(&self.committer_tx).await?;
+        if live != 0 {
+            return Err(lpc_error!(
+                "gc refused: committer not quiescent ({live} transaction(s) in flight)"
+            ));
         }
-        Ok(())
-    }
 
-    /// The world half of a GC pass: the committer marks from the client's
-    /// live slots (object cells + surviving upvalue cells) and the function
-    /// refs it holds outside the world (call-outs), and reclaims the
-    /// unreachable payload vars. Must run after [`Self::sweep`] so the slab
-    /// half's `drop_var` sends land ahead on the committer's channel. Returns
-    /// the number of payload vars reclaimed.
-    pub async fn sweep_world(&self) -> Result<usize> {
+        let mut marked = BitSet::new();
+        let mut processed = BitSet::new();
+        self.mark(&mut marked, &mut processed)?;
+
+        // The culled cells' ids, computed without mutating the bank; the
+        // surviving cells are the world sweep's upvalue roots. The read guard
+        // is scoped to this block so it drops before the pass's await.
+        let (dropped, survivors): (Vec<VarId>, Vec<VarId>) = {
+            let bank = self.upvalues.read();
+            (
+                bank.iter()
+                    .filter(|(idx, _)| !marked.contains(*idx))
+                    .map(|(_, id)| *id)
+                    .collect(),
+                bank.iter()
+                    .filter(|(idx, _)| marked.contains(*idx))
+                    .map(|(_, id)| *id)
+                    .collect(),
+            )
+        };
+
         let mut roots: Vec<WorldRoot> = self
             .object_space
             .all_cell_ids()
@@ -129,15 +144,22 @@ impl GlobalState {
             .all_live_object_slots()
             .into_iter()
             .for_each(|id| roots.push(WorldRoot::Var(id)));
-        self.slab_cell_ids()
-            .into_iter()
-            .for_each(|id| roots.push(WorldRoot::Var(id)));
+        for id in &survivors {
+            roots.push(WorldRoot::Var(*id));
+        }
         self.with_call_outs(|co| {
             for (_, call_out) in co.queue() {
                 roots.push(WorldRoot::Ref(call_out.func_ref.clone()));
             }
         });
-        gc_world(&self.committer_tx, roots).await
+
+        let report = gc_pass(&self.committer_tx, dropped, roots).await?;
+
+        // Cull the bank only after the committer has applied the drops.
+        self.with_upvalues_mut(|cells| {
+            cells.retain(|_, id| survivors.contains(id));
+        });
+        Ok(report)
     }
 
     pub fn with_call_outs<F, R>(&self, f: F) -> R
@@ -175,12 +197,6 @@ impl GlobalState {
         F: FnOnce(&mut GcVarIdBank) -> R,
     {
         f(&mut self.upvalues.write())
-    }
-
-    /// The upvalue slab's surviving cell ids: the world sweep's root set (a
-    /// swept cell orphans its payload, making it reclaimable).
-    pub(crate) fn slab_cell_ids(&self) -> Vec<crate::interpreter::stm::VarId> {
-        self.upvalues.read().iter().map(|(_, id)| *id).collect()
     }
 
     pub(crate) fn clone_upvalues(&self) -> Arc<RwLock<GcVarIdBank>> {

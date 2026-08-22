@@ -1,24 +1,22 @@
 use std::sync::Arc;
 
-use bit_set::BitSet;
 use flume::Sender as FlumeSender;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{Result, lpc_error};
+use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use tokio::{
     signal,
     sync::mpsc::{Receiver, Sender, error::SendError},
 };
-use tracing::{debug, error, info, instrument, trace};
+use tracing::{debug, error, info, instrument};
 use vm_op::VmOp;
 
 use crate::{
     compile_time_config::VM_CHANNEL_CAPACITY,
     interpreter::{
         SHUTDOWN,
-        gc::mark::Mark,
         process::Process,
-        stm::{CommitterStats, committer_stats, live_count},
+        stm::{CommitterStats, committer_stats},
         task::apply_function::{apply_function_in_master, apply_runtime_error},
         task_context::TaskContext,
         vm::global_state::GlobalState,
@@ -193,42 +191,6 @@ impl Vm {
         Ok(())
     }
 
-    /// Do a full garbage collection cycle.
-    ///
-    /// # Precondition
-    ///
-    /// The committer must be **quiescent** — no transaction in flight. A live task *is* an
-    /// in-flight transaction, so at quiescence the root set (object space + call-outs) is
-    /// complete with no task or transaction log to mark. A non-quiescent call is refused
-    /// rather than blocked: a concurrent task at a GC point is a caller bug.
-    ///
-    /// Slab half first, then world half. The world half runs second because the
-    /// slab half's cell drops already sit ahead on the committer's channel, so a
-    /// payload orphaned by a swept cell is reclaimable in the same pass.
-    #[instrument(skip_all)]
-    pub async fn gc(&self) -> Result<()> {
-        let live = live_count(&self.global_state.committer_tx).await?;
-        if live != 0 {
-            return Err(lpc_error!(
-                "gc refused: committer not quiescent ({live} transaction(s) in flight)"
-            ));
-        }
-
-        let mut marked = BitSet::new();
-        let mut processed = BitSet::new();
-        self.mark(&mut marked, &mut processed)?;
-
-        trace!("Marked {} objects", marked.count());
-
-        self.sweep(&marked)?;
-
-        let reclaimed = self.global_state.sweep_world().await?;
-        if reclaimed != 0 {
-            trace!("Reclaimed {} unreachable world payload vars", reclaimed);
-        }
-        Ok(())
-    }
-
     /// The committer's lifetime commit totals (commits/conflicts/errors).
     /// For bench measurement and tooling; not part of the hot path.
     pub async fn committer_stats(&self) -> Result<CommitterStats> {
@@ -238,12 +200,6 @@ impl Vm {
     /// Send an operation to the VM queue
     pub async fn send_op(&self, msg: VmOp) -> std::result::Result<(), SendError<VmOp>> {
         self.tx().send(msg).await
-    }
-
-    #[instrument(skip(self))]
-    #[inline]
-    pub fn sweep(&self, marked: &BitSet) -> Result<()> {
-        self.global_state.sweep(marked)
     }
 
     #[inline]
@@ -325,13 +281,6 @@ impl Vm {
     }
 }
 
-impl Mark for Vm {
-    #[instrument(skip(self))]
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
-        self.global_state.mark(marked, processed)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
@@ -407,13 +356,13 @@ mod tests {
 
         assert_len(&ctx1, 1);
 
-        vm.gc().await.unwrap();
+        vm.global_state.gc().await.unwrap();
 
         assert_len(&ctx1, 0);
 
         vm.global_state.object_space.clear();
 
-        vm.gc().await.unwrap();
+        vm.global_state.gc().await.unwrap();
 
         assert_len(&ctx1, 0);
     }
@@ -427,12 +376,12 @@ mod tests {
         let tx = vm.global_state.committer_tx.clone();
 
         // Baseline: nothing in flight, so a sweep goes through.
-        vm.gc().await.unwrap();
+        vm.global_state.gc().await.unwrap();
 
         // Pin a transaction so the committer is not quiescent.
         let live = start_txn(&tx).await.unwrap();
 
-        let err = vm.gc().await.unwrap_err();
+        let err = vm.global_state.gc().await.unwrap_err();
         assert!(
             err.to_string().contains("not quiescent"),
             "expected a non-quiescent refusal, got: {err}"
@@ -440,7 +389,7 @@ mod tests {
 
         drop(live);
 
-        vm.gc().await.unwrap();
+        vm.global_state.gc().await.unwrap();
     }
 
     /// A committed array still reachable from a live global survives the world
@@ -492,7 +441,7 @@ mod tests {
         assert!(vm.global_state.committed_array(cell_b).is_some());
 
         // Reachable arrays survive the world sweep.
-        vm.gc().await.unwrap();
+        vm.global_state.gc().await.unwrap();
         assert!(
             vm.global_state.committed_array(cell_b).is_some(),
             "a payload still reachable from a live global must survive gc"
@@ -505,7 +454,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        vm.gc().await.unwrap();
+        vm.global_state.gc().await.unwrap();
 
         // The orphaned payload's cell is gone; the live one is not.
         assert!(
