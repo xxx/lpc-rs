@@ -8,7 +8,7 @@ use tokio::{
     signal,
     sync::mpsc::{Receiver, Sender, error::SendError},
 };
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, trace};
 use vm_op::VmOp;
 
 use crate::{
@@ -16,7 +16,10 @@ use crate::{
     interpreter::{
         SHUTDOWN,
         process::Process,
-        stm::{CommitterStats, committer_stats},
+        stm::{
+            AttemptBody, Changeset, CommitProtocol, CommitterStats, Effect, LiveSnapshot,
+            Transaction, commit_changeset, committer_stats, flush_effects, run_attempts, start_txn,
+        },
         task::apply_function::{apply_function_in_master, apply_runtime_error},
         task_context::TaskContext,
         vm::global_state::GlobalState,
@@ -211,77 +214,91 @@ impl Vm {
         &self.global_state.tx
     }
 
-    /// Bind a [`Connection`] to a [`Process`], transactionally.
-    ///
-    /// Used by the login path (`initiate_login`). The connection cell on
-    /// `process` is written in its own transaction against the committer
-    /// (not inside any task's transaction), so it commits independently.
-    /// The physical socket-level handover — the connection's back-reference
-    /// pointing at `process`, and the disconnect of whatever was previously
-    /// bound — is a deferred `Effect::Exec`, flushed only after the commit
-    /// lands.
+    /// Bind a [`Connection`] to a [`Process`] in its own transaction. The
+    /// socket-level handover (back-reference, disconnect of the displaced
+    /// holder) is a deferred `Effect::Exec`, flushed after the commit lands.
     pub async fn takeover(
         global_state: &Arc<GlobalState>,
         connection: Arc<Connection>,
         process: Arc<Process>,
     ) {
-        use crate::interpreter::stm::{
-            Effect, Transaction, commit_changeset, flush_effects, start_txn,
+        let mut body = TakeoverBody {
+            global_state: global_state.clone(),
+            connection,
+            process,
+            attempt: None,
         };
-
-        let committer_tx = &global_state.committer_tx;
-
-        loop {
-            let live = match start_txn(committer_tx).await {
-                Ok(l) => l,
-                Err(e) => {
-                    error!("takeover: committer start failed: {e}");
-                    return;
-                }
-            };
-
-            let mut txn = Transaction::new(live.inner.clone());
-
-            // The connection currently bound to `process` (if any); the
-            // handover displaces it.
-            let previous = txn.read_connection(process.connection.id);
-            txn.write_connection(process.connection.id, Some(connection.clone()));
-
-            txn.record_effect(Effect::Exec {
-                new_process: process.clone(),
-                connection: connection.clone(),
-                previous,
-            });
-
-            let effects = txn.take_effects();
-            let (_world, changeset) = txn.into_parts();
-
-            let commit = commit_changeset(committer_tx, changeset).await;
-            drop(live);
-
-            match commit {
-                Ok(Ok(())) => {
-                    flush_effects(
-                        &global_state.config,
-                        &global_state.object_space,
-                        global_state.call_outs(),
-                        effects,
-                    )
-                    .await;
-                    return;
-                }
-                Ok(Err(_)) => continue,
-                Err(e) => {
-                    tracing::error!("takeover: committer commit failed: {e}");
-                    return;
-                }
-            }
+        let (res, stats) = run_attempts(&global_state.committer_tx, &mut body).await;
+        trace!(
+            attempts = stats.attempts,
+            conflicts = stats.conflicts,
+            ?stats.duration,
+            "takeover finished"
+        );
+        if let Err(e) = res {
+            error!("takeover: committer failed: {e}");
         }
+    }
+}
+
+/// One attempt of [`Vm::takeover`]: the connection-cell write plus the
+/// deferred socket handover.
+struct TakeoverBody {
+    global_state: Arc<GlobalState>,
+    connection: Arc<Connection>,
+    process: Arc<Process>,
+    attempt: Option<Transaction>,
+}
+
+#[async_trait::async_trait]
+impl AttemptBody for TakeoverBody {
+    async fn begin_attempt(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+    ) -> Result<Option<LiveSnapshot>> {
+        let live = start_txn(tx).await?;
+        let mut txn = Transaction::new(live.inner.clone());
+
+        // The connection currently bound to `process`; the handover
+        // displaces it.
+        let previous = txn.read_connection(self.process.connection.id);
+        txn.write_connection(self.process.connection.id, Some(self.connection.clone()));
+
+        txn.record_effect(Effect::Exec {
+            new_process: self.process.clone(),
+            connection: self.connection.clone(),
+            previous,
+        });
+
+        self.attempt = Some(txn);
+        Ok(Some(live))
+    }
+
+    async fn commit_phase(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+        _live: LiveSnapshot,
+    ) -> Result<(std::result::Result<(), Changeset>, Vec<Effect>)> {
+        let mut txn = self
+            .attempt
+            .take()
+            .expect("attempt present until committed");
+        let commit = commit_changeset(tx, txn.take_changeset()).await?;
+        Ok((commit, txn.take_effects()))
+    }
+
+    async fn deliver(&mut self, effects: Vec<Effect>) -> Result<()> {
+        let gs = &self.global_state;
+        flush_effects(&gs.config, &gs.object_space, gs.call_outs(), effects).await;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::net::ToSocketAddrs;
+
+    use arc_swap::ArcSwapAny;
     use indoc::indoc;
 
     use super::*;
@@ -289,11 +306,75 @@ mod tests {
         interpreter::{
             CommittedReader,
             lpc_ref::LpcRef,
-            stm::start_txn,
+            program::ProgramBuilder,
+            stm::{Committer, WorldValue, start_txn},
             task::{apply_function::apply_function_by_name, task_template::TaskTemplateBuilder},
         },
         test_support::test_config,
     };
+
+    /// A `Connection` whose own channels are dropped after the test.
+    fn make_connection() -> Arc<Connection> {
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let (broker_tx, _broker_rx) = flume::unbounded();
+        Arc::new(Connection {
+            address: "127.0.0.1:23123".to_socket_addrs().unwrap().next().unwrap(),
+            process: ArcSwapAny::from(None),
+            tx,
+            broker_tx,
+            input_to: Default::default(),
+        })
+    }
+
+    /// A rejected takeover attempt re-runs: the second attempt commits the
+    /// connection cell and only then flushes the back-reference.
+    #[tokio::test]
+    async fn takeover_reruns_after_rejection() {
+        let (vm_tx, _vm_rx) = tokio::sync::mpsc::channel(128);
+        let global_state = Arc::new(GlobalState::new(test_config(), vm_tx));
+        let process = Arc::new(Process::new(
+            ProgramBuilder::default()
+                .filename(LpcPath::InGame(std::path::PathBuf::from("/body")))
+                .build()
+                .unwrap(),
+        ));
+        let connection = make_connection();
+
+        let (tx, rx) = flume::bounded(4);
+        let committer_tx = tx.clone();
+        let handle =
+            std::thread::spawn(move || Committer::new().run_with_rejections(committer_tx, rx, 1));
+
+        let mut body = TakeoverBody {
+            global_state: global_state.clone(),
+            connection: connection.clone(),
+            process: process.clone(),
+            attempt: None,
+        };
+        let (res, stats) = run_attempts(&tx, &mut body).await;
+        assert!(res.is_ok());
+        assert_eq!(stats.attempts, 2, "one forced rejection, then a commit");
+        assert_eq!(stats.conflicts, 1);
+        assert!(
+            connection
+                .process
+                .load()
+                .as_ref()
+                .is_some_and(|bound| Arc::ptr_eq(bound, &process)),
+            "the back-reference is flushed after the commit"
+        );
+
+        tx.send(CommitProtocol::Close).unwrap();
+        drop(tx);
+        let world = handle.join().expect("committer panicked");
+        assert!(
+            matches!(
+                world.read(process.connection.id),
+                Some(WorldValue::Connection(Some(bound))) if Arc::ptr_eq(&bound, &connection)
+            ),
+            "the connection cell holds the committed binding"
+        );
+    }
 
     #[tokio::test]
     async fn test_gc() {

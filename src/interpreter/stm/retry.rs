@@ -2,8 +2,8 @@
 //!
 //! The runner owns the committer protocol (open, commit, release-after-reply,
 //! re-base, stats); the body owns the attempt-level work and its physical
-//! output. Production runs a [`Task`](crate::interpreter::task::Task); tests
-//! run a bare [`Transaction`].
+//! output. Production runs a [`Task`](crate::interpreter::task::Task) or a
+//! `Vm::takeover`; tests run a bare [`Transaction`].
 
 use std::{sync::Arc, time::Duration};
 
@@ -503,7 +503,6 @@ mod async_tests {
         seed(&mut committer, counter, 5);
         // The committer needs its own sender clone (its `LiveSnapshot`s use
         // it for releases); keep `tx` so the test can still send `Close`.
-        // (Same pattern as B4's `committer.rs` async tests.)
         let committer_tx = tx.clone();
         let handle = std::thread::spawn(move || committer.run(committer_tx, rx));
 

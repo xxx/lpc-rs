@@ -337,7 +337,7 @@ mod tests {
         let live = start_txn(&gs.committer_tx).await?;
         let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
         txn.with(|t| t.write_process(cell_id, process));
-        let (_world, changeset) = txn.with(|t| t.clone()).into_parts();
+        let changeset = txn.with(|t| t.take_changeset());
         let commit = commit_changeset(&gs.committer_tx, changeset).await?;
         let effects = txn.take_effects();
         drop(live);
@@ -425,7 +425,7 @@ mod tests {
         let live = start_txn(&gs.committer_tx).await.unwrap();
         let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
         txn.with(|t| t.drop_var(cell_id));
-        let (_world, changeset) = txn.with(|t| t.clone()).into_parts();
+        let changeset = txn.with(|t| t.take_changeset());
         let commit = commit_changeset(&gs.committer_tx, changeset).await.unwrap();
         drop(live);
         commit.expect("destruct commit must succeed");

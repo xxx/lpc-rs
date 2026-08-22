@@ -104,19 +104,6 @@ impl Transaction {
         }
     }
 
-    /// Build a transaction from its parts.
-    fn from_parts(snapshot: Snapshot, joinable: bool) -> Self {
-        let version = snapshot.version();
-        Self {
-            snapshot,
-            changeset: Changeset::new(version),
-            effects: EffectLog::new(),
-            pending_call_outs: Vec::new(),
-            cancelled_call_outs: HashMap::new(),
-            joinable,
-        }
-    }
-
     /// Read a slot value (globals, upvalues) — the changeset first, so an
     /// attempt sees its own writes, then the committed world.
     pub(crate) fn read(&mut self, var_id: VarId) -> Option<LpcRef> {
@@ -325,7 +312,13 @@ impl Transaction {
         self.effects.take()
     }
 
-    /// Dismantle the transaction into its snapshot and changeset for retries, etc.
+    /// Take the changeset out for commit; an empty one at the same version
+    /// replaces it.
+    pub(crate) fn take_changeset(&mut self) -> Changeset {
+        std::mem::replace(&mut self.changeset, Changeset::new(self.snapshot.version()))
+    }
+
+    /// Dismantle the transaction into its snapshot and changeset.
     pub(crate) fn into_parts(self) -> (Snapshot, Changeset) {
         (self.snapshot, self.changeset)
     }
@@ -345,8 +338,9 @@ impl TxnHandle {
     /// contexts). Not joinable: its holder is top-level and must open its
     /// own attempt.
     pub(crate) fn empty() -> Self {
-        let snapshot = Snapshot::new(Version::new(), imbl::OrdMap::new());
-        Self::new(Transaction::from_parts(snapshot, false))
+        let mut txn = Transaction::new(Snapshot::new(Version::new(), imbl::OrdMap::new()));
+        txn.joinable = false;
+        Self::new(txn)
     }
 
     /// Run `f` over the transaction, holding the lock.
@@ -524,7 +518,7 @@ pub(crate) async fn resolve_or_create_object(
     let process = compile_process_from_path(&(&gs.config, object_space), path).await?;
     txn_insert_process(&txn, object_space, &process);
 
-    let (_world, changeset) = txn.with(|t| t.clone()).into_parts();
+    let changeset = txn.with(|t| t.take_changeset());
     let commit = commit_changeset(&gs.committer_tx, changeset).await?;
     let effects = txn.take_effects();
     drop(live);
