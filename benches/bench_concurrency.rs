@@ -185,8 +185,18 @@ fn contention(c: &mut Criterion) {
         ("arr_churn", "churn", 1024, false),
     ];
 
+    // Criterion list mode runs the group body to register IDs but skips the bench closures.
+    // Keep setup and stats out of that path: their stdout breaks nextest's test listing.
+    let listing = std::env::args().any(|arg| arg == "--list");
+
     for (name, func, total, gil) in workloads {
         for &workers in &WORKERS {
+            if listing {
+                // Register the same ID the real path registers, with a no-op body.
+                group.bench_with_input(BenchmarkId::new(name, workers), &workers, |_, _| {});
+                continue;
+            }
+
             let rt = multi_thread_rt(workers);
             // Fresh Vm per block, so a before/after stats diff is unambiguous; per-sample printing inside
             // the closure would interleave criterion's stderr headers and misattribute the deltas.
