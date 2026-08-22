@@ -49,8 +49,8 @@ use crate::interpreter::{
     process::Process,
     program::Program,
     stm::{
-        CommitProtocol, LiveSnapshot, RetryStats, Transaction, TxnHandle, commit_changeset,
-        flush_effects, start_txn,
+        AttemptBody, CommitProtocol, Effect, LiveSnapshot, RetryStats, Transaction, TxnHandle,
+        commit_changeset, flush_effects, run_attempts, start_txn,
     },
     task::{task_id::TaskId, task_state::TaskState},
     task_context::TaskContext,
@@ -157,6 +157,14 @@ pub struct Task<const STACKSIZE: usize> {
     /// be the branch key on retry.
     joins_parent: bool,
 
+    /// The seed for this task's attempts: the function entry each re-run
+    /// rebuilds from. `None` for sub-tasks; set by the top-level entry
+    /// points.
+    seed: Option<TaskSeed>,
+
+    /// The per-attempt execution timeout, set by the top-level entry point.
+    timeout_ms: Option<u64>,
+
     /// The current state of the task
     pub state: TaskState,
 
@@ -196,6 +204,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             context: task_context,
             txn,
             joins_parent,
+            seed: None,
+            timeout_ms: None,
             state: TaskState::New,
 
             #[cfg(test)]
@@ -316,7 +326,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     async fn open_attempt(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
-        seed: &TaskSeed,
         timeout_ms: Option<u64>,
     ) -> Result<Option<LiveSnapshot>> {
         let live = if self.joins_parent {
@@ -324,6 +333,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         } else {
             Some(start_txn(tx).await?)
         };
+
+        let seed = self
+            .seed
+            .clone()
+            .expect("top-level attempt has a seed; joiners never open");
 
         self.reset();
 
@@ -369,103 +383,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(live)
     }
 
-    /// Retry loop: run attempts against the committer until one
-    /// commits. A rejected commit re-runs from the seed. Returns the result
-    /// plus per-loop stats.
-    ///
-    /// A joiner runs exactly one attempt and never commits or retries: its
-    /// writes ride the parent's commit, so a parent re-run re-runs it.
-    ///
-    /// Inlined rather than built on `retry_async`: the attempt's future
-    /// borrows `&mut self`, which cannot be returned out of the `FnMut`
-    /// closure `retry_async` takes (self-referential future). Same loop
-    /// shape as `retry_async`; only one loop in the task path.
+    /// One task's attempts through the shared runner
+    /// ([`stm::run_attempts`]): GIL scope, timeout, and effect flush stay
+    /// here; the committer protocol lives in the runner.
     async fn retry_loop(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
-        seed: &TaskSeed,
         timeout_ms: Option<u64>,
     ) -> (Result<()>, RetryStats) {
-        let started = std::time::Instant::now();
-        let mut attempts = 0u64;
-        let mut conflicts = 0u64;
-
-        loop {
-            attempts += 1;
-
-            let live = match self.open_attempt(tx, seed, timeout_ms).await {
-                Ok(live) => live,
-                Err(e) => {
-                    return (
-                        Err(e),
-                        RetryStats {
-                            attempts,
-                            conflicts,
-                            duration: started.elapsed(),
-                        },
-                    );
-                }
-            };
-            // A joiner keeps the parent's in-flight handle: nothing to
-            // commit, no retry — the parent's commit carries the writes.
-            let Some(live) = live else {
-                return (
-                    Ok(()),
-                    RetryStats {
-                        attempts,
-                        conflicts,
-                        duration: started.elapsed(),
-                    },
-                );
-            };
-            // Clone the attempt's transaction out of the task's handle for
-            // the commit; the task keeps its copy for the next re-run.
-            let (_world, changeset) = self.txn.with(|t| t.clone()).into_parts();
-
-            let commit = match commit_changeset(tx, changeset).await {
-                Ok(c) => c,
-                Err(e) => {
-                    drop(live);
-                    return (
-                        Err(e),
-                        RetryStats {
-                            attempts,
-                            conflicts,
-                            duration: started.elapsed(),
-                        },
-                    );
-                }
-            };
-            // Release the snapshot only after the commit reply has resolved.
-            drop(live);
-
-            if commit.is_ok() {
-                // The commit is permanent, so deliver the physical output this
-                // attempt recorded, exactly once, now. A rejected attempt
-                // never reaches this: its transaction (and its unflushed
-                // effects) is dropped with the attempt, and the re-run
-                // records them fresh.
-                let effects = self.txn.take_effects();
-                if !effects.is_empty() {
-                    flush_effects(
-                        self.context.config(),
-                        self.context.object_space(),
-                        self.context.global_state.call_outs(),
-                        effects,
-                    )
-                    .await;
-                }
-                return (
-                    Ok(()),
-                    RetryStats {
-                        attempts,
-                        conflicts,
-                        duration: started.elapsed(),
-                    },
-                );
-            }
-            conflicts += 1;
-        }
+        self.timeout_ms = timeout_ms;
+        run_attempts(tx, self).await
     }
 
     /// Evaluate `f` to completion, or an error. No timeouts are applied.
@@ -495,8 +422,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             function: f,
             args: args.to_vec(),
         };
+        self.seed = Some(seed);
         let tx = self.context.global_state.committer_tx.clone();
-        let (res, stats) = self.retry_loop(&tx, &seed, loop_timeout).await;
+        let (res, stats) = self.retry_loop(&tx, loop_timeout).await;
         trace!(
             attempts = stats.attempts,
             conflicts = stats.conflicts,
@@ -710,7 +638,47 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         tx: &flume::Sender<CommitProtocol>,
         seed: &TaskSeed,
     ) -> (Result<()>, RetryStats) {
-        self.retry_loop(tx, seed, None).await
+        self.seed = Some(seed.clone());
+        self.retry_loop(tx, None).await
+    }
+}
+
+#[async_trait::async_trait]
+impl<const STACKSIZE: usize> AttemptBody for Task<STACKSIZE> {
+    async fn begin_attempt(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+    ) -> Result<Option<LiveSnapshot>> {
+        self.open_attempt(tx, self.timeout_ms).await
+    }
+
+    async fn commit_phase(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+        _live: LiveSnapshot,
+    ) -> Result<(
+        std::result::Result<(), crate::interpreter::stm::Changeset>,
+        Vec<Effect>,
+    )> {
+        // Clone the attempt's transaction out of the handle; the task
+        // keeps its copy for the next re-run.
+        let (_world, changeset) = self.txn.with(|t| t.clone()).into_parts();
+        let commit = commit_changeset(tx, changeset).await?;
+        let effects = self.txn.take_effects();
+        Ok((commit, effects))
+    }
+
+    async fn deliver(&mut self, effects: Vec<Effect>) -> Result<()> {
+        if !effects.is_empty() {
+            flush_effects(
+                self.context.config(),
+                self.context.object_space(),
+                self.context.global_state.call_outs(),
+                effects,
+            )
+            .await;
+        }
+        Ok(())
     }
 }
 

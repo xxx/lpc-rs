@@ -1,12 +1,11 @@
-//! unbounded internal re-run of a transaction until it commits.
+//! The attempt runner: re-runs a transaction's attempts until one commits.
+//!
+//! The runner owns the committer protocol (open, commit, release-after-reply,
+//! re-base, stats); the body owns the attempt-level work and its physical
+//! output. Production runs a [`Task`](crate::interpreter::task::Task); tests
+//! run a bare [`Transaction`].
 
-use std::{
-    sync::Arc,
-    time::Duration,
-};
-
-#[cfg(test)]
-use std::time::Instant;
+use std::{sync::Arc, time::Duration};
 
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::{Result, lpc_error};
@@ -23,68 +22,133 @@ use crate::interpreter::{
     },
     vm::global_state::GlobalState,
 };
-#[cfg(test)]
-use crate::interpreter::stm::Transaction;
 
-/// Per-attempt statistics, owned by the retry loop: the transaction already
-/// knows its read/write set sizes, so commit size is free, and conflict rate
-/// is a property of this loop, not the committer.
+/// Per-attempt statistics, owned by the attempt loop: the transaction
+/// already knows its read/write set sizes, so commit size is free, and
+/// conflict rate is a property of this loop, not the committer.
 #[derive(Debug, Default)]
 pub(crate) struct RetryStats {
     /// The first attempt plus one per conflict.
     pub(crate) attempts: u64,
     /// Conflicts observed across attempts.
     pub(crate) conflicts: u64,
-    /// Wall time of the whole retry loop, successful attempt included.
+    /// Wall time of the whole loop, successful attempt included.
     pub(crate) duration: Duration,
 }
 
-/// Runs `f` against a fresh transaction, commits, and re-runs from scratch
-/// on each conflict until one commits.
-#[cfg(test)]
-fn retry<T>(
+/// One attempt of a transactional body. The body must keep two invariants
+/// the interface cannot express:
+///
+/// - `begin_attempt` may return a commit only for work that re-runs
+///   cleanly from scratch on rejection.
+/// - the commit must be atomic with the body's writes: a rejected attempt
+///   leaves nothing physical behind.
+#[async_trait::async_trait]
+pub(crate) trait AttemptBody {
+    /// Open one attempt against the committer's current world, reset the
+    /// body, run its work. `None` marks a joiner: the loop stops after one
+    /// attempt, no commit, no retry.
+    async fn begin_attempt(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+    ) -> Result<Option<LiveSnapshot>>;
+
+    /// Commit the attempt's changeset and take its physical output for
+    /// delivery. The loop releases the `LiveSnapshot` only after this
+    /// returns: releasing earlier lets the committer evict history the
+    /// commit still needs, spurious-conflicting a sound attempt.
+    async fn commit_phase(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+        live: LiveSnapshot,
+    ) -> Result<(
+        std::result::Result<(), Changeset>,
+        Vec<crate::interpreter::stm::Effect>,
+    )>;
+
+    /// Deliver the committed attempt's physical output, exactly once.
+    async fn deliver(&mut self, effects: Vec<crate::interpreter::stm::Effect>) -> Result<()>;
+}
+
+/// Re-run `body`'s attempts until one commits; each attempt re-bases on
+/// the newest world. A joiner (`None` from `begin_attempt`) stops after
+/// its single attempt without committing.
+pub(crate) async fn run_attempts<B: AttemptBody>(
     tx: &flume::Sender<CommitProtocol>,
-    mut f: impl FnMut(&mut Transaction) -> T,
-) -> (T, RetryStats) {
-    let started = Instant::now();
-    let mut attempts = 0;
-    let mut conflicts = 0;
+    body: &mut B,
+) -> (Result<()>, RetryStats) {
+    let started = std::time::Instant::now();
+    let mut attempts = 0u64;
+    let mut conflicts = 0u64;
 
     loop {
         attempts += 1;
 
-        // Each attempt starts against the current world, so a re-run
-        // re-bases on the newest snapshot.
-        let (reply_tx, reply_rx) = flume::bounded(1);
-        tx.send(CommitProtocol::Start { reply: reply_tx })
-            .expect("committer channel closed");
-        let live = reply_rx.recv().expect("no reply from committer");
+        let live = match body.begin_attempt(tx).await {
+            Ok(live) => live,
+            Err(e) => {
+                return (
+                    Err(e),
+                    RetryStats {
+                        attempts,
+                        conflicts,
+                        duration: started.elapsed(),
+                    },
+                );
+            }
+        };
 
-        let mut transaction = Transaction::new(live.inner.clone());
-        let result = f(&mut transaction);
-        let (_world, changeset) = transaction.into_parts();
-
-        // Hold the release handle until the reply resolves: dropping it
-        // earlier can let the committer evict history this commit still
-        // needs, spurious-conflicting a sound attempt.
-        let (reply_tx, reply_rx) = flume::bounded(1);
-        tx.send(CommitProtocol::Commit {
-            changeset,
-            reply: reply_tx,
-        })
-        .expect("committer channel closed");
-        let commit_result = reply_rx.recv().expect("no reply from committer");
-        drop(live);
-
-        if commit_result.is_ok() {
+        // A joiner: the caller's commit carries the writes.
+        let Some(live) = live else {
             return (
-                result,
+                Ok(()),
                 RetryStats {
                     attempts,
                     conflicts,
                     duration: started.elapsed(),
                 },
             );
+        };
+
+        let (commit, effects) = match body.commit_phase(tx, live).await {
+            Ok(c) => c,
+            Err(e) => {
+                return (
+                    Err(e),
+                    RetryStats {
+                        attempts,
+                        conflicts,
+                        duration: started.elapsed(),
+                    },
+                );
+            }
+        };
+
+        // The commit is permanent, so deliver now. A rejected attempt never
+        // reaches this: its recorded output is dropped with the attempt.
+        if commit.is_ok() {
+            match body.deliver(effects).await {
+                Ok(()) => {
+                    return (
+                        Ok(()),
+                        RetryStats {
+                            attempts,
+                            conflicts,
+                            duration: started.elapsed(),
+                        },
+                    );
+                }
+                Err(e) => {
+                    return (
+                        Err(e),
+                        RetryStats {
+                            attempts,
+                            conflicts,
+                            duration: started.elapsed(),
+                        },
+                    );
+                }
+            }
         }
         conflicts += 1;
     }
@@ -310,74 +374,64 @@ impl GlobalState {
     }
 }
 
-/// Async mirror of [`retry`]: run `f` (one attempt) against a fresh
-/// transaction, commit it, and re-run `f` from scratch on each rejection
-/// until one commits.
-///
-/// `f` opens the attempt's transaction (via [`start_txn`]), does the work,
-/// and returns the `Transaction` plus the attempt's [`LiveSnapshot`]. The
-/// loop commits the changeset and releases the `LiveSnapshot` after
-/// the commit reply resolves.
 #[cfg(test)]
-async fn retry_async<F, Fut>(
-    tx: &flume::Sender<CommitProtocol>,
-    mut f: F,
-) -> (Result<()>, RetryStats)
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = Result<(Transaction, LiveSnapshot)>>,
-{
-    let started = Instant::now();
-    let mut attempts = 0u64;
-    let mut conflicts = 0u64;
+use crate::interpreter::lpc_int::LpcInt;
+#[cfg(test)]
+use crate::interpreter::stm::Transaction;
 
-    loop {
-        attempts += 1;
+#[cfg(test)]
+/// A test-only body: one bare transaction per attempt, no task machinery.
+pub(crate) struct IncBody {
+    pub(crate) counter: VarId,
+    attempt: Option<Transaction>,
+}
 
-        let transaction = match f().await {
-            Ok(t) => t,
-            Err(e) => {
-                return (
-                    Err(e),
-                    RetryStats {
-                        attempts,
-                        conflicts,
-                        duration: started.elapsed(),
-                    },
-                );
-            }
-        };
-        let (live_txn, live) = transaction;
-        let (_world, changeset) = live_txn.into_parts();
-
-        let commit = match commit_changeset(tx, changeset).await {
-            Ok(c) => c,
-            Err(e) => {
-                drop(live);
-                return (
-                    Err(e),
-                    RetryStats {
-                        attempts,
-                        conflicts,
-                        duration: started.elapsed(),
-                    },
-                );
-            }
-        };
-        // Release the snapshot only after the commit reply has resolved.
-        drop(live);
-
-        if commit.is_ok() {
-            return (
-                Ok(()),
-                RetryStats {
-                    attempts,
-                    conflicts,
-                    duration: started.elapsed(),
-                },
-            );
+#[cfg(test)]
+impl IncBody {
+    pub(crate) fn new(counter: VarId) -> Self {
+        Self {
+            counter,
+            attempt: None,
         }
-        conflicts += 1;
+    }
+}
+
+#[async_trait::async_trait]
+#[cfg(test)]
+impl AttemptBody for IncBody {
+    async fn begin_attempt(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+    ) -> Result<Option<LiveSnapshot>> {
+        let live = start_txn(tx).await?;
+        let mut t = Transaction::new(live.inner.clone());
+        let LpcRef::Int(n) = t.read(self.counter).expect("counter cell missing") else {
+            panic!("counter cell is not an int");
+        };
+        t.write(self.counter, LpcRef::from(n + LpcInt(1)));
+        self.attempt = Some(t);
+        Ok(Some(live))
+    }
+
+    async fn commit_phase(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+        _live: LiveSnapshot,
+    ) -> Result<(
+        std::result::Result<(), Changeset>,
+        Vec<crate::interpreter::stm::Effect>,
+    )> {
+        let (_, changeset) = self
+            .attempt
+            .take()
+            .expect("attempt present until committed")
+            .into_parts();
+        let commit = commit_changeset(tx, changeset).await?;
+        Ok((commit, Vec::new()))
+    }
+
+    async fn deliver(&mut self, _effects: Vec<crate::interpreter::stm::Effect>) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -387,25 +441,14 @@ mod tests {
 
     use lpc_rs_core::LpcIntInner;
 
-    use super::{RetryStats, retry};
+    use super::{IncBody, run_attempts};
     use crate::interpreter::{
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         stm::{
-            Transaction, VarId, Version, WorldValue, changeset::Changeset,
-            committer::CommitProtocol, tests::*,
+            VarId, Version, WorldValue, changeset::Changeset, committer::CommitProtocol, tests::*,
         },
     };
-
-    /// `counter = counter + 1` with no atomics. Returns the written value.
-    fn increment(t: &mut Transaction, counter: VarId) -> LpcInt {
-        let LpcRef::Int(n) = t.read(counter).expect("counter cell missing") else {
-            panic!("counter cell is not an int");
-        };
-        let next = n + LpcInt(1);
-        t.write(counter, LpcRef::from(next));
-        next
-    }
 
     fn seed(tx: &flume::Sender<CommitProtocol>, v0: Version, var: VarId, value: LpcIntInner) {
         let mut seed = Changeset::new(v0);
@@ -422,18 +465,23 @@ mod tests {
             .expect("seed should commit");
     }
 
-    #[test]
-    fn a_clean_attempt_commits_in_one_pass() {
+    #[tokio::test]
+    async fn a_clean_attempt_commits_in_one_pass() {
         let (tx, v0, handle) = start_committer();
         let counter = VarId::new();
         seed(&tx, v0, counter, 5);
 
-        let (value, stats) = retry(&tx, |t| increment(t, counter));
+        let mut body = IncBody::new(counter);
+        let (res, stats) = run_attempts(&tx, &mut body).await;
 
-        assert_eq!(value, LpcInt(6));
+        assert!(res.is_ok());
         assert_eq!(stats.attempts, 1);
         assert_eq!(stats.conflicts, 0);
-        close_committer(tx, handle);
+        let final_snapshot = close_committer(tx, handle);
+        assert_eq!(
+            final_snapshot.read(counter),
+            Some(WorldValue::ref_of(LpcRef::from(6)))
+        );
     }
 
     #[test]
@@ -459,11 +507,18 @@ mod tests {
                 let gate = gate.clone();
                 handles.push(s.spawn(move || {
                     gate.wait();
+                    // Each worker drives the loop on its own runtime: the
+                    // loop's channel sends resolve off the calling thread.
+                    let rt = tokio::runtime::Builder::new_current_thread()
+                        .build()
+                        .expect("runtime");
                     let mut attempts = 0u64;
                     let mut conflicts = 0u64;
                     let mut duration = std::time::Duration::ZERO;
                     for _ in 0..ROUNDS {
-                        let (_, stats): (_, RetryStats) = retry(&tx, |t| increment(t, counter));
+                        let mut body = IncBody::new(counter);
+                        let (res, stats) = rt.block_on(run_attempts(&tx, &mut body));
+                        assert!(res.is_ok(), "attempt must commit");
                         attempts += stats.attempts;
                         conflicts += stats.conflicts;
                         duration += stats.duration;
@@ -509,7 +564,7 @@ mod async_tests {
     use crate::interpreter::{
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
-        stm::{Changeset, CommitProtocol, Committer, Transaction, VarId, WorldValue},
+        stm::{Changeset, CommitProtocol, Committer, VarId, WorldValue},
     };
 
     fn seed(committer: &mut Committer, var: VarId, value: LpcIntInner) {
@@ -530,16 +585,10 @@ mod async_tests {
         let committer_tx = tx.clone();
         let handle = std::thread::spawn(move || committer.run(committer_tx, rx));
 
-        let (res, stats) = retry_async(&tx, || async {
-            let live = start_txn(&tx).await?;
-            let mut t = Transaction::new(live.inner.clone());
-            let LpcRef::Int(n) = t.read(counter).expect("counter cell missing") else {
-                panic!("counter cell is not an int");
-            };
-            t.write(counter, LpcRef::from(n + LpcInt(1)));
-            Ok::<_, Box<lpc_rs_errors::LpcError>>((t, live))
-        })
-        .await;
+        let (res, stats) = {
+            let mut body = IncBody::new(counter);
+            run_attempts(&tx, &mut body).await
+        };
 
         assert!(res.is_ok());
         assert_eq!(stats.attempts, 1);
@@ -595,16 +644,10 @@ mod async_tests {
             committer.run_with_rejections(committer_tx, rx, 1)
         });
 
-        let (res, stats) = retry_async(&tx, || async {
-            let live = start_txn(&tx).await?;
-            let mut t = Transaction::new(live.inner.clone());
-            let LpcRef::Int(n) = t.read(counter).expect("counter cell missing") else {
-                panic!("counter cell is not an int");
-            };
-            t.write(counter, LpcRef::from(n + LpcInt(1)));
-            Ok::<_, Box<lpc_rs_errors::LpcError>>((t, live))
-        })
-        .await;
+        let (res, stats) = {
+            let mut body = IncBody::new(counter);
+            run_attempts(&tx, &mut body).await
+        };
 
         assert!(res.is_ok());
         assert_eq!(
