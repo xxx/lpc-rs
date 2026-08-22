@@ -92,8 +92,7 @@ impl GlobalState {
     /// One GC pass, atomic on the committer: refuse unless quiescent, else
     /// cull the unmarked upvalue cells and reclaim the unreachable world
     /// payload vars. The cells travel inside the pass message, so their drops
-    /// cannot be reordered past the sweep, and the committer's re-check closes
-    /// the gap after the client's fast-refuse probe.
+    /// cannot be reordered past the sweep.
     ///
     /// # Precondition
     ///

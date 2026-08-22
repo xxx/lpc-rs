@@ -183,9 +183,8 @@ pub(crate) async fn live_count(tx: &flume::Sender<CommitProtocol>) -> Result<usi
         .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
 }
 
-/// Run one GC pass: the committer re-checks quiescence, drops the swept
-/// upvalue cells, and marks the world from `roots`, all in one message.
-/// Returns the pass report, or the committer's refusal.
+/// Client side of a GC pass: send the [`CommitProtocol::GcPass`] message
+/// and await its reply.
 pub(crate) async fn gc_pass(
     tx: &flume::Sender<CommitProtocol>,
     dropped: Vec<VarId>,
