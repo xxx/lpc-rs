@@ -7,10 +7,23 @@ use lpc_rs_errors::Result;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use tokio::sync::mpsc::Receiver;
 
+use async_trait::async_trait;
+
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::{
-        CompilerBuilder, compilation_context::CompilationContext, semantic::scope_tree::ScopeTree,
+        CompilerBuilder,
+        ast::program_node::ProgramNode,
+        codegen::{
+            codegen_walker::CodegenWalker,
+            function_prototype_walker::FunctionPrototypeWalker,
+            inheritance_walker::InheritanceWalker,
+            scope_walker::ScopeWalker,
+            semantic_check_walker::SemanticCheckWalker,
+            tree_walker::{ContextHolder, Pass, apply},
+        },
+        compilation_context::CompilationContext,
+        semantic::scope_tree::ScopeTree,
     },
     interpreter::{
         object_space::ObjectSpace,
@@ -168,5 +181,114 @@ pub fn empty_compilation_context() -> CompilationContext {
     CompilationContext {
         scopes,
         ..CompilationContext::default()
+    }
+}
+
+/// Parse `code` as `/my_test.c` under the canonical test config.
+async fn parse_test_program(code: &str) -> Result<(ProgramNode, CompilationContext)> {
+    let config = ConfigBuilder::default()
+        .lib_dir("./tests/fixtures/code")
+        .simul_efun_file("/secure/simul_efuns")
+        .build()?;
+    let compiler = CompilerBuilder::default().config(config).build()?;
+
+    compiler
+        .parse_string(
+            &LpcPath::new_in_game("/my_test.c", "/", "./tests/fixtures/code"),
+            code,
+        )
+        .await
+}
+
+/// Compile a source string through the real pipeline, up to and including
+/// `Self` — every pass lenient, so recorded diagnostics stay inspectable.
+#[async_trait]
+pub trait CompileThrough: Pass {
+    /// Run the pipeline prefix and `Self` over an already-parsed program.
+    async fn compile_through_parsed(
+        program: &mut ProgramNode,
+        context: CompilationContext,
+    ) -> Result<Self>;
+
+    /// Parse `code` as `/my_test.c`, then run the pipeline through `Self`.
+    async fn compile_through(code: &str) -> Result<Self> {
+        let (mut program, context) = parse_test_program(code).await?;
+        Self::compile_through_parsed(&mut program, context).await
+    }
+}
+
+#[async_trait]
+impl CompileThrough for InheritanceWalker {
+    async fn compile_through_parsed(
+        program: &mut ProgramNode,
+        context: CompilationContext,
+    ) -> Result<Self> {
+        apply(program, context, false).await
+    }
+}
+
+#[async_trait]
+impl CompileThrough for FunctionPrototypeWalker {
+    async fn compile_through_parsed(
+        program: &mut ProgramNode,
+        context: CompilationContext,
+    ) -> Result<Self> {
+        let context = InheritanceWalker::compile_through_parsed(program, context)
+            .await?
+            .into_context();
+        apply(program, context, false).await
+    }
+}
+
+#[async_trait]
+impl CompileThrough for ScopeWalker {
+    async fn compile_through_parsed(
+        program: &mut ProgramNode,
+        context: CompilationContext,
+    ) -> Result<Self> {
+        let context = FunctionPrototypeWalker::compile_through_parsed(program, context)
+            .await?
+            .into_context();
+        apply(program, context, false).await
+    }
+}
+
+#[async_trait]
+impl CompileThrough for SemanticCheckWalker {
+    async fn compile_through_parsed(
+        program: &mut ProgramNode,
+        context: CompilationContext,
+    ) -> Result<Self> {
+        let context = ScopeWalker::compile_through_parsed(program, context)
+            .await?
+            .into_context();
+        apply(program, context, false).await
+    }
+}
+
+#[async_trait]
+impl CompileThrough for CodegenWalker {
+    async fn compile_through_parsed(
+        program: &mut ProgramNode,
+        context: CompilationContext,
+    ) -> Result<Self> {
+        let context = SemanticCheckWalker::compile_through_parsed(program, context)
+            .await?
+            .into_context();
+        apply(program, context, false).await
+    }
+}
+
+#[cfg(test)]
+mod compile_through_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn the_harness_compiles_through_codegen() {
+        let walker = CodegenWalker::compile_through("int marf() { return 42; }")
+            .await
+            .unwrap();
+        let program = walker.into_program().unwrap();
+        assert!(program.functions.values().any(|f| f.name() == "marf"));
     }
 }

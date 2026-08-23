@@ -669,19 +669,17 @@ mod tests {
     use factori::create;
     use indoc::indoc;
     use lpc_rs_core::{
-        call_namespace::CallNamespace, function_arity::FunctionArity, lpc_path::LpcPath,
-        lpc_type::LpcType,
+        call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
     };
     use lpc_rs_function_support::symbol::Symbol;
     use ustr::ustr;
 
     use super::*;
-    use crate::compiler::codegen::tree_walker::apply;
+    use crate::test_support::CompileThrough;
     use crate::{
         compiler::{
-            Compiler,
             ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode},
-            codegen::{scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker},
+            codegen::semantic_check_walker::SemanticCheckWalker,
             semantic::scope_tree::ScopeTree,
         },
         test_support::factories::*,
@@ -699,20 +697,9 @@ mod tests {
     }
 
     async fn walk_code(code: &str) -> Result<CompilationContext> {
-        let compiler = Compiler::default();
-        let (mut program, context) = compiler
-            .parse_string(
-                &LpcPath::new_in_game("/my_test.c", "/", "./tests/fixtures/code"),
-                code,
-            )
-            .await
-            .expect("failed to parse");
-
-        let context = apply::<ScopeWalker>(&mut program, context, false)
+        Ok(SemanticCheckWalker::compile_through(code)
             .await?
-            .into_context();
-        let walker = apply::<SemanticCheckWalker>(&mut program, context, false).await?;
-        Ok(walker.into_context())
+            .into_context())
     }
 
     mod test_visit_assignment {

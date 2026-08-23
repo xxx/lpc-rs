@@ -2310,21 +2310,18 @@ mod tests {
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{LpcFloatInner, lpc_path::LpcPath, lpc_type::LpcType};
     use lpc_rs_errors::{Result, span::Span};
-    use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
-    use crate::compiler::codegen::tree_walker::apply;
+    use crate::test_support::CompileThrough;
     use crate::{
         compiler::{
-            CompilerBuilder,
             ast::{
                 ast_node::AstNode, block_node::BlockNode,
                 comma_expression_node::CommaExpressionNode, expression_node::ExpressionNode,
             },
             codegen::{
                 codegen_walker::CodegenWalker, function_prototype_walker::FunctionPrototypeWalker,
-                inheritance_walker::InheritanceWalker, scope_walker::ScopeWalker,
-                semantic_check_walker::SemanticCheckWalker,
+                scope_walker::ScopeWalker,
             },
             lexer::LexWrapper,
         },
@@ -2380,35 +2377,7 @@ mod tests {
     }
 
     async fn walk_code(code: &str) -> Result<CodegenWalker> {
-        let config = ConfigBuilder::default()
-            .lib_dir(LIB_DIR)
-            .simul_efun_file("/secure/simul_efuns")
-            .build()
-            .unwrap();
-
-        let compiler = CompilerBuilder::default().config(config).build()?;
-        let (mut program, context) = compiler
-            .parse_string(&LpcPath::new_in_game("/my_test.c", "/", LIB_DIR), code)
-            .await
-            .expect("failed to parse");
-
-        let context = apply::<InheritanceWalker>(&mut program, context, false)
-            .await?
-            .into_context();
-        let context = apply::<FunctionPrototypeWalker>(&mut program, context, false)
-            .await?
-            .into_context();
-        let context = apply::<ScopeWalker>(&mut program, context, false)
-            .await?
-            .into_context();
-        let context = apply::<SemanticCheckWalker>(&mut program, context, false)
-            .await?
-            .into_context();
-
-        let mut walker = CodegenWalker::new(context);
-        let _ = program.visit(&mut walker).await;
-
-        Ok(walker)
+        CodegenWalker::compile_through(code).await
     }
 
     fn walker_function_instructions<T>(walker: &mut CodegenWalker, name: T) -> Vec<Instruction>
