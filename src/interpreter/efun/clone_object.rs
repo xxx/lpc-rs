@@ -21,12 +21,6 @@ async fn load_prototype<const N: usize>(
         return Err(context.runtime_error(format!("Cannot clone a clone: {}", full_path)));
     }
 
-    let path_str: &str = full_path.as_ref();
-
-    if context.frame().process.program.filename.to_str().unwrap() == path_str {
-        return Err(context.runtime_error(format!("Cannot clone self: {}", path_str)));
-    }
-
     context.load_object(&full_path).await
 }
 
@@ -293,13 +287,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn clones_its_own_prototype() {
+        let caller = indoc! { r#"
+            object made = "/self_copy"->copy();
+        "# };
+
+        let vm = Vm::new(test_config());
+        let caller_proc = vm
+            .initialize_process_from_code("caller.c", caller)
+            .await
+            .unwrap()
+            .context
+            .process;
+
+        let LpcRef::Object(made) = committed_globals_by_name(&vm.global_state, &caller_proc)
+            .get("made")
+            .unwrap()
+            .clone()
+        else {
+            panic!("made is not an object");
+        };
+        let made = made.upgrade().unwrap();
+
+        assert_eq!(made.filename(), "/self_copy#0");
+        assert!(vm.global_state.is_initialized(&made));
+        assert_eq!(
+            committed_globals_by_name(&vm.global_state, &made)
+                .get("i")
+                .unwrap(),
+            &LpcRef::from(123)
+        );
+    }
+
+    #[tokio::test]
     async fn handles_clone_self_recursion() {
         // Each clone's initializer clones the same path again.
         let prototype = indoc! { r#"
             object foo = clone_object("self_clone");
         "# };
 
-        // Same code, different path, so "Cannot clone self" does not apply.
         let self_clone = indoc! { r#"
             object foo = clone_object("self_clone");
         "# };
