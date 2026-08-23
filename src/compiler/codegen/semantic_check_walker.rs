@@ -139,7 +139,7 @@ impl SemanticCheckWalker {
             argument.visit(self).await?;
         }
 
-        let lookup = self.context.scopes.lookup(name);
+        let lookup = self.context.lookup_var(*name);
         // Check function existence.
         if !self.context.contains_function_complete(name.as_str(), &CallNamespace::Local)
             // check for function pointers & closures
@@ -1563,6 +1563,33 @@ mod tests {
 
             let context = CompilationContext {
                 scopes,
+                ..CompilationContext::default()
+            };
+            let mut walker = SemanticCheckWalker::new(context);
+            let _ = node.visit(&mut walker).await;
+
+            assert!(walker.context.errors.is_empty());
+        }
+
+        #[tokio::test]
+        async fn allows_inherited_function_pointers() {
+            let mut node = ExpressionNode::from(create!(
+                CallNode,
+                chain: create!(CallChain, name: ustr("inherited_pointer")),
+                arguments: vec![],
+            ));
+
+            let mut scopes = ScopeTree::default();
+            scopes.push_new();
+            let mut parent = Program::default();
+            parent.global_variables.insert(
+                "inherited_pointer".to_string(),
+                Symbol::new("inherited_pointer", LpcType::Function(false)),
+            );
+
+            let context = CompilationContext {
+                scopes,
+                inherits: vec![parent],
                 ..CompilationContext::default()
             };
             let mut walker = SemanticCheckWalker::new(context);

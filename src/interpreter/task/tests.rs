@@ -1254,6 +1254,21 @@ mod test_instructions {
         use super::*;
 
         #[tokio::test]
+        async fn an_inherited_function_variable_is_callable_by_name() {
+            let code = indoc! { r##"
+                inherit "/sibling_a";
+                mixed r;
+                void create() { r = fa(); }
+            "##};
+
+            let task = run_prog(code).await;
+            let globals =
+                committed_globals_by_name(&task.context.global_state, task.context.process());
+
+            assert_eq!(globals["r"].to_string(), "from-a");
+        }
+
+        #[tokio::test]
         async fn sibling_parents_keep_their_strings_calls_and_globals() {
             let code = indoc! { r##"
                 mixed r;
