@@ -42,11 +42,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         receiver: FunctionReceiver,
         name_idx: RegisterSize,
     ) -> lpc_rs_errors::Result<()> {
-        let call_other = match receiver {
-            FunctionReceiver::Var(_) | FunctionReceiver::Dynamic => true,
-            FunctionReceiver::Local | FunctionReceiver::Efun | FunctionReceiver::SimulEfun => false,
-        };
-
         let Some(func_name) = self
             .stack
             .current_frame()?
@@ -83,25 +78,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             FunctionReceiver::Var(location) => {
                 let receiver_ref = &*get_location(&self.stack, &self.context.txn, location)?;
-                match receiver_ref {
+                let process = match receiver_ref {
                     LpcRef::Object(weak_process) => {
                         let Some(process) = weak_process.upgrade() else {
                             return Err(self.runtime_error("called object is no longer available"));
                         };
 
-                        let func = {
-                            let Some(func) = process.program.lookup_function(func_name) else {
-                                return Err(self.runtime_error(format!(
-                                    "Unable to find function `{}` in remote process `{}`.",
-                                    func_name,
-                                    process.filename()
-                                )));
-                            };
-
-                            func.clone()
-                        };
-                        let weak_process = (*weak_process).clone();
-                        FunctionAddress::Local(weak_process, func)
+                        process
                     }
                     LpcRef::String(_) => {
                         let path_str = receiver_ref
@@ -109,7 +92,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             .unwrap_or_default();
                         let path = LpcPath::InGame(PathBuf::from(path_str.as_str()));
 
-                        let process = match self.context.find_object(&path) {
+                        match self.context.find_object(&path) {
                             ObjectLookup::Found(process) => process,
                             // A miss (removed, or never created) is a runtime
                             // error: this site does not create-on-miss.
@@ -119,21 +102,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                     path_str
                                 )));
                             }
-                        };
-
-                        let func = {
-                            let Some(func) = process.program.lookup_function(func_name) else {
-                                return Err(self.runtime_error(format!(
-                                    "Unable to find function `{}` in remote process `{}`.",
-                                    func_name,
-                                    process.filename()
-                                )));
-                            };
-
-                            func.clone()
-                        };
-
-                        FunctionAddress::Local(Arc::downgrade(&process), func)
+                        }
                     }
                     _ => {
                         return Err(self.runtime_error(format!(
@@ -141,11 +110,30 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             func_name
                         )));
                     }
+                };
+
+                let Some(func) = process.program.lookup_function(func_name) else {
+                    return Err(self.runtime_error(format!(
+                        "Unable to find function `{}` in remote process `{}`.",
+                        func_name,
+                        process.filename()
+                    )));
+                };
+                // Visibility is decided when the pointer is taken; a pointer fires anywhere.
+                if !func.public() && !Arc::ptr_eq(&process, &self.stack.current_frame()?.process) {
+                    return Err(self.runtime_error(format!(
+                        "cannot take a pointer to {} function `{}` of `{}`",
+                        func.prototype.flags.visibility(),
+                        func_name,
+                        process.filename()
+                    )));
                 }
+
+                FunctionAddress::Local(Arc::downgrade(&process), func.clone())
             }
         };
 
-        let partial_args = self
+        let mut partial_args = self
             .partial_args
             .iter()
             .map(|arg| {
@@ -155,6 +143,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 .transpose()
             })
             .collect::<lpc_rs_errors::Result<ThinVec<Option<LpcRef>>>>()?;
+        // A dynamic receiver is the pointer's first argument, bound at call time.
+        if matches!(address, FunctionAddress::Dynamic(_)) {
+            partial_args.insert(0, None);
+        }
 
         let frame = self.stack.current_frame()?;
         // Only a closure continues its creator's capture numbering.
@@ -166,7 +158,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .owner(Arc::downgrade(&frame.process))
             .address(address)
             .partial_args(partial_args)
-            .call_other(call_other)
             .upvalue_ptrs(upvalue_ptrs)
             .unique_id(UniqueId::new())
             .build()

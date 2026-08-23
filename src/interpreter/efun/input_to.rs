@@ -14,6 +14,11 @@ pub async fn input_to<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         return Err(context.runtime_error("non-function sent as first argument to `input_to`"));
     };
 
+    if !ptr.receiver_bound() {
+        return Err(context
+            .runtime_error("`input_to` needs the receiver of a dynamic function pointer bound"));
+    }
+
     let LpcRef::Int(no_echo) = context.resolve_local_register(2 as RegisterSize) else {
         return Err(context.runtime_error("non-integer sent as second argument to `input_to`"));
     };

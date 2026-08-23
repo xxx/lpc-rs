@@ -40,7 +40,7 @@ impl GlobalState {
                 }
             };
 
-            let prepared = match global_state.prepare_function_ptr(&ptr_arc, None).await {
+            let prepared = match global_state.prepare_function_ptr(&ptr_arc, &[], None).await {
                 Ok(Some(prepared)) => prepared,
                 Ok(None) => return,
                 Err(e) => {
@@ -137,6 +137,7 @@ mod tests {
         use super::*;
         async fn check(vm: &Vm, bar_proc: &Arc<Process>) {
             let ptr = FunctionPtrBuilder::default()
+                .owner(Arc::downgrade(bar_proc))
                 .address(FunctionAddress::Dynamic(ustr("foo")))
                 .partial_args(thin_vec![Some("/bar".into())])
                 .build()
@@ -217,6 +218,16 @@ mod tests {
             let code = r##"
                 int result;
                 void create() { int j = 5; call_out((: result = j + 1 :), 100); }
+            "##;
+            assert_eq!(fire_the_one_call_out(code).await, LpcRef::from(6));
+        }
+
+        #[tokio::test]
+        async fn a_bound_dynamic_receiver_fires() {
+            let code = r##"
+                int result;
+                void create() { call_out(papplyv(&->tick(1), ({ this_object() })), 100); }
+                void tick(int x) { result = x + 5; }
             "##;
             assert_eq!(fire_the_one_call_out(code).await, LpcRef::from(6));
         }

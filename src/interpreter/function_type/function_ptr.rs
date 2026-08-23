@@ -8,26 +8,26 @@ use bit_set::BitSet;
 use derive_builder::Builder;
 use itertools::Itertools;
 use lpc_rs_core::{lpc_path::LpcPath, register::Register};
-use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
+use lpc_rs_errors::{Result, lpc_bug, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use lpc_rs_utils::config::Config;
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
 
-use crate::{
-    interpreter::{
-        efun::EFUN_FUNCTIONS,
-        function_type::function_address::FunctionAddress,
-        gc::{mark::Mark, unique_id::UniqueId},
-        lpc_ref::{LpcRef, NULL},
-        object_space::ObjectSpace,
-        process::Process,
-    },
-    util::get_simul_efuns,
+use crate::interpreter::{
+    efun::EFUN_FUNCTIONS,
+    function_type::function_address::FunctionAddress,
+    gc::{mark::Mark, unique_id::UniqueId},
+    lpc_ref::{LpcRef, NULL},
+    process::Process,
+    task_context::{ObjectLookup, TaskContext},
 };
 
-/// A function pointer taken apart for a call: receiver, function, args.
-pub type PtrTriple = (Arc<Process>, Arc<ProgramFunction>, Vec<LpcRef>);
+/// A pointer resolved for one call: the receiver, the function, its arguments.
+pub struct ResolvedCall {
+    pub process: Arc<Process>,
+    pub function: Arc<ProgramFunction>,
+    pub args: Vec<LpcRef>,
+}
 
 /// A pointer to a function, created with the `&` syntax.
 #[derive(Debug, Builder)]
@@ -48,10 +48,6 @@ pub struct FunctionPtr {
     /// application builds a new pointer over a cloned list.
     #[builder(default)]
     partial_args: ThinVec<Option<LpcRef>>,
-
-    /// Does this pointer use `call_other`?
-    #[builder(default)]
-    pub call_other: bool,
 
     /// The variables that I need from the environment, at the time this
     /// [`FunctionPtr`] is created.
@@ -108,120 +104,124 @@ impl FunctionPtr {
         self
     }
 
-    /// Prepare this function pointer for a call, by getting all of the
-    /// pieces out of it, and into separate variables.
-    ///
-    /// Note that this is intended for use when calling a [`FunctionPtr`] that's used to
-    /// start a new [`Task`](crate::interpreter::task::Task). If the
-    /// [`Task`](crate::interpreter::task::Task) already exists, you should use
-    /// set it up to simply [`resume`](crate::interpreter::task::Task::resume) instead.
-    ///
-    /// A dynamic string receiver is normally created transactionally by
-    /// [`GlobalState::resolve_dynamic_string_receiver`](crate::interpreter::vm::global_state::GlobalState::resolve_dynamic_string_receiver)
-    /// before `triple` is called; the physical create below covers the window
-    /// in which the receiver is destructed (committed and flushed) between
-    /// that resolution and this lookup.
-    pub async fn triple(
-        ptr: &FunctionPtr,
-        config: &Config,
-        object_space: &ObjectSpace,
-    ) -> Result<PtrTriple> {
-        // We won't get any additional args passed to us, so just set up the partial args.
-        // Use int 0 for any that haven't been filled-in.
-        // TODO: error instead of int 0?
-        let args = ptr
-            .partial_args()
+    /// The argument list for a call with `passed`: the holes in the partial
+    /// args fill left to right, the rest append, an unfilled hole is `0`.
+    pub fn bound_args(&self, passed: &[LpcRef]) -> Vec<LpcRef> {
+        let mut passed = passed.iter();
+        let mut args: Vec<LpcRef> = self
+            .partial_args
             .iter()
             .map(|arg| match arg {
                 Some(lpc_ref) => lpc_ref.clone(),
-                None => NULL,
+                None => passed.next().cloned().unwrap_or(NULL),
             })
-            .collect::<Vec<_>>();
+            .collect();
+        args.extend(passed.cloned());
+        args
+    }
 
-        match ptr.address {
-            FunctionAddress::Local(ref proc, ref function) => {
-                if let Some(proc) = proc.upgrade() {
-                    Ok((proc, function.clone(), args))
-                } else {
-                    Err(lpc_error!(
-                        "attempted to call a function pointer with a dead process",
-                    ))
-                }
+    /// Whether a call can find this pointer's receiver without arguments:
+    /// always, unless it is `&->name()` with the receiver hole unfilled.
+    pub fn receiver_bound(&self) -> bool {
+        !matches!(self.address, FunctionAddress::Dynamic(_))
+            || matches!(self.partial_args.first(), Some(Some(_)))
+    }
+
+    /// Resolve this pointer for a call with `passed` arguments: the receiver
+    /// (a dynamic receiver is the first bound argument, created on a miss
+    /// through `ctx`), the function, and the bound arguments.
+    /// `Ok(None)`: a dynamic receiver has no function by this name, so the
+    /// call yields `0` as `call_other` would.
+    pub async fn prepare_call(
+        &self,
+        passed: &[LpcRef],
+        ctx: &TaskContext,
+    ) -> Result<Option<ResolvedCall>> {
+        let txn = ctx.txn();
+        let mut args = self.bound_args(passed);
+
+        let (process, function) = match &self.address {
+            FunctionAddress::Local(receiver, function) => {
+                let Some(process) = receiver.upgrade().filter(|p| p.is_live(txn)) else {
+                    return Err(lpc_error!(
+                        "attempted to call a pointer to a function in a destructed object: {}",
+                        self
+                    ));
+                };
+                (process, function.clone())
             }
             FunctionAddress::Dynamic(name) => {
-                let proc = {
-                    let first_arg = ptr.partial_args().first().cloned();
-                    let mut string_receiver = false;
-                    let mut proc = match &first_arg {
-                        Some(Some(x)) => match x {
-                            LpcRef::Object(proc) => {
-                                let Some(proc) = proc.upgrade() else {
-                                    return Err(lpc_error!(
-                                        "attempted to call a dynamic receiver that has been destructed",
-                                    ));
-                                };
-
-                                Some(proc)
-                            }
-                            LpcRef::String(_) => {
-                                string_receiver = true;
-                                x.with_string(|string| object_space.lookup(string.to_str()))?
-                            }
-                            _ => {
+                let receiver = if args.is_empty() {
+                    NULL
+                } else {
+                    args.remove(0)
+                };
+                let process = match &receiver {
+                    LpcRef::Object(_) => {
+                        let Some(process) = receiver.live_object(txn) else {
+                            return Err(lpc_error!(
+                                "attempted to call `{}` on a destructed object",
+                                name
+                            ));
+                        };
+                        process
+                    }
+                    LpcRef::String(_) => {
+                        let path = receiver.with_string(|s| LpcPath::InGame(PathBuf::from(s)))?;
+                        match ctx.find_object(&path) {
+                            ObjectLookup::Found(process) => process,
+                            ObjectLookup::Removed => {
                                 return Err(lpc_error!(
-                                    "attempted to call a dynamic receiver that is not an object or string"
+                                    "attempted to call `{}` on a destructed object `{}`",
+                                    name,
+                                    path
                                 ));
                             }
-                        },
-                        _ => {
-                            return Err(lpc_error!(
-                                "attempted to call a dynamic receiver that is not an object or string"
-                            ));
+                            ObjectLookup::NotCreated => {
+                                let process = ctx.compile_process(&path).await?;
+                                ctx.insert_process_transactional(&process);
+                                process
+                            }
                         }
-                    };
-
-                    if string_receiver && proc.is_none() {
-                        let path = first_arg
-                            .flatten()
-                            .map(|x| -> Result<LpcPath> {
-                                let buf = x.with_string(|s| PathBuf::from(s.to_str()))?;
-                                Ok(LpcPath::InGame(buf))
-                            })
-                            .unwrap_or_else(|| {
-                                unreachable!(
-                                    "No other branch should be setting `string_receiver` to true."
-                                )
-                            })?;
-
-                        // This will be initialized later on, if necessary.
-                        proc = Some(object_space.create_process_from_path(&path).await?);
                     }
-
-                    proc.unwrap()
+                    _ => {
+                        return Err(lpc_error!(
+                            "`&->{}()` needs an object or path as its receiver, got `{}`",
+                            name,
+                            receiver
+                        ));
+                    }
                 };
-
-                let func = proc.program.lookup_function(name).ok_or_else(|| {
-                    LpcError::new(format!("attempted to call unknown function `{}`", name))
-                })?;
-
-                let func = func.clone();
-                Ok((proc, func, args))
+                let Some(function) = process.program.lookup_function(name).cloned() else {
+                    return Ok(None);
+                };
+                (process, function)
             }
-            FunctionAddress::SimulEfun(name) => match get_simul_efuns(config, object_space) {
-                Some(simul_efuns) => match simul_efuns.program.lookup_function(name) {
-                    Some(function) => Ok((simul_efuns.clone(), function.clone(), args)),
-                    None => Err(lpc_error!("call to unknown simul_efun `{}`", name)),
-                },
-                None => Err(lpc_bug!(
-                    "function pointer to simul_efun passed, but no simul_efuns?",
-                )),
-            },
             FunctionAddress::Efun(name) => {
-                let pf = EFUN_FUNCTIONS.get(name.as_str()).unwrap();
-
-                Ok((Arc::new(Process::default()), pf.clone(), args))
+                let Some(owner) = self.owner.upgrade().filter(|p| p.is_live(txn)) else {
+                    return Err(lpc_error!(
+                        "attempted to call an efun pointer whose owner is destructed: {}",
+                        self
+                    ));
+                };
+                (owner, EFUN_FUNCTIONS[name.as_str()].clone())
             }
-        }
+            FunctionAddress::SimulEfun(name) => {
+                let Some(simul_efuns) = ctx.simul_efuns() else {
+                    return Err(lpc_bug!("simul_efun pointer without simul_efuns: {}", self));
+                };
+                let Some(function) = simul_efuns.program.lookup_function(name) else {
+                    return Err(lpc_error!("call to unknown simul_efun `{}`", name));
+                };
+                (simul_efuns.clone(), function.clone())
+            }
+        };
+
+        Ok(Some(ResolvedCall {
+            process,
+            function,
+            args,
+        }))
     }
 }
 
@@ -231,7 +231,6 @@ impl Clone for FunctionPtr {
             owner: self.owner.clone(),
             address: self.address.clone(),
             partial_args: self.partial_args.clone(),
-            call_other: self.call_other,
             upvalue_ptrs: self.upvalue_ptrs.clone(),
             unique_id: UniqueId::new(),
         }
@@ -300,9 +299,32 @@ mod tests {
     use std::sync::Arc;
 
     use factori::create;
+    use thin_vec::thin_vec;
 
     use super::*;
     use crate::test_support::factories::*;
+
+    #[test]
+    fn bound_args_fills_holes_left_to_right_then_appends() {
+        let ptr = create!(
+            FunctionPtr,
+            partial_args: thin_vec![None, None, Some(LpcRef::from("x"))],
+        );
+
+        assert_eq!(
+            ptr.bound_args(&[LpcRef::from(1), LpcRef::from(2), LpcRef::from(3)]),
+            vec![
+                LpcRef::from(1),
+                LpcRef::from(2),
+                LpcRef::from("x"),
+                LpcRef::from(3)
+            ]
+        );
+        assert_eq!(
+            ptr.bound_args(&[LpcRef::from(1)]),
+            vec![LpcRef::from(1), NULL, LpcRef::from("x")]
+        );
+    }
 
     #[test]
     fn test_mark() {

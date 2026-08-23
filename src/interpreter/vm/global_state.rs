@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc, thread::JoinHandle};
 
 use bit_set::BitSet;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{Result, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
@@ -123,30 +123,51 @@ impl GlobalState {
         stm::committer_stats(&self.committer_tx).await
     }
 
-    /// Resolve `ptr` to its process, function and partial args for a call
-    /// started outside any task (`call_out`, `input_to`), initializing the
-    /// receiver if needed with `this_player` as the command giver.
-    /// `Ok(None)`: the initializer failed and the error was already reported.
+    /// Resolve `ptr` for a call started outside any task (`call_out`,
+    /// `input_to`) with `passed` arguments, initializing the receiver if needed
+    /// with `this_player` as the command giver.
+    /// `Ok(None)`: the receiver has no such function, or its initializer
+    /// failed and the error was already reported.
     pub async fn prepare_function_ptr(
         self: &Arc<Self>,
         ptr: &FunctionPtr,
+        passed: &[LpcRef],
         this_player: Option<Arc<Process>>,
     ) -> Result<Option<PreparedCall>> {
         // The transactional seam: a create-on-miss goes through the
         // committer, and a destruct in the committed-unflushed window is an
         // error instead of a resurrection.
         self.resolve_dynamic_string_receiver(ptr).await?;
-        let (process, function, args) =
-            FunctionPtr::triple(ptr, &self.config, &self.object_space).await?;
 
-        if !self.is_initialized(&process) {
+        // The context only needs a live object to sit in until the receiver is known.
+        let seat = ptr.owner.upgrade().or_else(|| match &ptr.address {
+            FunctionAddress::Local(receiver, _) => receiver.upgrade(),
+            _ => None,
+        });
+        let Some(seat) = seat else {
+            return Err(lpc_error!(
+                "attempted to call a function pointer whose owner is destructed: {}",
+                ptr
+            ));
+        };
+        let template = TaskTemplate::from(self.clone());
+        template.set_this_player(this_player.clone());
+        let Some(resolved) = ptr
+            .prepare_call(passed, &template.into_task_context(seat))
+            .await?
+        else {
+            return Ok(None);
+        };
+
+        let process = &resolved.process;
+        if !self.is_initialized(process) {
             let template = TaskTemplate::from(self.clone());
             template.set_this_player(this_player.clone());
             let ctx = template.into_task_context(process.clone());
             if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_process(ctx).await {
                 let template = TaskTemplate::from(self.clone());
                 if !matches!(
-                    apply_runtime_error(&e, Some(process), template).await,
+                    apply_runtime_error(&e, Some(process.clone()), template).await,
                     Some(Ok(_))
                 ) {
                     self.config.debug_log(e.diagnostic_string()).await;
@@ -159,9 +180,9 @@ impl GlobalState {
         template.set_this_player(this_player);
         template.upvalue_ptrs = Some(ptr.upvalue_ptrs.clone());
         Ok(Some(PreparedCall {
-            context: template.into_task_context(process),
-            function,
-            args,
+            context: template.into_task_context(process.clone()),
+            function: resolved.function,
+            args: resolved.args,
         }))
     }
 
@@ -174,7 +195,7 @@ impl GlobalState {
     ///
     /// Returns `Ok(None)` when `ptr` is not a dynamic string receiver (a
     /// different address kind, or a missing / non-string first partial arg);
-    /// the caller falls through to [`FunctionPtr::triple`].
+    /// the caller falls through to [`FunctionPtr::prepare_call`].
     pub async fn resolve_dynamic_string_receiver(
         &self,
         ptr: &FunctionPtr,

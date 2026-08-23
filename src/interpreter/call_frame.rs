@@ -219,6 +219,30 @@ impl CallFrame {
         })
     }
 
+    /// Store argument `i` where the function declares it, or in the next
+    /// local register past the last argument for one beyond the declared list.
+    pub(crate) fn push_arg(&mut self, txn: &TxnHandle, i: usize, value: LpcRef) -> Result<()> {
+        let target = self
+            .function
+            .arg_locations
+            .get(i)
+            .copied()
+            .unwrap_or_else(|| {
+                let next = self
+                    .arg_locations
+                    .iter()
+                    .rev()
+                    .find_map(|loc| match loc {
+                        RegisterVariant::Local(r) => Some(r.index() + 1),
+                        _ => None,
+                    })
+                    .unwrap_or(1);
+                Register(next).as_local()
+            });
+        self.arg_locations.push(target);
+        self.set_location(txn, target, value)
+    }
+
     /// Resolve `location` to its slot in this frame.
     pub(crate) fn slot(&self, location: RegisterVariant) -> Result<Slot> {
         match location {

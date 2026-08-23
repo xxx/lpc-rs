@@ -1,11 +1,8 @@
 use chrono::Duration;
 use lpc_rs_core::{LpcFloatInner, LpcIntInner, RegisterSize};
-use lpc_rs_errors::{Result, lpc_error};
+use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext, function_type::function_address::FunctionAddress,
-    lpc_int::LpcInt, lpc_ref::LpcRef,
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef};
 
 /// `call_out`, an efun for calling a function at some future point in time
 pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -16,9 +13,9 @@ pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         let LpcRef::Function(func) = func_ref.clone() else {
             return Err(context.runtime_error("invalid function sent to `call_out`"));
         };
-        if let FunctionAddress::Dynamic(_) = func.address {
-            return Err(lpc_error!(
-                "cannot `call_out` to a function with a dynamic receiver",
+        if !func.receiver_bound() {
+            return Err(context.runtime_error(
+                "`call_out` needs the receiver of a dynamic function pointer bound",
             ));
         }
     }
@@ -97,7 +94,7 @@ mod tests {
 
         assert_eq!(
             result.unwrap_err().to_string(),
-            "cannot `call_out` to a function with a dynamic receiver"
+            "runtime error: `call_out` needs the receiver of a dynamic function pointer bound"
         );
     }
 

@@ -20,7 +20,6 @@ factori!(FunctionPtr, {
         owner: Weak<Process> = Arc::downgrade(&Arc::new(Process::default())),
         address: FunctionAddress = FunctionAddress::Efun(ustr("dump")),
         partial_args: ThinVec<Option<LpcRef>> = thin_vec![],
-        call_other: bool = false,
         upvalue_ptrs: ThinVec<Register> = thin_vec![],
         unique_id: UniqueId = UniqueId::new(),
     }
@@ -30,7 +29,6 @@ factori!(FunctionPtr, {
             .owner(owner)
             .address(address)
             .partial_args(partial_args)
-            .call_other(call_other)
             .upvalue_ptrs(upvalue_ptrs)
             .unique_id(unique_id)
             .build()

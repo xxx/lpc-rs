@@ -250,6 +250,15 @@ impl Process {
     }
 
     /// Whether the initializer has run, read through `txn` and tracked.
+    /// Whether this object is still live for `txn`: not removed by a
+    /// committed destruct, nor by this attempt.
+    pub(crate) fn is_live(&self, txn: &TxnHandle) -> bool {
+        !self
+            .cell
+            .get()
+            .is_some_and(|&cell| txn.with(|t| t.is_removed(cell)))
+    }
+
     pub(crate) fn is_initialized(&self, txn: &TxnHandle) -> bool {
         txn.with(|t| t.read(self.initialized.id).is_some())
     }

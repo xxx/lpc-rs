@@ -362,14 +362,19 @@ impl Telnet {
             let _ = sink.send(TelnetEvent::Wont(TelnetOption::Echo)).await;
         }
 
+        let input: LpcRef = LpcString::from(msg).into();
         let prepared = template
             .global_state
-            .prepare_function_ptr(&input_to.ptr, connection.process.load_full())
+            .prepare_function_ptr(
+                &input_to.ptr,
+                std::slice::from_ref(&input),
+                connection.process.load_full(),
+            )
             .await;
         let PreparedCall {
             context,
             function,
-            mut args,
+            args,
         } = match prepared {
             Ok(Some(prepared)) => prepared,
             Ok(None) => return,
@@ -380,14 +385,6 @@ impl Telnet {
                 return;
             }
         };
-
-        let arg_index: Option<usize> = input_to.ptr.partial_args().iter().position(|x| x.is_none());
-        let input_arg = LpcString::from(msg).into();
-        if let Some(idx) = arg_index {
-            args[idx] = input_arg;
-        } else {
-            args.push(input_arg);
-        }
 
         let process = context.process.clone();
         let max_execution_time = template.global_state.config.max_execution_time;
@@ -521,6 +518,7 @@ mod tests {
 
         async fn check(vm: &Vm, proc: Arc<Process>) {
             let ptr = FunctionPtrBuilder::default()
+                .owner(Arc::downgrade(&proc))
                 .address(FunctionAddress::Dynamic("foo".into()))
                 .partial_args(thin_vec![Some("/foo/bar".into())])
                 .build()
@@ -631,6 +629,17 @@ mod tests {
                 void create() { int j = 5; f = (: result = j + 1 :); }
             "##;
             assert_eq!(fire_the_stored_pointer(code).await, LpcRef::from(6));
+        }
+
+        #[tokio::test]
+        async fn a_bound_dynamic_receiver_takes_the_input_after_it() {
+            let code = r##"
+                string result;
+                function f;
+                void create() { f = papplyv(&->name(), ({ this_object() })); }
+                void name(string s) { result = s + "!"; }
+            "##;
+            assert_eq!(fire_the_stored_pointer(code).await.to_string(), "hello!");
         }
 
         #[tokio::test]

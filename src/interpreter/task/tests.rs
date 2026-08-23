@@ -702,7 +702,7 @@ mod test_instructions {
                 BareVal::String("awesome!".into()),
                 BareVal::Function(
                     "name".into(),
-                    vec![None, Some(BareVal::String("awesome!".into()))],
+                    vec![None, None, Some(BareVal::String("awesome!".into()))],
                 ),
                 BareVal::Object("/my_file".into()),
                 BareVal::Int(666),
@@ -742,35 +742,106 @@ mod test_instructions {
         }
 
         #[tokio::test]
-        async fn is_0_for_call_other_private_functions() {
+        async fn a_pointer_to_this_objects_private_function_fires() {
             let code = indoc! { r##"
                     function q = &(this_object())->tacos(, "adding some!");
-                    int a = q(666, 4);
-                    int b = q(123);
+                    string a = q(666, 4);
+                    string b = q(123);
                     private string tacos(int j, string s, int k = 100) {
                         return s + " " +  (j + k);
                     }
                 "##};
 
             let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
+            let globals =
+                committed_globals_by_name(&task.context.global_state, task.context.process());
 
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::String("adding some!".into()),
-                BareVal::Object("/my_file".into()),
-                BareVal::Function(
-                    "tacos".into(),
-                    vec![None, Some(BareVal::String("adding some!".into()))],
-                ),
-                BareVal::Int(666),
-                BareVal::Int(4),
-                BareVal::Int(0),
-                BareVal::Int(123),
-                BareVal::Int(0),
-            ];
+            assert_eq!(globals["a"].to_string(), "adding some! 670");
+            assert_eq!(globals["b"].to_string(), "adding some! 223");
+        }
 
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+        async fn committed_r(code: &str) -> String {
+            let task = run_prog(code).await;
+            let globals =
+                committed_globals_by_name(&task.context.global_state, task.context.process());
+            globals["r"].to_string()
+        }
+
+        #[tokio::test]
+        async fn a_dynamic_pointer_without_a_receiver_is_an_error() {
+            let code = indoc! { r##"
+                mixed r;
+                void create() { function f = &->sec(); r = catch(f()); }
+            "##};
+            let r = committed_r(code).await;
+            assert!(r.contains("receiver"), "{r}");
+        }
+
+        #[tokio::test]
+        async fn a_receiver_bound_by_papplyv_is_used() {
+            let code = indoc! { r##"
+                mixed r;
+                void create() {
+                    object o = clone_object("/ptr_target");
+                    function f = papplyv(&->sec(), ({ o }));
+                    r = f();
+                }
+            "##};
+            assert_eq!(committed_r(code).await, "77");
+        }
+
+        #[tokio::test]
+        async fn a_pointer_to_another_objects_private_function_cannot_be_taken() {
+            let code = indoc! { r##"
+                mixed r;
+                void create() {
+                    object o = clone_object("/ptr_target");
+                    function f;
+                    r = catch(f = &(o)->hidden());
+                }
+            "##};
+            let r = committed_r(code).await;
+            assert!(r.contains("private"), "{r}");
+        }
+
+        #[tokio::test]
+        async fn a_private_pointer_taken_inside_its_object_fires_anywhere() {
+            let code = indoc! { r##"
+                mixed r;
+                private int mine() { return 5; }
+                void create() {
+                    object o = clone_object("/ptr_target");
+                    r = o->fire(&mine()) * 100 + o->fire(o->get_hidden());
+                }
+            "##};
+            assert_eq!(committed_r(code).await, "542");
+        }
+
+        #[tokio::test]
+        async fn a_pointer_into_a_destructed_object_is_an_error() {
+            let code = indoc! { r##"
+                mixed r;
+                void create() {
+                    object o = clone_object("/ptr_target");
+                    function f = &(o)->sec();
+                    destruct(o);
+                    r = catch(f());
+                }
+            "##};
+            let r = committed_r(code).await;
+            assert!(r.contains("destructed"), "{r}");
+        }
+
+        #[tokio::test]
+        async fn an_efun_pointer_runs_in_its_owner() {
+            let code = indoc! { r##"
+                mixed r;
+                void create() {
+                    object o = clone_object("/ptr_target");
+                    r = o->fire(&this_object()) == this_object();
+                }
+            "##};
+            assert_eq!(committed_r(code).await, "1");
         }
 
         #[tokio::test]

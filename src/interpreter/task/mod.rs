@@ -12,7 +12,7 @@ mod tests;
 
 use std::{
     fmt::{Debug, Display},
-    sync::{Arc, Weak},
+    sync::Arc,
     time::Duration,
 };
 
@@ -49,9 +49,6 @@ use crate::interpreter::{
     },
     task_context::TaskContext,
 };
-
-// this is just to shut clippy up
-type ProcessFunctionPair = (Weak<Process>, Arc<ProgramFunction>);
 
 #[macro_export]
 macro_rules! pop_frame {

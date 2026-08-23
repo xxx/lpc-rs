@@ -131,11 +131,7 @@ impl LpcRef {
     /// attempt destructed it.
     pub(crate) fn live_object(&self, txn: &TxnHandle) -> Option<Arc<Process>> {
         let process = self.as_object()?;
-        let removed = process
-            .cell
-            .get()
-            .is_some_and(|&cell| txn.with(|t| t.is_removed(cell)));
-        (!removed).then_some(process)
+        process.is_live(txn).then_some(process)
     }
 
     /// Whether this is an object ref that no longer names a live object for `txn`.
