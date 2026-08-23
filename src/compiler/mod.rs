@@ -3,10 +3,9 @@ use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, sync::Arc};
 use ast::{ast_node::AstNodeTrait, program_node::ProgramNode};
 use async_recursion::async_recursion;
 use codegen::{
-    codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
-    function_prototype_walker::FunctionPrototypeWalker, inheritance_walker::InheritanceWalker,
-    scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker,
-    tree_walker::ContextHolder,
+    codegen_walker::CodegenWalker, function_prototype_walker::FunctionPrototypeWalker,
+    inheritance_walker::InheritanceWalker, scope_walker::ScopeWalker,
+    semantic_check_walker::SemanticCheckWalker, tree_walker::ContextHolder,
 };
 use compilation_context::CompilationContext;
 use derive_builder::Builder;
@@ -270,7 +269,6 @@ impl Compiler {
         let context = apply_walker!(InheritanceWalker, program_node, context, true);
         let context = apply_walker!(FunctionPrototypeWalker, program_node, context, false);
         let context = apply_walker!(ScopeWalker, program_node, context, false);
-        let context = apply_walker!(DefaultParamsWalker, program_node, context, false);
         let context = apply_walker!(SemanticCheckWalker, program_node, context, true);
 
         let mut asm_walker = CodegenWalker::new(context);

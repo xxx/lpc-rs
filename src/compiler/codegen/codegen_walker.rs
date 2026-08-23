@@ -2343,8 +2343,7 @@ mod tests {
                 expression_node::ExpressionNode,
             },
             codegen::{
-                codegen_walker::CodegenWalker, default_params_walker::DefaultParamsWalker,
-                function_prototype_walker::FunctionPrototypeWalker,
+                codegen_walker::CodegenWalker, function_prototype_walker::FunctionPrototypeWalker,
                 inheritance_walker::InheritanceWalker, scope_walker::ScopeWalker,
                 semantic_check_walker::SemanticCheckWalker,
             },
@@ -2417,7 +2416,6 @@ mod tests {
         let context = apply_walker!(InheritanceWalker, program, context, false);
         let context = apply_walker!(FunctionPrototypeWalker, program, context, false);
         let context = apply_walker!(ScopeWalker, program, context, false);
-        let context = apply_walker!(DefaultParamsWalker, program, context, false);
         let context = apply_walker!(SemanticCheckWalker, program, context, false);
 
         let mut walker = CodegenWalker::new(context);

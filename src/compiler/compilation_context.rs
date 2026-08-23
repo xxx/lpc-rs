@@ -14,7 +14,7 @@ use lpc_rs_utils::config::Config;
 use ustr::Ustr;
 
 use crate::{
-    compiler::{ast::expression_node::ExpressionNode, semantic::scope_tree::ScopeTree},
+    compiler::semantic::scope_tree::ScopeTree,
     interpreter::{efun::EFUN_PROTOTYPES, process::Process, program::Program},
 };
 
@@ -41,9 +41,6 @@ pub struct CompilationContext {
     /// The map of function names, to their respective prototypes.
     /// Used for checking forward references, and other things.
     pub function_prototypes: HashMap<String, FunctionPrototype>,
-
-    /// Storage for default function params, for the functions that have them
-    pub default_function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
 
     /// Everything this compilation has reported so far.
     pub diagnostics: Diagnostics,
@@ -256,7 +253,6 @@ impl Default for CompilationContext {
             config: Arc::new(Config::default()),
             diagnostics: Diagnostics::default(),
             scopes: ScopeTree::default(),
-            default_function_params: HashMap::new(),
             function_prototypes: HashMap::new(),
             pragmas: PragmaFlags::new(),
             inherits: vec![],

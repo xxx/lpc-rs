@@ -765,10 +765,7 @@ mod tests {
         compiler::{
             Compiler,
             ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode},
-            codegen::{
-                default_params_walker::DefaultParamsWalker, scope_walker::ScopeWalker,
-                semantic_check_walker::SemanticCheckWalker,
-            },
+            codegen::{scope_walker::ScopeWalker, semantic_check_walker::SemanticCheckWalker},
             semantic::scope_tree::ScopeTree,
         },
         test_support::factories::*,
@@ -796,7 +793,6 @@ mod tests {
             .expect("failed to parse");
 
         let context = apply_walker!(ScopeWalker, program, context, false);
-        let context = apply_walker!(DefaultParamsWalker, program, context, false);
         Ok(apply_walker!(SemanticCheckWalker, program, context, false))
     }
 
