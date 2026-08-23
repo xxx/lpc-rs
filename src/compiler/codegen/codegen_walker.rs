@@ -887,6 +887,7 @@ impl CodegenWalker {
             let result = self.register_counter.next().unwrap().as_local();
             let instruction = Instruction::Sizeof(*arg_results.first().unwrap(), result);
             push_instruction!(self, instruction, node.span);
+            self.current_result = result;
 
             return Ok(());
         }

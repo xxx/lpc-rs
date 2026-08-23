@@ -2364,6 +2364,25 @@ mod test_instructions {
         }
 
         #[tokio::test]
+        async fn the_size_reaches_the_assignment() {
+            let code = indoc! { r##"
+                    mapping m = ([ "a": 1, 'b': 2 ]);
+                    int a = sizeof(({ 1, 2, 3 }));
+                    int b = sizeof(m);
+                    int c;
+                    void create() { c = sizeof(m) + sizeof(({ 1 })); }
+                "##};
+
+            let task = run_prog(code).await;
+            let globals =
+                committed_globals_by_name(&task.context.global_state, &task.context.process);
+
+            assert_eq!(globals["a"], LpcRef::from(3));
+            assert_eq!(globals["b"], LpcRef::from(2));
+            assert_eq!(globals["c"], LpcRef::from(3));
+        }
+
+        #[tokio::test]
         async fn stores_the_value_for_mappings() {
             let code = indoc! { r##"
                     int a = sizeof(([ "a": 1, 'b': 2, 3: ({ 4, 5, 6 }), 0: 0 ]));
