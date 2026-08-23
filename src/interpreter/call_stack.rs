@@ -1,11 +1,10 @@
 use std::ops::{Index, IndexMut, RangeFrom};
 
 use arrayvec::ArrayVec;
-use bit_set::BitSet;
 use delegate::delegate;
 use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
 
-use crate::interpreter::{call_frame::CallFrame, gc::mark::Mark, lpc_ref::LpcRef};
+use crate::interpreter::{call_frame::CallFrame, lpc_ref::LpcRef};
 
 #[derive(Debug, Clone)]
 pub struct CallStack<const STACKSIZE: usize> {
@@ -112,16 +111,6 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     }
 }
 
-impl<const STACKSIZE: usize> Mark for CallStack<STACKSIZE> {
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
-        for frame in self.stack.iter() {
-            frame.mark(marked, processed)?
-        }
-
-        Ok(())
-    }
-}
-
 impl<const STACKSIZE: usize> Default for CallStack<STACKSIZE> {
     fn default() -> Self {
         Self {
@@ -156,24 +145,15 @@ impl<const STACKSIZE: usize> Index<RangeFrom<usize>> for CallStack<STACKSIZE> {
 mod tests {
     use std::sync::Arc;
 
-    use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, lpc_type::LpcType, register::Register};
+    use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, lpc_type::LpcType};
     use lpc_rs_function_support::{
         function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunctionBuilder,
     };
 
     use super::*;
-    use crate::{
-        interpreter::{
-            process::Process,
-            program::ProgramBuilder,
-            vm::{global_state::GlobalState, vm_op::VmOp},
-        },
-        test_support::test_config,
-    };
+    use crate::interpreter::{process::Process, program::ProgramBuilder};
 
     fn stack_with_one_frame() -> CallStack<4> {
-        let (tx, _rx) = tokio::sync::mpsc::channel::<VmOp>(8);
-        let global_state = GlobalState::new(test_config(), tx);
         let program = ProgramBuilder::default()
             .filename(LpcPath::InGame("/caller".into()))
             .build()
@@ -193,8 +173,7 @@ mod tests {
             Arc::new(Process::new(program)),
             Arc::new(function),
             0 as RegisterSize,
-            None::<&[Register]>,
-            global_state.clone_upvalues(),
+            None::<&[crate::interpreter::stm::VarId]>,
         );
         let mut stack = CallStack::default();
         stack.push(frame).unwrap();

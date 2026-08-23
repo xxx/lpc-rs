@@ -306,7 +306,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_core::{lpc_type::LpcType, register::Register};
+    use lpc_rs_core::lpc_type::LpcType;
     use lpc_rs_function_support::{
         function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunctionBuilder,
     };
@@ -326,7 +326,6 @@ mod tests {
     fn efun_context() -> (TaskContext, CallStack<10>) {
         let (tx, _rx) = tokio::sync::mpsc::channel::<VmOp>(128);
         let global_state = GlobalState::new(test_config(), tx);
-        let upvalues = global_state.clone_upvalues();
         let program = ProgramBuilder::default()
             .filename(LpcPath::InGame("/caller".into()))
             .build()
@@ -349,8 +348,7 @@ mod tests {
             process,
             Arc::new(function),
             0 as RegisterSize,
-            None::<&[Register]>,
-            upvalues,
+            None::<&[crate::interpreter::stm::VarId]>,
         );
         let mut stack = CallStack::default();
         stack.push(frame).expect("push entry frame");

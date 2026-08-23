@@ -4,7 +4,6 @@ use std::sync::{
 };
 
 use arc_swap::ArcSwapAny;
-use bit_set::BitSet;
 use dashmap::{DashMap, mapref::multiple::RefMulti};
 use delegate::delegate;
 use lpc_rs_core::lpc_path::LpcPath;
@@ -13,7 +12,7 @@ use lpc_rs_utils::config::Config;
 use tracing::{debug, trace};
 
 use crate::{
-    interpreter::{gc::mark::Mark, process::Process, program::Program, stm::VarId},
+    interpreter::{process::Process, program::Program, stm::VarId},
     util::process_builder::{compile_process_from_code, compile_process_from_path},
 };
 
@@ -257,17 +256,6 @@ impl Default for ObjectSpace {
             config: Config::default().into(),
             master_object: ArcSwapAny::from(None),
         }
-    }
-}
-
-impl Mark for ObjectSpace {
-    #[inline]
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
-        for process in self.processes.iter() {
-            process.mark(marked, processed)?;
-        }
-
-        Ok(())
     }
 }
 

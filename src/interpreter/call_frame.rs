@@ -5,7 +5,6 @@ use std::{
     sync::Arc,
 };
 
-use bit_set::BitSet;
 use derive_builder::Builder;
 use educe::Educe;
 use lpc_rs_asm::instruction::Instruction;
@@ -15,13 +14,11 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use parking_lot::RwLock;
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
 
 use crate::interpreter::{
     bank::RefBank,
-    gc::{gc_bank::GcVarIdBank, mark::Mark, unique_id::UniqueId},
     lpc_ref::{LpcRef, NULL},
     process::Process,
     stm::{TxnHandle, VarId},
@@ -85,19 +82,9 @@ pub struct CallFrame {
     #[builder(default)]
     pub called_with_num_args: RegisterSize,
 
-    /// The upvalue indexes (into `vm_upvalues`) for this specific call
+    /// The captured cells this call can reach: its creators' first, then its own.
     #[builder(default, setter(into))]
-    pub upvalue_ptrs: ThinVec<Register>,
-
-    /// The upvalue data from the [`Vm`](crate::interpreter::vm::Vm).
-    /// Each slot holds a transactional `VarId`; the committed value
-    /// lives in the committer's world.
-    #[builder(setter(into))]
-    vm_upvalues: Arc<RwLock<GcVarIdBank>>,
-
-    /// This object's unique ID, for garbage collection purposes
-    #[builder(default)]
-    pub unique_id: UniqueId,
+    pub upvalue_ptrs: ThinVec<VarId>,
 }
 
 impl CallFrame {
@@ -109,18 +96,16 @@ impl CallFrame {
     /// * `function` - The function being called
     /// * `called_with_num_args` - how many arguments were explicitly passed in
     ///   the call to this function?
-    /// * `upvalue_ptrs` - The indexes pointing to the real data, contained in `vm_upvalues`
-    /// * `vm_upvalues` - The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
+    /// * `upvalue_ptrs` - The captured cells inherited from the creator
     pub(crate) fn new<P, V>(
         process: P,
         function: Arc<ProgramFunction>,
         called_with_num_args: RegisterSize,
         upvalue_ptrs: Option<V>,
-        vm_upvalues: Arc<RwLock<GcVarIdBank>>,
     ) -> Self
     where
         P: Into<Arc<Process>>,
-        V: Into<ThinVec<Register>>,
+        V: Into<ThinVec<VarId>>,
     {
         Self::with_minimum_arg_capacity(
             process,
@@ -128,7 +113,6 @@ impl CallFrame {
             called_with_num_args,
             called_with_num_args,
             upvalue_ptrs,
-            vm_upvalues,
         )
     }
 
@@ -143,19 +127,17 @@ impl CallFrame {
     ///   the call to this function?
     /// * `arg_capacity` - Reserve space for at least this many registers (this
     ///   is used for ellipsis args and `call_other`)
-    /// * `upvalue_ptrs` - The indexes pointing to the real data, contained in `vm_upvalues`
-    /// * `vm_upvalues` - The upvalue data from the [`Vm`](crate::interpreter::vm::Vm)
+    /// * `upvalue_ptrs` - The captured cells inherited from the creator
     pub(crate) fn with_minimum_arg_capacity<P, V>(
         process: P,
         function: Arc<ProgramFunction>,
         called_with_num_args: RegisterSize,
         arg_capacity: RegisterSize,
         upvalue_ptrs: Option<V>,
-        vm_upvalues: Arc<RwLock<GcVarIdBank>>,
     ) -> Self
     where
         P: Into<Arc<Process>>,
-        V: Into<ThinVec<Register>>,
+        V: Into<ThinVec<VarId>>,
     {
         let process = process.into();
         let ups = upvalue_ptrs.map(Into::into).unwrap_or_default();
@@ -168,8 +150,6 @@ impl CallFrame {
             pc: 0,
             called_with_num_args,
             upvalue_ptrs: ups,
-            vm_upvalues,
-            unique_id: UniqueId::new(),
         };
 
         instance.populate_upvalues();
@@ -177,46 +157,14 @@ impl CallFrame {
         instance
     }
 
-    pub(crate) fn with_upvalues<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&GcVarIdBank) -> R,
-    {
-        f(&self.vm_upvalues.read())
-    }
-
-    pub(crate) fn with_upvalues_and_ptrs_mut<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&mut GcVarIdBank, &mut ThinVec<Register>) -> R,
-    {
-        f(&mut self.vm_upvalues.write(), &mut self.upvalue_ptrs)
-    }
-
-    /// Reserve space for the upvalues that this call will initialize
-    /// Returns the index in the [`Vm`](crate::interpreter::vm::Vm)'s `upvalues` array where the
-    ///   newly-populated upvalues will be stored
+    /// Mint this call's own captured cells, after the inherited ones. A cell
+    /// is an identity only; its value lives in the committer's world once written.
     #[instrument(skip_all)]
     fn populate_upvalues(&mut self) {
         let num_upvalues = self.function.num_upvalues;
-
         trace!("populating upvalues: {}", num_upvalues);
-        if num_upvalues == 0 {
-            return;
-        }
-
-        // Reserve space in me for the indexes
-        self.upvalue_ptrs.reserve(num_upvalues as usize);
-
-        self.with_upvalues_and_ptrs_mut(|upvalues, ptrs| {
-            // Reserve space in the proc for the actual values
-            upvalues.reserve(num_upvalues as usize);
-
-            for _ in 0..num_upvalues {
-                // Each cell mints its own transactional identity; the
-                // value itself lives in the committer's world.
-                let idx = upvalues.insert(VarId::new());
-                ptrs.push(Register(RegisterSize::try_from(idx).unwrap()));
-            }
-        })
+        self.upvalue_ptrs
+            .extend((0..num_upvalues).map(|_| VarId::new()));
     }
 
     /// Store argument `i` where the function declares it, or in the next
@@ -249,14 +197,14 @@ impl CallFrame {
             RegisterVariant::Local(reg) => Ok(Slot::Register(reg)),
             RegisterVariant::Global(reg) => Ok(Slot::Cell(self.process.var_id(reg.into()))),
             RegisterVariant::Upvalue(reg) => {
-                let Some(&idx) = self.upvalue_ptrs.get(reg.index() as usize) else {
+                let Some(&cell) = self.upvalue_ptrs.get(reg.index() as usize) else {
                     return Err(self.runtime_bug(format!(
                         "upvalue {} is outside this frame's {} cells",
                         reg.index(),
                         self.upvalue_ptrs.len()
                     )));
                 };
-                Ok(Slot::Cell(self.with_upvalues(|uv| uv[idx])))
+                Ok(Slot::Cell(cell))
             }
         }
     }
@@ -391,32 +339,6 @@ impl CallFrame {
     }
 }
 
-impl Mark for CallFrame {
-    #[instrument(skip(self))]
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
-        trace!("marking call frame {}", self.unique_id);
-        if !self.unique_id.first_visit(processed) {
-            return Ok(());
-        }
-
-        trace!("marking upvalue ptrs: {:?}", &self.upvalue_ptrs);
-
-        let ptrs = self
-            .upvalue_ptrs
-            .iter()
-            .copied()
-            .map(|r| r.index() as usize);
-
-        marked.extend(ptrs);
-
-        for lpc_ref in self.registers.iter() {
-            lpc_ref.mark(marked, processed)?;
-        }
-
-        Ok(())
-    }
-}
-
 impl Display for CallFrame {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -432,7 +354,7 @@ mod tests {
     use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
 
     use super::*;
-    use crate::interpreter::{gc::gc_bank::GcBank, program::Program};
+    use crate::interpreter::program::Program;
 
     #[test]
     fn new_sets_up_registers() {
@@ -447,15 +369,8 @@ mod tests {
             .unwrap();
 
         let fs = ProgramFunction::new(prototype, 7);
-        let vm_upvalues = RwLock::new(GcBank::default());
 
-        let frame = CallFrame::new(
-            process,
-            Arc::new(fs),
-            4,
-            None::<&[Register]>,
-            vm_upvalues.into(),
-        );
+        let frame = CallFrame::new(process, Arc::new(fs), 4, None::<&[VarId]>);
 
         assert_eq!(frame.registers.len(), 12);
         assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -476,13 +391,7 @@ mod tests {
         let mut pf = ProgramFunction::new(prototype, 0);
         pf.num_upvalues = 1;
 
-        let frame = CallFrame::new(
-            Process::new(program),
-            Arc::new(pf),
-            0,
-            None::<&[Register]>,
-            Arc::new(RwLock::new(GcBank::default())),
-        );
+        let frame = CallFrame::new(Process::new(program), Arc::new(pf), 0, None::<&[VarId]>);
 
         assert_eq!(
             frame.slot(Register(2).as_local()).unwrap(),
@@ -492,7 +401,7 @@ mod tests {
             frame.slot(Register(0).as_global()).unwrap(),
             Slot::Cell(frame.process.var_id(0))
         );
-        let cell = frame.with_upvalues(|uv| uv[frame.upvalue_ptrs[0]]);
+        let cell = frame.upvalue_ptrs[0];
         assert_eq!(
             frame.slot(Register(0).as_upvalue()).unwrap(),
             Slot::Cell(cell)
@@ -511,8 +420,7 @@ mod tests {
             Process::new(Program::default()),
             Arc::new(ProgramFunction::new(prototype, 0)),
             0,
-            None::<&[Register]>,
-            Arc::new(RwLock::new(GcBank::default())),
+            None::<&[VarId]>,
         );
 
         let err = frame.slot(Register(0).as_upvalue()).unwrap_err();
@@ -535,15 +443,13 @@ mod tests {
                 .unwrap();
 
             let fs = ProgramFunction::new(prototype, 7);
-            let vm_upvalues = RwLock::new(GcBank::default());
 
             let frame = CallFrame::with_minimum_arg_capacity(
                 process,
                 Arc::new(fs),
                 4,
                 30,
-                None::<&[Register]>,
-                vm_upvalues.into(),
+                None::<&[VarId]>,
             );
 
             assert_eq!(frame.registers.len(), 38);
@@ -563,16 +469,9 @@ mod tests {
                 .unwrap();
 
             let fs = ProgramFunction::new(prototype, 7);
-            let vm_upvalues = RwLock::new(GcBank::default());
 
-            let frame = CallFrame::with_minimum_arg_capacity(
-                process,
-                Arc::new(fs),
-                4,
-                2,
-                None::<&[Register]>,
-                vm_upvalues.into(),
-            );
+            let frame =
+                CallFrame::with_minimum_arg_capacity(process, Arc::new(fs), 4, 2, None::<&[VarId]>);
 
             assert_eq!(frame.registers.len(), 12);
             assert!(frame.registers.iter().all(|r| r == &NULL));
@@ -606,20 +505,10 @@ mod tests {
             });
             pf.local_variables.extend([a, b]);
             pf.num_upvalues = 2;
+            let frame = CallFrame::new(process, Arc::new(pf), 0, None::<&[VarId]>);
 
-            let vm_upvalues = Arc::new(RwLock::new(GcBank::default()));
-            let frame = CallFrame::new(
-                process,
-                Arc::new(pf),
-                0,
-                None::<&[Register]>,
-                vm_upvalues.clone(),
-            );
-
-            assert_eq!(frame.upvalue_ptrs, vec![Register(0), Register(1)]);
-            frame.with_upvalues(|uv| {
-                assert_eq!(uv.len(), 2);
-            });
+            assert_eq!(frame.upvalue_ptrs.len(), 2);
+            assert_ne!(frame.upvalue_ptrs[0], frame.upvalue_ptrs[1]);
 
             let prototype = FunctionPrototypeBuilder::default()
                 .name("my_function")
@@ -645,65 +534,8 @@ mod tests {
             pf.local_variables.extend([a, b, c]);
             pf.num_upvalues = 3;
 
-            let frame = CallFrame::new(
-                frame.process,
-                Arc::new(pf),
-                0,
-                None::<&[Register]>,
-                vm_upvalues,
-            );
-            assert_eq!(
-                frame.upvalue_ptrs,
-                vec![Register(2), Register(3), Register(4)]
-            );
-            frame.with_upvalues(|uv| {
-                assert_eq!(uv.len(), 5);
-            });
-        }
-    }
-
-    mod test_mark {
-        use super::*;
-
-        #[test]
-        fn test_mark() {
-            let process = Process::default();
-
-            let prototype = FunctionPrototypeBuilder::default()
-                .name("my_function")
-                .filename(Arc::new("my_file".into()))
-                .return_type(LpcType::Void)
-                .build()
-                .unwrap();
-
-            let fs = ProgramFunction::new(prototype, 7);
-            let vm_upvalues = RwLock::new(GcBank::<VarId>::default());
-
-            let frame = CallFrameBuilder::default()
-                .process(process)
-                .function(Arc::new(fs))
-                .vm_upvalues(vm_upvalues)
-                .upvalue_ptrs(vec![Register(2), Register(5)])
-                .build()
-                .unwrap();
-
-            let mut marked = BitSet::new();
-            let mut processed = BitSet::new();
-
-            frame.mark(&mut marked, &mut processed).unwrap();
-
-            assert_eq!(marked.count(), 2);
-            assert!(marked.contains(5));
-            assert!(marked.contains(2));
-
-            assert_eq!(processed.count(), 1);
-            assert!(processed.contains(*frame.unique_id.as_ref() as usize));
-
-            marked.make_empty();
-
-            frame.mark(&mut marked, &mut processed).unwrap();
-
-            assert_eq!(marked.count(), 0); // still empty because we already processed the frame
+            let frame = CallFrame::new(frame.process, Arc::new(pf), 0, None::<&[VarId]>);
+            assert_eq!(frame.upvalue_ptrs.len(), 3);
         }
     }
 }

@@ -1320,7 +1320,6 @@ dependencies = [
  "readonly",
  "regex",
  "rpds",
- "slab",
  "stable-vec",
  "syn 1.0.109",
  "termcolor",

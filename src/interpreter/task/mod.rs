@@ -17,7 +17,6 @@ use std::{
 };
 
 use async_recursion::async_recursion;
-use bit_set::BitSet;
 use educe::Educe;
 pub(crate) use location::{apply_in_location, get_location, set_location};
 use lpc_rs_asm::address::Address;
@@ -27,7 +26,6 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use parking_lot::RwLock;
 use thin_vec::{ThinVec, thin_vec};
 use tokio::time::timeout;
 use tracing::{error, instrument, trace, warn};
@@ -37,13 +35,12 @@ use crate::interpreter::stm::RetryStats;
 use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,
-    gc::{gc_bank::GcVarIdBank, mark::Mark},
     lpc_int::LpcInt,
     lpc_ref::LpcRef,
     lpc_string::LpcString,
     process::Process,
     stm::{
-        AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, TxnHandle,
+        AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, TxnHandle, VarId,
         commit_changeset, flush_effects, run_attempts, start_txn,
     },
     task_context::TaskContext,
@@ -93,17 +90,12 @@ pub struct TaskSeed {
 impl TaskSeed {
     /// Build the entry [`CallFrame`] for one attempt; `self.args` land in
     /// registers `1..=len`.
-    pub(crate) fn build_call_frame(
-        &self,
-        upvalue_ptrs: Option<&[Register]>,
-        vm_upvalues: Arc<RwLock<GcVarIdBank>>,
-    ) -> Result<CallFrame> {
+    pub(crate) fn build_call_frame(&self, upvalue_ptrs: Option<&[VarId]>) -> Result<CallFrame> {
         let mut frame = CallFrame::new(
             self.process.clone(),
             self.function.clone(),
             RegisterSize::try_from(self.args.len())?,
             upvalue_ptrs,
-            vm_upvalues,
         );
         if !self.args.is_empty() {
             // `Bank`'s own `Index` impls stop the indexing autoderef.
@@ -261,10 +253,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Ok(live);
         }
 
-        let frame = seed.build_call_frame(
-            self.context.upvalue_ptrs.as_deref(),
-            self.context.global_state.clone_upvalues(),
-        )?;
+        let frame = seed.build_call_frame(self.context.upvalue_ptrs.as_deref())?;
         self.stack.push(frame)?;
 
         // One timeout per attempt; the committer's conflict rule is the sole
@@ -564,21 +553,6 @@ impl<const STACKSIZE: usize> AttemptBody for Task<STACKSIZE> {
             .await;
         }
         Ok(())
-    }
-}
-
-impl<const STACKSIZE: usize> Mark for Task<STACKSIZE> {
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
-        self.stack.mark(marked, processed)?;
-
-        // Uncommitted (and committed-through-us) values in the in-flight
-        // changeset are roots: they may not exist anywhere else yet.
-        self.context.txn.with(|t| {
-            for value in t.written_values() {
-                value.mark(marked, processed)?;
-            }
-            Ok(())
-        })
     }
 }
 

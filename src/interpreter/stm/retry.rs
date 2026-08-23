@@ -143,16 +143,10 @@ pub(crate) async fn start_txn(tx: &flume::Sender<CommitProtocol>) -> Result<Live
 /// and await its reply.
 pub(crate) async fn gc_pass(
     tx: &flume::Sender<CommitProtocol>,
-    dropped: Vec<VarId>,
     roots: Vec<WorldRoot>,
 ) -> std::result::Result<GcReport, Box<lpc_rs_errors::LpcError>> {
     // The reply payload is the pass's own Ok/Err.
-    request(tx, |reply| CommitProtocol::GcPass {
-        dropped,
-        roots,
-        reply,
-    })
-    .await?
+    request(tx, |reply| CommitProtocol::GcPass { roots, reply }).await?
 }
 
 /// The committer's lifetime commit totals; for bench measurement and tooling, not the hot path.

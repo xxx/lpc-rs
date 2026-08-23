@@ -3,18 +3,16 @@ use std::sync::{
     atomic::{AtomicU64, Ordering::Relaxed},
 };
 
-use bit_set::BitSet;
 use chrono::{DateTime, Duration, Utc};
 use delegate::delegate;
 use derive_builder::Builder;
 use educe::Educe;
 use if_chain::if_chain;
-use lpc_rs_errors::Result;
 use stable_vec::StableVec;
 use tokio::{sync::mpsc::Sender, task::JoinHandle, time::Instant};
 
 use crate::interpreter::{
-    gc::mark::Mark, lpc_ref::LpcRef, process::Process, stm::CallOutSchedule, vm::vm_op::VmOp,
+    lpc_ref::LpcRef, process::Process, stm::CallOutSchedule, vm::vm_op::VmOp,
 };
 
 /// A single call out to a function, to be run at a later time, potentially on an interval.
@@ -81,12 +79,6 @@ impl CallOut {
     #[inline]
     pub fn process(&self) -> &Weak<Process> {
         &self.process
-    }
-}
-
-impl Mark for CallOut {
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
-        self.func_ref.mark(marked, processed)
     }
 }
 
@@ -231,15 +223,5 @@ impl CallOuts {
             next_run: Utc::now() + delay,
             _handle: handle,
         });
-    }
-}
-
-impl Mark for CallOuts {
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
-        for (_idx, call_out) in &self.queue {
-            call_out.mark(marked, processed)?;
-        }
-
-        Ok(())
     }
 }

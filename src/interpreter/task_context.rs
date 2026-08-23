@@ -3,7 +3,6 @@ use std::{path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapAny;
 use chrono::Duration;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_core::register::Register;
 use lpc_rs_errors::{Result, lpc_bug};
 use lpc_rs_utils::config::Config;
 use thin_vec::ThinVec;
@@ -14,7 +13,7 @@ use crate::{
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
-        stm::{CallOutSchedule, TxnHandle, txn_find_object, txn_insert_process},
+        stm::{CallOutSchedule, TxnHandle, VarId, txn_find_object, txn_insert_process},
         vm::{global_state::GlobalState, vm_op::VmOp},
     },
     util::{get_simul_efuns, process_builder::compile_process_from_path},
@@ -106,7 +105,7 @@ pub struct TaskContext {
     pub this_player: ArcSwapAny<Option<Arc<Process>>>,
 
     /// The upvalue_ptrs to populate the initial frame with, if any.
-    pub upvalue_ptrs: Option<ThinVec<Register>>,
+    pub upvalue_ptrs: Option<ThinVec<VarId>>,
 
     /// The number of this task in the current chain of Tasks. This is
     /// used to prevent infinite recursion among multiple Tasks.

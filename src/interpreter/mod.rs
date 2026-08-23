@@ -4,7 +4,6 @@ pub mod call_outs;
 pub mod call_stack;
 pub mod efun;
 pub mod function_type;
-pub mod gc;
 
 pub mod lpc_array;
 pub mod lpc_float;
@@ -15,7 +14,7 @@ pub mod lpc_string;
 pub mod object_space;
 pub mod process;
 pub mod program;
-mod stm;
+pub(crate) mod stm;
 pub mod task;
 pub mod task_context;
 pub mod vm;

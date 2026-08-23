@@ -4,19 +4,17 @@ use std::{
     sync::{Arc, Weak},
 };
 
-use bit_set::BitSet;
 use derive_builder::Builder;
 use itertools::Itertools;
-use lpc_rs_core::{lpc_path::LpcPath, register::Register};
+use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{Result, lpc_bug, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::ThinVec;
-use tracing::{instrument, trace};
 
+use crate::interpreter::stm::VarId;
 use crate::interpreter::{
     efun::EFUN_FUNCTIONS,
     function_type::function_address::FunctionAddress,
-    gc::{mark::Mark, unique_id::UniqueId},
     lpc_ref::{LpcRef, NULL},
     process::Process,
     task_context::{ObjectLookup, TaskContext},
@@ -30,7 +28,7 @@ pub struct ResolvedCall {
 }
 
 /// A pointer to a function, created with the `&` syntax.
-#[derive(Debug, Builder)]
+#[derive(Debug, Clone, Builder)]
 #[builder(pattern = "owned")]
 pub struct FunctionPtr {
     /// The object that this pointer was declared in.
@@ -49,14 +47,9 @@ pub struct FunctionPtr {
     #[builder(default)]
     partial_args: ThinVec<Option<LpcRef>>,
 
-    /// The variables that I need from the environment, at the time this
-    /// [`FunctionPtr`] is created.
+    /// The captured cells the pointed-to closure continues, from the frame that created it.
     #[builder(default)]
-    pub upvalue_ptrs: ThinVec<Register>,
-
-    /// A globally-unique ID for this function pointer, used for GC purposes.
-    #[builder(default)]
-    pub unique_id: UniqueId,
+    pub upvalue_ptrs: ThinVec<VarId>,
 }
 
 impl FunctionPtr {
@@ -75,16 +68,6 @@ impl FunctionPtr {
 
     pub fn partial_args(&self) -> &[Option<LpcRef>] {
         &self.partial_args
-    }
-
-    /// Get a clone of this function pointer, with a new unique ID.
-    /// This is used partially-apply an existing function to additional arguments.
-    #[inline]
-    pub fn clone_with_new_id(&self) -> Self {
-        Self {
-            unique_id: UniqueId::new(),
-            ..self.clone()
-        }
     }
 
     /// partially apply this function pointer to the passed arguments, filling in any existing
@@ -225,40 +208,6 @@ impl FunctionPtr {
     }
 }
 
-impl Clone for FunctionPtr {
-    fn clone(&self) -> Self {
-        Self {
-            owner: self.owner.clone(),
-            address: self.address.clone(),
-            partial_args: self.partial_args.clone(),
-            upvalue_ptrs: self.upvalue_ptrs.clone(),
-            unique_id: UniqueId::new(),
-        }
-    }
-}
-
-impl Mark for FunctionPtr {
-    #[instrument(skip(self))]
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
-        trace!("marking function ptr");
-
-        if !self.unique_id.first_visit(processed) {
-            return Ok(());
-        }
-
-        trace!("marking upvalue ptrs: {:?}", &self.upvalue_ptrs);
-
-        marked.extend(
-            self.upvalue_ptrs
-                .iter()
-                .copied()
-                .map(|r| r.index() as usize),
-        );
-
-        Ok(())
-    }
-}
-
 impl Display for FunctionPtr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut s = String::new();
@@ -286,7 +235,10 @@ impl Display for FunctionPtr {
         s.push_str(&format!("partial_args: [{partial_args}], "));
         s.push_str(&format!(
             "upvalues: [{}]",
-            self.upvalue_ptrs.iter().map(|x| format!("{x}")).join(", ")
+            self.upvalue_ptrs
+                .iter()
+                .map(|x| format!("{x:?}"))
+                .join(", ")
         ));
         s.push('}');
 
@@ -296,8 +248,6 @@ impl Display for FunctionPtr {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use factori::create;
     use thin_vec::thin_vec;
 
@@ -324,32 +274,5 @@ mod tests {
             ptr.bound_args(&[LpcRef::from(1)]),
             vec![LpcRef::from(1), NULL, LpcRef::from("x")]
         );
-    }
-
-    #[test]
-    fn test_mark() {
-        let mut ptr = create!(
-            FunctionPtr,
-            owner: Arc::downgrade(&Arc::new(Process::default())),
-        );
-
-        ptr.upvalue_ptrs.push(Register(3));
-        ptr.upvalue_ptrs.push(Register(5));
-
-        let mut marked = BitSet::new();
-        let mut processed = BitSet::new();
-        ptr.mark(&mut marked, &mut processed).unwrap();
-        assert_eq!(marked.count(), 2);
-        assert!(marked.contains(3));
-        assert!(marked.contains(5));
-
-        assert_eq!(processed.count(), 1);
-        assert!(processed.contains(*ptr.unique_id.as_ref() as usize));
-
-        marked.make_empty();
-
-        ptr.mark(&mut marked, &mut processed).unwrap();
-
-        assert_eq!(marked.count(), 0);
     }
 }

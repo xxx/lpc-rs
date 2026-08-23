@@ -68,11 +68,9 @@ pub(crate) enum CommitProtocol {
     },
     /// Drop the reference count of a [`Version`], called when a [`Snapshot`] is dropped.
     Drop(Version),
-    /// One GC pass, atomic: refuse unless quiescent, else drop the swept
-    /// upvalue cells and mark the world from `roots` in this one message.
-    /// Replies the report.
+    /// One GC pass, atomic: refuse unless quiescent, else mark the world from
+    /// `roots` and drop what the walk did not reach. Replies the report.
     GcPass {
-        dropped: Vec<VarId>,
         roots: Vec<WorldRoot>,
         reply: flume::Sender<GcPassReply>,
     },
@@ -90,10 +88,9 @@ type GcPassReply = std::result::Result<GcReport, Box<lpc_rs_errors::LpcError>>;
 /// The result of one GC pass.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GcReport {
-    /// Upvalue cells the slab half culled (their `VarId`s were dropped from the world).
-    pub cells_swept: usize,
-    /// Unreachable `Array`/`Mapping` payload vars the world half reclaimed.
-    pub payload_vars_reclaimed: usize,
+    /// World vars the walk did not reach: captured cells, dead objects'
+    /// globals, and array/mapping payloads.
+    pub reclaimed: usize,
 }
 
 /// A snapshot the committer has handed out. Dropping it releases the
@@ -213,11 +210,7 @@ impl Committer {
                 }
                 self.evict_old_versions();
             }
-            CommitProtocol::GcPass {
-                dropped,
-                roots,
-                reply,
-            } => {
+            CommitProtocol::GcPass { roots, reply } => {
                 // Held snapshots across versions; `0` = quiescent.
                 let live: usize = self.live_versions.values().map(|&c| c as usize).sum();
                 if live != 0 {
@@ -226,14 +219,8 @@ impl Committer {
                     )));
                     return true;
                 }
-                for var_id in &dropped {
-                    self.snapshot.drop_var(*var_id);
-                }
                 let reclaimed = self.mark_world(&roots);
-                let _ = reply.send(Ok(GcReport {
-                    cells_swept: dropped.len(),
-                    payload_vars_reclaimed: reclaimed,
-                }));
+                let _ = reply.send(Ok(GcReport { reclaimed }));
             }
             CommitProtocol::Stats { reply } => {
                 reply.send(self.stats).unwrap_or_else(|e| {
@@ -248,11 +235,9 @@ impl Committer {
         true
     }
 
-    /// Mark the world from `roots` and drop the unreachable `Array`/`Mapping`
-    /// payload vars. Returns the number of vars dropped.
-    ///
-    /// Only payload vars are reclaimed — object, connection, and upvalue-cell
-    /// vars are never dropped.
+    /// Mark the world from `roots` and drop every unreachable `Ref`, `Array`
+    /// and `Mapping` var; object and connection identities are never dropped.
+    /// Returns the number of vars dropped.
     fn mark_world(&mut self, roots: &[WorldRoot]) -> usize {
         let mut marked: BTreeSet<VarId> = BTreeSet::new();
         let mut work: Vec<MarkWork> = Vec::with_capacity(roots.len());
@@ -289,6 +274,11 @@ impl Committer {
                         for arg_ref in fun.partial_args().iter().flatten() {
                             work.push(MarkWork::Ref(arg_ref.clone()));
                         }
+                        for cell in &fun.upvalue_ptrs {
+                            if marked.insert(*cell) {
+                                work.push(MarkWork::Var(*cell));
+                            }
+                        }
                     }
                     LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::String(_) | LpcRef::Object(_) => {}
                 },
@@ -300,7 +290,10 @@ impl Committer {
             .state()
             .filter(|(var_id, world_value)| {
                 !marked.contains(*var_id)
-                    && matches!(world_value, WorldValue::Array(_) | WorldValue::Mapping(_))
+                    && matches!(
+                        world_value,
+                        WorldValue::Ref(_) | WorldValue::Array(_) | WorldValue::Mapping(_)
+                    )
             })
             .map(|(var_id, _)| *var_id)
             .collect();
@@ -493,10 +486,13 @@ mod tests {
     use std::sync::Arc;
 
     use lpc_rs_core::LpcIntInner;
+    use thin_vec::thin_vec;
     use tokio::{sync::Barrier, task::JoinSet};
+    use ustr::ustr;
 
     use super::*;
     use crate::interpreter::{
+        function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
         lpc_array::LpcArray,
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
@@ -973,11 +969,10 @@ mod tests {
             WorldValue::ref_of(LpcRef::from(7))
         );
 
-        // A GC pass with `var` in `dropped` removes it from the world.
+        // A pass that cannot reach `var` removes it from the world.
         let (reply_tx, reply_rx) = flume::bounded(1);
         committer.process(
             CommitProtocol::GcPass {
-                dropped: vec![var],
                 roots: Vec::new(),
                 reply: reply_tx,
             },
@@ -1007,7 +1002,6 @@ mod tests {
         let (reply_tx, reply_rx) = flume::bounded(1);
         committer.process(
             CommitProtocol::GcPass {
-                dropped: vec![var],
                 roots: Vec::new(),
                 reply: reply_tx,
             },
@@ -1025,7 +1019,7 @@ mod tests {
     }
 
     #[test]
-    fn gc_pass_drops_cells_and_reclaims_in_one_message() {
+    fn gc_pass_reclaims_every_unreached_var() {
         let (tx, _rx) = flume::unbounded();
         let mut committer = Committer::new();
 
@@ -1045,27 +1039,57 @@ mod tests {
         seed.write(cell, WorldValue::ref_of(LpcRef::from(9)));
         committer.commit(seed).unwrap();
 
-        // Drop `cell` while sweeping, and root only the live payload. The
-        // dead payload is reclaimed in the same message, not a later pass.
+        // Root only the live payload: the dead payload and the cell go together.
         let (reply_tx, reply_rx) = flume::bounded(1);
         committer.process(
             CommitProtocol::GcPass {
-                dropped: vec![cell],
                 roots: vec![WorldRoot::Var(live_payload.id)],
                 reply: reply_tx,
             },
             &tx,
         );
         let report = reply_rx.recv().unwrap().unwrap();
-        assert_eq!(report.cells_swept, 1);
-        assert_eq!(report.payload_vars_reclaimed, 1);
+        assert_eq!(report.reclaimed, 2);
 
         let is_null = |committer: &mut Committer, var: VarId| -> bool {
             committer.committed(var) == WorldValue::null()
         };
-        // The live payload survives; the dead payload and the dropped cell read back NULL.
+        // The live payload survives; the dead payload and the cell read back NULL.
         assert!(!is_null(&mut committer, live_payload.id));
         assert!(is_null(&mut committer, dead_payload.id));
         assert!(is_null(&mut committer, cell));
+    }
+
+    #[test]
+    fn gc_pass_keeps_the_cells_of_a_reachable_closure() {
+        let (tx, _rx) = flume::unbounded();
+        let mut committer = Committer::new();
+
+        let cell = VarId::new();
+        let holder = VarId::new();
+        let ptr = FunctionPtrBuilder::default()
+            .address(FunctionAddress::Efun(ustr("dump")))
+            .upvalue_ptrs(thin_vec![cell])
+            .build()
+            .unwrap();
+        let mut seed = Changeset::new(committer.snapshot.version());
+        seed.write(cell, WorldValue::ref_of(LpcRef::from(9)));
+        seed.write(holder, WorldValue::ref_of(LpcRef::Function(Arc::new(ptr))));
+        committer.commit(seed).unwrap();
+
+        let (reply_tx, reply_rx) = flume::bounded(1);
+        committer.process(
+            CommitProtocol::GcPass {
+                roots: vec![WorldRoot::Var(holder)],
+                reply: reply_tx,
+            },
+            &tx,
+        );
+        let report = reply_rx.recv().unwrap().unwrap();
+        assert_eq!(report.reclaimed, 0);
+        assert_eq!(
+            committer.committed(cell),
+            WorldValue::ref_of(LpcRef::from(9))
+        );
     }
 }

@@ -63,7 +63,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             function.clone(),
             RegisterSize::try_from(args.len())?,
             Some(ptr.upvalue_ptrs.clone()),
-            self.context.global_state.clone_upvalues(),
         );
         for (i, arg) in args.into_iter().enumerate() {
             new_frame.push_arg(&self.context.txn, i, arg)?;

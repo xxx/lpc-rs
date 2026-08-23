@@ -181,21 +181,22 @@ mod tests {
         test_support::test_config,
     };
 
+    /// Closures held only by another object's committed global keep their
+    /// captured cells across a pass; the cells go once nothing holds them.
     #[tokio::test]
     async fn test_gc() {
         let vm = Vm::new(test_config());
         let storage = indoc! { r#"
             function *storage = ({});
+            int total;
 
             void store(function f) {
-                dump("storing", f);
                 storage += ({ f });
             }
 
             void runem() {
-                dump("running", storage);
                 foreach (f: storage) {
-                    f();
+                    total += f();
                 }
             }
         "# };
@@ -206,50 +207,66 @@ mod tests {
 
                 object storage = clone_object("/storage");
 
-                dump("storage", storage);
-
                 while(++i < 5) {
-                    storage->store((:
-                        dump("yo", i);
-                    :));
+                    storage->store((: i :));
                 }
-
-                storage->runem();
             }
         "# };
 
-        let ctx1 = vm
-            .initialize_string(storage, "storage")
-            .await
-            .inspect_err(|e| {
-                e.emit_diagnostics();
-            })
-            .unwrap();
-        let _ctx2 = vm
-            .initialize_string(runner, "runner")
-            .await
-            .inspect_err(|e| {
-                e.emit_diagnostics();
-            })
-            .unwrap();
+        let ctx1 = vm.initialize_string(storage, "storage").await.unwrap();
+        let _ctx2 = vm.initialize_string(runner, "runner").await.unwrap();
+        let storage_proc = vm.global_state.object_space.lookup("/storage#0").unwrap();
+        let template = TaskTemplate::from(ctx1.global_state.clone());
 
-        let assert_len = |ctx: &TaskContext, len| {
-            ctx.global_state.with_upvalues(|uv| {
-                assert_eq!(uv.len(), len);
-            });
-        };
-
-        assert_len(&ctx1, 1);
-
+        // The only garbage is the arrays `+=` left behind; the capture cell stays.
         vm.global_state.gc().await.unwrap();
 
-        assert_len(&ctx1, 0);
+        apply_function_by_name("runem", &[], storage_proc.clone(), template.clone(), None)
+            .await
+            .unwrap()
+            .unwrap();
+        // Five closures over one cell, which the loop left at 5.
+        assert_eq!(
+            vm.global_state.committed_global(&storage_proc, 1),
+            LpcRef::from(25)
+        );
 
         vm.global_state.object_space.clear();
 
-        vm.global_state.gc().await.unwrap();
+        let report = vm.global_state.gc().await.unwrap();
+        assert!(
+            report.reclaimed > 0,
+            "unreachable objects' cells are reclaimed"
+        );
+    }
 
-        assert_len(&ctx1, 0);
+    /// The cell of a closure that died with its frame is reclaimed.
+    #[tokio::test]
+    async fn gc_reclaims_the_cells_of_a_popped_frame() {
+        let vm = Vm::new(test_config());
+        let code = indoc! { r#"
+            void create() { int j = 1; function f = (: j :); }
+        "# };
+        vm.initialize_string(code, "popped").await.unwrap();
+
+        let report = vm.global_state.gc().await.unwrap();
+        assert_eq!(report.reclaimed, 1);
+    }
+
+    /// A destructed object's committed globals are reclaimed.
+    #[tokio::test]
+    async fn gc_reclaims_a_destructed_objects_globals() {
+        let vm = Vm::new(test_config());
+        let code = indoc! { r#"
+            void create() {
+                object o = clone_object("/ptr_target");
+                destruct(o);
+            }
+        "# };
+        vm.initialize_string(code, "destructor").await.unwrap();
+
+        let report = vm.global_state.gc().await.unwrap();
+        assert!(report.reclaimed >= 1, "{report:?}");
     }
 
     /// A GC pass is refused while a transaction is in flight. The transaction

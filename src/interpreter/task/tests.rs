@@ -14,10 +14,7 @@ use ustr::ustr;
 use super::*;
 use crate::{
     interpreter::{
-        CommittedReader,
-        lpc_ref::{LpcRef, NULL},
-        process::Process,
-        vm::global_state::GlobalState,
+        CommittedReader, lpc_ref::LpcRef, process::Process, vm::global_state::GlobalState,
     },
     test_support::{initialize_program, run_prog, try_run_prog, try_run_prog_with_config},
 };
@@ -2950,50 +2947,6 @@ mod test_upvalues {
         }
     }
 
-    async fn check_vm_upvalues<T>(code: &str, upvalues: &[T])
-    where
-        T: Into<BareVal> + Clone,
-    {
-        let mut task = run_prog(code).await;
-
-        let snapshot = &mut task.snapshots.pop().unwrap();
-        snapshot.pop(); // pop off the init frame
-
-        let frame = snapshot.pop().unwrap();
-
-        let expected: Vec<BareVal> = upvalues.iter().map(|i| i.clone().into()).collect();
-
-        // The frame's upvalue cells hold transactional identities, not the
-        // values themselves: each slot is a `VarId` whose committed
-        // value is read through the frame's transaction. Slot order still
-        // matches upvalue-creation order, so the original position-based
-        // assertions apply to the committed reads.
-        frame.with_upvalues(|uv| {
-            let values: Vec<LpcRef> = (0..uv.len())
-                .map(|i| {
-                    task.context
-                        .txn()
-                        .with(|t| t.read(uv[i]).unwrap_or_else(|| NULL.clone()))
-                })
-                .collect();
-
-            assert_eq!(
-                expected.len(),
-                values.len(),
-                "expected upvalues: {:?}\nvm upvalues: {:?}\nbank: {:?}\n",
-                expected,
-                values,
-                (0..uv.len())
-                    .map(|i| format!("{:?}", uv[i]))
-                    .collect::<Vec<_>>()
-            );
-
-            for (v, ev) in values.iter().zip(&expected) {
-                ev.assert_equal(&task.context.global_state, v);
-            }
-        });
-    }
-
     async fn check_frame_upvalue_ptrs<T>(code: &str, upvalue_ptrs: &[T])
     where
         T: Into<Register> + Copy,
@@ -3005,12 +2958,8 @@ mod test_upvalues {
 
         let frame = snapshot.pop().unwrap();
 
+        // Cells are identities; only how many the frame holds is observable.
         assert_eq!(upvalue_ptrs.len(), frame.upvalue_ptrs.len());
-
-        for (i, v) in upvalue_ptrs.iter().enumerate() {
-            let v: Register = (*v).into();
-            assert_eq!(v, frame.upvalue_ptrs[i], "index: {i}");
-        }
     }
 
     #[tokio::test]
@@ -3023,9 +2972,6 @@ mod test_upvalues {
                     int k = inc();
                 }
             "##};
-
-        let expected = vec![Int(2)];
-        check_vm_upvalues(code, &expected).await;
 
         let expected = vec![Register(0)];
         check_frame_upvalue_ptrs(code, &expected).await;
@@ -3069,17 +3015,9 @@ mod test_upvalues {
             "bump() should have incremented the captured local twice"
         );
 
-        // The frame holding the closure is gone; the full pass drops the dead
-        // cell's VarId from the committer's world.
-        task.context.global_state.gc().await.unwrap();
-
-        // The txn remains usable after the sweep: a fresh read through the
-        // committer for the (now-swept) cell falls back to NULL, and no
-        // panic or inconsistency occurs. The dead cell is gone from the
-        // shared bank.
-        task.context.global_state.with_upvalues(|uv| {
-            assert_eq!(uv.len(), 0, "swept cell should be removed from the bank")
-        });
+        // The frame holding the closure is gone, so its cell is unreachable.
+        let report = task.context.global_state.gc().await.unwrap();
+        assert_eq!(report.reclaimed, 1, "the dead cell is reclaimed");
     }
 
     #[tokio::test]
@@ -3123,9 +3061,6 @@ mod test_upvalues {
                 }
             "##};
 
-        let expected = vec![Int(10), Int(666)];
-        check_vm_upvalues(code, &expected).await;
-
         let expected = IndexMap::from([
             ("j", Int(10)),
             ("k", Int(-40)),
@@ -3163,9 +3098,6 @@ mod test_upvalues {
                 }
             "##};
 
-        // let expected = vec![Int(105), Int(1), Int(1), Int(100)];
-        // check_vm_upvalues(code, &expected);
-
         let expected = IndexMap::from([
             ("c1", Int(1)),
             ("c2", Int(5)),
@@ -3200,9 +3132,6 @@ mod test_upvalues {
                     :);
                 }
             "##};
-
-        let expected: Vec<BareVal> = vec![];
-        check_vm_upvalues(code, &expected).await;
 
         let expected = IndexMap::from([
             ("c1", Int(0)),
@@ -3239,17 +3168,6 @@ mod test_upvalues {
                     :);
                 }
             "##};
-
-        let expected: Vec<BareVal> = vec![
-            Function("closure-2".into(), vec![]),
-            String("hello".into()),
-            Int(666),
-            Int(1),
-            Int(2),
-            Int(3),
-            Int(77),
-        ];
-        check_vm_upvalues(code, &expected).await;
 
         let expected = IndexMap::from([
             ("c1", String("hello666 1 2 -4".into())),
@@ -3291,14 +3209,6 @@ mod test_upvalues {
                     :);
                 }
             "##};
-
-        let expected: Vec<BareVal> = vec![
-            Function("closure-2".into(), vec![]),
-            String("hello".into()),
-            Array(vec![Int(123), Int(456)]),
-            Array(vec![String("world".into()), Int(77)]),
-        ];
-        check_vm_upvalues(code, &expected).await;
 
         let expected = IndexMap::from([
             ("c1", Int(123)),
@@ -3419,16 +3329,10 @@ mod test_gc {
 
         let task = run_prog(code).await;
         let ctx = &task.context;
-        ctx.global_state.with_upvalues(|uv| {
-            assert!(uv.len() > 0);
-        });
 
-        // The full pass drops the dead cells' VarIds out of the committer's
-        // world.
-        ctx.global_state.gc().await.unwrap();
-        ctx.global_state.with_upvalues(|uv| {
-            assert_eq!(uv.len(), 0);
-        });
+        // Three `store()` frames each minted a cell; every closure over them is gone.
+        let report = ctx.global_state.gc().await.unwrap();
+        assert_eq!(report.reclaimed, 3);
     }
 }
 

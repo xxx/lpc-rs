@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use arc_swap::ArcSwapAny;
-use lpc_rs_core::register::Register;
 use thin_vec::ThinVec;
 
+use crate::interpreter::stm::VarId;
 use crate::{
     interpreter::{
         process::Process,
@@ -25,7 +25,7 @@ pub struct TaskTemplate {
     pub this_player: ArcSwapAny<Option<Arc<Process>>>,
 
     /// The upvalue_ptrs to populate the initial frame with, if any.
-    pub upvalue_ptrs: Option<ThinVec<Register>>,
+    pub upvalue_ptrs: Option<ThinVec<VarId>>,
 
     /// The transaction the task made from this template runs in. A template
     /// derived from a live task adopts that task's in-flight handle, so the

@@ -9,7 +9,6 @@ use ustr::Ustr;
 
 use crate::interpreter::{
     function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
-    gc::unique_id::UniqueId,
     lpc_array::LpcArray,
     lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL},
@@ -146,7 +145,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .address(address)
             .partial_args(partial_args)
             .upvalue_ptrs(upvalue_ptrs)
-            .unique_id(UniqueId::new())
             .build()
             .unwrap();
 

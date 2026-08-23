@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use if_chain::if_chain;
-use lpc_rs_core::{RegisterSize, lpc_type::LpcType, register::Register};
+use lpc_rs_core::{RegisterSize, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::{instrument, trace};
 use ustr::Ustr;
 
+use crate::interpreter::stm::VarId;
 use crate::{
     interpreter::{
         call_frame::CallFrame,
@@ -73,8 +74,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             func.clone(),
             num_args,
             num_args,
-            None::<&[Register]>, /* static functions do not inherit upvalues from the calling function */
-            self.context.global_state.clone_upvalues(),
+            // A static function inherits no captures from its caller.
+            None::<&[VarId]>,
         );
 
         trace!("copying arguments to new frame: {num_args}");

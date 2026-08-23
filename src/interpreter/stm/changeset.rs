@@ -86,11 +86,6 @@ impl Changeset {
     pub(crate) fn into_parts(self) -> (BTreeMap<VarId, WorldValue>, BTreeSet<VarId>) {
         (self.writes, self.removals)
     }
-
-    /// The values this changeset has written, for GC rooting.
-    pub(crate) fn written_values(&self) -> impl Iterator<Item = &WorldValue> {
-        self.writes.values()
-    }
 }
 
 #[cfg(test)]

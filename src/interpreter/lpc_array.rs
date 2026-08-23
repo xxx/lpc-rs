@@ -4,21 +4,14 @@ use std::{
     ops::{Add, Deref, DerefMut},
 };
 
-use bit_set::BitSet;
 use delegate::delegate;
 use thin_vec::ThinVec;
-use tracing::{instrument, trace};
 
-use crate::interpreter::{
-    gc::{mark::Mark, unique_id::UniqueId},
-    lpc_ref::LpcRef,
-};
+use crate::interpreter::lpc_ref::LpcRef;
 
-/// A newtype wrapper for an array of [`LpcRef`]s, with a [`UniqueId`] for GC
-/// purposes.
+/// A newtype wrapper for an array of [`LpcRef`]s.
 #[derive(Default, Clone, PartialEq, Eq, Hash)]
 pub struct LpcArray {
-    pub unique_id: UniqueId,
     pub array: ThinVec<LpcRef>,
 }
 
@@ -30,7 +23,6 @@ impl LpcArray {
         A: Into<ThinVec<LpcRef>>,
     {
         Self {
-            unique_id: UniqueId::new(),
             array: array.into(),
         }
     }
@@ -39,7 +31,6 @@ impl LpcArray {
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            unique_id: UniqueId::new(),
             array: ThinVec::with_capacity(capacity),
         }
     }
@@ -74,7 +65,6 @@ where
 impl Debug for LpcArray {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "LpcArray {{ ")?;
-        write!(f, "unique_id: {:?}, ", self.unique_id)?;
         write!(f, "array: [")?;
         // Use display format to avoid infinite loops via inventory, etc.
         // TODO: this could be more elegant
@@ -88,23 +78,6 @@ impl Display for LpcArray {
         write!(f, "[")?;
         f.write_str(&format_array(self, |item| format!("{}", item)))?;
         write!(f, "]")
-    }
-}
-
-impl Mark for LpcArray {
-    #[instrument(skip(self))]
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
-        trace!("marking array");
-
-        if !self.unique_id.first_visit(processed) {
-            return Ok(());
-        }
-
-        for item in &self.array {
-            item.mark(marked, processed)?;
-        }
-
-        Ok(())
     }
 }
 
@@ -182,42 +155,5 @@ impl Add<LpcArray> for LpcArray {
         let mut array = self.array;
         array.extend(rhs.array);
         Self::new(array)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use factori::create;
-    use lpc_rs_core::register::Register;
-    use thin_vec::thin_vec;
-
-    use super::*;
-    use crate::test_support::factories::*;
-
-    #[test]
-    fn test_mark() {
-        let ptr = create!(
-            FunctionPtr,
-            upvalue_ptrs: thin_vec![Register(4), Register(33)]
-        );
-        let ptr_id = *ptr.unique_id.as_ref();
-
-        let function_ref = ptr.into();
-
-        let array = LpcArray::new(thin_vec![function_ref]);
-
-        let mut marked = BitSet::new();
-        let mut processed = BitSet::new();
-
-        array.mark(&mut marked, &mut processed).unwrap();
-
-        let mut marked_expected = BitSet::new();
-        marked_expected.extend([4_usize, 33_usize]);
-
-        let mut processed_expected = BitSet::new();
-        processed_expected.extend([ptr_id as usize, *array.unique_id.as_ref() as usize]);
-
-        assert_eq!(marked, marked_expected);
-        assert_eq!(processed, processed_expected);
     }
 }

@@ -7,13 +7,10 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use bit_set::BitSet;
 use lpc_rs_core::RegisterSize;
-use lpc_rs_errors::Result;
 
 use crate::{
     interpreter::{
-        gc::mark::Mark,
         lpc_array::LpcArray,
         lpc_ref::LpcRef,
         process::util::AllEnvironment,
@@ -351,15 +348,6 @@ impl Display for Process {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.filename())
-    }
-}
-
-impl Mark for Process {
-    fn mark(&self, _marked: &mut BitSet, _processed: &mut BitSet) -> Result<()> {
-        // The slot identities own no values. Live values are transaction
-        // roots, marked through the task's in-flight changeset;
-        // committed values live in the committer's world.
-        Ok(())
     }
 }
 

@@ -247,11 +247,6 @@ impl Transaction {
             .write(var_id, WorldValue::Mapping(Arc::new(clone)));
     }
 
-    /// The values this attempt has written (GC roots until commit).
-    pub(crate) fn written_values(&self) -> impl Iterator<Item = &WorldValue> {
-        self.changeset.written_values()
-    }
-
     /// Record a physical side effect for delivery after this attempt commits.
     pub(crate) fn record_effect(&mut self, effect: Effect) {
         self.effects.push(effect);

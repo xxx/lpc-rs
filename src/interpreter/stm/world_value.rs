@@ -4,13 +4,9 @@
 
 use std::sync::Arc;
 
-use bit_set::BitSet;
-use lpc_rs_errors::Result;
-
 use crate::{
     interpreter::{
-        gc::mark::Mark, lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef,
-        process::Process,
+        lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, process::Process,
     },
     telnet::connection::Connection,
 };
@@ -84,33 +80,6 @@ impl WorldValue {
         match self {
             Self::Connection(connection) => connection,
             _ => None,
-        }
-    }
-}
-
-impl Mark for WorldValue {
-    /// Mark the values a committed world entry holds. Slot entries mark
-    /// their `LpcRef` as usual; payload entries mark their contents, whose
-    /// inner elements are `LpcRef`s. A connection entry marks its
-    /// `input_to` callback: that `FunctionPtr` keeps the object alive for
-    /// the next input line, so it must survive like any other strong ref.
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
-        match self {
-            Self::Ref(lpc_ref) => lpc_ref.mark(marked, processed),
-            Self::Array(array) => array.mark(marked, processed),
-            Self::Mapping(mapping) => mapping.mark(marked, processed),
-            // `Process::mark` is a no-op (processes are identity, not
-            // markable payloads); keep the arm so the arm-set stays
-            // exhaustive.
-            Self::Process(process) => process.mark(marked, processed),
-            Self::Connection(maybe_connection) => {
-                if let Some(connection) = maybe_connection
-                    && let Some(input_to) = connection.input_to.load_full()
-                {
-                    input_to.ptr.mark(marked, processed)?;
-                }
-                Ok(())
-            }
         }
     }
 }

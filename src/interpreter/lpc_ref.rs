@@ -7,18 +7,15 @@ use std::{
     sync::{Arc, Weak},
 };
 
-use bit_set::BitSet;
 use decorum::Total;
 use lpc_rs_core::{BaseFloat, LpcFloatInner, LpcIntInner, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_utils::{string, string::concatenate_strings};
-use tracing::{instrument, trace};
 
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
     interpreter::{
         function_type::function_ptr::FunctionPtr,
-        gc::mark::Mark,
         lpc_array::LpcArray,
         lpc_float::LpcFloat,
         lpc_int::LpcInt,
@@ -500,23 +497,6 @@ impl LpcRef {
     }
 }
 
-impl Mark for LpcRef {
-    #[instrument(skip(self))]
-    fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
-        trace!("marking lpc ref of {type}", type = self.as_lpc_type());
-
-        match self {
-            LpcRef::Float(_)
-            | LpcRef::Int(_)
-            | LpcRef::String(_)
-            | LpcRef::Object(_)
-            | LpcRef::Array(_)
-            | LpcRef::Mapping(_) => Ok(()),
-            LpcRef::Function(fun) => fun.mark(marked, processed),
-        }
-    }
-}
-
 impl From<BaseFloat> for LpcRef {
     #[inline]
     fn from(f: BaseFloat) -> Self {
@@ -700,10 +680,9 @@ impl Default for LpcRef {
 #[cfg(test)]
 mod tests {
     use claims::assert_err;
-    use factori::create;
 
     use super::*;
-    use crate::{interpreter::lpc_array::LpcArray, test_support::factories::*};
+    use crate::interpreter::lpc_array::LpcArray;
 
     mod test_object_identity {
         use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
@@ -1482,53 +1461,6 @@ mod tests {
         fn fails_other_types() {
             let mut string = LpcRef::from(LpcString::from("foobar"));
             assert_err!(string.dec());
-        }
-    }
-
-    mod test_mark {
-        use indexmap::IndexMap;
-
-        use super::*;
-        use crate::interpreter::lpc_mapping::LpcMapping;
-
-        #[test]
-        fn test_array() {
-            let array = LpcArray::new(vec![LpcRef::from(1), LpcRef::from(2), LpcRef::from(3)]);
-            let array_id = array.unique_id;
-
-            let mut marked = BitSet::new();
-            let mut processed = BitSet::new();
-
-            array.mark(&mut marked, &mut processed).unwrap();
-
-            assert!(processed.contains(*array_id.as_ref() as usize));
-        }
-
-        #[test]
-        fn test_mapping() {
-            let mapping = LpcMapping::new(IndexMap::new());
-            let mapping_id = mapping.unique_id;
-
-            let mut marked = BitSet::new();
-            let mut processed = BitSet::new();
-
-            mapping.mark(&mut marked, &mut processed).unwrap();
-
-            assert!(processed.contains(*mapping_id.as_ref() as usize));
-        }
-
-        #[test]
-        fn test_function() {
-            let ptr = create!(FunctionPtr);
-            let ptr_id = ptr.unique_id;
-            let ptr = LpcRef::from(ptr);
-
-            let mut marked = BitSet::new();
-            let mut processed = BitSet::new();
-
-            ptr.mark(&mut marked, &mut processed).unwrap();
-
-            assert!(processed.contains(*ptr_id.as_ref() as usize));
         }
     }
 }
