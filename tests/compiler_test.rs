@@ -13,6 +13,7 @@ use lpc_rs::{
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::RegisterSize;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
+use ustr::ustr;
 
 use crate::support::{run_prog, test_config, test_config_builder};
 
@@ -297,7 +298,12 @@ async fn test_inherited_create_called_when_not_overridden() {
 
     let init = child_ctx.process().program.initializer.clone().unwrap();
 
-    let expected = vec![Instruction::Call(4), Instruction::Ret];
+    let expected = vec![
+        Instruction::Call(ustr(
+            "create__v__/test_inherited_create_called_when_not_overridden_test_parent2.c__pb__",
+        )),
+        Instruction::Ret,
+    ];
 
     let inst = &init.instructions;
     assert_eq!(&inst[(inst.len() - 2)..], &expected);

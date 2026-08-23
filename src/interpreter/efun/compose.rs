@@ -14,8 +14,7 @@ use lpc_rs_function_support::{
     program_function::{ProgramFunction, ProgramFunctionBuilder},
 };
 // use logos::Span;
-use once_cell::sync::{Lazy, OnceCell};
-use string_interner::StringInterner;
+use once_cell::sync::Lazy;
 use thin_vec::thin_vec;
 
 use crate::interpreter::{
@@ -80,7 +79,6 @@ pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
             RegisterVariant::Local(Register(1)),
             RegisterVariant::Local(Register(2)),
         ])
-        .strings(OnceCell::with_value(Arc::new(StringInterner::default())))
         .build()
         .unwrap();
 

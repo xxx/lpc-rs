@@ -11,7 +11,6 @@ use lpc_rs_function_support::{
     program_function::ProgramFunction, symbol::Symbol,
 };
 use lpc_rs_utils::config::Config;
-use string_interner::{DefaultBackend, StringInterner};
 use ustr::Ustr;
 
 use crate::{
@@ -51,9 +50,6 @@ pub struct CompilationContext {
 
     /// The pragmas that have been set
     pub pragmas: PragmaFlags,
-
-    /// Strings table
-    pub strings: StringInterner<DefaultBackend>,
 
     /// All of the inherited functions, keyed by their mangled name.
     pub inherited_functions: IndexMap<String, Arc<ProgramFunction>>,
@@ -269,7 +265,6 @@ impl Default for CompilationContext {
             default_function_params: HashMap::new(),
             function_prototypes: HashMap::new(),
             pragmas: PragmaFlags::new(),
-            strings: StringInterner::with_capacity(32),
             inherits: vec![],
             inherit_names: HashMap::new(),
             inherited_functions: IndexMap::new(),

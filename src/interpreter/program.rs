@@ -12,7 +12,6 @@ use itertools::Itertools;
 use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, pragma_flags::PragmaFlags};
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use path_dedot::*;
-use string_interner::{DefaultBackend, StringInterner};
 
 #[derive(Debug, Default, PartialEq, Eq, Clone, Builder)]
 #[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
@@ -45,10 +44,6 @@ pub struct Program {
 
     /// Which pragmas have been set for this program?
     pub pragmas: PragmaFlags,
-
-    /// Interned strings
-    #[builder(setter(into))]
-    pub strings: Arc<StringInterner<DefaultBackend>>,
 }
 
 impl<'a> Program {

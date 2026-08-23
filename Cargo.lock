@@ -1322,7 +1322,6 @@ dependencies = [
  "rpds",
  "slab",
  "stable-vec",
- "string-interner",
  "syn 1.0.109",
  "termcolor",
  "thin-vec",
@@ -1340,6 +1339,7 @@ dependencies = [
  "lpc-rs-core",
  "lpc-rs-errors",
  "static_assertions",
+ "ustr",
 ]
 
 [[package]]
@@ -1397,7 +1397,6 @@ dependencies = [
  "multimap",
  "once_cell",
  "readonly",
- "string-interner",
  "tracing",
 ]
 
@@ -1953,16 +1952,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "string-interner"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad3df9b59e2eded8d825c7c4363ad339a20fb6bc0b9a4778560f518f59910b15"
-dependencies = [
- "hashbrown 0.16.1",
- "serde",
-]
 
 [[package]]
 name = "string_cache"

@@ -9,6 +9,7 @@ use indexmap::IndexMap;
 use indoc::indoc;
 use lpc_rs_core::{LpcFloatInner, LpcIntInner, RegisterSize, register::RegisterVariant};
 use tokio::sync::mpsc;
+use ustr::ustr;
 
 use super::*;
 use crate::{
@@ -2547,8 +2548,6 @@ mod test_instructions {
         use lpc_rs_asm::instruction::Instruction::{Ret, SConst, Sizeof};
         use lpc_rs_core::{INIT_PROGRAM, lpc_path::LpcPath, lpc_type::LpcType};
         use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
-        use once_cell::sync::OnceCell;
-        use string_interner::StringInterner;
 
         use super::*;
         use crate::interpreter::program::Program;
@@ -2648,7 +2647,7 @@ mod test_instructions {
                 num_locals: 2,
                 num_upvalues: 0,
                 instructions: vec![
-                    SConst(Register(1).as_local(), 0),
+                    SConst(Register(1).as_local(), ustr("Hello, world!")),
                     Sizeof(Register(1).as_local(), Register(2).as_local()),
                     Ret,
                 ],
@@ -2656,9 +2655,6 @@ mod test_instructions {
                 labels: Some(HashMap::new()),
                 local_variables: Default::default(),
                 arg_locations: Default::default(),
-                strings: OnceCell::with_value(
-                    StringInterner::from_iter(["Hello, world!"].into_iter()).into(),
-                ),
             }
             .into();
 

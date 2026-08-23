@@ -5,18 +5,17 @@ use std::{
     hash::{Hash, Hasher},
     ops::Add,
     path::Path,
-    sync::Arc,
 };
 
 use lpc_rs_errors::{Result, lpc_error};
 use lpc_rs_utils::string::MAX_STRING_LENGTH;
-use string_interner::{DefaultBackend, DefaultSymbol, StringInterner, Symbol};
+use ustr::Ustr;
 
 /// An enum to differentiate between statically and dynamically created strings.
 #[derive(Debug, Clone)]
 pub enum LpcString {
-    /// A static string, indexing into its twinned string set.
-    Static(usize, Arc<StringInterner<DefaultBackend>>),
+    /// A string literal from compiled code.
+    Static(Ustr),
 
     /// A dynamically created string.
     Dynamic(String),
@@ -27,9 +26,7 @@ impl LpcString {
     #[inline]
     pub fn to_str(&self) -> &str {
         match self {
-            LpcString::Static(s, strings) => strings
-                .resolve(DefaultSymbol::try_from_usize(*s).unwrap())
-                .unwrap_or(""),
+            LpcString::Static(s) => s.as_str(),
             LpcString::Dynamic(s) => s.as_str(),
         }
     }
@@ -175,5 +172,20 @@ impl Add<LpcString> for LpcString {
         } else {
             Err(lpc_error!("overflow in string concatenation"))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ustr::ustr;
+
+    use super::*;
+
+    #[test]
+    fn a_static_string_is_its_literal() {
+        let s = LpcString::Static(ustr("hello"));
+        assert_eq!(s.to_str(), "hello");
+        assert_eq!(s, LpcString::from("hello"));
+        assert_eq!(s.len(), 5);
     }
 }

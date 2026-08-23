@@ -16,8 +16,6 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::span::Span;
 use multimap::MultiMap;
-use once_cell::sync::OnceCell;
-use string_interner::{DefaultBackend, StringInterner};
 use tracing::trace;
 
 use crate::{
@@ -69,11 +67,6 @@ pub struct ProgramFunction {
     /// Track the location of where my arguments are expected
     #[builder(default)]
     pub arg_locations: Vec<RegisterVariant>,
-
-    /// Interned strings. These are stored by our containing `Program` and
-    /// shared among all functions in the program.
-    #[builder(default)]
-    pub strings: OnceCell<Arc<StringInterner<DefaultBackend>>>,
 }
 
 impl ProgramFunction {
@@ -108,7 +101,6 @@ impl ProgramFunction {
             labels: Some(HashMap::new()),
             local_variables: vec![],
             arg_locations: vec![],
-            strings: OnceCell::new(),
         }
     }
 

@@ -5,6 +5,7 @@ use lpc_rs_core::{RegisterSize, lpc_type::LpcType, register::Register};
 use lpc_rs_errors::{LpcError, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::{instrument, trace};
+use ustr::Ustr;
 
 use crate::{
     interpreter::{
@@ -19,18 +20,10 @@ use crate::{
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
-    pub(crate) async fn handle_call(
-        &mut self,
-        name_idx: RegisterSize,
-    ) -> lpc_rs_errors::Result<()> {
+    pub(crate) async fn handle_call(&mut self, name: Ustr) -> lpc_rs_errors::Result<()> {
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
         let func = {
-            let name = process
-                .program
-                .strings
-                .resolve(Self::index_symbol(name_idx))
-                .unwrap();
             let function = process.program.lookup_function(name);
             if let Some(func) = function {
                 func.clone()
@@ -158,20 +151,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[inline]
     pub(crate) async fn handle_call_simul_efun(
         &mut self,
-        name_idx: RegisterSize,
+        func_name: Ustr,
     ) -> lpc_rs_errors::Result<()> {
-        let Some(func_name) = self
-            .stack
-            .current_frame()?
-            .function
-            .strings
-            .get()
-            .unwrap()
-            .resolve(Self::index_symbol(name_idx))
-        else {
-            return Err(self.runtime_bug("Unable to find the name being pointed to."));
-        };
-
         let Some(simul_efuns) = self.context.simul_efuns() else {
             // This could be legitimately hit in the case an object was compiled with simul_efuns,
             // cached to disk, and then later executed without them.

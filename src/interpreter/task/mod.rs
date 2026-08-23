@@ -28,7 +28,6 @@ use lpc_rs_core::{
 use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use parking_lot::RwLock;
-use string_interner::{DefaultSymbol, Symbol};
 use thin_vec::{ThinVec, thin_vec};
 use tokio::time::timeout;
 use tracing::{error, instrument, trace, warn};
@@ -505,11 +504,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     //     let none_args = partial_args.iter().filter(|a| a.is_none()).count();
     //     partial_args.len() + num_args.saturating_sub(none_args)
     // }
-
-    #[inline]
-    fn index_symbol(index: RegisterSize) -> DefaultSymbol {
-        DefaultSymbol::try_from_usize(index as usize).unwrap()
-    }
 
     #[inline]
     pub fn result(&self) -> Option<LpcRef> {

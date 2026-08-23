@@ -8,6 +8,7 @@ use lpc_rs_core::{
     register::RegisterVariant,
 };
 use lpc_rs_errors::{Result, lpc_bug};
+use ustr::Ustr;
 
 use crate::address::Address;
 
@@ -26,16 +27,14 @@ pub enum Instruction {
     /// x.1 = ~x.0
     BitwiseNot(RegisterVariant, RegisterVariant),
 
-    /// Call a function in the current object.
-    /// The `usize` is an index into the object's `strings` table.
-    /// TODO: make this index directly into the list of functions
-    Call(RegisterSize),
+    /// Call a function in the current object, by mangled name.
+    Call(Ustr),
 
     /// Call an Efun. x.0 is the index into the `EFUN_PROTOTYPES` map.
     CallEfun(u8),
 
-    /// Call a simulated efun. x.0 is the index into the caller's `strings` table.
-    CallSimulEfun(RegisterSize),
+    /// Call a simulated efun, by name.
+    CallSimulEfun(Ustr),
 
     /// Call a function pointer, located in x.0.
     CallFp(RegisterVariant),
@@ -82,7 +81,7 @@ pub enum Instruction {
     FunctionPtrConst {
         location: RegisterVariant,
         receiver: FunctionReceiver,
-        name_index: RegisterSize,
+        name: Ustr,
     },
 
     /// Greater than
@@ -229,8 +228,7 @@ pub enum Instruction {
     Store(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// String constant.
-    /// Store an index into the `Program`'s `strings` vector.
-    SConst(RegisterVariant, usize),
+    SConst(RegisterVariant, Ustr),
 
     /// bitwise ^ comparison.
     /// x.2 = x.0 ^ x.1
@@ -282,8 +280,8 @@ impl Display for Instruction {
             Instruction::CatchStart(r1, label) => {
                 write!(f, "catch_start {r1}, {label}")
             }
-            Instruction::Call(name_index) => {
-                write!(f, "call {name_index}")
+            Instruction::Call(name) => {
+                write!(f, "call {name}")
             }
             Instruction::CallEfun(name_index) => {
                 write!(f, "call_efun {name_index}")
@@ -294,8 +292,8 @@ impl Display for Instruction {
             Instruction::CallOther(receiver, name) => {
                 write!(f, "call_other {receiver}, {name}")
             }
-            Instruction::CallSimulEfun(name_index) => {
-                write!(f, "call_simul_efun {name_index}")
+            Instruction::CallSimulEfun(name) => {
+                write!(f, "call_simul_efun {name}")
             }
             Instruction::ClearArgs => {
                 write!(f, "clear_args")
@@ -321,7 +319,7 @@ impl Display for Instruction {
             Instruction::FunctionPtrConst {
                 location,
                 receiver,
-                name_index: name,
+                name,
             } => {
                 write!(f, "function_ptr_const {location}, {receiver}, {name}")
             }
@@ -435,7 +433,7 @@ impl Display for Instruction {
                 write!(f, "store {r1}, {r2}, {r3}")
             }
             Instruction::SConst(r, s) => {
-                write!(f, "s_const {r}, {s}")
+                write!(f, "s_const {r}, {:?}", s.as_str())
             }
             Instruction::Xor(r1, r2, r3) => {
                 write!(f, "xor {r1}, {r2}, {r3}")
@@ -448,3 +446,37 @@ impl Display for Instruction {
 // Note that if `RegisterSize` is changed, this will need to change as well.
 #[cfg(target_arch = "x86_64")]
 static_assertions::assert_eq_size!(Instruction, [u8; 24]);
+
+#[cfg(test)]
+mod tests {
+    use lpc_rs_core::register::Register;
+    use ustr::ustr;
+
+    use super::*;
+
+    #[test]
+    fn string_operands_display_as_names() {
+        let r1 = Register(1).as_local();
+        assert_eq!(
+            Instruction::SConst(r1, ustr("hi")).to_string(),
+            "s_const r1, \"hi\""
+        );
+        assert_eq!(
+            Instruction::Call(ustr("foo__v__/a.c__pb__")).to_string(),
+            "call foo__v__/a.c__pb__"
+        );
+        assert_eq!(
+            Instruction::CallSimulEfun(ustr("bar")).to_string(),
+            "call_simul_efun bar"
+        );
+        assert_eq!(
+            Instruction::FunctionPtrConst {
+                location: r1,
+                receiver: FunctionReceiver::Local,
+                name: ustr("baz"),
+            }
+            .to_string(),
+            "function_ptr_const r1, local, baz"
+        );
+    }
+}

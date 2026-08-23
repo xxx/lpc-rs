@@ -1,12 +1,11 @@
 use std::{path::PathBuf, sync::Arc};
 
 use lpc_rs_core::{
-    LpcIntInner, RegisterSize, function_receiver::FunctionReceiver, lpc_path::LpcPath,
-    register::RegisterVariant,
+    LpcIntInner, function_receiver::FunctionReceiver, lpc_path::LpcPath, register::RegisterVariant,
 };
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
-use ustr::ustr;
+use ustr::Ustr;
 
 use crate::interpreter::{
     function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
@@ -40,24 +39,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         &mut self,
         location: RegisterVariant,
         receiver: FunctionReceiver,
-        name_idx: RegisterSize,
+        func_name: Ustr,
     ) -> lpc_rs_errors::Result<()> {
-        let Some(func_name) = self
-            .stack
-            .current_frame()?
-            .function
-            .strings
-            .get()
-            .unwrap()
-            .resolve(Self::index_symbol(name_idx))
-        else {
-            return Err(self.runtime_bug("Unable to find the name being pointed to."));
-        };
-
         let address = match receiver {
-            FunctionReceiver::Efun => FunctionAddress::Efun(ustr(func_name)),
-            FunctionReceiver::SimulEfun => FunctionAddress::SimulEfun(ustr(func_name)),
-            FunctionReceiver::Dynamic => FunctionAddress::Dynamic(ustr(func_name)),
+            FunctionReceiver::Efun => FunctionAddress::Efun(func_name),
+            FunctionReceiver::SimulEfun => FunctionAddress::SimulEfun(func_name),
+            FunctionReceiver::Dynamic => FunctionAddress::Dynamic(func_name),
             FunctionReceiver::Local => {
                 let frame = self.stack.current_frame()?;
                 let process = frame.process.clone();
@@ -327,15 +314,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub(crate) fn handle_sconst(
         &mut self,
         location: RegisterVariant,
-        index: usize,
+        value: Ustr,
     ) -> lpc_rs_errors::Result<()> {
-        let function_strings = self.stack.current_frame()?.function.strings.get();
-        const MSG: &str = "the `strings` reference was never assigned to the function.";
-        debug_assert!(function_strings.is_some(), "{}", MSG); // This is very bad if it happens.
-        let Some(strings) = function_strings else {
-            return Err(self.runtime_bug(MSG));
-        };
-        let lpc_string = LpcString::Static(index, strings.clone());
+        let lpc_string = LpcString::Static(value);
 
         trace!(?lpc_string, "Storing static string");
 

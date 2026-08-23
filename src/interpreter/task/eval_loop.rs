@@ -116,8 +116,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::BitwiseNot(r1, r2) => {
                 self.unary_operation(r1, r2, |x, _| x.bitnot())?;
             }
-            Instruction::Call(name_idx) => {
-                self.handle_call(name_idx).await?;
+            Instruction::Call(name) => {
+                self.handle_call(name).await?;
             }
             Instruction::CallEfun(name_idx) => {
                 let process = self.stack.current_frame()?.process.clone();
@@ -139,8 +139,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::CallOther(receiver, name) => {
                 self.handle_call_other(receiver, name).await?;
             }
-            Instruction::CallSimulEfun(name_idx) => {
-                self.handle_call_simul_efun(name_idx).await?;
+            Instruction::CallSimulEfun(name) => {
+                self.handle_call_simul_efun(name).await?;
             }
             Instruction::CatchEnd => {
                 self.catch_points.pop();
@@ -184,9 +184,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::FunctionPtrConst {
                 location,
                 receiver,
-                name_index,
+                name,
             } => {
-                self.handle_functionptrconst(location, receiver, name_index)?;
+                self.handle_functionptrconst(location, receiver, name)?;
             }
             Instruction::Gt(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y, _| x > y)?;
@@ -504,8 +504,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 // r2[r3] = r1;
                 self.handle_store(value_loc, container_loc, index_loc)?;
             }
-            Instruction::SConst(location, index) => {
-                self.handle_sconst(location, index)?;
+            Instruction::SConst(location, value) => {
+                self.handle_sconst(location, value)?;
             }
             Instruction::Shl(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.shl(y))?;
