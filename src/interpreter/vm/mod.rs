@@ -132,8 +132,8 @@ impl Vm {
                         VmOp::PrioritizeCallOut(id) => {
                             self.global_state.prioritize_call_out(id).await;
                         }
-                        VmOp::FatalError(error) => {
-                            error!("VM notified of fatal error: {}. Shutting down.", error);
+                        VmOp::FatalError(e) => {
+                            error!("fatal error, shutting down: {}", e.diagnostic_string());
                             break;
                         },
                     }

@@ -7,6 +7,7 @@ use std::{net::SocketAddr, sync::Arc};
 use bytes::Bytes;
 use flume::Sender as FlumeSender;
 use futures::{SinkExt, StreamExt, stream::SplitSink};
+use lpc_rs_errors::lpc_error;
 use nectar::{
     TelnetCodec, event::TelnetEvent, option::TelnetOption, subnegotiation::SubnegotiationType,
 };
@@ -72,9 +73,10 @@ impl Telnet {
             let listener = match TcpListener::bind(address).await {
                 Ok(listener) => listener,
                 Err(e) => {
-                    error!("Telnet failed to bind to port: {}", &e);
                     let _ = broker_tx
-                        .send_async(BrokerOp::FatalError(e.to_string()))
+                        .send_async(BrokerOp::FatalError(lpc_error!(
+                            "telnet failed to bind its listener: {e}"
+                        )))
                         .await;
                     return;
                 }

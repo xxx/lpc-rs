@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use lpc_rs_errors::LpcError;
+
 use crate::telnet::connection::Connection;
 
 /// Operations that can be communicated to the [`Vm`](crate::interpreter::vm::Vm) remotely.
@@ -12,7 +14,7 @@ pub enum VmOp {
     PrioritizeCallOut(u64),
 
     /// A subsystem has run into a problem that cannot be recovered from, so we need to shut down.
-    FatalError(String),
+    FatalError(LpcError),
 }
 
 impl PartialEq for VmOp {
@@ -20,7 +22,7 @@ impl PartialEq for VmOp {
         match (self, other) {
             (Self::InitiateLogin(a), Self::InitiateLogin(b)) => a.address == b.address,
             (Self::PrioritizeCallOut(a), Self::PrioritizeCallOut(b)) => a == b,
-            (Self::FatalError(a), Self::FatalError(b)) => a == b,
+            (Self::FatalError(a), Self::FatalError(b)) => a.message() == b.message(),
             _ => false,
         }
     }

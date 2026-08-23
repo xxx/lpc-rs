@@ -1,5 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
+use lpc_rs_errors::LpcError;
 use tokio::task::JoinHandle;
 
 use crate::telnet::connection::{Connection, InputTo};
@@ -29,7 +30,7 @@ pub enum BrokerOp {
     /// A subsystem has run into a problem that cannot be recovered from, so we need to shut down.
     /// This op is for sending messages up the chain to the VM only.
     /// The VM will handle actual shutdown.
-    FatalError(String),
+    FatalError(LpcError),
 }
 
 /// Operations that can be performed on outgoing connections

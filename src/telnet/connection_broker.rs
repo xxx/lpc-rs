@@ -121,9 +121,8 @@ impl ConnectionBroker {
                             info!("Shutting down broker main loop");
                             return;
                         }
-                        BrokerOp::FatalError(s) => {
-                            error!("Broker received fatal error: {}", s);
-                            let _ = vm_tx.send(VmOp::FatalError(s)).await;
+                        BrokerOp::FatalError(e) => {
+                            let _ = vm_tx.send(VmOp::FatalError(e)).await;
                             return;
                         }
                     }
@@ -154,12 +153,39 @@ impl ConnectionBroker {
 mod tests {
     use std::time::Duration;
 
+    use lpc_rs_errors::lpc_bug;
+
     use super::*;
     use crate::{
         interpreter::{object_space::ObjectSpace, vm::global_state::GlobalState},
         telnet::connection::Connection,
         test_support::test_config,
     };
+
+    #[tokio::test]
+    async fn a_fatal_error_reaches_the_vm_with_its_diagnostics() {
+        let (broker_tx, broker_rx) = flume::bounded(10);
+        let (vm_tx, mut vm_rx) = tokio::sync::mpsc::channel(10);
+        let telnet = Telnet::new(broker_tx.clone());
+        let config = Arc::new(test_config());
+        let mut broker = ConnectionBroker::new(vm_tx.clone(), broker_rx, telnet);
+        let global_state = Arc::new(GlobalState::new(config, vm_tx));
+        broker
+            .run("127.0.0.1:0", TaskTemplate::from(global_state))
+            .await;
+
+        broker_tx
+            .send_async(BrokerOp::FatalError(lpc_bug!("subsystem died")))
+            .await
+            .unwrap();
+
+        let vm_op = vm_rx.recv().await.unwrap();
+        let VmOp::FatalError(e) = vm_op else {
+            panic!("expected a fatal error, got {vm_op:?}");
+        };
+        assert!(e.is_bug());
+        assert_eq!(e.message(), "subsystem died");
+    }
 
     #[tokio::test]
     async fn test_connection_broker() {
