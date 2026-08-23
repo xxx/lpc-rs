@@ -383,7 +383,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Err(e) => {
                 let frame = self.stack.current_frame()?;
-                return Err(e.with_span(frame.current_debug_span()));
+                return Err(e.or_span(frame.current_debug_span()));
             }
         }
 
@@ -408,7 +408,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Err(e) => {
                 let frame = self.stack.current_frame()?;
-                return Err(e.with_span(frame.current_debug_span()));
+                return Err(e.or_span(frame.current_debug_span()));
             }
         }
 

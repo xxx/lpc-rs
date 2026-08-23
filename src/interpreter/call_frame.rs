@@ -12,7 +12,7 @@ use lpc_rs_core::{
     RegisterSize,
     register::{Register, RegisterVariant},
 };
-use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, span::Span};
+use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
@@ -338,13 +338,13 @@ impl CallFrame {
     /// a convenience method to generate a runtime error
     #[inline]
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
-        lpc_error!(self.current_debug_span(), "runtime error: {}", msg.as_ref())
+        LpcError::runtime(msg).with_span(self.current_debug_span())
     }
 
     /// a convenience method to generate a runtime bug
     #[inline]
     pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
-        lpc_bug!(self.current_debug_span(), "runtime bug: {}", msg.as_ref())
+        LpcError::runtime_bug(msg).with_span(self.current_debug_span())
     }
 
     /// get a string representation of the frame's current current location

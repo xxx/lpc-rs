@@ -9,7 +9,7 @@ use std::{
 
 use decorum::Total;
 use lpc_rs_core::{BaseFloat, LpcFloatInner, LpcIntInner, lpc_type::LpcType};
-use lpc_rs_errors::{LpcError, Result, lpc_error};
+use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::{string, string::concatenate_strings};
 
 use crate::{
@@ -175,23 +175,23 @@ impl LpcRef {
     }
 
     fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> LpcError {
-        lpc_error!(
-            "runtime error: mismatched types: {} ({}) {} {} ({})",
+        LpcError::runtime(format!(
+            "mismatched types: {} ({}) {} {} ({})",
             self,
             self.type_name(),
             op,
             right,
             right.type_name()
-        )
+        ))
     }
 
     fn to_unary_op_error(&self, op: UnaryOperation) -> LpcError {
-        lpc_error!(
-            "runtime error: mismatched types: {} {} ({})",
+        LpcError::runtime(format!(
+            "mismatched types: {} {} ({})",
             op,
             self,
             self.type_name()
-        )
+        ))
     }
 
     pub fn inc(&mut self) -> Result<()> {
@@ -201,7 +201,7 @@ impl LpcRef {
 
                 Ok(())
             }
-            _ => Err(lpc_error!("runtime error: invalid increment")),
+            _ => Err(LpcError::runtime("invalid increment")),
         }
     }
 
@@ -211,7 +211,7 @@ impl LpcRef {
                 *x = x.wrapping_sub(1).into();
                 Ok(())
             }
-            _ => Err(lpc_error!("runtime error: invalid decrement")),
+            _ => Err(LpcError::runtime("invalid decrement")),
         }
     }
 
@@ -234,10 +234,10 @@ impl LpcRef {
     {
         match self {
             LpcRef::String(a) => Ok(f(a)),
-            _ => Err(lpc_error!(
-                "runtime error: invalid access. Expected string, actually {}",
+            _ => Err(LpcError::runtime(format!(
+                "invalid access. Expected string, actually {}",
                 self.type_name()
-            )),
+            ))),
         }
     }
 
@@ -307,17 +307,17 @@ impl LpcRef {
     }
 
     fn expected_array_error(&self) -> LpcError {
-        lpc_error!(
-            "runtime error: invalid access. Expected array, actually {}",
+        LpcError::runtime(format!(
+            "invalid access. Expected array, actually {}",
             self.type_name()
-        )
+        ))
     }
 
     fn expected_mapping_error(&self) -> LpcError {
-        lpc_error!(
-            "runtime error: invalid access. Expected mapping, actually {}",
+        LpcError::runtime(format!(
+            "invalid access. Expected mapping, actually {}",
             self.type_name()
-        )
+        ))
     }
 
     /// The numeric pair `self`/`rhs` form, the int promoted when the kinds
@@ -430,7 +430,7 @@ impl LpcRef {
     }
 
     pub fn div(&self, rhs: &Self) -> Result<Self> {
-        let zero = || lpc_error!("runtime error: Division by zero");
+        let zero = || LpcError::runtime("Division by zero");
 
         match self.promote(rhs) {
             Some(Numeric::Ints(_, 0)) => Err(zero()),
@@ -442,7 +442,7 @@ impl LpcRef {
     }
 
     pub fn rem(&self, rhs: &Self) -> Result<Self> {
-        let zero = || lpc_error!("runtime error: Remainder division by zero");
+        let zero = || LpcError::runtime("Remainder division by zero");
 
         match self.promote(rhs) {
             Some(Numeric::Ints(_, 0)) => Err(zero()),

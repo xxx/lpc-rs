@@ -2,7 +2,7 @@ use std::ops::{Index, IndexMut, RangeFrom};
 
 use arrayvec::ArrayVec;
 use delegate::delegate;
-use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
+use lpc_rs_errors::{LpcError, Result, lpc_error};
 
 use crate::interpreter::{call_frame::CallFrame, lpc_ref::LpcRef};
 
@@ -88,7 +88,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
         match self.stack.last() {
             Some(frame) => frame.runtime_error(msg),
-            None => lpc_error!(None, "runtime error: {}", msg.as_ref()),
+            None => LpcError::runtime(msg),
         }
     }
 
@@ -97,7 +97,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
         match self.stack.last() {
             Some(frame) => frame.runtime_bug(msg),
-            None => lpc_bug!(None, "runtime bug: {}", msg.as_ref()),
+            None => LpcError::runtime_bug(msg),
         }
     }
 

@@ -148,6 +148,23 @@ impl LpcError {
         Self::with_severity(message, LpcErrorSeverity::Bug)
     }
 
+    /// An error raised while running LPC; the prefix is part of the message
+    /// `catch()` hands back.
+    pub fn runtime<T>(message: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        Self::new(format!("runtime error: {}", message.as_ref()))
+    }
+
+    /// A bug raised while running LPC.
+    pub fn runtime_bug<T>(message: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        Self::bug(format!("runtime bug: {}", message.as_ref()))
+    }
+
     pub fn message(&self) -> &str {
         &self.0.message
     }
@@ -410,6 +427,17 @@ mod tests {
         let diagnostics = e.to_diagnostics();
         assert_eq!(diagnostics.len(), 2);
         assert_eq!(diagnostics[1].message, "tail");
+    }
+
+    #[test]
+    fn runtime_constructors_own_the_prefix() {
+        let e = LpcError::runtime("Division by zero");
+        assert_eq!(e.to_string(), "runtime error: Division by zero");
+        assert_eq!(e.severity(), LpcErrorSeverity::Error);
+
+        let b = LpcError::runtime_bug("stack is empty");
+        assert_eq!(b.to_string(), "runtime bug: stack is empty");
+        assert!(b.is_bug());
     }
 
     #[test]

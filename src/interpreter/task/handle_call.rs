@@ -132,15 +132,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // The efun's own frame has no debug span; the caller's is the nearest
         // location for an error built without one.
         if let Err(e) = result {
-            if e.span().is_none() {
-                let caller = self
-                    .stack
-                    .len()
-                    .checked_sub(2)
-                    .and_then(|i| self.stack.get(i));
-                return Err(e.with_span(caller.and_then(|frame| frame.current_debug_span())));
-            }
-            return Err(e);
+            let caller = self
+                .stack
+                .len()
+                .checked_sub(2)
+                .and_then(|i| self.stack.get(i));
+            return Err(e.or_span(caller.and_then(|frame| frame.current_debug_span())));
         }
 
         pop_frame!(self);
