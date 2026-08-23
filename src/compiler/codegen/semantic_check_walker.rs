@@ -2583,6 +2583,34 @@ mod tests {
         use crate::test_support::empty_compilation_context;
 
         #[tokio::test]
+        async fn comparisons_are_int() {
+            let code = r#"
+                int a = "a" == "b";
+                int b = 1.0 < 2.0;
+                int c = this_object() != this_object();
+                int d = ({ 1 }) == ({ 1 });
+                int e = 1 >= 2;
+            "#;
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert!(context.errors.is_empty(), "{:?}", context.errors);
+        }
+
+        #[tokio::test]
+        async fn comparison_result_is_not_the_operand_type() {
+            let code = r#"
+                string s = "a" == "b";
+            "#;
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(context.errors.len(), 1);
+            assert_eq!(
+                context.errors[0].to_string(),
+                "mismatched types: `s` (string) = `\"a\" == \"b\"` (int)"
+            );
+        }
+
+        #[tokio::test]
         async fn validates_both_sides() {
             let mut node = VarInitNode {
                 name: ustr("foo"),

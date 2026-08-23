@@ -271,6 +271,18 @@ pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationCont
 /// Check two types, and return the promotion if one occurs (or the same type if
 /// both are the same) Returns the first type if no promotion is possible.
 fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType {
+    if matches!(
+        op,
+        BinaryOperation::EqEq
+            | BinaryOperation::NotEq
+            | BinaryOperation::Lt
+            | BinaryOperation::Lte
+            | BinaryOperation::Gt
+            | BinaryOperation::Gte
+    ) {
+        return LpcType::Int(false);
+    }
+
     if op == BinaryOperation::Index {
         if matches!(type1, LpcType::Mapping(_)) {
             return LpcType::Mixed(false);
@@ -1766,6 +1778,24 @@ mod tests {
             let type_ = LpcType::String(true);
             let combo = combine_types(type_, type_, BinaryOperation::Add);
             assert_eq!(combo, type_);
+        }
+
+        #[test]
+        fn comparison_is_int() {
+            for op in [
+                BinaryOperation::EqEq,
+                BinaryOperation::NotEq,
+                BinaryOperation::Lt,
+                BinaryOperation::Lte,
+                BinaryOperation::Gt,
+                BinaryOperation::Gte,
+            ] {
+                let combo = combine_types(LpcType::Object(false), LpcType::Object(false), op);
+                assert_eq!(combo, LpcType::Int(false), "{op}");
+
+                let combo = combine_types(LpcType::String(true), LpcType::Int(true), op);
+                assert_eq!(combo, LpcType::Int(false), "{op}");
+            }
         }
 
         #[test]
