@@ -24,8 +24,7 @@ pub async fn papplyv<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
 mod tests {
 
     use super::*;
-    use crate::test_support::initialize_program;
-    use crate::{interpreter::vm::global_state::GlobalState, test_support::compile_prog};
+    use crate::test_support::try_run_prog;
 
     #[tokio::test]
     async fn test_papplyv() {
@@ -35,10 +34,7 @@ mod tests {
             }
         "##;
 
-        let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, config, _) = compile_prog(code).await;
-        let global_state = GlobalState::new(config, tx);
-        let result = initialize_program::<5>(program, global_state).await;
+        let result = try_run_prog(code).await;
 
         let b = result.unwrap();
         let r = b.result().unwrap();

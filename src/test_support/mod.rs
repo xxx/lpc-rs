@@ -5,6 +5,7 @@ use std::sync::Arc;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
+use tokio::sync::mpsc::Receiver;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -16,7 +17,7 @@ use crate::{
         process::Process,
         program::Program,
         task::{Task, task_template::TaskTemplate},
-        vm::global_state::GlobalState,
+        vm::{global_state::GlobalState, vm_op::VmOp},
     },
     util::process_builder::process_insert_and_initialize_program,
 };
@@ -94,24 +95,53 @@ pub async fn compile_prog_with_config(
 }
 
 pub async fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
-    let config = Arc::new(test_config());
-    run_prog_with_config(code, config).await
+    run_prog_with_config(code, Arc::new(test_config())).await
 }
 
 pub async fn run_prog_with_config(code: &str, config: Arc<Config>) -> Task<MAX_CALL_STACK_SIZE> {
+    expect_initialized(try_run_prog_with_config(code, config).await)
+}
+
+/// `run_prog` without the panic: the initializer's error comes back.
+pub async fn try_run_prog(code: &str) -> Result<Task<MAX_CALL_STACK_SIZE>> {
+    try_run_prog_with_config(code, Arc::new(test_config())).await
+}
+
+pub async fn try_run_prog_with_config(
+    code: &str,
+    config: Arc<Config>,
+) -> Result<Task<MAX_CALL_STACK_SIZE>> {
+    run_prog_core(code, config).await.map(|(task, _vm_rx)| task)
+}
+
+/// `run_prog`, also handing back the VM inbox the run's timers post to.
+pub async fn run_prog_with_vm_rx(code: &str) -> (Task<MAX_CALL_STACK_SIZE>, Receiver<VmOp>) {
+    expect_initialized(run_prog_core(code, Arc::new(test_config())).await)
+}
+
+/// Compile `code` as `/my_file.c` with the simul efuns physically inserted,
+/// then bootstrap it on a fresh `GlobalState`.
+async fn run_prog_core(
+    code: &str,
+    config: Arc<Config>,
+) -> Result<(Task<MAX_CALL_STACK_SIZE>, Receiver<VmOp>)> {
     let (program, config, se_proc) = compile_prog_with_config(code, config).await;
 
-    let (tx, _rx) = tokio::sync::mpsc::channel(128);
+    let (tx, rx) = tokio::sync::mpsc::channel(128);
     let global_state = GlobalState::new(config, tx);
     ObjectSpace::insert_process_physical(&global_state.object_space, se_proc);
 
     initialize_program(program, global_state)
         .await
-        .unwrap_or_else(|e| {
-            e.emit_diagnostics();
-            eprintln!("{:?}", e);
-            panic!("failed to initialize");
-        })
+        .map(|task| (task, rx))
+}
+
+fn expect_initialized<T>(result: Result<T>) -> T {
+    result.unwrap_or_else(|e| {
+        e.emit_diagnostics();
+        eprintln!("{:?}", e);
+        panic!("failed to initialize");
+    })
 }
 
 /// Bootstrap `program` the way the driver does (physical insert, then its

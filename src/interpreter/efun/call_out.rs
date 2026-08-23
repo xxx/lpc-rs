@@ -76,14 +76,9 @@ fn to_millis(x: LpcFloatInner) -> Duration {
 #[cfg(test)]
 mod tests {
 
-    use crate::test_support::initialize_program;
     use crate::{
-        interpreter::{
-            lpc_int::LpcInt,
-            lpc_ref::LpcRef,
-            vm::{global_state::GlobalState, vm_op::VmOp},
-        },
-        test_support::compile_prog,
+        interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, vm::vm_op::VmOp},
+        test_support::{run_prog, run_prog_with_vm_rx, try_run_prog},
     };
 
     #[tokio::test]
@@ -98,10 +93,7 @@ mod tests {
             }
         "##;
 
-        let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, config, _) = compile_prog(code).await;
-        let global_state = GlobalState::new(config, tx);
-        let result = initialize_program::<10>(program, global_state).await;
+        let result = try_run_prog(code).await;
 
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -125,14 +117,9 @@ mod tests {
             }
         "##;
 
-        let (tx, mut rx) = tokio::sync::mpsc::channel(128);
-        let (program, config, _) = compile_prog(code).await;
-        let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
-        let _ = initialize_program::<5>(program, global_state.clone())
-            .await
-            .unwrap();
+        let (task, mut rx) = run_prog_with_vm_rx(code).await;
 
-        let id = global_state.with_call_outs(|co| {
+        let id = task.context.global_state.with_call_outs(|co| {
             assert_eq!(co.len(), 1);
             co.queue().iter().next().unwrap().1.id
         });
@@ -158,12 +145,8 @@ mod tests {
             }
         "##;
 
-        let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, config, _) = compile_prog(code).await;
-        let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
-        let _ = initialize_program::<10>(program, global_state.clone())
-            .await
-            .unwrap();
+        let task = run_prog(code).await;
+        let global_state = task.context.global_state.clone();
 
         // Only the un-removed call out made it into the physical queue.
         global_state.with_call_outs(|co| assert_eq!(co.len(), 1));
@@ -183,12 +166,8 @@ mod tests {
             }
         "##;
 
-        let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, config, _) = compile_prog(code).await;
-        let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
-        let task = initialize_program::<10>(program, global_state.clone())
-            .await
-            .expect("init failed");
+        let task = run_prog(code).await;
+        let global_state = task.context.global_state.clone();
 
         task.result()
             .unwrap()

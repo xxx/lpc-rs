@@ -1,7 +1,6 @@
 use std::{path::PathBuf, sync::Arc, thread::JoinHandle};
 
 use bit_set::BitSet;
-use derive_builder::Builder;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
@@ -32,28 +31,20 @@ use crate::{
 };
 
 /// A type for globally-shared state that every [`Task`] will need access to.
-#[derive(Debug, Builder)]
+#[derive(Debug)]
 #[readonly::make]
-#[builder(setter(into), pattern = "owned")]
 pub struct GlobalState {
     /// Our object space, which stores all of the system objects (masters and clones)
-    #[builder(default, setter(into))]
     pub object_space: Arc<ObjectSpace>,
 
     /// All upvalues are stored in the [`Vm`](crate::interpreter::vm::Vm), and are shared between all [`Task`]s.
     /// Each slot holds a transactional `VarId`; the committed value lives in the committer's world.
-    #[builder(default, setter(into))]
     upvalues: Arc<RwLock<GcVarIdBank>>,
 
     /// The [`Config`] that's in use for this [`Vm`](crate::interpreter::vm::Vm)
-    #[builder(default, setter(into))]
     pub config: Arc<Config>,
 
     /// Enqueued call outs
-    #[builder(
-        default = "RwLock::new(CallOuts::new(self.tx.clone().unwrap()))",
-        setter(into)
-    )]
     call_outs: RwLock<CallOuts>,
 
     /// The channel used to send [`VmOp`]s to the [`Vm`](crate::interpreter::vm::Vm)
@@ -63,7 +54,6 @@ pub struct GlobalState {
     pub(crate) committer_tx: flume::Sender<CommitProtocol>,
 
     /// Handle to the committer thread.
-    #[builder(default)]
     committer_handle: Option<JoinHandle<Snapshot>>,
 }
 
@@ -86,9 +76,8 @@ impl GlobalState {
         }
     }
 
-    /// Spawn a committer thread; return its sender and join handle. Used by
-    /// `new` and by the few builder-based test fixtures.
-    pub(crate) fn spawn_committer() -> (flume::Sender<CommitProtocol>, JoinHandle<Snapshot>) {
+    /// Spawn a committer thread; return its sender and join handle.
+    fn spawn_committer() -> (flume::Sender<CommitProtocol>, JoinHandle<Snapshot>) {
         let (tx, rx) = flume::unbounded();
         let committer_tx = tx.clone();
         let handle = std::thread::Builder::new()

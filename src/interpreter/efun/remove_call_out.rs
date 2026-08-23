@@ -15,12 +15,9 @@ pub async fn remove_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -
 #[cfg(test)]
 mod tests {
 
-    use std::sync::Arc;
-
-    use crate::test_support::initialize_program;
     use crate::{
-        interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, vm::global_state::GlobalState},
-        test_support::compile_prog,
+        interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef},
+        test_support::run_prog,
     };
 
     #[tokio::test]
@@ -37,12 +34,8 @@ mod tests {
             }
         "##;
 
-        let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, config, _) = compile_prog(code).await;
-        let global_state = Arc::new(GlobalState::new(config, tx));
-        let task = initialize_program::<10>(program, global_state.clone())
-            .await
-            .expect("init failed");
+        let task = run_prog(code).await;
+        let global_state = task.context.global_state.clone();
 
         // The same-attempt cancellation returns the call out's full delay
         // (it never ran), not -1 (which would mean "not found").
@@ -77,16 +70,15 @@ mod tests {
             }
         "##;
 
-        let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, config, _) = compile_prog(code).await;
-        let query_fn = program
+        let mut task = run_prog(code).await;
+        let global_state = task.context.global_state.clone();
+        let query_fn = task
+            .context
+            .process
+            .program
             .lookup_function("query")
             .expect("no `query` found")
             .clone();
-        let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
-        let mut task = initialize_program::<10>(program, global_state.clone())
-            .await
-            .expect("init failed");
 
         // `create` committed, so call out 0 is in the physical queue.
         global_state.with_call_outs(|co| assert_eq!(co.len(), 1));

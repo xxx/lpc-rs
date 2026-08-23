@@ -351,30 +351,17 @@ mod tests {
     use crate::{
         interpreter::{
             program::ProgramBuilder,
-            vm::{
-                global_state::{GlobalState, GlobalStateBuilder},
-                vm_op::VmOp,
-            },
+            vm::{global_state::GlobalState, vm_op::VmOp},
         },
         test_support::test_config,
     };
 
     /// A fresh, uncommitted `EfunContext` whose call stack holds one real
-    /// frame. The committer is spawned (as in the other efun fixtures) so
-    /// effect flushing and cell mints behave as in a VM. `frame()` must
-    /// resolve, because `create_object` records the caller's debug span.
+    /// frame: `create_object` records the caller's debug span, so `frame()`
+    /// must resolve.
     fn efun_context() -> (TaskContext, CallStack<10>) {
         let (tx, _rx) = tokio::sync::mpsc::channel::<VmOp>(128);
-        let (committer_tx, committer_handle) = GlobalState::spawn_committer();
-        let config = Arc::new(test_config());
-        let global_state = GlobalStateBuilder::default()
-            .config(config.clone())
-            .object_space(ObjectSpace::new(config))
-            .tx(tx)
-            .committer_tx(committer_tx)
-            .committer_handle(Some(committer_handle))
-            .build()
-            .expect("global state builder");
+        let global_state = GlobalState::new(test_config(), tx);
         let upvalues = global_state.clone_upvalues();
         let program = ProgramBuilder::default()
             .filename(LpcPath::InGame("/caller".into()))

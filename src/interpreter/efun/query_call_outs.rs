@@ -28,8 +28,7 @@ pub async fn query_call_outs<const N: usize>(context: &mut EfunContext<'_, N>) -
 mod tests {
 
     use super::*;
-    use crate::test_support::initialize_program;
-    use crate::{interpreter::vm::global_state::GlobalState, test_support::compile_prog};
+    use crate::test_support::run_prog;
 
     /// The query sees this attempt's own pending call outs: the schedules
     /// are recorded but not yet in the physical queue.
@@ -47,12 +46,8 @@ mod tests {
             }
         "##;
 
-        let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, config, _) = compile_prog(code).await;
-        let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
-        let task = initialize_program::<10>(program, global_state.clone())
-            .await
-            .unwrap();
+        let task = run_prog(code).await;
+        let global_state = task.context.global_state.clone();
 
         task.result()
             .unwrap()
@@ -95,16 +90,15 @@ mod tests {
             }
         "##;
 
-        let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, config, _) = compile_prog(code).await;
-        let query_fn = program
+        let mut task = run_prog(code).await;
+        let global_state = task.context.global_state.clone();
+        let query_fn = task
+            .context
+            .process
+            .program
             .lookup_function("query")
             .expect("no `query` found")
             .clone();
-        let global_state = std::sync::Arc::new(GlobalState::new(config, tx));
-        let mut task = initialize_program::<10>(program, global_state.clone())
-            .await
-            .unwrap();
 
         // The initializer's transaction committed, so both call outs are physical.
         global_state.with_call_outs(|co| assert_eq!(co.len(), 2));

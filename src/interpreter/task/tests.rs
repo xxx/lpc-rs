@@ -15,11 +15,10 @@ use crate::{
     interpreter::{
         CommittedReader,
         lpc_ref::{LpcRef, NULL},
-        object_space::ObjectSpace,
         process::Process,
         vm::global_state::GlobalState,
     },
-    test_support::{compile_prog, run_prog},
+    test_support::{initialize_program, run_prog, try_run_prog, try_run_prog_with_config},
 };
 
 /// Committed global values for a process, read through the committer.
@@ -467,10 +466,8 @@ mod test_instructions {
 
     mod test_call_fp {
         use claims::assert_ok;
-        use tokio::sync::mpsc;
 
         use super::*;
-        use crate::test_support::initialize_program;
         use crate::{interpreter::vm::Vm, test_support::test_config};
 
         #[tokio::test]
@@ -745,13 +742,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let (program, config, process) = compile_prog(code).await;
-            let (tx, _rx) = mpsc::channel(128);
-            let global_state = Arc::new(GlobalState::new(config, tx));
-
-            ObjectSpace::insert_process_physical(&global_state.object_space, process);
-
-            let result = initialize_program::<32>(program, global_state.clone()).await;
+            let result = try_run_prog(code).await;
 
             assert_eq!(
                 result.unwrap_err().to_string(),
@@ -768,10 +759,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let (program, _config, process) = compile_prog(code).await;
-            ObjectSpace::insert_process_physical(&global_state.object_space, process);
-
-            let result = initialize_program::<10>(program, global_state.clone()).await;
+            let result = try_run_prog(code).await;
 
             assert_eq!(
                 result.unwrap_err().to_string(),
@@ -788,12 +776,7 @@ mod test_instructions {
                     }
                 "##};
 
-            let (program, _config, process) = compile_prog(code).await;
-            let object_space = ObjectSpace::default();
-            let space_cell = object_space;
-            ObjectSpace::insert_process_physical(&space_cell, process);
-
-            let result = initialize_program::<20>(program, global_state.clone()).await;
+            let result = try_run_prog(code).await;
 
             assert_ok!(result);
         }
@@ -1392,7 +1375,6 @@ mod test_instructions {
 
     mod test_idiv {
         use super::*;
-        use crate::test_support::initialize_program;
 
         #[tokio::test]
         async fn stores_the_value() {
@@ -1424,11 +1406,7 @@ mod test_instructions {
                     mixed s = q / r;
                 "##};
 
-            let (program, config, _) = compile_prog(code).await;
-            let (tx, _rx) = mpsc::channel(128);
-            let global_state = GlobalState::new(config, tx);
-
-            let r = initialize_program::<10>(program, global_state).await;
+            let r = try_run_prog(code).await;
 
             assert_eq!(
                 r.unwrap_err().to_string(),
@@ -1439,7 +1417,6 @@ mod test_instructions {
 
     mod test_imod {
         use super::*;
-        use crate::test_support::initialize_program;
 
         #[tokio::test]
         async fn stores_the_value() {
@@ -1471,11 +1448,7 @@ mod test_instructions {
                     mixed s = q % r;
                 "##};
 
-            let (program, config, _) = compile_prog(code).await;
-            let (tx, _rx) = mpsc::channel(128);
-            let global_state = GlobalState::new(config, tx);
-
-            let r = initialize_program::<20>(program, global_state).await;
+            let r = try_run_prog(code).await;
 
             assert_eq!(
                 r.unwrap_err().to_string(),
@@ -2262,7 +2235,6 @@ mod test_instructions {
 
         use super::*;
         use crate::interpreter::program::Program;
-        use crate::test_support::initialize_program;
         use crate::test_support::test_config;
 
         #[tokio::test]
@@ -2462,7 +2434,6 @@ mod test_limits {
 
     use super::*;
     use crate::test_config_builder;
-    use crate::test_support::initialize_program;
 
     #[tokio::test]
     async fn errors_on_stack_overflow() {
@@ -2474,11 +2445,7 @@ mod test_limits {
                 }
             "##};
 
-        let (program, config, _) = compile_prog(code).await;
-        let (tx, _rx) = mpsc::channel(128);
-        let global_state = GlobalState::new(config, tx);
-
-        let r = initialize_program::<20>(program, global_state).await;
+        let r = try_run_prog(code).await;
 
         assert_eq!(r.unwrap_err().to_string(), "stack overflow");
     }
@@ -2491,17 +2458,12 @@ mod test_limits {
                 }
             "##};
 
-        let (program, _, _) = compile_prog(code).await;
-        let (tx, _rx) = mpsc::channel(128);
-
         let config = test_config_builder!()
             .max_execution_time(40_u64)
             .build()
             .unwrap();
 
-        let global_state = GlobalState::new(config, tx);
-
-        let r = initialize_program::<20>(program, global_state).await;
+        let r = try_run_prog_with_config(code, Arc::new(config)).await;
 
         assert_eq!(
             r.unwrap_err().to_string(),

@@ -28,8 +28,7 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
 #[cfg(test)]
 mod tests {
 
-    use crate::test_support::initialize_program;
-    use crate::{interpreter::vm::global_state::GlobalState, test_support::compile_prog};
+    use crate::test_support::run_prog;
 
     #[tokio::test]
     async fn test_destruct() {
@@ -42,12 +41,7 @@ mod tests {
             }
         "##;
 
-        let (tx, _rx) = tokio::sync::mpsc::channel(128);
-        let (program, config, _) = compile_prog(code).await;
-        let global_state = GlobalState::new(config, tx);
-        let result = initialize_program::<5>(program, global_state)
-            .await
-            .unwrap();
+        let result = run_prog(code).await;
 
         let space = result
             .context
@@ -57,6 +51,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert!(space.contains(&"/my_file".to_owned())); // clone is removed
-        assert_eq!(result.context.object_space().len(), 1);
+        // The prototype and the simul-efun object `run_prog` inserts.
+        assert_eq!(result.context.object_space().len(), 2);
     }
 }

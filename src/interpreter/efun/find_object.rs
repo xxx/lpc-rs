@@ -48,11 +48,7 @@ mod tests {
             program::{Program, ProgramBuilder},
             task::Task,
             task_context::TaskContext,
-            vm::{
-                Vm,
-                global_state::{GlobalState, GlobalStateBuilder},
-                vm_op::VmOp,
-            },
+            vm::{Vm, global_state::GlobalState, vm_op::VmOp},
         },
         test_support::{compile_prog, test_config},
     };
@@ -64,15 +60,7 @@ mod tests {
     ) -> TaskContext {
         let process = Process::new(program);
 
-        let (committer_tx, committer_handle) = GlobalState::spawn_committer();
-        let global_state = GlobalStateBuilder::default()
-            .config(config.clone())
-            .object_space(ObjectSpace::new(config))
-            .tx(tx)
-            .committer_tx(committer_tx)
-            .committer_handle(Some(committer_handle))
-            .build()
-            .unwrap();
+        let global_state = GlobalState::new(config, tx);
 
         TaskContext::new(Arc::new(global_state), process, None, None)
     }
