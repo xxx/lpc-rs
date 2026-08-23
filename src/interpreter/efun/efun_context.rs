@@ -15,7 +15,7 @@ use crate::interpreter::{
     process::Process,
     program::Program,
     stm::{Effect, TxnHandle},
-    task::{Task, task_id::TaskId},
+    task::Task,
     task_context::{ObjectLookup, TaskContext},
 };
 
@@ -23,7 +23,6 @@ use crate::interpreter::{
 /// Efuns when they're called
 #[derive(Debug)]
 pub struct EfunContext<'task, const N: usize> {
-    task_id: TaskId,
     stack: &'task mut CallStack<N>,
     task_context: &'task TaskContext,
 
@@ -34,13 +33,8 @@ pub struct EfunContext<'task, const N: usize> {
 }
 
 impl<'task, const N: usize> EfunContext<'task, N> {
-    pub fn new(
-        task_id: TaskId,
-        stack: &'task mut CallStack<N>,
-        task_context: &'task TaskContext,
-    ) -> Self {
+    pub fn new(stack: &'task mut CallStack<N>, task_context: &'task TaskContext) -> Self {
         Self {
-            task_id,
             stack,
             task_context,
 
@@ -102,12 +96,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             })?;
 
         Ok(process)
-    }
-
-    /// Return the [`TaskId`] of the current `Task`
-    #[inline]
-    pub fn task_id(&self) -> TaskId {
-        self.task_id
     }
 
     /// Get a reference to the current [`CallFrame`]
@@ -253,7 +241,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         let mut new_task_context = self.task_context.clone().with_process(process.clone());
         new_task_context.chain_count += 1;
 
-        Task::<N>::initialize_sub_process(self.task_id(), new_task_context).await?;
+        Task::<N>::initialize_process(new_task_context).await?;
 
         Ok(())
     }
@@ -381,7 +369,7 @@ mod tests {
     #[tokio::test]
     async fn destruct_and_recreate_cycles_yield_fresh_objects() {
         let (task_context, mut stack) = efun_context();
-        let ctx = EfunContext::new(TaskId::default(), &mut stack, &task_context);
+        let ctx = EfunContext::new(&mut stack, &task_context);
 
         let path = LpcPath::new_in_game(
             "/example",

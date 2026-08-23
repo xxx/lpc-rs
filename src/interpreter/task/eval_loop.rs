@@ -14,9 +14,7 @@ use crate::{
         lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
         lpc_string::LpcString,
-        task::{
-            CatchPoint, Task, apply_in_location, get_location, set_location, task_state::TaskState,
-        },
+        task::{CatchPoint, Task, apply_in_location, get_location, set_location},
     },
     pop_frame,
 };
@@ -26,8 +24,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
     #[async_recursion]
     pub async fn resume(&mut self) -> lpc_rs_errors::Result<()> {
-        self.state = TaskState::Running;
-
         let f = &self.stack.current_frame()?.function.clone();
 
         if f.prototype.is_efun() {
@@ -71,7 +67,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         assert!(self.stack.is_empty());
-        self.state = TaskState::Complete;
         Ok(())
     }
 
@@ -86,8 +81,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[async_recursion]
     async fn eval_one_instruction(&mut self) -> lpc_rs_errors::Result<bool> {
         if self.stack.is_empty() {
-            self.state = TaskState::Complete;
-
             return Ok(true);
         }
 
@@ -95,8 +88,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let frame = match self.stack.current_frame_mut() {
                 Ok(x) => x,
                 Err(_) => {
-                    self.state = TaskState::Error;
-
                     warn!("Expected to get an instruction, but there are no more frames.");
 
                     return Ok(true);
@@ -104,8 +95,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             };
 
             let Some(instruction) = frame.instruction() else {
-                self.state = TaskState::Error;
-
                 warn!("No more instructions. Missing Ret instruction?");
 
                 return Ok(true);
@@ -465,7 +454,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 // halt at the end of all input
                 if self.stack.is_empty() {
-                    self.state = TaskState::Complete;
                     return Ok(true);
                 }
             }

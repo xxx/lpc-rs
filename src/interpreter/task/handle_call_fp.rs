@@ -43,7 +43,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         if !proc.is_initialized(&self.context.txn) {
             let ctx = self.context.clone().with_process(proc.clone());
-            Self::initialize_sub_process(self.id, ctx).await?;
+            Self::initialize_process(ctx).await?;
         }
 
         let adjusted_num_args = num_args - (is_dynamic_receiver as RegisterSize);

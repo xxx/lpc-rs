@@ -5,8 +5,6 @@ mod handle_call_fp;
 mod handle_call_other;
 mod handle_data;
 mod location;
-pub mod task_id;
-pub mod task_state;
 pub mod task_template;
 
 #[cfg(test)]
@@ -49,7 +47,6 @@ use crate::interpreter::{
         AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, TxnHandle,
         commit_changeset, flush_effects, run_attempts, start_txn,
     },
-    task::{task_id::TaskId, task_state::TaskState},
     task_context::TaskContext,
 };
 
@@ -125,8 +122,6 @@ impl TaskSeed {
 #[derive(Educe, Clone)]
 #[educe(Debug)]
 pub struct Task<const STACKSIZE: usize> {
-    pub id: TaskId,
-
     /// The call stack
     pub stack: CallStack<STACKSIZE>,
 
@@ -160,9 +155,6 @@ pub struct Task<const STACKSIZE: usize> {
     /// The per-attempt execution timeout, set by the top-level entry point.
     timeout_ms: Option<u64>,
 
-    /// The current state of the task
-    pub state: TaskState,
-
     /// Store the most recently popped frame, for testing
     #[cfg(test)]
     pub popped_frame: Option<CallFrame>,
@@ -176,17 +168,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Create a new Task
     #[instrument(skip_all)]
     pub fn new(task_context: TaskContext) -> Self {
-        Self::new_sub_task(TaskId::new(), task_context)
-    }
-
-    /// Create a new [`Task`], as a subtask of the given [`TaskId`].
-    /// A subtask should _never_ execute simultaneously with any other Task with
-    /// the same [`TaskId`], as that can lead to deadlocks.
-    pub fn new_sub_task(parent_id: TaskId, task_context: TaskContext) -> Self {
         // A joinable handle is a caller's live attempt; the empty default is not.
         let joins_parent = task_context.txn().joinable();
         Self {
-            id: parent_id,
             stack: CallStack::default(),
             catch_points: thin_vec![],
             args: ThinVec::with_capacity(4),
@@ -196,7 +180,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             joins_parent,
             seed: None,
             timeout_ms: None,
-            state: TaskState::New,
 
             #[cfg(test)]
             popped_frame: None,
@@ -214,7 +197,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.partial_args.clear();
         self.array_items.clear();
         self.context.reset();
-        self.state = TaskState::New;
 
         #[cfg(test)]
         {
@@ -223,21 +205,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Initialize a [`Process`] by calling its initializer function, using the
-    /// given [`TaskContext`]. This creates a new unique Task ID.
-    /// It's assumed that the process has already been inserted into the [`ObjectSpace`](crate::interpreter::object_space::ObjectSpace)
-    pub async fn initialize_process(context: TaskContext) -> Result<Task<STACKSIZE>> {
-        Self::initialize_sub_process(TaskId::new(), context).await
-    }
-
-    /// Initialize a [`Process`] by calling its initializer function, using the
-    /// given [`TaskContext`], using the specified Task ID.
+    /// given [`TaskContext`].
     /// It's assumed that the process has already been inserted into the [`ObjectSpace`](crate::interpreter::object_space::ObjectSpace).
     /// The task is returned unevaluated when another transaction already
     /// initialized the process.
-    pub async fn initialize_sub_process(
-        task_id: TaskId,
-        context: TaskContext,
-    ) -> Result<Task<STACKSIZE>> {
+    pub async fn initialize_process(context: TaskContext) -> Result<Task<STACKSIZE>> {
         let Some(initializer) = context.process.program.initializer.clone() else {
             let msg = format!(
                 "Init function not found for `{}`. This should never happen.",
@@ -249,7 +221,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         };
 
         let max_execution_time = context.config().max_execution_time;
-        let mut task = Task::new_sub_task(task_id, context);
+        let mut task = Task::new(context);
         let seed = TaskSeed {
             process: task.context.process().clone(),
             function: initializer,
@@ -614,12 +586,6 @@ impl<const STACKSIZE: usize> Mark for Task<STACKSIZE> {
         })
     }
 }
-
-// impl<const STACKSIZE: usize> Drop for Task<STACKSIZE> {
-//     fn drop(&mut self) {
-//         self.context.process.lock.try_release(self.id);
-//     }
-// }
 
 #[cfg(test)]
 mod stm_retry_tests {

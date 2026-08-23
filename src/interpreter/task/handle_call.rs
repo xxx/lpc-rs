@@ -232,7 +232,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     where
         S: AsRef<str>,
     {
-        let mut ctx = EfunContext::new(self.id, &mut self.stack, &self.context);
+        let mut ctx = EfunContext::new(&mut self.stack, &self.context);
 
         call_efun(name.as_ref(), &mut ctx).await?;
 

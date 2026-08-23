@@ -13,7 +13,7 @@ use crate::{
         lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
         process::Process,
-        task::{Task, get_location, task_id::TaskId},
+        task::{Task, get_location},
         task_context::{ObjectLookup, TaskContext},
     },
 };
@@ -51,14 +51,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             match &receiver_ref {
                 LpcRef::String(_) | LpcRef::Object(_) => {
-                    Self::resolve_result(
-                        self.id,
-                        receiver_ref,
-                        &*function_name,
-                        &args,
-                        &self.context,
-                    )
-                    .await?
+                    Self::resolve_result(receiver_ref, &*function_name, &args, &self.context)
+                        .await?
                 }
                 LpcRef::Array(_) => {
                     let mut refs = receiver_ref
@@ -67,10 +61,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     for lpc_ref in &mut refs {
                         let ctx = &self.context;
 
-                        let result =
-                            Self::resolve_result(self.id, lpc_ref, &*function_name, &args, ctx)
-                                .await
-                                .unwrap_or(NULL);
+                        let result = Self::resolve_result(lpc_ref, &*function_name, &args, ctx)
+                            .await
+                            .unwrap_or(NULL);
 
                         *lpc_ref = result;
                     }
@@ -83,15 +76,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     })?;
 
                     for (_key_ref, value_ref) in map.iter_mut() {
-                        let result = Self::resolve_result(
-                            self.id,
-                            value_ref,
-                            &*function_name,
-                            &args,
-                            &self.context,
-                        )
-                        .await
-                        .unwrap_or(NULL);
+                        let result =
+                            Self::resolve_result(value_ref, &*function_name, &args, &self.context)
+                                .await
+                                .unwrap_or(NULL);
 
                         *value_ref = result;
                     }
@@ -118,7 +106,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[async_recursion]
     async fn resolve_result<T>(
-        task_id: TaskId,
         receiver_ref: &LpcRef,
         function_name: T,
         args: &[LpcRef],
@@ -128,7 +115,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         T: AsRef<str> + Send + Sync,
     {
         let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
-            task_id,
             receiver_ref,
             function_name.as_ref(),
             task_context,
@@ -170,7 +156,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(skip_all)]
     async fn resolve_call_other_receiver<T>(
-        task_id: TaskId,
         receiver_ref: &LpcRef,
         name: T,
         context: &TaskContext,
@@ -208,10 +193,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // undefined function in old lib code, this is why.
         let result = if !process.is_initialized(context.txn()) {
             let ctx = context.clone().with_process(process);
-            Self::initialize_sub_process(task_id, ctx)
-                .await?
-                .context
-                .process
+            Self::initialize_process(ctx).await?.context.process
         } else {
             process
         };
