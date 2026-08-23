@@ -823,188 +823,6 @@ impl CodegenWalker {
 
         Ok(result)
     }
-
-    async fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
-        let node_span = node.span();
-        let CallChain::Root {
-            ref mut receiver,
-            ref name,
-            ref namespace,
-        } = node.chain
-        else {
-            return Err(lpc_bug!(node.span, "Invalid call chain"));
-        };
-        let has_receiver = receiver.is_some();
-
-        if name.as_str() == CATCH {
-            return self.emit_catch(node).await;
-        }
-
-        let argument_len = node.arguments.len();
-        let mut arg_results = Vec::with_capacity(argument_len);
-
-        for argument in &mut node.arguments {
-            argument.visit(self).await?;
-            arg_results.push(self.current_result);
-        }
-
-        if name.as_str() == SIZEOF {
-            let result = self.register_counter.next().unwrap().as_local();
-            let instruction = Instruction::Sizeof(*arg_results.first().unwrap(), result);
-            push_instruction!(self, instruction, node.span);
-            self.current_result = result;
-
-            return Ok(());
-        }
-
-        let instruction = {
-            push_instruction!(self, Instruction::ClearArgs, node.span);
-
-            // populate the args vector
-            for result in &arg_results {
-                push_instruction!(self, Instruction::PushArg(*result), node.span);
-            }
-
-            if let Some(rcvr) = receiver {
-                rcvr.visit(self).await?;
-                let receiver_result = self.current_result;
-
-                let name_register = self.register_counter.next().unwrap().as_local();
-
-                push_instruction!(self, Instruction::SConst(name_register, *name), node.span);
-
-                Instruction::CallOther(receiver_result, name_register)
-            } else if name.as_str() == CALL_OTHER {
-                debug_assert!(
-                    arg_results.len() >= 2,
-                    "CallOther requires at least 2 arguments, for the receiver and function name"
-                );
-                let receiver = arg_results[0];
-                let name_index = arg_results[1];
-
-                Instruction::CallOther(receiver, name_index)
-            } else {
-                if_chain! {
-                    if let Some(x) = self.context.lookup_var(name);
-                    if x.type_.matches_type(LpcType::Function(false));
-                    then {
-                        Instruction::CallFp(self.location_of(name)?)
-                    } else {
-                        let Some(func) =
-                            self.context.lookup_function_complete(name, namespace) else {
-                            return Err(lpc_bug!(
-                                node.span,
-                                "Cannot find function during code gen: {}",
-                                name
-                            ));
-                        };
-
-                        match func.prototype().kind {
-                            FunctionKind::Local => Instruction::Call(ustr(&func.mangle())),
-                            FunctionKind::Efun => {
-                                let idx = EFUN_PROTOTYPES.get_index_of(name.as_str()).unwrap();
-                                Instruction::CallEfun(u8::try_from(idx)?)
-                            }
-                            FunctionKind::SimulEfun => Instruction::CallSimulEfun(*name),
-                            FunctionKind::Closure => {
-                                return Err(lpc_bug!(
-                                    node.span,
-                                    "closure `{}` called by name",
-                                    name
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
-        push_instruction!(self, instruction, node.span);
-
-        let push_copy = |walker: &mut Self| {
-            let next_register = walker.register_counter.next().unwrap().as_local();
-
-            push_instruction!(
-                walker,
-                Instruction::Copy(Register(0).as_local(), next_register),
-                node_span
-            );
-
-            walker.current_result = next_register;
-        };
-
-        // Take care of the result after the call returns.
-        if let Some(func) = self.context.lookup_function_complete(name, namespace) {
-            if func.as_ref().return_type == LpcType::Void {
-                self.current_result = Register(0).as_local();
-            } else {
-                push_copy(self);
-            }
-        } else if let Some(Symbol {
-            type_: LpcType::Function(false) | LpcType::Mixed(false),
-            ..
-        }) = self.context.lookup_var(name)
-        {
-            push_copy(self);
-        } else if has_receiver
-            || matches!(
-                self.context.scopes.lookup(name),
-                Some(Symbol {
-                    type_: LpcType::Function(false),
-                    ..
-                })
-            )
-        {
-            push_copy(self);
-        } else {
-            return Err(lpc_bug!(
-                node.span,
-                "Unable to find the return type for `{}`. This is a weird issue that indicates \
-                something very broken in the semantic checks, or that I'm not looking hard enough.",
-                name
-            ));
-        }
-
-        Ok(())
-    }
-
-    async fn visit_call_chain(&mut self, node: &mut CallNode) -> Result<()> {
-        let CallChain::Node(chain_node) = &mut node.chain else {
-            return Err(lpc_bug!(node.span, "Invalid call chain"));
-        };
-
-        chain_node.visit(self).await?;
-        let fp_loc = self.current_result;
-
-        let argument_len = node.arguments.len();
-        let mut arg_results = Vec::with_capacity(argument_len);
-
-        for argument in &mut node.arguments {
-            argument.visit(self).await?;
-            arg_results.push(self.current_result);
-        }
-
-        push_instruction!(self, Instruction::ClearArgs, node.span);
-
-        // populate the args vector
-        for result in &arg_results {
-            push_instruction!(self, Instruction::PushArg(*result), node.span);
-        }
-
-        push_instruction!(self, Instruction::CallFp(fp_loc), node.span);
-
-        let next_register = self.register_counter.next().unwrap().as_local();
-
-        push_instruction!(
-            self,
-            Instruction::Copy(Register(0).as_local(), next_register),
-            node.span()
-        );
-
-        self.current_result = next_register;
-
-        Ok(())
-    }
 }
 
 impl ContextHolder for CodegenWalker {
@@ -1211,11 +1029,187 @@ impl TreeWalker for CodegenWalker {
     }
 
     #[instrument(skip_all)]
-    async fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
-        match &node.chain {
-            CallChain::Root { .. } => self.visit_call_root(node).await,
-            CallChain::Node(_) => self.visit_call_chain(node).await,
+    async fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
+        let node_span = node.span();
+        let CallChain::Root {
+            ref mut receiver,
+            ref name,
+            ref namespace,
+        } = node.chain
+        else {
+            return Err(lpc_bug!(node.span, "Invalid call chain"));
+        };
+        let has_receiver = receiver.is_some();
+
+        if name.as_str() == CATCH {
+            return self.emit_catch(node).await;
         }
+
+        let argument_len = node.arguments.len();
+        let mut arg_results = Vec::with_capacity(argument_len);
+
+        for argument in &mut node.arguments {
+            argument.visit(self).await?;
+            arg_results.push(self.current_result);
+        }
+
+        if name.as_str() == SIZEOF {
+            let result = self.register_counter.next().unwrap().as_local();
+            let instruction = Instruction::Sizeof(*arg_results.first().unwrap(), result);
+            push_instruction!(self, instruction, node.span);
+            self.current_result = result;
+
+            return Ok(());
+        }
+
+        let instruction = {
+            push_instruction!(self, Instruction::ClearArgs, node.span);
+
+            // populate the args vector
+            for result in &arg_results {
+                push_instruction!(self, Instruction::PushArg(*result), node.span);
+            }
+
+            if let Some(rcvr) = receiver {
+                rcvr.visit(self).await?;
+                let receiver_result = self.current_result;
+
+                let name_register = self.register_counter.next().unwrap().as_local();
+
+                push_instruction!(self, Instruction::SConst(name_register, *name), node.span);
+
+                Instruction::CallOther(receiver_result, name_register)
+            } else if name.as_str() == CALL_OTHER {
+                debug_assert!(
+                    arg_results.len() >= 2,
+                    "CallOther requires at least 2 arguments, for the receiver and function name"
+                );
+                let receiver = arg_results[0];
+                let name_index = arg_results[1];
+
+                Instruction::CallOther(receiver, name_index)
+            } else {
+                if_chain! {
+                    if let Some(x) = self.context.lookup_var(name);
+                    if x.type_.matches_type(LpcType::Function(false));
+                    then {
+                        Instruction::CallFp(self.location_of(name)?)
+                    } else {
+                        let Some(func) =
+                            self.context.lookup_function_complete(name, namespace) else {
+                            return Err(lpc_bug!(
+                                node.span,
+                                "Cannot find function during code gen: {}",
+                                name
+                            ));
+                        };
+
+                        match func.prototype().kind {
+                            FunctionKind::Local => Instruction::Call(ustr(&func.mangle())),
+                            FunctionKind::Efun => {
+                                let idx = EFUN_PROTOTYPES.get_index_of(name.as_str()).unwrap();
+                                Instruction::CallEfun(u8::try_from(idx)?)
+                            }
+                            FunctionKind::SimulEfun => Instruction::CallSimulEfun(*name),
+                            FunctionKind::Closure => {
+                                return Err(lpc_bug!(
+                                    node.span,
+                                    "closure `{}` called by name",
+                                    name
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        push_instruction!(self, instruction, node.span);
+
+        let push_copy = |walker: &mut Self| {
+            let next_register = walker.register_counter.next().unwrap().as_local();
+
+            push_instruction!(
+                walker,
+                Instruction::Copy(Register(0).as_local(), next_register),
+                node_span
+            );
+
+            walker.current_result = next_register;
+        };
+
+        // Take care of the result after the call returns.
+        if let Some(func) = self.context.lookup_function_complete(name, namespace) {
+            if func.as_ref().return_type == LpcType::Void {
+                self.current_result = Register(0).as_local();
+            } else {
+                push_copy(self);
+            }
+        } else if let Some(Symbol {
+            type_: LpcType::Function(false) | LpcType::Mixed(false),
+            ..
+        }) = self.context.lookup_var(name)
+        {
+            push_copy(self);
+        } else if has_receiver
+            || matches!(
+                self.context.scopes.lookup(name),
+                Some(Symbol {
+                    type_: LpcType::Function(false),
+                    ..
+                })
+            )
+        {
+            push_copy(self);
+        } else {
+            return Err(lpc_bug!(
+                node.span,
+                "Unable to find the return type for `{}`. This is a weird issue that indicates \
+                something very broken in the semantic checks, or that I'm not looking hard enough.",
+                name
+            ));
+        }
+
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
+    async fn visit_call_chain(&mut self, node: &mut CallNode) -> Result<()> {
+        let CallChain::Node(chain_node) = &mut node.chain else {
+            return Err(lpc_bug!(node.span, "Invalid call chain"));
+        };
+
+        chain_node.visit(self).await?;
+        let fp_loc = self.current_result;
+
+        let argument_len = node.arguments.len();
+        let mut arg_results = Vec::with_capacity(argument_len);
+
+        for argument in &mut node.arguments {
+            argument.visit(self).await?;
+            arg_results.push(self.current_result);
+        }
+
+        push_instruction!(self, Instruction::ClearArgs, node.span);
+
+        // populate the args vector
+        for result in &arg_results {
+            push_instruction!(self, Instruction::PushArg(*result), node.span);
+        }
+
+        push_instruction!(self, Instruction::CallFp(fp_loc), node.span);
+
+        let next_register = self.register_counter.next().unwrap().as_local();
+
+        push_instruction!(
+            self,
+            Instruction::Copy(Register(0).as_local(), next_register),
+            node.span()
+        );
+
+        self.current_result = next_register;
+
+        Ok(())
     }
 
     #[instrument(skip_all)]

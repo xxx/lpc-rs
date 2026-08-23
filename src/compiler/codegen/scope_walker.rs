@@ -17,7 +17,7 @@ use crate::compiler::{
         call_node::{CallChain, CallNode},
         closure_node::ClosureNode,
         do_while_node::DoWhileNode,
-        for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode},
+        for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachNode},
         for_node::ForNode,
         function_def_node::{ARGV, FunctionDefNode},
         if_node::IfNode,
@@ -26,7 +26,10 @@ use crate::compiler::{
         var_node::VarNode,
         while_node::WhileNode,
     },
-    codegen::tree_walker::{ContextHolder, TreeWalker},
+    codegen::tree_walker::{
+        ContextHolder, TreeWalker, walk_block, walk_do_while, walk_for, walk_foreach, walk_if,
+        walk_while,
+    },
     compilation_context::CompilationContext,
     semantic::semantic_checks::check_var_redefinition,
 };
@@ -93,6 +96,26 @@ impl ScopeWalker {
             }
         }
     }
+}
+
+impl ContextHolder for ScopeWalker {
+    fn into_context(self) -> CompilationContext {
+        self.context
+    }
+}
+
+#[async_trait]
+impl TreeWalker for ScopeWalker {
+    async fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
+        let scope_id = self.context.scopes.push_new();
+
+        node.scope_id = Some(scope_id);
+
+        walk_block(self, node).await?;
+
+        self.context.scopes.pop();
+        Ok(())
+    }
 
     async fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
         let CallChain::Root {
@@ -145,35 +168,6 @@ impl ScopeWalker {
 
         Ok(())
     }
-}
-
-impl ContextHolder for ScopeWalker {
-    fn into_context(self) -> CompilationContext {
-        self.context
-    }
-}
-
-#[async_trait]
-impl TreeWalker for ScopeWalker {
-    async fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
-        let scope_id = self.context.scopes.push_new();
-
-        node.scope_id = Some(scope_id);
-
-        for stmt in &mut node.body {
-            stmt.visit(self).await?;
-        }
-
-        self.context.scopes.pop();
-        Ok(())
-    }
-
-    async fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
-        match &node.chain {
-            CallChain::Root { .. } => self.visit_call_root(node).await,
-            CallChain::Node(_) => self.visit_call_chain(node).await,
-        }
-    }
 
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         let scope_id = self.context.scopes.push_new();
@@ -208,8 +202,7 @@ impl TreeWalker for ScopeWalker {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
-        let _ = node.body.visit(self).await;
-        let _ = node.condition.visit(self).await;
+        walk_do_while(self, node).await?;
 
         self.context.scopes.pop();
         Ok(())
@@ -219,18 +212,7 @@ impl TreeWalker for ScopeWalker {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
-        if let Some(n) = &mut *node.initializer {
-            let _ = n.visit(self).await;
-        }
-        if let Some(n) = &mut node.condition {
-            let _ = n.visit(self).await;
-        }
-
-        let _ = node.body.visit(self).await;
-
-        if let Some(n) = &mut node.incrementer {
-            let _ = n.visit(self).await;
-        }
+        walk_for(self, node).await?;
 
         self.context.scopes.pop();
         Ok(())
@@ -253,17 +235,7 @@ impl TreeWalker for ScopeWalker {
         self.insert_symbol(make_sym(FOREACH_INDEX));
         self.insert_symbol(make_sym(FOREACH_LENGTH));
 
-        match &mut node.initializer {
-            ForEachInit::Array(init) | ForEachInit::String(init) => {
-                let _ = init.visit(self).await;
-            }
-            ForEachInit::Mapping { key, value } => {
-                let _ = key.visit(self).await;
-                let _ = value.visit(self).await;
-            }
-        }
-        let _ = node.collection.visit(self).await;
-        let _ = node.body.visit(self).await;
+        walk_foreach(self, node).await?;
 
         self.context.scopes.pop();
         Ok(())
@@ -295,11 +267,7 @@ impl TreeWalker for ScopeWalker {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
-        let _ = node.condition.visit(self).await;
-        let _ = node.body.visit(self).await;
-        if let Some(n) = &mut *node.else_clause {
-            let _ = n.visit(self).await;
-        }
+        walk_if(self, node).await?;
 
         self.context.scopes.pop();
         Ok(())
@@ -409,8 +377,7 @@ impl TreeWalker for ScopeWalker {
         let scope_id = self.context.scopes.push_new();
         node.scope_id = Some(scope_id);
 
-        let _ = node.condition.visit(self).await;
-        let _ = node.body.visit(self).await;
+        walk_while(self, node).await?;
 
         self.context.scopes.pop();
         Ok(())

@@ -21,7 +21,7 @@ use crate::{
             for_each_node::{ForEachInit, ForEachNode},
             for_node::ForNode,
             function_def_node::{ARGV, FunctionDefNode},
-            function_ptr_node::{FunctionPtrNode, FunctionPtrReceiver},
+            function_ptr_node::FunctionPtrNode,
             int_node::IntNode,
             label_node::LabelNode,
             program_node::ProgramNode,
@@ -34,7 +34,12 @@ use crate::{
             var_node::VarNode,
             while_node::WhileNode,
         },
-        codegen::tree_walker::{ContextHolder, TreeWalker},
+        codegen::tree_walker::{
+            ContextHolder, TreeWalker, walk_assignment, walk_binary_op, walk_block, walk_closure,
+            walk_do_while, walk_for, walk_foreach, walk_function_def, walk_function_ptr,
+            walk_label, walk_range, walk_return, walk_switch, walk_ternary, walk_unary_op,
+            walk_var_init,
+        },
         compilation_context::CompilationContext,
         semantic::semantic_checks::{
             check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
@@ -105,6 +110,69 @@ impl SemanticCheckWalker {
 
     fn can_use_labels(&self) -> bool {
         !self.valid_labels.is_empty() && self.valid_labels.last().unwrap().0
+    }
+}
+
+impl ContextHolder for SemanticCheckWalker {
+    fn into_context(self) -> CompilationContext {
+        self.context
+    }
+}
+
+#[async_trait]
+impl TreeWalker for SemanticCheckWalker {
+    async fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
+        walk_assignment(self, node).await?;
+
+        let left_type = node_type(&node.lhs, &self.context)?;
+        let right_type = node_type(&node.rhs, &self.context)?;
+
+        // The integer 0 is always a valid assignment.
+        if left_type.matches_type(right_type)
+            || matches!(*node.rhs, ExpressionNode::Int(IntNode { value: 0, .. }))
+        {
+            Ok(())
+        } else {
+            let e: LpcError = lpc_error!(
+                node.span,
+                "Mismatched types: `{}` ({}) = `{}` ({})",
+                node.lhs,
+                left_type,
+                node.rhs,
+                right_type
+            );
+
+            Err(self.context.diagnostics.fail(e))
+        }
+    }
+
+    async fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
+        walk_binary_op(self, node).await?;
+
+        match check_binary_operation_types(node, &self.context) {
+            Ok(_) => Ok(()),
+            Err(err) => Err(self.context.diagnostics.fail(err)),
+        }
+    }
+
+    async fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
+        self.context.scopes.goto(node.scope_id);
+
+        walk_block(self, node).await?;
+
+        self.context.scopes.pop();
+        Ok(())
+    }
+
+    async fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
+        if !self.can_break() {
+            let e = lpc_error!(node.span, "Invalid `break`.");
+            self.context.diagnostics.record(e);
+
+            // non-fatal
+        }
+
+        Ok(())
     }
 
     async fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
@@ -224,94 +292,12 @@ impl SemanticCheckWalker {
 
         Ok(())
     }
-}
-
-impl ContextHolder for SemanticCheckWalker {
-    fn into_context(self) -> CompilationContext {
-        self.context
-    }
-}
-
-#[async_trait]
-impl TreeWalker for SemanticCheckWalker {
-    async fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
-        node.lhs.visit(self).await?;
-        node.rhs.visit(self).await?;
-
-        let left_type = node_type(&node.lhs, &self.context)?;
-        let right_type = node_type(&node.rhs, &self.context)?;
-
-        // The integer 0 is always a valid assignment.
-        if left_type.matches_type(right_type)
-            || matches!(*node.rhs, ExpressionNode::Int(IntNode { value: 0, .. }))
-        {
-            Ok(())
-        } else {
-            let e: LpcError = lpc_error!(
-                node.span,
-                "Mismatched types: `{}` ({}) = `{}` ({})",
-                node.lhs,
-                left_type,
-                node.rhs,
-                right_type
-            );
-
-            Err(self.context.diagnostics.fail(e))
-        }
-    }
-
-    async fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
-        node.l.visit(self).await?;
-        node.r.visit(self).await?;
-
-        match check_binary_operation_types(node, &self.context) {
-            Ok(_) => Ok(()),
-            Err(err) => Err(self.context.diagnostics.fail(err)),
-        }
-    }
-
-    async fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
-
-        for stmt in &mut node.body {
-            stmt.visit(self).await?;
-        }
-
-        self.context.scopes.pop();
-        Ok(())
-    }
-
-    async fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
-        if !self.can_break() {
-            let e = lpc_error!(node.span, "Invalid `break`.");
-            self.context.diagnostics.record(e);
-
-            // non-fatal
-        }
-
-        Ok(())
-    }
-
-    async fn visit_call(&mut self, node: &mut CallNode) -> Result<()> {
-        match &node.chain {
-            CallChain::Root { .. } => self.visit_call_root(node).await,
-            CallChain::Node(_) => self.visit_call_chain(node).await,
-        }
-    }
 
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         self.context.scopes.goto(node.scope_id);
         self.closure_depth += 1;
 
-        if let Some(parameters) = &mut node.parameters {
-            for param in parameters {
-                param.visit(self).await?;
-            }
-        }
-
-        for expression in &mut node.body {
-            expression.visit(self).await?;
-        }
+        walk_closure(self, node).await?;
 
         self.context.scopes.pop();
         self.closure_depth -= 1;
@@ -332,8 +318,7 @@ impl TreeWalker for SemanticCheckWalker {
 
     async fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
         self.allow_jumps();
-        let _ = node.body.visit(self).await;
-        let _ = node.condition.visit(self).await;
+        walk_do_while(self, node).await?;
 
         self.prevent_jumps();
         Ok(())
@@ -343,18 +328,7 @@ impl TreeWalker for SemanticCheckWalker {
         self.allow_jumps();
         self.context.scopes.goto(node.scope_id);
 
-        if let Some(n) = &mut *node.initializer {
-            let _ = n.visit(self).await;
-        }
-        if let Some(n) = &mut node.condition {
-            let _ = n.visit(self).await;
-        }
-
-        let _ = node.body.visit(self).await;
-
-        if let Some(n) = &mut node.incrementer {
-            let _ = n.visit(self).await;
-        }
+        walk_for(self, node).await?;
 
         self.context.scopes.pop();
         self.prevent_jumps();
@@ -378,25 +352,17 @@ impl TreeWalker for SemanticCheckWalker {
             self.context.diagnostics.record(e);
         }
 
-        match &mut node.initializer {
-            ForEachInit::Array(init) | ForEachInit::String(init) => {
-                let _ = init.visit(self).await;
-            }
-            ForEachInit::Mapping { key, value } => {
-                if key.type_ != LpcType::Mixed(false) || value.type_ != LpcType::Mixed(false) {
-                    let e = lpc_error!(
-                        node.span,
-                        "the key and value types for iterating a mapping via `foreach` must be of type `mixed`"
-                    );
-                    self.context.diagnostics.record(e);
-                }
-
-                let _ = key.visit(self).await;
-                let _ = value.visit(self).await;
-            }
+        if let ForEachInit::Mapping { key, value } = &node.initializer
+            && (key.type_ != LpcType::Mixed(false) || value.type_ != LpcType::Mixed(false))
+        {
+            let e = lpc_error!(
+                node.span,
+                "the key and value types for iterating a mapping via `foreach` must be of type `mixed`"
+            );
+            self.context.diagnostics.record(e);
         }
-        let _ = node.collection.visit(self).await;
-        let _ = node.body.visit(self).await;
+
+        walk_foreach(self, node).await?;
 
         self.context.scopes.pop();
         self.prevent_jumps();
@@ -406,38 +372,10 @@ impl TreeWalker for SemanticCheckWalker {
     async fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
         is_keyword(node.name)?;
 
-        // let proto_opt = self
-        //     .context
-        //     .lookup_function_complete(node.name, &CallNamespace::default());
-        //
-        // if let Some(function_like) = proto_opt {
-        //     let prototype = function_like.as_ref();
-        //     if prototype.flags.nomask() {
-        //         println!("{} {}", prototype.filename, self.context.filename);
-        //     }
-        //     if prototype.flags.nomask() && &self.context.filename != &prototype.filename {
-        //         let e = LpcError::new(format!(
-        //             "attempt to redefine nomask function `{}`",
-        //             node.name
-        //         ))
-        //         .with_span(node.span)
-        //         .with_label("defined here", prototype.span)
-        //         .into();
-        //
-        //         return Err(e);
-        //     }
-        // }
-
         self.context.scopes.goto_function(&node.name)?;
         self.current_function = Some(node.clone());
 
-        for parameter in &mut node.parameters {
-            parameter.visit(self).await?;
-        }
-
-        for expression in &mut node.body {
-            expression.visit(self).await?;
-        }
+        walk_function_def(self, node).await?;
 
         self.context.scopes.pop();
         Ok(())
@@ -471,17 +409,7 @@ impl TreeWalker for SemanticCheckWalker {
             }
         }
 
-        if let Some(FunctionPtrReceiver::Static(rcvr)) = &mut node.receiver {
-            rcvr.visit(self).await?;
-        }
-
-        if let Some(args) = &mut node.arguments {
-            for argument in args.iter_mut().flatten() {
-                argument.visit(self).await?;
-            }
-        }
-
-        Ok(())
+        walk_function_ptr(self, node).await
     }
 
     async fn visit_label(&mut self, node: &mut LabelNode) -> Result<()> {
@@ -496,11 +424,7 @@ impl TreeWalker for SemanticCheckWalker {
             self.context.diagnostics.record(err);
         }
 
-        if let Some(expr) = &mut node.case {
-            expr.visit(self).await?;
-        }
-
-        Ok(())
+        walk_label(self, node).await
     }
 
     async fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()> {
@@ -514,13 +438,7 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     async fn visit_range(&mut self, node: &mut RangeNode) -> Result<()> {
-        if let Some(expr) = &mut *node.l {
-            expr.visit(self).await?;
-        }
-
-        if let Some(expr) = &mut *node.r {
-            expr.visit(self).await?;
-        }
+        walk_range(self, node).await?;
 
         let left_type = if let Some(left) = &*node.l {
             node_type(left, &self.context)?
@@ -566,9 +484,7 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     async fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()> {
-        if let Some(expression) = &mut node.value {
-            expression.visit(self).await?;
-        }
+        walk_return(self, node).await?;
 
         // closure return types are not type-checked
         if self.closure_depth > 0 {
@@ -615,8 +531,7 @@ impl TreeWalker for SemanticCheckWalker {
         self.allow_labels();
         self.allow_breaks();
 
-        node.expression.visit(self).await?;
-        node.body.visit(self).await?;
+        walk_switch(self, node).await?;
 
         self.prevent_jumps();
         self.prevent_labels();
@@ -625,9 +540,7 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     async fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
-        let _ = node.condition.visit(self).await;
-        let _ = node.body.visit(self).await;
-        let _ = node.else_clause.visit(self).await;
+        walk_ternary(self, node).await?;
 
         let body_type = node_type(&node.body, &self.context)?;
         let else_type = node_type(&node.else_clause, &self.context)?;
@@ -644,7 +557,7 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     async fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
-        node.expr.visit(self).await?;
+        walk_unary_op(self, node).await?;
 
         match check_unary_operation_types(node, &self.context) {
             Ok(_) => match node.op {
@@ -702,9 +615,9 @@ impl TreeWalker for SemanticCheckWalker {
             }
         }
 
-        if let Some(expression) = &mut node.value {
-            expression.visit(self).await?;
+        walk_var_init(self, node).await?;
 
+        if let Some(expression) = &node.value {
             let expr_type = node_type(expression, &self.context)?;
 
             // The integer 0 is always a valid assignment.

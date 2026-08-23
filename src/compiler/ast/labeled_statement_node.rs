@@ -18,8 +18,8 @@ use crate::compiler::{
 /// They are only allowed in `switch` statements.
 #[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Eq)]
 pub struct LabeledStatementNode {
-    node: Box<AstNode>,
-    label: LabelNode,
+    pub node: Box<AstNode>,
+    pub label: LabelNode,
 }
 
 impl LabeledStatementNode {
@@ -34,8 +34,7 @@ impl LabeledStatementNode {
 #[async_trait]
 impl AstNodeTrait for LabeledStatementNode {
     async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
-        self.label.visit(tree_walker).await?;
-        self.node.visit(tree_walker).await
+        tree_walker.visit_labeled_statement(self).await
     }
 }
 

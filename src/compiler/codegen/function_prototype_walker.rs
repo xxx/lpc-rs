@@ -8,10 +8,10 @@ use lpc_rs_utils::string::closure_arg_number;
 
 use crate::compiler::{
     ast::{
-        ast_node::AstNodeTrait, closure_node::ClosureNode, function_def_node::FunctionDefNode,
-        var_init_node::VarInitNode, var_node::VarNode,
+        closure_node::ClosureNode, function_def_node::FunctionDefNode, var_init_node::VarInitNode,
+        var_node::VarNode,
     },
-    codegen::tree_walker::{ContextHolder, TreeWalker},
+    codegen::tree_walker::{ContextHolder, TreeWalker, walk_closure, walk_function_def},
     compilation_context::CompilationContext,
 };
 
@@ -60,15 +60,7 @@ impl TreeWalker for FunctionPrototypeWalker {
         // `$N` names a position in the innermost closure only.
         let enclosing_max = std::mem::replace(&mut self.max_closure_arg_reference, 0);
 
-        if let Some(parameters) = &mut node.parameters {
-            for param in parameters {
-                param.visit(self).await?;
-            }
-        }
-
-        for expression in &mut node.body {
-            expression.visit(self).await?;
-        }
+        walk_closure(self, node).await?;
 
         let highest_positional =
             std::mem::replace(&mut self.max_closure_arg_reference, enclosing_max);
@@ -178,15 +170,7 @@ impl TreeWalker for FunctionPrototypeWalker {
         );
 
         // walk the contents of the function, in case any closures are defined.
-        for parameter in &mut node.parameters {
-            parameter.visit(self).await?;
-        }
-
-        for expression in &mut node.body {
-            expression.visit(self).await?;
-        }
-
-        Ok(())
+        walk_function_def(self, node).await
     }
 
     async fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {

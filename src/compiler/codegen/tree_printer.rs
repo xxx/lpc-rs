@@ -1,6 +1,9 @@
 use async_trait::async_trait;
 use lpc_rs_errors::Result;
-use tree_walker::TreeWalker;
+use tree_walker::{
+    TreeWalker, walk_array, walk_block, walk_comma_expression, walk_decl, walk_program,
+    walk_return, walk_unary_op,
+};
 
 use crate::compiler::{
     ast::{
@@ -85,9 +88,7 @@ impl TreeWalker for TreePrinter {
     async fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()> {
         self.println_indented("Array ({");
         self.indent += 2;
-        for node in &mut node.value {
-            node.visit(self).await?;
-        }
+        walk_array(self, node).await?;
         self.indent -= 2;
         self.println_indented("})");
 
@@ -115,9 +116,7 @@ impl TreeWalker for TreePrinter {
 
         self.indent += 2;
 
-        for expr in &mut node.body {
-            expr.visit(self).await?;
-        }
+        walk_block(self, node).await?;
 
         self.indent -= 2;
 
@@ -167,9 +166,7 @@ impl TreeWalker for TreePrinter {
     async fn visit_comma_expression(&mut self, node: &mut CommaExpressionNode) -> Result<()> {
         self.println_indented("Comma Expression");
         self.indent += 2;
-        for expr in &mut node.value {
-            let _ = expr.visit(self).await;
-        }
+        walk_comma_expression(self, node).await?;
         self.indent -= 2;
 
         Ok(())
@@ -181,9 +178,7 @@ impl TreeWalker for TreePrinter {
         self.println_indented(&format!("type: {}", node.type_));
         self.println_indented("initializations:");
         self.indent += 2;
-        for init in &mut node.initializations {
-            init.visit(self).await?;
-        }
+        walk_decl(self, node).await?;
         self.indent -= 4;
 
         Ok(())
@@ -376,13 +371,7 @@ impl TreeWalker for TreePrinter {
     async fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()> {
         println!("Program");
         self.indent += 2;
-        for expr in &mut node.inherits {
-            expr.visit(self).await?;
-        }
-
-        for expr in &mut node.body {
-            expr.visit(self).await?;
-        }
+        walk_program(self, node).await?;
         self.indent -= 2;
 
         Ok(())
@@ -416,9 +405,7 @@ impl TreeWalker for TreePrinter {
     async fn visit_return(&mut self, node: &mut ReturnNode) -> Result<()> {
         self.println_indented("Return");
         self.indent += 2;
-        if let Some(expression) = &mut node.value {
-            expression.visit(self).await?;
-        }
+        walk_return(self, node).await?;
         self.indent -= 2;
 
         Ok(())
@@ -436,7 +423,7 @@ impl TreeWalker for TreePrinter {
         self.println_indented(&format!("operation: {:?}", node.op));
         self.println_indented("expr: ");
         self.indent += 2;
-        node.expr.visit(self).await?;
+        walk_unary_op(self, node).await?;
         self.indent -= 4;
 
         Ok(())
