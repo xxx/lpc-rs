@@ -384,8 +384,9 @@ impl Telnet {
             args.push(input_arg);
         }
 
-        let apply_template = template.clone();
+        let mut apply_template = template.clone();
         apply_template.set_this_player(connection.process.load_full());
+        apply_template.upvalue_ptrs = Some(input_to.ptr.upvalue_ptrs.clone());
 
         let max_execution_time = apply_template.global_state.config.max_execution_time;
         let result = apply_function(
@@ -593,6 +594,59 @@ mod tests {
                 .unwrap();
 
             check(&vm, proc).await;
+        }
+    }
+
+    mod upvalues {
+        use super::*;
+
+        async fn fire_the_stored_pointer(code: &str) -> LpcRef {
+            let vm = Vm::new(test_config());
+            let r = vm.initialize_process_from_code("/foo/bar.c", code).await;
+            let proc = r.unwrap().context.process;
+            let LpcRef::Function(ptr) = vm.global_state.committed_global(&proc, 1u16) else {
+                panic!("global 1 holds the pointer");
+            };
+            let (broker_tx, _broker_rx) = flume::unbounded();
+            let (connection_tx, _connection_rx) = mpsc::channel(1);
+            let mut sink = FakeSink;
+            let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
+            let connection = Connection::new(addr, connection_tx, broker_tx.clone());
+            let input_to = InputTo {
+                ptr,
+                no_echo: false,
+            };
+            Telnet::resolve_input_to(
+                &input_to,
+                &"hello".to_string(),
+                &mut sink,
+                &connection,
+                &TaskTemplate::from(vm.global_state.clone()),
+            )
+            .await;
+            vm.global_state.committed_global(&proc, 0u16)
+        }
+
+        #[tokio::test]
+        async fn a_closure_fires_with_its_captures() {
+            let code = r##"
+                int result;
+                function f;
+                void create() { int j = 5; f = (: result = j + 1 :); }
+            "##;
+            assert_eq!(fire_the_stored_pointer(code).await, LpcRef::from(6));
+        }
+
+        #[tokio::test]
+        async fn a_static_function_fires_without_the_creators_captures() {
+            let code = r##"
+                int result;
+                function f;
+                function g;
+                void foo() { int k = 7; function h = (: k :); result = g(); }
+                void create() { int j = 5; g = (: j :); f = &foo(); }
+            "##;
+            assert_eq!(fire_the_stored_pointer(code).await, LpcRef::from(5));
         }
     }
 }

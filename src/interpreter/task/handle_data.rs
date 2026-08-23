@@ -157,12 +157,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .collect::<lpc_rs_errors::Result<ThinVec<Option<LpcRef>>>>()?;
 
         let frame = self.stack.current_frame()?;
+        // Only a closure continues its creator's capture numbering.
+        let upvalue_ptrs = match &address {
+            FunctionAddress::Local(_, func) if func.is_closure() => frame.upvalue_ptrs.clone(),
+            _ => ThinVec::new(),
+        };
         let fp = FunctionPtrBuilder::default()
             .owner(Arc::downgrade(&frame.process))
             .address(address)
             .partial_args(partial_args)
             .call_other(call_other)
-            .upvalue_ptrs(frame.upvalue_ptrs.clone())
+            .upvalue_ptrs(upvalue_ptrs)
             .unique_id(UniqueId::new())
             .build()
             .unwrap();

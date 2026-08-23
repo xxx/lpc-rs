@@ -196,20 +196,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             )));
         };
 
-        let upvalues = if function.is_closure() {
-            Some(ptr.upvalue_ptrs.clone())
-        } else {
-            // Calls to pointers to static functions do not inherit upvalues,
-            // same as normal direct calls to them.
-            None
-        };
         Ok(Some((
             passed_args_count,
             function_is_efun,
             is_dynamic_receiver,
             function,
             proc,
-            upvalues,
+            Some(ptr.upvalue_ptrs.clone()),
         )))
     }
 }

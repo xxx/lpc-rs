@@ -203,4 +203,38 @@ mod tests {
             check(&vm, &bar_proc).await;
         }
     }
+
+    mod upvalues {
+        use super::*;
+        use crate::test_support::run_prog_with_vm_rx;
+
+        async fn fire_the_one_call_out(code: &str) -> LpcRef {
+            let (task, _rx) = run_prog_with_vm_rx(code).await;
+            let gs = task.context.global_state.clone();
+            let proc = task.context.process.clone();
+            let id = gs.with_call_outs(|co| co.queue().iter().next().unwrap().1.id);
+            gs.prioritize_call_out(id).await.await.unwrap();
+            gs.committed_global(&proc, 0u16)
+        }
+
+        #[tokio::test]
+        async fn a_closure_fires_with_its_captures() {
+            let code = r##"
+                int result;
+                void create() { int j = 5; call_out((: result = j + 1 :), 100); }
+            "##;
+            assert_eq!(fire_the_one_call_out(code).await, LpcRef::from(6));
+        }
+
+        #[tokio::test]
+        async fn a_static_function_fires_without_the_creators_captures() {
+            let code = r##"
+                int result;
+                function g;
+                void foo() { int k = 7; function h = (: k :); result = g(); }
+                void create() { int j = 5; g = (: j :); call_out(&foo(), 100); }
+            "##;
+            assert_eq!(fire_the_one_call_out(code).await, LpcRef::from(5));
+        }
+    }
 }
