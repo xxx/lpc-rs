@@ -112,7 +112,7 @@ mod tests {
     /// Scheduling is a deferred effect: the timer task and the queue entry
     /// materialize only when the task's transaction commits and its effects
     /// flush. After the init task commits, the queue holds exactly the one
-    /// call out, and the timer task fires its materialization's slot (0).
+    /// call out, and the timer task fires its ID.
     #[tokio::test]
     async fn test_enqueues_task_on_commit() {
         let code = r##"
@@ -132,12 +132,13 @@ mod tests {
             .await
             .unwrap();
 
-        global_state.with_call_outs(|co| assert_eq!(co.len(), 1));
+        let id = global_state.with_call_outs(|co| {
+            assert_eq!(co.len(), 1);
+            co.queue().iter().next().unwrap().1.id
+        });
 
-        // The timer task fires the slot its materialization returned (0),
-        // not the explicit ID.
         let msg = rx.recv().await.unwrap();
-        assert_eq!(msg, VmOp::PrioritizeCallOut(0));
+        assert_eq!(msg, VmOp::PrioritizeCallOut(id));
     }
 
     /// The ID `call_out` returns is the one `remove_call_out` (in the same

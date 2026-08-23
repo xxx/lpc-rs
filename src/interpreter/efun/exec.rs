@@ -71,7 +71,9 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, task::Task, vm::Vm},
+        interpreter::{
+            lpc_int::LpcInt, lpc_ref::LpcRef, task::Task, task::task_template::TaskTemplate, vm::Vm,
+        },
         telnet::connection::Connection,
         test_support::test_config,
     };
@@ -91,7 +93,7 @@ mod tests {
 
     /// The core D9b Piece 2 guarantee: an in-transaction `exec` is visible
     /// to `interactive()` within the same transaction. The old body's
-    /// `create()` starts bound (via `Vm::takeover`), then `exec`s the
+    /// `create()` starts bound (via `GlobalState::takeover`), then `exec`s the
     /// connection into the target. The `interactive(target)` reads that
     /// follow run in the same transaction the `exec` wrote the cell into,
     /// i.e. before any commit — they must still observe the handover.
@@ -142,24 +144,28 @@ mod tests {
 
         // Bind the connection to the old body through the transactional
         // path (the login mechanism), so the cell is in the committed world.
-        Vm::takeover(&vm.global_state, connection.clone(), old_proc.clone()).await;
+        vm.global_state
+            .takeover(connection.clone(), old_proc.clone())
+            .await;
 
         // Run the old body's `create()`: it performs the exec and makes the
         // in-transaction visibility assertions above.
-        let task =
-            Task::<16>::initialize_process(vm.new_task_template().into_task_context(old_proc))
-                .await
-                .unwrap();
+        let task = Task::<16>::initialize_process(
+            TaskTemplate::from(vm.global_state.clone()).into_task_context(old_proc),
+        )
+        .await
+        .unwrap();
         let result = task.result().unwrap();
         assert_eq!(result, LpcRef::Int(LpcInt(1)));
 
         // After the commit, the binding is settled in the committed world:
         // a fresh task on the target must still see it (its `create()`
         // returns `interactive()`).
-        let task =
-            Task::<16>::initialize_process(vm.new_task_template().into_task_context(target_proc))
-                .await
-                .unwrap();
+        let task = Task::<16>::initialize_process(
+            TaskTemplate::from(vm.global_state.clone()).into_task_context(target_proc),
+        )
+        .await
+        .unwrap();
         let result = task.result().unwrap();
         assert_eq!(result, LpcRef::Int(LpcInt(1)));
     }

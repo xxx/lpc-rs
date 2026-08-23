@@ -227,7 +227,7 @@ async fn test_positional_vars_into_argv() {
 
 #[tokio::test]
 async fn test_inherited_create_called_when_not_overridden() {
-    let mut vm = Vm::new(test_config());
+    let vm = Vm::new(test_config());
     let grandparent = indoc! { r#"
         void create() {
             dump("grandparent create");
@@ -310,7 +310,7 @@ async fn test_calls_simul_efuns() {
         .build()
         .unwrap();
 
-    let mut vm = Vm::new(config);
+    let vm = Vm::new(config);
     vm.initialize_simul_efuns()
         .await
         .expect("no simul efuns?")
@@ -375,7 +375,7 @@ async fn test_calls_simul_efuns() {
 //     "## };
 //
 //     let config = test_config();
-//     let mut vm = Vm::new(config);
+//     let vm = Vm::new(config);
 //
 //     let result = vm.initialize_string(code, "/foo.c").await.expect("received an error");
 //     let _ = vm.send_op(VmOp::PrioritizeCallOut(0)).await;

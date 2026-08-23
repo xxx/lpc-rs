@@ -26,7 +26,8 @@ use crate::{
     util::get_simul_efuns,
 };
 
-type PtrTriple = (Arc<Process>, Arc<ProgramFunction>, Vec<LpcRef>);
+/// A function pointer taken apart for a call: receiver, function, args.
+pub type PtrTriple = (Arc<Process>, Arc<ProgramFunction>, Vec<LpcRef>);
 
 /// A pointer to a function, created with the `&` syntax.
 #[derive(Debug, Builder)]

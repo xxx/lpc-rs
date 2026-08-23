@@ -20,16 +20,12 @@ use tokio_util::codec::{Decoder, Framed};
 use tracing::{error, info, instrument, trace, warn};
 
 use crate::{
-    compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
         PROCESS_INPUT,
-        function_type::function_ptr::FunctionPtr,
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
-        object_flags::ObjectFlags,
         task::{
-            Task,
             apply_function::{apply_function, apply_function_by_name, apply_runtime_error},
             task_template::TaskTemplate,
         },
@@ -365,49 +361,20 @@ impl Telnet {
             let _ = sink.send(TelnetEvent::Wont(TelnetOption::Echo)).await;
         }
 
-        // The transactional seam: a create-on-miss goes through the committer,
-        // and a destruct in the committed-unflushed window is an error instead
-        // of a resurrection.
-        if template
+        let prepared = template
             .global_state
-            .resolve_dynamic_string_receiver(&input_to.ptr)
-            .await
-            .is_err()
-        {
-            let _ = sink
-                .send(TelnetEvent::Message("Canceled.".to_string()))
-                .await;
-            return;
-        }
-        let triple = FunctionPtr::triple(
-            &input_to.ptr,
-            &template.global_state.config,
-            &template.global_state.object_space,
-        )
-        .await;
-        let Ok((process, function, mut args)) = triple else {
-            let _ = sink
-                .send(TelnetEvent::Message("Canceled.".to_string()))
-                .await;
-            return;
-        };
-
-        if !process.flags.test(ObjectFlags::Initialized) {
-            let init_template = template.clone();
-            init_template.set_this_player(connection.process.load_full());
-            let ctx = init_template.into_task_context(process.clone());
-            if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_process(ctx).await {
-                let template = template.clone();
-                let config = template.global_state.config.clone();
-
-                let Some(Ok(_)) = apply_runtime_error(&e, Some(process), template).await else {
-                    config.debug_log(e.diagnostic_string()).await;
-                    return;
-                };
-
+            .prepare_function_ptr(&input_to.ptr, connection.process.load_full())
+            .await;
+        let (process, function, mut args) = match prepared {
+            Ok(Some(triple)) => triple,
+            Ok(None) => return,
+            Err(_) => {
+                let _ = sink
+                    .send(TelnetEvent::Message("Canceled.".to_string()))
+                    .await;
                 return;
             }
-        }
+        };
 
         let arg_index: Option<usize> = input_to.ptr.partial_args().iter().position(|x| x.is_none());
         let input_arg = LpcString::from(msg).into();
@@ -542,7 +509,7 @@ mod tests {
             &"hello".to_string(),
             &mut sink,
             &connection,
-            &vm.new_task_template(),
+            &TaskTemplate::from(vm.global_state.clone()),
         )
         .await;
 
@@ -580,7 +547,7 @@ mod tests {
                 &"hello".to_string(),
                 &mut sink,
                 &connection,
-                &vm.new_task_template(),
+                &TaskTemplate::from(vm.global_state.clone()),
             )
             .await;
 

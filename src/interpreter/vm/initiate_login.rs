@@ -12,7 +12,7 @@ use crate::{
         lpc_ref::LpcRef,
         lpc_string::LpcString,
         process::Process,
-        task::apply_function::apply_function_by_name,
+        task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
         vm::{Vm, vm_op::VmOp},
     },
     telnet::{
@@ -28,7 +28,7 @@ impl Vm {
     pub async fn initiate_login(&self, connection: Arc<Connection>) {
         let global_state = self.global_state.clone();
         let broker_tx = self.broker_tx.clone();
-        let task_template = self.new_task_template();
+        let task_template = TaskTemplate::from(self.global_state.clone());
 
         let address = connection.address;
         let (ip, port) = (address.ip().to_string(), address.port());
@@ -123,7 +123,9 @@ impl Vm {
             };
 
             // This is the initial exec() of the player into a body.
-            Vm::takeover(&global_state, connection.clone(), login_ob.clone()).await;
+            global_state
+                .takeover(connection.clone(), login_ob.clone())
+                .await;
 
             let template = task_template.clone();
             template.set_this_player(Some(login_ob.clone()));

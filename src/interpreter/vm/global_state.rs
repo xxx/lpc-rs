@@ -9,21 +9,29 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
 use tracing::instrument;
 
-use crate::interpreter::{
-    call_outs::CallOuts,
-    function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
-    gc::{gc_bank::GcVarIdBank, mark::Mark},
-    lpc_ref::LpcRef,
-    object_space::ObjectSpace,
-    process::Process,
-    stm::{
-        CommitProtocol, Committer, GcReport, Snapshot, VarId, WorldRoot, gc_pass, live_count,
-        resolve_or_create_object,
+use crate::{
+    compile_time_config::MAX_CALL_STACK_SIZE,
+    interpreter::{
+        call_outs::CallOuts,
+        function_type::{
+            function_address::FunctionAddress,
+            function_ptr::{FunctionPtr, PtrTriple},
+        },
+        gc::{gc_bank::GcVarIdBank, mark::Mark},
+        lpc_ref::LpcRef,
+        object_flags::ObjectFlags,
+        object_space::ObjectSpace,
+        process::Process,
+        stm::{
+            self, CommitProtocol, Committer, CommitterStats, GcReport, Snapshot, VarId, WorldRoot,
+            gc_pass, live_count, resolve_or_create_object,
+        },
+        task::{Task, apply_function::apply_runtime_error, task_template::TaskTemplate},
+        vm::vm_op::VmOp,
     },
-    vm::vm_op::VmOp,
 };
 
-/// A type for globally-shared state that every [`Task`](crate::interpreter::task::Task) will need access to.
+/// A type for globally-shared state that every [`Task`] will need access to.
 #[derive(Debug, Builder)]
 #[readonly::make]
 #[builder(setter(into), pattern = "owned")]
@@ -32,7 +40,7 @@ pub struct GlobalState {
     #[builder(default, setter(into))]
     pub object_space: Arc<ObjectSpace>,
 
-    /// All upvalues are stored in the [`Vm`](crate::interpreter::vm::Vm), and are shared between all [`Task`](crate::interpreter::task::Task)s.
+    /// All upvalues are stored in the [`Vm`](crate::interpreter::vm::Vm), and are shared between all [`Task`]s.
     /// Each slot holds a transactional `VarId`; the committed value lives in the committer's world.
     #[builder(default, setter(into))]
     upvalues: Arc<RwLock<GcVarIdBank>>,
@@ -94,6 +102,47 @@ impl GlobalState {
     /// the first `Close`; later sends just fail (channel closed).
     pub fn close_committer(&self) {
         let _ = self.committer_tx.send(CommitProtocol::Close);
+    }
+
+    /// The committer's lifetime commit totals (commits/conflicts/errors),
+    /// for benches and tooling.
+    pub async fn committer_stats(&self) -> Result<CommitterStats> {
+        stm::committer_stats(&self.committer_tx).await
+    }
+
+    /// Resolve `ptr` to its process, function and partial args for a call
+    /// started outside any task (`call_out`, `input_to`), initializing the
+    /// receiver if needed with `this_player` as the command giver.
+    /// `Ok(None)`: the initializer failed and the error was already reported.
+    pub async fn prepare_function_ptr(
+        self: &Arc<Self>,
+        ptr: &FunctionPtr,
+        this_player: Option<Arc<Process>>,
+    ) -> Result<Option<PtrTriple>> {
+        // The transactional seam: a create-on-miss goes through the
+        // committer, and a destruct in the committed-unflushed window is an
+        // error instead of a resurrection.
+        self.resolve_dynamic_string_receiver(ptr).await?;
+        let (process, function, args) =
+            FunctionPtr::triple(ptr, &self.config, &self.object_space).await?;
+
+        if !process.flags.test(ObjectFlags::Initialized) {
+            let template = TaskTemplate::from(self.clone());
+            template.set_this_player(this_player);
+            let ctx = template.into_task_context(process.clone());
+            if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_process(ctx).await {
+                let template = TaskTemplate::from(self.clone());
+                if !matches!(
+                    apply_runtime_error(&e, Some(process), template).await,
+                    Some(Ok(_))
+                ) {
+                    self.config.debug_log(e.diagnostic_string()).await;
+                }
+                return Ok(None);
+            }
+        }
+
+        Ok(Some((process, function, args)))
     }
 
     /// Resolve the receiver of a dynamic function pointer whose first partial
@@ -258,7 +307,7 @@ impl Mark for GlobalState {
         // The committer world is not a GC root here: payload vars committed into
         // it are unmarked and the sweep only culls upvalue cells, so a payload
         // reachable only through a committed slot is retained. Reclaiming the
-        // dead ones is the quiescent pass's job (`Vm::gc`).
+        // dead ones is the quiescent pass's job (`GlobalState::gc`).
         //
         // No live tasks are marked: the pass runs only at quiescence, when no
         // transaction is in flight.

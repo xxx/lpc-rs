@@ -22,10 +22,8 @@ use crate::interpreter::{
 #[educe(Debug)]
 #[builder(pattern = "owned")]
 pub struct CallOut {
-    /// The explicit call out ID, minted when the `call_out` was recorded.
-    /// Not the queue's slot: scheduling is a deferred effect, so the ID must
-    /// be addressable before the physical insert (and survive a slot shift
-    /// from an intervening removal).
+    /// The call out ID, minted when the `call_out` was recorded so it is
+    /// addressable before the deferred physical insert.
     pub id: u64,
 
     /// The process where `call_out` was called from.
@@ -139,22 +137,13 @@ impl CallOuts {
 
             /// Is the queue empty?
             pub fn is_empty(&self) -> bool;
-
-            /// Get a reference to a [`CallOut`] by its queue slot. Only the
-            /// call-out fire path uses this: it already holds the slot index
-            /// its timer task was spawned with.
-            pub fn get(&self, index: usize) -> Option<&CallOut>;
-
-            /// Get a mutable reference to a [`CallOut`] by its queue slot,
-            /// as in `get`.
-            pub fn get_mut(&mut self, index: usize) -> Option<&mut CallOut>;
-
-            /// Remove a [`CallOut`] by its queue slot, as in `get`.
-            pub fn remove(&mut self, index: usize) -> Option<CallOut>;
-
-            /// Push a [`CallOut`] to the end of the queue
-            pub fn push(&mut self, value: CallOut) -> usize;
         }
+    }
+
+    /// Push a ready-made [`CallOut`] (no timer task) for fire-path fixtures.
+    #[cfg(test)]
+    pub fn push(&mut self, value: CallOut) {
+        self.queue.push(value);
     }
 
     /// Get a reference to the underlying [`StableVec`]
@@ -166,7 +155,7 @@ impl CallOuts {
         &self.queue
     }
 
-    /// Get a reference to a [`CallOut`] by its explicit ID.
+    /// Get a reference to a [`CallOut`] by its ID.
     pub fn get_by_id(&self, id: u64) -> Option<&CallOut> {
         self.queue
             .iter()
@@ -174,7 +163,15 @@ impl CallOuts {
             .map(|(_idx, call_out)| call_out)
     }
 
-    /// Remove a [`CallOut`] by its explicit ID, returning it.
+    /// Get a mutable reference to a [`CallOut`] by its ID.
+    pub fn get_mut_by_id(&mut self, id: u64) -> Option<&mut CallOut> {
+        self.queue
+            .iter_mut()
+            .find(|(_idx, call_out)| call_out.id == id)
+            .map(|(_idx, call_out)| call_out)
+    }
+
+    /// Remove a [`CallOut`] by its ID, returning it.
     pub fn remove_by_id(&mut self, id: u64) -> Option<CallOut> {
         let idx = self
             .queue
@@ -186,13 +183,11 @@ impl CallOuts {
     /// Physically materialize a recorded call out: spawn its timer task and
     /// push itself into the queue. The flush calls this after a successful
     /// commit, so an aborted attempt spawns no timer and enqueues nothing.
-    /// The ID travels on the [`CallOut`] itself, so the queue slot the
-    /// insert lands in is irrelevant to the ID.
     ///
     /// TODO: Unclear if there's a race condition for the 0 delay case.
     ///       Hand testing doesn't show one, but it's possible that
     ///       something shows up under load.
-    pub fn materialize(&mut self, schedule: CallOutSchedule) -> usize {
+    pub fn materialize(&mut self, schedule: CallOutSchedule) {
         let CallOutSchedule {
             id,
             process,
@@ -200,7 +195,6 @@ impl CallOuts {
             delay,
             repeat,
         } = schedule;
-        let index = self.queue.next_push_index();
         let tx = self.tx.clone();
 
         let handle = if_chain! {
@@ -218,13 +212,13 @@ impl CallOuts {
 
                     loop {
                         i.tick().await;
-                        let _ = tx.send(VmOp::PrioritizeCallOut(index)).await;
+                        let _ = tx.send(VmOp::PrioritizeCallOut(id)).await;
                     }
                 })
             } else {
                 tokio::spawn(async move {
                     tokio::time::sleep(delay.to_std().unwrap()).await;
-                    let _ = tx.send(VmOp::PrioritizeCallOut(index)).await;
+                    let _ = tx.send(VmOp::PrioritizeCallOut(id)).await;
                 })
             }
         };
@@ -236,7 +230,7 @@ impl CallOuts {
             repeat_duration: repeat,
             next_run: Utc::now() + delay,
             _handle: handle,
-        })
+        });
     }
 }
 

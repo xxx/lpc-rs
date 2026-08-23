@@ -3,7 +3,7 @@
 //! The runner owns the committer protocol (open, commit, release-after-reply,
 //! re-base, stats); the body owns the attempt-level work and its physical
 //! output. Production runs a [`Task`](crate::interpreter::task::Task) or a
-//! `Vm::takeover`; tests run a bare [`Transaction`].
+//! `GlobalState::takeover`; tests run a bare [`Transaction`].
 
 use std::{sync::Arc, time::Duration};
 

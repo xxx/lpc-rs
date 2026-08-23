@@ -5,7 +5,7 @@ use lpc_rs::interpreter::{
     CommittedReader,
     lpc_ref::LpcRef,
     process::Process,
-    task::apply_function::apply_function_by_name,
+    task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
     vm::{Vm, global_state::GlobalState},
 };
 use lpc_rs_core::LpcIntInner;
@@ -37,7 +37,7 @@ pub async fn spawn_applies(
     iterations: usize,
 ) -> Vec<Result<LpcRef>> {
     let timeout = vm.global_state.config.max_execution_time;
-    let template = vm.new_task_template();
+    let template = TaskTemplate::from(vm.global_state.clone());
     let func = func.to_owned();
 
     // Release every worker simultaneously to enforce contention and prevent an infinite hang waiting to join.

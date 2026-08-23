@@ -1,6 +1,5 @@
 use std::{path::Path, sync::Arc};
 
-use arc_swap::ArcSwapAny;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 
@@ -8,17 +7,16 @@ use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
         process::Process,
-        stm::TxnHandle,
         task::{self, task_template::TaskTemplate},
         task_context::TaskContext,
-        vm::Vm,
+        vm::{Vm, global_state::GlobalState},
     },
     util::process_builder::{
         compile_process_from_code, compile_process_from_path, process_insert_and_initialize_program,
     },
 };
 
-impl Vm {
+impl GlobalState {
     /// Initialize the simulated efuns file, if it is configured.
     ///
     /// # Returns
@@ -26,14 +24,13 @@ impl Vm {
     /// * `Some(Ok(()))` - The simul_efun file was loaded successfully
     /// * `Some(Err(LpcError))` - If there was an error loading the simul_efun file
     /// * `None` - If there is no simul_efun file configured
-    pub async fn initialize_simul_efuns(&mut self) -> Option<Result<()>> {
-        let Some(path) = &self.config().simul_efun_file else {
-            return None;
-        };
+    pub async fn initialize_simul_efuns(&self) -> Option<Result<()>> {
+        let path = self.config.simul_efun_file.as_ref()?;
 
-        let simul_efun_path = LpcPath::new_in_game(path.as_str(), "/", &*self.config().lib_dir);
+        let simul_efun_path = LpcPath::new_in_game(path.as_str(), "/", &*self.config.lib_dir);
         Some(
-            self.create_process_from_path(&simul_efun_path)
+            self.object_space
+                .create_process_from_path(&simul_efun_path)
                 .await
                 .map(|_| ()),
         )
@@ -52,30 +49,17 @@ impl Vm {
     ///
     /// * `Ok(TaskContext)` - The [`TaskContext`] for the code
     /// * `Err(LpcError)` - If there was an error compiling or initializing the code
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # tokio_test::block_on(async {
-    /// use lpc_rs::interpreter::{CommittedReader, lpc_int::LpcInt, lpc_ref::LpcRef, vm::Vm};
-    /// use lpc_rs_utils::config::Config;
-    ///
-    /// let mut vm = Vm::new(Config::default());
-    /// let ctx = vm.initialize_string("int x = 5;", "test.c").await.unwrap();
-    ///
-    /// let value = vm.global_state.committed_global(&ctx.process, 0u16);
-    /// assert_eq!(value, LpcRef::Int(LpcInt(5)));
-    ///
-    /// assert!(vm.global_state.object_space.lookup("/test").is_some());
-    /// # })
-    /// ```
-    pub async fn initialize_string<P, S>(&mut self, code: S, filename: P) -> Result<TaskContext>
+    pub async fn initialize_string<P, S>(
+        self: &Arc<Self>,
+        code: S,
+        filename: P,
+    ) -> Result<TaskContext>
     where
         P: AsRef<Path>,
         S: AsRef<str> + Send + Sync,
     {
-        let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config().lib_dir);
-        self.config().validate_in_game_path(&lpc_path, None)?;
+        let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config.lib_dir);
+        self.config.validate_in_game_path(&lpc_path, None)?;
 
         self.initialize_process_from_code(&lpc_path, code)
             .await
@@ -85,16 +69,70 @@ impl Vm {
     /// Compile the in-game file at `path` and initialize it (insert it into the
     /// [`ObjectSpace`](crate::interpreter::object_space::ObjectSpace), then run its initializer in a fresh task).
     pub async fn initialize_process_from_path(
-        &self,
+        self: &Arc<Self>,
         path: &LpcPath,
     ) -> Result<task::Task<MAX_CALL_STACK_SIZE>> {
-        let process = compile_process_from_path(&self.global_state.object_space, path).await?;
-        let template = self.new_task_template();
-        process_insert_and_initialize_program(process, template).await
+        let process = compile_process_from_path(&self.object_space, path).await?;
+        process_insert_and_initialize_program(process, TaskTemplate::from(self.clone())).await
     }
 
     /// Compile `code` (masquerading as `filename`) and initialize it (insert it
     /// into the [`ObjectSpace`](crate::interpreter::object_space::ObjectSpace), then run its initializer in a fresh task).
+    pub async fn initialize_process_from_code<P, S>(
+        self: &Arc<Self>,
+        filename: P,
+        code: S,
+    ) -> Result<task::Task<MAX_CALL_STACK_SIZE>>
+    where
+        P: Into<LpcPath> + Send + Sync,
+        S: AsRef<str> + Send + Sync,
+    {
+        let process = compile_process_from_code(&self.object_space, filename, code).await?;
+        process_insert_and_initialize_program(process, TaskTemplate::from(self.clone())).await
+    }
+}
+
+impl Vm {
+    /// See [`GlobalState::initialize_simul_efuns`].
+    pub async fn initialize_simul_efuns(&self) -> Option<Result<()>> {
+        self.global_state.initialize_simul_efuns().await
+    }
+
+    /// See [`GlobalState::initialize_string`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # tokio_test::block_on(async {
+    /// use lpc_rs::interpreter::{CommittedReader, lpc_int::LpcInt, lpc_ref::LpcRef, vm::Vm};
+    /// use lpc_rs_utils::config::Config;
+    ///
+    /// let vm = Vm::new(Config::default());
+    /// let ctx = vm.initialize_string("int x = 5;", "test.c").await.unwrap();
+    ///
+    /// let value = vm.global_state.committed_global(&ctx.process, 0u16);
+    /// assert_eq!(value, LpcRef::Int(LpcInt(5)));
+    ///
+    /// assert!(vm.global_state.object_space.lookup("/test").is_some());
+    /// # })
+    /// ```
+    pub async fn initialize_string<P, S>(&self, code: S, filename: P) -> Result<TaskContext>
+    where
+        P: AsRef<Path>,
+        S: AsRef<str> + Send + Sync,
+    {
+        self.global_state.initialize_string(code, filename).await
+    }
+
+    /// See [`GlobalState::initialize_process_from_path`].
+    pub async fn initialize_process_from_path(
+        &self,
+        path: &LpcPath,
+    ) -> Result<task::Task<MAX_CALL_STACK_SIZE>> {
+        self.global_state.initialize_process_from_path(path).await
+    }
+
+    /// See [`GlobalState::initialize_process_from_code`].
     pub async fn initialize_process_from_code<P, S>(
         &self,
         filename: P,
@@ -104,20 +142,9 @@ impl Vm {
         P: Into<LpcPath> + Send + Sync,
         S: AsRef<str> + Send + Sync,
     {
-        let process =
-            compile_process_from_code(&self.global_state.object_space, filename, code).await?;
-        let template = self.new_task_template();
-        process_insert_and_initialize_program(process, template).await
-    }
-
-    /// A convenience helper to create a populated [`TaskTemplate`]
-    pub fn new_task_template(&self) -> TaskTemplate {
-        TaskTemplate {
-            global_state: self.global_state.clone(),
-            this_player: ArcSwapAny::from(None),
-            upvalue_ptrs: None,
-            txn: TxnHandle::default(),
-        }
+        self.global_state
+            .initialize_process_from_code(filename, code)
+            .await
     }
 
     /// Compile the in-game file at `path` and physically insert it. Bootstrap

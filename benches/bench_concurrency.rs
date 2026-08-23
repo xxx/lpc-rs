@@ -110,7 +110,7 @@ async fn setup(path: &str, code: &str) -> (Arc<Vm>, Arc<Process>, TaskTemplate, 
     let vm = Vm::new(config);
     let task = vm.initialize_process_from_code(path, code).await.unwrap();
     let proc = task.context.process.clone();
-    let template = vm.new_task_template();
+    let template = TaskTemplate::from(vm.global_state.clone());
     let timeout = vm.global_state.config.max_execution_time;
 
     (Arc::new(vm), proc, template, timeout)
@@ -126,7 +126,7 @@ async fn setup_pair() -> (Arc<Vm>, Arc<Process>, TaskTemplate, u64) {
         .await
         .unwrap();
     let proc = task.context.process.clone();
-    let template = vm.as_ref().new_task_template();
+    let template = TaskTemplate::from(vm.global_state.clone());
     let timeout = vm.global_state.config.max_execution_time;
 
     (vm, proc, template, timeout)
@@ -197,14 +197,14 @@ fn contention(c: &mut Criterion) {
             // the closure would interleave criterion's stderr headers and misattribute the deltas.
             let (vm, proc, template, timeout) = rt.block_on(setup_for(name));
             let per_worker = total / workers;
-            let before: CommitterStats = rt.block_on(vm.committer_stats()).unwrap();
+            let before: CommitterStats = rt.block_on(vm.global_state.committer_stats()).unwrap();
 
             group.bench_with_input(BenchmarkId::new(name, workers), &workers, |b, &workers| {
                 b.to_async(&rt)
                     .iter(|| run_workers(&template, &proc, func, workers, per_worker, timeout));
             });
 
-            let after: CommitterStats = rt.block_on(vm.committer_stats()).unwrap();
+            let after: CommitterStats = rt.block_on(vm.global_state.committer_stats()).unwrap();
             let commits = after.commits.saturating_sub(before.commits);
             let conflicts = after.conflicts.saturating_sub(before.conflicts);
             let errors = after.errors.saturating_sub(before.errors);

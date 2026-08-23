@@ -91,7 +91,7 @@ mod tests {
             }
         "##;
 
-        let mut vm = Vm::new(test_config());
+        let vm = Vm::new(test_config());
         let result = vm
             .initialize_string(code, "test_write.c")
             .await

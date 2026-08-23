@@ -4,32 +4,28 @@ use flume::Sender as FlumeSender;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
-use tokio::{
-    signal,
-    sync::mpsc::{Receiver, Sender, error::SendError},
-};
-use tracing::{debug, error, info, instrument, trace};
+use tokio::{signal, sync::mpsc::Receiver};
+use tracing::{debug, error, info, instrument};
 use vm_op::VmOp;
 
 use crate::{
     compile_time_config::VM_CHANNEL_CAPACITY,
     interpreter::{
         SHUTDOWN,
-        process::Process,
-        stm::{
-            AttemptBody, Changeset, CommitProtocol, CommitterStats, Effect, LiveSnapshot,
-            Transaction, commit_changeset, committer_stats, flush_effects, run_attempts, start_txn,
+        task::{
+            apply_function::{apply_function_in_master, apply_runtime_error},
+            task_template::TaskTemplate,
         },
-        task::apply_function::{apply_function_in_master, apply_runtime_error},
         task_context::TaskContext,
         vm::global_state::GlobalState,
     },
-    telnet::{Telnet, connection::Connection, connection_broker::ConnectionBroker, ops::BrokerOp},
+    telnet::{Telnet, connection_broker::ConnectionBroker, ops::BrokerOp},
 };
 
 mod initiate_login;
 mod object_initializers;
 mod prioritize_call_out;
+mod takeover;
 
 pub mod global_state;
 pub mod vm_op;
@@ -42,8 +38,6 @@ pub struct Vm {
     /// The connection broker, which handles all of the network connections
     connection_broker: ConnectionBroker,
 
-    // /// The channel used to send [`VmOp`]s to this [`Vm`]
-    // tx: Sender<VmOp>,
     /// The channel used to receive [`VmOp`]s from other locations
     rx: Receiver<VmOp>,
 
@@ -77,9 +71,10 @@ impl Vm {
     pub async fn boot(&mut self) -> lpc_rs_errors::Result<()> {
         self.bootstrap().await?;
 
-        let address = format!("{}:{}", self.config().bind_address, self.config().port);
+        let config = &self.global_state.config;
+        let address = format!("{}:{}", config.bind_address, config.port);
         self.connection_broker
-            .run(address, self.new_task_template())
+            .run(address, TaskTemplate::from(self.global_state.clone()))
             .await;
         self.run().await
     }
@@ -90,17 +85,17 @@ impl Vm {
     /// * `Ok(TaskContext)` - The [`TaskContext`] for the master object
     /// * `Err(LpcError)` - If there was an error.
     pub async fn bootstrap(&mut self) -> Result<TaskContext> {
-        if let Some(Err(e)) = self.initialize_simul_efuns().await {
+        if let Some(Err(e)) = self.global_state.initialize_simul_efuns().await {
             e.emit_diagnostics();
             return Err(e);
         }
 
-        let master_path =
-            LpcPath::new_in_game(&*self.config().master_object, "/", &*self.config().lib_dir);
-        self.initialize_process_from_path(&master_path)
+        let config = &self.global_state.config;
+        let master_path = LpcPath::new_in_game(&*config.master_object, "/", &*config.lib_dir);
+        self.global_state
+            .initialize_process_from_path(&master_path)
             .await
             .map(|t| t.context)
-        // self.initialize_file(&master_path).await
     }
 
     /// Run the [`Vm`]'s main loop, which is the main event loop for the entire system.
@@ -122,11 +117,11 @@ impl Vm {
                         VmOp::InitiateLogin(connection) => {
                             self.initiate_login(connection).await;
                         }
-                        VmOp::PrioritizeCallOut(idx) => {
-                            self.prioritize_call_out(idx).await;
+                        VmOp::PrioritizeCallOut(id) => {
+                            self.global_state.prioritize_call_out(id).await;
                         }
                         VmOp::RuntimeError(error, proc) => {
-                            let template = self.new_task_template();
+                            let template = TaskTemplate::from(self.global_state.clone());
 
                             tokio::spawn(async move {
                                 match apply_runtime_error(&error, proc, template).await {
@@ -167,7 +162,7 @@ impl Vm {
         match apply_function_in_master(
             SHUTDOWN,
             &[],
-            self.new_task_template(),
+            TaskTemplate::from(self.global_state.clone()),
             Some(5000), // a much longer timeout than normal, to allow for saving.
         )
         .await
@@ -192,193 +187,24 @@ impl Vm {
 
         Ok(())
     }
-
-    /// The committer's lifetime commit totals (commits/conflicts/errors).
-    /// For bench measurement and tooling; not part of the hot path.
-    pub async fn committer_stats(&self) -> Result<CommitterStats> {
-        committer_stats(&self.global_state.committer_tx).await
-    }
-
-    /// Send an operation to the VM queue
-    pub async fn send_op(&self, msg: VmOp) -> std::result::Result<(), SendError<VmOp>> {
-        self.tx().send(msg).await
-    }
-
-    #[inline]
-    fn config(&self) -> &Config {
-        &self.global_state.config
-    }
-
-    #[inline]
-    fn tx(&self) -> &Sender<VmOp> {
-        &self.global_state.tx
-    }
-
-    /// Bind a [`Connection`] to a [`Process`] in its own transaction. The
-    /// socket-level handover (back-reference, disconnect of the displaced
-    /// holder) is a deferred `Effect::Exec`, flushed after the commit lands.
-    pub async fn takeover(
-        global_state: &Arc<GlobalState>,
-        connection: Arc<Connection>,
-        process: Arc<Process>,
-    ) {
-        let mut body = TakeoverBody {
-            global_state: global_state.clone(),
-            connection,
-            process,
-            attempt: None,
-        };
-        let (res, stats) = run_attempts(&global_state.committer_tx, &mut body).await;
-        trace!(
-            attempts = stats.attempts,
-            conflicts = stats.conflicts,
-            ?stats.duration,
-            "takeover finished"
-        );
-        if let Err(e) = res {
-            error!("takeover: committer failed: {e}");
-        }
-    }
-}
-
-/// One attempt of [`Vm::takeover`]: the connection-cell write plus the
-/// deferred socket handover.
-struct TakeoverBody {
-    global_state: Arc<GlobalState>,
-    connection: Arc<Connection>,
-    process: Arc<Process>,
-    attempt: Option<Transaction>,
-}
-
-#[async_trait::async_trait]
-impl AttemptBody for TakeoverBody {
-    async fn begin_attempt(
-        &mut self,
-        tx: &flume::Sender<CommitProtocol>,
-    ) -> Result<Option<LiveSnapshot>> {
-        let live = start_txn(tx).await?;
-        let mut txn = Transaction::new(live.inner.clone());
-
-        // The connection currently bound to `process`; the handover
-        // displaces it.
-        let previous = txn.read_connection(self.process.connection.id);
-        txn.write_connection(self.process.connection.id, Some(self.connection.clone()));
-
-        txn.record_effect(Effect::Exec {
-            new_process: self.process.clone(),
-            connection: self.connection.clone(),
-            previous,
-        });
-
-        self.attempt = Some(txn);
-        Ok(Some(live))
-    }
-
-    async fn commit_phase(
-        &mut self,
-        tx: &flume::Sender<CommitProtocol>,
-        _live: LiveSnapshot,
-    ) -> Result<(std::result::Result<(), Changeset>, Vec<Effect>)> {
-        let mut txn = self
-            .attempt
-            .take()
-            .expect("attempt present until committed");
-        let commit = commit_changeset(tx, txn.take_changeset()).await?;
-        Ok((commit, txn.take_effects()))
-    }
-
-    async fn deliver(&mut self, effects: Vec<Effect>) -> Result<()> {
-        let gs = &self.global_state;
-        flush_effects(&gs.config, &gs.object_space, gs.call_outs(), effects).await;
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::net::ToSocketAddrs;
-
-    use arc_swap::ArcSwapAny;
     use indoc::indoc;
 
     use super::*;
     use crate::{
         interpreter::{
-            CommittedReader,
-            lpc_ref::LpcRef,
-            program::ProgramBuilder,
-            stm::{Committer, WorldValue, start_txn},
-            task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
+            CommittedReader, lpc_ref::LpcRef, process::Process, stm::start_txn,
+            task::apply_function::apply_function_by_name,
         },
         test_support::test_config,
     };
 
-    /// A `Connection` whose own channels are dropped after the test.
-    fn make_connection() -> Arc<Connection> {
-        let (tx, _rx) = tokio::sync::mpsc::channel(1);
-        let (broker_tx, _broker_rx) = flume::unbounded();
-        Arc::new(Connection {
-            address: "127.0.0.1:23123".to_socket_addrs().unwrap().next().unwrap(),
-            process: ArcSwapAny::from(None),
-            tx,
-            broker_tx,
-            input_to: Default::default(),
-        })
-    }
-
-    /// A rejected takeover attempt re-runs: the second attempt commits the
-    /// connection cell and only then flushes the back-reference.
-    #[tokio::test]
-    async fn takeover_reruns_after_rejection() {
-        let (vm_tx, _vm_rx) = tokio::sync::mpsc::channel(128);
-        let global_state = Arc::new(GlobalState::new(test_config(), vm_tx));
-        let process = Arc::new(Process::new(
-            ProgramBuilder::default()
-                .filename(LpcPath::InGame(std::path::PathBuf::from("/body")))
-                .build()
-                .unwrap(),
-        ));
-        let connection = make_connection();
-
-        let (tx, rx) = flume::bounded(4);
-        let committer_tx = tx.clone();
-        let handle =
-            std::thread::spawn(move || Committer::new().run_with_rejections(committer_tx, rx, 1));
-
-        let mut body = TakeoverBody {
-            global_state: global_state.clone(),
-            connection: connection.clone(),
-            process: process.clone(),
-            attempt: None,
-        };
-        let (res, stats) = run_attempts(&tx, &mut body).await;
-        assert!(res.is_ok());
-        assert_eq!(stats.attempts, 2, "one forced rejection, then a commit");
-        assert_eq!(stats.conflicts, 1);
-        assert!(
-            connection
-                .process
-                .load()
-                .as_ref()
-                .is_some_and(|bound| Arc::ptr_eq(bound, &process)),
-            "the back-reference is flushed after the commit"
-        );
-
-        tx.send(CommitProtocol::Close).unwrap();
-        drop(tx);
-        let world = handle.join().expect("committer panicked");
-        assert!(
-            matches!(
-                world.read(process.connection.id),
-                Some(WorldValue::Connection(Some(bound))) if Arc::ptr_eq(&bound, &connection)
-            ),
-            "the connection cell holds the committed binding"
-        );
-    }
-
     #[tokio::test]
     async fn test_gc() {
-        let mut vm = Vm::new(test_config());
+        let vm = Vm::new(test_config());
         let storage = indoc! { r#"
             function *storage = ({});
 
@@ -476,7 +302,7 @@ mod tests {
     /// sweep; one whose last live reference was dropped is reclaimed.
     #[tokio::test]
     async fn gc_reclaims_unreachable_committed_payload() {
-        let mut vm = Vm::new(test_config());
+        let vm = Vm::new(test_config());
         let code = indoc! { r##"
             mixed payload_a;
             mixed payload_b;
@@ -552,7 +378,7 @@ mod tests {
     /// and it is the one the physical map and the committed world agree on.
     #[tokio::test]
     async fn test_create_destruct_cycles_one_transaction() {
-        let mut vm = Vm::new(test_config());
+        let vm = Vm::new(test_config());
 
         let code = indoc! { r##"
             mixed *create() {
@@ -621,7 +447,7 @@ mod tests {
     #[tokio::test]
     async fn contention_probe_sequential_increment_is_conflict_free() {
         const N: usize = 400;
-        let mut vm = Vm::new(test_config());
+        let vm = Vm::new(test_config());
         let code = indoc! { r#"
             int count = 0;
 
@@ -634,16 +460,16 @@ mod tests {
             .await
             .unwrap();
         let proc = ctx.process;
-        let template = vm.new_task_template();
+        let template = TaskTemplate::from(vm.global_state.clone());
 
-        let before = vm.committer_stats().await.unwrap();
+        let before = vm.global_state.committer_stats().await.unwrap();
         for _ in 0..N {
             apply_function_by_name("increment", &[], proc.clone(), template.clone(), None)
                 .await
                 .unwrap()
                 .unwrap();
         }
-        let after = vm.committer_stats().await.unwrap();
+        let after = vm.global_state.committer_stats().await.unwrap();
         let final_val = match vm.global_state.committed_global(&proc, 0) {
             LpcRef::Int(n) => n,
             other => panic!("counter not an int: {other:?}"),
@@ -666,7 +492,7 @@ mod tests {
     async fn contention_probe_concurrent_increment_loses_nothing() {
         const N: usize = 200; // per worker
         const WORKERS: usize = 8;
-        let mut vm = Vm::new(test_config());
+        let vm = Vm::new(test_config());
         let code = indoc! { r#"
             int count = 0;
 
@@ -679,9 +505,9 @@ mod tests {
             .await
             .unwrap();
         let proc = ctx.process;
-        let template = vm.new_task_template();
+        let template = TaskTemplate::from(vm.global_state.clone());
 
-        let before = vm.committer_stats().await.unwrap();
+        let before = vm.global_state.committer_stats().await.unwrap();
 
         let mut set = tokio::task::JoinSet::new();
         for _ in 0..WORKERS {
@@ -698,7 +524,7 @@ mod tests {
         }
         while set.join_next().await.is_some() {}
 
-        let after = vm.committer_stats().await.unwrap();
+        let after = vm.global_state.committer_stats().await.unwrap();
         let final_val = match vm.global_state.committed_global(&proc, 0) {
             LpcRef::Int(n) => n,
             other => panic!("counter not an int: {other:?}"),
@@ -733,7 +559,7 @@ mod tests {
                 .unwrap();
 
             rt.block_on(async {
-                let mut vm = Vm::new(test_config());
+                let vm = Vm::new(test_config());
                 let code = indoc! { r#"
                     int count = 0;
 
@@ -746,9 +572,9 @@ mod tests {
                     .await
                     .unwrap();
                 let proc = ctx.process;
-                let template = vm.new_task_template();
+                let template = TaskTemplate::from(vm.global_state.clone());
 
-                let before = vm.committer_stats().await.unwrap();
+                let before = vm.global_state.committer_stats().await.unwrap();
 
                 let mut set = tokio::task::JoinSet::new();
                 for _ in 0..workers {
@@ -771,7 +597,7 @@ mod tests {
                 }
                 while set.join_next().await.is_some() {}
 
-                let after = vm.committer_stats().await.unwrap();
+                let after = vm.global_state.committer_stats().await.unwrap();
                 let final_val = match vm.global_state.committed_global(&proc, 0) {
                     LpcRef::Int(n) => n,
                     other => panic!("counter not an int: {other:?}"),

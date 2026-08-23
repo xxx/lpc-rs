@@ -17,7 +17,9 @@ mod tests {
 
     use crate::{
         interpreter::{
-            object_flags::ObjectFlags, task::apply_function::apply_function_by_name, vm::Vm,
+            object_flags::ObjectFlags,
+            task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
+            vm::Vm,
         },
         test_support::test_config,
     };
@@ -68,7 +70,7 @@ mod tests {
             "disabler",
             &[],
             master_proc.context.process,
-            vm.new_task_template(),
+            TaskTemplate::from(vm.global_state.clone()),
             None,
         )
         .await

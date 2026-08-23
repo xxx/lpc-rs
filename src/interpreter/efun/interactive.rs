@@ -21,7 +21,9 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, task::Task, vm::Vm},
+        interpreter::{
+            lpc_int::LpcInt, lpc_ref::LpcRef, task::Task, task::task_template::TaskTemplate, vm::Vm,
+        },
         telnet::connection::Connection,
         test_support::test_config,
     };
@@ -52,12 +54,15 @@ mod tests {
 
         // Bind the connection through the transactional path (the login
         // mechanism), so the cell is committed to the world.
-        Vm::takeover(&vm.global_state, Arc::new(connection), master_proc.clone()).await;
+        vm.global_state
+            .takeover(Arc::new(connection), master_proc.clone())
+            .await;
 
-        let task =
-            Task::<16>::initialize_process(vm.new_task_template().into_task_context(master_proc))
-                .await
-                .unwrap();
+        let task = Task::<16>::initialize_process(
+            TaskTemplate::from(vm.global_state.clone()).into_task_context(master_proc),
+        )
+        .await
+        .unwrap();
 
         let result = task.result().unwrap();
         assert_eq!(result, LpcRef::Int(LpcInt(1)));

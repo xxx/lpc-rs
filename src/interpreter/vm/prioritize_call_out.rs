@@ -8,93 +8,57 @@ use crate::{
     interpreter::{
         function_type::function_ptr::FunctionPtr,
         lpc_ref::LpcRef,
-        object_flags::ObjectFlags,
-        task::{
-            Task, apply_function::apply_runtime_error, task_id::TaskId, task_template::TaskTemplate,
-        },
+        task::{Task, task_id::TaskId},
         task_context::TaskContext,
-        vm::{Vm, vm_op::VmOp},
+        vm::{global_state::GlobalState, vm_op::VmOp},
     },
 };
 
-impl Vm {
-    /// Handler for [`VmOp::PrioritizeCallOut`].
-    ///
-    /// # Arguments
-    ///
-    /// * `idx` - The index of the call out to run
-    ///
-    /// Errors are communicated directly to the [`Vm`] via it's channel.
-    pub async fn prioritize_call_out(&self, idx: usize) -> JoinHandle<()> {
-        let global_state = self.global_state.clone();
+impl GlobalState {
+    /// Handler for [`VmOp::PrioritizeCallOut`]: run the call out with `id`,
+    /// reporting errors on the [`Vm`](crate::interpreter::vm::Vm) channel.
+    pub async fn prioritize_call_out(self: &Arc<Self>, id: u64) -> JoinHandle<()> {
+        let global_state = self.clone();
 
         tokio::spawn(async move {
-            if global_state.with_call_outs(|co| co.get(idx).is_none()) {
-                return;
-            }
-
-            let pair = {
-                global_state.with_call_outs(|co| -> Result<(Arc<FunctionPtr>, bool)> {
-                    let call_out = co.get(idx).unwrap();
-                    if let LpcRef::Function(ref func) = call_out.func_ref {
-                        let repeating = call_out.is_repeating();
-                        Ok((func.clone(), repeating))
+            let pair =
+                global_state.with_call_outs(|co| -> Option<Result<(Arc<FunctionPtr>, bool)>> {
+                    let call_out = co.get_by_id(id)?;
+                    Some(if let LpcRef::Function(ref func) = call_out.func_ref {
+                        Ok((func.clone(), call_out.is_repeating()))
                     } else {
                         Err(lpc_error!("invalid function sent to `call_out`"))
-                    }
-                })
-            };
-
-            let Ok((ptr_arc, repeating)) = pair else {
-                global_state.with_call_outs_mut(|co| co.remove(idx));
-                let _ = global_state
-                    .tx
-                    .send(VmOp::TaskError(TaskId(0), pair.unwrap_err()))
-                    .await;
+                    })
+                });
+            let Some(pair) = pair else {
                 return;
             };
 
-            // The transactional seam: a create-on-miss goes through the
-            // committer, and a destruct in the committed-unflushed window is an
-            // error instead of a resurrection.
-            if let Err(e) = global_state.resolve_dynamic_string_receiver(&ptr_arc).await {
-                global_state.with_call_outs_mut(|co| co.remove(idx));
-                let _ = global_state.tx.send(VmOp::TaskError(TaskId(0), e)).await;
-                return;
-            }
-            let triple =
-                FunctionPtr::triple(&ptr_arc, &global_state.config, &global_state.object_space)
-                    .await;
-            let Ok((process, function, args)) = triple else {
-                global_state.with_call_outs_mut(|co| co.remove(idx));
-                let _ = global_state
-                    .tx
-                    .send(VmOp::TaskError(TaskId(0), triple.unwrap_err()))
-                    .await;
-                return;
-            };
-
-            if !process.flags.test(ObjectFlags::Initialized) {
-                let template = TaskTemplate::from(global_state.clone());
-
-                let ctx = template.into_task_context(process.clone());
-                if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_process(ctx).await {
-                    let template = TaskTemplate::from(global_state.clone());
-
-                    let Some(Ok(_)) = apply_runtime_error(&e, Some(process), template).await else {
-                        global_state.config.debug_log(e.diagnostic_string()).await;
-                        return;
-                    };
-
+            let (ptr_arc, repeating) = match pair {
+                Ok(pair) => pair,
+                Err(e) => {
+                    global_state.with_call_outs_mut(|co| co.remove_by_id(id));
+                    let _ = global_state.tx.send(VmOp::TaskError(TaskId(0), e)).await;
                     return;
                 }
-            }
+            };
+
+            let (process, function, args) =
+                match global_state.prepare_function_ptr(&ptr_arc, None).await {
+                    Ok(Some(triple)) => triple,
+                    Ok(None) => return,
+                    Err(e) => {
+                        global_state.with_call_outs_mut(|co| co.remove_by_id(id));
+                        let _ = global_state.tx.send(VmOp::TaskError(TaskId(0), e)).await;
+                        return;
+                    }
+                };
 
             global_state.with_call_outs_mut(|co| {
                 if repeating {
-                    co.get_mut(idx).unwrap().refresh();
+                    co.get_mut_by_id(id).unwrap().refresh();
                 } else {
-                    co.remove(idx);
+                    co.remove_by_id(id);
                 }
             });
 
@@ -138,6 +102,7 @@ mod tests {
             function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
             object_flags::ObjectFlags,
             process::Process,
+            vm::Vm,
         },
         test_support::test_config,
     };
@@ -170,9 +135,9 @@ mod tests {
             .build()
             .unwrap();
 
-        let idx = vm.global_state.with_call_outs_mut(|co| co.push(call_out));
+        vm.global_state.with_call_outs_mut(|co| co.push(call_out));
 
-        let handle = vm.prioritize_call_out(idx).await;
+        let handle = vm.global_state.prioritize_call_out(0).await;
         handle.await.unwrap();
 
         assert_eq!(
@@ -180,7 +145,7 @@ mod tests {
             LpcRef::from(165)
         );
         vm.global_state
-            .with_call_outs(|co| assert!(co.get(idx).is_none()));
+            .with_call_outs(|co| assert!(co.get_by_id(0).is_none()));
     }
 
     mod test_string_receivers {
@@ -200,9 +165,9 @@ mod tests {
                 .build()
                 .unwrap();
 
-            let idx = vm.global_state.with_call_outs_mut(|co| co.push(call_out));
+            vm.global_state.with_call_outs_mut(|co| co.push(call_out));
 
-            let handle = vm.prioritize_call_out(idx).await;
+            let handle = vm.global_state.prioritize_call_out(0).await;
             handle.await.unwrap();
 
             assert_eq!(
@@ -211,7 +176,7 @@ mod tests {
             );
             assert!(bar_proc.flags.test(ObjectFlags::Initialized));
             vm.global_state.with_call_outs(|co| {
-                assert!(co.get(idx).is_none());
+                assert!(co.get_by_id(0).is_none());
             });
         }
 

@@ -1,7 +1,7 @@
 //! Software transactional memory implementation
 
 use std::{
-    collections::HashMap,
+    collections::HashSet,
     marker::PhantomData,
     sync::{Arc, atomic::AtomicU64},
 };
@@ -83,7 +83,7 @@ pub(crate) struct Transaction {
     pending_call_outs: Vec<CallOutSchedule>,
     /// Committed call outs this attempt canceled. The queries subtract this
     /// shadow; same lifetime as `pending_call_outs`.
-    cancelled_call_outs: HashMap<u64, ()>,
+    cancelled_call_outs: HashSet<u64>,
     /// True when this transaction was opened by the committer (a live
     /// attempt) and may be joined by a nested sub-task; false for the fresh
     /// empty one minted for top-level contexts, whose holder must open its
@@ -99,7 +99,7 @@ impl Transaction {
             changeset: Changeset::new(version),
             effects: EffectLog::new(),
             pending_call_outs: Vec::new(),
-            cancelled_call_outs: HashMap::new(),
+            cancelled_call_outs: HashSet::new(),
             joinable: true,
         }
     }
@@ -292,13 +292,13 @@ impl Transaction {
     /// Cancel a committed call out: record the deferred physical removal
     /// and add the ID to the shadow.
     pub(crate) fn cancel_committed_call_out(&mut self, id: u64) {
-        self.cancelled_call_outs.insert(id, ());
+        self.cancelled_call_outs.insert(id);
         self.record_effect(Effect::CancelCallOut { id });
     }
 
     /// Whether this attempt canceled the committed call out with `id`.
     pub(crate) fn is_cancelled_call_out(&self, id: u64) -> bool {
-        self.cancelled_call_outs.contains_key(&id)
+        self.cancelled_call_outs.contains(&id)
     }
 
     /// Take out the attempt's recorded side effects for delivery. The

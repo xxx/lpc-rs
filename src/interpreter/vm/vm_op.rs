@@ -13,8 +13,8 @@ pub enum VmOp {
     /// Start the login process for a connection.
     InitiateLogin(Arc<Connection>),
 
-    /// Run a CallOut function, identified by its index in the [`CallOuts`](crate::interpreter::call_outs::CallOuts) list
-    PrioritizeCallOut(usize),
+    /// Run a scheduled [`CallOut`](crate::interpreter::call_outs::CallOut), identified by its ID.
+    PrioritizeCallOut(u64),
 
     /// The Task with the passed ID has failed.
     TaskError(TaskId, Box<LpcError>),
