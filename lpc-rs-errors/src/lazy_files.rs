@@ -2,12 +2,12 @@ use std::{
     ffi::{OsStr, OsString},
     ops::Range,
     path::Path,
+    sync::LazyLock,
 };
 
 use cached::{LruCache, macros::cached};
 use codespan_reporting::files::{Error, Files, SimpleFile};
 use fs_err as fs;
-use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 
 use crate::span::Span;
@@ -22,27 +22,8 @@ enum LazyFile<Name, Source> {
 }
 
 /// A global file cache for use in error reporting.
-pub static FILE_CACHE: Lazy<RwLock<LazyFiles<String, String>>> =
-    Lazy::new(|| RwLock::new(LazyFiles::new()));
-
-/// A wrapper type for the global [`FILE_CACHE`]
-pub struct FileCache;
-
-impl FileCache {
-    /// A convenience helper to add a file to the mutexed global file cache.
-    /// This function will block if it needs to wait for the mutex.
-    ///
-    /// # Arguments
-    /// `path` - The path of the file to add. It will be used as the key in the
-    /// file cache.
-    pub fn insert<T>(path: T) -> FileId
-    where
-        T: std::fmt::Display,
-    {
-        let mut cache = FILE_CACHE.write();
-        cache.add(path.to_string())
-    }
-}
+pub static FILE_CACHE: LazyLock<RwLock<LazyFiles<String, String>>> =
+    LazyLock::new(|| RwLock::new(LazyFiles::new()));
 
 /// For readability
 pub type FileId = usize;

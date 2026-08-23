@@ -3,7 +3,6 @@
 use std::{
     error::Error,
     fmt::{Debug, Display, Formatter},
-    fs::OpenOptions,
     num::TryFromIntError,
     result,
 };
@@ -13,17 +12,14 @@ use codespan_reporting::{
     term::termcolor::{Buffer, ColorChoice, StandardStream, WriteColor},
 };
 use derive_builder::UninitializedFieldError;
-use itertools::Itertools;
 use lalrpop_util::ParseError as LalrpopParseError;
 use span::HasSpan;
 
 use crate::{
-    file_stream::FileStream,
     lazy_files::{FILE_CACHE, FileId},
     span::Span,
 };
 
-pub mod file_stream;
 pub mod lazy_files;
 pub mod span;
 
@@ -235,22 +231,6 @@ impl LpcError {
         );
     }
 
-    /// Emit this error's collected diagnostics
-    pub fn _emit_diagnostics_to_file(&self, path: &str) {
-        let file = OpenOptions::new().append(true).create(true).open(path);
-
-        match file {
-            Ok(file) => {
-                let mut file_stream = FileStream::new(file);
-
-                output_diagnostics(&self.to_diagnostics(), &mut file_stream);
-            }
-            Err(e) => {
-                eprintln!("Error opening file `{path}`: {e}");
-            }
-        }
-    }
-
     /// Emit the diagnostics as a String
     pub fn diagnostic_string(&self) -> String {
         let mut err = self.to_string();
@@ -344,7 +324,12 @@ impl From<&LpcError> for Diagnostic<FileId> {
         if let Some(stack_trace) = &inner.stack_trace {
             diagnostic.notes.push(format!(
                 "Stack trace:\n\n{}",
-                stack_trace.iter().rev().join("\n")
+                stack_trace
+                    .iter()
+                    .rev()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>()
+                    .join("\n")
             ));
         }
 
@@ -373,23 +358,6 @@ pub fn output_diagnostics(diagnostics: &[Diagnostic<FileId>], writer: &mut dyn W
             );
         };
     }
-}
-
-/// An extracted function that covers the most common use case for generating
-/// diagnostics.
-///
-/// # Arguments
-/// `message` - The main message for the error
-/// `span` - The [`Span`] of the code that created this error
-pub fn default_diagnostic(message: String, span: Option<Span>) -> Vec<Diagnostic<FileId>> {
-    let mut diagnostic = Diagnostic::error().with_message(message);
-
-    if let Some(span) = span {
-        let labels = vec![Label::primary(span.file_id, span.l..span.r)];
-        diagnostic = diagnostic.with_labels(labels);
-    }
-
-    vec![diagnostic]
 }
 
 /// Just a shared helper.

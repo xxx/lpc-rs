@@ -4,7 +4,6 @@ use std::{
 };
 
 use codespan_reporting::files::Files;
-use if_chain::if_chain;
 
 use crate::lazy_files::{FILE_CACHE, FileId};
 
@@ -24,16 +23,14 @@ impl Display for Span {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let files = FILE_CACHE.read();
 
-        if_chain! {
-            if let Ok(name) = files.name(self.file_id);
-            if let Ok(idx) = files.line_index(self.file_id, self.l);
-            if let Ok(line_num) = files.line_number(self.file_id, idx);
-            if let Ok(column_num) = files.column_number(self.file_id, idx, line_num);
-            then {
-                write!(f, "{name}:{line_num}:{column_num}")
-            } else {
-                write!(f, "{self:?}")
-            }
+        if let Ok(name) = files.name(self.file_id)
+            && let Ok(idx) = files.line_index(self.file_id, self.l)
+            && let Ok(line_num) = files.line_number(self.file_id, idx)
+            && let Ok(column_num) = files.column_number(self.file_id, idx, line_num)
+        {
+            write!(f, "{name}:{line_num}:{column_num}")
+        } else {
+            write!(f, "{self:?}")
         }
     }
 }
@@ -75,9 +72,9 @@ impl Span {
     ///
     /// # Examples
     /// ```
-    /// use lpc_rs_errors::{lazy_files::FileCache, span::Span};
+    /// use lpc_rs_errors::{lazy_files::FILE_CACHE, span::Span};
     ///
-    /// let file_id = FileCache::insert("tests/fixtures/code/example.c");
+    /// let file_id = FILE_CACHE.write().add("tests/fixtures/code/example.c");
     /// let span = Span::new(file_id, 1..8);
     /// ```
     #[inline]

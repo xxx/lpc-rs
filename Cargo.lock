@@ -1375,12 +1375,8 @@ dependencies = [
  "codespan-reporting",
  "derive_builder",
  "fs-err",
- "if_chain",
- "itertools 0.15.0",
  "lalrpop-util",
- "once_cell",
  "parking_lot",
- "tokio",
 ]
 
 [[package]]
