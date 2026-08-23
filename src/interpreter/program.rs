@@ -9,7 +9,12 @@ use std::{
 use derive_builder::Builder;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, pragma_flags::PragmaFlags};
+use lpc_rs_core::{
+    RegisterSize,
+    lpc_path::LpcPath,
+    pragma_flags::PragmaFlags,
+    register::{Register, RegisterVariant},
+};
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use path_dedot::*;
 
@@ -97,13 +102,24 @@ impl<'a> Program {
         }
     }
 
-    /// Get the number of registers needed to initialize this program.
-    /// This number always includes 1 register for the return value
-    pub fn num_init_registers(&self) -> RegisterSize {
-        self.initializer
-            .as_ref()
-            .map(|init| init.num_locals + 1)
-            .unwrap_or(1) // 1 for the return value
+    /// Move every global this program owns up by `base`, so it can be
+    /// imported into a child whose earlier parents hold the first `base` slots.
+    pub fn rebase_globals(&mut self, base: RegisterSize) {
+        if base == 0 {
+            return;
+        }
+        for func in self.functions.values_mut() {
+            let mut shifted = ProgramFunction::clone(func);
+            for instruction in &mut shifted.instructions {
+                *instruction = instruction.shift_globals(base);
+            }
+            *func = Arc::new(shifted);
+        }
+        for symbol in self.global_variables.values_mut() {
+            if let Some(RegisterVariant::Global(reg)) = symbol.location {
+                symbol.location = Some(RegisterVariant::Global(Register(reg.index() + base)));
+            }
+        }
     }
 
     /// Get a listing of this Program's assembly language, suitable for printing

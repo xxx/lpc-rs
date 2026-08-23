@@ -4,8 +4,9 @@ use std::{
 };
 
 use lpc_rs_core::{
-    LpcFloatInner, LpcIntInner, RegisterSize, function_receiver::FunctionReceiver,
-    register::RegisterVariant,
+    LpcFloatInner, LpcIntInner, RegisterSize,
+    function_receiver::FunctionReceiver,
+    register::{Register, RegisterVariant},
 };
 use lpc_rs_errors::{Result, lpc_bug};
 use ustr::Ustr;
@@ -236,6 +237,87 @@ pub enum Instruction {
 }
 
 impl Instruction {
+    /// This instruction with `f` applied to every register operand.
+    pub fn map_registers<F>(self, f: F) -> Self
+    where
+        F: Fn(RegisterVariant) -> RegisterVariant,
+    {
+        match self {
+            Self::AConst(a0) => Self::AConst(f(a0)),
+            Self::And(a0, a1, a2) => Self::And(f(a0), f(a1), f(a2)),
+            Self::BitwiseNot(a0, a1) => Self::BitwiseNot(f(a0), f(a1)),
+            Self::Call(a0) => Self::Call(a0),
+            Self::CallEfun(a0) => Self::CallEfun(a0),
+            Self::CallSimulEfun(a0) => Self::CallSimulEfun(a0),
+            Self::CallFp(a0) => Self::CallFp(f(a0)),
+            Self::CallOther(a0, a1) => Self::CallOther(f(a0), f(a1)),
+            Self::CatchEnd => Self::CatchEnd,
+            Self::CatchStart(a0, a1) => Self::CatchStart(f(a0), a1),
+            Self::ClearArgs => Self::ClearArgs,
+            Self::ClearPartialArgs => Self::ClearPartialArgs,
+            Self::ClearArrayItems => Self::ClearArrayItems,
+            Self::Copy(a0, a1) => Self::Copy(f(a0), f(a1)),
+            Self::Dec(a0) => Self::Dec(f(a0)),
+            Self::EqEq(a0, a1, a2) => Self::EqEq(f(a0), f(a1), f(a2)),
+            Self::FConst(a0, a1) => Self::FConst(f(a0), a1),
+            Self::FunctionPtrConst {
+                location,
+                receiver,
+                name,
+            } => Self::FunctionPtrConst {
+                location: f(location),
+                receiver,
+                name,
+            },
+            Self::Gt(a0, a1, a2) => Self::Gt(f(a0), f(a1), f(a2)),
+            Self::Gte(a0, a1, a2) => Self::Gte(f(a0), f(a1), f(a2)),
+            Self::IAdd(a0, a1, a2) => Self::IAdd(f(a0), f(a1), f(a2)),
+            Self::IConst(a0, a1) => Self::IConst(f(a0), a1),
+            Self::IConst0(a0) => Self::IConst0(f(a0)),
+            Self::IConst1(a0) => Self::IConst1(f(a0)),
+            Self::IDiv(a0, a1, a2) => Self::IDiv(f(a0), f(a1), f(a2)),
+            Self::IMod(a0, a1, a2) => Self::IMod(f(a0), f(a1), f(a2)),
+            Self::Inc(a0) => Self::Inc(f(a0)),
+            Self::IMul(a0, a1, a2) => Self::IMul(f(a0), f(a1), f(a2)),
+            Self::ISub(a0, a1, a2) => Self::ISub(f(a0), f(a1), f(a2)),
+            Self::Jmp(a0) => Self::Jmp(a0),
+            Self::Jnz(a0, a1) => Self::Jnz(f(a0), a1),
+            Self::Jz(a0, a1) => Self::Jz(f(a0), a1),
+            Self::Load(a0, a1, a2) => Self::Load(f(a0), f(a1), f(a2)),
+            Self::LoadMappingKey(a0, a1, a2) => Self::LoadMappingKey(f(a0), f(a1), f(a2)),
+            Self::Lt(a0, a1, a2) => Self::Lt(f(a0), f(a1), f(a2)),
+            Self::Lte(a0, a1, a2) => Self::Lte(f(a0), f(a1), f(a2)),
+            Self::MapConst(a0) => Self::MapConst(f(a0)),
+            Self::MAdd(a0, a1, a2) => Self::MAdd(f(a0), f(a1), f(a2)),
+            Self::MMul(a0, a1, a2) => Self::MMul(f(a0), f(a1), f(a2)),
+            Self::MSub(a0, a1, a2) => Self::MSub(f(a0), f(a1), f(a2)),
+            Self::Not(a0, a1) => Self::Not(f(a0), f(a1)),
+            Self::NotEq(a0, a1, a2) => Self::NotEq(f(a0), f(a1), f(a2)),
+            Self::Or(a0, a1, a2) => Self::Or(f(a0), f(a1), f(a2)),
+            Self::PopulateArgv(a0, a1, a2) => Self::PopulateArgv(f(a0), a1, a2),
+            Self::PopulateDefaults => Self::PopulateDefaults,
+            Self::PushArg(a0) => Self::PushArg(f(a0)),
+            Self::PushArrayItem(a0) => Self::PushArrayItem(f(a0)),
+            Self::PushPartialArg(a0) => Self::PushPartialArg(a0.map(&f)),
+            Self::Range(a0, a1, a2, a3) => Self::Range(f(a0), f(a1), f(a2), f(a3)),
+            Self::Ret => Self::Ret,
+            Self::Shl(a0, a1, a2) => Self::Shl(f(a0), f(a1), f(a2)),
+            Self::Shr(a0, a1, a2) => Self::Shr(f(a0), f(a1), f(a2)),
+            Self::Sizeof(a0, a1) => Self::Sizeof(f(a0), f(a1)),
+            Self::Store(a0, a1, a2) => Self::Store(f(a0), f(a1), f(a2)),
+            Self::SConst(a0, a1) => Self::SConst(f(a0), a1),
+            Self::Xor(a0, a1, a2) => Self::Xor(f(a0), f(a1), f(a2)),
+        }
+    }
+
+    /// This instruction with every global register moved up by `base`.
+    pub fn shift_globals(self, base: RegisterSize) -> Self {
+        self.map_registers(|r| match r {
+            RegisterVariant::Global(reg) => RegisterVariant::Global(Register(reg.index() + base)),
+            other => other,
+        })
+    }
+
     /// Backpatch an instruction with a new address.
     /// This is used to fix up jumps after the code has been generated.
     /// Returns an error if the instruction cannot be backpatched.

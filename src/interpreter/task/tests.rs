@@ -1250,6 +1250,39 @@ mod test_instructions {
         }
     }
 
+    mod test_inheritance {
+        use super::*;
+
+        #[tokio::test]
+        async fn sibling_parents_keep_their_strings_calls_and_globals() {
+            let code = indoc! { r##"
+                mixed r;
+                void create() { object o = clone_object("/sibling_child"); r = o->snapshot(); }
+            "##};
+
+            let task = run_prog(code).await;
+            let gs = &task.context.global_state;
+            let globals = committed_globals_by_name(gs, task.context.process());
+            let LpcRef::Array(cell) = &globals["r"] else {
+                panic!("snapshot is an array");
+            };
+            let snapshot: Vec<String> = gs
+                .committed_array(cell.id)
+                .unwrap()
+                .iter()
+                .map(|v| v.to_string())
+                .collect();
+
+            assert_eq!(
+                snapshot,
+                [
+                    "alpha", "beta", "from-a", "from-b", "1", "2", "3", "child", "1", "0", "0",
+                    "1", "2"
+                ]
+            );
+        }
+    }
+
     mod test_functionptrconst {
         use super::*;
 
@@ -2546,7 +2579,7 @@ mod test_instructions {
         use std::sync::Arc;
 
         use lpc_rs_asm::instruction::Instruction::{Ret, SConst, Sizeof};
-        use lpc_rs_core::{INIT_PROGRAM, lpc_path::LpcPath, lpc_type::LpcType};
+        use lpc_rs_core::{INIT_GLOBALS, lpc_path::LpcPath, lpc_type::LpcType};
         use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
 
         use super::*;
@@ -2637,7 +2670,7 @@ mod test_instructions {
             let path = Arc::new(LpcPath::new_in_game("/my_file.c", "/", &*config.lib_dir));
 
             let prototype = FunctionPrototypeBuilder::default()
-                .name(INIT_PROGRAM)
+                .name(INIT_GLOBALS)
                 .filename(path.clone())
                 .return_type(LpcType::Void)
                 .build()

@@ -151,7 +151,8 @@ pub struct Task<const STACKSIZE: usize> {
     /// The per-attempt execution timeout, set by the top-level entry point.
     timeout_ms: Option<u64>,
 
-    /// Store the most recently popped frame, for testing
+    /// The most recently popped frame other than the initializer's driver
+    /// frame, for testing.
     #[cfg(test)]
     pub popped_frame: Option<CallFrame>,
 
@@ -481,6 +482,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let frame = self.stack.pop();
 
         #[cfg(test)]
+        if frame
+            .as_ref()
+            .is_some_and(|f| f.function.name() != lpc_rs_core::INIT_PROGRAM)
         {
             self.popped_frame = frame.clone();
         }

@@ -28,6 +28,10 @@ pub const CREATE_FUNCTION: &str = "create";
 /// Note, this name cannot be parsed, so the user is unable to override it.
 pub const INIT_PROGRAM: &str = "init-program";
 
+/// Name of a program's own global-variable initializer; unparseable, so
+/// never user-overridden.
+pub const INIT_GLOBALS: &str = "init-globals";
+
 /// Reserved efun inherit namespace
 pub const EFUN: &str = "efun";
 

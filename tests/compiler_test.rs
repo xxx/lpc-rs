@@ -56,7 +56,6 @@ async fn test_inheritance() {
     let prog = &proc.program;
 
     assert_eq!(prog.num_globals, 5);
-    assert_eq!(prog.num_init_registers(), 6);
 }
 
 #[tokio::test]
@@ -79,7 +78,6 @@ async fn test_dynamic_receiver() {
     let prog = &proc.program;
 
     assert_eq!(prog.num_globals, 0);
-    assert_eq!(prog.num_init_registers(), 1);
 }
 
 #[tokio::test]

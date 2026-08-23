@@ -70,12 +70,6 @@ pub struct CompilationContext {
     /// allocate for global variables.
     pub num_globals: RegisterSize,
 
-    /// How many [`Register`](lpc_rs_core::register::Register)s were required
-    /// for initializing global variables, in inherited-from parents?
-    /// This is how we determine how much space the final [`Process`] needs to
-    /// allocate for the global `init-program` call, when an object is cloned.
-    pub num_init_registers: RegisterSize,
-
     /// Pointer to the simul efuns
     pub simul_efuns: Option<Arc<Process>>,
 
@@ -270,7 +264,6 @@ impl Default for CompilationContext {
             inherited_functions: IndexMap::new(),
             inherit_depth: 0,
             num_globals: 0,
-            num_init_registers: 0,
             simul_efuns: None,
             closure_count: 0,
         }

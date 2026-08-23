@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Range, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use bit_set::BitSet;
@@ -9,8 +9,9 @@ use lpc_rs_asm::{
     instruction::Instruction,
 };
 use lpc_rs_core::{
-    CREATE_FUNCTION, INIT_PROGRAM, RegisterSize,
+    CREATE_FUNCTION, INIT_GLOBALS, INIT_PROGRAM, RegisterSize,
     call_namespace::CallNamespace,
+    function_flags::FunctionFlags,
     function_receiver::FunctionReceiver,
     lpc_path::LpcPath,
     lpc_type::LpcType,
@@ -21,13 +22,13 @@ use lpc_rs_core::{
 use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, lpc_warning, span::Span};
 use lpc_rs_function_support::{
     function_prototype::{FunctionKind, FunctionPrototypeBuilder},
-    program_function::{ProgramFunction, ProgramFunctionBuilder},
+    program_function::ProgramFunction,
     symbol::Symbol,
 };
 use lpc_rs_utils::string::closure_arg_number;
 use tracing::{instrument, trace};
 use tree_walker::TreeWalker;
-use ustr::ustr;
+use ustr::{Ustr, ustr};
 
 use crate::{
     compiler::{
@@ -171,7 +172,6 @@ impl CodegenWalker {
     /// use for its internal workings.
     pub fn new(context: CompilationContext) -> Self {
         let num_globals = context.num_globals;
-        let num_init_registers = context.num_init_registers;
 
         let mut result = Self {
             context,
@@ -180,37 +180,84 @@ impl CodegenWalker {
 
         result.global_counter.set(num_globals);
 
-        result.register_counter.set(num_init_registers + 1);
-
         result.setup_init();
 
         result
     }
 
-    /// Create the combined initialization function, with code taken from all
-    /// of our inherited-from parents.
+    /// Start this program's own global initializer: it first runs each
+    /// parent's, in inheritance order, then the globals declared here.
     #[instrument(skip_all)]
     pub fn setup_init(&mut self) {
+        let prototype = FunctionPrototypeBuilder::default()
+            .name(INIT_GLOBALS)
+            .filename(self.context.filename.clone())
+            .return_type(LpcType::Void)
+            .flags(FunctionFlags::from(&["private"][..]))
+            .build()
+            .expect("Failed to build init prototype");
+
+        let mut func = ProgramFunction::new(prototype, 0);
+        for inherit in &self.context.inherits {
+            let parent_init = inherit
+                .functions
+                .values()
+                .find(|f| f.name() == INIT_GLOBALS)
+                .expect("an inherited program initializes its globals");
+            func.push_instruction(Instruction::ClearArgs, None);
+            func.push_instruction(Instruction::Call(ustr(&parent_init.mangle())), None);
+        }
+
+        self.function_stack.push(func);
+    }
+
+    /// The function that initializes a new object: this program's globals
+    /// (parents' first), then `create()` if any program in the chain defines it.
+    async fn build_initializer(&mut self, init_globals: Ustr) -> Result<ProgramFunction> {
         let prototype = FunctionPrototypeBuilder::default()
             .name(INIT_PROGRAM)
             .filename(self.context.filename.clone())
             .return_type(LpcType::Void)
             .build()
-            .expect("Failed to build init prototype");
+            .expect("Failed to build initializer prototype");
 
-        let mut new_init_instructions = vec![];
-        let mut new_init_debug_spans = vec![];
-        self.combine_inits(&mut new_init_instructions, &mut new_init_debug_spans);
+        self.function_stack.push(ProgramFunction::new(prototype, 0));
+        self.backpatch_maps.push(HashMap::new());
+        self.register_counter.push();
 
-        let func = ProgramFunctionBuilder::default()
-            .prototype(prototype)
-            .instructions(new_init_instructions)
-            .debug_spans(new_init_debug_spans)
-            .labels(HashMap::new())
-            .build()
-            .expect("Failed to build init function");
+        push_instruction!(self, Instruction::ClearArgs, None);
+        push_instruction!(self, Instruction::Call(init_globals), None);
 
-        self.function_stack.push(func);
+        if self
+            .context
+            .lookup_function(CREATE_FUNCTION, &CallNamespace::Local)
+            .is_some()
+        {
+            let mut call = CallNode {
+                chain: CallChain::Root {
+                    receiver: None,
+                    name: ustr(CREATE_FUNCTION),
+                    namespace: CallNamespace::Local,
+                },
+                arguments: vec![],
+                span: None,
+            };
+            call.visit(self).await?;
+        }
+
+        let mut ret = ReturnNode {
+            value: None,
+            span: None,
+        };
+        ret.visit(self).await?;
+
+        let backpatch_map = self.backpatch_maps.pop().unwrap();
+        let mut func = self.function_stack.pop().unwrap();
+        func.num_locals = self.register_counter.number_emitted();
+        Self::backpatch(&backpatch_map, &mut func)?;
+        self.register_counter.pop();
+
+        Ok(func)
     }
 
     /// Consume this walker and convert it into a [`Program`]
@@ -643,69 +690,6 @@ impl CodegenWalker {
             .last_mut()
             .unwrap()
             .insert_label(label, address);
-    }
-
-    /// Create the combined initializer from all of my inherited-from parents.
-    /// This method assumes that my immediate parents already have their own
-    /// init functions correctly combined from *their* parents, etc.
-    ///
-    /// # Arguments
-    /// * instructions: A mutable reference to a vector, where the combined
-    ///   [`Instruction`]s will be stored. Done this way to avoid a lot of vector
-    ///   creations in the recursion.
-    /// * debug_spans: A mutable reference to a vector, where the debug [`Span`]s of
-    ///   the combined instructions will be stored.
-    fn combine_inits(
-        &mut self,
-        instructions: &mut Vec<Instruction>,
-        debug_spans: &mut Vec<Option<Span>>,
-    ) {
-        let calls_create = |instructions: &[Instruction]| -> bool {
-            let len = instructions.len();
-
-            debug_assert!(CREATE_FUNCTION == "create"); // have to hardcode this below in the starts_with check
-            if_chain! {
-                if len > 1;
-                if let Instruction::Call(name) = &instructions[len - 2];
-                if name.starts_with("create__") && matches!(&instructions[len - 1], Instruction::Ret);
-                then {
-                    true
-                } else {
-                    false
-                }
-            }
-        };
-
-        let get_range = |instructions: &[Instruction]| -> Range<usize> {
-            let len = instructions.len();
-            // remove any calls to `create` from the inherited initializers -
-            // we'll call it once at the end, if necessary.
-            if calls_create(instructions) {
-                0..len - 3 // drop ClearArgs, Call, and Ret
-            } else if len > 0 && matches!(&instructions[len - 1], Instruction::Ret) {
-                0..len - 1 // drop Ret
-            } else {
-                0..len
-            }
-        };
-
-        let extend_instructions =
-            |func: &Arc<ProgramFunction>,
-             instructions: &mut Vec<Instruction>,
-             debug_spans: &mut Vec<Option<Span>>| {
-                let range = get_range(&func.instructions);
-                if calls_create(instructions) {
-                    instructions.truncate(instructions.len() - 3);
-                    debug_spans.truncate(debug_spans.len() - 3);
-                }
-                instructions.extend(func.instructions[range.clone()].iter());
-                debug_spans.extend(func.debug_spans[range].iter());
-            };
-        for inherit in &self.context.inherits {
-            if let Some(func) = &inherit.initializer {
-                extend_instructions(func, instructions, debug_spans);
-            }
-        }
     }
 
     // Get a reference to the current [`CompilationContext`]
@@ -1849,7 +1833,6 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     async fn visit_program(&mut self, program: &mut ProgramNode) -> Result<()> {
         self.context.scopes.goto_root();
-        self.setup_init();
         self.backpatch_maps.push(HashMap::new());
 
         // Partition global variable initializations vs everything else
@@ -1864,44 +1847,26 @@ impl TreeWalker for CodegenWalker {
             node.visit(self).await?;
         }
 
-        // Insert a call to `create`, if it's been defined.
-        if self
-            .context
-            .lookup_function(CREATE_FUNCTION, &CallNamespace::Local)
-            .is_some()
-        {
-            let mut call = CallNode {
-                chain: CallChain::Root {
-                    receiver: None,
-                    name: ustr(CREATE_FUNCTION),
-                    namespace: CallNamespace::Local,
-                },
-                arguments: vec![],
-                span: None,
-            };
-            call.visit(self).await?;
-        }
-
         let mut ret = ReturnNode {
             value: None,
             span: None,
         };
         ret.visit(self).await?;
 
+        let backpatch_map = self.backpatch_maps.pop().unwrap();
+        let mut init_globals = self.function_stack.pop().unwrap();
+        debug_assert!(init_globals.name() == INIT_GLOBALS);
+        init_globals.num_locals = self.register_counter.number_emitted();
+        Self::backpatch(&backpatch_map, &mut init_globals)?;
+        let init_globals_name = ustr(&init_globals.mangle());
+        self.functions
+            .insert(init_globals.mangle(), init_globals.into());
+
         for node in functions {
             node.visit(self).await?;
         }
 
-        let backpatch_map = self.backpatch_maps.pop().unwrap();
-        // populate the initializer
-        let mut func = self.function_stack.pop().unwrap();
-        debug_assert!(func.name() == INIT_PROGRAM);
-        func.num_locals = self.register_counter.number_emitted();
-
-        Self::backpatch(&backpatch_map, &mut func)?;
-
-        self.initializer = Some(Arc::new(func));
-        // self.functions.insert(func.mangle(), func.into());
+        self.initializer = Some(Arc::new(self.build_initializer(init_globals_name).await?));
 
         self.context.scopes.pop();
 
@@ -2460,11 +2425,13 @@ mod tests {
         walker.function_stack.last().unwrap().instructions.clone()
     }
 
+    /// The instructions of the program's own global initializer.
     async fn generate_init_instructions(prog: &str) -> Vec<Instruction> {
-        // walker_init_instructions(&mut walk_prog(prog))
-        walk_prog(prog)
-            .await
-            .initializer
+        let walker = walk_prog(prog).await;
+        walker
+            .functions
+            .values()
+            .find(|f| f.name() == INIT_GLOBALS)
             .unwrap()
             .instructions
             .clone()
@@ -4632,7 +4599,13 @@ mod tests {
 
             let walker = walk_prog(prog).await;
 
-            let expected = vec![ClearArgs, Call(ustr("create__v____pb__")), Ret];
+            let expected = vec![
+                ClearArgs,
+                Call(ustr("init-globals__v____pv__")),
+                ClearArgs,
+                Call(ustr("create__v____pb__")),
+                Ret,
+            ];
 
             assert_eq!(walker.initializer.unwrap().instructions, expected);
 
@@ -4697,20 +4670,17 @@ mod tests {
                 }
             "#;
 
-            let instructions = generate_init_instructions(prog).await;
+            let walker = walk_prog(prog).await;
 
             let expected = [
-                IConst(RegisterVariant::Local(Register(1)), 666),
-                Copy(
-                    RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Global(Register(0)),
-                ),
+                ClearArgs,
+                Call(ustr("init-globals__v____pv__")),
                 ClearArgs,
                 Call(ustr("create__v____pb__")),
-                Ret, // end of initialization
+                Ret,
             ];
 
-            assert_eq!(instructions, expected);
+            assert_eq!(walker.initializer.unwrap().instructions, expected);
         }
 
         #[tokio::test]
@@ -5630,7 +5600,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn sets_num_init_registers() {
+        async fn sizes_the_global_initializer() {
             let code = r##"
                 int i = 123, j;
                 mixed *arr = ({ "foo", "bar", "baz", ({ "quux", 0 }) });
@@ -5642,25 +5612,12 @@ mod tests {
                 .await
                 .into_program()
                 .expect("failed to compile");
-            assert_eq!(program.num_init_registers(), 10);
-            assert_eq!(program.initializer.unwrap().num_locals, 9)
-        }
-
-        #[tokio::test]
-        async fn reserves_enough_global_registers_when_create_returns_non_void() {
-            let code = r##"
-                int create() {
-                    dump("sup dawg");
-                    int b = 123;
-                    return b;
-                }
-            "##;
-
-            let program = walk_prog(code)
-                .await
-                .into_program()
-                .expect("failed to compile");
-            assert_eq!(program.num_init_registers(), 2)
+            let init_globals = program
+                .functions
+                .values()
+                .find(|f| f.name() == INIT_GLOBALS)
+                .unwrap();
+            assert_eq!(init_globals.num_locals, 9)
         }
 
         #[tokio::test]
@@ -5677,13 +5634,69 @@ mod tests {
                 .await
                 .into_program()
                 .expect("failed to compile");
-            assert_eq!(program.functions.len(), 1);
-            let create = program.functions.values().next().unwrap();
+            let create = program
+                .functions
+                .values()
+                .find(|f| f.name() == CREATE_FUNCTION)
+                .unwrap();
             assert!(create.instructions.iter().any(|i| matches!(
                 i,
                 Instruction::SConst(_, s) if s.as_str() == "sup dawg"
             )));
         }
+    }
+
+    #[tokio::test]
+    async fn sibling_parents_are_imported_with_shifted_globals() {
+        let code = r##"
+            inherit "/sibling_a";
+            inherit "/sibling_b";
+            int own = 5;
+        "##;
+        let program = walk_prog(code).await.into_program().unwrap();
+
+        // sibling_a declares 4 globals, so sibling_b's first global follows them.
+        assert_eq!(
+            program.global_variables["sb"].location,
+            Some(RegisterVariant::Global(Register(4)))
+        );
+        assert_eq!(
+            program.global_variables["own"].location,
+            Some(RegisterVariant::Global(Register(8)))
+        );
+
+        let b_init = &program.functions["init-globals__v__/sibling_b.c__pv__"];
+        let globals_written: Vec<_> = b_init
+            .instructions
+            .iter()
+            .filter_map(|i| match i {
+                Instruction::Copy(_, RegisterVariant::Global(r)) => Some(r.index()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(globals_written, vec![4, 5, 6]);
+
+        let own_init = &program.functions["init-globals__v____pv__"];
+        assert_eq!(
+            &own_init.instructions[..4],
+            &[
+                ClearArgs,
+                Call(ustr("init-globals__v__/sibling_a.c__pv__")),
+                ClearArgs,
+                Call(ustr("init-globals__v__/sibling_b.c__pv__")),
+            ]
+        );
+
+        assert_eq!(
+            program.initializer.unwrap().instructions,
+            vec![
+                ClearArgs,
+                Call(ustr("init-globals__v____pv__")),
+                ClearArgs,
+                Call(ustr("create__v__/sibling_b.c__pb__")),
+                Ret,
+            ]
+        );
     }
 
     #[tokio::test]
@@ -5699,110 +5712,15 @@ mod tests {
             .await
             .into_program()
             .expect("failed to compile");
-        let init = program.initializer.unwrap();
+        let init_globals = program
+            .functions
+            .values()
+            .find(|f| f.name() == INIT_GLOBALS)
+            .unwrap();
 
         assert_eq!(program.num_globals, 9);
-        assert_eq!(init.num_locals, 7);
-    }
-
-    #[test]
-    fn test_combine_inits() {
-        let init_prototype = FunctionPrototypeBuilder::default()
-            .name(INIT_PROGRAM)
-            .filename(LpcPath::InGame("/grandparent.c".into()))
-            .return_type(LpcType::Void)
-            .build()
-            .unwrap();
-        let create_prototype = FunctionPrototypeBuilder::default()
-            .name(CREATE_FUNCTION)
-            .filename(LpcPath::InGame("/grandparent.c".into()))
-            .return_type(LpcType::Void)
-            .build()
-            .unwrap();
-
-        let mut grandparent_init = ProgramFunction::new(init_prototype, 0);
-        let grandparent_init_instructions = vec![
-            IConst1(RegisterVariant::Local(Register(0))),
-            IConst(RegisterVariant::Local(Register(0)), 666),
-            ClearArgs,
-            Call(ustr("create__v____pb__")),
-            Ret,
-        ];
-        let grandparent_spans = vec![
-            Some(Span {
-                l: 0,
-                r: 1,
-                file_id: 1
-            });
-            grandparent_init_instructions.len()
-        ];
-        let _ = std::mem::replace(
-            &mut grandparent_init.instructions,
-            grandparent_init_instructions,
-        );
-        let _ = std::mem::replace(&mut grandparent_init.debug_spans, grandparent_spans);
-
-        let grandparent_create = ProgramFunction::new(create_prototype, 0);
-
-        let parent_init_prototype = FunctionPrototypeBuilder::default()
-            .name(INIT_PROGRAM)
-            .filename(LpcPath::InGame("/parent.c".into()))
-            .return_type(LpcType::Void)
-            .build()
-            .unwrap();
-
-        let mut parent_init = ProgramFunction::new(parent_init_prototype, 0);
-
-        let mut grandparent = Program {
-            initializer: Some(grandparent_init.into()),
-            ..Default::default()
-        };
-        grandparent
-            .functions
-            .insert(CREATE_FUNCTION.to_string(), grandparent_create.into());
-
-        let parent_init_instructions = vec![
-            IConst1(RegisterVariant::Local(Register(0))),
-            IConst(RegisterVariant::Local(Register(0)), 666),
-            SConst(RegisterVariant::Local(Register(1)), ustr("asdf")),
-            IConst(RegisterVariant::Local(Register(5)), 4321),
-            ClearArgs,
-            Call(ustr("create__v____pb__")),
-            Ret,
-        ];
-        let parent_spans = vec![
-            Some(Span {
-                l: 0,
-                r: 1,
-                file_id: 1
-            });
-            parent_init_instructions.len()
-        ];
-        let _ = std::mem::replace(&mut parent_init.instructions, parent_init_instructions);
-        let _ = std::mem::replace(&mut parent_init.debug_spans, parent_spans);
-
-        let parent = Program {
-            functions: grandparent.functions,
-            initializer: Some(parent_init.into()),
-            ..Default::default()
-        };
-
-        let mut walker = default_walker();
-        walker.context.inherits.push(parent);
-
-        let expected = vec![
-            IConst1(RegisterVariant::Local(Register(0))),
-            IConst(RegisterVariant::Local(Register(0)), 666),
-            SConst(RegisterVariant::Local(Register(1)), ustr("asdf")),
-            IConst(RegisterVariant::Local(Register(5)), 4321),
-            // Note call to create is added later in the process, at the end of visit_program()
-        ];
-
-        let mut new_instructions = vec![];
-        let mut new_spans = vec![];
-        walker.combine_inits(&mut new_instructions, &mut new_spans);
-
-        assert_eq!(new_instructions, expected);
+        // Only this program's own initializers; the parent's run in their own frame.
+        assert_eq!(init_globals.num_locals, 3);
     }
 
     fn insert_symbol(walker: &mut CodegenWalker, symbol: Symbol) {
