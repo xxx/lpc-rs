@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use lpc_rs_core::ScopeId;
 use lpc_rs_errors::Result;
 
 use crate::compiler::{
@@ -431,6 +432,16 @@ where
 /// A trait for types that can walk abstract syntax trees
 #[async_trait]
 pub trait TreeWalker {
+    /// Called by the node dispatch layer before visiting a node that owns a
+    /// scope (block, closure, do_while, for, foreach, if, while), with the
+    /// node's `scope_id`: the scope walker writes a fresh id through it, and
+    /// every later pass reads it.
+    fn enter_scope(&mut self, _scope_id: &mut Option<ScopeId>) {}
+
+    /// The counterpart to [`enter_scope`](TreeWalker::enter_scope), called
+    /// after the visit returns — whether it succeeded or not.
+    fn exit_scope(&mut self) {}
+
     /// Visit an array literal node
     async fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()>
     where
@@ -709,13 +720,21 @@ mod tests {
 
     /// Records every leaf it reaches; the traversing defaults do the walking.
     #[derive(Default)]
-    struct SpyWalker {
-        visited: Vec<String>,
+    pub(super) struct SpyWalker {
+        pub(super) visited: Vec<String>,
         poison: Option<&'static str>,
     }
 
     #[async_trait]
     impl TreeWalker for SpyWalker {
+        fn enter_scope(&mut self, _scope_id: &mut Option<ScopeId>) {
+            self.visited.push("enter".into());
+        }
+
+        fn exit_scope(&mut self) {
+            self.visited.push("exit".into());
+        }
+
         async fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
             self.visited.push(node.name.to_string());
             if self.poison == Some(node.name.as_str()) {
@@ -735,25 +754,25 @@ mod tests {
         }
     }
 
-    fn var(name: &str) -> ExpressionNode {
+    pub(super) fn var(name: &str) -> ExpressionNode {
         ExpressionNode::Var(VarNode::new(name))
     }
 
-    fn stmt(name: &str) -> AstNode {
+    pub(super) fn stmt(name: &str) -> AstNode {
         AstNode::Expression(var(name))
     }
 
-    fn init(name: &str) -> VarInitNode {
+    pub(super) fn init(name: &str) -> VarInitNode {
         let mut node = VarInitNode::new(name, LpcType::Int(false));
         node.value = Some(var(name));
         node
     }
 
-    fn spy() -> SpyWalker {
+    pub(super) fn spy() -> SpyWalker {
         SpyWalker::default()
     }
 
-    fn poisoned(name: &'static str) -> SpyWalker {
+    pub(super) fn poisoned(name: &'static str) -> SpyWalker {
         SpyWalker {
             poison: Some(name),
             ..SpyWalker::default()
@@ -1179,5 +1198,104 @@ mod tests {
             assert!(walker.visit_while(&mut node).await.is_ok());
             assert_eq!(walker.visited, ["c", "b"]);
         }
+    }
+}
+
+#[cfg(test)]
+mod scope_hook_tests {
+    use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
+
+    use super::{tests::*, *};
+    use crate::compiler::ast::{ast_node::AstNode, expression_node::ExpressionNode};
+
+    #[tokio::test]
+    async fn a_block_is_entered_and_exited_around_its_children() {
+        let mut node = AstNode::Block(BlockNode::new(vec![stmt("a"), stmt("b")]));
+        let mut walker = spy();
+        node.visit(&mut walker).await.unwrap();
+        assert_eq!(walker.visited, ["enter", "a", "b", "exit"]);
+    }
+
+    #[tokio::test]
+    async fn a_closure_is_entered_and_exited_around_its_children() {
+        let mut node = ExpressionNode::Closure(ClosureNode {
+            name: "closure-0".into(),
+            return_type: LpcType::Mixed(false),
+            flags: FunctionFlags::default(),
+            parameters: Some(vec![init("p")]),
+            body: vec![stmt("b1")],
+            span: None,
+            scope_id: None,
+        });
+        let mut walker = spy();
+        node.visit(&mut walker).await.unwrap();
+        assert_eq!(walker.visited, ["enter", "p", "b1", "exit"]);
+    }
+
+    #[tokio::test]
+    async fn a_do_while_is_entered_and_exited_around_its_children() {
+        let mut node = AstNode::DoWhile(DoWhileNode::new(stmt("b"), var("c"), None));
+        let mut walker = spy();
+        node.visit(&mut walker).await.unwrap();
+        assert_eq!(walker.visited, ["enter", "b", "c", "exit"]);
+    }
+
+    #[tokio::test]
+    async fn a_for_is_entered_and_exited_around_its_children() {
+        let mut node = AstNode::For(ForNode::new(
+            Some(stmt("i")),
+            Some(var("c")),
+            Some(var("n")),
+            stmt("b"),
+            None,
+        ));
+        let mut walker = spy();
+        node.visit(&mut walker).await.unwrap();
+        assert_eq!(walker.visited, ["enter", "i", "c", "b", "n", "exit"]);
+    }
+
+    #[tokio::test]
+    async fn a_foreach_is_entered_and_exited_around_its_children() {
+        let mut node = AstNode::ForEach(Box::new(ForEachNode::new(
+            ForEachInit::Array(init("k")),
+            var("l"),
+            stmt("b"),
+            None,
+        )));
+        let mut walker = spy();
+        node.visit(&mut walker).await.unwrap();
+        assert_eq!(walker.visited, ["enter", "k", "l", "b", "exit"]);
+    }
+
+    #[tokio::test]
+    async fn an_if_is_entered_and_exited_around_its_children() {
+        let mut node = AstNode::If(IfNode::new(var("c"), stmt("t"), Some(stmt("e")), None));
+        let mut walker = spy();
+        node.visit(&mut walker).await.unwrap();
+        assert_eq!(walker.visited, ["enter", "c", "t", "e", "exit"]);
+    }
+
+    #[tokio::test]
+    async fn a_while_is_entered_and_exited_around_its_children() {
+        let mut node = AstNode::While(WhileNode::new(var("c"), stmt("b"), None));
+        let mut walker = spy();
+        node.visit(&mut walker).await.unwrap();
+        assert_eq!(walker.visited, ["enter", "c", "b", "exit"]);
+    }
+
+    #[tokio::test]
+    async fn an_unscoped_node_fires_no_hooks() {
+        let mut node = AstNode::Switch(SwitchNode::new(var("e"), stmt("b"), None));
+        let mut walker = spy();
+        node.visit(&mut walker).await.unwrap();
+        assert_eq!(walker.visited, ["e", "b"]);
+    }
+
+    #[tokio::test]
+    async fn exit_fires_even_when_a_child_errors() {
+        let mut node = AstNode::Block(BlockNode::new(vec![stmt("a"), stmt("b")]));
+        let mut walker = poisoned("a");
+        assert!(node.visit(&mut walker).await.is_err());
+        assert_eq!(walker.visited, ["enter", "a", "exit"]);
     }
 }

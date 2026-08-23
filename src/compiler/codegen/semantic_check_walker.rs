@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use if_chain::if_chain;
-use lpc_rs_core::{EFUN, call_namespace::CallNamespace, lpc_type::LpcType};
+use lpc_rs_core::{EFUN, ScopeId, call_namespace::CallNamespace, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_utils::string::closure_arg_number;
 
@@ -11,7 +11,6 @@ use crate::{
             assignment_node::AssignmentNode,
             ast_node::{AstNodeTrait, SpannedNode},
             binary_op_node::BinaryOpNode,
-            block_node::BlockNode,
             break_node::BreakNode,
             call_node::{CallChain, CallNode},
             closure_node::ClosureNode,
@@ -35,7 +34,7 @@ use crate::{
             while_node::WhileNode,
         },
         codegen::tree_walker::{
-            ContextHolder, TreeWalker, walk_assignment, walk_binary_op, walk_block, walk_closure,
+            ContextHolder, TreeWalker, walk_assignment, walk_binary_op, walk_closure,
             walk_do_while, walk_for, walk_foreach, walk_function_def, walk_function_ptr,
             walk_label, walk_range, walk_return, walk_switch, walk_ternary, walk_unary_op,
             walk_var_init,
@@ -121,6 +120,14 @@ impl ContextHolder for SemanticCheckWalker {
 
 #[async_trait]
 impl TreeWalker for SemanticCheckWalker {
+    fn enter_scope(&mut self, scope_id: &mut Option<ScopeId>) {
+        self.context.scopes.goto(*scope_id);
+    }
+
+    fn exit_scope(&mut self) {
+        self.context.scopes.pop();
+    }
+
     async fn visit_assignment(&mut self, node: &mut AssignmentNode) -> Result<()> {
         walk_assignment(self, node).await?;
 
@@ -153,15 +160,6 @@ impl TreeWalker for SemanticCheckWalker {
             Ok(_) => Ok(()),
             Err(err) => Err(self.context.diagnostics.fail(err)),
         }
-    }
-
-    async fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
-
-        walk_block(self, node).await?;
-
-        self.context.scopes.pop();
-        Ok(())
     }
 
     async fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
@@ -294,12 +292,10 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
         self.closure_depth += 1;
 
         walk_closure(self, node).await?;
 
-        self.context.scopes.pop();
         self.closure_depth -= 1;
 
         Ok(())
@@ -326,18 +322,15 @@ impl TreeWalker for SemanticCheckWalker {
 
     async fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
         self.allow_jumps();
-        self.context.scopes.goto(node.scope_id);
 
         walk_for(self, node).await?;
 
-        self.context.scopes.pop();
         self.prevent_jumps();
         Ok(())
     }
 
     async fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
         self.allow_jumps();
-        self.context.scopes.goto(node.scope_id);
 
         let collection_type = node_type(&node.collection, &self.context)?;
         if !collection_type.is_array()
@@ -364,7 +357,6 @@ impl TreeWalker for SemanticCheckWalker {
 
         walk_foreach(self, node).await?;
 
-        self.context.scopes.pop();
         self.prevent_jumps();
         Ok(())
     }

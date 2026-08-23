@@ -38,7 +38,10 @@ impl DoWhileNode {
 #[async_trait]
 impl AstNodeTrait for DoWhileNode {
     async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
-        tree_walker.visit_do_while(self).await
+        tree_walker.enter_scope(&mut self.scope_id);
+        let result = tree_walker.visit_do_while(self).await;
+        tree_walker.exit_scope();
+        result
     }
 }
 

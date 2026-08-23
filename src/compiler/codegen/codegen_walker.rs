@@ -9,7 +9,7 @@ use lpc_rs_asm::{
     instruction::Instruction,
 };
 use lpc_rs_core::{
-    CREATE_FUNCTION, INIT_GLOBALS, INIT_PROGRAM, RegisterSize,
+    CREATE_FUNCTION, INIT_GLOBALS, INIT_PROGRAM, RegisterSize, ScopeId,
     call_namespace::CallNamespace,
     function_flags::FunctionFlags,
     function_receiver::FunctionReceiver,
@@ -37,7 +37,6 @@ use crate::{
             assignment_node::AssignmentNode,
             ast_node::{AstNode, AstNodeTrait, SpannedNode},
             binary_op_node::{BinaryOpNode, BinaryOperation},
-            block_node::BlockNode,
             break_node::BreakNode,
             call_node::{CallChain, CallNode},
             closure_node::ClosureNode,
@@ -833,6 +832,14 @@ impl ContextHolder for CodegenWalker {
 
 #[async_trait]
 impl TreeWalker for CodegenWalker {
+    fn enter_scope(&mut self, scope_id: &mut Option<ScopeId>) {
+        self.context.scopes.goto(*scope_id);
+    }
+
+    fn exit_scope(&mut self) {
+        self.context.scopes.pop();
+    }
+
     #[instrument(skip_all)]
     async fn visit_array(&mut self, node: &mut ArrayNode) -> Result<()> {
         let mut items = Vec::with_capacity(node.value.len());
@@ -998,18 +1005,6 @@ impl TreeWalker for CodegenWalker {
         let instruction = self.choose_op_instruction(node, reg_left, reg_right, reg_result);
         push_instruction!(self, instruction, node.span);
 
-        Ok(())
-    }
-
-    #[instrument(skip_all)]
-    async fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
-
-        for stmt in &mut node.body {
-            stmt.visit(self).await?;
-        }
-
-        self.context.scopes.pop();
         Ok(())
     }
 
@@ -1242,11 +1237,7 @@ impl TreeWalker for CodegenWalker {
 
         let len = self.current_address();
 
-        let parent_scope_id = self.context.scopes.current_id;
-
         self.register_counter.push();
-
-        self.context.scopes.goto(node.scope_id);
 
         let declared_arg_locations = if let Some(parameters) = &node.parameters {
             self.visit_parameters(parameters).await?
@@ -1302,7 +1293,6 @@ impl TreeWalker for CodegenWalker {
             .await?;
         }
 
-        self.context.scopes.pop();
         let mut func = self.function_stack.pop().unwrap();
 
         // The mangled name carries the file, so inherited code keeps its own closures.
@@ -1327,8 +1317,6 @@ impl TreeWalker for CodegenWalker {
         self.functions.insert(mangled, func.into());
 
         self.register_counter.pop();
-
-        self.context.scopes.goto(parent_scope_id);
 
         // At this point, the closure has been generated and stored.
         // We just need to store a reference to it in the current result.
@@ -1378,8 +1366,6 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
-
         let start_label = self.new_label("do-while-start");
         let end_label = self.new_label("do-while-end");
         let continue_label = self.new_label("do-while-continue");
@@ -1403,7 +1389,6 @@ impl TreeWalker for CodegenWalker {
         let end_addr = self.current_address();
         self.insert_label(end_label, end_addr);
 
-        self.context.scopes.pop();
         self.jump_targets.pop();
         Ok(())
     }
@@ -1420,8 +1405,6 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
-
         if let Some(i) = &mut *node.initializer {
             i.visit(self).await?;
         }
@@ -1459,15 +1442,12 @@ impl TreeWalker for CodegenWalker {
         let addr = self.current_address();
         self.insert_label(end_label, addr);
 
-        self.context.scopes.pop();
         self.jump_targets.pop();
         Ok(())
     }
 
     #[instrument(skip_all)]
     async fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
-
         node.collection.visit(self).await?;
         let collection_location = self.current_result;
 
@@ -1545,7 +1525,6 @@ impl TreeWalker for CodegenWalker {
         let addr = self.current_address();
         self.insert_label(end_label, addr);
 
-        self.context.scopes.pop();
         self.jump_targets.pop();
         Ok(())
     }
@@ -1728,7 +1707,6 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
         let else_label = self.new_label("if-else");
         let end_label = self.new_label("if-end");
 
@@ -1762,7 +1740,6 @@ impl TreeWalker for CodegenWalker {
             self.insert_label(end_label, addr);
         }
 
-        self.context.scopes.pop();
         Ok(())
     }
 
@@ -2259,8 +2236,6 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
-        self.context.scopes.goto(node.scope_id);
-
         let start_label = self.new_label("while-start");
         let end_label = self.new_label("while-end");
         self.jump_targets
@@ -2286,7 +2261,6 @@ impl TreeWalker for CodegenWalker {
         let addr = self.current_address();
         self.insert_label(end_label, addr);
 
-        self.context.scopes.pop();
         self.jump_targets.pop();
         Ok(())
     }
@@ -2333,8 +2307,8 @@ mod tests {
         compiler::{
             CompilerBuilder,
             ast::{
-                ast_node::AstNode, comma_expression_node::CommaExpressionNode,
-                expression_node::ExpressionNode,
+                ast_node::AstNode, block_node::BlockNode,
+                comma_expression_node::CommaExpressionNode, expression_node::ExpressionNode,
             },
             codegen::{
                 codegen_walker::CodegenWalker, function_prototype_walker::FunctionPrototypeWalker,
@@ -3699,11 +3673,15 @@ mod tests {
             };
 
             let mut scope_walker = ScopeWalker::default();
+            scope_walker.enter_scope(&mut node.scope_id);
             let _ = scope_walker.visit_block(node).await;
+            scope_walker.exit_scope();
 
             let context = scope_walker.into_context();
             let mut walker = CodegenWalker::new(context);
+            walker.enter_scope(&mut node.scope_id);
             let _ = walker.visit_block(node).await;
+            walker.exit_scope();
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 127983),
@@ -3774,13 +3752,17 @@ mod tests {
             context.scopes.push_new(); // global scope
 
             let mut scope_walker = ScopeWalker::new(context);
+            scope_walker.enter_scope(&mut node.scope_id);
             let _ = scope_walker.visit_closure(&mut node).await;
+            scope_walker.exit_scope();
 
             let mut context = scope_walker.into_context();
             context.scopes.goto_root();
 
             let mut walker = CodegenWalker::new(context);
+            walker.enter_scope(&mut node.scope_id);
             let _ = walker.visit_closure(&mut node).await;
+            walker.exit_scope();
 
             walker
         }
@@ -4378,13 +4360,17 @@ mod tests {
             };
 
             let mut scope_walker = ScopeWalker::default();
+            scope_walker.enter_scope(&mut node.scope_id);
             let _ = scope_walker.visit_for(&mut node).await;
+            scope_walker.exit_scope();
 
             let context = scope_walker.into_context();
             let mut walker = CodegenWalker::new(context);
             walker.backpatch_maps.push(HashMap::new());
 
+            walker.enter_scope(&mut node.scope_id);
             walker.visit_for(&mut node).await.unwrap();
+            walker.exit_scope();
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 10),

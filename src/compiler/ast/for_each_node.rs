@@ -74,7 +74,10 @@ impl ForEachNode {
 #[async_trait]
 impl AstNodeTrait for ForEachNode {
     async fn visit(&mut self, tree_walker: &mut (impl TreeWalker + Send)) -> Result<()> {
-        tree_walker.visit_foreach(self).await
+        tree_walker.enter_scope(&mut self.scope_id);
+        let result = tree_walker.visit_foreach(self).await;
+        tree_walker.exit_scope();
+        result
     }
 }
 

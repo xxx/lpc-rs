@@ -13,23 +13,15 @@ use tracing::trace;
 use crate::compiler::{
     ast::{
         ast_node::AstNodeTrait,
-        block_node::BlockNode,
         call_node::{CallChain, CallNode},
         closure_node::ClosureNode,
-        do_while_node::DoWhileNode,
         for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachNode},
-        for_node::ForNode,
         function_def_node::{ARGV, FunctionDefNode},
-        if_node::IfNode,
         program_node::ProgramNode,
         var_init_node::VarInitNode,
         var_node::VarNode,
-        while_node::WhileNode,
     },
-    codegen::tree_walker::{
-        ContextHolder, TreeWalker, walk_block, walk_do_while, walk_for, walk_foreach, walk_if,
-        walk_while,
-    },
+    codegen::tree_walker::{ContextHolder, TreeWalker, walk_foreach},
     compilation_context::CompilationContext,
     semantic::semantic_checks::check_var_redefinition,
 };
@@ -106,15 +98,12 @@ impl ContextHolder for ScopeWalker {
 
 #[async_trait]
 impl TreeWalker for ScopeWalker {
-    async fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
-        let scope_id = self.context.scopes.push_new();
+    fn enter_scope(&mut self, scope_id: &mut Option<ScopeId>) {
+        *scope_id = Some(self.context.scopes.push_new());
+    }
 
-        node.scope_id = Some(scope_id);
-
-        walk_block(self, node).await?;
-
+    fn exit_scope(&mut self) {
         self.context.scopes.pop();
-        Ok(())
     }
 
     async fn visit_call_root(&mut self, node: &mut CallNode) -> Result<()> {
@@ -170,8 +159,9 @@ impl TreeWalker for ScopeWalker {
     }
 
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
-        let scope_id = self.context.scopes.push_new();
-        node.scope_id = Some(scope_id);
+        let Some(scope_id) = node.scope_id else {
+            return Err(lpc_bug!("closure scope was not entered before the visit"));
+        };
 
         trace!("Defining closure {}", &node.name);
 
@@ -194,33 +184,13 @@ impl TreeWalker for ScopeWalker {
 
         self.closure_scope_stack.pop();
 
-        self.context.scopes.pop();
-        Ok(())
-    }
-
-    async fn visit_do_while(&mut self, node: &mut DoWhileNode) -> Result<()> {
-        let scope_id = self.context.scopes.push_new();
-        node.scope_id = Some(scope_id);
-
-        walk_do_while(self, node).await?;
-
-        self.context.scopes.pop();
-        Ok(())
-    }
-
-    async fn visit_for(&mut self, node: &mut ForNode) -> Result<()> {
-        let scope_id = self.context.scopes.push_new();
-        node.scope_id = Some(scope_id);
-
-        walk_for(self, node).await?;
-
-        self.context.scopes.pop();
         Ok(())
     }
 
     async fn visit_foreach(&mut self, node: &mut ForEachNode) -> Result<()> {
-        let scope_id = self.context.scopes.push_new();
-        node.scope_id = Some(scope_id);
+        let Some(scope_id) = node.scope_id else {
+            return Err(lpc_bug!("foreach scope was not entered before the visit"));
+        };
 
         let make_sym = |name: &str| Symbol {
             name: name.to_string(),
@@ -235,10 +205,7 @@ impl TreeWalker for ScopeWalker {
         self.insert_symbol(make_sym(FOREACH_INDEX));
         self.insert_symbol(make_sym(FOREACH_LENGTH));
 
-        walk_foreach(self, node).await?;
-
-        self.context.scopes.pop();
-        Ok(())
+        walk_foreach(self, node).await
     }
 
     async fn visit_function_def(&mut self, node: &mut FunctionDefNode) -> Result<()> {
@@ -258,16 +225,6 @@ impl TreeWalker for ScopeWalker {
         for expression in &mut node.body {
             expression.visit(self).await?;
         }
-
-        self.context.scopes.pop();
-        Ok(())
-    }
-
-    async fn visit_if(&mut self, node: &mut IfNode) -> Result<()> {
-        let scope_id = self.context.scopes.push_new();
-        node.scope_id = Some(scope_id);
-
-        walk_if(self, node).await?;
 
         self.context.scopes.pop();
         Ok(())
@@ -372,16 +329,6 @@ impl TreeWalker for ScopeWalker {
 
         Ok(())
     }
-
-    async fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
-        let scope_id = self.context.scopes.push_new();
-        node.scope_id = Some(scope_id);
-
-        walk_while(self, node).await?;
-
-        self.context.scopes.pop();
-        Ok(())
-    }
 }
 
 impl Default for ScopeWalker {
@@ -421,7 +368,9 @@ mod tests {
                 flags: FunctionFlags::default().with_ellipsis(true),
             );
 
+            walker.enter_scope(&mut node.scope_id);
             let _ = walker.visit_closure(&mut node).await;
+            walker.exit_scope();
 
             walker.context.scopes.goto(node.scope_id);
 
