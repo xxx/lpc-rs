@@ -396,11 +396,12 @@ impl TreeWalker for ScopeWalker {
             self.context.errors.push(e);
         }
 
+        // Inserted first, so a closure in the initializer can capture the variable.
+        self.insert_symbol(Symbol::from(&mut *node));
+
         if let Some(expr_node) = &mut node.value {
             expr_node.visit(self).await?;
         }
-
-        self.insert_symbol(Symbol::from(node));
 
         Ok(())
     }

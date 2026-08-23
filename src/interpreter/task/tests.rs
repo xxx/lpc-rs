@@ -3209,6 +3209,31 @@ mod test_upvalues {
             "## };
             assert_eq!(committed_r(code).await, LpcRef::Int(LpcInt(15)));
         }
+
+        #[tokio::test]
+        async fn a_closure_may_capture_the_variable_it_initializes() {
+            let code = indoc! { r##"
+                int r;
+                void create() {
+                    function fact = (: if ($1 <= 1) return 1; return $1 * fact($1 - 1); :);
+                    r = fact(5);
+                }
+            "## };
+            assert_eq!(committed_r(code).await, LpcRef::Int(LpcInt(120)));
+        }
+
+        #[tokio::test]
+        async fn a_variable_read_in_its_own_initializer_reads_zero() {
+            let code = indoc! { r##"
+                int g = g + 10;
+                int r;
+                void create() {
+                    int x = x + 1;
+                    r = x * 100 + g;
+                }
+            "## };
+            assert_eq!(committed_r(code).await, LpcRef::Int(LpcInt(110)));
+        }
     }
 }
 

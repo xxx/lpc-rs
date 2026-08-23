@@ -446,6 +446,15 @@ impl CodegenWalker {
         Ok(loc)
     }
 
+    /// The location a read of `name` resolves to — a variable read inside its
+    /// own initializer is given one here.
+    fn location_of(&mut self, name: &str) -> Result<RegisterVariant> {
+        match self.context.lookup_var(name).and_then(|sym| sym.location) {
+            Some(loc) => Ok(loc),
+            None => self.assign_sym_location(name),
+        }
+    }
+
     /// The location of `name` in the current scope: a captured symbol keeps
     /// the cell the scope walker laid out, any other takes the next free register.
     fn assign_sym_location(&mut self, name: &str) -> Result<RegisterVariant> {
@@ -910,7 +919,7 @@ impl CodegenWalker {
                     if let Some(x) = self.context.lookup_var(name);
                     if x.type_.matches_type(LpcType::Function(false));
                     then {
-                        Instruction::CallFp(x.location.unwrap())
+                        Instruction::CallFp(self.location_of(name)?)
                     } else {
                         let Some(func) =
                             self.context.lookup_function_complete(name, namespace) else {
@@ -2196,23 +2205,15 @@ impl TreeWalker for CodegenWalker {
             return self.visit_function_ptr(&mut fptr_node).await;
         }
 
-        let Some(sym) = self.context.lookup_var(node.name) else {
+        if self.context.lookup_var(node.name).is_none() {
             return Err(lpc_error!(
                 node.span,
                 "Unable to find symbol `{}`",
                 node.name
             ));
-        };
+        }
 
-        let Some(sym_loc) = sym.location else {
-            return Err(lpc_error!(
-                node.span,
-                "Symbol `{}` has no location set.",
-                sym.name
-            ));
-        };
-
-        self.current_result = sym_loc;
+        self.current_result = self.location_of(&node.name)?;
 
         Ok(())
     }
@@ -2231,14 +2232,26 @@ impl TreeWalker for CodegenWalker {
 
         let global = sym.is_global();
         let upvalue = sym.upvalue;
-        let cell = sym.location;
 
         let current_register = if let Some(expression) = &mut node.value {
             expression.visit(self).await?;
+            // A read of the variable inside the initializer already gave it a location.
+            let assigned = self
+                .context
+                .lookup_var(node.name)
+                .and_then(|sym| sym.location);
 
             // TODO: This whole thing sucks. We'd rather have the `expression.visit()` call
             //       above put the result into the correct location directly.
-            if global {
+            if let Some(next_register) = assigned {
+                trace!("Copying into {:?}", next_register);
+                push_instruction!(
+                    self,
+                    Instruction::Copy(self.current_result, next_register),
+                    node.span()
+                );
+                next_register
+            } else if global {
                 let next_register = self.global_counter.next().unwrap().as_global();
 
                 trace!("Copying global to {:?}", next_register);
@@ -2250,20 +2263,11 @@ impl TreeWalker for CodegenWalker {
 
                 next_register
             } else if upvalue {
-                let Some(next_register) = cell else {
-                    return Err(lpc_bug!(
-                        node.span,
-                        "captured `{}` was never given a cell",
-                        node.name
-                    ));
-                };
-                trace!("Copying upvalue to {:?}", next_register);
-                push_instruction!(
-                    self,
-                    Instruction::Copy(self.current_result, next_register),
-                    node.span()
-                );
-                next_register
+                return Err(lpc_bug!(
+                    node.span,
+                    "captured `{}` was never given a cell",
+                    node.name
+                ));
             } else if matches!(expression, ExpressionNode::Var(_)) {
                 // Copy to a new register so the new var isn't literally
                 // sharing a register with the old one.
