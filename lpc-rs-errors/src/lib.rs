@@ -37,13 +37,13 @@ macro_rules! lpc_error {
         $crate::LpcError::new(format!($fmt, $($arg)*))
     };
     ($span:expr, $msg:literal $(,)?) => {
-        $crate::LpcError::new($msg).with_span($span)
+        $crate::LpcError::new(format!($msg)).with_span($span)
     };
     ($span:expr, $fmt:expr, $($arg:tt)*) => {
         $crate::LpcError::new(format!($fmt, $($arg)*)).with_span($span)
     };
     ($msg:literal $(,)?) => {
-        $crate::LpcError::new($msg)
+        $crate::LpcError::new(format!($msg))
     };
     ($err:expr $(,)?) => {
         $crate::LpcError::new($err)
@@ -57,13 +57,13 @@ macro_rules! lpc_warning {
         $crate::LpcError::warning(format!($fmt, $($arg)*))
     };
     ($span:expr, $msg:literal $(,)?) => {
-        $crate::LpcError::warning($msg).with_span($span)
+        $crate::LpcError::warning(format!($msg)).with_span($span)
     };
     ($span:expr, $fmt:expr, $($arg:tt)*) => {
         $crate::LpcError::warning(format!($fmt, $($arg)*)).with_span($span)
     };
     ($msg:literal $(,)?) => {
-        $crate::LpcError::warning($msg)
+        $crate::LpcError::warning(format!($msg))
     };
     ($err:expr $(,)?) => {
         $crate::LpcError::warning($err)
@@ -77,13 +77,13 @@ macro_rules! lpc_bug {
         $crate::LpcError::bug(format!($fmt, $($arg)*))
     };
     ($span:expr, $msg:literal $(,)?) => {
-        $crate::LpcError::bug($msg).with_span($span)
+        $crate::LpcError::bug(format!($msg)).with_span($span)
     };
     ($span:expr, $fmt:expr, $($arg:tt)*) => {
         $crate::LpcError::bug(format!($fmt, $($arg)*)).with_span($span)
     };
     ($msg:literal $(,)?) => {
-        $crate::LpcError::bug($msg)
+        $crate::LpcError::bug(format!($msg))
     };
     ($err:expr $(,)?) => {
         $crate::LpcError::bug($err)
@@ -432,6 +432,15 @@ mod tests {
         let diagnostics = e.to_diagnostics();
         assert_eq!(diagnostics.len(), 2);
         assert_eq!(diagnostics[1].message, "tail");
+    }
+
+    #[test]
+    fn a_literal_message_formats_inline_captures() {
+        let name = "x";
+        let plain: LpcError = lpc_error!("undefined symbol {name}");
+        let spanned: LpcError = lpc_error!(Some(Span::new(0, 0..1)), "undefined symbol {name}");
+        assert_eq!(plain.message(), "undefined symbol x");
+        assert_eq!(spanned.message(), "undefined symbol x");
     }
 
     #[test]

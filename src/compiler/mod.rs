@@ -422,6 +422,27 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn an_undefined_symbol_is_named() {
+            let config: Arc<Config> = ConfigBuilder::default()
+                .lib_dir("tests/fixtures/code")
+                .build()
+                .unwrap()
+                .into();
+            let compiler = CompilerBuilder::default().config(config).build().unwrap();
+
+            let e = compiler
+                .compile_string("/undefined.c", "void create() { x = 1; }")
+                .await
+                .unwrap_err();
+
+            let rendered: Vec<_> = e.to_diagnostics().into_iter().map(|d| d.message).collect();
+            assert_eq!(
+                rendered,
+                vec!["undefined variable `x`", "undefined symbol x"]
+            );
+        }
+
+        #[tokio::test]
         async fn uses_auto_inherit_if_specified() {
             let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests/fixtures/code")
