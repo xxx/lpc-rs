@@ -1,7 +1,7 @@
 use std::{
     fmt::{Debug, Display, Formatter},
     hash::Hash,
-    ops::{Add, Deref, Index, IndexMut, Range, RangeInclusive},
+    ops::{Add, Deref, DerefMut},
 };
 
 use bit_set::BitSet;
@@ -96,7 +96,7 @@ impl Mark for LpcArray {
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
         trace!("marking array");
 
-        if !processed.insert(*self.unique_id.as_ref() as usize) {
+        if !self.unique_id.first_visit(processed) {
             return Ok(());
         }
 
@@ -114,6 +114,13 @@ impl Deref for LpcArray {
     #[inline]
     fn deref(&self) -> &Self::Target {
         &self.array
+    }
+}
+
+impl DerefMut for LpcArray {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.array
     }
 }
 
@@ -145,40 +152,6 @@ impl IntoIterator for LpcArray {
     #[inline]
     fn into_iter(self) -> thin_vec::IntoIter<LpcRef> {
         self.array.into_iter()
-    }
-}
-
-impl Index<usize> for LpcArray {
-    type Output = LpcRef;
-
-    #[inline]
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.array[index]
-    }
-}
-
-impl IndexMut<usize> for LpcArray {
-    #[inline]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.array[index]
-    }
-}
-
-impl Index<Range<usize>> for LpcArray {
-    type Output = [LpcRef];
-
-    #[inline]
-    fn index(&self, index: Range<usize>) -> &Self::Output {
-        &self.array[index]
-    }
-}
-
-impl Index<RangeInclusive<usize>> for LpcArray {
-    type Output = [LpcRef];
-
-    #[inline]
-    fn index(&self, index: RangeInclusive<usize>) -> &Self::Output {
-        &self.array[index]
     }
 }
 

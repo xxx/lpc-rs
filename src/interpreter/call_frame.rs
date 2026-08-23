@@ -363,7 +363,7 @@ impl Mark for CallFrame {
     #[instrument(skip(self))]
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
         trace!("marking call frame {}", self.unique_id);
-        if !processed.insert(*self.unique_id.as_ref() as usize) {
+        if !self.unique_id.first_visit(processed) {
             return Ok(());
         }
 

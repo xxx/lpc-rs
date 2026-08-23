@@ -243,7 +243,7 @@ impl Mark for FunctionPtr {
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> Result<()> {
         trace!("marking function ptr");
 
-        if !processed.insert(*self.unique_id.as_ref() as usize) {
+        if !self.unique_id.first_visit(processed) {
             return Ok(());
         }
 

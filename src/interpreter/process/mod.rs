@@ -4,12 +4,10 @@ use std::{
     borrow::Cow,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
-    path::Path,
     sync::Arc,
 };
 
 use bit_set::BitSet;
-use delegate::delegate;
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
@@ -77,7 +75,7 @@ pub struct Process {
     pub connection: SVar<Connection>,
 
     /// Our flags
-    pub flags: AtomicFlags<ObjectFlags>,
+    pub flags: AtomicFlags,
 
     /// Where are we in the game world?
     pub position: ProcessPosition,
@@ -125,7 +123,7 @@ impl Process {
     pub fn new_clone(program: Arc<Program>, clone_id: usize) -> Self {
         let num_globals = program.num_globals;
 
-        let flags = AtomicFlags::new();
+        let flags = AtomicFlags::default();
         flags.set(ObjectFlags::Clone);
 
         Self {
@@ -138,13 +136,6 @@ impl Process {
             connection: SVar::new(),
             flags,
             position: Default::default(),
-        }
-    }
-
-    delegate! {
-        to self.program {
-            /// Get the program's current working directory
-            pub fn cwd(&self) -> Cow<'_, Path>;
         }
     }
 
@@ -299,13 +290,6 @@ impl Hash for Process {
         // NOTE: this should not be based on any field with interior mutability. It's used
         // to prevent infinite looping in numerous places.
         self.filename().as_ref().hash(state)
-    }
-}
-
-impl AsRef<Program> for Process {
-    #[inline]
-    fn as_ref(&self) -> &Program {
-        &self.program
     }
 }
 

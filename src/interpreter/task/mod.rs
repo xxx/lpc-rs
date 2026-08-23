@@ -111,7 +111,8 @@ impl TaskSeed {
             vm_upvalues,
         );
         if !self.args.is_empty() {
-            frame.registers[1..=self.args.len()].clone_from_slice(&self.args);
+            // `Bank`'s own `Index` impls stop the indexing autoderef.
+            (*frame.registers)[1..=self.args.len()].clone_from_slice(&self.args);
         }
         Ok(frame)
     }

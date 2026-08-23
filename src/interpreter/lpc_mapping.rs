@@ -82,7 +82,7 @@ impl Mark for LpcMapping {
     fn mark(&self, marked: &mut BitSet, processed: &mut BitSet) -> lpc_rs_errors::Result<()> {
         trace!("marking mapping");
 
-        if !processed.insert(*self.unique_id.as_ref() as usize) {
+        if !self.unique_id.first_visit(processed) {
             return Ok(());
         }
 

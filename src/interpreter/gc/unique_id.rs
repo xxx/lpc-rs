@@ -3,6 +3,7 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
+use bit_set::BitSet;
 use serde::{Deserialize, Serialize};
 
 /// A unique ID, suitable for uniquely identifying an object that contains
@@ -14,6 +15,12 @@ impl UniqueId {
     /// Create a new [`UniqueId`].
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Record this node in a mark pass's `processed` set; `false` if it was
+    /// already there.
+    pub fn first_visit(&self, processed: &mut BitSet) -> bool {
+        processed.insert(self.0 as usize)
     }
 }
 

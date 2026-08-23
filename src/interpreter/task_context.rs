@@ -326,7 +326,7 @@ impl TaskContext {
     /// Get the in-game directory of the current process.
     /// This assumes an already-dedotted path
     pub fn in_game_cwd(&self) -> PathBuf {
-        let current_cwd = self.process.cwd();
+        let current_cwd = self.process.program.cwd();
 
         match current_cwd.strip_prefix(&*self.config().lib_dir) {
             Ok(x) => {

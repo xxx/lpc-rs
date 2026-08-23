@@ -95,14 +95,6 @@ impl<'a> Program {
             || self.unmangled_functions.contains_key(function_name)
     }
 
-    /// Call the passed callback, passing the function reference if found.
-    pub fn with_function<F, T>(&self, name: &str, callback: F) -> Option<T>
-    where
-        F: FnOnce(&Arc<ProgramFunction>) -> T,
-    {
-        self.lookup_function(name).map(callback)
-    }
-
     /// Get the in-game directory of this program. Used for clone_object, etc.
     pub fn cwd(&'a self) -> Cow<'a, Path> {
         match self.filename.parent() {
