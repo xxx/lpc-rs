@@ -188,12 +188,14 @@ impl TaskContext {
         repeat: Option<Duration>,
     ) -> u64 {
         let id = self.global_state.with_call_outs(|co| co.mint_id());
-        self.txn().record_call_out(CallOutSchedule {
-            id,
-            process: Arc::downgrade(owner),
-            func_ref,
-            delay,
-            repeat,
+        self.txn().with(|t| {
+            t.record_call_out(CallOutSchedule {
+                id,
+                process: Arc::downgrade(owner),
+                func_ref,
+                delay,
+                repeat,
+            })
         });
         id
     }
@@ -204,7 +206,7 @@ impl TaskContext {
     /// unknown or this attempt canceled it. The caller mints the result cell
     /// after the scan.
     pub fn query_call_out(&self, id: u64) -> Option<Vec<LpcRef>> {
-        if self.txn().is_cancelled_call_out(id) {
+        if self.txn().with(|t| t.is_cancelled_call_out(id)) {
             return None;
         }
         let pending = self
@@ -251,7 +253,7 @@ impl TaskContext {
         let mut out = Vec::new();
         let pending = self.txn().with(|t| t.pending_call_outs().to_vec());
         for s in pending {
-            if self.txn().is_cancelled_call_out(s.id) {
+            if self.txn().with(|t| t.is_cancelled_call_out(s.id)) {
                 continue;
             }
             if let Some(p) = s.process.upgrade()
@@ -267,7 +269,7 @@ impl TaskContext {
         }
         self.global_state.with_call_outs(|co| {
             for (_idx, call_out) in co.queue().iter() {
-                if self.txn().is_cancelled_call_out(call_out.id) {
+                if self.txn().with(|t| t.is_cancelled_call_out(call_out.id)) {
                     continue;
                 }
                 if let Some(p) = call_out.process().upgrade()
@@ -301,7 +303,7 @@ impl TaskContext {
     /// from the attempt; committed entries get a deferred removal plus the
     /// shadow. Returns the milliseconds left, or -1 if unknown.
     pub fn cancel_call_out(&self, id: u64) -> i64 {
-        if let Some(ms) = self.txn().cancel_pending_call_out(id) {
+        if let Some(ms) = self.txn().with(|t| t.cancel_pending_call_out(id)) {
             return ms;
         }
         let remaining = self.global_state.with_call_outs(|co| {
@@ -314,7 +316,7 @@ impl TaskContext {
         });
         match remaining {
             Some(ms) => {
-                self.txn().cancel_committed_call_out(id);
+                self.txn().with(|t| t.cancel_committed_call_out(id));
                 ms
             }
             None => -1,

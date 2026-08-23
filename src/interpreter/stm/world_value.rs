@@ -50,8 +50,41 @@ impl WorldValue {
     }
 
     /// The value a missing var reads back as: `NULL`, as committed reads see it.
+    #[cfg(test)]
     pub(crate) fn null() -> Self {
         Self::Ref(LpcRef::from(0))
+    }
+
+    /// The array payload, or `None` for any other kind.
+    pub(crate) fn into_array(self) -> Option<Arc<LpcArray>> {
+        match self {
+            Self::Array(array) => Some(array),
+            _ => None,
+        }
+    }
+
+    /// The mapping payload, or `None` for any other kind.
+    pub(crate) fn into_mapping(self) -> Option<Arc<LpcMapping>> {
+        match self {
+            Self::Mapping(mapping) => Some(mapping),
+            _ => None,
+        }
+    }
+
+    /// The object in an object-space cell, or `None` for any other kind.
+    pub(crate) fn into_process(self) -> Option<Arc<Process>> {
+        match self {
+            Self::Process(process) => Some(process),
+            _ => None,
+        }
+    }
+
+    /// The bound connection, or `None` for an unbound cell or any other kind.
+    pub(crate) fn into_connection(self) -> Option<Arc<Connection>> {
+        match self {
+            Self::Connection(connection) => connection,
+            _ => None,
+        }
     }
 }
 

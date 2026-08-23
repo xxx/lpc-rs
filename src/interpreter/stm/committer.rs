@@ -69,15 +69,6 @@ pub(crate) enum CommitProtocol {
     },
     /// Drop the reference count of a [`Version`], called when a [`Snapshot`] is dropped.
     Drop(Version),
-    /// Query the committed value of a var (consistency-agnostic readers:
-    /// test/debug/tooling, Do not use this for normal operations).
-    Query {
-        var_id: VarId,
-        reply: flume::Sender<WorldValue>,
-    },
-    /// How many transactions are in flight (held [`LiveSnapshot`]s). `0` means
-    /// quiescent, the precondition for a GC pass.
-    LiveCount { reply: flume::Sender<usize> },
     /// One GC pass, atomic: refuse unless quiescent, else drop the swept
     /// upvalue cells and mark the world from `roots` in this one message.
     /// Replies the report.
@@ -223,29 +214,12 @@ impl Committer {
                 }
                 self.evict_old_versions();
             }
-            CommitProtocol::Query { var_id, reply } => {
-                let value = self.snapshot.read(var_id).unwrap_or_else(WorldValue::null);
-                reply.send(value).unwrap_or_else(|e| {
-                    error!("Failed to send query reply: {e}");
-                    self.stats.error()
-                });
-            }
-            CommitProtocol::LiveCount { reply } => {
-                // Total held snapshots across versions; `0` = quiescent.
-                let live: usize = self.live_versions.values().map(|&c| c as usize).sum();
-                reply.send(live).unwrap_or_else(|e| {
-                    error!("Failed to send live count: {e}");
-                    self.stats.error()
-                });
-            }
             CommitProtocol::GcPass {
                 dropped,
                 roots,
                 reply,
             } => {
-                // Same live-count expression as the `LiveCount` arm, checked
-                // in this message so a task that starts after the client's
-                // fast-refuse probe still finds the pass refused.
+                // Held snapshots across versions; `0` = quiescent.
                 let live: usize = self.live_versions.values().map(|&c| c as usize).sum();
                 if live != 0 {
                     let _ = reply.send(Err(lpc_error!(
@@ -482,6 +456,12 @@ impl Committer {
     /// The version of the current world snapshot.
     pub(crate) fn current_version(&self) -> Version {
         self.snapshot.version()
+    }
+
+    /// The committed value of a var (`NULL` when absent), read in-thread.
+    #[cfg(test)]
+    pub(crate) fn committed(&self, var_id: VarId) -> WorldValue {
+        self.snapshot.read(var_id).unwrap_or_else(WorldValue::null)
     }
 
     /// A clone of the current world snapshot (sibling test modules can't
@@ -987,16 +967,8 @@ mod tests {
         let var = VarId::new();
 
         // absent → NULL
-        let (reply_tx, reply_rx) = flume::bounded(1);
-        committer.process(
-            CommitProtocol::Query {
-                var_id: var,
-                reply: reply_tx,
-            },
-            &tx,
-        );
         assert_eq!(
-            reply_rx.recv().unwrap(),
+            committer.committed(var),
             WorldValue::ref_of(LpcRef::from(0))
         );
 
@@ -1004,16 +976,8 @@ mod tests {
         let mut seed = Changeset::new(committer.snapshot.version());
         seed.write(var, WorldValue::ref_of(LpcRef::from(7)));
         committer.commit(seed).unwrap();
-        let (reply_tx, reply_rx) = flume::bounded(1);
-        committer.process(
-            CommitProtocol::Query {
-                var_id: var,
-                reply: reply_tx,
-            },
-            &tx,
-        );
         assert_eq!(
-            reply_rx.recv().unwrap(),
+            committer.committed(var),
             WorldValue::ref_of(LpcRef::from(7))
         );
 
@@ -1028,16 +992,8 @@ mod tests {
             &tx,
         );
         assert!(reply_rx.recv().unwrap().is_ok());
-        let (reply_tx, reply_rx) = flume::bounded(1);
-        committer.process(
-            CommitProtocol::Query {
-                var_id: var,
-                reply: reply_tx,
-            },
-            &tx,
-        );
         assert_eq!(
-            reply_rx.recv().unwrap(),
+            committer.committed(var),
             WorldValue::ref_of(LpcRef::from(0))
         );
     }
@@ -1070,16 +1026,8 @@ mod tests {
         // Refused: the var survives the pass untouched.
         drop(live);
         pump(&mut committer, &tx, &drop_rx);
-        let (reply_tx, reply_rx) = flume::bounded(1);
-        committer.process(
-            CommitProtocol::Query {
-                var_id: var,
-                reply: reply_tx,
-            },
-            &tx,
-        );
         assert_eq!(
-            reply_rx.recv().unwrap(),
+            committer.committed(var),
             WorldValue::ref_of(LpcRef::from(7))
         );
     }
@@ -1121,15 +1069,7 @@ mod tests {
         assert_eq!(report.payload_vars_reclaimed, 1);
 
         let is_null = |committer: &mut Committer, var: VarId| -> bool {
-            let (reply_tx, reply_rx) = flume::bounded(1);
-            committer.process(
-                CommitProtocol::Query {
-                    var_id: var,
-                    reply: reply_tx,
-                },
-                &tx,
-            );
-            reply_rx.recv().unwrap() == WorldValue::null()
+            committer.committed(var) == WorldValue::null()
         };
         // The live payload survives; the dead payload and the dropped cell read back NULL.
         assert!(!is_null(&mut committer, live_payload.id));

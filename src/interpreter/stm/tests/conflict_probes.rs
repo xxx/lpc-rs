@@ -58,19 +58,16 @@ fn spawn_seeded_committer(
     (tx, handle)
 }
 
-/// The committed value of `counter`, read back over the channel.
+/// The committed value of `counter`, read from a fresh transaction's snapshot.
 fn committed_counter(tx: &flume::Sender<CommitProtocol>, counter: VarId) -> i64 {
     let (reply_tx, reply_rx) = flume::bounded(1);
-    tx.send(CommitProtocol::Query {
-        var_id: counter,
-        reply: reply_tx,
-    })
-    .expect("channel closed");
-    let v = reply_rx
+    tx.send(CommitProtocol::Start { reply: reply_tx })
+        .expect("channel closed");
+    let live = reply_rx
         .recv_timeout(std::time::Duration::from_secs(10))
-        .expect("query timed out");
-    match v {
-        WorldValue::Ref(LpcRef::Int(n)) => n.0,
+        .expect("start timed out");
+    match live.inner.read(counter) {
+        Some(WorldValue::Ref(LpcRef::Int(n))) => n.0,
         other => panic!("counter read back as {other:?}"),
     }
 }

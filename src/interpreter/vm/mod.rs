@@ -12,10 +12,7 @@ use crate::{
     compile_time_config::VM_CHANNEL_CAPACITY,
     interpreter::{
         SHUTDOWN,
-        task::{
-            apply_function::{apply_function_in_master, apply_runtime_error},
-            task_template::TaskTemplate,
-        },
+        task::{apply_function::apply_function_in_master, task_template::TaskTemplate},
         task_context::TaskContext,
         vm::global_state::GlobalState,
     },
@@ -120,24 +117,6 @@ impl Vm {
                         VmOp::PrioritizeCallOut(id) => {
                             self.global_state.prioritize_call_out(id).await;
                         }
-                        VmOp::RuntimeError(error, proc) => {
-                            let template = TaskTemplate::from(self.global_state.clone());
-
-                            tokio::spawn(async move {
-                                match apply_runtime_error(&error, proc, template).await {
-                                    Some(Ok(_)) => {},
-                                    None => {
-                                        error!("runtime_error() is not defined in the master object.");
-                                    }
-                                    Some(Err(e)) => {
-                                        error!("Error applying runtime error: {}", e.diagnostic_string());
-                                    }
-                                }
-                            });
-                        }
-                        VmOp::TaskError(_task_id, error) => {
-                            tokio::spawn(async move { error.emit_diagnostics() });
-                        },
                         VmOp::FatalError(error) => {
                             error!("VM notified of fatal error: {}. Shutting down.", error);
                             break;

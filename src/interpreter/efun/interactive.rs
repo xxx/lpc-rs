@@ -5,8 +5,12 @@ use crate::interpreter::{efun, efun::efun_context::EfunContext, lpc_ref::LpcRef}
 
 pub async fn interactive<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
-    let result = efun::arg_or_this_object(arg_ref, context)
-        .is_some_and(|proc| context.txn().read_connection(proc.connection.id).is_some());
+    let result = efun::arg_or_this_object(arg_ref, context).is_some_and(|proc| {
+        context
+            .txn()
+            .with(|t| t.read_connection(proc.connection.id))
+            .is_some()
+    });
 
     context.return_efun_result(LpcRef::from(result));
 

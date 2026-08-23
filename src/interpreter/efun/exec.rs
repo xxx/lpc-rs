@@ -31,17 +31,17 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
             // The connection being moved, from the old body's cell.
             // Changeset-first, so a prior uncommitted `exec` in this same
             // task is seen.
-            let connection = txn.read_connection(old_ob.connection.id);
+            let connection = txn.with(|t| t.read_connection(old_ob.connection.id));
 
             if let Some(connection) = connection {
                 // The connection the new body currently holds (if any);
                 // the handover displaces it.
-                let previous = txn.read_connection(new_ob.connection.id);
+                let previous = txn.with(|t| t.read_connection(new_ob.connection.id));
 
                 // Bind the new body, unbind the old one. Both writes land
                 // in the changeset and commit with this task.
-                txn.write_connection(new_ob.connection.id, Some(connection.clone()));
-                txn.write_connection(old_ob.connection.id, None);
+                txn.with(|t| t.write_connection(new_ob.connection.id, Some(connection.clone())));
+                txn.with(|t| t.write_connection(old_ob.connection.id, None));
 
                 // Record the physical handover. Flushed only if this
                 // attempt commits: point the connection's back-reference

@@ -18,9 +18,7 @@ use crate::interpreter::{
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
     stm::{
-        Transaction, VarId, Version, WorldValue,
-        changeset::Changeset,
-        committer::{CommitProtocol, Committer},
+        Transaction, VarId, Version, WorldValue, changeset::Changeset, committer::Committer,
         snapshot::Snapshot,
     },
 };
@@ -57,7 +55,6 @@ fn read_sees_previous_writes_before_falling_back_to_state() {
 
 #[test]
 fn a_payload_var_roundtrips_through_the_committed_world() {
-    let (tx, _rx) = flume::unbounded();
     let mut committer = Committer::new();
     let payload = VarId::new();
     let contents = Arc::new(LpcArray::new([LpcRef::from(10), LpcRef::from(20)]));
@@ -67,18 +64,7 @@ fn a_payload_var_roundtrips_through_the_committed_world() {
     seed.write(payload, WorldValue::Array(contents.clone()));
     committer.commit(seed).expect("payload seed should commit");
 
-    let (reply_tx, reply_rx) = flume::bounded(1);
-    committer.process(
-        CommitProtocol::Query {
-            var_id: payload,
-            reply: reply_tx,
-        },
-        &tx,
-    );
-    assert_eq!(
-        reply_rx.recv().expect("no reply"),
-        WorldValue::Array(contents)
-    );
+    assert_eq!(committer.committed(payload), WorldValue::Array(contents));
 }
 
 #[test]
@@ -145,23 +131,13 @@ fn a_reader_holding_a_snapshot_retains_the_old_payload() {
 
 #[test]
 fn querying_an_absent_var_reads_back_null() {
-    let (tx, _rx) = flume::unbounded();
-    let mut committer = Committer::new();
+    let committer = Committer::new();
 
-    let (reply_tx, reply_rx) = flume::bounded(1);
-    committer.process(
-        CommitProtocol::Query {
-            var_id: VarId::new(),
-            reply: reply_tx,
-        },
-        &tx,
-    );
-    assert_eq!(reply_rx.recv().expect("no reply"), WorldValue::null());
+    assert_eq!(committer.committed(VarId::new()), WorldValue::null());
 }
 
 #[test]
 fn a_mapping_payload_var_roundtrips_too() {
-    let (tx, _rx) = flume::unbounded();
     let mut committer = Committer::new();
     let payload = VarId::new();
     let mut mapping = IndexMap::new();
@@ -172,16 +148,5 @@ fn a_mapping_payload_var_roundtrips_too() {
     seed.write(payload, WorldValue::Mapping(contents.clone()));
     committer.commit(seed).expect("mapping seed should commit");
 
-    let (reply_tx, reply_rx) = flume::bounded(1);
-    committer.process(
-        CommitProtocol::Query {
-            var_id: payload,
-            reply: reply_tx,
-        },
-        &tx,
-    );
-    assert_eq!(
-        reply_rx.recv().expect("no reply"),
-        WorldValue::Mapping(contents)
-    );
+    assert_eq!(committer.committed(payload), WorldValue::Mapping(contents));
 }

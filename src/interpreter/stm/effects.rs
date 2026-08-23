@@ -181,32 +181,6 @@ pub(crate) async fn flush_effects(
     }
 }
 
-/// A batch of pending effects on one attempt.
-#[derive(Clone)]
-pub(crate) struct EffectLog(Vec<Effect>);
-
-impl EffectLog {
-    pub(crate) fn new() -> Self {
-        Self(Vec::new())
-    }
-
-    /// Add an effect recorded during this attempt.
-    pub(crate) fn record(&mut self, effect: Effect) {
-        self.0.push(effect);
-    }
-
-    /// Take all effects out, leaving an empty log. The caller delivers them.
-    pub(crate) fn take(&mut self) -> Vec<Effect> {
-        std::mem::take(&mut self.0)
-    }
-}
-
-impl Default for EffectLog {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 // `Effect` can't derive `Debug`: `Sender<ConnectionOp>` isn't `Debug`.
 impl std::fmt::Debug for Effect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -221,12 +195,6 @@ impl std::fmt::Debug for Effect {
             Self::CancelCallOut { id } => f.debug_tuple("CancelCallOut").field(id).finish(),
             Self::Exec { .. } => f.debug_tuple("Exec").finish(),
         }
-    }
-}
-
-impl std::fmt::Debug for EffectLog {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
     }
 }
 
@@ -248,20 +216,21 @@ mod tests {
         let op_a = ConnectionOp::SendMessage("a".to_string());
         let op_b = ConnectionOp::SendMessage("b".to_string());
 
-        let mut log = EffectLog::new();
-        log.record(Effect::Socket {
-            op: op_a.clone(),
-            tx: tx_a,
-        });
-        log.record(Effect::Socket {
-            op: op_b.clone(),
-            tx: tx_b,
-        });
+        let log = vec![
+            Effect::Socket {
+                op: op_a.clone(),
+                tx: tx_a,
+            },
+            Effect::Socket {
+                op: op_b.clone(),
+                tx: tx_b,
+            },
+        ];
 
         let object_space = ObjectSpace::default();
         let (tx_d, _rx_d) = tokio::sync::mpsc::channel(16);
         let call_outs = parking_lot::RwLock::new(CallOuts::new(tx_d));
-        flush_effects(&Config::default(), &object_space, &call_outs, log.take()).await;
+        flush_effects(&Config::default(), &object_space, &call_outs, log).await;
 
         assert_eq!(rx_a.recv().await, Some(op_a));
         assert_eq!(rx_b.recv().await, Some(op_b));

@@ -242,7 +242,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Record a physical side effect on this efun's attempt.
     pub(crate) fn record_effect(&self, effect: Effect) {
-        self.txn().record_effect(effect);
+        self.txn().with(|t| t.record_effect(effect));
     }
 
     /// Find an object by path, transactionally. Delegates to

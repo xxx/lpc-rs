@@ -13,7 +13,7 @@ use lpc_rs_errors::{Result, lpc_error};
 use crate::interpreter::{
     lpc_array::LpcArray,
     lpc_mapping::LpcMapping,
-    lpc_ref::LpcRef,
+    lpc_ref::{LpcRef, NULL},
     process::Process,
     stm::{
         GcReport, VarId, WorldRoot, WorldValue,
@@ -139,13 +139,6 @@ pub(crate) async fn start_txn(tx: &flume::Sender<CommitProtocol>) -> Result<Live
     request(tx, |reply| CommitProtocol::Start { reply }).await
 }
 
-/// How many transactions are currently in flight against the committer, i.e.
-/// how many [`LiveSnapshot`]s are held. `0` means the committer is quiescent
-/// (no live task holds a transaction).
-pub(crate) async fn live_count(tx: &flume::Sender<CommitProtocol>) -> Result<usize> {
-    request(tx, |reply| CommitProtocol::LiveCount { reply }).await
-}
-
 /// Client side of a GC pass: send the [`CommitProtocol::GcPass`] message
 /// and await its reply.
 pub(crate) async fn gc_pass(
@@ -212,38 +205,23 @@ impl CommittedReader for Arc<GlobalState> {
 
     fn committed_global(&self, process: &Process, reg: RegisterSize) -> LpcRef {
         self.committed_value(process.var_id(reg))
-            .map(WorldValue::lpc_ref)
-            .expect("committer always answers a query")
+            .map_or(NULL, WorldValue::lpc_ref)
     }
 
     fn committed_array(&self, var_id: VarId) -> Option<LpcArray> {
-        match self.committed_value(var_id)? {
-            WorldValue::Array(array) => Some((*array).clone()),
-            WorldValue::Ref(_)
-            | WorldValue::Mapping(_)
-            | WorldValue::Process(_)
-            | WorldValue::Connection(_) => None,
-        }
+        self.committed_value(var_id)?
+            .into_array()
+            .map(|array| (*array).clone())
     }
 
     fn committed_mapping(&self, var_id: VarId) -> Option<LpcMapping> {
-        match self.committed_value(var_id)? {
-            WorldValue::Mapping(mapping) => Some((*mapping).clone()),
-            WorldValue::Ref(_)
-            | WorldValue::Array(_)
-            | WorldValue::Process(_)
-            | WorldValue::Connection(_) => None,
-        }
+        self.committed_value(var_id)?
+            .into_mapping()
+            .map(|mapping| (*mapping).clone())
     }
 
     fn committed_object(&self, var_id: VarId) -> Option<Arc<Process>> {
-        match self.committed_value(var_id)? {
-            WorldValue::Process(process) => Some(process),
-            WorldValue::Ref(_)
-            | WorldValue::Array(_)
-            | WorldValue::Mapping(_)
-            | WorldValue::Connection(_) => None,
-        }
+        self.committed_value(var_id)?.into_process()
     }
 
     fn committed_environment(&self, process: &Process) -> Option<Arc<Process>> {
@@ -258,8 +236,9 @@ impl CommittedReader for Arc<GlobalState> {
     }
 
     fn committed_inventory(&self, process: &Process) -> Vec<Arc<Process>> {
-        let Some(WorldValue::Array(inventory)) =
-            self.committed_value(process.position.inventory.id)
+        let Some(inventory) = self
+            .committed_value(process.position.inventory.id)
+            .and_then(WorldValue::into_array)
         else {
             return Vec::new();
         };
@@ -277,22 +256,21 @@ impl CommittedReader for Arc<GlobalState> {
 }
 
 impl GlobalState {
-    /// One synchronous round trip against the committer; the blocking recv
-    /// runs on a scoped thread, never the caller's. `None` only if the
-    /// committer never answers; absent vars reply as `NULL`.
+    /// One synchronous read of the latest committed world (start, read the
+    /// snapshot, release); the blocking recv runs on a scoped thread, never
+    /// the caller's. `None` = absent.
     fn committed_value(&self, var_id: VarId) -> Option<WorldValue> {
         std::thread::scope(|s| {
             let (reply_tx, reply_rx) = flume::bounded(1);
             self.committer_tx
-                .send(CommitProtocol::Query {
-                    var_id,
-                    reply: reply_tx,
-                })
+                .send(CommitProtocol::Start { reply: reply_tx })
                 .expect("committer channel closed");
-            s.spawn(move || reply_rx.recv())
+            let live = s
+                .spawn(move || reply_rx.recv())
                 .join()
-                .expect("query reply thread panicked")
-                .ok()
+                .expect("start reply thread panicked")
+                .expect("committer always answers a start");
+            live.inner.read(var_id)
         })
     }
 }

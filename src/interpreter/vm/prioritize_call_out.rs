@@ -6,17 +6,14 @@ use tokio::task::JoinHandle;
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
-        function_type::function_ptr::FunctionPtr,
-        lpc_ref::LpcRef,
-        task::{Task, task_id::TaskId},
-        task_context::TaskContext,
-        vm::{global_state::GlobalState, vm_op::VmOp},
+        function_type::function_ptr::FunctionPtr, lpc_ref::LpcRef, task::Task,
+        task_context::TaskContext, vm::global_state::GlobalState,
     },
 };
 
 impl GlobalState {
-    /// Handler for [`VmOp::PrioritizeCallOut`]: run the call out with `id`,
-    /// reporting errors on the [`Vm`](crate::interpreter::vm::Vm) channel.
+    /// Handler for [`VmOp::PrioritizeCallOut`](crate::interpreter::vm::vm_op::VmOp::PrioritizeCallOut):
+    /// run the call out with `id`, emitting any error's diagnostics.
     pub async fn prioritize_call_out(self: &Arc<Self>, id: u64) -> JoinHandle<()> {
         let global_state = self.clone();
 
@@ -38,7 +35,7 @@ impl GlobalState {
                 Ok(pair) => pair,
                 Err(e) => {
                     global_state.with_call_outs_mut(|co| co.remove_by_id(id));
-                    let _ = global_state.tx.send(VmOp::TaskError(TaskId(0), e)).await;
+                    e.emit_diagnostics();
                     return;
                 }
             };
@@ -49,7 +46,7 @@ impl GlobalState {
                     Ok(None) => return,
                     Err(e) => {
                         global_state.with_call_outs_mut(|co| co.remove_by_id(id));
-                        let _ = global_state.tx.send(VmOp::TaskError(TaskId(0), e)).await;
+                        e.emit_diagnostics();
                         return;
                     }
                 };
@@ -71,16 +68,10 @@ impl GlobalState {
             );
 
             let mut task = Task::<MAX_CALL_STACK_SIZE>::new(task_context);
-            let id = task.id;
 
             if let Err(e) = task.timed_eval(function, &args, max_execution_time).await {
-                let _ = global_state
-                    .tx
-                    .send(VmOp::TaskError(
-                        id,
-                        Box::new(e.with_stack_trace(task.stack.stack_trace())),
-                    ))
-                    .await;
+                e.with_stack_trace(task.stack.stack_trace())
+                    .emit_diagnostics();
             }
         })
     }

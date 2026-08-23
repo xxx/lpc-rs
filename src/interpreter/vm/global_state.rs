@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc, thread::JoinHandle};
 use bit_set::BitSet;
 use derive_builder::Builder;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{Result, lpc_error};
+use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
@@ -24,7 +24,7 @@ use crate::{
         process::Process,
         stm::{
             self, CommitProtocol, Committer, CommitterStats, GcReport, Snapshot, VarId, WorldRoot,
-            gc_pass, live_count, resolve_or_create_object,
+            gc_pass, resolve_or_create_object,
         },
         task::{Task, apply_function::apply_runtime_error, task_template::TaskTemplate},
         vm::vm_op::VmOp,
@@ -185,13 +185,6 @@ impl GlobalState {
     /// A refused pass leaves the bank untouched.
     #[instrument(skip_all)]
     pub async fn gc(&self) -> Result<GcReport> {
-        let live = live_count(&self.committer_tx).await?;
-        if live != 0 {
-            return Err(lpc_error!(
-                "gc refused: committer not quiescent ({live} transaction(s) in flight)"
-            ));
-        }
-
         let mut marked = BitSet::new();
         let mut processed = BitSet::new();
         self.mark(&mut marked, &mut processed)?;
@@ -388,7 +381,7 @@ mod tests {
         txn.with(|t| t.write_process(cell_id, process));
         let changeset = txn.with(|t| t.take_changeset());
         let commit = commit_changeset(&gs.committer_tx, changeset).await?;
-        let effects = txn.take_effects();
+        let effects = txn.with(|t| t.take_effects());
         drop(live);
         commit.expect("object cell commit must succeed");
         if !effects.is_empty() {

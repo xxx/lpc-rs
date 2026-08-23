@@ -23,7 +23,10 @@ pub async fn write_socket<const N: usize>(context: &mut EfunContext<'_, N>) -> R
 
     let process = context.process();
 
-    match context.txn().read_connection(process.connection.id) {
+    match context
+        .txn()
+        .with(|t| t.read_connection(process.connection.id))
+    {
         Some(connection) => {
             // Record the socket send against this transaction's effect log,
             // carrying its own channel so the retry loop can deliver it

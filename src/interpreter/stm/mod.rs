@@ -30,12 +30,12 @@ pub(crate) use changeset::Changeset;
 /// Public API surface re-exports (read-only, for benches/tooling/tests).
 pub use committer::CommitterStats;
 pub(crate) use committer::{CommitProtocol, Committer, GcReport, LiveSnapshot, WorldRoot};
-pub(crate) use effects::{CallOutSchedule, Effect, EffectLog, flush_effects};
+pub(crate) use effects::{CallOutSchedule, Effect, flush_effects};
 pub use retry::CommittedReader;
 #[cfg(test)]
 pub(crate) use retry::RetryStats;
 pub(crate) use retry::{
-    AttemptBody, commit_changeset, committer_stats, gc_pass, live_count, run_attempts, start_txn,
+    AttemptBody, commit_changeset, committer_stats, gc_pass, run_attempts, start_txn,
 };
 pub(crate) use snapshot::Snapshot;
 pub(crate) use world_value::WorldValue;
@@ -73,7 +73,7 @@ pub(crate) struct Transaction {
     /// Physical output recorded by this attempt, delivered once after a
     /// successful commit. Dropped with the attempt on conflict, so a
     /// re-run re-records it; never resolved from a cell at flush time.
-    effects: EffectLog,
+    effects: Vec<Effect>,
     /// Call outs recorded by this attempt but not yet materialized. A
     /// separate list (not an `Effect`) because materialization needs the
     /// physical `CallOuts` queue at flush time, and cancellation must see
@@ -97,7 +97,7 @@ impl Transaction {
         Self {
             snapshot,
             changeset: Changeset::new(version),
-            effects: EffectLog::new(),
+            effects: Vec::new(),
             pending_call_outs: Vec::new(),
             cancelled_call_outs: HashSet::new(),
             joinable: true,
@@ -146,6 +146,12 @@ impl Transaction {
         self.changeset.drop_var(var_id);
     }
 
+    /// Whether this attempt removes the var; a removed cell must not be read
+    /// back from the world or the physical map until a re-write cancels it.
+    pub(crate) fn is_removed(&self, var_id: VarId) -> bool {
+        self.changeset.is_removed(var_id)
+    }
+
     /// Mint a fresh array cell: a new `VarId` with its contents written into
     /// the changeset. A fresh id is never in the world, so the write can't
     /// conflict; the returned handle is the cell's identity.
@@ -171,19 +177,13 @@ impl Transaction {
     /// The committed array contents for a cell var, or `None` if the var is
     /// absent from both the changeset and the world.
     pub(crate) fn read_array(&mut self, var_id: VarId) -> Option<Arc<LpcArray>> {
-        match self.read_value(var_id)? {
-            WorldValue::Array(a) => Some(a),
-            _ => None,
-        }
+        self.read_value(var_id)?.into_array()
     }
 
     /// The committed mapping contents for a cell var, or `None` if the var is
     /// absent from both the changeset and the world.
     pub(crate) fn read_mapping(&mut self, var_id: VarId) -> Option<Arc<LpcMapping>> {
-        match self.read_value(var_id)? {
-            WorldValue::Mapping(m) => Some(m),
-            _ => None,
-        }
+        self.read_value(var_id)?.into_mapping()
     }
 
     /// The committed object for a cell var, or `None` if the var is absent
@@ -192,10 +192,7 @@ impl Transaction {
     /// what a transactional `find_object` uses, and it is the read that makes
     /// a concurrent create of this cell conflict and re-run.
     pub(crate) fn read_object(&mut self, var_id: VarId) -> Option<Arc<Process>> {
-        match self.read_value(var_id)? {
-            WorldValue::Process(p) => Some(p),
-            _ => None,
-        }
+        self.read_value(var_id)?.into_process()
     }
 
     /// Write the connection-binding cell: the `Connection` attached to a
@@ -213,11 +210,7 @@ impl Transaction {
     /// (changeset first), which is what lets `interactive()` and the like see
     /// an `exec` that has not yet committed.
     pub(crate) fn read_connection(&mut self, var_id: VarId) -> Option<Arc<Connection>> {
-        match self.read_value(var_id)? {
-            WorldValue::Connection(Some(connection)) => Some(connection),
-            WorldValue::Connection(None) => None,
-            _ => None,
-        }
+        self.read_value(var_id)?.into_connection()
     }
 
     /// Copy-on-write the array cell `var_id`: read its contents, clone into a
@@ -227,10 +220,7 @@ impl Transaction {
     pub(crate) fn with_array_cow(&mut self, var_id: VarId, f: impl FnOnce(&mut LpcArray)) {
         let current = self
             .read_value(var_id)
-            .and_then(|v| match v {
-                WorldValue::Array(a) => Some(a),
-                _ => None,
-            })
+            .and_then(WorldValue::into_array)
             .unwrap_or_else(|| Arc::new(LpcArray::default()));
         let mut clone = (*current).clone();
         f(&mut clone);
@@ -242,10 +232,7 @@ impl Transaction {
     pub(crate) fn with_mapping_cow(&mut self, var_id: VarId, f: impl FnOnce(&mut LpcMapping)) {
         let current = self
             .read_value(var_id)
-            .and_then(|v| match v {
-                WorldValue::Mapping(m) => Some(m),
-                _ => None,
-            })
+            .and_then(WorldValue::into_mapping)
             .unwrap_or_else(|| Arc::new(LpcMapping::default()));
         let mut clone = (*current).clone();
         f(&mut clone);
@@ -260,7 +247,7 @@ impl Transaction {
 
     /// Record a physical side effect for delivery after this attempt commits.
     pub(crate) fn record_effect(&mut self, effect: Effect) {
-        self.effects.record(effect);
+        self.effects.push(effect);
     }
 
     /// Record a call out for materialization after this attempt commits. The
@@ -307,9 +294,9 @@ impl Transaction {
     /// is dropped with the attempt instead.
     pub(crate) fn take_effects(&mut self) -> Vec<Effect> {
         for schedule in self.pending_call_outs.drain(..) {
-            self.effects.record(Effect::ScheduleCallOut(schedule));
+            self.effects.push(Effect::ScheduleCallOut(schedule));
         }
-        self.effects.take()
+        std::mem::take(&mut self.effects)
     }
 
     /// Take the changeset out for commit; an empty one at the same version
@@ -325,7 +312,8 @@ impl Transaction {
 }
 
 /// One top-level task = one transaction. Nested sub-tasks join it by
-/// cloning this handle.
+/// cloning this handle, so a joiner's reads, writes, effects and call outs
+/// are the parent's attempt's and ride the parent's single commit.
 #[derive(Debug, Clone)]
 pub(crate) struct TxnHandle(Arc<RwLock<Transaction>>);
 
@@ -352,73 +340,6 @@ impl TxnHandle {
         f(&mut guard)
     }
 
-    /// Read the object in a cell var (changeset first, then the committed
-    /// world), or `None` if the cell is absent or holds a non-object. A
-    /// joiner's handle is the parent's, so this reads the parent's attempt.
-    pub(crate) fn read_object(&self, var_id: VarId) -> Option<Arc<Process>> {
-        self.with(|t| t.read_object(var_id))
-    }
-
-    /// Read the connection in a cell var, as in
-    /// [`Transaction::read_connection`](crate::interpreter::stm::Transaction).
-    /// A joiner's handle is the parent's, so this reads the parent's attempt,
-    /// which is what lets an `exec`'s effect see the binding its transaction
-    /// just wrote.
-    pub(crate) fn read_connection(&self, var_id: VarId) -> Option<Arc<Connection>> {
-        self.with(|t| t.read_connection(var_id))
-    }
-
-    /// Write the connection cell, as in
-    /// [`Transaction::write_connection`](crate::interpreter::stm::Transaction).
-    /// A joiner's handle is the parent's, so the write folds into the
-    /// parent's attempt and rides the parent's single commit.
-    pub(crate) fn write_connection(&self, var_id: VarId, connection: Option<Arc<Connection>>) {
-        self.with(|t| t.write_connection(var_id, connection))
-    }
-
-    /// Whether this attempt removes the var. A removed object cell must not
-    /// be read back from the committed world or from the physical object map
-    /// (the deferred insert/remove effects haven't landed yet): the removal
-    /// is authoritative for this attempt until a re-write cancels it.
-    pub(crate) fn is_removed(&self, var_id: VarId) -> bool {
-        self.with(|t| t.changeset.is_removed(var_id))
-    }
-
-    /// Record a physical side effect on this attempt. A joiner's handle is
-    /// the parent's, so its output folds into the parent's log and rides the
-    /// parent's single commit.
-    pub(crate) fn record_effect(&self, effect: Effect) {
-        self.with(|t| t.record_effect(effect));
-    }
-
-    /// Record a call out for materialization after this attempt commits.
-    /// A joiner's handle is the parent's, so it folds into the parent's
-    /// pending list and rides the parent's single flush.
-    pub(crate) fn record_call_out(&self, schedule: CallOutSchedule) {
-        self.with(|t| t.record_call_out(schedule));
-    }
-
-    /// Cancel a call out this attempt recorded, as in
-    /// [`Transaction::cancel_pending_call_out`](crate::interpreter::stm::Transaction).
-    pub(crate) fn cancel_pending_call_out(&self, id: u64) -> Option<i64> {
-        self.with(|t| t.cancel_pending_call_out(id))
-    }
-
-    pub(crate) fn cancel_committed_call_out(&self, id: u64) {
-        self.with(|t| t.cancel_committed_call_out(id))
-    }
-
-    /// Whether this attempt canceled the committed call out with `id`, as in
-    /// [`Transaction::is_cancelled_call_out`](crate::interpreter::stm::Transaction).
-    pub(crate) fn is_cancelled_call_out(&self, id: u64) -> bool {
-        self.with(|t| t.is_cancelled_call_out(id))
-    }
-
-    /// Take out the attempt's recorded side effects for delivery after commit.
-    pub(crate) fn take_effects(&self) -> Vec<Effect> {
-        self.with(|t| t.take_effects())
-    }
-
     /// Whether this handle wraps a live attempt that can be joined by a nested task.
     pub(crate) fn joinable(&self) -> bool {
         self.0.read().joinable
@@ -442,9 +363,9 @@ pub(crate) fn txn_find_object(
 ) -> ObjectLookup {
     let key = object_space.path_key(path.as_ref());
     match object_space.get_cell_id(&key) {
-        Some(var_id) if txn.is_removed(var_id) => ObjectLookup::Removed,
+        Some(var_id) if txn.with(|t| t.is_removed(var_id)) => ObjectLookup::Removed,
         Some(var_id) => match txn
-            .read_object(var_id)
+            .with(|t| t.read_object(var_id))
             .or_else(|| object_space.lookup(&key))
         {
             Some(process) => ObjectLookup::Found(process),
@@ -470,9 +391,11 @@ pub(crate) fn txn_insert_process(
     let key = object_space.process_key(process);
     let var_id = object_space.cell_id(&key);
     txn.with(|t| t.write_process(var_id, process.clone()));
-    txn.record_effect(Effect::InsertObject {
-        key,
-        process: process.clone(),
+    txn.with(|t| {
+        t.record_effect(Effect::InsertObject {
+            key,
+            process: process.clone(),
+        })
     });
 }
 
@@ -493,7 +416,7 @@ pub(crate) async fn resolve_or_create_object(
 
     // Cell-first find with a physical tie-breaker.
     let cell = object_space.get_cell_id(&key);
-    if let Some(process) = cell.and_then(|var_id| txn.read_object(var_id)) {
+    if let Some(process) = cell.and_then(|var_id| txn.with(|t| t.read_object(var_id))) {
         return Ok(process);
     }
 
@@ -520,7 +443,7 @@ pub(crate) async fn resolve_or_create_object(
 
     let changeset = txn.with(|t| t.take_changeset());
     let commit = commit_changeset(&gs.committer_tx, changeset).await?;
-    let effects = txn.take_effects();
+    let effects = txn.with(|t| t.take_effects());
     drop(live);
 
     match commit {
@@ -536,7 +459,7 @@ pub(crate) async fn resolve_or_create_object(
             let txn2 = TxnHandle::new(Transaction::new(live2.inner.clone()));
             match object_space
                 .get_cell_id(&key)
-                .and_then(|v| txn2.read_object(v))
+                .and_then(|v| txn2.with(|t| t.read_object(v)))
             {
                 Some(winner) => Ok(winner),
                 None => Err(lpc_error!(

@@ -1,11 +1,6 @@
 use std::sync::Arc;
 
-use lpc_rs_errors::LpcError;
-
-use crate::{
-    interpreter::{process::Process, task::task_id::TaskId},
-    telnet::connection::Connection,
-};
+use crate::telnet::connection::Connection;
 
 /// Operations that can be communicated to the [`Vm`](crate::interpreter::vm::Vm) remotely.
 #[derive(Debug)]
@@ -16,14 +11,6 @@ pub enum VmOp {
     /// Run a scheduled [`CallOut`](crate::interpreter::call_outs::CallOut), identified by its ID.
     PrioritizeCallOut(u64),
 
-    /// The Task with the passed ID has failed.
-    TaskError(TaskId, Box<LpcError>),
-
-    /// A generic runtime error has occurred.
-    /// Note we use an Arc instead of a Weak here because we want to
-    /// report the error even if the object has been destructed.
-    RuntimeError(Box<LpcError>, Option<Arc<Process>>),
-
     /// A subsystem has run into a problem that cannot be recovered from, so we need to shut down.
     FatalError(String),
 }
@@ -33,7 +20,6 @@ impl PartialEq for VmOp {
         match (self, other) {
             (Self::InitiateLogin(a), Self::InitiateLogin(b)) => a.address == b.address,
             (Self::PrioritizeCallOut(a), Self::PrioritizeCallOut(b)) => a == b,
-            (Self::TaskError(a, _), Self::TaskError(b, _)) => a == b,
             (Self::FatalError(a), Self::FatalError(b)) => a == b,
             _ => false,
         }

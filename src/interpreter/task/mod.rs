@@ -565,7 +565,7 @@ impl<const STACKSIZE: usize> AttemptBody for Task<STACKSIZE> {
         // the commit, against a pre-commit snapshot.
         let (_world, changeset) = self.context.txn.with(|t| t.clone()).into_parts();
         let commit = commit_changeset(tx, changeset).await?;
-        let effects = self.context.txn.take_effects();
+        let effects = self.context.txn.with(|t| t.take_effects());
         Ok((commit, effects))
     }
 
