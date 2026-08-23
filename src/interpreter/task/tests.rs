@@ -166,9 +166,10 @@ impl Hash for BareVal {
             BareVal::Float(x) => x.hash(state),
             BareVal::Int(x) => x.hash(state),
             BareVal::String(x) => x.hash(state),
-            BareVal::Array(x) => std::ptr::hash(&**x, state),
-            BareVal::Mapping(x) => std::ptr::hash(x, state),
-            BareVal::Object(x) => std::ptr::hash(x, state),
+            BareVal::Array(x) => x.hash(state),
+            // `HashMap` has no `Hash`; the length keeps equal mappings hashing equal.
+            BareVal::Mapping(x) => x.len().hash(state),
+            BareVal::Object(x) => x.hash(state),
             BareVal::Function(x, y) => {
                 x.hash(state);
                 y.hash(state);
@@ -2952,5 +2953,30 @@ mod test_gc {
         ctx.global_state.with_upvalues(|uv| {
             assert_eq!(uv.len(), 0);
         });
+    }
+}
+
+mod bare_val {
+    use super::*;
+
+    #[test]
+    fn separately_built_keys_find_each_other() {
+        let mut map = HashMap::new();
+        map.insert(BareVal::Object("/my_file".into()), BareVal::Int(1));
+        map.insert(BareVal::Array(vec![BareVal::Int(2)]), BareVal::Int(2));
+        map.insert(BareVal::Mapping(HashMap::new()), BareVal::Int(3));
+
+        assert_eq!(
+            map.get(&BareVal::Object("/my_file".into())),
+            Some(&BareVal::Int(1))
+        );
+        assert_eq!(
+            map.get(&BareVal::Array(vec![BareVal::Int(2)])),
+            Some(&BareVal::Int(2))
+        );
+        assert_eq!(
+            map.get(&BareVal::Mapping(HashMap::new())),
+            Some(&BareVal::Int(3))
+        );
     }
 }
