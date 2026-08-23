@@ -30,14 +30,10 @@ pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        path::{Path, PathBuf},
-        sync::Arc,
-    };
+    use std::{path::Path, sync::Arc};
 
     use indoc::indoc;
     use lpc_rs_core::lpc_path::LpcPath;
-    use lpc_rs_errors::lazy_files::FILE_CACHE;
     use lpc_rs_utils::config::Config;
 
     use super::*;
@@ -122,26 +118,24 @@ mod tests {
     async fn test_creates_object() {
         let master = indoc! { r#"
             object create() {
-                return find_object("/foo");
+                return find_object("/empty");
             }
         "# };
 
         let vm = Vm::new(test_config());
-
-        {
-            let mut current_path = PathBuf::from(test_config().lib_dir.to_owned());
-            current_path.push("foo.c");
-
-            let mut cache = FILE_CACHE.write();
-            cache.add_eager(current_path.to_string_lossy(), "");
-        }
 
         let master_proc = vm
             .initialize_process_from_code("/master.c", master)
             .await
             .unwrap();
 
-        assert!(master_proc.context.object_space().lookup("/foo").is_some());
+        assert!(
+            master_proc
+                .context
+                .object_space()
+                .lookup("/empty")
+                .is_some()
+        );
     }
 
     // A clone created this transaction is not yet in the physical object map

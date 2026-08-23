@@ -53,7 +53,6 @@ pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
 mod tests {
     use indoc::indoc;
     use itertools::Itertools;
-    use lpc_rs_errors::lazy_files::FILE_CACHE;
 
     use crate::{
         interpreter::{CommittedReader, vm::Vm},
@@ -114,14 +113,6 @@ mod tests {
             }
         "# };
 
-        let hears = indoc! { r#"
-            string *i_herd = ({});
-
-            void catch_tell(string message) {
-                i_herd += ({ message });
-            }
-        "# };
-
         let enabled = indoc! { r#"
             inherit "/hears";
 
@@ -133,10 +124,6 @@ mod tests {
         let disabled = indoc! { r#"
             inherit "/hears";
         "# };
-
-        // The inherited file just needs to be there.
-        let path = format!("{}/hears.c", test_config().lib_dir);
-        FILE_CACHE.write().add_eager(path, hears);
 
         let vm = Vm::new(test_config());
         let _enabled_proc = vm

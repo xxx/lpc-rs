@@ -11,9 +11,7 @@ keywords = ["lpc", "mud", "driver", "compiler"]
 categories = ["command-line-utilities", "compilers", "game-engines"]
 
 [dependencies]
-cached = "2.0.2"
 codespan-reporting = "0.13.1"
 derive_builder = "0.20.2"
-fs-err = "3.3.1"
 lalrpop-util = "0.23.1"
 parking_lot = "0.12.0"

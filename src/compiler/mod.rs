@@ -335,6 +335,34 @@ mod tests {
 
             assert!(compiler.compile_file("example").await.is_ok());
         }
+
+        #[tokio::test]
+        async fn a_diagnostic_renders_the_compiled_text_not_todays_disk_content() {
+            use lpc_rs_utils::config::ConfigBuilder;
+
+            let root =
+                std::env::temp_dir().join(format!("lpc-rs-stale-render-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            std::fs::create_dir_all(&root).unwrap();
+            std::fs::write(root.join("stale.c"), "int x = ;\n").unwrap();
+
+            let config: Arc<Config> = ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .build()
+                .unwrap()
+                .into();
+            let compiler = CompilerBuilder::default().config(config).build().unwrap();
+            let e = compiler.compile_file("/stale.c").await.unwrap_err();
+
+            std::fs::write(root.join("stale.c"), "// rewritten since the compile\n").unwrap();
+            let rendered = e.diagnostic_string();
+            let _ = std::fs::remove_dir_all(&root);
+
+            // "int x = " stops short of the caret's ANSI codes; the next
+            // commit makes diagnostic_string plain.
+            assert!(rendered.contains("int x = "), "{rendered}");
+            assert!(!rendered.contains("rewritten"), "{rendered}");
+        }
     }
 
     mod test_compile_in_game_file {

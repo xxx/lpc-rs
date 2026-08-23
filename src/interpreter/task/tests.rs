@@ -985,14 +985,7 @@ mod test_instructions {
     }
 
     mod test_call_other {
-        use lpc_rs_errors::lazy_files::FILE_CACHE;
-
         use super::*;
-
-        fn add_fixture(name: &str, code: &str) {
-            let path = format!("{}/{name}.c", crate::test_support::test_config().lib_dir);
-            FILE_CACHE.write().add_eager(path, code);
-        }
 
         #[tokio::test]
         async fn errors_on_a_missing_path() {
@@ -1007,8 +1000,7 @@ mod test_instructions {
 
         #[tokio::test]
         async fn errors_on_an_uncompilable_path() {
-            add_fixture("bad_source", "int x = ;");
-            let code = r#"mixed q = "/bad_source"->foo();"#;
+            let code = r#"mixed q = "/broken"->foo();"#;
 
             let error = try_run_prog(code)
                 .await
@@ -1019,7 +1011,6 @@ mod test_instructions {
 
         #[tokio::test]
         async fn propagates_the_receivers_init_error() {
-            add_fixture("init_fails", "int j = 0; int x = 10 / j;");
             let code = r#"mixed q = "/init_fails"->foo();"#;
 
             let error = try_run_prog(code)

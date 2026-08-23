@@ -1,0 +1,1 @@
+inherit "/nomask_parent";

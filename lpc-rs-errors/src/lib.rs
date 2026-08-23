@@ -16,11 +16,11 @@ use lalrpop_util::ParseError as LalrpopParseError;
 use span::HasSpan;
 
 use crate::{
-    lazy_files::{FILE_CACHE, FileId},
+    source_map::{FileId, SOURCE_MAP},
     span::Span,
 };
 
-pub mod lazy_files;
+pub mod source_map;
 pub mod span;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -366,7 +366,7 @@ impl From<TryFromIntError> for LpcError {
 
 /// Write a list of diagnostics to a writer.
 pub fn output_diagnostics(diagnostics: &[Diagnostic<FileId>], writer: &mut dyn WriteColor) {
-    let files = FILE_CACHE.read();
+    let files = SOURCE_MAP.read();
 
     let config = codespan_reporting::term::Config::default();
 

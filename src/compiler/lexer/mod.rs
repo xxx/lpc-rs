@@ -7,9 +7,8 @@ use std::{
 use logos::{Lexer, Logos};
 use lpc_rs_core::{BaseFloat, LpcIntInner, convert_escapes};
 use lpc_rs_errors::{
-    Result,
-    lazy_files::FileId,
-    lpc_error,
+    Result, lpc_error,
+    source_map::FileId,
     span::{HasSpan, Span},
 };
 

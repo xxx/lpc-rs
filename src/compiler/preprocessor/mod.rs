@@ -7,7 +7,7 @@ use lpc_rs_core::{
     lpc_path::LpcPath,
     pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
 };
-use lpc_rs_errors::{LpcError, Result, lazy_files::FILE_CACHE, lpc_error, span::Span};
+use lpc_rs_errors::{LpcError, Result, lpc_error, source_map::SOURCE_MAP, span::Span};
 use lpc_rs_utils::read_lpc_file;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -212,14 +212,10 @@ impl Preprocessor {
 
         let file_id = {
             let server_path = lpc_path.as_server(self.context.config.lib_dir.as_str());
-            let mut cache = FILE_CACHE.write();
-            if Path::exists(&server_path) {
-                cache.add(server_path.to_string_lossy())
-            } else {
-                // We pretend the eager file has an absolute path in the cache, as it makes lookups easier.
-                cache.add_eager(server_path.to_string_lossy(), code.as_ref())
-                // cache.add_eager(lpc_path.to_string_lossy(), code.as_ref())
-            }
+            SOURCE_MAP.write().add(
+                server_path.to_string_lossy().into_owned(),
+                code.as_ref().to_owned(),
+            )
         };
 
         let mut token_stream = LexWrapper::new(code.as_ref());

@@ -229,67 +229,13 @@ async fn test_positional_vars_into_argv() {
 #[tokio::test]
 async fn test_inherited_create_called_when_not_overridden() {
     let vm = Vm::new(test_config());
-    let grandparent = indoc! { r#"
-        void create() {
-            dump("grandparent create");
-        }
-    "# };
-
-    let parent = indoc! { r#"
-        inherit "test_inherited_create_called_when_not_overridden_test_grandparent";
-
-        void create() {
-            dump("parent create");
-        }
-    "# };
-    let _parent2 = indoc! { r#"
-        inherit "test_inherited_create_called_when_not_overridden_test_grandparent";
-
-        void create() {
-            dump("parent2 create"); // this should be called because child inherits it last.
-        }
-    "# };
-
     let child = indoc! { r#"
-        inherit "test_inherited_create_called_when_not_overridden_test_parent";
-        inherit "test_inherited_create_called_when_not_overridden_test_parent2";
+        inherit "/create_parent";
+        inherit "/create_parent2";
     "# };
 
-    let _grandparent_ctx = vm
-        .initialize_string(
-            grandparent,
-            "test_inherited_create_called_when_not_overridden_test_grandparent.c",
-        )
-        .await
-        .inspect_err(|e| {
-            e.emit_diagnostics();
-        })
-        .unwrap();
-    let _parent_ctx = vm
-        .initialize_string(
-            parent,
-            "test_inherited_create_called_when_not_overridden_test_parent.c",
-        )
-        .await
-        .inspect_err(|e| {
-            e.emit_diagnostics();
-        })
-        .unwrap();
-    let _parent2_ctx = vm
-        .initialize_string(
-            parent,
-            "test_inherited_create_called_when_not_overridden_test_parent2.c",
-        )
-        .await
-        .inspect_err(|e| {
-            e.emit_diagnostics();
-        })
-        .unwrap();
     let child_ctx = vm
-        .initialize_string(
-            child,
-            "test_inherited_create_called_when_not_overridden_test_child.c",
-        )
+        .initialize_string(child, "child_of_create_parents.c")
         .await
         .inspect_err(|e| {
             e.emit_diagnostics();
@@ -298,10 +244,9 @@ async fn test_inherited_create_called_when_not_overridden() {
 
     let init = child_ctx.process().program.initializer.clone().unwrap();
 
+    // parent2's create is inherited last, so it wins.
     let expected = vec![
-        Instruction::Call(ustr(
-            "create__v__/test_inherited_create_called_when_not_overridden_test_parent2.c__pb__",
-        )),
+        Instruction::Call(ustr("create__v__/create_parent2.c__pb__")),
         Instruction::Ret,
     ];
 
@@ -371,14 +316,8 @@ async fn test_calls_simul_efuns() {
 
 #[tokio::test]
 async fn test_nomask_children() {
-    let parent = indoc! { r#"
-        nomask void noooo() {
-            write("don't mask me!\n");
-        }
-    "# };
-
     let child = indoc! { r#"
-        inherit "/test_parent";
+        inherit "/nomask_parent";
 
         void noooo() {
             write("this shouldn't work");
@@ -386,11 +325,6 @@ async fn test_nomask_children() {
     "# };
 
     let vm = Vm::new(test_config());
-    let _parent_proc = vm
-        .initialize_process_from_code("/test_parent.c", parent)
-        .await
-        .unwrap();
-
     let child_proc = vm.initialize_process_from_code("/child.c", child).await;
 
     assert_eq!(
@@ -401,18 +335,8 @@ async fn test_nomask_children() {
 
 #[tokio::test]
 async fn test_nomask_grandchildren() {
-    let parent = indoc! { r#"
-        nomask void noooo() {
-            write("don't mask me!\n");
-        }
-    "# };
-
-    let child = indoc! { r#"
-        inherit "/test_parent";
-    "# };
-
     let grandchild = indoc! { r#"
-        inherit "/child";
+        inherit "/nomask_child";
 
         void noooo() {
             write("this shouldn't work");
@@ -420,16 +344,6 @@ async fn test_nomask_grandchildren() {
     "# };
 
     let vm = Vm::new(test_config());
-    let _parent_proc = vm
-        .initialize_process_from_code("/test_parent.c", parent)
-        .await
-        .unwrap();
-
-    let _child_proc = vm
-        .initialize_process_from_code("/child.c", child)
-        .await
-        .unwrap();
-
     let grandchild_proc = vm
         .initialize_process_from_code("/grandchild.c", grandchild)
         .await;

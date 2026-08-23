@@ -5,7 +5,7 @@ use std::{
 
 use codespan_reporting::files::Files;
 
-use crate::lazy_files::{FILE_CACHE, FileId};
+use crate::source_map::{FileId, SOURCE_MAP};
 
 /// Store the details of a code span, for use in error messaging.
 /// `r` is set such that `span.l..span.r` will return the correct span of chars.
@@ -15,13 +15,13 @@ pub struct Span {
     pub l: usize,
     /// Right index of the span
     pub r: usize,
-    /// The ID of the file in the global [`FILE_CACHE`]
+    /// The ID of the file in the global [`SOURCE_MAP`](static@SOURCE_MAP)
     pub file_id: FileId,
 }
 
 impl Display for Span {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let files = FILE_CACHE.read();
+        let files = SOURCE_MAP.read();
 
         if let Ok(name) = files.name(self.file_id)
             && let Ok(idx) = files.line_index(self.file_id, self.l)
@@ -39,17 +39,19 @@ impl Span {
     /// Create a new [`Span`]
     ///
     /// # Arguments
-    /// `file_id` - The [`FileId`] of the file from the
-    /// [`FILE_CACHE`](static@crate::lazy_files::FILE_CACHE) `range` - The
+    /// `file_id` - The [`FileId`] of the file in the
+    /// [`SOURCE_MAP`](static@crate::source_map::SOURCE_MAP). `range` - The
     /// range containing the start and end indices of the span.
     ///           It's assumed that `l..r` is the correct code span in error
     /// messaging.
     ///
     /// # Examples
     /// ```
-    /// use lpc_rs_errors::{lazy_files::FILE_CACHE, span::Span};
+    /// use lpc_rs_errors::{source_map::SOURCE_MAP, span::Span};
     ///
-    /// let file_id = FILE_CACHE.write().add("tests/fixtures/code/example.c");
+    /// let file_id = SOURCE_MAP
+    ///     .write()
+    ///     .add("/example.c".to_owned(), "int x = 123;\n".to_owned());
     /// let span = Span::new(file_id, 1..8);
     /// ```
     #[inline]
@@ -87,7 +89,7 @@ impl Span {
     /// Return the string of the actual source code that this span represents.
     /// Formatting will be as it appears in the source file.
     pub fn code(&self) -> Option<String> {
-        let files = FILE_CACHE.read();
+        let files = SOURCE_MAP.read();
 
         files
             .get(self.file_id)
