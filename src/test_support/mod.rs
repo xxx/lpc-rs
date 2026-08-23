@@ -55,6 +55,13 @@ pub fn test_config() -> Config {
     test_config_builder!().build().unwrap()
 }
 
+/// Make a rendered diagnostic machine-independent: the canonical lib_dir
+/// prefix becomes the in-game `/`.
+pub fn strip_lib_dir(rendered: &str) -> String {
+    let canon = std::fs::canonicalize("./tests/fixtures/code").unwrap();
+    rendered.replace(&canon.to_string_lossy().into_owned(), "")
+}
+
 async fn compile_simul_efuns(config: &Arc<Config>) -> Program {
     let compiler = CompilerBuilder::default()
         .config(config.clone())

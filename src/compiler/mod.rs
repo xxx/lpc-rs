@@ -363,6 +363,58 @@ mod tests {
         }
     }
 
+    mod test_rendered_diagnostics {
+        use indoc::indoc;
+
+        use super::*;
+        use crate::test_support::{strip_lib_dir, test_config};
+
+        async fn rendered_error(code: &str) -> String {
+            let compiler = Compiler::new(test_config());
+            let e = compiler
+                .compile_string("/my_file.c", code)
+                .await
+                .map(|_| ())
+                .expect_err("expected a compile error");
+            strip_lib_dir(&e.diagnostic_string())
+        }
+
+        #[tokio::test]
+        async fn a_compile_error_renders_with_its_label() {
+            let code = indoc! { r#"
+                nomask void noooo() {}
+                void noooo() {}
+            "# };
+            assert_eq!(
+                rendered_error(code).await,
+                "error: attempt to redefine nomask function `noooo`\n  ┌─ /my_file.c:2:1\n  │\n1 │ nomask void noooo() {}\n  │ ----------------- defined here\n2 │ void noooo() {}\n  │ ^^^^^^^^^^\n\n"
+            );
+        }
+
+        #[tokio::test]
+        async fn an_error_in_an_included_file_names_that_file() {
+            let code = indoc! { r#"
+                #include "/include/bad_token.h"
+            "# };
+            assert_eq!(
+                rendered_error(code).await,
+                "error: Unrecognized Token: ;\n  ┌─ /include/bad_token.h:1:9\n  │\n1 │ int x = ;\n  │         ^\n  │\n  = expected one of: \"-\", \"!\", \"~\", \"&\", \"++\", \"--\", \"efun\", \"(\", \"::\", \"StringLiteral\", \"IntLiteral\", \"FloatLiteral\", \"ID\", \"ClosureArgVar\"\n\n"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_label_into_an_inherited_file_renders_both_files() {
+            let code = indoc! { r#"
+                inherit "/nomask_parent";
+                void noooo() {}
+            "# };
+            assert_eq!(
+                rendered_error(code).await,
+                "error: attempt to redefine nomask function `noooo`\n  ┌─ /my_file.c:2:1\n  │\n2 │ void noooo() {}\n  │ ^^^^^^^^^^\n  │\n  ┌─ /nomask_parent.c:1:1\n  │\n1 │ nomask void noooo() {\n  │ ----------------- defined here\n\n"
+            );
+        }
+    }
+
     mod test_compile_in_game_file {
         use lpc_rs_utils::config::ConfigBuilder;
 

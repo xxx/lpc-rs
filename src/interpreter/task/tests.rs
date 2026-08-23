@@ -1158,6 +1158,21 @@ mod test_instructions {
     mod test_error_locations {
         use super::*;
 
+        #[tokio::test]
+        async fn a_runtime_error_renders_with_its_stack_trace() {
+            let code = indoc! { r##"
+                void create() {
+                    int j = 0;
+                    int x = 10 / j;
+                }
+            "##};
+            let e = try_run_prog(code).await.unwrap_err();
+            assert_eq!(
+                crate::test_support::strip_lib_dir(&e.diagnostic_string()),
+                "error: runtime error: Division by zero\n  ┌─ /my_file.c:3:13\n  │\n3 │     int x = 10 / j;\n  │             ^^^^^^\n  │\n  = Stack trace:\n    \n    /my_file.c:3:1 in create()\n    (unknown) in init-program()\n\n"
+            );
+        }
+
         fn stack_trace_of(e: &LpcError) -> String {
             e.to_diagnostics()[0]
                 .notes
