@@ -387,7 +387,7 @@ fn arg_or_this_object<const N: usize>(
 ) -> Option<Arc<Process>> {
     match arg_ref {
         LpcRef::Int(LpcInt(0)) => Some(context.frame().process.clone()),
-        _ => arg_ref.as_object(),
+        _ => arg_ref.live_object(context.txn()),
     }
 }
 

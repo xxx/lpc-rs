@@ -425,11 +425,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         operation: F,
     ) -> Result<()>
     where
-        F: Fn(&LpcRef) -> Result<LpcRef>,
+        F: Fn(&LpcRef, &TxnHandle) -> Result<LpcRef>,
     {
         let ref1 = &*get_location(&self.stack, &self.context.txn, r1)?;
 
-        match operation(ref1) {
+        match operation(ref1, &self.context.txn) {
             Ok(result) => {
                 set_location(&mut self.stack, &self.context.txn, r2, result)?;
             }
@@ -453,12 +453,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         operation: F,
     ) -> Result<()>
     where
-        F: Fn(&LpcRef, &LpcRef) -> bool,
+        F: Fn(&LpcRef, &LpcRef, &TxnHandle) -> bool,
     {
         let ref1 = &*get_location(&self.stack, &self.context.txn, r1)?;
         let ref2 = &*get_location(&self.stack, &self.context.txn, r2)?;
 
-        let out = operation(ref1, ref2) as LpcIntInner;
+        let out = operation(ref1, ref2, &self.context.txn) as LpcIntInner;
 
         set_location(
             &mut self.stack,

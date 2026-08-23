@@ -210,7 +210,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         function_name: &str,
     ) -> lpc_rs_errors::Result<()> {
         if_chain! {
-            if lpc_ref != &NULL; // 0 is always allowed
+            if !lpc_ref.eq_in(&NULL, &self.context.txn); // 0 is always allowed
             if let Some(arg_type) = arg_type;
             let ref_type = lpc_ref.as_lpc_type();
             if !ref_type.matches_type(*arg_type);

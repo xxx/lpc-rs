@@ -3,22 +3,19 @@ use std::sync::Arc;
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext, lpc_ref::LpcRef, object_flags::ObjectFlags, process::Process,
-};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process};
 
 pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let lpc_ref = context.resolve_local_register(1 as RegisterSize);
-    let destruct = |proc: Arc<Process>| {
-        proc.flags.set(ObjectFlags::Destructed);
-        context.remove_process(proc);
-    };
+    let destruct = |proc: Arc<Process>| context.remove_process(proc);
 
     if matches!(lpc_ref, LpcRef::Array(_)) {
         lpc_ref.with_array(context.txn(), |arr| {
-            arr.iter().filter_map(LpcRef::as_object).for_each(&destruct)
+            arr.iter()
+                .filter_map(|r| r.live_object(context.txn()))
+                .for_each(&destruct)
         })?;
-    } else if let Some(proc) = lpc_ref.as_object() {
+    } else if let Some(proc) = lpc_ref.live_object(context.txn()) {
         destruct(proc);
     }
 

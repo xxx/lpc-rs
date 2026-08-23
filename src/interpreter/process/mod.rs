@@ -4,7 +4,7 @@ use std::{
     borrow::Cow,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
 use bit_set::BitSet;
@@ -77,6 +77,10 @@ pub struct Process {
     /// Our flags
     pub flags: AtomicFlags,
 
+    /// The object-space cell this process lives under, known once it is
+    /// inserted or destructed transactionally.
+    pub cell: OnceLock<VarId>,
+
     /// Where are we in the game world?
     pub position: ProcessPosition,
 }
@@ -91,6 +95,7 @@ impl Default for Process {
             clone_id: None,
             connection: SVar::new(),
             flags: Default::default(),
+            cell: OnceLock::new(),
             position: Default::default(),
         }
     }
@@ -114,6 +119,7 @@ impl Process {
             clone_id: None,
             connection: SVar::new(),
             flags: Default::default(),
+            cell: OnceLock::new(),
             position: Default::default(),
         }
     }
@@ -135,6 +141,7 @@ impl Process {
             clone_id: Some(clone_id),
             connection: SVar::new(),
             flags,
+            cell: OnceLock::new(),
             position: Default::default(),
         }
     }

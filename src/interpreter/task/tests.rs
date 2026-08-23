@@ -2997,6 +2997,99 @@ mod object_identity {
     }
 }
 
+mod destructed_refs {
+    use super::*;
+    use crate::{
+        compile_time_config::MAX_CALL_STACK_SIZE,
+        interpreter::{
+            object_space::ObjectSpace, stm::TxnHandle, task::task_template::TaskTemplate,
+        },
+        test_support::compile_prog,
+        util::process_builder::process_insert_and_initialize_program,
+    };
+
+    #[tokio::test]
+    async fn reads_as_zero_in_the_destructing_attempt() {
+        let code = indoc! { r##"
+            object ob;
+            object alias;
+            int is_zero, ne_zero, not_ob, objp, branch, alias_eq, named;
+
+            void create() {
+                ob = clone_object("/std/widget");
+                alias = ob;
+                destruct(ob);
+                is_zero = ob == 0;
+                ne_zero = ob != 0;
+                not_ob = !ob;
+                objp = objectp(ob);
+                if (ob) branch = 1; else branch = 2;
+                alias_eq = ob == alias;
+                named = file_name(ob) == 0;
+            }
+        "##};
+
+        let task = run_prog(code).await;
+        let ctx = task.context;
+        let values = committed_globals_by_name(&ctx.global_state, ctx.process());
+        let expect = |name: &str, value: i64| {
+            BareVal::Int(value).assert_equal(&ctx.global_state, values.get(name).unwrap());
+        };
+
+        expect("is_zero", 1);
+        expect("ne_zero", 0);
+        expect("not_ob", 1);
+        expect("objp", 0);
+        expect("branch", 2);
+        expect("alias_eq", 1);
+        expect("named", 1);
+    }
+
+    #[tokio::test]
+    async fn a_discarded_attempt_leaves_the_object_live() {
+        let code = indoc! { r##"
+            void create() {
+                destruct(this_object());
+                throw("boom");
+            }
+        "##};
+
+        let (program, config, se_proc) = compile_prog(code).await;
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
+        let global_state = Arc::new(GlobalState::new(config, tx));
+        ObjectSpace::insert_process_physical(&global_state.object_space, se_proc);
+        let process = Arc::new(Process::new(program));
+
+        let result = process_insert_and_initialize_program::<MAX_CALL_STACK_SIZE>(
+            process.clone(),
+            TaskTemplate::from(global_state.clone()),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(global_state.object_space.lookup("/my_file").is_some());
+        let lpc_ref = LpcRef::from(Arc::downgrade(&process));
+        assert!(lpc_ref.live_object(&TxnHandle::empty()).is_some());
+    }
+
+    #[tokio::test]
+    async fn this_object_reads_as_zero_after_self_destruct() {
+        let code = indoc! { r##"
+            int this_zero;
+
+            void create() {
+                destruct(this_object());
+                this_zero = this_object() == 0;
+            }
+        "##};
+
+        let task = run_prog(code).await;
+        let ctx = task.context;
+        let values = committed_globals_by_name(&ctx.global_state, ctx.process());
+        BareVal::Int(1).assert_equal(&ctx.global_state, values.get("this_zero").unwrap());
+    }
+}
+
 mod bare_val {
     use super::*;
 

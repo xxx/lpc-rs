@@ -1,5 +1,4 @@
 use async_recursion::async_recursion;
-use decorum::Total;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_asm::instruction::Instruction;
@@ -121,7 +120,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.bitand(y))?;
             }
             Instruction::BitwiseNot(r1, r2) => {
-                self.unary_operation(r1, r2, |x| x.bitnot())?;
+                self.unary_operation(r1, r2, |x, _| x.bitnot())?;
             }
             Instruction::Call(name_idx) => {
                 self.handle_call(name_idx).await?;
@@ -178,7 +177,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 apply_in_location(&mut self.stack, &self.context.txn, r1, |x| x.dec())?;
             }
             Instruction::EqEq(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y| x == y)?;
+                self.binary_boolean_operation(r1, r2, r3, |x, y, txn| x.eq_in(y, txn))?;
             }
             Instruction::FConst(r, f) => {
                 set_location(
@@ -196,10 +195,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.handle_functionptrconst(location, receiver, name_index)?;
             }
             Instruction::Gt(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y| x > y)?;
+                self.binary_boolean_operation(r1, r2, r3, |x, y, _| x > y)?;
             }
             Instruction::Gte(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y| x >= y)?;
+                self.binary_boolean_operation(r1, r2, r3, |x, y, _| x >= y)?;
             }
             Instruction::IConst(r, i) => {
                 set_location(&mut self.stack, &self.context.txn, r, LpcRef::Int(i.into()))?;
@@ -226,8 +225,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Jnz(r1, address) => {
                 let v = &*get_location(&self.stack, &self.context.txn, r1)?;
 
-                // TODO: re-decide of 0.0 floats should match here and with Jz
-                if v != &NULL && v != &LpcRef::Float(Total::from(0.0).into()) {
+                if v.is_truthy(&self.context.txn) {
                     let frame = self.stack.current_frame_mut()?;
                     frame.set_pc(address);
                 }
@@ -235,7 +233,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Jz(r1, address) => {
                 let v = &*get_location(&self.stack, &self.context.txn, r1)?;
 
-                if v == &NULL || v == &LpcRef::Float(Total::from(0.0).into()) {
+                if !v.is_truthy(&self.context.txn) {
                     let frame = self.stack.current_frame_mut()?;
                     frame.set_pc(address);
                 }
@@ -247,10 +245,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.handle_load_mapping_key(container, index, destination)?;
             }
             Instruction::Lt(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y| x < y)?;
+                self.binary_boolean_operation(r1, r2, r3, |x, y, _| x < y)?;
             }
             Instruction::Lte(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y| x <= y)?;
+                self.binary_boolean_operation(r1, r2, r3, |x, y, _| x <= y)?;
             }
             Instruction::IAdd(r1, r2, r3) | Instruction::MAdd(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, txn| x.add(y, txn))?;
@@ -285,10 +283,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.binary_operation(r1, r2, r3, |x, y, txn| x.sub(y, txn))?;
             }
             Instruction::Not(r1, r2) => {
-                self.unary_operation(r1, r2, |x| Ok(x.not()))?;
+                self.unary_operation(r1, r2, |x, txn| Ok(x.not(txn)))?;
             }
             Instruction::NotEq(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y| x != y)?;
+                self.binary_boolean_operation(r1, r2, r3, |x, y, txn| !x.eq_in(y, txn))?;
             }
             Instruction::Or(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.bitor(y))?;

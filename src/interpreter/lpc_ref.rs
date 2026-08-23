@@ -8,6 +8,7 @@ use std::{
 };
 
 use bit_set::BitSet;
+use decorum::Total;
 use lpc_rs_core::{BaseFloat, LpcFloatInner, LpcIntInner, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_utils::{string, string::concatenate_strings};
@@ -117,12 +118,49 @@ impl LpcRef {
         matches!(self, LpcRef::Int(LpcInt(0)))
     }
 
-    /// The live object this ref points to; `None` for a non-object or a
-    /// destructed one.
+    /// The process behind an object ref, `None` once it is dropped;
+    /// `live_object` also honours this attempt's destructs.
     pub fn as_object(&self) -> Option<Arc<Process>> {
         match self {
             LpcRef::Object(proc) => proc.upgrade(),
             _ => None,
+        }
+    }
+
+    /// The object this ref points to, unless its process is dropped or this
+    /// attempt destructed it.
+    pub(crate) fn live_object(&self, txn: &TxnHandle) -> Option<Arc<Process>> {
+        let process = self.as_object()?;
+        let removed = process
+            .cell
+            .get()
+            .is_some_and(|&cell| txn.with(|t| t.is_removed(cell)));
+        (!removed).then_some(process)
+    }
+
+    /// Whether this is an object ref that no longer names a live object for `txn`.
+    fn is_dead_object(&self, txn: &TxnHandle) -> bool {
+        matches!(self, LpcRef::Object(_)) && self.live_object(txn).is_none()
+    }
+
+    /// The value as a condition sees it: `0`, `0.0` and a destructed object
+    /// are false.
+    pub(crate) fn is_truthy(&self, txn: &TxnHandle) -> bool {
+        match self {
+            LpcRef::Int(x) => x.0 != 0,
+            LpcRef::Float(_) => self != &LpcRef::Float(Total::from(0.0).into()),
+            LpcRef::Object(_) => self.live_object(txn).is_some(),
+            _ => true,
+        }
+    }
+
+    /// `==` as LPC sees it: a destructed object compares as `0`.
+    pub(crate) fn eq_in(&self, other: &Self, txn: &TxnHandle) -> bool {
+        match (self.is_dead_object(txn), other.is_dead_object(txn)) {
+            (false, false) => self == other,
+            (true, true) => true,
+            (true, false) => other.is_null(),
+            (false, true) => self.is_null(),
         }
     }
 
@@ -182,6 +220,7 @@ impl LpcRef {
             LpcRef::String(_) => LpcType::String(false),
             LpcRef::Array(_) => LpcType::Mixed(true), // this could be better
             LpcRef::Mapping(_) => LpcType::Mapping(false),
+            LpcRef::Object(x) if x.strong_count() == 0 => LpcType::Int(false),
             LpcRef::Object(_) => LpcType::Object(false),
             LpcRef::Function(_) => LpcType::Function(false),
         }
@@ -441,18 +480,14 @@ impl LpcRef {
         })
     }
 
-    /// Logical not (the unary `!` operator): 1 for `0` and `0.0`, else 0.
-    pub fn not(&self) -> Self {
+    /// Logical not (the unary `!` operator): 1 for `0`, `0.0` and a
+    /// destructed object, else 0.
+    pub(crate) fn not(&self, txn: &TxnHandle) -> Self {
         match self {
             LpcRef::Int(x) => LpcRef::Int(LpcInt((*x == 0) as LpcIntInner)),
             LpcRef::Float(x) => LpcRef::Int(LpcInt((*x == 0.0) as LpcIntInner)),
-
-            // Null is always an `LpcRef::Int`, so every other variant is truthy.
-            LpcRef::String(_)
-            | LpcRef::Array(_)
-            | LpcRef::Mapping(_)
-            | LpcRef::Object(_)
-            | LpcRef::Function(_) => NULL,
+            LpcRef::Object(_) => LpcRef::from(self.live_object(txn).is_none()),
+            LpcRef::String(_) | LpcRef::Array(_) | LpcRef::Mapping(_) | LpcRef::Function(_) => NULL,
         }
     }
 
@@ -552,6 +587,8 @@ impl From<bool> for LpcRef {
     }
 }
 
+/// A destructed object keeps its address hash, so a mapping keyed by it is
+/// found by the ref and not by `0`.
 impl Hash for LpcRef {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -625,7 +662,7 @@ impl Display for LpcRef {
             LpcRef::Mapping(x) => write!(f, "<mapping#{}>", x.id.as_u64()),
             LpcRef::Object(x) => match x.upgrade() {
                 Some(x) => write!(f, "{}", x),
-                None => write!(f, "< destructed >"),
+                None => write!(f, "0"),
             },
             LpcRef::Function(x) => {
                 write!(f, "{}", x)
@@ -710,6 +747,57 @@ mod tests {
 
             assert_eq!(a, b);
             assert_eq!(hash_of(&a), hash_of(&b));
+        }
+    }
+
+    mod test_liveness {
+        use super::*;
+        use crate::interpreter::{program::Program, stm::VarId};
+
+        #[test]
+        fn a_dropped_process_reads_as_zero() {
+            let txn = TxnHandle::empty();
+            let process = Arc::new(Process::new(Program::default()));
+            let live = LpcRef::from(Arc::downgrade(&process));
+            let other = LpcRef::from(Arc::downgrade(&Arc::new(Process::new(Program::default()))));
+            assert!(live.is_truthy(&txn));
+            assert!(!live.eq_in(&NULL, &txn));
+            assert!(live.eq_in(&live.clone(), &txn));
+            assert_eq!(live.not(&txn), LpcRef::from(0));
+            assert_eq!(live.as_lpc_type(), LpcType::Object(false));
+
+            drop(process);
+            let dead = live;
+            assert!(dead.live_object(&txn).is_none());
+            assert!(!dead.is_truthy(&txn));
+            assert!(dead.eq_in(&NULL, &txn));
+            assert!(NULL.eq_in(&dead, &txn));
+            assert!(dead.eq_in(&other, &txn));
+            assert!(!dead.eq_in(&LpcRef::from(1), &txn));
+            assert!(!dead.eq_in(&LpcRef::from(0.0), &txn));
+            assert_eq!(dead.not(&txn), LpcRef::from(1));
+            assert_eq!(dead.as_lpc_type(), LpcType::Int(false));
+            assert_eq!(dead.to_string(), "0");
+        }
+
+        #[test]
+        fn an_object_destructed_in_the_attempt_reads_as_zero_there_only() {
+            let process = Arc::new(Process::new(Program::default()));
+            let cell = VarId::new();
+            process.cell.set(cell).unwrap();
+            let lpc_ref = LpcRef::from(Arc::downgrade(&process));
+
+            let destructing = TxnHandle::empty();
+            destructing.with(|t| t.drop_var(cell));
+            assert!(lpc_ref.live_object(&destructing).is_none());
+            assert!(!lpc_ref.is_truthy(&destructing));
+            assert!(lpc_ref.eq_in(&NULL, &destructing));
+            assert_eq!(lpc_ref.not(&destructing), LpcRef::from(1));
+
+            let another = TxnHandle::empty();
+            assert!(lpc_ref.live_object(&another).is_some());
+            assert!(lpc_ref.is_truthy(&another));
+            assert!(!lpc_ref.eq_in(&NULL, &another));
         }
     }
 

@@ -16,7 +16,7 @@ pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         let path = context.in_game_path(path);
         Some(context.load_object(&path).await?)
     } else {
-        ob_ref.as_object()
+        ob_ref.live_object(context.txn())
     };
 
     let delivered = match proc {

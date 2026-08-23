@@ -40,9 +40,14 @@ pub async fn mappingp<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     type_predicate(context, |r| matches!(r, LpcRef::Mapping(_))).await
 }
 
-/// `objectp`: 1 if the argument is an object reference, destructed or not.
+/// `objectp`: 1 if the argument is a live object.
 pub async fn objectp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    type_predicate(context, |r| matches!(r, LpcRef::Object(_))).await
+    let live = context
+        .resolve_local_register(1 as RegisterSize)
+        .live_object(context.txn())
+        .is_some();
+    context.return_efun_result(LpcRef::from(live));
+    Ok(())
 }
 
 /// `stringp`: 1 if the argument is a string.

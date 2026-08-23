@@ -9,7 +9,7 @@ use crate::interpreter::{
 
 pub async fn file_name<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
-    let result = arg_ref.as_object().map_or(NULL, |proc| {
+    let result = arg_ref.live_object(context.txn()).map_or(NULL, |proc| {
         let path = LpcPath::new_server(&*proc.filename());
         let s = LpcString::from(String::from(
             path.as_in_game(&*context.config().lib_dir)

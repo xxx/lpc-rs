@@ -198,7 +198,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 }
             }
-            LpcRef::Object(proc) => proc.upgrade()?,
+            LpcRef::Object(_) => receiver_ref.live_object(context.txn())?,
             _ => return None,
         };
 

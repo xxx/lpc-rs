@@ -298,7 +298,9 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     {
         let process = process.into();
         let key = self.object_space().process_key(&process);
-        let var_id = self.object_space().cell_id(&key);
+        let var_id = *process
+            .cell
+            .get_or_init(|| self.object_space().cell_id(&key));
         self.txn().with(|t| t.drop_var(var_id));
         self.record_effect(Effect::RemoveObject { key });
     }

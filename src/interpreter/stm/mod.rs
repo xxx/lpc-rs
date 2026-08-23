@@ -389,7 +389,7 @@ pub(crate) fn txn_insert_process(
     process: &Arc<Process>,
 ) {
     let key = object_space.process_key(process);
-    let var_id = object_space.cell_id(&key);
+    let var_id = *process.cell.get_or_init(|| object_space.cell_id(&key));
     txn.with(|t| t.write_process(var_id, process.clone()));
     txn.with(|t| {
         t.record_effect(Effect::InsertObject {
