@@ -277,6 +277,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::ISub(r1, r2, r3) | Instruction::MSub(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, txn| x.sub(y, txn))?;
             }
+            Instruction::NewUpvalue(location) => {
+                self.stack.current_frame_mut()?.new_upvalue(location)?;
+            }
             Instruction::Not(r1, r2) => {
                 self.unary_operation(r1, r2, |x, txn| Ok(x.not(txn)))?;
             }

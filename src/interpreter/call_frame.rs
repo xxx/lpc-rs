@@ -167,6 +167,23 @@ impl CallFrame {
             .extend((0..num_upvalues).map(|_| VarId::new()));
     }
 
+    /// Bind the captured variable at `location` to a fresh cell; pointers
+    /// that copied the old cell keep it.
+    pub(crate) fn new_upvalue(&mut self, location: RegisterVariant) -> Result<()> {
+        let RegisterVariant::Upvalue(reg) = location else {
+            return Err(self.runtime_bug(format!("new_upvalue on a non-upvalue {location}")));
+        };
+        let Some(cell) = self.upvalue_ptrs.get_mut(reg.index() as usize) else {
+            return Err(self.runtime_bug(format!(
+                "upvalue {} is outside this frame's {} cells",
+                reg.index(),
+                self.upvalue_ptrs.len()
+            )));
+        };
+        *cell = VarId::new();
+        Ok(())
+    }
+
     /// Store argument `i` where the function declares it, or in the next
     /// local register past the last argument for one beyond the declared list.
     pub(crate) fn push_arg(&mut self, txn: &TxnHandle, i: usize, value: LpcRef) -> Result<()> {

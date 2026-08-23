@@ -3276,6 +3276,84 @@ mod test_upvalues {
         }
 
         #[tokio::test]
+        async fn a_declaration_in_a_loop_body_gets_a_cell_per_iteration() {
+            let code = indoc! { r##"
+                int r;
+                void create() {
+                    function *fs = ({});
+                    for (int i = 0; i < 3; i++) {
+                        int j = i * 10;
+                        function f = (: j :);
+                        fs += ({ f });
+                    }
+                    function f0 = fs[0];
+                    function f1 = fs[1];
+                    function f2 = fs[2];
+                    r = f0() * 100 + f1() * 10 + f2();
+                }
+            "## };
+            assert_eq!(committed_r(code).await, LpcRef::Int(LpcInt(120)));
+        }
+
+        #[tokio::test]
+        async fn a_variable_declared_once_is_shared_by_every_iteration() {
+            let code = indoc! { r##"
+                int r;
+                void create() {
+                    function *fs = ({});
+                    for (int i = 0; i < 3; i++) {
+                        function f = (: i :);
+                        fs += ({ f });
+                    }
+                    function f0 = fs[0];
+                    function f1 = fs[1];
+                    function f2 = fs[2];
+                    r = f0() * 100 + f1() * 10 + f2();
+                }
+            "## };
+            assert_eq!(committed_r(code).await, LpcRef::Int(LpcInt(333)));
+        }
+
+        #[tokio::test]
+        async fn a_while_body_declaration_gets_a_cell_per_iteration() {
+            let code = indoc! { r##"
+                int r;
+                void create() {
+                    function *fs = ({});
+                    int i = 0;
+                    while (i < 3) {
+                        int j = i;
+                        function f = (: j :);
+                        fs += ({ f });
+                        i++;
+                    }
+                    function f0 = fs[0];
+                    function f1 = fs[1];
+                    function f2 = fs[2];
+                    r = f0() * 100 + f1() * 10 + f2();
+                }
+            "## };
+            assert_eq!(committed_r(code).await, LpcRef::Int(LpcInt(12)));
+        }
+
+        #[tokio::test]
+        async fn an_earlier_closure_keeps_the_cell_it_captured() {
+            let code = indoc! { r##"
+                int r;
+                void create() {
+                    function a;
+                    function b;
+                    for (int k = 0; k < 2; k++) {
+                        int j = k;
+                        if (k == 0) { a = (: j :); } else { b = (: j :); }
+                    }
+                    r = a() * 10 + b();
+                }
+            "## };
+            assert_eq!(committed_r(code).await, LpcRef::Int(LpcInt(1)));
+        }
+
+        #[tokio::test]
         async fn a_closure_may_capture_the_variable_it_initializes() {
             let code = indoc! { r##"
                 int r;

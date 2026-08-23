@@ -168,6 +168,10 @@ pub enum Instruction {
     NotEq(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// bitwise | comparison.
+    /// Give the captured variable at x.0 a fresh cell: a declaration that runs
+    /// again (a loop body) binds a new cell, and closures made earlier keep the old one.
+    NewUpvalue(RegisterVariant),
+
     /// x.2 = x.0 | x.1
     Or(RegisterVariant, RegisterVariant, RegisterVariant),
 
@@ -292,6 +296,7 @@ impl Instruction {
             Self::MMul(a0, a1, a2) => Self::MMul(f(a0), f(a1), f(a2)),
             Self::MSub(a0, a1, a2) => Self::MSub(f(a0), f(a1), f(a2)),
             Self::Not(a0, a1) => Self::Not(f(a0), f(a1)),
+            Self::NewUpvalue(a0) => Self::NewUpvalue(f(a0)),
             Self::NotEq(a0, a1, a2) => Self::NotEq(f(a0), f(a1), f(a2)),
             Self::Or(a0, a1, a2) => Self::Or(f(a0), f(a1), f(a2)),
             Self::PopulateArgv(a0, a1, a2) => Self::PopulateArgv(f(a0), a1, a2),
@@ -470,6 +475,9 @@ impl Display for Instruction {
             }
             Instruction::MSub(r1, r2, r3) => {
                 write!(f, "m_sub {r1}, {r2}, {r3}")
+            }
+            Instruction::NewUpvalue(r) => {
+                write!(f, "new_upvalue {r}")
             }
             Instruction::Not(r1, r2) => {
                 write!(f, "not {r1}, {r2}")

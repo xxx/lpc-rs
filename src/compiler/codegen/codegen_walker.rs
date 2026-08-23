@@ -2180,6 +2180,18 @@ impl TreeWalker for CodegenWalker {
         let global = sym.is_global();
         let upvalue = sym.upvalue;
 
+        // Before the initializer runs, so a closure inside it captures the new cell.
+        if upvalue {
+            let Some(cell) = sym.location else {
+                return Err(lpc_bug!(
+                    node.span,
+                    "captured `{}` was never given a cell",
+                    node.name
+                ));
+            };
+            push_instruction!(self, Instruction::NewUpvalue(cell), node.span());
+        }
+
         let current_register = if let Some(expression) = &mut node.value {
             expression.visit(self).await?;
             // A read of the variable inside the initializer already gave it a location.
@@ -3956,6 +3968,33 @@ mod tests {
                 .map(|e| e.to_string())
                 .collect();
             assert!(errors.iter().any(|e| e.contains("defaulted")), "{errors:?}");
+        }
+
+        #[tokio::test]
+        async fn a_captured_declaration_mints_its_cell_before_the_store() {
+            let code = indoc! {r##"
+                void create() { int plain = 1; int j = 1; function f = (: j :); }
+            "##};
+            let walker = walk_prog(code).await;
+            let (create, cell) = owner_of(&walker, "j");
+            let (_, plain) = owner_of(&walker, "plain");
+            assert_eq!(plain, RegisterVariant::Local(Register(1)));
+
+            let instructions = &create.instructions;
+            let mint = instructions
+                .iter()
+                .position(|i| *i == Instruction::NewUpvalue(cell))
+                .expect("the captured declaration mints its cell");
+            let store = instructions
+                .iter()
+                .position(|i| matches!(i, Instruction::Copy(_, to) if *to == cell))
+                .unwrap();
+            assert!(mint < store);
+            assert!(
+                !instructions
+                    .iter()
+                    .any(|i| matches!(i, Instruction::NewUpvalue(RegisterVariant::Local(_))))
+            );
         }
 
         /// The function owning local `var`, with that local's location.
