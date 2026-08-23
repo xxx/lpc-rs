@@ -30,7 +30,8 @@ mod world_value;
 pub(crate) use changeset::Changeset;
 /// Public API surface re-exports (read-only, for benches/tooling/tests).
 pub use committer::CommitterStats;
-pub(crate) use committer::{CommitProtocol, Committer, GcReport, LiveSnapshot, WorldRoot};
+pub(crate) use committer::{CommitProtocol, Committer, GcPassReply, LiveSnapshot, WorldRoot};
+pub use committer::{GcRefused, GcReport};
 pub(crate) use effects::{CallOutSchedule, Effect, flush_effects};
 pub use retry::CommittedReader;
 #[cfg(test)]

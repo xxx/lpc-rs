@@ -17,8 +17,8 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
         stm::{
-            self, CommitProtocol, CommittedReader, Committer, CommitterStats, GcReport, Snapshot,
-            WorldRoot, gc_pass, resolve_or_create_object,
+            self, CommitProtocol, CommittedReader, Committer, CommitterStats, GcPassReply,
+            Snapshot, WorldRoot, gc_pass, resolve_or_create_object,
         },
         task::{Task, apply_function::apply_runtime_error, task_template::TaskTemplate},
         task_context::TaskContext,
@@ -214,9 +214,10 @@ impl GlobalState {
     /// # Precondition
     ///
     /// The committer must be **quiescent** — a non-quiescent call is refused
-    /// rather than blocked: a concurrent task at a GC point is a caller bug.
+    /// (`Ok(Err(_))`) rather than blocked: a concurrent task at a GC point is
+    /// a caller bug.
     #[instrument(skip_all)]
-    pub async fn gc(&self) -> Result<GcReport> {
+    pub async fn gc(&self) -> Result<GcPassReply> {
         let mut roots: Vec<WorldRoot> = self
             .object_space
             .all_cell_ids()
@@ -240,17 +241,17 @@ impl GlobalState {
 
     /// Run a GC pass at the next quiet moment: a refused pass (attempts in
     /// flight) is retried up to `retries` times, `delay` apart, then the
-    /// committer's refusal is returned.
-    pub async fn gc_when_quiet(&self, retries: u32, delay: Duration) -> Result<GcReport> {
+    /// committer's refusal is returned. A failed pass is not retried.
+    pub async fn gc_when_quiet(&self, retries: u32, delay: Duration) -> Result<GcPassReply> {
         let mut attempt = 0;
         loop {
-            match self.gc().await {
-                Err(e) if attempt < retries => {
-                    trace!("gc pass deferred: {e}");
+            match self.gc().await? {
+                Err(refused) if attempt < retries => {
+                    trace!("gc pass deferred: {refused}");
                     attempt += 1;
                     tokio::time::sleep(delay).await;
                 }
-                result => return result,
+                outcome => return Ok(outcome),
             }
         }
     }

@@ -16,7 +16,7 @@ use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
     process::Process,
     stm::{
-        GcReport, VarId, WorldRoot, WorldValue,
+        GcPassReply, VarId, WorldRoot, WorldValue,
         changeset::Changeset,
         committer::{CommitProtocol, CommitterStats, LiveSnapshot},
     },
@@ -140,13 +140,12 @@ pub(crate) async fn start_txn(tx: &flume::Sender<CommitProtocol>) -> Result<Live
 }
 
 /// Client side of a GC pass: send the [`CommitProtocol::GcPass`] message
-/// and await its reply.
+/// and await its reply. `Ok(Err(_))` = refused, not quiescent.
 pub(crate) async fn gc_pass(
     tx: &flume::Sender<CommitProtocol>,
     roots: Vec<WorldRoot>,
-) -> std::result::Result<GcReport, lpc_rs_errors::LpcError> {
-    // The reply payload is the pass's own Ok/Err.
-    request(tx, |reply| CommitProtocol::GcPass { roots, reply }).await?
+) -> Result<GcPassReply> {
+    request(tx, |reply| CommitProtocol::GcPass { roots, reply }).await
 }
 
 /// The committer's lifetime commit totals; for bench measurement and tooling, not the hot path.

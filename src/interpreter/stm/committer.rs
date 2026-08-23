@@ -4,7 +4,6 @@ use std::{
 };
 
 use imbl::OrdMap;
-use lpc_rs_errors::lpc_error;
 use tracing::error;
 
 use crate::interpreter::{
@@ -83,7 +82,23 @@ pub(crate) enum CommitProtocol {
 }
 
 /// The pass's reply: the report, or the committer's refusal.
-type GcPassReply = std::result::Result<GcReport, lpc_rs_errors::LpcError>;
+pub(crate) type GcPassReply = std::result::Result<GcReport, GcRefused>;
+
+/// The committer refused a GC pass: `live` transactions still held snapshots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GcRefused {
+    pub live: usize,
+}
+
+impl std::fmt::Display for GcRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "gc refused: committer not quiescent ({} transaction(s) in flight)",
+            self.live
+        )
+    }
+}
 
 /// The result of one GC pass.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -214,9 +229,7 @@ impl Committer {
                 // Held snapshots across versions; `0` = quiescent.
                 let live: usize = self.live_versions.values().map(|&c| c as usize).sum();
                 if live != 0 {
-                    let _ = reply.send(Err(lpc_error!(
-                        "gc refused: committer not quiescent ({live} transaction(s) in flight)"
-                    )));
+                    let _ = reply.send(Err(GcRefused { live }));
                     return true;
                 }
                 let reclaimed = self.mark_world(&roots);

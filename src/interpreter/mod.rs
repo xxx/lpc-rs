@@ -23,6 +23,7 @@ pub mod vm;
 /// readers (test/debug/tooling).
 pub use stm::CommittedReader;
 pub use stm::CommitterStats;
+pub use stm::{GcRefused, GcReport};
 
 // Applies - functions in LPC objects that are called directly by the driver at various times.
 pub const CATCH_TELL: &str = "catch_tell";

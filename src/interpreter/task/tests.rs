@@ -3151,7 +3151,7 @@ mod test_upvalues {
         );
 
         // The frame holding the closure is gone, so its cell is unreachable.
-        let report = task.context.global_state.gc().await.unwrap();
+        let report = task.context.global_state.gc().await.unwrap().unwrap();
         assert_eq!(report.reclaimed, 1, "the dead cell is reclaimed");
     }
 
@@ -3544,7 +3544,7 @@ mod test_gc {
         let ctx = &task.context;
 
         // Three `store()` frames each minted a cell; every closure over them is gone.
-        let report = ctx.global_state.gc().await.unwrap();
+        let report = ctx.global_state.gc().await.unwrap().unwrap();
         assert_eq!(report.reclaimed, 3);
     }
 }

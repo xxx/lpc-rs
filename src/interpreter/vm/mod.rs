@@ -118,8 +118,9 @@ impl Vm {
                     let global_state = self.global_state.clone();
                     tokio::spawn(async move {
                         match global_state.gc_when_quiet(20, Duration::from_millis(100)).await {
-                            Ok(report) => info!("gc pass reclaimed {} vars", report.reclaimed),
-                            Err(e) => debug!("gc pass skipped this period: {e}"),
+                            Ok(Ok(report)) => info!("gc pass reclaimed {} vars", report.reclaimed),
+                            Ok(Err(refused)) => debug!("gc pass skipped this period: {refused}"),
+                            Err(e) => error!("gc pass failed: {e}"),
                         }
                     });
                 }
@@ -189,7 +190,10 @@ mod tests {
     use super::*;
     use crate::{
         interpreter::{
-            CommittedReader, lpc_ref::LpcRef, process::Process, stm::start_txn,
+            CommittedReader,
+            lpc_ref::LpcRef,
+            process::Process,
+            stm::{GcRefused, start_txn},
             task::apply_function::apply_function_by_name,
         },
         test_support::test_config,
@@ -233,7 +237,7 @@ mod tests {
         let template = TaskTemplate::from(ctx1.global_state.clone());
 
         // The only garbage is the arrays `+=` left behind; the capture cell stays.
-        vm.global_state.gc().await.unwrap();
+        vm.global_state.gc().await.unwrap().unwrap();
 
         apply_function_by_name("runem", &[], storage_proc.clone(), template.clone(), None)
             .await
@@ -247,7 +251,7 @@ mod tests {
 
         vm.global_state.object_space.clear();
 
-        let report = vm.global_state.gc().await.unwrap();
+        let report = vm.global_state.gc().await.unwrap().unwrap();
         assert!(
             report.reclaimed > 0,
             "unreachable objects' cells are reclaimed"
@@ -263,7 +267,7 @@ mod tests {
         "# };
         vm.initialize_string(code, "popped").await.unwrap();
 
-        let report = vm.global_state.gc().await.unwrap();
+        let report = vm.global_state.gc().await.unwrap().unwrap();
         assert_eq!(report.reclaimed, 1);
     }
 
@@ -279,7 +283,7 @@ mod tests {
         "# };
         vm.initialize_string(code, "destructor").await.unwrap();
 
-        let report = vm.global_state.gc().await.unwrap();
+        let report = vm.global_state.gc().await.unwrap().unwrap();
         assert!(report.reclaimed >= 1, "{report:?}");
     }
 
@@ -294,6 +298,7 @@ mod tests {
             vm.global_state
                 .gc_when_quiet(3, Duration::from_millis(10))
                 .await
+                .unwrap()
                 .unwrap();
         }
 
@@ -310,6 +315,7 @@ mod tests {
             vm.global_state
                 .gc_when_quiet(20, Duration::from_millis(10))
                 .await
+                .unwrap()
                 .unwrap();
             releaser.await.unwrap();
         }
@@ -320,12 +326,32 @@ mod tests {
             let tx = vm.global_state.committer_tx.clone();
             let _live = start_txn(&tx).await.unwrap();
 
-            let err = vm
+            let refused = vm
                 .global_state
                 .gc_when_quiet(3, Duration::from_millis(5))
                 .await
+                .unwrap()
                 .unwrap_err();
-            assert!(err.to_string().contains("not quiescent"), "{err}");
+            assert_eq!(refused, GcRefused { live: 1 });
+        }
+
+        #[tokio::test]
+        async fn a_dead_committer_is_not_retried() {
+            let vm = Vm::new(test_config());
+            vm.global_state.close_committer();
+            // A request queued before the committer thread exits is never answered.
+            while !vm.global_state.committer_tx.is_disconnected() {
+                tokio::task::yield_now().await;
+            }
+
+            let started = std::time::Instant::now();
+            let result = vm
+                .global_state
+                .gc_when_quiet(3, Duration::from_millis(500))
+                .await;
+
+            assert!(result.is_err(), "{result:?}");
+            assert!(started.elapsed() < Duration::from_millis(500));
         }
     }
 
@@ -338,20 +364,17 @@ mod tests {
         let tx = vm.global_state.committer_tx.clone();
 
         // Baseline: nothing in flight, so a sweep goes through.
-        vm.global_state.gc().await.unwrap();
+        vm.global_state.gc().await.unwrap().unwrap();
 
         // Pin a transaction so the committer is not quiescent.
         let live = start_txn(&tx).await.unwrap();
 
-        let err = vm.global_state.gc().await.unwrap_err();
-        assert!(
-            err.to_string().contains("not quiescent"),
-            "expected a non-quiescent refusal, got: {err}"
-        );
+        let refused = vm.global_state.gc().await.unwrap().unwrap_err();
+        assert_eq!(refused, GcRefused { live: 1 });
 
         drop(live);
 
-        vm.global_state.gc().await.unwrap();
+        vm.global_state.gc().await.unwrap().unwrap();
     }
 
     /// A committed array still reachable from a live global survives the world
@@ -400,7 +423,7 @@ mod tests {
         assert!(vm.global_state.committed_array(cell_b).is_some());
 
         // Reachable arrays survive the world sweep.
-        vm.global_state.gc().await.unwrap();
+        vm.global_state.gc().await.unwrap().unwrap();
         assert!(
             vm.global_state.committed_array(cell_b).is_some(),
             "a payload still reachable from a live global must survive gc"
@@ -413,7 +436,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        vm.global_state.gc().await.unwrap();
+        vm.global_state.gc().await.unwrap().unwrap();
 
         // The orphaned payload's cell is gone; the live one is not.
         assert!(
