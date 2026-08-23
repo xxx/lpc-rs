@@ -1,15 +1,12 @@
 use std::sync::Arc;
 
 use indoc::indoc;
-use lpc_rs::{
-    interpreter::{
-        CommittedReader,
-        lpc_ref::LpcRef,
-        process::Process,
-        task::apply_function::apply_function_by_name,
-        vm::{Vm, global_state::GlobalState},
-    },
-    util::process_builder::ProcessCreator,
+use lpc_rs::interpreter::{
+    CommittedReader,
+    lpc_ref::LpcRef,
+    process::Process,
+    task::apply_function::apply_function_by_name,
+    vm::{Vm, global_state::GlobalState},
 };
 use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::Result;

@@ -3,7 +3,7 @@ use lpc_rs_errors::{Result, lpc_error};
 
 use crate::interpreter::{
     CATCH_TELL, efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_string::LpcString,
-    stm::Effect, task::apply_function::apply_function_by_name,
+    stm::Effect, task::apply_function::apply_function,
 };
 
 /// `write`, an efun for writing to this_player().
@@ -36,35 +36,34 @@ pub async fn apply_catch_tell<const N: usize>(
         return Ok(());
     };
 
+    let Some(catch_tell) = this_player.program.unmangled_functions.get(CATCH_TELL) else {
+        record_output_effect(context, msg);
+        return Ok(());
+    };
+
     let ctx = context
-        .task_context_builder()
-        .process(this_player.clone())
-        .build()
-        .unwrap();
+        .task_context()
+        .clone()
+        .with_process(this_player.clone());
 
     let max_execution_time = context.config().max_execution_time;
-    let result = apply_function_by_name(
-        CATCH_TELL,
+    let result = apply_function(
+        catch_tell.clone(),
         &[LpcString::from(&msg).into()],
-        this_player.clone(),
         ctx,
         Some(max_execution_time),
     )
     .await;
 
     match result {
-        Some(Ok(_)) => {
+        Ok(_) => {
             context.return_efun_result(LpcRef::from(1));
             Ok(())
         }
-        Some(Err(e)) => Err(lpc_error!(
+        Err(e) => Err(lpc_error!(
             "write: failed to write to this_player(): {:?}",
             e
         )),
-        None => {
-            record_output_effect(context, msg);
-            Ok(())
-        }
     }
 }
 

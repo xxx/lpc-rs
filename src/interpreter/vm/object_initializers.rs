@@ -1,26 +1,20 @@
-use std::{future::Future, path::Path};
+use std::{path::Path, sync::Arc};
 
 use arc_swap::ArcSwapAny;
-use async_trait::async_trait;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
-    compiler::Compiler,
     interpreter::{
-        object_space::ObjectSpace,
+        process::Process,
         stm::TxnHandle,
         task::{self, task_template::TaskTemplate},
         task_context::TaskContext,
         vm::Vm,
     },
-    util::{
-        process_builder::{
-            ProcessCreator, compile_process_from_code, compile_process_from_path,
-            process_insert_and_initialize_program,
-        },
-        with_compiler::WithCompiler,
+    util::process_builder::{
+        compile_process_from_code, compile_process_from_path, process_insert_and_initialize_program,
     },
 };
 
@@ -89,18 +83,18 @@ impl Vm {
     }
 
     /// Compile the in-game file at `path` and initialize it (insert it into the
-    /// [`ObjectSpace`], then run its initializer in a fresh task).
+    /// [`ObjectSpace`](crate::interpreter::object_space::ObjectSpace), then run its initializer in a fresh task).
     pub async fn initialize_process_from_path(
         &self,
         path: &LpcPath,
     ) -> Result<task::Task<MAX_CALL_STACK_SIZE>> {
-        let process = compile_process_from_path(self, path).await?;
+        let process = compile_process_from_path(&self.global_state.object_space, path).await?;
         let template = self.new_task_template();
         process_insert_and_initialize_program(process, template).await
     }
 
     /// Compile `code` (masquerading as `filename`) and initialize it (insert it
-    /// into the [`ObjectSpace`], then run its initializer in a fresh task).
+    /// into the [`ObjectSpace`](crate::interpreter::object_space::ObjectSpace), then run its initializer in a fresh task).
     pub async fn initialize_process_from_code<P, S>(
         &self,
         filename: P,
@@ -110,7 +104,8 @@ impl Vm {
         P: Into<LpcPath> + Send + Sync,
         S: AsRef<str> + Send + Sync,
     {
-        let process = compile_process_from_code(self, filename, code).await?;
+        let process =
+            compile_process_from_code(&self.global_state.object_space, filename, code).await?;
         let template = self.new_task_template();
         process_insert_and_initialize_program(process, template).await
     }
@@ -124,28 +119,27 @@ impl Vm {
             txn: TxnHandle::default(),
         }
     }
-}
 
-#[async_trait]
-impl WithCompiler for Vm {
-    async fn with_async_compiler<F, U, T>(&self, f: F) -> Result<T>
-    where
-        F: FnOnce(Compiler) -> U + Send,
-        U: Future<Output = Result<T>> + Send,
-    {
-        Self::with_async_compiler_associated(
-            f,
-            &self.global_state.config,
-            &self.global_state.object_space,
-        )
-        .await
+    /// Compile the in-game file at `path` and physically insert it. Bootstrap
+    /// only; see [`ObjectSpace::create_process_from_path`](crate::interpreter::object_space::ObjectSpace::create_process_from_path).
+    pub async fn create_process_from_path(&self, path: &LpcPath) -> Result<Arc<Process>> {
+        self.global_state
+            .object_space
+            .create_process_from_path(path)
+            .await
     }
-}
 
-#[async_trait]
-impl ProcessCreator for Vm {
-    #[inline]
-    fn process_creator_data(&self) -> &ObjectSpace {
-        &self.global_state.object_space
+    /// Compile `code` (masquerading as `filename`) and physically insert it.
+    /// Bootstrap and test fixtures only; see
+    /// [`ObjectSpace::create_process_from_code`](crate::interpreter::object_space::ObjectSpace::create_process_from_code).
+    pub async fn create_process_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>>
+    where
+        P: Into<LpcPath> + Send + Sync,
+        S: AsRef<str> + Send + Sync,
+    {
+        self.global_state
+            .object_space
+            .create_process_from_code(filename, code)
+            .await
     }
 }

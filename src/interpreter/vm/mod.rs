@@ -308,7 +308,7 @@ mod tests {
             lpc_ref::LpcRef,
             program::ProgramBuilder,
             stm::{Committer, WorldValue, start_txn},
-            task::{apply_function::apply_function_by_name, task_template::TaskTemplateBuilder},
+            task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
         },
         test_support::test_config,
     };
@@ -493,10 +493,7 @@ mod tests {
 
         let ctx = vm.initialize_string(code, "gc_payload.c").await.unwrap();
         let proc = ctx.process;
-        let template = TaskTemplateBuilder::default()
-            .global_state(ctx.global_state.clone())
-            .build()
-            .unwrap();
+        let template = TaskTemplate::from(ctx.global_state.clone());
 
         // Seed two live arrays into the world through a committed call. The
         // slot vars hold `LpcRef::Array` whose `SVar.id` is the payload cell.

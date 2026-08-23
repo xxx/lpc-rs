@@ -36,7 +36,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("fib 20", |b| {
         b.to_async(&runtime).iter(|| async {
-            let _ = process_insert_and_initialize_program::<64, _>(
+            let _ = process_insert_and_initialize_program::<64>(
                 Arc::new(Process::new(program.clone())),
                 TaskTemplate::from(global_state.clone()),
             )

@@ -14,9 +14,7 @@ pub async fn all_environment<const N: usize>(context: &mut EfunContext<'_, N>) -
 mod tests {
     use indoc::indoc;
 
-    use crate::{
-        interpreter::vm::Vm, test_support::test_config, util::process_builder::ProcessCreator,
-    };
+    use crate::{interpreter::vm::Vm, test_support::test_config};
 
     #[tokio::test]
     async fn test_all_environment() {

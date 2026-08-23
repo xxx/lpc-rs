@@ -73,8 +73,8 @@ Quick start: create `lib/hello.c` with `void create() { dump("hi"); }` and run
   (`compile_to_process` in `util/process_builder.rs`, reached through
   `compile_process_from_path` / `compile_process_from_code`). Placement is either
   *physical* (`ObjectSpace::insert_process_physical`, blind, no cell — bootstrap and
-  test fixtures only, exposed via the `ProcessCreator` trait implemented only by
-  `ObjectSpace` and `Vm`) or *transactional*
+  test fixtures only, reached through `ObjectSpace::create_process_from_path` /
+  `create_process_from_code` and the `Vm` forwarders of the same name) or *transactional*
   (`TaskContext::insert_process_transactional` / `txn_insert_process`, a cell write +
   deferred physical insert flushed at commit). In-game contexts (`EfunContext`,
   `TaskContext`) deliberately have **no** physical create path; if a call site wants

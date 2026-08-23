@@ -16,7 +16,7 @@ use crate::interpreter::{
     program::Program,
     stm::{Effect, TxnHandle},
     task::{Task, task_id::TaskId, task_template::TaskTemplate},
-    task_context::{ObjectLookup, TaskContext, TaskContextBuilder},
+    task_context::{ObjectLookup, TaskContext},
 };
 
 /// A structure to hold various pieces of interpreter state, to be passed to
@@ -87,7 +87,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
 
         let debug_span = self.current_debug_span();
-        let process = self.create_process_from_path(path).await.map_err(|mut e| {
+        let process = self.compile_process(path).await.map_err(|mut e| {
             *e = e.with_span(debug_span);
             e
         })?;
@@ -107,7 +107,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
 
         let debug_span = self.current_debug_span();
-        let process = self.create_process_from_path(path).await.map_err(|mut e| {
+        let process = self.compile_process(path).await.map_err(|mut e| {
             *e = e.with_span(debug_span);
             e
         })?;
@@ -255,7 +255,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// inserting it physically. The transactional caller performs the (cell +
     /// deferred-physical) insert, so the object is not physically visible
     /// until its transaction commits.
-    pub async fn create_process_from_path(&self, path: &LpcPath) -> Result<Arc<Process>> {
+    pub async fn compile_process(&self, path: &LpcPath) -> Result<Arc<Process>> {
         self.task_context.compile_process(path).await
     }
 
@@ -270,16 +270,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// prevent infinite loops, and the sub-task's writes ride this
     /// transaction's single commit.
     pub async fn init_process_transactional(&self, process: &Arc<Process>) -> Result<()> {
-        let new_task_context = self
-            .task_context_builder()
-            .process(process.clone())
-            .chain_count(self.chain_count() + 1)
-            .build()
-            .map_err(|e| -> Box<LpcError> {
-                Box::new(LpcError::new_bug(format!(
-                    "{e}: could not build sub-task context"
-                )))
-            })?;
+        let mut new_task_context = self.task_context.clone().with_process(process.clone());
+        new_task_context.chain_count += 1;
 
         Task::<N>::initialize_sub_process(self.task_id(), new_task_context).await?;
 
@@ -311,10 +303,10 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.record_effect(Effect::RemoveObject { key });
     }
 
-    /// Get a clone of the task context
+    /// The task context this efun runs in.
     #[inline]
-    pub fn task_context_builder(&self) -> TaskContextBuilder {
-        TaskContextBuilder::from(self.task_context)
+    pub fn task_context(&self) -> &TaskContext {
+        self.task_context
     }
 
     /// Get a reference to the [`Process`] that contains the call to this efun
@@ -374,8 +366,10 @@ mod tests {
     fn efun_context() -> (TaskContext, CallStack<10>) {
         let (tx, _rx) = tokio::sync::mpsc::channel::<VmOp>(128);
         let (committer_tx, committer_handle) = GlobalState::spawn_committer();
+        let config = Arc::new(test_config());
         let global_state = GlobalStateBuilder::default()
-            .config(test_config())
+            .config(config.clone())
+            .object_space(ObjectSpace::new(config))
             .tx(tx)
             .committer_tx(committer_tx)
             .committer_handle(Some(committer_handle))
@@ -387,11 +381,7 @@ mod tests {
             .build()
             .expect("program builder");
         let process = Arc::new(Process::new(program));
-        let task_context = TaskContextBuilder::default()
-            .global_state(global_state)
-            .process(process.clone())
-            .build()
-            .expect("task context builder");
+        let task_context = TaskContext::new(Arc::new(global_state), process.clone(), None, None);
 
         let function = ProgramFunctionBuilder::default()
             .prototype(

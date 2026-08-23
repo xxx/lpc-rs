@@ -1,44 +1,36 @@
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 
 use arc_swap::ArcSwapAny;
-use async_trait::async_trait;
-use derive_builder::Builder;
 use lpc_rs_core::register::Register;
-use lpc_rs_errors::Result;
 use thin_vec::ThinVec;
 
 use crate::{
-    compiler::Compiler,
     interpreter::{
-        object_space::ObjectSpace, process::Process, stm::TxnHandle,
-        task::into_task_context::IntoTaskContext, task_context::TaskContext,
+        process::Process,
+        stm::TxnHandle,
+        task_context::{TaskContext, TaskResult},
         vm::global_state::GlobalState,
     },
-    util::with_compiler::WithCompiler,
+    util::get_simul_efuns,
 };
 
 /// A struct to handle the Task state, so we can prepare it ahead of time.
-#[derive(Debug, Builder)]
-#[builder(pattern = "owned")]
+#[derive(Debug)]
 pub struct TaskTemplate {
     /// The [`GlobalState`] from the [`Vm`](crate::interpreter::vm::Vm).
-    #[builder(setter(into))]
     pub global_state: Arc<GlobalState>,
 
     /// The command giver, if there was one. This might be an NPC, or None, in the case of a
     /// call_out or input_to callback.
-    #[builder(default, setter(into))]
     pub this_player: ArcSwapAny<Option<Arc<Process>>>,
 
     /// The upvalue_ptrs to populate the initial frame with, if any.
-    #[builder(default)]
     pub upvalue_ptrs: Option<ThinVec<Register>>,
 
     /// The transaction the task made from this template runs in. A template
     /// derived from a live task adopts that task's in-flight handle, so the
     /// spawned task joins it; a fresh top-level template (a `Vm`, a `GlobalState`)
     /// carries the empty handle, so the spawned task opens its own attempt.
-    #[builder(default)]
     pub(crate) txn: TxnHandle,
 }
 
@@ -49,6 +41,25 @@ impl TaskTemplate {
     pub fn set_this_player(&self, this_player: Option<Arc<Process>>) {
         self.this_player.store(this_player);
     }
+
+    /// Create the [`TaskContext`] for a task running in `process`.
+    pub fn into_task_context(self, process: Arc<Process>) -> TaskContext {
+        let simul_efuns =
+            get_simul_efuns(&self.global_state.config, &self.global_state.object_space);
+
+        TaskContext {
+            global_state: self.global_state,
+            process,
+            result: TaskResult::new(),
+            simul_efuns,
+            this_player: self.this_player,
+            upvalue_ptrs: self.upvalue_ptrs,
+            chain_count: 0,
+            // A template from a live task carries its in-flight attempt, so
+            // this context joins it.
+            txn: self.txn,
+        }
+    }
 }
 
 impl Clone for TaskTemplate {
@@ -58,29 +69,6 @@ impl Clone for TaskTemplate {
             this_player: ArcSwapAny::from(self.this_player.load_full()),
             upvalue_ptrs: self.upvalue_ptrs.clone(),
             txn: self.txn.clone(),
-        }
-    }
-}
-
-impl AsRef<ObjectSpace> for TaskTemplate {
-    fn as_ref(&self) -> &ObjectSpace {
-        &self.global_state.object_space
-    }
-}
-
-impl IntoTaskContext for TaskTemplate {
-    fn into_task_context(self, process: Arc<Process>) -> TaskContext {
-        TaskContext::from_template(self, process)
-    }
-}
-
-impl From<TaskContext> for TaskTemplate {
-    fn from(task_context: TaskContext) -> Self {
-        Self {
-            global_state: task_context.global_state,
-            this_player: task_context.this_player,
-            upvalue_ptrs: task_context.upvalue_ptrs,
-            txn: task_context.txn,
         }
     }
 }
@@ -107,21 +95,5 @@ where
             upvalue_ptrs: None,
             txn: TxnHandle::default(),
         }
-    }
-}
-
-#[async_trait]
-impl WithCompiler for TaskTemplate {
-    async fn with_async_compiler<F, U, T>(&self, f: F) -> Result<T>
-    where
-        F: FnOnce(Compiler) -> U + Send,
-        U: Future<Output = Result<T>> + Send,
-    {
-        Self::with_async_compiler_associated(
-            f,
-            &self.global_state.config,
-            &self.global_state.object_space,
-        )
-        .await
     }
 }

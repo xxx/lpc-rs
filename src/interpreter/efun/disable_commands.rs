@@ -20,7 +20,6 @@ mod tests {
             object_flags::ObjectFlags, task::apply_function::apply_function_by_name, vm::Vm,
         },
         test_support::test_config,
-        util::process_builder::ProcessCreator,
     };
 
     #[tokio::test]

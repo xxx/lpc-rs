@@ -1,23 +1,20 @@
-use std::{
-    future::Future,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
 };
 
 use arc_swap::ArcSwapAny;
-use async_trait::async_trait;
 use bit_set::BitSet;
 use dashmap::{DashMap, mapref::multiple::RefMulti};
 use delegate::delegate;
+use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use tracing::{debug, trace};
 
 use crate::{
-    compiler::Compiler,
     interpreter::{gc::mark::Mark, process::Process, program::Program, stm::VarId},
-    util::{process_builder::ProcessCreator, with_compiler::WithCompiler},
+    util::process_builder::{compile_process_from_code, compile_process_from_path},
 };
 
 /// The initial size (in objects) of the object space
@@ -77,6 +74,32 @@ impl ObjectSpace {
             config: config.into(),
             ..Default::default()
         }
+    }
+
+    /// The [`Config`] this space (and every compile into it) runs under.
+    pub fn config(&self) -> &Arc<Config> {
+        &self.config
+    }
+
+    /// Compile the in-game file at `path` and physically insert it (blind, no
+    /// cell, no initialization). Bootstrap only; in-game creation goes through
+    /// `insert_process_transactional`.
+    pub async fn create_process_from_path(&self, path: &LpcPath) -> Result<Arc<Process>> {
+        let process = compile_process_from_path(self, path).await?;
+        Self::insert_process_physical(self, process.clone());
+        Ok(process)
+    }
+
+    /// Compile `code` (masquerading as `filename`) and physically insert it
+    /// (blind, no cell, no initialization). Bootstrap only.
+    pub async fn create_process_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>>
+    where
+        P: Into<LpcPath> + Send + Sync,
+        S: AsRef<str> + Send + Sync,
+    {
+        let process = compile_process_from_code(self, filename, code).await?;
+        Self::insert_process_physical(self, process.clone());
+        Ok(process)
     }
 
     /// Get a reference to the master object.
@@ -219,12 +242,6 @@ impl ObjectSpace {
     }
 }
 
-impl ProcessCreator for ObjectSpace {
-    fn process_creator_data(&self) -> &Self {
-        self
-    }
-}
-
 impl Default for ObjectSpace {
     fn default() -> Self {
         let processes = DashMap::with_capacity(OBJECT_SPACE_SIZE);
@@ -247,17 +264,6 @@ impl Mark for ObjectSpace {
         }
 
         Ok(())
-    }
-}
-
-#[async_trait]
-impl WithCompiler for ObjectSpace {
-    async fn with_async_compiler<F, U, T>(&self, f: F) -> lpc_rs_errors::Result<T>
-    where
-        F: FnOnce(Compiler) -> U + Send,
-        U: Future<Output = lpc_rs_errors::Result<T>> + Send,
-    {
-        Self::with_async_compiler_associated(f, &self.config, self).await
     }
 }
 

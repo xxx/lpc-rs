@@ -515,7 +515,7 @@ pub(crate) async fn resolve_or_create_object(
     }
 
     // True miss: compile the file and create the object in this transaction.
-    let process = compile_process_from_path(&(&gs.config, object_space), path).await?;
+    let process = compile_process_from_path(object_space, path).await?;
     txn_insert_process(&txn, object_space, &process);
 
     let changeset = txn.with(|t| t.take_changeset());

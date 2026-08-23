@@ -23,7 +23,7 @@ use crate::{
         object_space::ObjectSpace,
         process::Process,
     },
-    util::{get_simul_efuns, process_builder::ProcessCreator},
+    util::get_simul_efuns,
 };
 
 type PtrTriple = (Arc<Process>, Arc<ProgramFunction>, Vec<LpcRef>);

@@ -71,15 +71,9 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{
-            lpc_int::LpcInt,
-            lpc_ref::LpcRef,
-            task::{Task, into_task_context::IntoTaskContext},
-            vm::Vm,
-        },
+        interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, task::Task, vm::Vm},
         telnet::connection::Connection,
         test_support::test_config,
-        util::process_builder::ProcessCreator,
     };
 
     /// Build a [`Connection`] whose own channels are dropped after the test.

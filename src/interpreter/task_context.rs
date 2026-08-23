@@ -1,9 +1,7 @@
-use std::{future::Future, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use arc_swap::ArcSwapAny;
-use async_trait::async_trait;
 use chrono::Duration;
-use derive_builder::Builder;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_core::register::Register;
 use lpc_rs_errors::{Result, lpc_bug};
@@ -12,18 +10,14 @@ use thin_vec::ThinVec;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
-    compiler::Compiler,
     interpreter::{
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
         stm::{CallOutSchedule, TxnHandle, txn_find_object, txn_insert_process},
-        task::{into_task_context::IntoTaskContext, task_template::TaskTemplate},
         vm::{global_state::GlobalState, vm_op::VmOp},
     },
-    util::{
-        get_simul_efuns, process_builder::compile_process_from_path, with_compiler::WithCompiler,
-    },
+    util::{get_simul_efuns, process_builder::compile_process_from_path},
 };
 
 /// The task's final result, resettable between retry attempts.
@@ -89,46 +83,37 @@ pub enum ObjectLookup {
 }
 
 /// A struct to carry context during the evaluation of a single [`Task`](crate::interpreter::task::Task).
-#[derive(Debug, Builder)]
-#[builder(pattern = "owned")]
+#[derive(Debug)]
 pub struct TaskContext {
     /// The [`GlobalState`] from the [`Vm`](crate::interpreter::vm::Vm).
-    #[builder(setter(into))]
     pub global_state: Arc<GlobalState>,
 
     /// The [`Process`] that owns the function being
     /// called in this [`Task`](crate::interpreter::task::Task).
     // TODO: this is not accurate in the case of some call_others, or function ptr calls,
     //       The process in the call frame is more accurate, and this probably should be removed.
-    #[builder(setter(into))]
     pub process: Arc<Process>,
 
     /// Direct pointer to the simul efuns
-    #[builder(default, setter(strip_option))]
     pub simul_efuns: Option<Arc<Process>>,
 
     /// The final result of the original function that was called.
-    #[builder(default)]
     pub result: TaskResult,
 
     /// The command giver, if there was one. This might be an NPC, or None.
     // TODO: put this into an Arc so it can shared more easily between multiple contexts.
     //       also make this Weak
-    #[builder(default, setter(strip_option))]
     pub this_player: ArcSwapAny<Option<Arc<Process>>>,
 
     /// The upvalue_ptrs to populate the initial frame with, if any.
-    #[builder(default)]
     pub upvalue_ptrs: Option<ThinVec<Register>>,
 
     /// The number of this task in the current chain of Tasks. This is
     /// used to prevent infinite recursion among multiple Tasks.
-    #[builder(default)]
     pub chain_count: u8,
 
     /// This task's transaction handle. Top-level tasks re-base it per
     /// attempt; sub-tasks adopt their caller's handle.
-    #[builder(default)]
     pub(crate) txn: TxnHandle,
 }
 
@@ -157,27 +142,6 @@ impl TaskContext {
         }
     }
 
-    /// Create a new [`TaskContext`] from the passed [`TaskTemplate`]
-    pub fn from_template(template: TaskTemplate, process: Arc<Process>) -> Self {
-        let simul_efuns = get_simul_efuns(
-            &template.global_state.config,
-            &template.global_state.object_space,
-        );
-
-        Self {
-            global_state: template.global_state,
-            process,
-            result: TaskResult::new(),
-            simul_efuns,
-            this_player: template.this_player,
-            upvalue_ptrs: template.upvalue_ptrs,
-            chain_count: 0,
-            // A template from a live task carries its in-flight attempt, so
-            // this context joins it.
-            txn: template.txn,
-        }
-    }
-
     /// Set the process for an existing TaskContext
     pub fn with_process<P>(mut self, process: P) -> Self
     where
@@ -202,7 +166,7 @@ impl TaskContext {
     /// the caller performs the insert (and any initialization), so the
     /// object is not visible until placed.
     pub async fn compile_process(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        compile_process_from_path(self, path).await
+        compile_process_from_path(self.object_space(), path).await
     }
 
     /// Insert an object transactionally: write its cell and record a deferred
@@ -455,64 +419,6 @@ impl Clone for TaskContext {
     }
 }
 
-impl AsRef<ObjectSpace> for TaskContext {
-    fn as_ref(&self) -> &ObjectSpace {
-        &self.global_state.object_space
-    }
-}
-
-impl IntoTaskContext for TaskContext {
-    fn into_task_context(self, _proc: Arc<Process>) -> TaskContext {
-        self
-    }
-}
-
-#[async_trait]
-impl WithCompiler for TaskContext {
-    async fn with_async_compiler<F, U, T>(&self, f: F) -> Result<T>
-    where
-        F: FnOnce(Compiler) -> U + Send,
-        U: Future<Output = Result<T>> + Send,
-    {
-        Self::with_async_compiler_associated(
-            f,
-            &self.global_state.config,
-            &self.global_state.object_space,
-        )
-        .await
-    }
-}
-
-impl From<TaskContext> for TaskContextBuilder {
-    fn from(value: TaskContext) -> Self {
-        Self {
-            global_state: Some(value.global_state),
-            process: Some(value.process),
-            simul_efuns: Some(value.simul_efuns),
-            result: None,
-            this_player: Some(value.this_player),
-            upvalue_ptrs: Some(value.upvalue_ptrs),
-            chain_count: Some(value.chain_count),
-            txn: Some(value.txn),
-        }
-    }
-}
-
-impl From<&TaskContext> for TaskContextBuilder {
-    fn from(value: &TaskContext) -> Self {
-        Self {
-            global_state: Some(value.global_state.clone()),
-            process: Some(value.process.clone()),
-            simul_efuns: Some(value.simul_efuns.clone()),
-            result: None,
-            this_player: Some(ArcSwapAny::from(value.this_player.load_full())),
-            upvalue_ptrs: Some(value.upvalue_ptrs.clone()),
-            chain_count: Some(value.chain_count),
-            txn: Some(value.txn.clone()),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use lpc_rs_core::lpc_path::LpcPath;
@@ -532,11 +438,7 @@ mod tests {
         let process = Process::new(program);
         let (tx, _rx) = mpsc::channel(100);
         let global_state = GlobalState::new(test_config(), tx);
-        TaskContextBuilder::default()
-            .global_state(global_state)
-            .process(process)
-            .build()
-            .unwrap()
+        TaskContext::new(Arc::new(global_state), process, None, None)
     }
 
     #[test]
@@ -573,11 +475,7 @@ mod tests {
         let process = Process::new(program);
         let (tx, _rx) = mpsc::channel(100);
         let global_state = GlobalState::new(config, tx);
-        let context = TaskContextBuilder::default()
-            .global_state(global_state)
-            .process(process)
-            .build()
-            .unwrap();
+        let context = TaskContext::new(Arc::new(global_state), process, None, None);
 
         assert_eq!(context.in_game_cwd().to_str().unwrap(), "/foo/bar");
     }

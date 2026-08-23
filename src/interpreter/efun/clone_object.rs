@@ -89,9 +89,10 @@ mod tests {
         interpreter::{
             CommittedReader,
             lpc_ref::{LpcRef, NULL},
+            object_space::ObjectSpace,
             program::Program,
             task::Task,
-            task_context::{TaskContext, TaskContextBuilder},
+            task_context::TaskContext,
             vm::{
                 Vm,
                 global_state::{GlobalState, GlobalStateBuilder},
@@ -99,7 +100,6 @@ mod tests {
             },
         },
         test_support::{compile_prog, test_config},
-        util::process_builder::ProcessCreator,
     };
 
     /// Committed global values by name, read through the committer.
@@ -127,18 +127,15 @@ mod tests {
         let process = Process::new(program);
         let (committer_tx, committer_handle) = GlobalState::spawn_committer();
         let global_state = GlobalStateBuilder::default()
-            .config(config)
+            .config(config.clone())
+            .object_space(ObjectSpace::new(config))
             .tx(tx)
             .committer_tx(committer_tx)
             .committer_handle(Some(committer_handle))
             .build()
             .unwrap();
 
-        TaskContextBuilder::default()
-            .global_state(Arc::new(global_state))
-            .process(process)
-            .build()
-            .unwrap()
+        TaskContext::new(Arc::new(global_state), process, None, None)
     }
 
     #[tokio::test]

@@ -31,7 +31,6 @@ use crate::{
         task::{
             Task,
             apply_function::{apply_function, apply_function_by_name, apply_runtime_error},
-            into_task_context::IntoTaskContext,
             task_template::TaskTemplate,
         },
     },
@@ -425,8 +424,7 @@ impl Telnet {
         let result = apply_function(
             function,
             &args,
-            process.clone(),
-            apply_template,
+            apply_template.into_task_context(process.clone()),
             Some(max_execution_time),
         )
         .await;
@@ -474,7 +472,6 @@ mod tests {
             vm::Vm,
         },
         test_support::test_config,
-        util::process_builder::ProcessCreator,
     };
 
     struct FakeSink;
