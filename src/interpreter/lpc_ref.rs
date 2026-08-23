@@ -440,12 +440,7 @@ impl LpcRef {
     }
 
     pub fn rem(&self, rhs: &Self) -> Result<Self> {
-        // Preserved: the message follows the left operand's kind, whatever
-        // the divisor.
-        let zero = || match self {
-            LpcRef::Int(_) => lpc_error!("Runtime Error: Remainder division by zero"),
-            _ => lpc_error!("Runtime Error: Division by zero"),
-        };
+        let zero = || lpc_error!("Runtime Error: Remainder division by zero");
 
         match self.promote(rhs) {
             Some(Numeric::Ints(_, 0)) => Err(zero()),
@@ -1318,7 +1313,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn each_pairing_keeps_its_message() {
+        fn message_follows_the_operator() {
             let int = LpcRef::from(1);
             let float = LpcRef::from(1.0);
             let zero = LpcRef::from(0);
@@ -1331,8 +1326,8 @@ mod tests {
                 ("float / int", float.div(&zero), division),
                 ("int / float", int.div(&fzero), division),
                 ("int % int", int.rem(&zero), remainder),
-                ("float % float", float.rem(&fzero), division),
-                ("float % int", float.rem(&zero), division),
+                ("float % float", float.rem(&fzero), remainder),
+                ("float % int", float.rem(&zero), remainder),
                 ("int % float", int.rem(&fzero), remainder),
             ];
 
