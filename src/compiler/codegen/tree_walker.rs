@@ -50,8 +50,7 @@ pub trait ContextHolder {
     fn into_context(self) -> CompilationContext;
 }
 
-/// One pipeline pass over a program: wrapped around the context, run by
-/// [`apply`], consumed back into the context (or, for codegen, the program).
+/// One pipeline pass over a program, run by [`apply`].
 pub trait Pass: TreeWalker + ContextHolder + Send + Sized {
     /// Wrap `context` for this pass's walk.
     fn new(context: CompilationContext) -> Self;
