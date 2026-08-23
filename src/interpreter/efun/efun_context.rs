@@ -302,7 +302,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             .cell
             .get_or_init(|| self.object_space().cell_id(&key));
         self.txn().with(|t| t.drop_var(var_id));
-        self.record_effect(Effect::RemoveObject { key });
+        self.record_effect(Effect::RemoveObject { key, process });
     }
 
     /// The task context this efun runs in.

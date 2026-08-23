@@ -87,6 +87,24 @@ impl GlobalState {
         (tx, handle)
     }
 
+    /// A state whose committer rejects its first `rejections` commits.
+    #[cfg(test)]
+    pub(crate) fn new_rejecting(config: Arc<Config>, tx: Sender<VmOp>, rejections: usize) -> Self {
+        let mut state = Self::new(config, tx);
+        state.close_committer();
+        if let Some(handle) = state.committer_handle.take() {
+            let _ = handle.join();
+        }
+        let (committer_tx, rx) = flume::unbounded();
+        let loop_tx = committer_tx.clone();
+        let handle = std::thread::spawn(move || {
+            Committer::new().run_with_rejections(loop_tx, rx, rejections)
+        });
+        state.committer_tx = committer_tx;
+        state.committer_handle = Some(handle);
+        state
+    }
+
     /// Tell the committer to shut down. Idempotent: the committer exits on
     /// the first `Close`; later sends just fail (channel closed).
     pub fn close_committer(&self) {
@@ -432,10 +450,10 @@ mod tests {
     }
 
     /// A committed cell that reads back absent while the physical object is
-    /// still present (a committed, not-yet-flushed destruct) is an error, not
-    /// a physical resurrection.
+    /// still present (a committed, not-yet-flushed destruct) is a miss: a
+    /// fresh object is created, never the destructed one handed back.
     #[tokio::test]
-    async fn string_receiver_unflushed_destruct_errors() {
+    async fn string_receiver_unflushed_destruct_creates_fresh() {
         let gs = state_for_receiver();
         let process = Arc::new(Process::new(
             crate::interpreter::program::ProgramBuilder::default()
@@ -470,14 +488,19 @@ mod tests {
             "physical entry still present"
         );
 
-        let err = gs
+        let fresh = gs
             .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver"))
             .await
-            .expect_err("a committed-but-unflushed destruct must be an error");
+            .unwrap()
+            .expect("a destructed path is a miss");
         assert!(
-            err.to_string().contains("destructed"),
-            "expected a destructed-receiver error, got: {err}"
+            !Arc::ptr_eq(&fresh, &process),
+            "the destructed object must not be handed out"
         );
+        let committed = gs.committed_object(cell_id).expect("cell committed");
+        let physical = gs.object_space.lookup(&key).expect("physically present");
+        assert!(Arc::ptr_eq(&committed, &fresh));
+        assert!(Arc::ptr_eq(&physical, &fresh));
     }
 
     /// A true miss compiles the file, commits the cell, and flushes the
@@ -533,14 +556,43 @@ mod tests {
             gs.object_space.process_key(&b),
             "both must target the same path"
         );
+        assert!(Arc::ptr_eq(&a, &b), "both callers must get the one object");
         let cell_id = gs.object_space.get_cell_id(&key).expect("cell must exist");
-        assert!(
-            gs.committed_object(cell_id).is_some(),
-            "cell must hold a committed process"
-        );
-        assert!(
-            gs.object_space.lookup(&key).is_some(),
-            "receiver must be physically present"
+        let committed = gs
+            .committed_object(cell_id)
+            .expect("cell must hold a committed process");
+        let physical = gs
+            .object_space
+            .lookup(&key)
+            .expect("receiver must be physically present");
+        assert!(Arc::ptr_eq(&committed, &a));
+        assert!(Arc::ptr_eq(&physical, &a));
+    }
+
+    /// A rejected create re-runs: the second round finds the committed cell
+    /// or creates again, and the one object it returns is the committed and
+    /// physical one.
+    #[tokio::test]
+    async fn string_receiver_create_survives_a_rejected_commit() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
+        let gs = Arc::new(GlobalState::new_rejecting(Arc::new(test_config()), tx, 1));
+
+        let got = gs
+            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver"))
+            .await
+            .unwrap()
+            .expect("a miss should create the receiver");
+
+        let key = gs.object_space.process_key(&got);
+        let cell_id = gs.object_space.get_cell_id(&key).expect("cell must exist");
+        let committed = gs.committed_object(cell_id).expect("cell committed");
+        let physical = gs.object_space.lookup(&key).expect("physically present");
+        assert!(Arc::ptr_eq(&committed, &got));
+        assert!(Arc::ptr_eq(&physical, &got));
+        assert_eq!(
+            gs.committer_stats().await.unwrap().commits,
+            1,
+            "one round was rejected synthetically, the next committed"
         );
     }
 

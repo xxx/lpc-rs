@@ -80,9 +80,12 @@ pub(crate) enum Effect {
         process: std::sync::Arc<Process>,
     },
 
-    /// A deferred object-space removal: the physical key. Applied to the
-    /// `ObjectSpace` at commit.
-    RemoveObject { key: String },
+    /// A deferred object-space removal of `process` under its key, applied at
+    /// commit; a newer object under the key stays.
+    RemoveObject {
+        key: String,
+        process: std::sync::Arc<Process>,
+    },
 
     /// A deferred call-out scheduling: the timer task is spawned and the
     /// entry pushed into the queue only when the attempt commits. An
@@ -130,8 +133,8 @@ impl Effect {
             Self::InsertObject { key, process } => {
                 object_space.apply_insert(&key, process);
             }
-            Self::RemoveObject { key } => {
-                object_space.apply_remove(&key);
+            Self::RemoveObject { key, process } => {
+                object_space.apply_remove(&key, &process);
             }
             Self::ScheduleCallOut(schedule) => {
                 call_outs.write().materialize(schedule);
@@ -188,7 +191,7 @@ impl std::fmt::Debug for Effect {
             Self::DebugLog(msg) => f.debug_tuple("DebugLog").field(msg).finish(),
             Self::Socket { op, .. } => f.debug_tuple("Socket").field(op).finish(),
             Self::InsertObject { key, .. } => f.debug_tuple("InsertObject").field(key).finish(),
-            Self::RemoveObject { key } => f.debug_tuple("RemoveObject").field(key).finish(),
+            Self::RemoveObject { key, .. } => f.debug_tuple("RemoveObject").field(key).finish(),
             Self::ScheduleCallOut(schedule) => {
                 f.debug_tuple("ScheduleCallOut").field(schedule).finish()
             }

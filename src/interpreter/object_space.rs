@@ -196,11 +196,15 @@ impl ObjectSpace {
         self.processes.insert(key.to_string(), process);
     }
 
-    /// Apply a committed deferred removal: delete the object from the physical
-    /// map. If it was the master, the master pointer is cleared.
-    pub(crate) fn apply_remove(&self, key: &str) {
-        self.processes.remove(key);
-        if self.is_master_key(key) {
+    /// Apply a committed deferred removal: delete `process` from the physical
+    /// map, leaving a newer object under `key` untouched. A removed master
+    /// clears the master pointer.
+    pub(crate) fn apply_remove(&self, key: &str, process: &Arc<Process>) {
+        let removed = self
+            .processes
+            .remove_if(key, |_, current| Arc::ptr_eq(current, process))
+            .is_some();
+        if removed && self.is_master_key(key) {
             self.master_object.store(None);
         }
     }
@@ -288,6 +292,36 @@ mod tests {
     //     assert_eq!(space.len(), 1);
     //     assert!(space.processes.contains_key(filename));
     // }
+
+    /// A destruct flushed after a newer create of the same key must not
+    /// evict the newer object.
+    #[test]
+    fn apply_remove_leaves_a_newer_object_in_place() {
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code/")
+            .build()
+            .unwrap();
+        let space = ObjectSpace::new(config);
+        let program = ProgramBuilder::default()
+            .filename(LpcPath::new_in_game(
+                "/foo/bar.c",
+                "/",
+                "./tests/fixtures/code/",
+            ))
+            .build()
+            .unwrap();
+        let old = Arc::new(Process::new(program.clone()));
+        let new = Arc::new(Process::new(program));
+        let key = space.process_key(&old);
+
+        space.apply_insert(&key, old.clone());
+        space.apply_insert(&key, new.clone());
+        space.apply_remove(&key, &old);
+        assert!(Arc::ptr_eq(&space.lookup(&key).unwrap(), &new));
+
+        space.apply_remove(&key, &new);
+        assert!(space.lookup(&key).is_none());
+    }
 
     #[test]
     fn test_insert_process() {
