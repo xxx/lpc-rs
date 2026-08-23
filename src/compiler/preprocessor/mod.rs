@@ -2,15 +2,12 @@ use std::{collections::HashMap, fmt::Debug, iter::Peekable, path::Path};
 
 use async_recursion::async_recursion;
 use define::{Define, ObjectMacro};
-use lalrpop_util::ParseError as LalrpopParseError;
 use lpc_rs_core::{
     LpcIntInner, convert_escapes,
     lpc_path::LpcPath,
     pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
 };
-use lpc_rs_errors::{
-    LpcError, Result, format_expected, lazy_files::FILE_CACHE, lpc_error, span::Span,
-};
+use lpc_rs_errors::{LpcError, Result, lazy_files::FILE_CACHE, lpc_error, span::Span};
 use lpc_rs_utils::read_lpc_file;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -486,7 +483,8 @@ impl Preprocessor {
             let body = &captures[3];
 
             // re-span these tokens to just be the entire #define line
-            let tokens = lex_vec(&convert_escapes(body))?
+            let tokens = lex_vec(&convert_escapes(body))
+                .map_err(|e| e.with_span(Some(token.0)))?
                 .into_iter()
                 .map(|(_, t, _)| (span.l, t.with_span(span), span.r))
                 .collect::<Vec<_>>();
@@ -504,7 +502,8 @@ impl Preprocessor {
                 vec![(span.l, Token::IntLiteral(IntToken(span, 0)), span.r)]
             } else {
                 // tokenize captures[2] with our full language lexer, so we can store it
-                lex_vec(&convert_escapes(&captures[2]))?
+                lex_vec(&convert_escapes(&captures[2]))
+                    .map_err(|e| e.with_span(Some(token.0)))?
                     .into_iter()
                     .map(|(_, t, _)| (span.l, t.with_span(span), span.r))
                     .collect::<Vec<_>>()
@@ -517,14 +516,7 @@ impl Preprocessor {
                     .parse(LexWrapper::new(&captures[2]))
                 {
                     Ok(i) => i,
-                    Err(e) => {
-                        return Err(lpc_error!(
-                            Some(token.0),
-                            "parse error: {}, for expression `{}`",
-                            e,
-                            &captures[2]
-                        ));
-                    }
+                    Err(e) => return Err(LpcError::from(e).with_span(Some(token.0))),
                 }
             };
 
@@ -666,39 +658,14 @@ impl Preprocessor {
                         span: token.0,
                     });
                 }
-                Err(e) => {
-                    // This is awkward due to being almost identical to the From<ParseError> impl,
-                    // but we need to use our `token` parameter's span for the errors, rather than
-                    // pulling it from the error's token.
-                    // Is there a better way?
-                    let err = match e {
-                        LalrpopParseError::InvalidToken { location } => {
-                            LpcError::new(format!("invalid token `{}` at {}", token.1, location))
-                        }
-                        LalrpopParseError::UnrecognizedEof { expected, .. } => {
-                            LpcError::new("unexpected EOF").with_note(format_expected(&expected))
-                        }
-                        LalrpopParseError::UnrecognizedToken { expected, .. } => {
-                            LpcError::new(format!("unrecognized Token: {}", token.1))
-                                .with_span(Some(token.0))
-                                .with_note(format_expected(&expected))
-                        }
-                        LalrpopParseError::ExtraToken { .. } => {
-                            LpcError::new(format!("extra Token: `{}`", token.1))
-                                .with_span(Some(token.0))
-                        }
-                        LalrpopParseError::User { error } => {
-                            LpcError::new(format!("error: {error}"))
-                        }
-                    };
-
-                    return Err(err);
-                }
+                // The expression was lexed on its own, so its tokens' spans
+                // mean nothing; the directive's span is the location.
+                Err(e) => return Err(LpcError::from(e).with_span(Some(token.0))),
             }
 
             Ok(())
         } else {
-            Err(lpc_error!(Some(token.0), "invalid `#ifdef`."))
+            Err(lpc_error!(Some(token.0), "invalid `#if`."))
         }
     }
 
@@ -1739,6 +1706,25 @@ mod tests {
 
     mod test_if {
         use super::*;
+
+        #[tokio::test]
+        async fn a_malformed_if_is_invalid() {
+            test_invalid("#iffy\n#endif\n", "invalid `#if`").await;
+        }
+
+        #[tokio::test]
+        async fn an_expression_error_points_at_the_directive() {
+            let mut preprocessor = fixture();
+            let e = preprocessor
+                .scan("/if_lex_error.c", "int a;\n#if 1 + `\n#endif\n")
+                .await
+                .unwrap_err();
+            assert_eq!(e.to_string(), "Lex Error: Invalid Token ```");
+            assert_eq!(
+                e.span().and_then(|s| s.code()).as_deref(),
+                Some("#if 1 + `")
+            );
+        }
 
         #[tokio::test]
         async fn test_simple_if() {

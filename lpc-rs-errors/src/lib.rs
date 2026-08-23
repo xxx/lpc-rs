@@ -175,6 +175,14 @@ impl LpcError {
         self
     }
 
+    /// Set the primary span only when none was recorded at the source.
+    pub fn or_span(self, span: Option<Span>) -> Self {
+        if self.0.span.is_some() {
+            return self;
+        }
+        self.with_span(span)
+    }
+
     /// Add a secondary label for this error
     pub fn with_label<T>(mut self, message: T, span: Option<Span>) -> Self
     where
@@ -233,19 +241,10 @@ impl LpcError {
 
     /// Emit the diagnostics as a String
     pub fn diagnostic_string(&self) -> String {
-        let mut err = self.to_string();
-        err.push('\n');
-
         let mut buffer = Buffer::ansi();
-        let diagnostics = self.to_diagnostics();
+        output_diagnostics(&self.to_diagnostics(), &mut buffer);
 
-        output_diagnostics(&diagnostics, &mut buffer);
-        err.push_str(
-            std::str::from_utf8(buffer.as_slice()).unwrap_or("<diagnostic with invalid utf8?>"),
-        );
-        err.push('\n');
-
-        err
+        String::from_utf8(buffer.into_inner()).unwrap_or_else(|_| self.to_string())
     }
 }
 
@@ -353,9 +352,7 @@ pub fn output_diagnostics(diagnostics: &[Diagnostic<FileId>], writer: &mut dyn W
         if let Err(e) =
             codespan_reporting::term::emit_to_write_style(writer, &config, &*files, diagnostic)
         {
-            eprintln!(
-                "error attempting to emit diagnostic: {e:?} ::: {diagnostic:?} ::: {files:?}"
-            );
+            eprintln!("error attempting to emit diagnostic: {e:?} ::: {diagnostic:?}");
         };
     }
 }
@@ -413,6 +410,23 @@ mod tests {
         let diagnostics = e.to_diagnostics();
         assert_eq!(diagnostics.len(), 2);
         assert_eq!(diagnostics[1].message, "tail");
+    }
+
+    #[test]
+    fn or_span_fills_only_an_empty_span() {
+        let first = Some(Span::new(1, 0..1));
+        let second = Some(Span::new(2, 5..9));
+        assert_eq!(LpcError::new("x").or_span(first).span(), first);
+        assert_eq!(
+            LpcError::new("x").with_span(first).or_span(second).span(),
+            first
+        );
+    }
+
+    #[test]
+    fn diagnostic_string_states_the_message_once() {
+        let rendered = LpcError::new("one of a kind").diagnostic_string();
+        assert_eq!(rendered.matches("one of a kind").count(), 1);
     }
 
     #[test]

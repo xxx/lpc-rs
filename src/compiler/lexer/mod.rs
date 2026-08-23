@@ -57,9 +57,9 @@ impl Iterator for LexWrapper<'_> {
         match token {
             Ok(t) => Some(Ok((span.start, t, span.end))),
             Err(_) => Some(Err(lpc_error!(
-                "Lex Error: Invalid Token `{}` at {:?}",
+                Some(Span::new(self.lexer.extras.current_file_id, span)),
+                "Lex Error: Invalid Token `{}`",
                 self.lexer.slice(),
-                span,
             ))),
         }
     }
@@ -769,6 +769,17 @@ impl Display for Token {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_invalid_token_carries_its_span() {
+        let mut lexer = LexWrapper::new("int x = `;");
+        lexer.set_file_id(7);
+        let error = lexer
+            .find_map(|item| item.err())
+            .expect("a backtick does not lex");
+        assert_eq!(error.span(), Some(Span::new(7, 8..9)));
+        assert_eq!(error.to_string(), "Lex Error: Invalid Token ```");
+    }
 
     fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>>> {
         let lexer = LexWrapper::new(prog);

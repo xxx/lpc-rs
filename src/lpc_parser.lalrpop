@@ -41,7 +41,7 @@ use lpc_rs_core::call_namespace::CallNamespace;
 use lpc_rs_core::EFUN;
 use crate::compiler::parser::collapse_binary_op::collapse_binary_op;
 use crate::compiler::parser::collapse_unary_op::collapse_unary_op;
-use lpc_rs_errors::span::{Span, combine_spans};
+use lpc_rs_errors::span::Span;
 use crate::compiler::lexer::Token;
 use lpc_rs_errors::{LpcError, lpc_error, lpc_bug, lpc_warning};
 use crate::compiler::lexer::logos_token::{StringToken, IntToken, FloatToken};
@@ -156,7 +156,7 @@ pub Program: ProgramNode = <inherits:Inherit*> <body:Def*> => ProgramNode {
 
 Inherit: InheritNode = {
     <l:"inherit"> <path_node:String> <namespace:"ID"?> <r:";"> =>? {
-        let span = combine_spans(Some(l), Some(r));
+        let span = Span::join(l, r);
 
         let path = if let ExpressionNode::String(StringNode { value, .. }) = path_node {
             value
@@ -184,7 +184,7 @@ Def: AstNode = {
             || r_type.map_or(name.0, |ty| ty.0),
             |flag| flag.0
         );
-        let span = combine_spans(Some(left), Some(r));
+        let span = Span::join(left, r);
 
         let warning = lpc_warning!(Some(span), "prototypes are ignored in this flavor of LPC");
         context.errors.push(warning);
@@ -194,7 +194,7 @@ Def: AstNode = {
         let flag_strs = flags.iter().map(|i| i.1).collect::<Vec<_>>();
         let invalid = GlobalVarFlags::validate(&flag_strs);
         if let Some(field) = invalid.first() {
-            let span = combine_spans(Some(flags[0].0), Some(flags.last().unwrap().0));
+            let span = Span::join(flags[0].0, flags.last().unwrap().0);
 
             let err = lpc_error!(Some(span), "`{}` is intended for functions only", field);
             return Err(ParseError::User { error: err });
@@ -295,7 +295,7 @@ ClosureBody: Vec<AstNode> = {
 
 Closure: ExpressionNode = {
      <l:"("> ":" <params:ClosureParameters?> <body:ClosureBody?> ":" <r:")"> =>? {
-        let span = combine_spans(Some(l), Some(r));
+        let span = Span::join(l, r);
 
         let (parameters, ellipsis) = params.map(|tuple| {
             (Some(tuple.0), tuple.1)
@@ -420,7 +420,7 @@ OpenStatement: AstNode = {
         AstNode::from(node)
     },
     <l:"switch"> "(" <expression:Expression> <r:")"> <body:OpenStatement> => {
-        let span = combine_spans(Some(l), Some(r));
+        let span = Span::join(l, r);
         let node = SwitchNode {
             expression,
             body: body.into(),
@@ -453,7 +453,7 @@ ClosedStatement: AstNode = {
         AstNode::from(node)
     },
     <l:"switch"> "(" <expression:Expression> <r:")"> <body:ClosedStatement> => {
-        let span = combine_spans(Some(l), Some(r));
+        let span = Span::join(l, r);
         let node = SwitchNode {
             expression,
             body: body.into(),
@@ -498,7 +498,7 @@ DoWhile: DoWhileNode = {
 
 Label: LabelNode = {
     <word:"case"> <case:SwitchCase> <colon:":"> => {
-        let span = combine_spans(Some(word), Some(colon));
+        let span = Span::join(word, colon);
         LabelNode::new(case, Some(span))
     },
     <d:"default"> ":" => {
@@ -509,16 +509,16 @@ Label: LabelNode = {
 SwitchCase: ExpressionNode = {
     <Expression>,
     <e1:ConditionalExpression> ".." <e2:ConditionalExpression> => {
-        let span = combine_spans(e1.span(), e2.span());
-        RangeNode::new(Some(e1), Some(e2), Some(span)).into()
+        let span = Span::combine(e1.span(), e2.span());
+        RangeNode::new(Some(e1), Some(e2), span).into()
     },
     <rng:".."> <e:ConditionalExpression> => {
-        let span = combine_spans(Some(rng), e.span());
-        RangeNode::new(None, Some(e), Some(span)).into()
+        let span = Span::combine(Some(rng), e.span());
+        RangeNode::new(None, Some(e), span).into()
     },
     <e:ConditionalExpression> <rng:".."> => {
-        let span = combine_spans(e.span(), Some(rng));
-        RangeNode::new(Some(e), None, Some(span)).into()
+        let span = Span::combine(e.span(), Some(rng));
+        RangeNode::new(Some(e), None, span).into()
     },
 };
 
@@ -612,7 +612,7 @@ PostfixExpression: ExpressionNode = {
         let file_id = first_span(&[&l, &r]).file_id;
         let left = l.span().map(|s| s.l).unwrap_or(0);
 
-        collapse_binary_op(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
+        collapse_binary_op(BinaryOperation::Index, l, r, Some(Span { file_id, l: left, r: right.r }))
     },
     <l:PostfixExpression> "["  <e1:Expression> ".." <e2:Expression> <right:"]"> =>? {
         let file_id = first_span(&[&l, &e1, &e2]).file_id;
@@ -624,7 +624,7 @@ PostfixExpression: ExpressionNode = {
             span: Some(Span { file_id, l: left, r: right.r })
         });
 
-        collapse_binary_op(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
+        collapse_binary_op(BinaryOperation::Index, l, r, Some(Span { file_id, l: left, r: right.r }))
     },
     <l:PostfixExpression> "[" ".." <e:Expression> <right:"]"> =>? {
         let file_id = first_span(&[&l, &e]).file_id;
@@ -636,7 +636,7 @@ PostfixExpression: ExpressionNode = {
             span: Some(Span { file_id, l: left, r: right.r })
         });
 
-        collapse_binary_op(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
+        collapse_binary_op(BinaryOperation::Index, l, r, Some(Span { file_id, l: left, r: right.r }))
     },
     <l:PostfixExpression> "[" <e:Expression> ".." <right:"]"> =>? {
         let file_id = first_span(&[&l, &e]).file_id;
@@ -648,7 +648,7 @@ PostfixExpression: ExpressionNode = {
             span: Some(Span { file_id, l: left, r: right.r })
         });
 
-        collapse_binary_op(BinaryOperation::Index, l, r, Span { file_id, l: left, r: right.r })
+        collapse_binary_op(BinaryOperation::Index, l, r, Some(Span { file_id, l: left, r: right.r }))
     },
     <e:(<PostfixExpression> "->")?> <mut c:Call> => {
         if let Some(rcvr) = e {
@@ -715,7 +715,7 @@ MultiplicitiveExpression: ExpressionNode = {
     <CastExpression>,
     #[precedence(level="0")]
     <l:MultiplicitiveExpression> <op:MultiplicitiveBinaryOp> <r:CastExpression> =>? {
-        let span = combine_spans(l.span(), r.span());
+        let span = Span::combine(l.span(), r.span());
 
         collapse_binary_op(op, l, r, span)
     },
@@ -723,7 +723,7 @@ MultiplicitiveExpression: ExpressionNode = {
     #[assoc(side="right")]
     // note the recursive term is on the right side of the operator in this rule.
     <l:CastExpression> "@" <r:MultiplicitiveExpression> =>? {
-        let span = combine_spans(l.span(), r.span());
+        let span = Span::combine(l.span(), r.span());
 
         collapse_binary_op(BinaryOperation::Compose, l, r, span)
     },
@@ -732,7 +732,7 @@ MultiplicitiveExpression: ExpressionNode = {
 AdditiveExpression: ExpressionNode = {
     <MultiplicitiveExpression>,
     <l:AdditiveExpression> <op:AdditiveBinaryOp> <r:MultiplicitiveExpression> =>? {
-        let span = combine_spans(l.span(), r.span());
+        let span = Span::combine(l.span(), r.span());
 
         collapse_binary_op(op, l, r, span)
     }
@@ -741,7 +741,7 @@ AdditiveExpression: ExpressionNode = {
 ShiftExpression: ExpressionNode = {
     <AdditiveExpression>,
     <l:ShiftExpression> <op:ShiftOp> <r:AdditiveExpression> =>? {
-        let span = combine_spans(l.span(), r.span());
+        let span = Span::combine(l.span(), r.span());
 
         collapse_binary_op(op, l, r, span)
     }
@@ -750,7 +750,7 @@ ShiftExpression: ExpressionNode = {
 RelationalExpression: ExpressionNode = {
     <ShiftExpression>,
     <l:RelationalExpression> <op:RelationalOp> <r:ShiftExpression> =>? {
-        let span = combine_spans(l.span(), r.span());
+        let span = Span::combine(l.span(), r.span());
 
         collapse_binary_op(op, l, r, span)
     }
@@ -759,7 +759,7 @@ RelationalExpression: ExpressionNode = {
 EqualityExpression: ExpressionNode = {
     <RelationalExpression>,
     <l:EqualityExpression> <op:EqualityOp> <r:RelationalExpression> =>? {
-        let span = combine_spans(l.span(), r.span());
+        let span = Span::combine(l.span(), r.span());
 
         collapse_binary_op(op, l, r, span)
     }
@@ -768,7 +768,7 @@ EqualityExpression: ExpressionNode = {
 AndExpression: ExpressionNode = {
     <EqualityExpression>,
     <l:AndExpression> "&" <r:EqualityExpression> =>? {
-        let span = combine_spans(l.span(), r.span());
+        let span = Span::combine(l.span(), r.span());
 
         collapse_binary_op(BinaryOperation::And, l, r, span)
     }
@@ -777,7 +777,7 @@ AndExpression: ExpressionNode = {
 ExclusiveOrExpression: ExpressionNode = {
     <AndExpression>,
     <l:ExclusiveOrExpression> "^" <r:AndExpression> =>? {
-        let span = combine_spans(l.span(), r.span());
+        let span = Span::combine(l.span(), r.span());
 
         collapse_binary_op(BinaryOperation::Xor, l, r, span)
     }
@@ -786,7 +786,7 @@ ExclusiveOrExpression: ExpressionNode = {
 OrExpression: ExpressionNode = {
     <ExclusiveOrExpression>,
     <l:OrExpression> "|" <r:ExclusiveOrExpression> =>? {
-        let span = combine_spans(l.span(), r.span());
+        let span = Span::combine(l.span(), r.span());
 
         collapse_binary_op(BinaryOperation::Or, l, r, span)
     }
@@ -795,7 +795,7 @@ OrExpression: ExpressionNode = {
 LogicalAndExpression: ExpressionNode = {
     <OrExpression>,
     <l:LogicalAndExpression> "&&" <r:OrExpression> =>? {
-        let span = combine_spans(l.span(), r.span());
+        let span = Span::combine(l.span(), r.span());
 
         collapse_binary_op(BinaryOperation::AndAnd, l, r, span)
     }
@@ -804,7 +804,7 @@ LogicalAndExpression: ExpressionNode = {
 LogicalOrExpression: ExpressionNode = {
     <LogicalAndExpression>,
     <l:LogicalOrExpression> "||" <r:LogicalAndExpression> =>? {
-        let span = combine_spans(l.span(), r.span());
+        let span = Span::combine(l.span(), r.span());
 
         collapse_binary_op(BinaryOperation::OrOr, l, r, span)
     }
@@ -824,7 +824,7 @@ ConditionalExpression: ExpressionNode = {
 AssignmentExpression: ExpressionNode = {
     <ConditionalExpression>,
     <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> => {
-        let span = combine_spans(lhs.span(), rhs.span());
+        let span = Span::combine(lhs.span(), rhs.span());
 
         // Desugar `op=` operators (e.g. `x += y`, etc.) into `x = x op y`
         let rhs = match op {
@@ -862,7 +862,7 @@ AssignmentExpression: ExpressionNode = {
         ExpressionNode::Assignment(AssignmentNode {
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
-            span: Some(span),
+            span,
         })
     }
 };
@@ -1109,7 +1109,7 @@ FunctionPointer: ExpressionNode = {
             receiver,
             arguments,
             name: ustr(&std::mem::take(&mut name.1)),
-            span: Some(combine_spans(Some(l), Some(r)))
+            span: Some(Span::join(l, r))
         };
 
         ExpressionNode::from(ptr_node)

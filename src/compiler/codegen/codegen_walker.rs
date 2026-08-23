@@ -578,7 +578,7 @@ impl CodegenWalker {
         for (label, addresses) in backpatch_map {
             let Some(label_address) = labels.get(label) else {
                 return Err(lpc_bug!(
-                    "Label `{}` not found in function `{}",
+                    "Label `{}` not found in function `{}`",
                     label,
                     function.name()
                 ));
@@ -587,7 +587,7 @@ impl CodegenWalker {
             for address in addresses {
                 let Some(instruction) = function.instructions.get_mut(address) else {
                     return Err(lpc_bug!(
-                        "Instruction at address {} not found in function `{}",
+                        "Instruction at address {} not found in function `{}`",
                         address,
                         function.name()
                     ));

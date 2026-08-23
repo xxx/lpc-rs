@@ -35,31 +35,6 @@ impl Display for Span {
     }
 }
 
-/// combine two [`Span`]s together, handling `None` cases.
-pub fn combine_spans(left: Option<Span>, right: Option<Span>) -> Span {
-    match (left, right) {
-        (Some(x), None) | (None, Some(x)) => x,
-        (Some(ls), Some(rs)) => {
-            // We're not going to deal with it when they cross file boundaries.
-            if ls.file_id != rs.file_id {
-                return ls;
-            }
-
-            let file_id = ls.file_id;
-
-            let l = ls.l;
-            let r = rs.r;
-
-            Span { l, r, file_id }
-        }
-        (None, None) => Span {
-            l: 0,
-            r: 0,
-            file_id: 0,
-        },
-    }
-}
-
 impl Span {
     /// Create a new [`Span`]
     ///
@@ -86,23 +61,27 @@ impl Span {
         }
     }
 
-    pub fn combine(left: Option<Span>, right: Option<Span>) -> Option<Self> {
-        if left.is_none() {
-            return right;
-        }
-        if right.is_none() {
+    /// The span from `left`'s start to `right`'s end; `left` alone when the
+    /// two lie in different files.
+    pub fn join(left: Span, right: Span) -> Self {
+        if left.file_id != right.file_id {
             return left;
         }
-        let l = left.unwrap();
-        let r = right.unwrap();
 
-        let span = Self {
-            file_id: l.file_id,
-            l: l.l,
-            r: r.r,
-        };
+        Self {
+            file_id: left.file_id,
+            l: left.l,
+            r: right.r,
+        }
+    }
 
-        Some(span)
+    /// [`Span::join`] over spans that may be missing; a missing side yields
+    /// the other, and two missing sides stay missing.
+    pub fn combine(left: Option<Span>, right: Option<Span>) -> Option<Self> {
+        match (left, right) {
+            (Some(l), Some(r)) => Some(Self::join(l, r)),
+            (l, r) => l.or(r),
+        }
     }
 
     /// Return the string of the actual source code that this span represents.
@@ -141,18 +120,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_combine_spans() {
-        assert_eq!(combine_spans(None, None), Span::new(0, 0..0));
+    fn combine_keeps_a_missing_span_missing() {
+        assert_eq!(Span::combine(None, None), None);
+        let only = Some(Span::new(0, 3..5));
+        assert_eq!(Span::combine(only, None), only);
+        assert_eq!(Span::combine(None, only), only);
+    }
 
-        let left = Span::new(0, 0..10);
+    #[test]
+    fn combine_stays_in_the_left_file() {
+        let left = Span::new(1, 0..4);
+        let right = Span::new(2, 10..20);
+        assert_eq!(Span::combine(Some(left), Some(right)), Some(left));
+        assert_eq!(Span::join(left, right), left);
+    }
+
+    #[test]
+    fn join_spans_the_two_ends() {
+        let left = Span::new(0, 0..4);
         let right = Span::new(0, 10..20);
-
-        assert_eq!(combine_spans(Some(left), None), left);
-        assert_eq!(combine_spans(None, Some(right)), right);
-
-        let combined = combine_spans(Some(left), Some(right));
-        assert_eq!(combined.l, left.l);
-        assert_eq!(combined.r, right.r);
-        assert_eq!(combined.file_id, left.file_id);
+        assert_eq!(Span::join(left, right), Span::new(0, 0..20));
+        assert_eq!(
+            Span::combine(Some(left), Some(right)),
+            Some(Span::new(0, 0..20))
+        );
     }
 }
