@@ -3,7 +3,7 @@ use std::ops::{Index, IndexMut, RangeFrom};
 use arrayvec::ArrayVec;
 use bit_set::BitSet;
 use delegate::delegate;
-use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, span::Span};
+use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
 
 use crate::interpreter::{call_frame::CallFrame, gc::mark::Mark, lpc_ref::LpcRef};
 
@@ -84,26 +84,22 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
         self.set_result(from.registers[0].clone())
     }
 
-    /// Create a runtime error, with stack trace, based on the current state.
+    /// Create a runtime error at the current frame's location; `None` span
+    /// on an empty stack.
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
-        let span = self.current_frame_debug_span();
-
-        lpc_error!(span, "runtime error: {}", msg.as_ref())
+        match self.stack.last() {
+            Some(frame) => frame.runtime_error(msg),
+            None => lpc_error!(None, "runtime error: {}", msg.as_ref()),
+        }
     }
 
-    /// Create a runtime bug, with stack trace, based on the current state.
+    /// Create a runtime bug at the current frame's location; `None` span on
+    /// an empty stack.
     pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
-        let span = self.current_frame_debug_span();
-
-        lpc_bug!(span, "runtime error: {}", msg.as_ref())
-    }
-
-    /// Convenience helper to get the current frame's debug span
-    #[inline]
-    fn current_frame_debug_span(&self) -> Option<Span> {
-        self.current_frame()
-            .map(|f| f.current_debug_span())
-            .unwrap_or(None)
+        match self.stack.last() {
+            Some(frame) => frame.runtime_bug(msg),
+            None => lpc_bug!(None, "runtime bug: {}", msg.as_ref()),
+        }
     }
 
     /// Get the stack trace information for the stack
@@ -153,5 +149,68 @@ impl<const STACKSIZE: usize> Index<RangeFrom<usize>> for CallStack<STACKSIZE> {
 
     fn index(&self, index: RangeFrom<usize>) -> &Self::Output {
         &self.stack[index]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, lpc_type::LpcType, register::Register};
+    use lpc_rs_function_support::{
+        function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunctionBuilder,
+    };
+
+    use super::*;
+    use crate::{
+        interpreter::{
+            process::Process,
+            program::ProgramBuilder,
+            vm::{global_state::GlobalState, vm_op::VmOp},
+        },
+        test_support::test_config,
+    };
+
+    fn stack_with_one_frame() -> CallStack<4> {
+        let (tx, _rx) = tokio::sync::mpsc::channel::<VmOp>(8);
+        let global_state = GlobalState::new(test_config(), tx);
+        let program = ProgramBuilder::default()
+            .filename(LpcPath::InGame("/caller".into()))
+            .build()
+            .unwrap();
+        let function = ProgramFunctionBuilder::default()
+            .prototype(
+                FunctionPrototypeBuilder::default()
+                    .name("f")
+                    .filename(Arc::new(LpcPath::InGame("/caller".into())))
+                    .return_type(LpcType::Void)
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap();
+        let frame = CallFrame::new(
+            Arc::new(Process::new(program)),
+            Arc::new(function),
+            0 as RegisterSize,
+            None::<&[Register]>,
+            global_state.clone_upvalues(),
+        );
+        let mut stack = CallStack::default();
+        stack.push(frame).unwrap();
+        stack
+    }
+
+    #[test]
+    fn error_helpers_carry_their_prefix_and_severity() {
+        for stack in [CallStack::<4>::default(), stack_with_one_frame()] {
+            let error = stack.runtime_error("x");
+            assert_eq!(error.to_string(), "runtime error: x");
+            assert!(error.is_error());
+
+            let bug = stack.runtime_bug("x");
+            assert_eq!(bug.to_string(), "runtime bug: x");
+            assert!(bug.is_bug());
+        }
     }
 }
