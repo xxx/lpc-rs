@@ -441,7 +441,7 @@ mod tests {
         );
 
         let err = frame.slot(Register(0).as_upvalue()).unwrap_err();
-        assert!(err.to_string().contains("runtime bug"), "{err}");
+        assert!(err.is_bug(), "{err}");
     }
 
     mod test_with_minimum_arg_capacity {
