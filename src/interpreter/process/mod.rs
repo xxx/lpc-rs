@@ -16,7 +16,6 @@ use crate::{
         gc::mark::Mark,
         lpc_array::LpcArray,
         lpc_ref::LpcRef,
-        object_flags::{AtomicFlags, ObjectFlags},
         process::util::AllEnvironment,
         program::Program,
         stm::{SVar, Transaction, TxnHandle, VarId, WorldValue},
@@ -74,9 +73,6 @@ pub struct Process {
     /// the cell through the transaction, so they see an in-transaction `exec`.
     pub connection: SVar<Connection>,
 
-    /// Our flags
-    pub flags: AtomicFlags,
-
     /// The cell marking that the initializer has run; a rejected
     /// initialization rolls it back with the globals.
     pub initialized: SVar<LpcRef>,
@@ -101,7 +97,6 @@ impl Default for Process {
             globals: Vec::new().into_boxed_slice(),
             clone_id: None,
             connection: SVar::new(),
-            flags: Default::default(),
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
             cell: OnceLock::new(),
@@ -127,7 +122,6 @@ impl Process {
                 .into_boxed_slice(),
             clone_id: None,
             connection: SVar::new(),
-            flags: Default::default(),
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
             cell: OnceLock::new(),
@@ -140,9 +134,6 @@ impl Process {
     pub fn new_clone(program: Arc<Program>, clone_id: usize) -> Self {
         let num_globals = program.num_globals;
 
-        let flags = AtomicFlags::default();
-        flags.set(ObjectFlags::Clone);
-
         Self {
             program,
             globals: (0..num_globals as usize)
@@ -151,7 +142,6 @@ impl Process {
                 .into_boxed_slice(),
             clone_id: Some(clone_id),
             connection: SVar::new(),
-            flags,
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
             cell: OnceLock::new(),
@@ -274,6 +264,11 @@ impl Process {
             t.write(self.initialized.id, LpcRef::from(1));
             true
         })
+    }
+
+    /// Whether this process was made by `clone_object`.
+    pub fn is_clone(&self) -> bool {
+        self.clone_id.is_some()
     }
 
     /// Whether `enable_commands()` is in effect, as seen through `txn`.

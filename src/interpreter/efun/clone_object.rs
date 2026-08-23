@@ -5,10 +5,7 @@ use lpc_rs_errors::Result;
 
 use crate::{
     compile_time_config::MAX_CLONE_CHAIN,
-    interpreter::{
-        efun::efun_context::EfunContext, lpc_ref::LpcRef, object_flags::ObjectFlags,
-        process::Process,
-    },
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process},
 };
 
 async fn load_prototype<const N: usize>(
@@ -32,10 +29,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
 
     let prototype = load_prototype(context, &path).await?;
 
-    debug_assert!(
-        !prototype.flags.test(ObjectFlags::Clone),
-        "prototype cannot be a clone"
-    );
+    debug_assert!(!prototype.is_clone(), "prototype cannot be a clone");
 
     {
         if prototype.program.pragmas.no_clone() {
@@ -49,10 +43,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     let new_prog = prototype.program.clone();
     let clone_process = context.insert_clone(new_prog);
 
-    debug_assert!(
-        clone_process.flags.test(ObjectFlags::Clone),
-        "new_clone must be a clone"
-    );
+    debug_assert!(clone_process.is_clone(), "new_clone must be a clone");
 
     if context.chain_count() >= MAX_CLONE_CHAIN {
         return Err(context.runtime_error("infinite clone recursion detected"));
