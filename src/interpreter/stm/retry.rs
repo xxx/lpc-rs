@@ -45,8 +45,8 @@ pub(crate) struct RetryStats {
 #[async_trait::async_trait]
 pub(crate) trait AttemptBody {
     /// Open one attempt against the committer's current world, reset the
-    /// body, run its work. `None` marks a joiner: the loop stops after one
-    /// attempt, no commit, no retry.
+    /// body, run its work. `None` means nothing to commit (a joiner, or a
+    /// read that answered); the loop stops after that attempt.
     async fn begin_attempt(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
@@ -70,8 +70,8 @@ pub(crate) trait AttemptBody {
 }
 
 /// Re-run `body`'s attempts until one commits; each attempt re-bases on
-/// the newest world. A joiner (`None` from `begin_attempt`) stops after
-/// its single attempt without committing.
+/// the newest world. `None` from `begin_attempt` stops after that single
+/// attempt without committing.
 pub(crate) async fn run_attempts<B: AttemptBody>(
     tx: &flume::Sender<CommitProtocol>,
     body: &mut B,

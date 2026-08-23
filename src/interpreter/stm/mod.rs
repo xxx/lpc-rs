@@ -9,6 +9,7 @@ use std::{
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use parking_lot::RwLock;
+use tracing::trace;
 
 use crate::{
     interpreter::{
@@ -410,28 +411,70 @@ pub(crate) async fn resolve_or_create_object(
     gs: &GlobalState,
     path: &LpcPath,
 ) -> Result<Arc<Process>> {
-    let object_space = gs.object_space.as_ref();
+    let mut body = ResolveObjectBody {
+        gs,
+        path,
+        txn: None,
+        process: None,
+    };
+    let (res, stats) = run_attempts(&gs.committer_tx, &mut body).await;
+    trace!(
+        attempts = stats.attempts,
+        conflicts = stats.conflicts,
+        ?stats.duration,
+        "resolve_or_create_object finished"
+    );
+    res?;
+    Ok(body
+        .process
+        .expect("a committed or found attempt leaves the process"))
+}
 
-    loop {
-        let live = start_txn(&gs.committer_tx).await?;
+/// One attempt of [`resolve_or_create_object`]: a find hit has nothing to
+/// commit; a miss compiles, inserts, and commits.
+struct ResolveObjectBody<'a> {
+    gs: &'a GlobalState,
+    path: &'a LpcPath,
+    txn: Option<TxnHandle>,
+    process: Option<Arc<Process>>,
+}
+
+#[async_trait::async_trait]
+impl AttemptBody for ResolveObjectBody<'_> {
+    async fn begin_attempt(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+    ) -> Result<Option<LiveSnapshot>> {
+        let object_space = self.gs.object_space.as_ref();
+        let live = start_txn(tx).await?;
         let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
 
-        if let ObjectLookup::Found(process) = txn_find_object(&txn, object_space, path) {
-            return Ok(process);
+        if let ObjectLookup::Found(process) = txn_find_object(&txn, object_space, self.path) {
+            self.process = Some(process);
+            return Ok(None);
         }
 
-        let process = compile_process_from_path(object_space, path).await?;
+        let process = compile_process_from_path(object_space, self.path).await?;
         txn_insert_process(&txn, object_space, &process);
+        self.process = Some(process);
+        self.txn = Some(txn);
+        Ok(Some(live))
+    }
 
-        let changeset = txn.with(|t| t.take_changeset());
-        let commit = commit_changeset(&gs.committer_tx, changeset).await?;
-        let effects = txn.with(|t| t.take_effects());
-        drop(live);
+    async fn commit_phase(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+        _live: LiveSnapshot,
+    ) -> Result<(std::result::Result<(), Changeset>, Vec<Effect>)> {
+        let txn = self.txn.take().expect("attempt present until committed");
+        let commit = commit_changeset(tx, txn.with(|t| t.take_changeset())).await?;
+        Ok((commit, txn.with(|t| t.take_effects())))
+    }
 
-        if commit.is_ok() {
-            flush_effects(&gs.config, object_space, gs.call_outs(), effects).await;
-            return Ok(process);
-        }
+    async fn deliver(&mut self, effects: Vec<Effect>) -> Result<()> {
+        let gs = self.gs;
+        flush_effects(&gs.config, &gs.object_space, gs.call_outs(), effects).await;
+        Ok(())
     }
 }
 

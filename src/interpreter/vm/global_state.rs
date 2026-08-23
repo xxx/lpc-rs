@@ -610,6 +610,29 @@ mod tests {
         );
     }
 
+    /// A find hit has nothing to commit: the second resolve of a path adds
+    /// no commit.
+    #[tokio::test]
+    async fn string_receiver_find_hit_commits_nothing() {
+        let gs = state_for_receiver();
+        let ptr = string_receiver_ptr("/dynamic_receiver");
+
+        let created = gs
+            .resolve_dynamic_string_receiver(&ptr)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(gs.committer_stats().await.unwrap().commits, 1);
+
+        let found = gs
+            .resolve_dynamic_string_receiver(&ptr)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(Arc::ptr_eq(&created, &found));
+        assert_eq!(gs.committer_stats().await.unwrap().commits, 1);
+    }
+
     /// A non-dynamic address, a missing first partial arg, or a non-string
     /// first arg all return `Ok(None)`: the caller falls through to `triple`.
     #[tokio::test]
