@@ -6,7 +6,8 @@ use crate::interpreter::{efun, efun::efun_context::EfunContext, process::Process
 pub async fn all_environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     efun::return_objects_of(context, |txn, object| {
         Process::all_environment(txn.clone(), object)
-    });
+    })
+    .await;
     Ok(())
 }
 

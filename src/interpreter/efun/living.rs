@@ -11,6 +11,7 @@ pub async fn living<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
 
     let result = efun::arg_or_this_object(arg_ref, context)
+        .await
         .is_some_and(|proc| proc.flags.test(ObjectFlags::CommandsEnabled));
 
     context.return_efun_result(LpcRef::from(result));
@@ -45,6 +46,35 @@ mod tests {
 
         assert_eq!(gs.committed_global(proc, 0), LpcRef::from(0));
         assert_eq!(gs.committed_global(proc, 1), LpcRef::from(1));
+    }
+
+    #[tokio::test]
+    async fn living_by_path() {
+        let master = indoc! { r#"
+            int create() {
+                "/maybe_living"->set_living(1);
+
+                return living("/maybe_living");
+            }
+        "# };
+
+        let maybe_living = indoc! { r#"
+            void set_living() {
+                enable_commands();
+            }
+        "# };
+
+        let vm = Vm::new(test_config());
+        vm.create_process_from_code("/maybe_living.c", maybe_living)
+            .await
+            .unwrap();
+
+        let master_proc = vm
+            .initialize_process_from_code("master.c", master)
+            .await
+            .unwrap();
+
+        assert_eq!(master_proc.result().unwrap(), LpcRef::Int(LpcInt(1)));
     }
 
     #[tokio::test]

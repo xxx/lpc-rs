@@ -379,14 +379,19 @@ pub static EFUN_FUNCTIONS: Lazy<IndexMap<&'static str, Arc<ProgramFunction>>> = 
         .collect()
 });
 
-/// The object an optional argument names: `0` is the caller; a destructed or
-/// non-object argument is `None`.
-fn arg_or_this_object<const N: usize>(
+/// The object an optional argument names: `0` is the caller, a string is
+/// loaded by path (`None` when it fails to load), a destructed or non-object
+/// argument is `None`.
+async fn arg_or_this_object<const N: usize>(
     arg_ref: &LpcRef,
     context: &EfunContext<'_, N>,
 ) -> Option<Arc<Process>> {
     match arg_ref {
         LpcRef::Int(LpcInt(0)) => Some(context.frame().process.clone()),
+        LpcRef::String(path) => {
+            let path = context.in_game_path(path.to_str());
+            context.load_object(&path).await.ok()
+        }
         _ => arg_ref.live_object(context.txn()),
     }
 }
@@ -394,13 +399,15 @@ fn arg_or_this_object<const N: usize>(
 /// Return `f`'s objects for the object register 1 names (per
 /// [`arg_or_this_object`]) as an array of weak references, empty when it
 /// names nothing.
-fn return_objects_of<const N: usize, I, F>(context: &mut EfunContext<'_, N>, f: F)
+async fn return_objects_of<const N: usize, I, F>(context: &mut EfunContext<'_, N>, f: F)
 where
     I: IntoIterator<Item = Arc<Process>>,
     F: FnOnce(&TxnHandle, Arc<Process>) -> I,
 {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
-    let objects = arg_or_this_object(arg_ref, context).map(|env| f(context.txn(), env));
+    let objects = arg_or_this_object(arg_ref, context)
+        .await
+        .map(|env| f(context.txn(), env));
     let refs: Vec<LpcRef> = objects
         .into_iter()
         .flatten()

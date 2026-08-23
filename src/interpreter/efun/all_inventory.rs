@@ -4,7 +4,7 @@ use crate::interpreter::{efun, efun::efun_context::EfunContext, process::Process
 
 /// `all_inventory`, an efun for returning an object's inventory.
 pub async fn all_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    efun::return_objects_of(context, |txn, object| Process::inventory_of(txn, &object));
+    efun::return_objects_of(context, |txn, object| Process::inventory_of(txn, &object)).await;
     Ok(())
 }
 
@@ -69,5 +69,46 @@ mod tests {
         let globals = array.iter().map(|w| w.to_string()).sorted().collect_vec();
 
         assert_eq!(globals, &["/all_inv_bar", "/all_inv_baz", "/all_inv_foo"]);
+    }
+
+    #[tokio::test]
+    async fn all_inventory_by_path() {
+        let ob = indoc! { r#"
+            void create() {
+                move_object("/room");
+            }
+        "# };
+        let checker = indoc! { r#"
+            object *inv = all_inventory("/room");
+        "# };
+
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code("/room.c", "")
+            .await
+            .unwrap();
+        vm.initialize_process_from_code("/all_inv_foo.c", ob)
+            .await
+            .unwrap();
+        vm.initialize_process_from_code("/all_inv_bar.c", ob)
+            .await
+            .unwrap();
+        let checker_proc = vm
+            .initialize_process_from_code("/checker.c", checker)
+            .await
+            .unwrap()
+            .context
+            .process;
+
+        let g0 = vm.global_state.committed_global(&checker_proc, 0u16);
+        let crate::interpreter::lpc_ref::LpcRef::Array(cell) = g0 else {
+            panic!("global holds an array cell, actually {g0:?}");
+        };
+        let array = vm
+            .global_state
+            .committed_array(cell.id)
+            .expect("array payload committed");
+        let names = array.iter().map(|w| w.to_string()).sorted().collect_vec();
+
+        assert_eq!(names, &["/all_inv_bar", "/all_inv_foo"]);
     }
 }
