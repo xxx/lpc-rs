@@ -83,7 +83,7 @@ pub(crate) enum CommitProtocol {
 }
 
 /// The pass's reply: the report, or the committer's refusal.
-type GcPassReply = std::result::Result<GcReport, Box<lpc_rs_errors::LpcError>>;
+type GcPassReply = std::result::Result<GcReport, lpc_rs_errors::LpcError>;
 
 /// The result of one GC pass.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

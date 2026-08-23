@@ -174,7 +174,7 @@ impl LpcRef {
         }
     }
 
-    fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> Box<LpcError> {
+    fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> LpcError {
         lpc_error!(
             "runtime error: mismatched types: {} ({}) {} {} ({})",
             self,
@@ -185,7 +185,7 @@ impl LpcRef {
         )
     }
 
-    fn to_unary_op_error(&self, op: UnaryOperation) -> Box<LpcError> {
+    fn to_unary_op_error(&self, op: UnaryOperation) -> LpcError {
         lpc_error!(
             "runtime error: mismatched types: {} {} ({})",
             op,
@@ -306,14 +306,14 @@ impl LpcRef {
         }
     }
 
-    fn expected_array_error(&self) -> Box<LpcError> {
+    fn expected_array_error(&self) -> LpcError {
         lpc_error!(
             "runtime error: invalid access. Expected array, actually {}",
             self.type_name()
         )
     }
 
-    fn expected_mapping_error(&self) -> Box<LpcError> {
+    fn expected_mapping_error(&self) -> LpcError {
         lpc_error!(
             "runtime error: invalid access. Expected mapping, actually {}",
             self.type_name()

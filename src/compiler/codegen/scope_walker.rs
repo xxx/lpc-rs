@@ -357,8 +357,7 @@ impl TreeWalker for ScopeWalker {
                 node.name
             ))
             .with_span(node.span)
-            .with_label("defined here", symbol.span)
-            .into();
+            .with_label("defined here", symbol.span);
 
             self.context.errors.push(e);
 
@@ -622,7 +621,7 @@ mod tests {
             let _ = walker.visit_var(&mut node).await;
 
             assert_regex!(
-                (*walker.context.errors[0]).as_ref(),
+                walker.context.errors[0].message(),
                 "undefined variable `foo`"
             );
         }
@@ -661,7 +660,7 @@ mod tests {
             let _ = walker.visit_var(&mut node).await;
 
             assert_regex!(
-                (*walker.context.errors[0]).as_ref(),
+                walker.context.errors[0].message(),
                 "private variable `foo` accessed outside of its file"
             );
         }

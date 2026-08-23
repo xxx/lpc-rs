@@ -32,7 +32,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 // These shouldn't be reachable due to the CallEfun and CallSimulEfun instructions,
                 // but are kept juuuuuust in case.
                 {
-                    let e = LpcError::new_warning(
+                    let e = LpcError::warning(
                         format!("Call to unknown local function `{name}`. Falling back to legacy SEfun and Efun checks.")
                     ).with_span(current_frame.current_debug_span());
                     e.emit_diagnostics();
@@ -106,7 +106,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 ))
                 .with_label("defined here", arg_def_span.copied());
 
-                return Err(error.into());
+                return Err(error);
             }
         }
 
@@ -131,14 +131,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         // The efun's own frame has no debug span; the caller's is the nearest
         // location for an error built without one.
-        if let Err(mut e) = result {
-            if e.span.is_none() {
+        if let Err(e) = result {
+            if e.span().is_none() {
                 let caller = self
                     .stack
                     .len()
                     .checked_sub(2)
                     .and_then(|i| self.stack.get(i));
-                *e = e.with_span(caller.and_then(|frame| frame.current_debug_span()));
+                return Err(e.with_span(caller.and_then(|frame| frame.current_debug_span())));
             }
             return Err(e);
         }

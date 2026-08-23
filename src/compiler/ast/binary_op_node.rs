@@ -71,7 +71,7 @@ impl Display for BinaryOperation {
 }
 
 impl TryFrom<AssignmentOperation> for BinaryOperation {
-    type Error = Box<LpcError>;
+    type Error = LpcError;
 
     fn try_from(value: AssignmentOperation) -> Result<Self> {
         match value {

@@ -43,16 +43,16 @@ macro_rules! apply_walker {
 
         if let Err(e) = result {
             let e = e.with_additional_errors(context.errors);
-            return Err(e.into());
+            return Err(e);
         } else if $fatal
             && context
                 .errors
                 .iter()
-                .any(|e| e.severity == LpcErrorSeverity::Error)
+                .any(|e| e.severity() == LpcErrorSeverity::Error)
         {
             let mut errors = std::mem::take(&mut context.errors);
             // put all warnings first, but otherwise keep them in the original order
-            errors.sort_by(|a, b| match (a.severity, b.severity) {
+            errors.sort_by(|a, b| match (a.severity(), b.severity()) {
                 (LpcErrorSeverity::Warning, _) => std::cmp::Ordering::Less,
                 (_, LpcErrorSeverity::Warning) => std::cmp::Ordering::Greater,
                 _ => std::cmp::Ordering::Equal,
@@ -60,9 +60,8 @@ macro_rules! apply_walker {
 
             // TODO: benchmark these type conversions vs `errors.remove(0)`
             let mut deq = VecDeque::from(errors);
-            let mut e = deq.pop_front().unwrap();
-            *e = e.with_additional_errors(Vec::from(deq));
-            return Err(e);
+            let e = deq.pop_front().unwrap();
+            return Err(e.with_additional_errors(Vec::from(deq)));
         }
 
         context
@@ -341,7 +340,7 @@ impl Compiler {
         lpc_parser::ProgramParser::new()
             .parse(&mut context, wrapper)
             .map(|p| (p, context))
-            .map_err(|e| Box::new(LpcError::from(e)))
+            .map_err(LpcError::from)
     }
 }
 

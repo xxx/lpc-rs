@@ -96,7 +96,7 @@ impl TreeWalker for InheritanceWalker {
                     .iter()
                     .any(|x| x.filename == program.filename)
                 {
-                    let err: Box<LpcError> = lpc_error!(
+                    let err: LpcError = lpc_error!(
                         node.span,
                         "`{}` is already being inherited from",
                         program.filename

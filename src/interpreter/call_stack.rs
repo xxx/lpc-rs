@@ -85,7 +85,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
 
     /// Create a runtime error at the current frame's location; `None` span
     /// on an empty stack.
-    pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
+    pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
         match self.stack.last() {
             Some(frame) => frame.runtime_error(msg),
             None => lpc_error!(None, "runtime error: {}", msg.as_ref()),
@@ -94,7 +94,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
 
     /// Create a runtime bug at the current frame's location; `None` span on
     /// an empty stack.
-    pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
+    pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
         match self.stack.last() {
             Some(frame) => frame.runtime_bug(msg),
             None => lpc_bug!(None, "runtime bug: {}", msg.as_ref()),
@@ -185,7 +185,7 @@ mod tests {
         for stack in [CallStack::<4>::default(), stack_with_one_frame()] {
             let error = stack.runtime_error("x");
             assert_eq!(error.to_string(), "runtime error: x");
-            assert!(error.is_error());
+            assert_eq!(error.severity(), lpc_rs_errors::LpcErrorSeverity::Error);
 
             let bug = stack.runtime_bug("x");
             assert_eq!(bug.to_string(), "runtime bug: x");

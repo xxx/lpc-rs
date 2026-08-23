@@ -276,7 +276,7 @@ pub enum Token {
         Some(c) => Ok(IntToken(span, c as LpcIntInner)),
         None => {
             Err(())
-            // Err(LpcError::new_bug(
+            // Err(LpcError::bug(
             //     format!("Unable to find the character in token `{}`? This is a WTF.", lex.slice())
             // ).with_span(Some(span)))
         }

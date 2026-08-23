@@ -10,7 +10,7 @@ grammar;
 
 extern {
     type Location = usize;
-    type Error = Box<LpcError>;
+    type Error = LpcError;
 
     enum Token {
         "+" => Token::Plus(<Span>),

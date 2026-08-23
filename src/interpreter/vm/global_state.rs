@@ -354,7 +354,7 @@ mod tests {
     async fn commit_object_cell(
         gs: &GlobalState,
         process: Arc<Process>,
-    ) -> std::result::Result<(), Box<lpc_rs_errors::LpcError>> {
+    ) -> std::result::Result<(), lpc_rs_errors::LpcError> {
         let key = gs
             .object_space
             .path_key(LpcPath::InGame(std::path::PathBuf::from("/dynamic_receiver")).as_ref());

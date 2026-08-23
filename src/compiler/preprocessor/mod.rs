@@ -462,10 +462,8 @@ impl Preprocessor {
 
         let check_duplicate = |key, error_span| -> Result<()> {
             if !self.skipping_lines() && self.defines.contains_key(key) {
-                return Err(Box::new(
-                    LpcError::new(format!("duplicate `#define`: `{key}`"))
-                        .with_span(Some(error_span)),
-                ));
+                return Err(LpcError::new(format!("duplicate `#define`: `{key}`"))
+                    .with_span(Some(error_span)));
             }
 
             Ok(())
@@ -588,7 +586,7 @@ impl Preprocessor {
                     Err(e) => {
                         // TODO: bleeeeeeech. Errors should have a better way to handle this.
                         // If the error is just "file not found", keep looking
-                        if (*e).as_ref().contains("unable to read include file") {
+                        if e.message().contains("unable to read include file") {
                             continue;
                         }
 
@@ -694,7 +692,7 @@ impl Preprocessor {
                         }
                     };
 
-                    return Err(err.into());
+                    return Err(err);
                 }
             }
 
@@ -840,7 +838,7 @@ impl Preprocessor {
                     .with_span(Some(token.0))
                     .with_label("first used here", Some(*else_span));
 
-                return Err(err.into());
+                return Err(err);
             }
 
             self.current_else = Some(token.0);
@@ -1052,7 +1050,7 @@ mod tests {
                 panic!("Expected to fail, but passed with {result:?}");
             }
             Err(e) => {
-                assert_regex!((*e).as_ref(), expected);
+                assert_regex!(e.message(), expected);
             }
         }
     }

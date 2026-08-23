@@ -136,7 +136,7 @@ pub async fn apply_runtime_error(
     // get the path and line number from the span, stripping off the lib dir so
     // the path is an in-game path.
     let span_string = error
-        .span
+        .span()
         .and_then(|s| {
             s.to_string()
                 .strip_prefix(ctx.config().lib_dir.as_str())

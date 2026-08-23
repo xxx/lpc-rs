@@ -153,7 +153,7 @@ impl SemanticCheckWalker {
         // Further checks require access to the function prototype for error messaging
         let proto_opt = self.context.lookup_function_complete(&name, namespace);
 
-        let mut errors: Vec<Box<LpcError>> = vec![];
+        let mut errors: Vec<LpcError> = vec![];
 
         if let Some(function_like) = proto_opt {
             let prototype = function_like.as_ref();
@@ -167,7 +167,7 @@ impl SemanticCheckWalker {
                 let e = LpcError::new(format!("call to private function `{}`", name))
                     .with_span(node.span)
                     .with_label("defined here", prototype.span);
-                errors.push(e.into());
+                errors.push(e);
             }
 
             let arg_len = node.arguments.len();
@@ -179,7 +179,7 @@ impl SemanticCheckWalker {
                 ))
                 .with_span(node.span)
                 .with_label("defined here", prototype.span);
-                errors.push(e.into());
+                errors.push(e);
             }
 
             // Check argument types.
@@ -196,8 +196,7 @@ impl SemanticCheckWalker {
                             name, arg_type, ty
                         ))
                         .with_span(arg.span())
-                        .with_label("declared here", prototype.arg_spans.get(index).cloned())
-                        .into();
+                        .with_label("declared here", prototype.arg_spans.get(index).cloned());
 
                         errors.push(e);
                     }
@@ -246,7 +245,7 @@ impl TreeWalker for SemanticCheckWalker {
         {
             Ok(())
         } else {
-            let e: Box<LpcError> = lpc_error!(
+            let e: LpcError = lpc_error!(
                 node.span,
                 "Mismatched types: `{}` ({}) = `{}` ({})",
                 node.lhs,
@@ -470,8 +469,7 @@ impl TreeWalker for SemanticCheckWalker {
                 .with_note(concat!(
                     "A function pointer can only point to a private function if ",
                     "it is declared in the same file."
-                ))
-                .into();
+                ));
                 self.context.errors.push(e);
             }
         }
@@ -497,7 +495,7 @@ impl TreeWalker for SemanticCheckWalker {
                 "invalid `case` statement."
             };
 
-            let err = LpcError::new(msg).with_span(node.span).into();
+            let err = LpcError::new(msg).with_span(node.span);
             self.context.errors.push(err);
         }
 
@@ -557,7 +555,7 @@ impl TreeWalker for SemanticCheckWalker {
                 String::from("-1")
             };
 
-            let e: Box<LpcError> = lpc_error!(
+            let e: LpcError = lpc_error!(
                 node.span,
                 "invalid range types: `{}` ({}) .. `{}` ({})",
                 left_val,
@@ -597,8 +595,7 @@ impl TreeWalker for SemanticCheckWalker {
                             return_type, function_def.return_type
                         ))
                         .with_span(node.span)
-                        .with_label("defined here", function_def.span)
-                        .into();
+                        .with_label("defined here", function_def.span);
 
                         self.context.errors.push(error);
                     }
@@ -610,8 +607,7 @@ impl TreeWalker for SemanticCheckWalker {
                     function_def.return_type
                 ))
                 .with_span(node.span)
-                .with_label("defined here", function_def.span)
-                .into();
+                .with_label("defined here", function_def.span);
 
                 self.context.errors.push(error);
             }
@@ -645,8 +641,7 @@ impl TreeWalker for SemanticCheckWalker {
             let e = LpcError::new(format!(
                 "differing types in ternary expression: `{body_type}` and `{else_type}`"
             ))
-            .with_span(node.span)
-            .into();
+            .with_span(node.span);
             self.context.errors.push(e);
         }
 
@@ -660,7 +655,7 @@ impl TreeWalker for SemanticCheckWalker {
             Ok(_) => match node.op {
                 UnaryOperation::Inc | UnaryOperation::Dec => {
                     if matches!(*node.expr, ExpressionNode::Int(_)) {
-                        let err: Box<LpcError> = lpc_error!("Invalid operation on `int` literal");
+                        let err: LpcError = lpc_error!("Invalid operation on `int` literal");
                         self.context.errors.push(err.clone());
                         Err(err)
                     } else {
@@ -707,12 +702,11 @@ impl TreeWalker for SemanticCheckWalker {
             if let Some(FunctionDefNode { flags, span, .. }) = self.current_function;
             if flags.ellipsis();
             then {
-                let e: Box<LpcError> = LpcError::new(
+                let e: LpcError = LpcError::new(
                     "redeclaration of `argv` in a function with ellipsis arguments",
                 )
                 .with_span(node.span)
-                .with_label("Declared here", span)
-                .into();
+                .with_label("Declared here", span);
                 self.context.errors.push(e.clone());
                 return Err(e);
             }
@@ -1334,7 +1328,7 @@ mod tests {
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
             assert_regex!(
-                (*walker.context.errors[0]).as_ref(),
+                walker.context.errors[0].message(),
                 "call to private function `known`"
             );
         }
@@ -1429,7 +1423,7 @@ mod tests {
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
             assert_regex!(
-                (*walker.context.errors[0]).as_ref(),
+                walker.context.errors[0].message(),
                 "call to private function `known`"
             );
         }
@@ -1467,7 +1461,7 @@ mod tests {
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
             assert_regex!(
-                (*walker.context.errors[0]).as_ref(),
+                walker.context.errors[0].message(),
                 "unknown namespace `unknown_namespace`"
             );
         }
@@ -1505,7 +1499,7 @@ mod tests {
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
             assert_regex!(
-                (*walker.context.errors[0]).as_ref(),
+                walker.context.errors[0].message(),
                 "call to private function `known`"
             );
         }
@@ -1851,7 +1845,7 @@ mod tests {
             let _ = node.visit(&mut walker).await;
             assert!(!walker.context.errors.is_empty());
             assert_regex!(
-                (*walker.context.errors[0]).as_ref(),
+                walker.context.errors[0].message(),
                 "namespaced `call_other` is not allowed"
             );
         }
@@ -2113,7 +2107,7 @@ mod tests {
             assert_ok!(result);
             assert!(!walker.context.errors.is_empty());
             assert_regex!(
-                (*walker.context.errors[0]).as_ref(),
+                walker.context.errors[0].message(),
                 "attempt to point to private function `known`"
             );
         }

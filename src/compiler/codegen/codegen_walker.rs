@@ -318,7 +318,7 @@ impl CodegenWalker {
             let a = func.instructions.len();
             let b = func.debug_spans.len();
             if a != b {
-                return Err(LpcError::new_bug(format!(
+                return Err(LpcError::bug(format!(
                     concat!(
                         "Instructions (length {}) and `debug_spans` (length {}) for ",
                         "function `{}` are out of sync. This would be catastrophic at ",
@@ -327,8 +327,7 @@ impl CodegenWalker {
                     a,
                     b,
                     &func.name()
-                ))
-                .into());
+                )));
             }
         }
 

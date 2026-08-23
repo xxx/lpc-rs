@@ -81,19 +81,15 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
 
         let debug_span = self.current_debug_span();
-        let process = self.compile_process(path).await.map_err(|mut e| {
-            *e = e.with_span(debug_span);
-            e
-        })?;
+        let process = self
+            .compile_process(path)
+            .await
+            .map_err(|e| e.with_span(debug_span))?;
 
         self.insert_process_transactional(&process);
         self.init_process_transactional(&process)
             .await
-            .map_err(|mut e| {
-                let span = self.current_debug_span();
-                *e = e.with_span(span);
-                e
-            })?;
+            .map_err(|e| e.with_span(self.current_debug_span()))?;
 
         Ok(process)
     }
@@ -168,13 +164,13 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// A helper to generate an [`LpcError`] for runtime errors
     #[inline]
-    pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
+    pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
         self.frame().runtime_error(msg)
     }
 
     /// A helper to generate an [`LpcError`] for runtime bugs
     #[inline]
-    pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
+    pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
         self.frame().runtime_bug(msg)
     }
 

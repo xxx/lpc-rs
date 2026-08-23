@@ -37,7 +37,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             while !halted {
                 halted = match self.eval_one_instruction().await {
                     Ok(x) => x,
-                    Err(mut e) => {
+                    Err(e) => {
                         if e.is_bug() {
                             error!("{}", e.diagnostic_string());
                         }
@@ -49,10 +49,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             false
                         } else {
                             let stack_trace = self.stack.stack_trace();
-                            return Err({
-                                *e = e.with_stack_trace(stack_trace);
-                                e
-                            });
+                            return Err(e.with_stack_trace(stack_trace));
                         }
                     }
                 };

@@ -1,17 +1,15 @@
 #![forbid(unsafe_code)]
 
 use std::{
-    convert::Infallible,
     error::Error,
     fmt::{Debug, Display, Formatter},
     fs::OpenOptions,
-    hash::{Hash, Hasher},
     num::TryFromIntError,
     result,
 };
 
 use codespan_reporting::{
-    diagnostic::{Diagnostic, Label, LabelStyle},
+    diagnostic::{Diagnostic, Label},
     term::termcolor::{Buffer, ColorChoice, StandardStream, WriteColor},
 };
 use derive_builder::UninitializedFieldError;
@@ -40,19 +38,19 @@ pub enum LpcErrorSeverity {
 #[macro_export]
 macro_rules! lpc_error {
     ($fmt:literal, $($arg:tt)*) => {
-        $crate::LpcError::new(format!($fmt, $($arg)*)).into()
+        $crate::LpcError::new(format!($fmt, $($arg)*))
     };
     ($span:expr, $msg:literal $(,)?) => {
-        $crate::LpcError::new($msg).with_span($span).into()
+        $crate::LpcError::new($msg).with_span($span)
     };
     ($span:expr, $fmt:expr, $($arg:tt)*) => {
-        $crate::LpcError::new(format!($fmt, $($arg)*)).with_span($span).into()
+        $crate::LpcError::new(format!($fmt, $($arg)*)).with_span($span)
     };
     ($msg:literal $(,)?) => {
-        $crate::LpcError::new($msg).into()
+        $crate::LpcError::new($msg)
     };
     ($err:expr $(,)?) => {
-        $crate::LpcError::new($err).into()
+        $crate::LpcError::new($err)
     };
 }
 
@@ -60,19 +58,19 @@ macro_rules! lpc_error {
 #[macro_export]
 macro_rules! lpc_warning {
     ($fmt:literal, $($arg:tt)*) => {
-        $crate::LpcError::new_warning(format!($fmt, $($arg)*)).into()
+        $crate::LpcError::warning(format!($fmt, $($arg)*))
     };
     ($span:expr, $msg:literal $(,)?) => {
-        $crate::LpcError::new_warning($msg).with_span($span).into()
+        $crate::LpcError::warning($msg).with_span($span)
     };
     ($span:expr, $fmt:expr, $($arg:tt)*) => {
-        $crate::LpcError::new_warning(format!($fmt, $($arg)*)).with_span($span).into()
+        $crate::LpcError::warning(format!($fmt, $($arg)*)).with_span($span)
     };
     ($msg:literal $(,)?) => {
-        $crate::LpcError::new_warning($msg).into()
+        $crate::LpcError::warning($msg)
     };
     ($err:expr $(,)?) => {
-        $crate::LpcError::new_warning($err).into()
+        $crate::LpcError::warning($err)
     };
 }
 
@@ -80,109 +78,103 @@ macro_rules! lpc_warning {
 #[macro_export]
 macro_rules! lpc_bug {
     ($fmt:literal, $($arg:tt)*) => {
-        $crate::LpcError::new_bug(format!($fmt, $($arg)*)).into()
+        $crate::LpcError::bug(format!($fmt, $($arg)*))
     };
     ($span:expr, $msg:literal $(,)?) => {
-        $crate::LpcError::new_bug($msg).with_span($span).into()
+        $crate::LpcError::bug($msg).with_span($span)
     };
     ($span:expr, $fmt:expr, $($arg:tt)*) => {
-        $crate::LpcError::new_bug(format!($fmt, $($arg)*)).with_span($span).into()
+        $crate::LpcError::bug(format!($fmt, $($arg)*)).with_span($span)
     };
     ($msg:literal $(,)?) => {
-        $crate::LpcError::new_bug($msg).into()
+        $crate::LpcError::bug($msg)
     };
     ($err:expr $(,)?) => {
-        $crate::LpcError::new_bug($err).into()
+        $crate::LpcError::bug($err)
     };
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LpcError {
-    /// The main message to be printed out
+/// A compile-time or runtime diagnostic: a message, the code it points at,
+/// and anything else worth printing alongside. One pointer wide, so it
+/// travels in `Result` without a `Box` at the call site.
+#[derive(Clone)]
+pub struct LpcError(Box<Inner>);
+
+#[derive(Debug, Clone)]
+struct Inner {
     message: String,
-    /// The primary span causing this error
-    pub span: Option<Span>,
-    /// Any secondary labels that are additionally printed with the error
-    labels: Vec<Label<usize>>,
-    /// Additional text notes, suggestions, etc. to be printed to the user.
+    span: Option<Span>,
+    labels: Vec<Label<FileId>>,
     notes: Vec<String>,
-    /// Additional errors that were collected before this one. This is only
-    /// used during compilation, when non-fatal errors can occur.
-    additional_errors: Option<Vec<LpcError>>,
-    /// Optional stack trace for printing
+    /// Further diagnostics collected before this one, rendered after it.
+    additional_errors: Vec<LpcError>,
     stack_trace: Option<Vec<String>>,
-    /// The severity of this error. Warnings are printed, but do not stop
-    /// compilation or execution.
-    pub severity: LpcErrorSeverity,
+    severity: LpcErrorSeverity,
 }
 
 impl LpcError {
-    /// Create a new `LpcError` with severity [`LpcErrorSeverity::Error`], and a
-    /// message
+    fn with_severity<T>(message: T, severity: LpcErrorSeverity) -> Self
+    where
+        T: Into<String>,
+    {
+        Self(Box::new(Inner {
+            message: message.into(),
+            span: None,
+            labels: vec![],
+            notes: vec![],
+            additional_errors: vec![],
+            stack_trace: None,
+            severity,
+        }))
+    }
+
+    /// An error: stops compilation, and is catchable at runtime.
     pub fn new<T>(message: T) -> Self
     where
         T: Into<String>,
     {
-        Self {
-            message: message.into(),
-            span: None,
-            labels: vec![],
-            notes: vec![],
-            additional_errors: None,
-            stack_trace: None,
-            severity: LpcErrorSeverity::Error,
-        }
+        Self::with_severity(message, LpcErrorSeverity::Error)
     }
 
-    /// Create a new `LpcError` with severity [`LpcErrorSeverity::Warning`], and
-    /// a message
-    pub fn new_warning<T>(message: T) -> Self
+    /// A warning: printed, but stops nothing.
+    pub fn warning<T>(message: T) -> Self
     where
         T: Into<String>,
     {
-        Self {
-            message: message.into(),
-            span: None,
-            labels: vec![],
-            notes: vec![],
-            additional_errors: None,
-            stack_trace: None,
-            severity: LpcErrorSeverity::Warning,
-        }
+        Self::with_severity(message, LpcErrorSeverity::Warning)
     }
 
-    /// Create a new `LpcError` with severity [`LpcErrorSeverity::Bug`], and
-    /// a message
-    pub fn new_bug<T>(message: T) -> Self
+    /// A bug: a broken driver invariant, never catchable at runtime.
+    pub fn bug<T>(message: T) -> Self
     where
         T: Into<String>,
     {
-        Self {
-            message: message.into(),
-            span: None,
-            labels: vec![],
-            notes: vec![],
-            additional_errors: None,
-            stack_trace: None,
-            severity: LpcErrorSeverity::Bug,
-        }
+        Self::with_severity(message, LpcErrorSeverity::Bug)
+    }
+
+    pub fn message(&self) -> &str {
+        &self.0.message
+    }
+
+    pub fn span(&self) -> Option<Span> {
+        self.0.span
+    }
+
+    pub fn severity(&self) -> LpcErrorSeverity {
+        self.0.severity
     }
 
     pub fn is_warning(&self) -> bool {
-        self.severity == LpcErrorSeverity::Warning
-    }
-
-    pub fn is_error(&self) -> bool {
-        self.severity == LpcErrorSeverity::Error
+        self.0.severity == LpcErrorSeverity::Warning
     }
 
     pub fn is_bug(&self) -> bool {
-        self.severity == LpcErrorSeverity::Bug
+        self.0.severity == LpcErrorSeverity::Bug
     }
 
     /// Set the primary span for this error
     pub fn with_span(mut self, span: Option<Span>) -> Self {
-        self.span = span;
+        self.0.span = span;
 
         self
     }
@@ -193,7 +185,8 @@ impl LpcError {
         T: AsRef<str>,
     {
         if let Some(s) = span {
-            self.labels
+            self.0
+                .labels
                 .push(Label::secondary(s.file_id, s.l..s.r).with_message(message.as_ref()));
         }
 
@@ -205,29 +198,31 @@ impl LpcError {
     where
         T: Into<String>,
     {
-        self.notes.push(note.into());
+        self.0.notes.push(note.into());
 
         self
     }
 
-    pub fn with_additional_errors(mut self, additional_errors: Vec<Box<LpcError>>) -> Self {
-        self.additional_errors = Some(additional_errors.into_iter().map(|e| *e).collect());
+    pub fn with_additional_errors(mut self, additional_errors: Vec<LpcError>) -> Self {
+        self.0.additional_errors = additional_errors;
 
         self
     }
 
     pub fn with_stack_trace(mut self, stack_trace: Vec<String>) -> Self {
-        self.stack_trace = Some(stack_trace);
+        self.0.stack_trace = Some(stack_trace);
 
         self
     }
 
     pub fn to_diagnostics(&self) -> Vec<Diagnostic<FileId>> {
         let mut v = vec![Diagnostic::from(self)];
-
-        if let Some(ref additional_errors) = self.additional_errors {
-            v.extend(additional_errors.iter().flat_map(|e| e.to_diagnostics()));
-        }
+        v.extend(
+            self.0
+                .additional_errors
+                .iter()
+                .flat_map(|e| e.to_diagnostics()),
+        );
 
         v
     }
@@ -274,19 +269,19 @@ impl LpcError {
     }
 }
 
+impl Debug for LpcError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&*self.0, f)
+    }
+}
+
 impl Display for LpcError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message)
+        write!(f, "{}", self.0.message)
     }
 }
 
 impl Error for LpcError {}
-
-impl AsRef<str> for LpcError {
-    fn as_ref(&self) -> &str {
-        &self.message
-    }
-}
 
 /// Map LALRpop's parse errors into our local error type
 impl<T> From<LalrpopParseError<usize, T, LpcError>> for LpcError
@@ -313,37 +308,6 @@ where
     }
 }
 
-/// Map LALRpop's parse errors into our local error type
-impl<T> From<LalrpopParseError<usize, T, Box<LpcError>>> for LpcError
-where
-    T: Display + HasSpan,
-{
-    fn from(err: LalrpopParseError<usize, T, Box<LpcError>>) -> Self {
-        match err {
-            LalrpopParseError::InvalidToken { .. } => lpc_error!("Invalid token"),
-            LalrpopParseError::UnrecognizedEof { ref expected, .. } => {
-                LpcError::new("Unexpected EOF").with_note(format_expected(expected))
-            }
-            LalrpopParseError::UnrecognizedToken {
-                token: (_start, ref token, _end),
-                ref expected,
-            } => LpcError::new(format!("Unrecognized Token: {token}"))
-                .with_span(Some(token.span()))
-                .with_note(format_expected(expected)),
-            LalrpopParseError::ExtraToken {
-                token: (_start, ref token, _end),
-            } => LpcError::new(format!("Extra Token: `{token}`")).with_span(Some(token.span())),
-            LalrpopParseError::User { error } => *error,
-        }
-    }
-}
-
-impl From<std::io::Error> for LpcError {
-    fn from(e: std::io::Error) -> Self {
-        Self::new(e.to_string())
-    }
-}
-
 impl From<UninitializedFieldError> for LpcError {
     fn from(e: UninitializedFieldError) -> Self {
         Self::new(e.to_string())
@@ -352,33 +316,32 @@ impl From<UninitializedFieldError> for LpcError {
 
 impl From<&LpcError> for Diagnostic<FileId> {
     fn from(error: &LpcError) -> Self {
-        let mut diagnostic = match error.severity {
+        let inner = &*error.0;
+        let mut diagnostic = match inner.severity {
             LpcErrorSeverity::Warning => Diagnostic::warning(),
             LpcErrorSeverity::Error => Diagnostic::error(),
             LpcErrorSeverity::Bug => Diagnostic::bug(),
         };
 
-        diagnostic = diagnostic.with_message(format!("{error}"));
+        diagnostic = diagnostic.with_message(&inner.message);
 
         let mut labels = vec![];
 
-        if let Some(span) = error.span {
+        if let Some(span) = inner.span {
             labels.push(Label::primary(span.file_id, span.l..span.r));
         }
 
-        for label in &error.labels {
-            labels.push(label.clone());
-        }
+        labels.extend(inner.labels.iter().cloned());
 
         if !labels.is_empty() {
             diagnostic = diagnostic.with_labels(labels);
         }
 
-        if !error.notes.is_empty() {
-            diagnostic = diagnostic.with_notes(error.notes.clone())
+        if !inner.notes.is_empty() {
+            diagnostic = diagnostic.with_notes(inner.notes.clone())
         }
 
-        if let Some(stack_trace) = &error.stack_trace {
+        if let Some(stack_trace) = &inner.stack_trace {
             diagnostic.notes.push(format!(
                 "Stack trace:\n\n{}",
                 stack_trace.iter().rev().join("\n")
@@ -389,48 +352,9 @@ impl From<&LpcError> for Diagnostic<FileId> {
     }
 }
 
-impl<T> From<tokio::sync::mpsc::error::SendError<T>> for LpcError {
-    fn from(e: tokio::sync::mpsc::error::SendError<T>) -> Self {
-        Self::new(e.to_string())
-    }
-}
-
 impl From<TryFromIntError> for LpcError {
     fn from(e: TryFromIntError) -> Self {
         Self::new(e.to_string())
-    }
-}
-
-impl From<TryFromIntError> for Box<LpcError> {
-    fn from(e: TryFromIntError) -> Self {
-        Self::new(lpc_error!(e.to_string()))
-    }
-}
-
-impl From<Infallible> for Box<LpcError> {
-    fn from(_e: Infallible) -> Self {
-        unreachable!("this better be unreachable.")
-    }
-}
-
-impl Hash for LpcError {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.message.hash(state);
-        self.severity.hash(state);
-        self.span.hash(state);
-        self.labels.iter().for_each(|l| {
-            match l.style {
-                LabelStyle::Primary => 0,
-                LabelStyle::Secondary => 1,
-            }
-            .hash(state);
-            l.file_id.hash(state);
-            l.range.hash(state);
-            l.message.hash(state);
-        });
-        self.notes.hash(state);
-        self.additional_errors.hash(state);
-        self.stack_trace.hash(state);
     }
 }
 
@@ -478,43 +402,49 @@ pub fn format_expected(expected: &[String]) -> String {
 }
 
 /// Common `Result` type
-pub type Result<T> = result::Result<T, Box<LpcError>>;
+pub type Result<T> = result::Result<T, LpcError>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_builder() {
-        let error = LpcError::new("test error")
-            .with_span(Some(Span::new(0, 0..1)))
-            .with_note("test note")
-            .with_label("my label", Some(Span::new(0, 0..1)))
-            .with_additional_errors(vec![lpc_error!("test error 2")])
-            .with_stack_trace(vec!["test".to_string(), "test2".to_string()]);
-
-        assert_eq!(error.message, "test error");
-        assert_eq!(error.span.unwrap().l, 0);
-        assert_eq!(error.span.unwrap().r, 1);
-        assert_eq!(error.notes[0], "test note");
-        assert_eq!(error.labels[0].message, "my label");
-        assert_eq!(error.additional_errors.unwrap()[0].message, "test error 2");
-        assert_eq!(error.stack_trace.unwrap(), vec!["test", "test2"]);
+    fn an_error_is_one_pointer_wide() {
+        assert_eq!(std::mem::size_of::<LpcError>(), 8);
+        assert_eq!(std::mem::size_of::<Result<()>>(), 8);
     }
 
     #[test]
-    fn test_severity() {
-        let error = LpcError::new("test error");
-        assert_eq!(error.severity, LpcErrorSeverity::Error);
-        assert!(error.is_error());
+    fn constructors_name_their_severity() {
+        assert_eq!(LpcError::new("e").severity(), LpcErrorSeverity::Error);
+        assert_eq!(LpcError::warning("w").severity(), LpcErrorSeverity::Warning);
+        assert_eq!(LpcError::bug("b").severity(), LpcErrorSeverity::Bug);
+    }
 
-        let error = LpcError::new_warning("test warning");
-        assert_eq!(error.severity, LpcErrorSeverity::Warning);
-        assert!(error.is_warning());
+    #[test]
+    fn the_message_and_span_are_readable() {
+        let e = LpcError::new("boom").with_span(Some(Span::new(3, 1..4)));
+        assert_eq!(e.message(), "boom");
+        assert_eq!(e.span(), Some(Span::new(3, 1..4)));
+    }
 
-        let error = LpcError::new_bug("test bug");
-        assert_eq!(error.severity, LpcErrorSeverity::Bug);
-        assert!(error.is_bug());
+    #[test]
+    fn macros_build_errors_by_value() {
+        let plain: LpcError = lpc_error!("a {}", 1);
+        let warned: LpcError = lpc_warning!(Some(Span::new(0, 0..1)), "b");
+        let bugged: LpcError = lpc_bug!("c");
+        assert_eq!(plain.message(), "a 1");
+        assert!(warned.is_warning());
+        assert!(bugged.is_bug());
+        assert!(warned.span().is_some());
+    }
+
+    #[test]
+    fn additional_errors_are_taken_by_value_and_rendered_after() {
+        let e = LpcError::new("head").with_additional_errors(vec![lpc_error!("tail")]);
+        let diagnostics = e.to_diagnostics();
+        assert_eq!(diagnostics.len(), 2);
+        assert_eq!(diagnostics[1].message, "tail");
     }
 
     #[test]

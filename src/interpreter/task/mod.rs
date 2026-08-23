@@ -320,7 +320,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Set the state to handle a caught error.
     /// Panics if there aren't actually any catch points.
     #[instrument(skip_all)]
-    fn catch_error(&mut self, error: Box<LpcError>) -> Result<()> {
+    fn catch_error(&mut self, error: LpcError) -> Result<()> {
         let catch_point = self.catch_points.last().unwrap();
         let result_index = catch_point.register.index();
         let frame_index = catch_point.frame_index;
@@ -381,10 +381,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Ok(result) => {
                 set_location(&mut self.stack, &self.context.txn, r3, result)?;
             }
-            Err(mut e) => {
+            Err(e) => {
                 let frame = self.stack.current_frame()?;
-                *e = e.with_span(frame.current_debug_span());
-                return Err(e);
+                return Err(e.with_span(frame.current_debug_span()));
             }
         }
 
@@ -407,10 +406,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Ok(result) => {
                 set_location(&mut self.stack, &self.context.txn, r2, result)?;
             }
-            Err(mut e) => {
+            Err(e) => {
                 let frame = self.stack.current_frame()?;
-                *e = e.with_span(frame.current_debug_span());
-                return Err(e);
+                return Err(e.with_span(frame.current_debug_span()));
             }
         }
 
@@ -444,18 +442,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// convenience helper to generate runtime errors
     #[inline]
-    fn runtime_error<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
+    fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
         self.stack.runtime_error(msg)
     }
 
     /// convenience helper to generate runtime bugs
     #[inline]
-    fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> Box<LpcError> {
+    fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
         self.stack.runtime_bug(msg)
     }
 
     #[inline]
-    fn array_index_error<T>(&self, index: T, length: usize) -> Box<LpcError>
+    fn array_index_error<T>(&self, index: T, length: usize) -> LpcError
     where
         T: Display,
     {

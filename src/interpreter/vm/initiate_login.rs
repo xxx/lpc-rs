@@ -43,7 +43,7 @@ impl Vm {
 
             // Abort the login; no object to blame means the master object
             // itself is bad, so `runtime_error` is not applied.
-            let fail = async |error: Box<LpcError>, object: Option<Arc<Process>>| {
+            let fail = async |error: LpcError, object: Option<Arc<Process>>| {
                 let _ = connection
                     .tx
                     .send(ConnectionOp::SendMessage(error.to_string()))

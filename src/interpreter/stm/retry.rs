@@ -124,13 +124,13 @@ async fn request<R: Send + 'static>(
 ) -> Result<R> {
     let (reply_tx, reply_rx) = flume::bounded(1);
     tx.send(message(reply_tx))
-        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("committer channel closed") })?;
+        .map_err(|_| -> lpc_rs_errors::LpcError { lpc_error!("committer channel closed") })?;
     tokio::task::spawn_blocking(move || reply_rx.recv())
         .await
-        .map_err(|e| -> Box<lpc_rs_errors::LpcError> {
+        .map_err(|e| -> lpc_rs_errors::LpcError {
             lpc_error!("committer reply task panicked: {}", e)
         })?
-        .map_err(|_| -> Box<lpc_rs_errors::LpcError> { lpc_error!("no reply from committer") })
+        .map_err(|_| -> lpc_rs_errors::LpcError { lpc_error!("no reply from committer") })
 }
 
 /// Start a transaction against the committer's current world and hand back
@@ -144,7 +144,7 @@ pub(crate) async fn start_txn(tx: &flume::Sender<CommitProtocol>) -> Result<Live
 pub(crate) async fn gc_pass(
     tx: &flume::Sender<CommitProtocol>,
     roots: Vec<WorldRoot>,
-) -> std::result::Result<GcReport, Box<lpc_rs_errors::LpcError>> {
+) -> std::result::Result<GcReport, lpc_rs_errors::LpcError> {
     // The reply payload is the pass's own Ok/Err.
     request(tx, |reply| CommitProtocol::GcPass { roots, reply }).await?
 }

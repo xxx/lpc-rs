@@ -46,7 +46,7 @@ pub struct CompilationContext {
     pub default_function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
 
     /// Any warnings & errors that have been collected
-    pub errors: Vec<Box<LpcError>>,
+    pub errors: Vec<LpcError>,
 
     /// The pragmas that have been set
     pub pragmas: PragmaFlags,

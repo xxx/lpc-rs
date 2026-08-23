@@ -56,7 +56,7 @@ grammar<'context>(context: &'context mut CompilationContext);
 
 extern {
     type Location = usize;
-    type Error = Box<LpcError>;
+    type Error = LpcError;
 
     enum Token {
         "+" => Token::Plus(<Span>),
@@ -250,7 +250,7 @@ FunctionDef: FunctionDefNode = {
             let err = LpcError::new("Missing return type")
                                       .with_span(Some(span))
                                       .with_note("`#pragma strict_types` is enabled, which requires all functions to have an explicit return type.");
-            return Err(ParseError::User { error: Box::new(err) });
+            return Err(ParseError::User { error: err });
         } else {
             LpcType::Mixed(array)
         };

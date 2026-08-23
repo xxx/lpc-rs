@@ -479,7 +479,7 @@ mod test_instructions {
                 .await
                 .expect_err("implode needs an array");
 
-            assert!(error.span.is_some(), "{error:?}");
+            assert!(error.span().is_some(), "{error:?}");
             assert_eq!(
                 error.to_string(),
                 "runtime error: invalid access. Expected array, actually int"

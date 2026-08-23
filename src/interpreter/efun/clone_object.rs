@@ -148,7 +148,7 @@ mod tests {
         let result = task.timed_eval(func, &[], 300).await;
 
         assert_regex!(
-            result.as_ref().unwrap_err().as_ref().as_ref(),
+            result.as_ref().unwrap_err().message(),
             r"no_clone\.c has `#pragma no_clone` enabled, and so cannot be cloned\."
         );
     }

@@ -68,8 +68,7 @@ pub fn check_var_redefinition(node: &'_ VarInitNode, scope: &'_ LocalScope) -> R
     if let Some(sym) = scope.lookup(&node.name) {
         Err(LpcError::new(format!("Redefinition of `{}`", sym.name))
             .with_span(node.span)
-            .with_label("Originally declared here", sym.span)
-            .into())
+            .with_label("Originally declared here", sym.span))
     } else {
         Ok(())
     }
@@ -90,7 +89,7 @@ pub fn check_binary_operation_types(
         op: BinaryOperation,
         left_type: LpcType,
         right_type: LpcType,
-    ) -> Box<LpcError> {
+    ) -> LpcError {
         lpc_error!(
             node.span,
             "Mismatched types: `{}` ({}) {} `{}` ({})",

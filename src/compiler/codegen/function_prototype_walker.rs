@@ -131,8 +131,7 @@ impl TreeWalker for FunctionPrototypeWalker {
                     node.name
                 ))
                 .with_span(node.span)
-                .with_label("defined here", prototype.span)
-                .into();
+                .with_label("defined here", prototype.span);
 
                 return Err(e);
             }
@@ -262,7 +261,7 @@ mod tests {
 
         if let Err(e) = result {
             assert_regex!(
-                (*e).as_ref(),
+                e.message(),
                 "attempt to redefine nomask function `duplicate`"
             );
         } else {
