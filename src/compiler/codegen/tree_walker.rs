@@ -39,6 +39,7 @@ use crate::compiler::{
         while_node::WhileNode,
     },
     compilation_context::CompilationContext,
+    diagnostics::Diagnostics,
 };
 
 pub trait ContextHolder {
@@ -47,6 +48,42 @@ pub trait ContextHolder {
     /// This is intended for use after a walker has completed processing, and
     /// you're ready to re-take ownership of the context for the next step.
     fn into_context(self) -> CompilationContext;
+}
+
+/// One pipeline pass over a program: wrapped around the context, run by
+/// [`apply`], consumed back into the context (or, for codegen, the program).
+pub trait Pass: TreeWalker + ContextHolder + Send + Sized {
+    /// Wrap `context` for this pass's walk.
+    fn new(context: CompilationContext) -> Self;
+
+    /// The diagnostics sink, while this pass still owns the context.
+    fn diagnostics_mut(&mut self) -> &mut Diagnostics;
+}
+
+/// Run one pass over `program`, applying the pipeline's error policy: a walk
+/// error is recorded and returned, and with `fatal`, any recorded error or bug
+/// stops the pipeline here (warnings never do). Returns the walker, for its
+/// products.
+pub async fn apply<P: Pass>(
+    program: &mut ProgramNode,
+    context: CompilationContext,
+    fatal: bool,
+) -> Result<P> {
+    let mut walker = P::new(context);
+    let result = program.visit(&mut walker).await;
+
+    if let Err(e) = result {
+        return Err(walker.diagnostics_mut().finish_with(e));
+    }
+
+    if fatal && !walker.diagnostics_mut().is_clean() {
+        return Err(walker
+            .diagnostics_mut()
+            .finish()
+            .expect_err("not clean, so finish fails"));
+    }
+
+    Ok(walker)
 }
 
 // The `walk_*` functions below are the single statement of each node's
@@ -1296,5 +1333,102 @@ mod scope_hook_tests {
         let mut walker = poisoned("a");
         assert!(node.visit(&mut walker).await.is_err());
         assert_eq!(walker.visited, ["enter", "a", "exit"]);
+    }
+}
+
+#[cfg(test)]
+mod apply_tests {
+    use lpc_rs_errors::{lpc_error, lpc_warning};
+
+    use super::*;
+
+    macro_rules! stub_pass {
+        ($name:ident, $body:expr) => {
+            #[derive(Debug)]
+            struct $name {
+                context: CompilationContext,
+            }
+
+            #[async_trait]
+            impl TreeWalker for $name {
+                async fn visit_program(&mut self, _node: &mut ProgramNode) -> Result<()> {
+                    let visit: fn(&mut $name) -> Result<()> = $body;
+                    visit(self)
+                }
+            }
+
+            impl ContextHolder for $name {
+                fn into_context(self) -> CompilationContext {
+                    self.context
+                }
+            }
+
+            impl Pass for $name {
+                fn new(context: CompilationContext) -> Self {
+                    Self { context }
+                }
+
+                fn diagnostics_mut(&mut self) -> &mut Diagnostics {
+                    &mut self.context.diagnostics
+                }
+            }
+        };
+    }
+
+    stub_pass!(CleanPass, |_me| Ok(()));
+    stub_pass!(FailingPass, |me| {
+        Err(me.context.diagnostics.fail(lpc_error!("boom")))
+    });
+    stub_pass!(RecordingPass, |me| {
+        me.context.diagnostics.record(lpc_error!("recorded"));
+        Ok(())
+    });
+    stub_pass!(WarningPass, |me| {
+        me.context.diagnostics.record(lpc_warning!("advisory"));
+        Ok(())
+    });
+
+    #[tokio::test]
+    async fn fatal_passes_a_clean_walk_through() {
+        let mut program = ProgramNode::default();
+        let walker: CleanPass = apply(&mut program, CompilationContext::default(), true)
+            .await
+            .unwrap();
+        assert!(walker.into_context().diagnostics.errors().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_walk_error_is_finished_and_returned() {
+        let mut program = ProgramNode::default();
+        let result: Result<FailingPass> =
+            apply(&mut program, CompilationContext::default(), false).await;
+        assert_eq!(result.unwrap_err().message(), "boom");
+    }
+
+    #[tokio::test]
+    async fn fatal_stops_on_a_recorded_error() {
+        let mut program = ProgramNode::default();
+        let result: Result<RecordingPass> =
+            apply(&mut program, CompilationContext::default(), true).await;
+        assert_eq!(result.unwrap_err().message(), "recorded");
+    }
+
+    #[tokio::test]
+    async fn lenient_flows_through_with_diagnostics_intact() {
+        let mut program = ProgramNode::default();
+        let walker: RecordingPass = apply(&mut program, CompilationContext::default(), false)
+            .await
+            .unwrap();
+        let context = walker.into_context();
+        assert_eq!(context.diagnostics.errors().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn fatal_lets_warnings_through() {
+        let mut program = ProgramNode::default();
+        let walker: WarningPass = apply(&mut program, CompilationContext::default(), true)
+            .await
+            .unwrap();
+        assert_eq!(walker.into_context().diagnostics.errors().len(), 1);
     }
 }

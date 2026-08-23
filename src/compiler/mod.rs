@@ -1,11 +1,14 @@
 use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, sync::Arc};
 
-use ast::{ast_node::AstNodeTrait, program_node::ProgramNode};
+use ast::program_node::ProgramNode;
 use async_recursion::async_recursion;
 use codegen::{
-    codegen_walker::CodegenWalker, function_prototype_walker::FunctionPrototypeWalker,
-    inheritance_walker::InheritanceWalker, scope_walker::ScopeWalker,
-    semantic_check_walker::SemanticCheckWalker, tree_walker::ContextHolder,
+    codegen_walker::CodegenWalker,
+    function_prototype_walker::FunctionPrototypeWalker,
+    inheritance_walker::InheritanceWalker,
+    scope_walker::ScopeWalker,
+    semantic_check_walker::SemanticCheckWalker,
+    tree_walker::{ContextHolder, Pass, apply},
 };
 use compilation_context::CompilationContext;
 use derive_builder::Builder;
@@ -32,28 +35,6 @@ pub mod lexer;
 pub mod parser;
 pub mod preprocessor;
 pub mod semantic;
-
-#[macro_export]
-macro_rules! apply_walker {
-    ($walker:ty, $program:expr, $context:expr, $fatal:expr) => {{
-        let mut walker = <$walker>::new($context);
-        let result = $program.visit(&mut walker).await;
-
-        let mut context = walker.into_context();
-
-        if let Err(e) = result {
-            return Err(context.diagnostics.finish_with(e));
-        }
-        if $fatal && !context.diagnostics.is_clean() {
-            return Err(context
-                .diagnostics
-                .finish()
-                .expect_err("not clean, so finish fails"));
-        }
-
-        context
-    }};
-}
 
 #[derive(Educe, Default, Builder)]
 #[educe(Debug)]
@@ -266,23 +247,24 @@ impl Compiler {
         // let mut printer = TreePrinter::new();
         // let _ = program.visit(&mut printer);
 
-        let context = apply_walker!(InheritanceWalker, program_node, context, true);
-        let context = apply_walker!(FunctionPrototypeWalker, program_node, context, false);
-        let context = apply_walker!(ScopeWalker, program_node, context, false);
-        let context = apply_walker!(SemanticCheckWalker, program_node, context, true);
+        let context = apply::<InheritanceWalker>(&mut program_node, context, true)
+            .await?
+            .into_context();
+        let context = apply::<FunctionPrototypeWalker>(&mut program_node, context, false)
+            .await?
+            .into_context();
+        let context = apply::<ScopeWalker>(&mut program_node, context, false)
+            .await?
+            .into_context();
+        let context = apply::<SemanticCheckWalker>(&mut program_node, context, true)
+            .await?
+            .into_context();
 
-        let mut asm_walker = CodegenWalker::new(context);
-
-        if let Err(e) = program_node.visit(&mut asm_walker).await {
-            return Err(asm_walker.context_mut().diagnostics.finish_with(e));
-        }
-        let warnings = asm_walker.context_mut().diagnostics.finish()?;
+        let mut asm_walker: CodegenWalker = apply(&mut program_node, context, true).await?;
+        let warnings = asm_walker.diagnostics_mut().finish()?;
         self.report_warnings(warnings).await;
 
-        let program = match asm_walker.into_program() {
-            Ok(p) => p,
-            Err(e) => return Err(e),
-        };
+        let program = asm_walker.into_program()?;
 
         // println!("{}", program.filename);
         // for s in program.listing() {

@@ -34,12 +34,13 @@ use crate::{
             while_node::WhileNode,
         },
         codegen::tree_walker::{
-            ContextHolder, TreeWalker, walk_assignment, walk_binary_op, walk_closure,
+            ContextHolder, Pass, TreeWalker, walk_assignment, walk_binary_op, walk_closure,
             walk_do_while, walk_for, walk_foreach, walk_function_def, walk_function_ptr,
             walk_label, walk_range, walk_return, walk_switch, walk_ternary, walk_unary_op,
             walk_var_init,
         },
         compilation_context::CompilationContext,
+        diagnostics::Diagnostics,
         semantic::semantic_checks::{
             check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
         },
@@ -115,6 +116,16 @@ impl SemanticCheckWalker {
 impl ContextHolder for SemanticCheckWalker {
     fn into_context(self) -> CompilationContext {
         self.context
+    }
+}
+
+impl Pass for SemanticCheckWalker {
+    fn new(context: CompilationContext) -> Self {
+        SemanticCheckWalker::new(context)
+    }
+
+    fn diagnostics_mut(&mut self) -> &mut Diagnostics {
+        &mut self.context.diagnostics
     }
 }
 
@@ -665,8 +676,8 @@ mod tests {
     use ustr::ustr;
 
     use super::*;
+    use crate::compiler::codegen::tree_walker::apply;
     use crate::{
-        apply_walker,
         compiler::{
             Compiler,
             ast::{ast_node::AstNode, expression_node::ExpressionNode, var_node::VarNode},
@@ -697,8 +708,11 @@ mod tests {
             .await
             .expect("failed to parse");
 
-        let context = apply_walker!(ScopeWalker, program, context, false);
-        Ok(apply_walker!(SemanticCheckWalker, program, context, false))
+        let context = apply::<ScopeWalker>(&mut program, context, false)
+            .await?
+            .into_context();
+        let walker = apply::<SemanticCheckWalker>(&mut program, context, false).await?;
+        Ok(walker.into_context())
     }
 
     mod test_visit_assignment {

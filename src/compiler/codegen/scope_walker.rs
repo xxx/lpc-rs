@@ -21,8 +21,9 @@ use crate::compiler::{
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
-    codegen::tree_walker::{ContextHolder, TreeWalker, walk_foreach},
+    codegen::tree_walker::{ContextHolder, Pass, TreeWalker, walk_foreach},
     compilation_context::CompilationContext,
+    diagnostics::Diagnostics,
     semantic::semantic_checks::check_var_redefinition,
 };
 
@@ -93,6 +94,16 @@ impl ScopeWalker {
 impl ContextHolder for ScopeWalker {
     fn into_context(self) -> CompilationContext {
         self.context
+    }
+}
+
+impl Pass for ScopeWalker {
+    fn new(context: CompilationContext) -> Self {
+        ScopeWalker::new(context)
+    }
+
+    fn diagnostics_mut(&mut self) -> &mut Diagnostics {
+        &mut self.context.diagnostics
     }
 }
 

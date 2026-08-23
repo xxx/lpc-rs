@@ -11,8 +11,9 @@ use crate::compiler::{
         closure_node::ClosureNode, function_def_node::FunctionDefNode, var_init_node::VarInitNode,
         var_node::VarNode,
     },
-    codegen::tree_walker::{ContextHolder, TreeWalker, walk_closure, walk_function_def},
+    codegen::tree_walker::{ContextHolder, Pass, TreeWalker, walk_closure, walk_function_def},
     compilation_context::CompilationContext,
+    diagnostics::Diagnostics,
 };
 
 /// A walker to collect all of the function definitions. This runs early on to
@@ -51,6 +52,16 @@ impl ContextHolder for FunctionPrototypeWalker {
     #[inline]
     fn into_context(self) -> CompilationContext {
         self.context
+    }
+}
+
+impl Pass for FunctionPrototypeWalker {
+    fn new(context: CompilationContext) -> Self {
+        FunctionPrototypeWalker::new(context)
+    }
+
+    fn diagnostics_mut(&mut self) -> &mut Diagnostics {
+        &mut self.context.diagnostics
     }
 }
 

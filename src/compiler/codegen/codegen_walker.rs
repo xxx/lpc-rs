@@ -27,7 +27,7 @@ use lpc_rs_function_support::{
 };
 use lpc_rs_utils::string::closure_arg_number;
 use tracing::{instrument, trace};
-use tree_walker::TreeWalker;
+use tree_walker::{Pass, TreeWalker};
 use ustr::{Ustr, ustr};
 
 use crate::{
@@ -66,6 +66,7 @@ use crate::{
         },
         codegen::{tree_walker, tree_walker::ContextHolder},
         compilation_context::CompilationContext,
+        diagnostics::Diagnostics,
     },
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
@@ -827,6 +828,16 @@ impl CodegenWalker {
 impl ContextHolder for CodegenWalker {
     fn into_context(self) -> CompilationContext {
         self.context
+    }
+}
+
+impl Pass for CodegenWalker {
+    fn new(context: CompilationContext) -> Self {
+        CodegenWalker::new(context)
+    }
+
+    fn diagnostics_mut(&mut self) -> &mut Diagnostics {
+        &mut self.context.diagnostics
     }
 }
 
@@ -2302,8 +2313,8 @@ mod tests {
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
+    use crate::compiler::codegen::tree_walker::apply;
     use crate::{
-        apply_walker,
         compiler::{
             CompilerBuilder,
             ast::{
@@ -2381,10 +2392,18 @@ mod tests {
             .await
             .expect("failed to parse");
 
-        let context = apply_walker!(InheritanceWalker, program, context, false);
-        let context = apply_walker!(FunctionPrototypeWalker, program, context, false);
-        let context = apply_walker!(ScopeWalker, program, context, false);
-        let context = apply_walker!(SemanticCheckWalker, program, context, false);
+        let context = apply::<InheritanceWalker>(&mut program, context, false)
+            .await?
+            .into_context();
+        let context = apply::<FunctionPrototypeWalker>(&mut program, context, false)
+            .await?
+            .into_context();
+        let context = apply::<ScopeWalker>(&mut program, context, false)
+            .await?
+            .into_context();
+        let context = apply::<SemanticCheckWalker>(&mut program, context, false)
+            .await?
+            .into_context();
 
         let mut walker = CodegenWalker::new(context);
         let _ = program.visit(&mut walker).await;

@@ -5,8 +5,9 @@ use lpc_rs_errors::{LpcError, Result, lpc_error};
 use crate::compiler::{
     CompilerBuilder,
     ast::inherit_node::InheritNode,
-    codegen::tree_walker::{ContextHolder, TreeWalker},
+    codegen::tree_walker::{ContextHolder, Pass, TreeWalker},
     compilation_context::CompilationContext,
+    diagnostics::Diagnostics,
 };
 
 /// A walker to handle compiling and linking inherited files.
@@ -54,6 +55,16 @@ impl InheritanceWalker {
 impl ContextHolder for InheritanceWalker {
     fn into_context(self) -> CompilationContext {
         self.context
+    }
+}
+
+impl Pass for InheritanceWalker {
+    fn new(context: CompilationContext) -> Self {
+        InheritanceWalker::new(context)
+    }
+
+    fn diagnostics_mut(&mut self) -> &mut Diagnostics {
+        &mut self.context.diagnostics
     }
 }
 
