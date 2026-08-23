@@ -73,17 +73,6 @@ impl Clone for TaskTemplate {
     }
 }
 
-impl From<&TaskContext> for TaskTemplate {
-    fn from(task_context: &TaskContext) -> Self {
-        Self {
-            global_state: task_context.global_state.clone(),
-            this_player: ArcSwapAny::from(None),
-            upvalue_ptrs: task_context.upvalue_ptrs.clone(),
-            txn: task_context.txn.clone(),
-        }
-    }
-}
-
 impl<T> From<T> for TaskTemplate
 where
     T: Into<Arc<GlobalState>>,

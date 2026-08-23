@@ -5,7 +5,7 @@ use crate::interpreter::{
     CATCH_TELL,
     efun::{efun_context::EfunContext, write::record_output_effect},
     lpc_ref::LpcRef,
-    task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
+    task::apply_function::apply_function,
 };
 
 pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -20,17 +20,19 @@ pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
 
     let delivered = match proc {
         Some(proc) if proc.commands_enabled(context.txn()) => {
-            match apply_function_by_name(
-                CATCH_TELL,
-                std::slice::from_ref(&string_ref),
-                proc,
-                TaskTemplate::from(&*context),
-                Some(context.config().max_execution_time),
-            )
-            .await
-            {
-                Some(Ok(_)) => true,
-                Some(Err(e)) => return Err(e),
+            match proc.program.unmangled_functions.get(CATCH_TELL).cloned() {
+                Some(catch_tell) => {
+                    let ctx = context.task_context().clone().with_process(proc);
+                    let max_execution_time = context.config().max_execution_time;
+                    apply_function(
+                        catch_tell,
+                        std::slice::from_ref(&string_ref),
+                        ctx,
+                        Some(max_execution_time),
+                    )
+                    .await?;
+                    true
+                }
                 None => false,
             }
         }
@@ -57,6 +59,47 @@ mod tests {
         interpreter::{CommittedReader, vm::Vm},
         test_support::test_config,
     };
+
+    #[tokio::test]
+    async fn catch_tell_sees_the_callers_command_giver() {
+        let target = indoc! { r#"
+            object giver;
+
+            void create() {
+                enable_commands();
+            }
+
+            void catch_tell(string message) {
+                giver = this_player();
+            }
+        "# };
+
+        let master = indoc! { r#"
+            void create() {
+                set_this_player(this_object());
+                tell_object("/target", "hi");
+            }
+        "# };
+
+        let vm = Vm::new(test_config());
+        let target = vm
+            .initialize_process_from_code("/target.c", target)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let master_proc = vm
+            .initialize_process_from_code("master.c", master)
+            .await
+            .unwrap()
+            .context
+            .process;
+
+        assert_eq!(
+            vm.global_state.committed_global(&target, 0u16),
+            crate::interpreter::lpc_ref::LpcRef::from(std::sync::Arc::downgrade(&master_proc))
+        );
+    }
 
     #[tokio::test]
     async fn test_tell_object() {

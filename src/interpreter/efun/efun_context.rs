@@ -15,7 +15,7 @@ use crate::interpreter::{
     process::Process,
     program::Program,
     stm::{Effect, TxnHandle},
-    task::{Task, task_id::TaskId, task_template::TaskTemplate},
+    task::{Task, task_id::TaskId},
     task_context::{ObjectLookup, TaskContext},
 };
 
@@ -313,12 +313,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     #[cfg(test)]
     pub fn clone_stack(&self) -> CallStack<N> {
         self.stack.clone()
-    }
-}
-
-impl<'task, const N: usize> From<&EfunContext<'task, N>> for TaskTemplate {
-    fn from(value: &EfunContext<'task, N>) -> Self {
-        TaskTemplate::from(value.task_context)
     }
 }
 
