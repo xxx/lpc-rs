@@ -261,9 +261,10 @@ impl LpcError {
         );
     }
 
-    /// Emit the diagnostics as a String
+    /// Emit the diagnostics as a plain-text String, for logs and tests;
+    /// `emit_diagnostics` is the colored terminal output.
     pub fn diagnostic_string(&self) -> String {
-        let mut buffer = Buffer::ansi();
+        let mut buffer = Buffer::no_color();
         output_diagnostics(&self.to_diagnostics(), &mut buffer);
 
         String::from_utf8(buffer.into_inner()).unwrap_or_else(|_| self.to_string())
@@ -469,6 +470,17 @@ mod tests {
     fn diagnostic_string_states_the_message_once() {
         let rendered = LpcError::new("one of a kind").diagnostic_string();
         assert_eq!(rendered.matches("one of a kind").count(), 1);
+    }
+
+    #[test]
+    fn diagnostic_string_is_plain_text() {
+        let file_id = crate::source_map::SOURCE_MAP
+            .write()
+            .add("/plain.c".to_owned(), "int x = ;\n".to_owned());
+        let rendered = LpcError::new("no escapes")
+            .with_span(Some(Span::new(file_id, 8..9)))
+            .diagnostic_string();
+        assert!(!rendered.contains('\u{1b}'), "{rendered:?}");
     }
 
     #[test]

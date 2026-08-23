@@ -358,9 +358,7 @@ mod tests {
             let rendered = e.diagnostic_string();
             let _ = std::fs::remove_dir_all(&root);
 
-            // "int x = " stops short of the caret's ANSI codes; the next
-            // commit makes diagnostic_string plain.
-            assert!(rendered.contains("int x = "), "{rendered}");
+            assert!(rendered.contains("int x = ;"), "{rendered}");
             assert!(!rendered.contains("rewritten"), "{rendered}");
         }
     }
