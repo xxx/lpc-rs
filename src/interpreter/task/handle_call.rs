@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use if_chain::if_chain;
 use lpc_rs_core::{RegisterSize, lpc_type::LpcType};
-use lpc_rs_errors::{LpcError, span::Span};
+use lpc_rs_errors::span::Span;
 use lpc_rs_function_support::program_function::ProgramFunction;
-use tracing::{instrument, trace};
+use tracing::{instrument, trace, warn};
 use ustr::Ustr;
 
 use crate::interpreter::stm::VarId;
@@ -29,14 +29,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             if let Some(func) = function {
                 func.clone()
             } else {
-                // These shouldn't be reachable due to the CallEfun and CallSimulEfun instructions,
-                // but are kept juuuuuust in case.
-                {
-                    let e = LpcError::warning(
-                        format!("Call to unknown local function `{name}`. Falling back to legacy SEfun and Efun checks.")
-                    ).with_span(current_frame.current_debug_span());
-                    e.emit_diagnostics();
-                }
+                // The compiler emits CallEfun and CallSimulEfun for these, so
+                // this fallback should be unreachable.
+                warn!(
+                    at = %current_frame.to_stack_trace_format(),
+                    "call to unknown local function `{name}`, trying simul_efuns and efuns"
+                );
 
                 if_chain! {
                     // See if there is a simul efun with this name
