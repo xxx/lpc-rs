@@ -2,7 +2,6 @@ mod support;
 
 use std::sync::Arc;
 
-use claims::assert_err;
 use indoc::indoc;
 use lpc_rs::{
     compiler::{Compiler, CompilerBuilder},
@@ -33,7 +32,10 @@ async fn errors_on_max_inherit_depth() {
     let compiler = default_compiler();
     let result = compiler.compile_string("foo.c", code).await;
 
-    assert_err!(result, "maximum inheritance depth of 10 reached reached");
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "maximum inheritance depth reached"
+    );
 }
 
 #[tokio::test]

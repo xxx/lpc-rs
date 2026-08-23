@@ -21,8 +21,8 @@ macro_rules! assert_regex {
         assert!(
             re.is_match($string),
             "Expected '{}' to match '{}'",
-            $regex,
-            $string
+            $string,
+            $regex
         )
     };
 }
