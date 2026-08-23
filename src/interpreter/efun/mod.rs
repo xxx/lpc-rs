@@ -63,9 +63,10 @@ pub const SIZEOF: &str = "sizeof";
 /// The efun table: one row per efun expands to its dispatch arm and its
 /// [`EFUN_PROTOTYPES`] entry.
 ///
-/// Row: `name [option] => { returns: <LpcType>, arity: <arity>, args: [<LpcType>, ..], flags: ellipsis }`.
+/// Row: `name [option] => { returns: <LpcType>, arity: <arity>, args: [<LpcType>, ..] }`.
 /// `arity` is `n` (n arguments), `(n, d)` (the last `d` defaulted) or
-/// `(n, d, ellipsis)`; `arity`, `args` and `flags` may be omitted.
+/// `(n, d, ellipsis)`, which also sets the prototype's ellipsis flag;
+/// `arity` and `args` may be omitted.
 /// `[in module]` dispatches to `module::name` instead of `name::name`;
 /// `[prototype only]` marks a special form: no module, no dispatch.
 macro_rules! efuns {
@@ -103,18 +104,17 @@ macro_rules! efuns {
         }
     };
 
-    (@flags) => {
-        FunctionFlags::default()
-    };
-    (@flags ellipsis) => {
+    (@flags ($n:literal, $d:literal, ellipsis)) => {
         FunctionFlags::default().with_ellipsis(true)
+    };
+    (@flags $($arity:tt)?) => {
+        FunctionFlags::default()
     };
 
     (@prototype $name:ident {
         returns: $returns:expr
         $(, arity: $arity:tt)?
         $(, args: [$($arg:expr),* $(,)?])?
-        $(, flags: $flags:ident)?
         $(,)?
     }) => {
         FunctionPrototypeBuilder::default()
@@ -124,7 +124,7 @@ macro_rules! efuns {
             .kind(FunctionKind::Efun)
             .arity(efuns!(@arity $($arity)?))
             .arg_types(vec![$($($arg),*)?])
-            .flags(efuns!(@flags $($flags)?))
+            .flags(efuns!(@flags $($arity)?))
             .build()
             .expect(concat!("failed to build ", stringify!($name)))
     };
@@ -184,7 +184,6 @@ efuns! {
                 | LpcType::Mapping(false),
             LpcType::String(false),
         ],
-        flags: ellipsis,
     },
     catch [prototype only] => {
         returns: LpcType::Mixed(false),
@@ -223,7 +222,6 @@ efuns! {
         returns: LpcType::Void,
         arity: (1, 0, ellipsis),
         args: [LpcType::Mixed(false)],
-        flags: ellipsis,
     },
     enable_commands => {
         returns: LpcType::Void,
@@ -423,6 +421,18 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ellipsis_is_one_fact_per_prototype() {
+        for (name, prototype) in EFUN_PROTOTYPES.iter() {
+            assert_eq!(
+                prototype.flags.ellipsis(),
+                prototype.arity.ellipsis,
+                "{name}"
+            );
+        }
+        assert!(EFUN_PROTOTYPES["call_out"].to_string().ends_with(", ...)"));
+    }
 
     /// `CallEfun(u8)` is a position in this list; a reorder breaks every
     /// compiled program.
