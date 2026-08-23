@@ -174,7 +174,7 @@ impl LpcRef {
 
     fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> Box<LpcError> {
         lpc_error!(
-            "Runtime Error: mismatched types: {} ({}) {} {} ({})",
+            "runtime error: mismatched types: {} ({}) {} {} ({})",
             self,
             self.type_name(),
             op,
@@ -185,7 +185,7 @@ impl LpcRef {
 
     fn to_unary_op_error(&self, op: UnaryOperation) -> Box<LpcError> {
         lpc_error!(
-            "Runtime Error: mismatched types: {} {} ({})",
+            "runtime error: mismatched types: {} {} ({})",
             op,
             self,
             self.type_name()
@@ -199,7 +199,7 @@ impl LpcRef {
 
                 Ok(())
             }
-            _ => Err(lpc_error!("Runtime Error: invalid increment")),
+            _ => Err(lpc_error!("runtime error: invalid increment")),
         }
     }
 
@@ -209,7 +209,7 @@ impl LpcRef {
                 *x = x.wrapping_sub(1).into();
                 Ok(())
             }
-            _ => Err(lpc_error!("Runtime Error: invalid decrement")),
+            _ => Err(lpc_error!("runtime error: invalid decrement")),
         }
     }
 
@@ -233,7 +233,7 @@ impl LpcRef {
         match self {
             LpcRef::String(a) => Ok(f(a)),
             _ => Err(lpc_error!(
-                "Runtime Error: invalid access. Expected string, actually {}",
+                "runtime error: invalid access. Expected string, actually {}",
                 self.type_name()
             )),
         }
@@ -306,14 +306,14 @@ impl LpcRef {
 
     fn expected_array_error(&self) -> Box<LpcError> {
         lpc_error!(
-            "Runtime Error: invalid access. Expected array, actually {}",
+            "runtime error: invalid access. Expected array, actually {}",
             self.type_name()
         )
     }
 
     fn expected_mapping_error(&self) -> Box<LpcError> {
         lpc_error!(
-            "Runtime Error: invalid access. Expected mapping, actually {}",
+            "runtime error: invalid access. Expected mapping, actually {}",
             self.type_name()
         )
     }
@@ -428,7 +428,7 @@ impl LpcRef {
     }
 
     pub fn div(&self, rhs: &Self) -> Result<Self> {
-        let zero = || lpc_error!("Runtime Error: Division by zero");
+        let zero = || lpc_error!("runtime error: Division by zero");
 
         match self.promote(rhs) {
             Some(Numeric::Ints(_, 0)) => Err(zero()),
@@ -440,7 +440,7 @@ impl LpcRef {
     }
 
     pub fn rem(&self, rhs: &Self) -> Result<Self> {
-        let zero = || lpc_error!("Runtime Error: Remainder division by zero");
+        let zero = || lpc_error!("runtime error: Remainder division by zero");
 
         match self.promote(rhs) {
             Some(Numeric::Ints(_, 0)) => Err(zero()),
@@ -1318,8 +1318,8 @@ mod tests {
             let float = LpcRef::from(1.0);
             let zero = LpcRef::from(0);
             let fzero = LpcRef::from(0.0);
-            let division = "Runtime Error: Division by zero";
-            let remainder = "Runtime Error: Remainder division by zero";
+            let division = "runtime error: Division by zero";
+            let remainder = "runtime error: Remainder division by zero";
             let cases = [
                 ("int / int", int.div(&zero), division),
                 ("float / float", float.div(&fzero), division),

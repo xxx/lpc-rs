@@ -234,13 +234,27 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     {
         let mut ctx = EfunContext::new(&mut self.stack, &self.context);
 
-        call_efun(name.as_ref(), &mut ctx).await?;
+        let result = call_efun(name.as_ref(), &mut ctx).await;
 
         #[cfg(test)]
         {
             if let Some(snap) = ctx.snapshot {
                 self.snapshots.push(snap);
             }
+        }
+
+        // The efun's own frame has no debug span; the caller's is the nearest
+        // location for an error built without one.
+        if let Err(mut e) = result {
+            if e.span.is_none() {
+                let caller = self
+                    .stack
+                    .len()
+                    .checked_sub(2)
+                    .and_then(|i| self.stack.get(i));
+                *e = e.with_span(caller.and_then(|frame| frame.current_debug_span()));
+            }
+            return Err(e);
         }
 
         pop_frame!(self);

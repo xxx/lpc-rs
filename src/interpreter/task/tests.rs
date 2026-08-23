@@ -474,6 +474,21 @@ mod test_instructions {
         use super::*;
 
         #[tokio::test]
+        async fn accessor_errors_carry_a_span() {
+            let code = r#"mixed x = 1; string s = implode(x, ",");"#;
+
+            let error = try_run_prog(code)
+                .await
+                .expect_err("implode needs an array");
+
+            assert!(error.span.is_some(), "{error:?}");
+            assert_eq!(
+                error.to_string(),
+                "runtime error: invalid access. Expected array, actually int"
+            );
+        }
+
+        #[tokio::test]
         async fn stores_the_value() {
             let code = indoc! { r##"
                     mixed q = this_object();
@@ -873,7 +888,7 @@ mod test_instructions {
                 .await
                 .expect_err("the receiver's initializer fails");
 
-            assert_eq!(error.to_string(), "Runtime Error: Division by zero");
+            assert_eq!(error.to_string(), "runtime error: Division by zero");
         }
 
         #[tokio::test]
@@ -974,7 +989,7 @@ mod test_instructions {
             let expected = vec![
                 BareVal::Int(0),
                 BareVal::Int(0),
-                BareVal::String("Runtime Error: Division by zero".into()),
+                BareVal::String("runtime error: Division by zero".into()),
                 BareVal::Int(10),
                 BareVal::Int(0),
                 BareVal::String("snapshot_stack".into()),
@@ -1500,7 +1515,7 @@ mod test_instructions {
 
             assert_eq!(
                 r.unwrap_err().to_string(),
-                "Runtime Error: Division by zero"
+                "runtime error: Division by zero"
             )
         }
     }
@@ -1542,7 +1557,7 @@ mod test_instructions {
 
             assert_eq!(
                 r.unwrap_err().to_string(),
-                "Runtime Error: Remainder division by zero"
+                "runtime error: Remainder division by zero"
             )
         }
     }
