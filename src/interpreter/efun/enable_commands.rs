@@ -1,12 +1,14 @@
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, object_flags::ObjectFlags};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// `enable_commands`, an efun that enables an object to interact with the game world.
 pub async fn enable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let proc = &context.frame().process;
 
-    proc.flags.set(ObjectFlags::CommandsEnabled);
+    context
+        .txn()
+        .with(|t| t.write(proc.commands_enabled.id, LpcRef::from(1)));
 
     Ok(())
 }
@@ -16,9 +18,39 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{object_flags::ObjectFlags, vm::Vm},
+        interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
         test_support::test_config,
     };
+
+    #[tokio::test]
+    async fn a_failed_attempt_does_not_enable_commands() {
+        let ob = indoc! { r#"
+            void create() {
+                enable_commands();
+                int j = 0;
+                int x = 10 / j;
+            }
+        "# };
+        let checker = indoc! { r#"
+            int alive = living("/ob");
+        "# };
+
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code("/ob.c", ob)
+            .await
+            .expect_err("the initializer divides by zero");
+        let checker_proc = vm
+            .initialize_process_from_code("/checker.c", checker)
+            .await
+            .unwrap()
+            .context
+            .process;
+
+        assert_eq!(
+            vm.global_state.committed_global(&checker_proc, 0u16),
+            LpcRef::from(0)
+        );
+    }
 
     #[tokio::test]
     async fn test_enable_commands() {
@@ -51,7 +83,7 @@ mod tests {
         let prototype = space.lookup("/maybe_interactive").unwrap();
         let clone = space.lookup("/maybe_interactive#0").unwrap();
 
-        assert!(prototype.flags.test(ObjectFlags::CommandsEnabled));
-        assert!(!clone.flags.test(ObjectFlags::CommandsEnabled));
+        assert!(vm.global_state.commands_enabled(&prototype));
+        assert!(!vm.global_state.commands_enabled(&clone));
     }
 }

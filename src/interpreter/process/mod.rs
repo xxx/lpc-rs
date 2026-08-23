@@ -81,6 +81,9 @@ pub struct Process {
     /// initialization rolls it back with the globals.
     pub initialized: SVar<LpcRef>,
 
+    /// The cell marking that commands are enabled; absent means disabled.
+    pub commands_enabled: SVar<LpcRef>,
+
     /// The object-space cell this process lives under, known once it is
     /// inserted or destructed transactionally.
     pub cell: OnceLock<VarId>,
@@ -100,6 +103,7 @@ impl Default for Process {
             connection: SVar::new(),
             flags: Default::default(),
             initialized: SVar::new(),
+            commands_enabled: SVar::new(),
             cell: OnceLock::new(),
             position: Default::default(),
         }
@@ -125,6 +129,7 @@ impl Process {
             connection: SVar::new(),
             flags: Default::default(),
             initialized: SVar::new(),
+            commands_enabled: SVar::new(),
             cell: OnceLock::new(),
             position: Default::default(),
         }
@@ -148,6 +153,7 @@ impl Process {
             connection: SVar::new(),
             flags,
             initialized: SVar::new(),
+            commands_enabled: SVar::new(),
             cell: OnceLock::new(),
             position: Default::default(),
         }
@@ -270,6 +276,11 @@ impl Process {
         })
     }
 
+    /// Whether `enable_commands()` is in effect, as seen through `txn`.
+    pub(crate) fn commands_enabled(&self, txn: &TxnHandle) -> bool {
+        txn.with(|t| t.read(self.commands_enabled.id).is_some())
+    }
+
     /// The committer-world identity of a global slot.
     pub(crate) fn var_id(&self, reg: RegisterSize) -> VarId {
         self.globals[reg as usize].id
@@ -283,6 +294,7 @@ impl Process {
             .map(|slot| slot.id)
             .chain([
                 self.initialized.id,
+                self.commands_enabled.id,
                 self.position.environment.id,
                 self.position.inventory.id,
                 self.connection.id,

@@ -5,7 +5,6 @@ use crate::interpreter::{
     CATCH_TELL,
     efun::{efun_context::EfunContext, write::record_output_effect},
     lpc_ref::LpcRef,
-    object_flags::ObjectFlags,
     task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
 };
 
@@ -20,7 +19,7 @@ pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     };
 
     let delivered = match proc {
-        Some(proc) if proc.flags.test(ObjectFlags::CommandsEnabled) => {
+        Some(proc) if proc.commands_enabled(context.txn()) => {
             match apply_function_by_name(
                 CATCH_TELL,
                 std::slice::from_ref(&string_ref),

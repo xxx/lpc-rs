@@ -181,6 +181,9 @@ pub trait CommittedReader {
     /// Whether `process`'s initializer has run and committed.
     fn is_initialized(&self, process: &Process) -> bool;
 
+    /// Whether a committed `enable_commands()` is in effect on `process`.
+    fn commands_enabled(&self, process: &Process) -> bool;
+
     /// The committed contents of one array payload cell; `None` if the var is
     /// absent or holds a slot value.
     fn committed_array(&self, var_id: VarId) -> Option<LpcArray>;
@@ -213,6 +216,10 @@ impl CommittedReader for Arc<GlobalState> {
 
     fn is_initialized(&self, process: &Process) -> bool {
         self.committed_value(process.initialized.id).is_some()
+    }
+
+    fn commands_enabled(&self, process: &Process) -> bool {
+        self.committed_value(process.commands_enabled.id).is_some()
     }
 
     fn committed_array(&self, var_id: VarId) -> Option<LpcArray> {

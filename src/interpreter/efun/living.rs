@@ -1,9 +1,7 @@
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun, efun::efun_context::EfunContext, lpc_ref::LpcRef, object_flags::ObjectFlags,
-};
+use crate::interpreter::{efun, efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// `living`, an efun that returns whether an object (the caller by default)
 /// has commands enabled.
@@ -12,7 +10,7 @@ pub async fn living<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
 
     let result = efun::arg_or_this_object(arg_ref, context)
         .await
-        .is_some_and(|proc| proc.flags.test(ObjectFlags::CommandsEnabled));
+        .is_some_and(|proc| proc.commands_enabled(context.txn()));
 
     context.return_efun_result(LpcRef::from(result));
 

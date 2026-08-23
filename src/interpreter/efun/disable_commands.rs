@@ -1,12 +1,12 @@
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, object_flags::ObjectFlags};
+use crate::interpreter::efun::efun_context::EfunContext;
 
 /// `disable_commands`, an efun that disables an object from being able to interact with the game world.
 pub async fn disable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let proc = &context.frame().process;
 
-    proc.flags.clear(ObjectFlags::CommandsEnabled);
+    context.txn().with(|t| t.drop_var(proc.commands_enabled.id));
 
     Ok(())
 }
@@ -17,7 +17,7 @@ mod tests {
 
     use crate::{
         interpreter::{
-            object_flags::ObjectFlags,
+            CommittedReader,
             task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
             vm::Vm,
         },
@@ -64,7 +64,7 @@ mod tests {
             .unwrap()
             .clone();
 
-        assert!(prototype.flags.test(ObjectFlags::CommandsEnabled));
+        assert!(vm.global_state.commands_enabled(&prototype));
 
         apply_function_by_name(
             "disabler",
@@ -77,6 +77,6 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        assert!(!prototype.flags.test(ObjectFlags::CommandsEnabled));
+        assert!(!vm.global_state.commands_enabled(&prototype));
     }
 }
