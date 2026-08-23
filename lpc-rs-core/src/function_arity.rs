@@ -14,14 +14,6 @@ pub struct FunctionArity {
     /// The number of arguments that defaults were specified for
     #[builder(default)]
     pub num_default_args: RegisterSize,
-
-    /// Has an ellipsis arg been declared for this function?
-    #[builder(default)]
-    pub ellipsis: bool,
-
-    /// Is the function `varargs`?
-    #[builder(default)]
-    pub varargs: bool,
 }
 
 impl FunctionArity {
@@ -30,104 +22,6 @@ impl FunctionArity {
         Self {
             num_args,
             ..Default::default()
-        }
-    }
-
-    /// Is the passed length valid for this arity?
-    /// This takes `varargs` and ellipsis args into account.
-    #[inline]
-    pub fn is_valid(&self, len: usize) -> bool {
-        if len > RegisterSize::MAX as usize {
-            return false;
-        }
-
-        let len = len as RegisterSize;
-
-        match (self.varargs, self.ellipsis) {
-            (true, true) => true,
-            (true, false) => len <= self.num_args,
-            (false, true) => len >= self.net_args(),
-            (false, false) => {
-                let range = (self.num_args - self.num_default_args)..=self.num_args;
-                range.contains(&len)
-            }
-        }
-    }
-
-    #[inline]
-    fn net_args(&self) -> RegisterSize {
-        self.num_args - self.num_default_args
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    mod test_function_arity {
-        use super::*;
-
-        #[test]
-        fn test_is_valid() {
-            let arity = FunctionArity {
-                num_args: 5,
-                num_default_args: 3,
-                varargs: false,
-                ellipsis: false,
-            };
-
-            assert!(!arity.is_valid(0));
-            assert!(!arity.is_valid(1));
-            assert!(arity.is_valid(2));
-            assert!(arity.is_valid(3));
-            assert!(arity.is_valid(4));
-            assert!(arity.is_valid(5));
-            assert!(!arity.is_valid(6));
-
-            let arity = FunctionArity {
-                num_args: 5,
-                num_default_args: 3,
-                varargs: true,
-                ellipsis: false,
-            };
-
-            assert!(arity.is_valid(0));
-            assert!(arity.is_valid(1));
-            assert!(arity.is_valid(2));
-            assert!(arity.is_valid(3));
-            assert!(arity.is_valid(4));
-            assert!(arity.is_valid(5));
-            assert!(!arity.is_valid(6));
-
-            let arity = FunctionArity {
-                num_args: 5,
-                num_default_args: 3,
-                varargs: false,
-                ellipsis: true,
-            };
-
-            assert!(!arity.is_valid(0));
-            assert!(!arity.is_valid(1));
-            assert!(arity.is_valid(2));
-            assert!(arity.is_valid(3));
-            assert!(arity.is_valid(4));
-            assert!(arity.is_valid(5));
-            assert!(arity.is_valid(6));
-
-            let arity = FunctionArity {
-                num_args: 5,
-                num_default_args: 3,
-                varargs: true,
-                ellipsis: true,
-            };
-
-            assert!(arity.is_valid(0));
-            assert!(arity.is_valid(1));
-            assert!(arity.is_valid(2));
-            assert!(arity.is_valid(3));
-            assert!(arity.is_valid(4));
-            assert!(arity.is_valid(5));
-            assert!(arity.is_valid(6));
         }
     }
 }

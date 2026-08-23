@@ -8,7 +8,7 @@ use derive_builder::Builder;
 use itertools::Itertools;
 use lazy_format::lazy_format;
 use lpc_rs_core::{
-    function_arity::FunctionArity, function_flags::FunctionFlags, lpc_path::LpcPath,
+    RegisterSize, function_arity::FunctionArity, function_flags::FunctionFlags, lpc_path::LpcPath,
     lpc_type::LpcType, mangle::Mangle,
 };
 use lpc_rs_errors::span::Span;
@@ -87,6 +87,24 @@ impl FunctionPrototype {
     pub fn is_efun(&self) -> bool {
         self.kind == FunctionKind::Efun
     }
+
+    /// Whether a call with `len` arguments fits this prototype's arity,
+    /// `varargs`, and ellipsis.
+    pub fn accepts_arg_count(&self, len: usize) -> bool {
+        if len > RegisterSize::MAX as usize {
+            return false;
+        }
+        let len = len as RegisterSize;
+        let arity = self.arity;
+        let required = arity.num_args - arity.num_default_args;
+
+        match (self.flags.varargs(), self.flags.ellipsis()) {
+            (true, true) => true,
+            (true, false) => len <= arity.num_args,
+            (false, true) => len >= required,
+            (false, false) => (required..=arity.num_args).contains(&len),
+        }
+    }
 }
 
 impl Mangle for FunctionPrototype {
@@ -132,5 +150,54 @@ impl Display for FunctionPrototype {
             "{}{}{}{} {}({})",
             nomask, varargs, visibility, self.return_type, self.name, args
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn prototype(flags: FunctionFlags) -> FunctionPrototype {
+        FunctionPrototypeBuilder::default()
+            .name("f")
+            .filename(Arc::new(LpcPath::default()))
+            .return_type(LpcType::Int(false))
+            .arity(FunctionArity {
+                num_args: 5,
+                num_default_args: 3,
+            })
+            .flags(flags)
+            .build()
+            .unwrap()
+    }
+
+    fn accepted(flags: FunctionFlags) -> Vec<usize> {
+        (0..=6)
+            .filter(|&n| prototype(flags).accepts_arg_count(n))
+            .collect()
+    }
+
+    #[test]
+    fn accepts_arg_count_follows_varargs_and_ellipsis() {
+        assert_eq!(accepted(FunctionFlags::default()), vec![2, 3, 4, 5]);
+        assert_eq!(
+            accepted(FunctionFlags::default().with_varargs(true)),
+            vec![0, 1, 2, 3, 4, 5]
+        );
+        assert_eq!(
+            accepted(FunctionFlags::default().with_ellipsis(true)),
+            vec![2, 3, 4, 5, 6]
+        );
+        assert_eq!(
+            accepted(
+                FunctionFlags::default()
+                    .with_varargs(true)
+                    .with_ellipsis(true)
+            ),
+            vec![0, 1, 2, 3, 4, 5, 6]
+        );
+        assert!(
+            !prototype(FunctionFlags::default().with_ellipsis(true)).accepts_arg_count(usize::MAX)
+        );
     }
 }

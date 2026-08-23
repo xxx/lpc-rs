@@ -171,12 +171,11 @@ impl SemanticCheckWalker {
             }
 
             let arg_len = node.arguments.len();
-            let arity = prototype.arity;
 
-            if !arity.is_valid(arg_len) {
+            if !prototype.accepts_arg_count(arg_len) {
                 let e = LpcError::new(format!(
                     "incorrect argument count in call to `{}`: expected: {}, received: {}",
-                    name, arity.num_args, arg_len
+                    name, prototype.arity.num_args, arg_len
                 ))
                 .with_span(node.span)
                 .with_label("defined here", prototype.span);
@@ -1660,11 +1659,7 @@ mod tests {
                     .name("my_function")
                     .filename(Arc::new("my_function.c".into()))
                     .return_type(LpcType::Int(false))
-                    .arity(FunctionArity {
-                        num_args: 5,
-                        varargs: true,
-                        ..FunctionArity::default()
-                    })
+                    .arity(FunctionArity::new(5))
                     .arg_types(vec![
                         LpcType::Int(false),
                         LpcType::Float(false),
@@ -1708,7 +1703,6 @@ mod tests {
                     .arity(FunctionArity {
                         num_args: 1,
                         num_default_args: 1,
-                        ..FunctionArity::default()
                     })
                     .arg_types(vec![LpcType::String(false)])
                     .flags(FunctionFlags::default())

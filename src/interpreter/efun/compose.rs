@@ -3,7 +3,7 @@ use std::sync::Arc;
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::{
     RegisterSize,
-    function_arity::FunctionArityBuilder,
+    function_arity::FunctionArity,
     function_flags::FunctionFlags,
     lpc_type::LpcType,
     register::{Register, RegisterVariant},
@@ -36,13 +36,7 @@ pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
         .name("compose-executor")
         .filename(Arc::new(Default::default()))
         .return_type(LpcType::Mixed(false))
-        .arity(
-            FunctionArityBuilder::default()
-                .num_args(2)
-                .ellipsis(true)
-                .build()
-                .unwrap(),
-        )
+        .arity(FunctionArity::new(2))
         .arg_types(vec![LpcType::Function(false), LpcType::Function(false)])
         .flags(FunctionFlags::default().with_ellipsis(true))
         .build()

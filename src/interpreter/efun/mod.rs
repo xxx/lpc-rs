@@ -87,20 +87,10 @@ macro_rules! efuns {
     (@arity $n:literal) => {
         FunctionArity::new($n)
     };
-    (@arity ($n:literal, $d:literal)) => {
+    (@arity ($n:literal, $d:literal $(, ellipsis)?)) => {
         FunctionArity {
             num_args: $n,
             num_default_args: $d,
-            varargs: false,
-            ellipsis: false,
-        }
-    };
-    (@arity ($n:literal, $d:literal, ellipsis)) => {
-        FunctionArity {
-            num_args: $n,
-            num_default_args: $d,
-            varargs: false,
-            ellipsis: true,
         }
     };
 
@@ -423,14 +413,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ellipsis_is_one_fact_per_prototype() {
-        for (name, prototype) in EFUN_PROTOTYPES.iter() {
-            assert_eq!(
-                prototype.flags.ellipsis(),
-                prototype.arity.ellipsis,
-                "{name}"
-            );
-        }
+    fn the_arity_tuple_sets_the_ellipsis_flag() {
         assert!(EFUN_PROTOTYPES["call_out"].to_string().ends_with(", ...)"));
     }
 

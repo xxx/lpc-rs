@@ -105,8 +105,6 @@ impl TreeWalker for FunctionPrototypeWalker {
                 .arity(FunctionArity {
                     num_args,
                     num_default_args,
-                    ellipsis: node.flags.ellipsis(),
-                    varargs: node.flags.varargs(),
                 })
                 .arg_types(arg_types)
                 .span(node.span)
@@ -166,8 +164,6 @@ impl TreeWalker for FunctionPrototypeWalker {
                 .arity(FunctionArity {
                     num_args,
                     num_default_args,
-                    ellipsis: node.flags.ellipsis(),
-                    varargs: node.flags.varargs(),
                 })
                 .arg_types(arg_types)
                 .span(node.span)
