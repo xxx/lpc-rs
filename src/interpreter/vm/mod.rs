@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use flume::Sender as FlumeSender;
 use lpc_rs_core::lpc_path::LpcPath;
@@ -101,6 +101,11 @@ impl Vm {
     /// Spawn a task to do anything beyond message handling, or logging.
     #[instrument(skip_all)]
     pub async fn run(&mut self) -> lpc_rs_errors::Result<()> {
+        let gc_interval = self.global_state.config.gc_interval;
+        // `interval` panics on a zero period; a disabled collector is gated off at the arm.
+        let mut gc_ticks = tokio::time::interval(Duration::from_secs(gc_interval.max(1)));
+        gc_ticks.tick().await;
+
         loop {
             tokio::select! {
                 biased; // we want signal handlers checked first, always.
@@ -108,6 +113,15 @@ impl Vm {
                     // SIGINT on Linux
                     info!("Ctrl-C received... shutting down");
                     break;
+                }
+                _ = gc_ticks.tick(), if gc_interval > 0 => {
+                    let global_state = self.global_state.clone();
+                    tokio::spawn(async move {
+                        match global_state.gc_when_quiet(20, Duration::from_millis(100)).await {
+                            Ok(report) => info!("gc pass reclaimed {} vars", report.reclaimed),
+                            Err(e) => debug!("gc pass skipped this period: {e}"),
+                        }
+                    });
                 }
                 Some(op) = self.rx.recv() => {
                     match op {
@@ -267,6 +281,52 @@ mod tests {
 
         let report = vm.global_state.gc().await.unwrap();
         assert!(report.reclaimed >= 1, "{report:?}");
+    }
+
+    mod gc_when_quiet {
+        use std::time::Duration;
+
+        use super::*;
+
+        #[tokio::test]
+        async fn runs_at_once_when_nothing_is_in_flight() {
+            let vm = Vm::new(test_config());
+            vm.global_state
+                .gc_when_quiet(3, Duration::from_millis(10))
+                .await
+                .unwrap();
+        }
+
+        #[tokio::test]
+        async fn waits_for_a_transaction_to_finish() {
+            let vm = Vm::new(test_config());
+            let tx = vm.global_state.committer_tx.clone();
+            let live = start_txn(&tx).await.unwrap();
+
+            let releaser = tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                drop(live);
+            });
+            vm.global_state
+                .gc_when_quiet(20, Duration::from_millis(10))
+                .await
+                .unwrap();
+            releaser.await.unwrap();
+        }
+
+        #[tokio::test]
+        async fn gives_up_after_its_retries() {
+            let vm = Vm::new(test_config());
+            let tx = vm.global_state.committer_tx.clone();
+            let _live = start_txn(&tx).await.unwrap();
+
+            let err = vm
+                .global_state
+                .gc_when_quiet(3, Duration::from_millis(5))
+                .await
+                .unwrap_err();
+            assert!(err.to_string().contains("not quiescent"), "{err}");
+        }
     }
 
     /// A GC pass is refused while a transaction is in flight. The transaction

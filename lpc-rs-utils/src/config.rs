@@ -12,6 +12,7 @@ use crate::debug_log::DebugLog;
 
 const DEFAULT_MAX_INHERIT_DEPTH: u8 = 10;
 const DEFAULT_MAX_EXECUTION_TIME: u64 = 300;
+const DEFAULT_GC_INTERVAL: u64 = 300;
 
 /// The main struct that handles runtime use configurations.
 #[derive(Debug, Builder)]
@@ -44,6 +45,10 @@ pub struct Config {
 
     #[builder(default = "DEFAULT_MAX_INHERIT_DEPTH")]
     pub max_inherit_depth: u8,
+
+    /// Seconds between garbage-collection passes; `0` disables them.
+    #[builder(setter(into), default = "DEFAULT_GC_INTERVAL")]
+    pub gc_interval: u64,
 
     #[builder(setter(into, strip_option), default = "None")]
     pub simul_efun_file: Option<Ustr>,
@@ -138,6 +143,11 @@ impl ConfigBuilder {
                 .or_else(|| env.get("MAX_INHERIT_DEPTH"))
                 .map(|x| x.parse::<u8>().unwrap())
                 .or(self.max_inherit_depth),
+            gc_interval: env
+                .get("LPC_GC_INTERVAL")
+                .or_else(|| env.get("GC_INTERVAL"))
+                .map(|x| x.parse::<u64>().unwrap())
+                .or(self.gc_interval),
             port: env
                 .get("LPC_PORT")
                 .or_else(|| env.get("PORT"))
@@ -274,6 +284,19 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gc_interval_defaults_to_five_minutes() {
+        assert_eq!(Config::default().gc_interval, 300);
+        assert_eq!(
+            ConfigBuilder::default()
+                .gc_interval(0u64)
+                .build()
+                .unwrap()
+                .gc_interval,
+            0
+        );
+    }
 
     mod test_validate_in_game_path {
         use super::*;

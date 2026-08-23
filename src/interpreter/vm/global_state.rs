@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc, thread::JoinHandle};
+use std::{path::PathBuf, sync::Arc, thread::JoinHandle, time::Duration};
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{Result, lpc_error};
@@ -6,7 +6,7 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
-use tracing::instrument;
+use tracing::{instrument, trace};
 
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
@@ -236,6 +236,23 @@ impl GlobalState {
         });
 
         gc_pass(&self.committer_tx, roots).await
+    }
+
+    /// Run a GC pass at the next quiet moment: a refused pass (attempts in
+    /// flight) is retried up to `retries` times, `delay` apart, then the
+    /// committer's refusal is returned.
+    pub async fn gc_when_quiet(&self, retries: u32, delay: Duration) -> Result<GcReport> {
+        let mut attempt = 0;
+        loop {
+            match self.gc().await {
+                Err(e) if attempt < retries => {
+                    trace!("gc pass deferred: {e}");
+                    attempt += 1;
+                    tokio::time::sleep(delay).await;
+                }
+                result => return result,
+            }
+        }
     }
 
     pub fn with_call_outs<F, R>(&self, f: F) -> R
