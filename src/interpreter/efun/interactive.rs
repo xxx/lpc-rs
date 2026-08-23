@@ -6,7 +6,7 @@ use crate::interpreter::{efun, efun::efun_context::EfunContext, lpc_ref::LpcRef}
 pub async fn interactive<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
     let result = efun::arg_or_this_object(arg_ref, context)
-        .await
+        .await?
         .is_some_and(|proc| {
             context
                 .txn()

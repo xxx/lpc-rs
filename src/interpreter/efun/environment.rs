@@ -6,7 +6,7 @@ use crate::interpreter::{efun, efun::efun_context::EfunContext, lpc_ref::NULL};
 pub async fn environment<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
     let result = efun::arg_or_this_object(arg_ref, context)
-        .await
+        .await?
         .and_then(|object| {
             context
                 .txn()
@@ -64,7 +64,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn environment_of_an_unloadable_path_is_zero() {
+    async fn environment_of_an_unloadable_path_errors() {
         let master = indoc! { r#"
             mixed create() {
                 return environment("/nonexistent");
@@ -72,12 +72,12 @@ mod tests {
         "# };
 
         let vm = Vm::new(test_config());
-        let master_proc = vm
+        let error = vm
             .initialize_process_from_code("/master.c", master)
             .await
-            .unwrap();
+            .expect_err("the path cannot load");
 
-        assert_eq!(master_proc.result().unwrap(), LpcRef::from(0));
+        assert!(error.to_string().contains("nonexistent"), "{error}");
     }
 
     #[tokio::test]

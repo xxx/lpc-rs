@@ -133,7 +133,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             function_name.as_ref(),
             task_context,
         )
-        .await;
+        .await?;
 
         if let Some(receiver) = resolved {
             let new_context = task_context.clone().with_process(receiver.clone());
@@ -174,31 +174,32 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         receiver_ref: &LpcRef,
         name: T,
         context: &TaskContext,
-    ) -> Option<Arc<Process>>
+    ) -> Result<Option<Arc<Process>>>
     where
         T: AsRef<str>,
     {
         let process = match receiver_ref {
             LpcRef::String(_) => {
-                let path = receiver_ref
-                    .with_string(|s| LpcPath::InGame(PathBuf::from(s)))
-                    .ok()?;
+                let path = receiver_ref.with_string(|s| LpcPath::InGame(PathBuf::from(s)))?;
 
                 match context.find_object(&path) {
                     ObjectLookup::Found(proc) => proc,
                     // A destructed object: don't create (that would resurrect
                     // it); the call below short-circuits.
-                    ObjectLookup::Removed => return None,
+                    ObjectLookup::Removed => return Ok(None),
                     // NotCreated: create-on-miss, transactionally.
                     ObjectLookup::NotCreated => {
-                        let process = context.compile_process(&path).await.ok()?;
+                        let process = context.compile_process(&path).await?;
                         context.insert_process_transactional(&process);
                         process
                     }
                 }
             }
-            LpcRef::Object(_) => receiver_ref.live_object(context.txn())?,
-            _ => return None,
+            LpcRef::Object(_) => match receiver_ref.live_object(context.txn()) {
+                Some(proc) => proc,
+                None => return Ok(None),
+            },
+            _ => return Ok(None),
         };
 
         // If uninitialized, it's time to set that up. Note that we do this regardless
@@ -207,21 +208,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // undefined function in old lib code, this is why.
         let result = if !process.is_initialized(context.txn()) {
             let ctx = context.clone().with_process(process);
-            let Ok(task) = Self::initialize_sub_process(task_id, ctx).await else {
-                return None;
-            };
-
-            task.context.process
+            Self::initialize_sub_process(task_id, ctx)
+                .await?
+                .context
+                .process
         } else {
             process
         };
 
         // Only switch the process if there's actually a function to
         // call by this name on the other side.
-        if result.program.contains_function(name) {
-            Some(result)
-        } else {
-            None
-        }
+        Ok(result.program.contains_function(name).then_some(result))
     }
 }

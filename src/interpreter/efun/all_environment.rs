@@ -7,8 +7,7 @@ pub async fn all_environment<const N: usize>(context: &mut EfunContext<'_, N>) -
     efun::return_objects_of(context, |txn, object| {
         Process::all_environment(txn.clone(), object)
     })
-    .await;
-    Ok(())
+    .await
 }
 
 #[cfg(test)]

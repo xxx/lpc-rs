@@ -832,7 +832,49 @@ mod test_instructions {
     }
 
     mod test_call_other {
+        use lpc_rs_errors::lazy_files::FILE_CACHE;
+
         use super::*;
+
+        fn add_fixture(name: &str, code: &str) {
+            let path = format!("{}/{name}.c", crate::test_support::test_config().lib_dir);
+            FILE_CACHE.write().add_eager(path, code);
+        }
+
+        #[tokio::test]
+        async fn errors_on_a_missing_path() {
+            let code = r#"mixed q = "/no_such_file"->foo();"#;
+
+            let error = try_run_prog(code)
+                .await
+                .expect_err("the receiver cannot load");
+
+            assert!(error.to_string().contains("no_such_file"), "{error}");
+        }
+
+        #[tokio::test]
+        async fn errors_on_an_uncompilable_path() {
+            add_fixture("bad_source", "int x = ;");
+            let code = r#"mixed q = "/bad_source"->foo();"#;
+
+            let error = try_run_prog(code)
+                .await
+                .expect_err("the receiver cannot compile");
+
+            assert_eq!(error.to_string(), "Unrecognized Token: ;");
+        }
+
+        #[tokio::test]
+        async fn propagates_the_receivers_init_error() {
+            add_fixture("init_fails", "int j = 0; int x = 10 / j;");
+            let code = r#"mixed q = "/init_fails"->foo();"#;
+
+            let error = try_run_prog(code)
+                .await
+                .expect_err("the receiver's initializer fails");
+
+            assert_eq!(error.to_string(), "Runtime Error: Division by zero");
+        }
 
         #[tokio::test]
         async fn stores_the_value() {
@@ -887,25 +929,6 @@ mod test_instructions {
             let expected = vec![
                 BareVal::Int(0),
                 BareVal::Object("/my_file".into()),
-                BareVal::String("tacos".into()),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, registers);
-        }
-
-        #[tokio::test]
-        async fn returns_0_for_unknown_receiver() {
-            let code = indoc! { r##"
-                    mixed q = "/foobarbaz"->tacos();
-                "##};
-
-            let task = run_prog(code).await;
-            let registers = &task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::String("/foobarbaz".into()),
                 BareVal::String("tacos".into()),
                 BareVal::Int(0),
             ];

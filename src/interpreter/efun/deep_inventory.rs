@@ -13,8 +13,7 @@ pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) ->
         recurse_deep_inventory(txn, &object, &mut collection);
         collection
     })
-    .await;
-    Ok(())
+    .await
 }
 
 /// Read the passed transaction's view of `env`'s inventory and recurse into it,

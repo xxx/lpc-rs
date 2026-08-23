@@ -9,7 +9,7 @@ pub async fn living<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
 
     let result = efun::arg_or_this_object(arg_ref, context)
-        .await
+        .await?
         .is_some_and(|proc| proc.commands_enabled(context.txn()));
 
     context.return_efun_result(LpcRef::from(result));
@@ -23,7 +23,7 @@ mod tests {
 
     use crate::{
         interpreter::{CommittedReader, lpc_int::LpcInt, lpc_ref::LpcRef, vm::Vm},
-        test_support::{run_prog, test_config},
+        test_support::{run_prog, test_config, try_run_prog},
     };
 
     #[tokio::test]
@@ -44,6 +44,15 @@ mod tests {
 
         assert_eq!(gs.committed_global(proc, 0), LpcRef::from(0));
         assert_eq!(gs.committed_global(proc, 1), LpcRef::from(1));
+    }
+
+    #[tokio::test]
+    async fn living_of_an_unloadable_path_errors() {
+        let error = try_run_prog(r#"int a = living("/nonexistent");"#)
+            .await
+            .expect_err("the path cannot load");
+
+        assert!(error.to_string().contains("nonexistent"), "{error}");
     }
 
     #[tokio::test]

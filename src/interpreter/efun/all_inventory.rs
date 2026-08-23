@@ -4,8 +4,7 @@ use crate::interpreter::{efun, efun::efun_context::EfunContext, process::Process
 
 /// `all_inventory`, an efun for returning an object's inventory.
 pub async fn all_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    efun::return_objects_of(context, |txn, object| Process::inventory_of(txn, &object)).await;
-    Ok(())
+    efun::return_objects_of(context, |txn, object| Process::inventory_of(txn, &object)).await
 }
 
 #[cfg(test)]
