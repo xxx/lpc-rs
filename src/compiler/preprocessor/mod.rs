@@ -571,42 +571,37 @@ impl Preprocessor {
             let matched = captures.get(1).unwrap();
 
             let config = self.context.config.clone();
-            for dir in &config.system_include_dirs {
-                let to_include =
+            // The first system dir holding the file wins; whatever goes
+            // wrong including it is reported from there.
+            let found = config.system_include_dirs.iter().find_map(|dir| {
+                let candidate =
                     LpcPath::new_in_game(matched.as_str(), dir.as_str(), &*config.lib_dir);
-                return match self.include_local_file(&to_include, Some(token.0)).await {
-                    Ok(included) => {
-                        for spanned in included {
-                            self.append_spanned(output, spanned)
-                        }
+                candidate
+                    .as_server(&*config.lib_dir)
+                    .exists()
+                    .then_some(candidate)
+            });
+            let to_include = found
+                .unwrap_or_else(|| LpcPath::new_in_game(matched.as_str(), cwd, &*config.lib_dir));
 
-                        Ok(())
-                    }
-                    Err(e) => {
-                        // TODO: bleeeeeeech. Errors should have a better way to handle this.
-                        // If the error is just "file not found", keep looking
-                        if e.message().contains("unable to read include file") {
-                            continue;
-                        }
-
-                        Err(e)
-                    }
-                };
-            }
-
-            let to_include = LpcPath::new_in_game(matched.as_str(), cwd, &*config.lib_dir);
-
-            // Fall back to trying the path directly
-            let included = self.include_local_file(&to_include, Some(token.0)).await?;
-
-            for spanned in included {
-                self.append_spanned(output, spanned)
-            }
-
-            Ok(())
+            self.include_into(&to_include, token.0, output).await
         } else {
             Err(lpc_error!(Some(token.0), "invalid `#include`."))
         }
+    }
+
+    /// Include `path` at `span`, appending its tokens to `output`.
+    async fn include_into(
+        &mut self,
+        path: &LpcPath,
+        span: Span,
+        output: &mut Vec<Spanned<Token>>,
+    ) -> Result<()> {
+        let included = self.include_local_file(path, Some(span)).await?;
+        for spanned in included {
+            self.append_spanned(output, spanned)
+        }
+        Ok(())
     }
 
     /// # Arguments
@@ -635,13 +630,7 @@ impl Preprocessor {
             let to_include =
                 LpcPath::new_in_game(matched.as_str(), cwd, &*self.context.config.lib_dir);
 
-            let included = self.include_local_file(&to_include, Some(token.0)).await?;
-
-            for spanned in included {
-                self.append_spanned(output, spanned)
-            }
-
-            Ok(())
+            self.include_into(&to_include, token.0, output).await
         } else {
             Err(lpc_error!(Some(token.0), "invalid `#include`."))
         }
@@ -914,7 +903,7 @@ impl Preprocessor {
             Err(e) => {
                 return Err(lpc_error!(
                     span,
-                    "unable to read include file `{}`: {:?}",
+                    "unable to read include file `{}`: {}",
                     path,
                     e
                 ));
@@ -1132,7 +1121,50 @@ mod tests {
         async fn test_errors_for_nonexistent_paths() {
             let input = r#"#include <nonexistent.h>"#;
 
-            test_invalid(input, "unable to read include file `/nonexistent.h`").await;
+            test_invalid(
+                input,
+                "^unable to read include file `/nonexistent.h`: No such file or directory \\(os error 2\\)$",
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn an_unreadable_system_header_is_an_error_not_a_fallthrough() {
+            use std::os::unix::fs::PermissionsExt;
+
+            let root = std::env::temp_dir()
+                .join(format!("lpc-rs-unreadable-header-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            std::fs::create_dir_all(root.join("sys")).unwrap();
+            std::fs::create_dir_all(root.join("sys2")).unwrap();
+            std::fs::write(root.join("sys/secret.h"), "first").unwrap();
+            std::fs::write(root.join("sys2/secret.h"), "second").unwrap();
+            std::fs::set_permissions(
+                root.join("sys/secret.h"),
+                std::fs::Permissions::from_mode(0o000),
+            )
+            .unwrap();
+
+            let config = ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .system_include_dirs(vec!["/sys", "/sys2"])
+                .build()
+                .unwrap();
+            let context = CompilationContextBuilder::default()
+                .filename(Arc::new("test.c".into()))
+                .config(config)
+                .build()
+                .unwrap();
+            let mut preprocessor = Preprocessor::new(context);
+
+            let result = preprocessor.scan("/test.c", "#include <secret.h>").await;
+            let _ = std::fs::remove_dir_all(&root);
+
+            let e = result.unwrap_err();
+            assert_eq!(
+                e.message(),
+                "unable to read include file `/sys/secret.h`: Permission denied (os error 13)"
+            );
         }
 
         #[tokio::test]
@@ -1228,7 +1260,11 @@ mod tests {
         async fn test_errors_for_nonexistent_paths() {
             let input = r#"#include "/askdf/foo.h""#;
 
-            test_invalid(input, "unable to read include file `/askdf/foo.h`").await;
+            test_invalid(
+                input,
+                "^unable to read include file `/askdf/foo.h`: No such file or directory \\(os error 2\\)$",
+            )
+            .await;
         }
 
         #[tokio::test]
