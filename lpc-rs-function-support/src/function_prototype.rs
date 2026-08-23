@@ -12,10 +12,9 @@ use lpc_rs_core::{
     lpc_type::LpcType, mangle::Mangle,
 };
 use lpc_rs_errors::span::Span;
-use serde::{Deserialize, Serialize};
 
 /// Kinds of functions. Used for codegen.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
 pub enum FunctionKind {
     /// A plain old normal LPC function, defined in a plain old normal LPC object.
     #[default]
@@ -41,7 +40,7 @@ impl Display for FunctionKind {
 }
 
 /// A representation of a function prototype, used to allow forward references.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Builder)]
+#[derive(Debug, Clone, Eq, PartialEq, Builder)]
 #[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
 #[readonly::make]
 pub struct FunctionPrototype {

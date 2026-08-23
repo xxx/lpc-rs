@@ -37,7 +37,7 @@ flume = "0.12.0"
 futures = "0.3.28"
 if_chain = "1.0.1"
 imbl = "7.0.1"
-indexmap = { version = "2.14.0", features = ["serde"] }
+indexmap = "2.14.0"
 indextree = { version = "4.3.1", features = ["deser"] }
 itertools = "0.15.0"
 lalrpop-util = "0.23.1"
@@ -53,8 +53,6 @@ path-dedot = "4.0.1"
 phf = { version = "0.14.0", features = ["macros"] }
 readonly = "0.2.3"
 regex = "1"
-rmp-serde = "1.0.0"
-serde = { version = "1.0.123", features = ["derive", "rc"] }
 slab = "0.4.8"
 stable-vec = "0.4.0"
 string-interner = "0.20.0"
@@ -66,7 +64,6 @@ tracing = "~0.1"
 ustr = "1.1.0"
 
 [dev-dependencies]
-beaver = "1.0.0"
 claims = "0.8.0"
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support", "async_tokio"] }
 factori = "1.1.0"

@@ -174,17 +174,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
-name = "beaver"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dae9d37f4bd59fa25b65676d759cec12a6c617008b797fd37511c2b7851c133"
-dependencies = [
- "lazy_static",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1062,8 +1051,6 @@ checksum = "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
 dependencies = [
  "equivalent",
  "hashbrown 0.17.1",
- "serde",
- "serde_core",
 ]
 
 [[package]]
@@ -1294,7 +1281,6 @@ dependencies = [
  "arrayvec",
  "async-recursion",
  "async-trait",
- "beaver",
  "bit-set 0.11.1",
  "bytes",
  "chrono",
@@ -1333,9 +1319,7 @@ dependencies = [
  "phf",
  "readonly",
  "regex",
- "rmp-serde",
  "rpds",
- "serde",
  "slab",
  "stable-vec",
  "string-interner",
@@ -1355,7 +1339,6 @@ version = "0.1.0"
 dependencies = [
  "lpc-rs-core",
  "lpc-rs-errors",
- "serde",
  "static_assertions",
 ]
 
@@ -1370,7 +1353,6 @@ dependencies = [
  "modular-bitfield",
  "once_cell",
  "path-absolutize",
- "serde",
  "ustr",
 ]
 
@@ -1399,7 +1381,6 @@ dependencies = [
  "lalrpop-util",
  "once_cell",
  "parking_lot",
- "serde",
  "tokio",
 ]
 
@@ -1416,7 +1397,6 @@ dependencies = [
  "multimap",
  "once_cell",
  "readonly",
- "serde",
  "string-interner",
  "tracing",
 ]
@@ -1806,25 +1786,6 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
-
-[[package]]
-name = "rmp"
-version = "0.8.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ba8be72d372b2c9b35542551678538b562e7cf86c3315773cae48dfbfe7790c"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
-name = "rmp-serde"
-version = "1.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72f81bee8c8ef9b577d1681a70ebbc962c232461e397b22c208c43c04b67a155"
-dependencies = [
- "rmp",
- "serde",
-]
 
 [[package]]
 name = "rpds"
@@ -2334,7 +2295,6 @@ dependencies = [
  "byteorder",
  "lazy_static",
  "parking_lot",
- "serde",
 ]
 
 [[package]]

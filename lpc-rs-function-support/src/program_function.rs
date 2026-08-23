@@ -17,7 +17,6 @@ use lpc_rs_core::{
 use lpc_rs_errors::span::Span;
 use multimap::MultiMap;
 use once_cell::sync::OnceCell;
-use serde::{Deserialize, Serialize};
 use string_interner::{DefaultBackend, StringInterner};
 use tracing::trace;
 
@@ -30,7 +29,7 @@ use crate::{function_prototype::FunctionPrototype, symbol::Symbol};
 /// `closure-<id>`, which is unparseable, and cannot conflict with user-defined
 /// functions They otherwise act as normal functions, with the exception of
 /// upvalue access.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Builder)]
+#[derive(Debug, Clone, Eq, PartialEq, Builder)]
 #[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct ProgramFunction {
     /// My prototype from compilation
@@ -71,8 +70,6 @@ pub struct ProgramFunction {
     /// Interned strings. These are stored by our containing `Program` and
     /// shared among all functions in the program.
     #[builder(default)]
-    #[serde(serialize_with = "lpc_rs_core::serialize::serialize_once_cell")]
-    #[serde(deserialize_with = "lpc_rs_core::serialize::deserialize_once_cell")]
     pub strings: OnceCell<Arc<StringInterner<DefaultBackend>>>,
 }
 

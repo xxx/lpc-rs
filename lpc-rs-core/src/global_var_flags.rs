@@ -1,14 +1,13 @@
 use std::fmt::{Display, Formatter};
 
 use modular_bitfield::prelude::*;
-use serde::{Deserialize, Serialize};
 
 use crate::visibility::Visibility;
 
 /// A struct to keep track of the various boolean flags that can be set
 /// on global variables, like `public` and `private`.
 #[bitfield(filled = false)]
-#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Default, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Default, Hash)]
 pub struct GlobalVarFlags {
     #[bits = 2]
     pub visibility: Visibility,

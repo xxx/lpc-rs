@@ -4,11 +4,10 @@ use std::{
 };
 
 use bit_set::BitSet;
-use serde::{Deserialize, Serialize};
 
 /// A unique ID, suitable for uniquely identifying an object that contains
 /// references that could be garbage-collected.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct UniqueId(u32);
 
 impl UniqueId {

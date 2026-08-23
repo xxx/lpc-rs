@@ -1,5 +1,4 @@
 use modular_bitfield::prelude::*;
-use serde::{Deserialize, Serialize};
 
 pub const NO_CLONE: &str = "no_clone";
 pub const NO_INHERIT: &str = "no_inherit";
@@ -9,7 +8,7 @@ pub const STRICT_TYPES: &str = "strict_types";
 
 /// A struct to track which `pragma`s have been enabled in a `Program`
 #[bitfield(filled = false)]
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PragmaFlags {
     /// Disallow a `Program` from being cloned at runtime via `clone_object`
     pub no_clone: bool,

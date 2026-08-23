@@ -1,11 +1,9 @@
 use std::fmt::{Display, Formatter};
 
-use serde::{Deserialize, Serialize};
-
 use crate::register::RegisterVariant;
 
 /// The possible receivers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FunctionReceiver {
     /// The receiver is the object that defines the function.
     Local,

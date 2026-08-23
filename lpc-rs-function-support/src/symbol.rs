@@ -5,12 +5,11 @@ use lpc_rs_core::{
     visibility::Visibility,
 };
 use lpc_rs_errors::span::Span;
-use serde::{Deserialize, Serialize};
 
 use crate::function_prototype::FunctionPrototype;
 
 /// Representation of a Symbol, to be stored in the Scopes
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Symbol {
     /// The name of this symbol
     pub name: String,

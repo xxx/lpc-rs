@@ -4,10 +4,8 @@ use std::{
     ops::Add,
 };
 
-use serde::{Deserialize, Serialize};
-
 /// Really just a `pc` index in the vm.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Address(pub usize);
 
 impl Display for Address {

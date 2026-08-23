@@ -1,5 +1,4 @@
 use modular_bitfield::prelude::*;
-use serde::{Deserialize, Serialize};
 
 use crate::{mangle::Mangle, visibility::Visibility};
 
@@ -7,7 +6,7 @@ use crate::{mangle::Mangle, visibility::Visibility};
 /// on functions, like `varargs` and `static`, as well as whether the function
 /// takes ellipsis args.
 #[bitfield(filled = false)]
-#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Hash, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Hash, Default)]
 pub struct FunctionFlags {
     pub ellipsis: bool,
     pub varargs: bool,

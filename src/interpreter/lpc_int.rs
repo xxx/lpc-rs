@@ -2,9 +2,8 @@ use std::fmt::{Display, Formatter};
 
 use delegate::delegate;
 use lpc_rs_core::LpcIntInner;
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LpcInt(pub LpcIntInner);
 
 impl LpcInt {

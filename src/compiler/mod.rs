@@ -316,9 +316,6 @@ impl Compiler {
         // }
         // println!();
 
-        // let msgpack = program.to_msgpack();
-        // println!("{:?}", msgpack.len());
-        // println!("{:?}", Program::from(msgpack));
         Ok(program)
     }
 

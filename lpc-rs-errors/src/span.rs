@@ -5,13 +5,12 @@ use std::{
 
 use codespan_reporting::files::Files;
 use if_chain::if_chain;
-use serde::{Deserialize, Serialize};
 
 use crate::lazy_files::{FILE_CACHE, FileId};
 
 /// Store the details of a code span, for use in error messaging.
 /// `r` is set such that `span.l..span.r` will return the correct span of chars.
-#[derive(Hash, Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Hash, Debug, Copy, Clone, Eq, PartialEq, PartialOrd)]
 pub struct Span {
     /// Left index of the span
     pub l: usize,

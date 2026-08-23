@@ -1,10 +1,9 @@
 use derive_builder::Builder;
-use serde::{Deserialize, Serialize};
 
 use crate::RegisterSize;
 
 /// A struct to hold data about a function's expected arity at call time.
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Builder)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Builder)]
 pub struct FunctionArity {
     /// The number of explicitly-specified parameters
     /// For partial applications, this is the arity of the underlying function,

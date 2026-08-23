@@ -8,14 +8,13 @@ use lpc_rs_core::{
     register::RegisterVariant,
 };
 use lpc_rs_errors::{Result, lpc_bug};
-use serde::{Deserialize, Serialize};
 
 use crate::address::Address;
 
 /// Representation of an assembly language instruction.
 /// In general, they are structured as `name(arg1, ...argn, destination)`, a la
 /// the AT&T syntax
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Instruction {
     /// Create an array with values from the vector
     AConst(RegisterVariant),

@@ -1,13 +1,12 @@
 use std::{fmt, ops::BitOr};
 
 use fmt::{Display, Formatter};
-use serde::{Deserialize, Serialize};
 
 use crate::{lpc_type_union::LpcTypeUnion, mangle::Mangle};
 
 /// The enumeration of types that a variable can be declared as.
 /// The bool is whether it's an array.
-#[derive(Debug, Clone, Copy, Eq, PartialOrd, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialOrd, PartialEq, Hash)]
 pub enum LpcType {
     Void,
     Int(bool),

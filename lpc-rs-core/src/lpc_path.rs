@@ -9,11 +9,10 @@ use std::{
 
 use bstr::ByteSlice;
 use path_absolutize::{Absolutize, path_dedot::ParseDot};
-use serde::{Deserialize, Serialize};
 
 use crate::mangle::Mangle;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LpcPath {
     /// Represent an on-server path. Relative paths are relative to the running
     /// process' dir.

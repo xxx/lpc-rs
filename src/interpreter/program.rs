@@ -12,11 +12,9 @@ use itertools::Itertools;
 use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, pragma_flags::PragmaFlags};
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use path_dedot::*;
-use rmp_serde::Serializer;
-use serde::{Deserialize, Serialize};
 use string_interner::{DefaultBackend, StringInterner};
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Builder)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Builder)]
 #[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct Program {
     /// The path to the file that this program was compiled from.
@@ -62,13 +60,6 @@ impl<'a> Program {
             filename: Arc::new(filename.into()),
             ..Default::default()
         }
-    }
-
-    /// Serialize the program to msgpack format, suitable for saving to disk.
-    pub fn to_msgpack(&self) -> Vec<u8> {
-        let mut buf = vec![];
-        self.serialize(&mut Serializer::new(&mut buf)).unwrap();
-        buf
     }
 
     /// Look up a function by its name, starting from this program,
@@ -169,13 +160,6 @@ impl<'a> Program {
     }
 }
 
-impl From<Vec<u8>> for Program {
-    /// Deserialize from msgpack data
-    fn from(vec: Vec<u8>) -> Self {
-        rmp_serde::from_slice(&vec).unwrap()
-    }
-}
-
 impl Display for Program {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.filename)
@@ -186,24 +170,6 @@ impl Display for Program {
 mod tests {
 
     use super::*;
-    use crate::compiler::Compiler;
-
-    #[tokio::test]
-    async fn test_serialization_and_deserialization() {
-        let content = r#"
-            int *foo = ({ 1, 2, 3, 4, 234 });
-            void create() {
-                foo = foo + ({ 666 });
-                dump(foo);
-            }
-        "#;
-        let compiler = Compiler::default();
-        let prog = compiler.compile_string("foo.c", content).await.unwrap();
-
-        let msgpack = prog.to_msgpack();
-
-        assert_eq!(Program::from(msgpack), prog);
-    }
 
     #[test]
     fn test_cwd() {
