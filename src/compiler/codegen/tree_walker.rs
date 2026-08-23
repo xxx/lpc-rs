@@ -438,8 +438,7 @@ pub trait TreeWalker {
     /// every later pass reads it.
     fn enter_scope(&mut self, _scope_id: &mut Option<ScopeId>) {}
 
-    /// The counterpart to [`enter_scope`](TreeWalker::enter_scope), called
-    /// after the visit returns — whether it succeeded or not.
+    /// Called after the visit returns — whether it succeeded or not.
     fn exit_scope(&mut self) {}
 
     /// Visit an array literal node
