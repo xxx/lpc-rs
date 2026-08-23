@@ -61,9 +61,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     for lpc_ref in &mut refs {
                         let ctx = &self.context;
 
-                        let result = Self::resolve_result(lpc_ref, &*function_name, &args, ctx)
-                            .await
-                            .unwrap_or(NULL);
+                        let result =
+                            Self::resolve_result(lpc_ref, &*function_name, &args, ctx).await?;
 
                         *lpc_ref = result;
                     }
@@ -78,8 +77,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     for (_key_ref, value_ref) in map.iter_mut() {
                         let result =
                             Self::resolve_result(value_ref, &*function_name, &args, &self.context)
-                                .await
-                                .unwrap_or(NULL);
+                                .await?;
 
                         *value_ref = result;
                     }

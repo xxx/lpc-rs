@@ -1208,6 +1208,30 @@ mod test_instructions {
         }
 
         #[tokio::test]
+        async fn call_other_on_an_array_propagates_an_error() {
+            let code = indoc! { r##"
+                void create() {
+                    object o = clone_object("/ptr_target");
+                    ({ o })->fire((: 1 / 0 :));
+                }
+            "##};
+            let e = try_run_prog(code).await.unwrap_err();
+            assert_eq!(e.to_string(), "runtime error: Division by zero");
+        }
+
+        #[tokio::test]
+        async fn call_other_on_a_mapping_propagates_an_error() {
+            let code = indoc! { r##"
+                void create() {
+                    object o = clone_object("/ptr_target");
+                    ([ "o": o ])->fire((: 1 / 0 :));
+                }
+            "##};
+            let e = try_run_prog(code).await.unwrap_err();
+            assert_eq!(e.to_string(), "runtime error: Division by zero");
+        }
+
+        #[tokio::test]
         async fn a_timeout_carries_the_trace_it_interrupted() {
             use lpc_rs_utils::config::ConfigBuilder;
 
