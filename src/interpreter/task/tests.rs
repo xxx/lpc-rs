@@ -769,6 +769,27 @@ mod test_instructions {
         }
 
         #[tokio::test]
+        async fn a_positional_arg_follows_a_captured_parameter() {
+            let code = indoc! { r##"
+                mixed r;
+                void create() {
+                    function f = (: [int x] function g = (: x :); return g() + $2; :);
+                    r = f(10, 1);
+                }
+            "##};
+            assert_eq!(committed_r(code).await, "11");
+        }
+
+        #[tokio::test]
+        async fn a_positional_arg_aliases_a_declared_parameter() {
+            let code = indoc! { r##"
+                mixed r;
+                void create() { function f = (: [int x] $1 * 2 :); r = f(21); }
+            "##};
+            assert_eq!(committed_r(code).await, "42");
+        }
+
+        #[tokio::test]
         async fn a_dynamic_pointer_without_a_receiver_is_an_error() {
             let code = indoc! { r##"
                 mixed r;

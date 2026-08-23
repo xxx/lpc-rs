@@ -1262,14 +1262,6 @@ impl TreeWalker for CodegenWalker {
 
         let populate_defaults_index = self.setup_populate_defaults(node.span, num_default_args);
 
-        // bump the register counter if they have used `$\d` vars that go beyond
-        // declared parameters, so that the positional params point to the correct slot.
-        let current_count = self.register_counter.number_emitted();
-        if num_args > current_count {
-            self.register_counter.set(num_args + 1);
-            self.current_result = Register(num_args + 1).as_local();
-        }
-
         let populate_argv_index =
             self.setup_populate_argv(node.flags.ellipsis(), node.span, declared_arg_count)?;
 
@@ -1319,7 +1311,11 @@ impl TreeWalker for CodegenWalker {
         // The mangled name carries the file, so inherited code keeps its own closures.
         let name = ustr(&func.mangle());
 
-        func.num_locals = self.register_counter.number_emitted() - num_args;
+        // A captured parameter holds no register, so the count can fall short of `num_args`.
+        func.num_locals = self
+            .register_counter
+            .number_emitted()
+            .saturating_sub(num_args);
         func.num_upvalues = self.context.scopes.get(scope_id).unwrap().num_upvalues;
         func.arg_locations = declared_arg_locations;
 
@@ -2128,12 +2124,18 @@ impl TreeWalker for CodegenWalker {
     async fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
         if node.is_closure_arg_var() {
             let idx = closure_arg_number(node.name)?;
-            let loc = self
+            let Some(loc) = self
                 .closure_arg_locations
                 .last()
                 .and_then(|locs| locs.get((idx - 1) as usize))
                 .copied()
-                .unwrap_or_else(|| Register(idx).as_local());
+            else {
+                return Err(lpc_bug!(
+                    node.span,
+                    "positional `{}` is not a parameter of its closure",
+                    node.name
+                ));
+            };
             self.current_result = loc;
 
             return Ok(());
@@ -3419,7 +3421,7 @@ mod tests {
                 FunctionPtrConst {
                     location: RegisterVariant::Local(Register(1)),
                     receiver: FunctionReceiver::Local,
-                    name: ustr("closure-0__x__/my_file.c__pv__"),
+                    name: ustr("closure-0__x__/my_file.c__pv__x"),
                 },
                 IConst(RegisterVariant::Local(Register(2)), 666),
                 ClearArgs,
@@ -3917,6 +3919,43 @@ mod tests {
             let program = walker.into_program().unwrap();
             assert!(program.functions.contains_key(&name));
             assert!(!program.unmangled_functions.contains_key("closure-0"));
+        }
+
+        #[tokio::test]
+        async fn positional_args_are_parameters_of_their_own_closure() {
+            let code = indoc! {r##"
+                void create() { function a = (: [int x] $3 :); function b = (: 1 :); }
+            "##};
+            let walker = walk_prog(code).await;
+
+            let a = &walker.context.function_prototypes["closure-0"];
+            assert_eq!(a.arity.num_args, 3);
+            assert_eq!(
+                a.arg_types,
+                vec![
+                    LpcType::Int(false),
+                    LpcType::Mixed(false),
+                    LpcType::Mixed(false)
+                ]
+            );
+
+            let b = &walker.context.function_prototypes["closure-1"];
+            assert_eq!(b.arity.num_args, 0);
+        }
+
+        #[tokio::test]
+        async fn a_positional_arg_beyond_a_defaulted_parameter_is_an_error() {
+            let code = indoc! {r##"
+                void create() { function a = (: [int i = 5] $2 :); }
+            "##};
+            let walker = walk_prog(code).await;
+            let errors: Vec<String> = walker
+                .context
+                .errors
+                .iter()
+                .map(|e| e.to_string())
+                .collect();
+            assert!(errors.iter().any(|e| e.contains("defaulted")), "{errors:?}");
         }
 
         /// The function owning local `var`, with that local's location.
@@ -5118,9 +5157,9 @@ mod tests {
                 .unwrap()
                 .instructions;
             let expected = vec![
-                SConst(RegisterVariant::Local(Register(2)), ustr("i")),
+                SConst(RegisterVariant::Local(Register(1)), ustr("i")),
                 ClearArgs,
-                PushArg(RegisterVariant::Local(Register(2))),
+                PushArg(RegisterVariant::Local(Register(1))),
                 PushArg(RegisterVariant::Upvalue(Register(0))), /* This is what we're really testing for */
                 CallEfun(12),
                 // ...etc. We don't care about the rest.

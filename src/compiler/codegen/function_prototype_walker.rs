@@ -1,13 +1,15 @@
 use async_trait::async_trait;
-use lpc_rs_core::{RegisterSize, call_namespace::CallNamespace, function_arity::FunctionArity};
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_core::{
+    RegisterSize, call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
+};
+use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototypeBuilder};
 use lpc_rs_utils::string::closure_arg_number;
 
 use crate::compiler::{
     ast::{
         ast_node::AstNodeTrait, closure_node::ClosureNode, function_def_node::FunctionDefNode,
-        var_node::VarNode,
+        var_init_node::VarInitNode, var_node::VarNode,
     },
     codegen::tree_walker::{ContextHolder, TreeWalker},
     compilation_context::CompilationContext,
@@ -20,7 +22,7 @@ pub struct FunctionPrototypeWalker {
     /// The compilation context
     context: CompilationContext,
 
-    /// Track the max number used in any `$\d` vars within closures
+    /// The highest `$N` referenced in the closure being walked.
     max_closure_arg_reference: RegisterSize,
 }
 
@@ -55,35 +57,9 @@ impl ContextHolder for FunctionPrototypeWalker {
 #[async_trait]
 impl TreeWalker for FunctionPrototypeWalker {
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
-        let num_args = node
-            .parameters
-            .as_ref()
-            .map(|nodes| nodes.len())
-            .unwrap_or(0);
-        let mut num_args = RegisterSize::try_from(num_args)?;
+        // `$N` names a position in the innermost closure only.
+        let enclosing_max = std::mem::replace(&mut self.max_closure_arg_reference, 0);
 
-        let num_default_args = node
-            .parameters
-            .as_ref()
-            .map(|nodes| nodes.iter().filter(|p| p.value.is_some()).count())
-            .unwrap_or(0);
-        let num_default_args = RegisterSize::try_from(num_default_args)?;
-
-        let kind = FunctionKind::Closure;
-
-        let arg_types = node
-            .parameters
-            .as_ref()
-            .map(|nodes| nodes.iter().map(|parm| parm.type_).collect::<Vec<_>>())
-            .unwrap_or_default();
-
-        let arg_spans = node
-            .parameters
-            .as_ref()
-            .map(|nodes| nodes.iter().flat_map(|n| n.span).collect::<Vec<_>>())
-            .unwrap_or_default();
-
-        // look for cases of closures-within-closures
         if let Some(parameters) = &mut node.parameters {
             for param in parameters {
                 param.visit(self).await?;
@@ -94,9 +70,30 @@ impl TreeWalker for FunctionPrototypeWalker {
             expression.visit(self).await?;
         }
 
-        if self.max_closure_arg_reference > num_args {
-            num_args = self.max_closure_arg_reference;
+        let highest_positional =
+            std::mem::replace(&mut self.max_closure_arg_reference, enclosing_max);
+
+        let parameters = node.parameters.get_or_insert_default();
+        let declared = RegisterSize::try_from(parameters.len())?;
+        if highest_positional > declared && parameters.iter().any(|p| p.value.is_some()) {
+            self.context.errors.push(lpc_error!(
+                node.span,
+                "positional `${}` lies beyond a defaulted parameter",
+                highest_positional
+            ));
         }
+        for position in (declared + 1)..=highest_positional {
+            let mut positional = VarInitNode::new(&format!("${position}"), LpcType::Mixed(false));
+            positional.span = node.span;
+            parameters.push(positional);
+        }
+
+        let num_args = RegisterSize::try_from(parameters.len())?;
+        let num_default_args =
+            RegisterSize::try_from(parameters.iter().filter(|p| p.value.is_some()).count())?;
+        let kind = FunctionKind::Closure;
+        let arg_types = parameters.iter().map(|parm| parm.type_).collect::<Vec<_>>();
+        let arg_spans = parameters.iter().flat_map(|n| n.span).collect::<Vec<_>>();
 
         self.context.function_prototypes.insert(
             node.name.to_owned(),
@@ -341,7 +338,12 @@ mod tests {
                 .return_type(LpcType::Mixed(false))
                 .kind(FunctionKind::Closure)
                 .arity(FunctionArity::new(4))
-                .arg_types(vec![LpcType::Int(false), LpcType::Mapping(true)])
+                .arg_types(vec![
+                    LpcType::Int(false),
+                    LpcType::Mapping(true),
+                    LpcType::Mixed(false),
+                    LpcType::Mixed(false),
+                ])
                 .build()
                 .expect("Failed to build function prototype"),
         )
