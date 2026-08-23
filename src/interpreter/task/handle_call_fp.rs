@@ -13,7 +13,6 @@ use crate::interpreter::{
     call_frame::CallFrame,
     function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
     lpc_ref::{LpcRef, NULL},
-    object_flags::ObjectFlags,
     process::Process,
     task::{Task, get_location, set_location},
 };
@@ -42,7 +41,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 Err(e) => return Err(e),
             };
 
-        if !proc.flags.test(ObjectFlags::Initialized) {
+        if !proc.is_initialized(&self.context.txn) {
             let ctx = self.context.clone().with_process(proc.clone());
             Self::initialize_sub_process(self.id, ctx).await?;
         }

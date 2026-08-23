@@ -4,7 +4,6 @@ use std::{
 };
 
 use imbl::OrdMap;
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::lpc_error;
 use tracing::error;
 
@@ -330,18 +329,11 @@ impl Committer {
                 }
                 out
             }
-            WorldValue::Process(process) => {
-                // The object's globals are separate slot vars that must stay alive.
-                let num_globals = process.program.num_globals as usize;
-                let mut out = Vec::with_capacity(num_globals + 3);
-                for reg in 0..num_globals {
-                    out.push(MarkWork::Var(process.var_id(reg as RegisterSize)));
-                }
-                out.push(MarkWork::Var(process.position.environment.id));
-                out.push(MarkWork::Var(process.position.inventory.id));
-                out.push(MarkWork::Var(process.connection.id));
-                out
-            }
+            WorldValue::Process(process) => process
+                .world_var_ids()
+                .into_iter()
+                .map(MarkWork::Var)
+                .collect(),
             WorldValue::Connection(maybe_connection) => {
                 // The connection's `input_to` target is a strong ref: it keeps
                 // its function alive for the next input line.

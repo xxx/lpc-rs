@@ -18,12 +18,11 @@ use crate::{
         },
         gc::{gc_bank::GcVarIdBank, mark::Mark},
         lpc_ref::LpcRef,
-        object_flags::ObjectFlags,
         object_space::ObjectSpace,
         process::Process,
         stm::{
-            self, CommitProtocol, Committer, CommitterStats, GcReport, Snapshot, VarId, WorldRoot,
-            gc_pass, resolve_or_create_object,
+            self, CommitProtocol, CommittedReader, Committer, CommitterStats, GcReport, Snapshot,
+            VarId, WorldRoot, gc_pass, resolve_or_create_object,
         },
         task::{Task, apply_function::apply_runtime_error, task_template::TaskTemplate},
         vm::vm_op::VmOp,
@@ -133,7 +132,7 @@ impl GlobalState {
         let (process, function, args) =
             FunctionPtr::triple(ptr, &self.config, &self.object_space).await?;
 
-        if !process.flags.test(ObjectFlags::Initialized) {
+        if !self.is_initialized(&process) {
             let template = TaskTemplate::from(self.clone());
             template.set_this_player(this_player);
             let ctx = template.into_task_context(process.clone());
@@ -326,13 +325,14 @@ mod tests {
         interpreter::{
             function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
             lpc_ref::LpcRef,
-            object_flags::ObjectFlags,
             object_space::ObjectSpace,
+            process::Process,
             stm::{
                 CommittedReader, Transaction, TxnHandle, commit_changeset, flush_effects, start_txn,
             },
         },
         test_support::test_config,
+        util::process_builder::{compile_process_from_code, process_insert_and_initialize_program},
     };
     use lpc_rs_core::lpc_path::LpcPath;
     use thin_vec::thin_vec;
@@ -530,7 +530,7 @@ mod tests {
             "created receiver's cell must be committed"
         );
         assert!(
-            !got.flags.test(ObjectFlags::Initialized),
+            !gs.is_initialized(&got),
             "a create-on-miss leaves the receiver uninitialized"
         );
     }
@@ -640,5 +640,85 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    /// A rejected parent attempt that lazily initialized a callee re-runs
+    /// and initializes it again, rather than leaving its globals null.
+    #[tokio::test]
+    async fn lazy_callee_init_survives_a_rejected_commit() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(128);
+        let gs = Arc::new(GlobalState::new_rejecting(Arc::new(test_config()), tx, 1));
+
+        let target = compile_process_from_code(
+            &gs.object_space,
+            "/target.c",
+            "int i = 123; int get() { return i; }",
+        )
+        .await
+        .unwrap();
+        ObjectSpace::insert_process_physical(&gs.object_space, target.clone());
+        assert!(!gs.is_initialized(&target));
+
+        let caller = compile_process_from_code(
+            &gs.object_space,
+            "/caller.c",
+            r#"int r = "/target"->get();"#,
+        )
+        .await
+        .unwrap();
+        process_insert_and_initialize_program::<MAX_CALL_STACK_SIZE>(
+            caller.clone(),
+            TaskTemplate::from(gs.clone()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(gs.committed_global(&target, 0), LpcRef::from(123));
+        assert_eq!(gs.committed_global(&caller, 0), LpcRef::from(123));
+        assert!(gs.is_initialized(&target));
+        assert_eq!(gs.committer_stats().await.unwrap().commits, 1);
+    }
+
+    /// Two attempts claiming one initialization conflict at commit; the
+    /// loser then finds the object initialized.
+    #[tokio::test]
+    async fn concurrent_init_claims_conflict_at_commit() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(8);
+        let gs = Arc::new(GlobalState::new(test_config(), tx));
+        let process = Arc::new(Process::default());
+
+        let a = start_txn(&gs.committer_tx).await.unwrap();
+        let b = start_txn(&gs.committer_tx).await.unwrap();
+        let txn_a = TxnHandle::new(Transaction::new(a.inner.clone()));
+        let txn_b = TxnHandle::new(Transaction::new(b.inner.clone()));
+        assert!(process.claim_init(&txn_a));
+        assert!(process.claim_init(&txn_b));
+        assert!(
+            !process.claim_init(&txn_a),
+            "a second claim in one attempt is a no-op"
+        );
+
+        let changeset_a = txn_a.with(|t| t.take_changeset());
+        let changeset_b = txn_b.with(|t| t.take_changeset());
+        assert!(
+            commit_changeset(&gs.committer_tx, changeset_a)
+                .await
+                .unwrap()
+                .is_ok()
+        );
+        assert!(
+            commit_changeset(&gs.committer_tx, changeset_b)
+                .await
+                .unwrap()
+                .is_err()
+        );
+        drop(a);
+        drop(b);
+
+        assert!(gs.is_initialized(&process));
+        let c = start_txn(&gs.committer_tx).await.unwrap();
+        let txn_c = TxnHandle::new(Transaction::new(c.inner.clone()));
+        assert!(process.is_initialized(&txn_c));
+        assert!(!process.claim_init(&txn_c));
     }
 }

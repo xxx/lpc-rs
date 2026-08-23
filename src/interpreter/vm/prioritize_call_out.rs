@@ -91,7 +91,6 @@ mod tests {
             CommittedReader,
             call_outs::CallOutBuilder,
             function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
-            object_flags::ObjectFlags,
             process::Process,
             vm::Vm,
         },
@@ -165,7 +164,7 @@ mod tests {
                 vm.global_state.committed_global(bar_proc, 0u16),
                 LpcRef::from(165)
             );
-            assert!(bar_proc.flags.test(ObjectFlags::Initialized));
+            assert!(vm.global_state.is_initialized(bar_proc));
             vm.global_state.with_call_outs(|co| {
                 assert!(co.get_by_id(0).is_none());
             });

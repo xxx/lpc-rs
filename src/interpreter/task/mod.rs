@@ -44,7 +44,6 @@ use crate::interpreter::{
     lpc_int::LpcInt,
     lpc_ref::LpcRef,
     lpc_string::LpcString,
-    object_flags::ObjectFlags,
     process::Process,
     stm::{
         AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, TxnHandle,
@@ -93,6 +92,9 @@ pub struct TaskSeed {
     pub process: Arc<Process>,
     pub function: Arc<ProgramFunction>,
     pub args: Vec<LpcRef>,
+    /// An initializer run: each attempt claims the marker first and is a
+    /// no-op when it is already held.
+    pub initializes: bool,
 }
 
 impl TaskSeed {
@@ -229,13 +231,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// Initialize a [`Process`] by calling its initializer function, using the
     /// given [`TaskContext`], using the specified Task ID.
-    /// It's assumed that the process has already been inserted into the [`ObjectSpace`](crate::interpreter::object_space::ObjectSpace)
+    /// It's assumed that the process has already been inserted into the [`ObjectSpace`](crate::interpreter::object_space::ObjectSpace).
+    /// The task is returned unevaluated when another transaction already
+    /// initialized the process.
     pub async fn initialize_sub_process(
         task_id: TaskId,
         context: TaskContext,
     ) -> Result<Task<STACKSIZE>> {
-        debug_assert!(!context.process.flags.test(ObjectFlags::Initialized));
-
         let Some(initializer) = context.process.program.initializer.clone() else {
             let msg = format!(
                 "Init function not found for `{}`. This should never happen.",
@@ -246,16 +248,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Err(lpc_bug!("{}", msg));
         };
 
-        // We mark ourselves as initialized before actually initializing, to avoid
-        // infinite loops where this_object() is used in global initialization.
-        // this flag is physical world state, so a rejected
-        // commit (init rolled back) leaves it set and a re-run skips re-init.
-        context.process.flags.set(ObjectFlags::Initialized);
-
         let max_execution_time = context.config().max_execution_time;
         let mut task = Task::new_sub_task(task_id, context);
-        task.timed_eval(initializer, &[], max_execution_time)
-            .await?;
+        let seed = TaskSeed {
+            process: task.context.process().clone(),
+            function: initializer,
+            args: Vec::new(),
+            initializes: true,
+        };
+        task.timed_eval_seed(seed, max_execution_time).await?;
 
         Ok(task)
     }
@@ -274,6 +275,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Some(start_txn(tx).await?)
         };
 
+        if let Some(live) = &live {
+            self.context.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+        }
+
         let seed = self
             .seed
             .clone()
@@ -281,15 +286,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         self.reset();
 
+        // Claimed inside the attempt, so a rejected initialization re-runs
+        // instead of staying marked.
+        if seed.initializes && !seed.process.claim_init(&self.context.txn) {
+            return Ok(live);
+        }
+
         let frame = seed.build_call_frame(
             self.context.upvalue_ptrs.as_deref(),
             self.context.global_state.clone_upvalues(),
         )?;
         self.stack.push(frame)?;
-
-        if let Some(live) = &live {
-            self.context.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
-        }
 
         // One timeout per attempt; the committer's conflict rule is the sole
         // serialization control.
@@ -326,12 +333,21 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         args: &[LpcRef],
         timeout_ms: u64,
     ) -> Result<()> {
-        self.timeout_ms = (timeout_ms != 0).then_some(timeout_ms);
-        self.seed = Some(TaskSeed {
+        let seed = TaskSeed {
             process: self.context.process().clone(),
             function: f,
             args: args.to_vec(),
-        });
+            initializes: false,
+        };
+        self.timed_eval_seed(seed, timeout_ms).await
+    }
+
+    /// Run `seed` to completion through the committer's retry loop, or an
+    /// error; a `timeout_ms` of 0 means no timeout.
+    #[async_recursion]
+    async fn timed_eval_seed(&mut self, seed: TaskSeed, timeout_ms: u64) -> Result<()> {
+        self.timeout_ms = (timeout_ms != 0).then_some(timeout_ms);
+        self.seed = Some(seed);
         let tx = self.context.global_state.committer_tx.clone();
         let (res, stats) = run_attempts(&tx, self).await;
         trace!(
@@ -636,6 +652,7 @@ mod stm_retry_tests {
             process,
             function: f,
             args: Vec::new(),
+            initializes: false,
         };
         task.eval_with_committer(tx, &seed).await
     }

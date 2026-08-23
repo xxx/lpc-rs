@@ -675,7 +675,7 @@ mod test_instructions {
             let object_space = task.context.object_space();
 
             let widget = object_space.lookup("/std/widget").unwrap();
-            assert!(widget.flags.test(ObjectFlags::Initialized));
+            assert!(task.context.global_state.is_initialized(&widget));
         }
 
         #[tokio::test]

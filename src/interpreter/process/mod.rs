@@ -77,6 +77,10 @@ pub struct Process {
     /// Our flags
     pub flags: AtomicFlags,
 
+    /// The cell marking that the initializer has run; a rejected
+    /// initialization rolls it back with the globals.
+    pub initialized: SVar<LpcRef>,
+
     /// The object-space cell this process lives under, known once it is
     /// inserted or destructed transactionally.
     pub cell: OnceLock<VarId>,
@@ -95,6 +99,7 @@ impl Default for Process {
             clone_id: None,
             connection: SVar::new(),
             flags: Default::default(),
+            initialized: SVar::new(),
             cell: OnceLock::new(),
             position: Default::default(),
         }
@@ -119,6 +124,7 @@ impl Process {
             clone_id: None,
             connection: SVar::new(),
             flags: Default::default(),
+            initialized: SVar::new(),
             cell: OnceLock::new(),
             position: Default::default(),
         }
@@ -141,6 +147,7 @@ impl Process {
             clone_id: Some(clone_id),
             connection: SVar::new(),
             flags,
+            initialized: SVar::new(),
             cell: OnceLock::new(),
             position: Default::default(),
         }
@@ -246,17 +253,41 @@ impl Process {
             .is_some_and(|upgraded| std::ptr::eq(upgraded.as_ref(), object.as_ref()))
     }
 
+    /// Whether the initializer has run, read through `txn` and tracked.
+    pub(crate) fn is_initialized(&self, txn: &TxnHandle) -> bool {
+        txn.with(|t| t.read(self.initialized.id).is_some())
+    }
+
+    /// Write the marker in `txn` and return `true`, or `false` when already
+    /// initialized.
+    pub(crate) fn claim_init(&self, txn: &TxnHandle) -> bool {
+        txn.with(|t| {
+            if t.read(self.initialized.id).is_some() {
+                return false;
+            }
+            t.write(self.initialized.id, LpcRef::from(1));
+            true
+        })
+    }
+
     /// The committer-world identity of a global slot.
     pub(crate) fn var_id(&self, reg: RegisterSize) -> VarId {
         self.globals[reg as usize].id
     }
 
-    /// The world ids of every global slot, for the world sweep's root set.
-    /// Slot values (arrays, mappings, function captures) hold payloads, so
-    /// every live object's slots must be rooted even when the object has no
-    /// committed `Process` cell.
-    pub(crate) fn global_cell_ids(&self) -> Vec<VarId> {
-        self.globals.iter().map(|slot| slot.id).collect()
+    /// The world ids a live object keeps alive, rooted even when the object
+    /// has no committed `Process` cell.
+    pub(crate) fn world_var_ids(&self) -> Vec<VarId> {
+        self.globals
+            .iter()
+            .map(|slot| slot.id)
+            .chain([
+                self.initialized.id,
+                self.position.environment.id,
+                self.position.inventory.id,
+                self.connection.id,
+            ])
+            .collect()
     }
 
     /// Get the filename of this process, including the clone ID suffix if

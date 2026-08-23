@@ -435,7 +435,6 @@ mod tests {
             CommittedReader,
             function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
             lpc_ref::LpcRef,
-            object_flags::ObjectFlags,
             vm::Vm,
         },
         test_support::test_config,
@@ -555,7 +554,7 @@ mod tests {
                 vm.global_state.committed_global(&proc, 0u16),
                 LpcRef::from(165)
             );
-            assert!(proc.flags.test(ObjectFlags::Initialized));
+            assert!(vm.global_state.is_initialized(&proc));
         }
 
         #[tokio::test]

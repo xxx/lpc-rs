@@ -61,7 +61,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     );
 
     // if the prototype is not initialized, we initialize the clone.
-    if !prototype.flags.test(ObjectFlags::Initialized) {
+    if !prototype.is_initialized(context.txn()) {
         if context.chain_count() >= MAX_CLONE_CHAIN {
             return Err(context.runtime_error("infinite clone recursion detected"));
         }
@@ -194,7 +194,7 @@ mod tests {
                 .unwrap(),
             &NULL
         );
-        assert!(!cloned_proc.flags.test(ObjectFlags::Initialized));
+        assert!(!vm.global_state.is_initialized(&cloned_proc));
 
         let cloner_proc = vm
             .initialize_process_from_code("cloner.c", cloner)
@@ -202,7 +202,7 @@ mod tests {
             .unwrap()
             .context
             .process;
-        assert!(cloner_proc.flags.test(ObjectFlags::Initialized));
+        assert!(vm.global_state.is_initialized(&cloner_proc));
 
         assert_eq!(
             committed_globals_by_name(&vm.global_state, &cloned_proc)
@@ -219,7 +219,7 @@ mod tests {
         };
 
         let foo = foo.upgrade().unwrap();
-        assert!(foo.flags.test(ObjectFlags::Initialized));
+        assert!(vm.global_state.is_initialized(&foo));
 
         let foo_i = committed_globals_by_name(&vm.global_state, &foo)
             .get("i")

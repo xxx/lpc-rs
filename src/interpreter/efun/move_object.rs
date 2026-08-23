@@ -54,7 +54,7 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{CommittedReader, object_flags::ObjectFlags, vm::Vm},
+        interpreter::{CommittedReader, vm::Vm},
         test_support::test_config,
     };
 
@@ -89,7 +89,7 @@ mod tests {
             .unwrap();
 
         let foo_clone = master_proc.context.object_space().lookup("/foo#0").unwrap();
-        assert!(foo_clone.flags.test(ObjectFlags::Initialized));
+        assert!(vm.global_state.is_initialized(&foo_clone));
 
         // The committed world is the source of truth: the clone's environment
         // pointer and the rooms' inventory cells.

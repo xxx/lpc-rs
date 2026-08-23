@@ -3,14 +3,11 @@ use std::sync::atomic::{AtomicU8, Ordering};
 /// Flags for a [`Process`](crate::interpreter::process::Process).
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ObjectFlags {
-    /// Has this process been initialized?
-    Initialized = 0b0000_0001,
-
     /// Is this process a clone?
-    Clone = 0b0000_0010,
+    Clone = 0b0000_0001,
 
     /// Have commands been enabled on this object?
-    CommandsEnabled = 0b0000_0100,
+    CommandsEnabled = 0b0000_0010,
 }
 
 /// A [`Process`](crate::interpreter::process::Process)'s flags, set and
@@ -46,38 +43,25 @@ mod tests {
     #[test]
     fn test_atomic_flags() {
         let flags = AtomicFlags::default();
-        assert!(!flags.test(ObjectFlags::Initialized));
+        assert!(!flags.test(ObjectFlags::Clone));
         assert!(!flags.test(ObjectFlags::CommandsEnabled));
+        assert_eq!(flags.set(ObjectFlags::CommandsEnabled), 0);
         assert!(!flags.test(ObjectFlags::Clone));
-        assert_eq!(flags.set(ObjectFlags::Initialized), 0);
-        assert!(flags.test(ObjectFlags::Initialized));
-        assert!(!flags.test(ObjectFlags::CommandsEnabled));
-        assert!(!flags.test(ObjectFlags::Clone));
-        assert_eq!(flags.set(ObjectFlags::CommandsEnabled), 1);
-        assert!(flags.test(ObjectFlags::Initialized));
         assert!(flags.test(ObjectFlags::CommandsEnabled));
-        assert!(!flags.test(ObjectFlags::Clone));
         assert_eq!(
-            flags.clear(ObjectFlags::Initialized),
-            ObjectFlags::Initialized as u8 | ObjectFlags::CommandsEnabled as u8
-        );
-        assert!(!flags.test(ObjectFlags::Initialized));
-        assert!(flags.test(ObjectFlags::CommandsEnabled));
-        assert!(!flags.test(ObjectFlags::Clone));
-        assert_eq!(
-            flags.clear(ObjectFlags::CommandsEnabled),
+            flags.set(ObjectFlags::Clone),
             ObjectFlags::CommandsEnabled as u8
         );
-        assert!(!flags.test(ObjectFlags::Initialized));
-        assert!(!flags.test(ObjectFlags::CommandsEnabled));
-        assert!(!flags.test(ObjectFlags::Clone));
-        assert_eq!(flags.set(ObjectFlags::Clone), 0);
-        assert!(!flags.test(ObjectFlags::Initialized));
-        assert!(!flags.test(ObjectFlags::CommandsEnabled));
         assert!(flags.test(ObjectFlags::Clone));
-        assert_eq!(flags.clear(ObjectFlags::Clone), ObjectFlags::Clone as u8);
-        assert!(!flags.test(ObjectFlags::Initialized));
+        assert!(flags.test(ObjectFlags::CommandsEnabled));
+        assert_eq!(
+            flags.clear(ObjectFlags::CommandsEnabled),
+            ObjectFlags::Clone as u8 | ObjectFlags::CommandsEnabled as u8
+        );
+        assert!(flags.test(ObjectFlags::Clone));
         assert!(!flags.test(ObjectFlags::CommandsEnabled));
+        assert_eq!(flags.clear(ObjectFlags::Clone), ObjectFlags::Clone as u8);
         assert!(!flags.test(ObjectFlags::Clone));
+        assert!(!flags.test(ObjectFlags::CommandsEnabled));
     }
 }

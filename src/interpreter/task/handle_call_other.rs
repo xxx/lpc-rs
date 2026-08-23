@@ -12,7 +12,6 @@ use crate::{
         lpc_array::LpcArray,
         lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
-        object_flags::ObjectFlags,
         process::Process,
         task::{Task, get_location, task_id::TaskId},
         task_context::{ObjectLookup, TaskContext},
@@ -206,7 +205,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // of whether the function exists or not, because this is a primary way of
         // initializing objects. If you've ever seen a call_other to some knowingly
         // undefined function in old lib code, this is why.
-        let result = if !process.flags.test(ObjectFlags::Initialized) {
+        let result = if !process.is_initialized(context.txn()) {
             let ctx = context.clone().with_process(process);
             let Ok(task) = Self::initialize_sub_process(task_id, ctx).await else {
                 return None;

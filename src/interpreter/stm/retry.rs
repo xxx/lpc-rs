@@ -178,6 +178,9 @@ pub trait CommittedReader {
     /// The committed value of one global slot (absent = `NULL`).
     fn committed_global(&self, process: &Process, reg: RegisterSize) -> LpcRef;
 
+    /// Whether `process`'s initializer has run and committed.
+    fn is_initialized(&self, process: &Process) -> bool;
+
     /// The committed contents of one array payload cell; `None` if the var is
     /// absent or holds a slot value.
     fn committed_array(&self, var_id: VarId) -> Option<LpcArray>;
@@ -206,6 +209,10 @@ impl CommittedReader for Arc<GlobalState> {
     fn committed_global(&self, process: &Process, reg: RegisterSize) -> LpcRef {
         self.committed_value(process.var_id(reg))
             .map_or(NULL, WorldValue::lpc_ref)
+    }
+
+    fn is_initialized(&self, process: &Process) -> bool {
+        self.committed_value(process.initialized.id).is_some()
     }
 
     fn committed_array(&self, var_id: VarId) -> Option<LpcArray> {

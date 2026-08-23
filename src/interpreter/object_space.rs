@@ -141,7 +141,7 @@ impl ObjectSpace {
     pub(crate) fn all_live_object_slots(&self) -> Vec<VarId> {
         self.processes
             .iter()
-            .flat_map(|process| process.global_cell_ids())
+            .flat_map(|process| process.world_var_ids())
             .collect()
     }
 
