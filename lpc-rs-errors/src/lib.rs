@@ -208,7 +208,7 @@ impl LpcError {
         if let Some(s) = span {
             self.0
                 .labels
-                .push(Label::secondary(s.file_id, s.l..s.r).with_message(message.as_ref()));
+                .push(Label::secondary(s.file_id(), s.l()..s.r()).with_message(message.as_ref()));
         }
 
         self
@@ -330,7 +330,7 @@ impl From<&LpcError> for Diagnostic<FileId> {
         let mut labels = vec![];
 
         if let Some(span) = inner.span {
-            labels.push(Label::primary(span.file_id, span.l..span.r));
+            labels.push(Label::primary(span.file_id(), span.l()..span.r()));
         }
 
         labels.extend(inner.labels.iter().cloned());

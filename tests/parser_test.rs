@@ -47,11 +47,7 @@ fn assert_int(value: LpcIntInner, expr: &str) {
 
     let expected = ExpressionNode::Int(IntNode {
         value,
-        span: Some(Span {
-            file_id: 0,
-            l: 16,
-            r: 16 + expr.len(),
-        }),
+        span: Some(Span::new(0, 16..16 + expr.len())),
     });
 
     assert_eq!(expr_node, expected);
@@ -75,19 +71,11 @@ fn program_global_vars() {
                     name: ustr("i"),
                     value: Some(ExpressionNode::Int(IntNode {
                         value: 123,
-                        span: Some(Span {
-                            file_id: 0,
-                            l: 8,
-                            r: 11,
-                        }),
+                        span: Some(Span::new(0, 8..11)),
                     })),
                     array: false,
                     global: true,
-                    span: Some(Span {
-                        file_id: 0,
-                        l: 4,
-                        r: 11,
-                    }),
+                    span: Some(Span::new(0, 4..11)),
                     flags: Some(GlobalVarFlags::new().with_visibility(Visibility::Public)),
                 }],
             }),
@@ -99,36 +87,20 @@ fn program_global_vars() {
                     value: Some(ExpressionNode::BinaryOp(BinaryOpNode {
                         l: Box::new(ExpressionNode::Var(VarNode {
                             name: ustr("i"),
-                            span: Some(Span {
-                                file_id: 0,
-                                l: 29,
-                                r: 30,
-                            }),
+                            span: Some(Span::new(0, 29..30)),
                             global: false,
                             function_name: false,
                         })),
                         r: Box::new(ExpressionNode::Int(IntNode {
                             value: 8,
-                            span: Some(Span {
-                                file_id: 0,
-                                l: 33,
-                                r: 34,
-                            }),
+                            span: Some(Span::new(0, 33..34)),
                         })),
                         op: BinaryOperation::Sub,
-                        span: Some(Span {
-                            file_id: 0,
-                            l: 29,
-                            r: 34,
-                        }),
+                        span: Some(Span::new(0, 29..34)),
                     })),
                     array: false,
                     global: true,
-                    span: Some(Span {
-                        file_id: 0,
-                        l: 25,
-                        r: 34,
-                    }),
+                    span: Some(Span::new(0, 25..34)),
                     flags: Some(GlobalVarFlags::new().with_visibility(Visibility::Private)),
                 }],
             }),
@@ -140,11 +112,7 @@ fn program_global_vars() {
                     value: None,
                     array: true,
                     global: true,
-                    span: Some(Span {
-                        file_id: 0,
-                        l: 58,
-                        r: 60,
-                    }),
+                    span: Some(Span::new(0, 58..60)),
                     flags: Some(
                         GlobalVarFlags::new()
                             .with_visibility(Visibility::Private)
@@ -213,11 +181,7 @@ fn float_literal_underscores() {
 
     let expected = ExpressionNode::Float(FloatNode {
         value: LpcFloatInner::from(112343320000000000000000.0),
-        span: Some(Span {
-            file_id: 0,
-            l: 16,
-            r: 31,
-        }),
+        span: Some(Span::new(0, 16..31)),
     });
 
     assert_eq!(node, expected);
@@ -240,11 +204,7 @@ fn string_literal_concat() {
 
     let expected = ExpressionNode::String(StringNode {
         value: "foobarbazquux".into(),
-        span: Some(Span {
-            file_id: 0,
-            l: 16,
-            r: 46,
-        }),
+        span: Some(Span::new(0, 16..46)),
     });
 
     assert_eq!(node, expected);
@@ -276,11 +236,7 @@ fn string_literal_repeat() {
     };
     let expected = ExpressionNode::String(StringNode {
         value: "foofoofoo".into(),
-        span: Some(Span {
-            file_id: 0,
-            l: 16,
-            r: 25,
-        }),
+        span: Some(Span::new(0, 16..25)),
     });
 
     assert_eq!(node, expected);
@@ -301,11 +257,7 @@ fn string_literal_repeat() {
 
     let expected = ExpressionNode::String(StringNode {
         value: "".into(),
-        span: Some(Span {
-            file_id: 0,
-            l: 16,
-            r: 26,
-        }),
+        span: Some(Span::new(0, 16..26)),
     });
 
     assert_eq!(node, expected);
@@ -337,45 +289,25 @@ fn compound_assignment_decompose() {
     let expected = ExpressionNode::Assignment(AssignmentNode {
         lhs: Box::new(ExpressionNode::Var(VarNode {
             name: ustr("a"),
-            span: Some(Span {
-                l: 16,
-                r: 17,
-                file_id: 0,
-            }),
+            span: Some(Span::new(0, 16..17)),
             global: false,
             function_name: false,
         })),
         rhs: Box::new(ExpressionNode::BinaryOp(BinaryOpNode {
             l: Box::new(ExpressionNode::Var(VarNode {
                 name: ustr("a"),
-                span: Some(Span {
-                    l: 16,
-                    r: 17,
-                    file_id: 0,
-                }),
+                span: Some(Span::new(0, 16..17)),
                 global: false,
                 function_name: false,
             })),
             r: Box::new(ExpressionNode::Int(IntNode {
                 value: 2,
-                span: Some(Span {
-                    l: 21,
-                    r: 22,
-                    file_id: 0,
-                }),
+                span: Some(Span::new(0, 21..22)),
             })),
             op: BinaryOperation::Add,
-            span: Some(Span {
-                l: 21,
-                r: 22,
-                file_id: 0,
-            }),
+            span: Some(Span::new(0, 21..22)),
         })),
-        span: Some(Span {
-            l: 16,
-            r: 22,
-            file_id: 0,
-        }),
+        span: Some(Span::new(0, 16..22)),
     });
 
     assert_eq!(node, expected);

@@ -90,7 +90,7 @@ impl<'a> Iterator for TokenVecWrapper<'a> {
 
         let t = &token.1;
         let span = t.span();
-        Some(Ok((span.l, t.clone(), span.r)))
+        Some(Ok((span.l(), t.clone(), span.r())))
     }
 }
 
@@ -643,9 +643,7 @@ impl Token {
     /// Allow directly setting a new span on a token
     pub fn with_span(mut self, new_span: Span) -> Self {
         if let Some(span) = self.span_ref() {
-            span.file_id = new_span.file_id;
-            span.l = new_span.l;
-            span.r = new_span.r;
+            *span = new_span;
         }
 
         self

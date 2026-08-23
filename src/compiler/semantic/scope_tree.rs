@@ -174,7 +174,7 @@ impl ScopeTree {
                     .symbols
                     .values()
                     .filter(|sym| sym.upvalue)
-                    .map(|sym| (sym.span.map(|span| span.l), sym.name.clone(), id)),
+                    .map(|sym| (sym.span.map(|span| span.l()), sym.name.clone(), id)),
             );
             for child in id.children(&self.scopes) {
                 if units.contains(&child) {

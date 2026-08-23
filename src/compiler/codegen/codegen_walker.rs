@@ -4281,28 +4281,14 @@ mod tests {
         assert_eq!(foo.type_, LpcType::Int(false));
         assert_eq!(foo.location, Some(RegisterVariant::Global(Register(0))));
         assert_some!(foo.scope_id);
-        assert_eq!(
-            foo.span,
-            Some(Span {
-                file_id: 0,
-                l: 4,
-                r: 11
-            })
-        );
+        assert_eq!(foo.span, Some(Span::new(0, 4..11)));
 
         let bar = scope.lookup("bar").unwrap();
         assert_eq!(&bar.name, "bar");
         assert_eq!(bar.type_, LpcType::Int(true));
         assert_eq!(bar.location, Some(RegisterVariant::Global(Register(1))));
         assert_some!(bar.scope_id);
-        assert_eq!(
-            bar.span,
-            Some(Span {
-                file_id: 0,
-                l: 13,
-                r: 25
-            })
-        );
+        assert_eq!(bar.span, Some(Span::new(0, 13..25)));
     }
 
     mod test_visit_do_while {

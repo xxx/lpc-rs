@@ -230,17 +230,17 @@ FunctionDef: FunctionDefNode = {
         let (parameters, ellipsis) = parameter_tuple;
 
         let l = if flags.len() > 0 {
-            flags.first().unwrap().0.l
+            flags.first().unwrap().0.l()
         } else if let Some((span, _)) = &r_type {
-            span.l
+            span.l()
         } else if let Some(span) = &star {
-            span.l
+            span.l()
         } else {
-            name.0.l
+            name.0.l()
         };
 
-        let r = name.0.r;
-        let file_id = name.0.file_id;
+        let r = name.0.r();
+        let file_id = name.0.file_id();
 
         let span = Span::new(file_id, l..r);
 
@@ -525,14 +525,14 @@ SwitchCase: ExpressionNode = {
 VarInit: VarInitNode = {
     <array:"*"?> <name:"ID"> <value:("=" <AssignmentExpression>)?> => {
         let name_span = name.0;
-        let file_id = name_span.file_id;
-        let l = array.unwrap_or(name_span).l;
+        let file_id = name_span.file_id();
+        let l = array.unwrap_or(name_span).l();
         let r = value
                     .as_ref()
                     .map(|node| node.span())
                     .flatten()
                     .unwrap_or(name_span)
-                    .r;
+                    .r();
 
         VarInitNode {
             type_: LpcType::Int(false), // placeholder. Corrected in Decl.
@@ -597,10 +597,7 @@ PrimaryExpression: ExpressionNode = {
             vec![]
         };
 
-        let span = Span {
-            r: r.r,
-            ..l
-        };
+        let span = Span::new(l.file_id(), l.l()..r.r());
 
         ExpressionNode::Mapping(MappingNode::new(vec, Some(span)))
     }
@@ -609,46 +606,46 @@ PrimaryExpression: ExpressionNode = {
 PostfixExpression: ExpressionNode = {
     <PrimaryExpression>,
     <l:PostfixExpression> "[" <r:Expression> <right:"]"> =>? {
-        let file_id = first_span(&[&l, &r]).file_id;
-        let left = l.span().map(|s| s.l).unwrap_or(0);
+        let file_id = first_span(&[&l, &r]).file_id();
+        let left = l.span().map(|s| s.l()).unwrap_or(0);
 
-        collapse_binary_op(BinaryOperation::Index, l, r, Some(Span { file_id, l: left, r: right.r }))
+        collapse_binary_op(BinaryOperation::Index, l, r, Some(Span::new(file_id, left..right.r())))
     },
     <l:PostfixExpression> "["  <e1:Expression> ".." <e2:Expression> <right:"]"> =>? {
-        let file_id = first_span(&[&l, &e1, &e2]).file_id;
-        let left = l.span().map(|s| s.l).unwrap_or(0);
+        let file_id = first_span(&[&l, &e1, &e2]).file_id();
+        let left = l.span().map(|s| s.l()).unwrap_or(0);
 
         let r = ExpressionNode::Range(RangeNode {
             l: Box::new(Some(e1)),
             r: Box::new(Some(e2)),
-            span: Some(Span { file_id, l: left, r: right.r })
+            span: Some(Span::new(file_id, left..right.r()))
         });
 
-        collapse_binary_op(BinaryOperation::Index, l, r, Some(Span { file_id, l: left, r: right.r }))
+        collapse_binary_op(BinaryOperation::Index, l, r, Some(Span::new(file_id, left..right.r())))
     },
     <l:PostfixExpression> "[" ".." <e:Expression> <right:"]"> =>? {
-        let file_id = first_span(&[&l, &e]).file_id;
-        let left = l.span().map(|s| s.l).unwrap_or(0);
+        let file_id = first_span(&[&l, &e]).file_id();
+        let left = l.span().map(|s| s.l()).unwrap_or(0);
 
         let r = ExpressionNode::Range(RangeNode {
             l: Box::new(None),
             r: Box::new(Some(e)),
-            span: Some(Span { file_id, l: left, r: right.r })
+            span: Some(Span::new(file_id, left..right.r()))
         });
 
-        collapse_binary_op(BinaryOperation::Index, l, r, Some(Span { file_id, l: left, r: right.r }))
+        collapse_binary_op(BinaryOperation::Index, l, r, Some(Span::new(file_id, left..right.r())))
     },
     <l:PostfixExpression> "[" <e:Expression> ".." <right:"]"> =>? {
-        let file_id = first_span(&[&l, &e]).file_id;
-        let left = l.span().map(|s| s.l).unwrap_or(0);
+        let file_id = first_span(&[&l, &e]).file_id();
+        let left = l.span().map(|s| s.l()).unwrap_or(0);
 
         let r = ExpressionNode::Range(RangeNode {
             l: Box::new(Some(e)),
             r: Box::new(None),
-            span: Some(Span { file_id, l: left, r: right.r })
+            span: Some(Span::new(file_id, left..right.r()))
         });
 
-        collapse_binary_op(BinaryOperation::Index, l, r, Some(Span { file_id, l: left, r: right.r }))
+        collapse_binary_op(BinaryOperation::Index, l, r, Some(Span::new(file_id, left..right.r())))
     },
     <e:(<PostfixExpression> "->")?> <mut c:Call> => {
         if let Some(rcvr) = e {
@@ -688,12 +685,9 @@ PostfixExpression: ExpressionNode = {
 UnaryExpression: ExpressionNode = {
     <PostfixExpression>,
     <op:UnaryOp> <expr:CastExpression> => {
-        let span = expr.span().map(|s| {
-            Span {
-                l: op.1.start,
-                ..s
-            }
-        });
+        let span = expr
+            .span()
+            .map(|s| Span::new(s.file_id(), op.1.start..s.r()));
 
         let n = UnaryOpNode {
             expr: Box::new(expr),
@@ -813,11 +807,11 @@ LogicalOrExpression: ExpressionNode = {
 ConditionalExpression: ExpressionNode = {
     <LogicalOrExpression>,
     <cond:LogicalOrExpression> "?" <body:Expression> ":" <else_clause:ConditionalExpression> => {
-        let file_id = first_span(&[&cond, &body, &else_clause]).file_id;
-        let l = cond.span().map(|s| s.l).unwrap_or(0);
-        let r = else_clause.span().map(|s| s.r).unwrap_or(0);
+        let file_id = first_span(&[&cond, &body, &else_clause]).file_id();
+        let l = cond.span().map(|s| s.l()).unwrap_or(0);
+        let r = else_clause.span().map(|s| s.r()).unwrap_or(0);
 
-        ExpressionNode::from(TernaryNode::new(cond, body, else_clause, Some(Span { file_id, l, r })))
+        ExpressionNode::from(TernaryNode::new(cond, body, else_clause, Some(Span::new(file_id, l..r))))
     }
 };
 
@@ -871,15 +865,15 @@ Expression: ExpressionNode = {
     <AssignmentExpression>,
     <e:Expression> <c:","> <ass:AssignmentExpression> => {
         let file_id = if let Some(s) = e.span() {
-            s.file_id
+            s.file_id()
         } else if let Some(s) = ass.span() {
-            s.file_id
+            s.file_id()
         } else {
-            c.file_id
+            c.file_id()
         };
 
-        let l = e.span().unwrap_or(c).l;
-        let r = ass.span().unwrap_or(c).r;
+        let l = e.span().unwrap_or(c).l();
+        let r = ass.span().unwrap_or(c).r();
 
         let mut list = if let ExpressionNode::CommaExpression(ce) = e {
             ce.value
@@ -891,7 +885,7 @@ Expression: ExpressionNode = {
 
         ExpressionNode::CommaExpression(CommaExpressionNode {
             value: list,
-            span: Some(Span { file_id, l, r })
+            span: Some(Span::new(file_id, l..r))
         })
     }
 };
@@ -899,12 +893,12 @@ Expression: ExpressionNode = {
 Return: ReturnNode = {
     <ret:"return"> <e:Expression?> => {
         let r = if let Some(expr) = &e {
-            expr.span().unwrap_or(ret).r
+            expr.span().unwrap_or(ret).r()
         } else {
-            ret.r
+            ret.r()
         };
 
-        ReturnNode { value: e, span: Some(Span { file_id: ret.file_id, l: ret.l, r }) }
+        ReturnNode { value: e, span: Some(Span::new(ret.file_id(), ret.l()..r)) }
     }
 }
 
@@ -948,9 +942,9 @@ Call: CallNode = {
         let arguments = list.unwrap_or_else(|| vec![]);
 
         let (left, namespace) = ns.unwrap_or_else(|| (name.0, CallNamespace::default()));
-        let file_id = left.file_id;
-        let l = left.l;
-        let r = right.r;
+        let file_id = left.file_id();
+        let l = left.l();
+        let r = right.r();
 
         CallNode {
             chain: CallChain::Root {
@@ -959,18 +953,18 @@ Call: CallNode = {
                 namespace
             },
             arguments,
-            span: Some(Span { file_id, l, r }),
+            span: Some(Span::new(file_id, l..r)),
         }
     },
     <expr:Call> <lparen:"("> <list:ArgumentExpressionList?> <right:")"> => {
          let arguments = list.unwrap_or_else(|| vec![]);
 
         let left = expr.span().unwrap_or(lparen);
-        let l = left.l;
+        let l = left.l();
         CallNode {
             chain: CallChain::Node(Box::new(expr)),
             arguments,
-            span: Some(Span { file_id: left.file_id, l, r: right.r }),
+            span: Some(Span::new(left.file_id(), l..right.r())),
         }
     }
 };
@@ -1087,15 +1081,15 @@ String: ExpressionNode = {
     },
     <s1:"StringLiteral"> <s2:String> => {
         let span = s1.0;
-        let file_id = span.file_id;
-        let l = span.l;
+        let file_id = span.file_id();
+        let l = span.l();
 
         match s2 {
             ExpressionNode::String(node) => {
-                let r = node.span.map(|s| s.r).unwrap_or(l);
+                let r = node.span.map(|s| s.r()).unwrap_or(l);
                 ExpressionNode::String(StringNode {
                     value: s1.1 + &node.value,
-                    span: Some(Span { file_id, l, r })
+                    span: Some(Span::new(file_id, l..r))
                 })
             }
             _ => unimplemented!()

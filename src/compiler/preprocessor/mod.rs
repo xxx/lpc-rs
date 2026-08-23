@@ -323,7 +323,7 @@ impl Preprocessor {
                             // Set the span to that of the token before its replacement.
                             // let new_spanned = (span.l, tok.with_span(span), span.r);
                             // tokens.push(new_spanned);
-                            tokens.push((span.l, tok, span.r));
+                            tokens.push((span.l(), tok, span.r()));
                         }
                     }
                 }
@@ -482,7 +482,7 @@ impl Preprocessor {
             let tokens = lex_vec(&convert_escapes(body))
                 .map_err(|e| e.with_span(Some(token.0)))?
                 .into_iter()
-                .map(|(_, t, _)| (span.l, t.with_span(span), span.r))
+                .map(|(_, t, _)| (span.l(), t.with_span(span), span.r()))
                 .collect::<Vec<_>>();
 
             let define = Define::new_function(tokens, args);
@@ -495,13 +495,13 @@ impl Preprocessor {
 
             let name = String::from(&captures[1]);
             let tokens = if captures[2].is_empty() {
-                vec![(span.l, Token::IntLiteral(IntToken(span, 0)), span.r)]
+                vec![(span.l(), Token::IntLiteral(IntToken(span, 0)), span.r())]
             } else {
                 // tokenize captures[2] with our full language lexer, so we can store it
                 lex_vec(&convert_escapes(&captures[2]))
                     .map_err(|e| e.with_span(Some(token.0)))?
                     .into_iter()
-                    .map(|(_, t, _)| (span.l, t.with_span(span), span.r))
+                    .map(|(_, t, _)| (span.l(), t.with_span(span), span.r()))
                     .collect::<Vec<_>>()
             };
 

@@ -8,25 +8,34 @@ use codespan_reporting::files::Files;
 use crate::source_map::{FileId, SOURCE_MAP};
 
 /// Store the details of a code span, for use in error messaging.
-/// `r` is set such that `span.l..span.r` will return the correct span of chars.
-#[derive(Hash, Debug, Copy, Clone, Eq, PartialEq, PartialOrd)]
+/// `r` is set such that `span.l()..span.r()` will return the correct span of
+/// chars. 12 bytes, and the file id's niche lets `Option<Span>` share them.
+#[derive(Hash, Copy, Clone, Eq, PartialEq, PartialOrd)]
 pub struct Span {
-    /// Left index of the span
-    pub l: usize,
-    /// Right index of the span
-    pub r: usize,
-    /// The ID of the file in the global [`SOURCE_MAP`](static@SOURCE_MAP)
-    pub file_id: FileId,
+    l: u32,
+    r: u32,
+    // The SOURCE_MAP id, stored +1 for the niche.
+    file_id: std::num::NonZeroU32,
+}
+
+impl std::fmt::Debug for Span {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Span")
+            .field("l", &self.l())
+            .field("r", &self.r())
+            .field("file_id", &self.file_id())
+            .finish()
+    }
 }
 
 impl Display for Span {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let files = SOURCE_MAP.read();
 
-        if let Ok(name) = files.name(self.file_id)
-            && let Ok(idx) = files.line_index(self.file_id, self.l)
-            && let Ok(line_num) = files.line_number(self.file_id, idx)
-            && let Ok(column_num) = files.column_number(self.file_id, idx, line_num)
+        if let Ok(name) = files.name(self.file_id())
+            && let Ok(idx) = files.line_index(self.file_id(), self.l())
+            && let Ok(line_num) = files.line_number(self.file_id(), idx)
+            && let Ok(column_num) = files.column_number(self.file_id(), idx, line_num)
         {
             write!(f, "{name}:{line_num}:{column_num}")
         } else {
@@ -56,11 +65,32 @@ impl Span {
     /// ```
     #[inline]
     pub fn new(file_id: FileId, range: Range<usize>) -> Self {
+        // Saturate: a span is a diagnostic, and a wrong caret on a 4 GiB
+        // input never justifies a panic.
+        let clamp = |x: usize| u32::try_from(x).unwrap_or(u32::MAX);
         Self {
-            file_id,
-            l: range.start,
-            r: range.end,
+            l: clamp(range.start),
+            r: clamp(range.end),
+            file_id: std::num::NonZeroU32::MIN.saturating_add(clamp(file_id)),
         }
+    }
+
+    /// Left index of the span
+    #[inline]
+    pub fn l(&self) -> usize {
+        self.l as usize
+    }
+
+    /// Right index of the span
+    #[inline]
+    pub fn r(&self) -> usize {
+        self.r as usize
+    }
+
+    /// The ID of the file in the global [`SOURCE_MAP`](static@SOURCE_MAP)
+    #[inline]
+    pub fn file_id(&self) -> FileId {
+        (self.file_id.get() - 1) as FileId
     }
 
     /// The span from `left`'s start to `right`'s end; `left` alone when the
@@ -71,9 +101,9 @@ impl Span {
         }
 
         Self {
-            file_id: left.file_id,
             l: left.l,
             r: right.r,
+            file_id: left.file_id,
         }
     }
 
@@ -91,17 +121,18 @@ impl Span {
     pub fn code(&self) -> Option<String> {
         let files = SOURCE_MAP.read();
 
-        files
-            .get(self.file_id)
-            .ok()
-            .and_then(|f| f.source().get(self.l..self.r).map(|code| code.to_string()))
+        files.get(self.file_id()).ok().and_then(|f| {
+            f.source()
+                .get(self.l()..self.r())
+                .map(|code| code.to_string())
+        })
     }
 }
 
 impl From<&Span> for Range<usize> {
     #[inline]
     fn from(span: &Span) -> Self {
-        span.l..span.r
+        span.l()..span.r()
     }
 }
 
@@ -120,6 +151,25 @@ pub trait HasSpan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_span_is_twelve_bytes_and_option_shares_them() {
+        assert_eq!(std::mem::size_of::<Span>(), 12);
+        assert_eq!(std::mem::size_of::<Option<Span>>(), 12);
+    }
+
+    #[test]
+    fn accessors_round_trip_and_saturate() {
+        let span = Span::new(7, 3..9);
+        assert_eq!(span.file_id(), 7);
+        assert_eq!(span.l(), 3);
+        assert_eq!(span.r(), 9);
+
+        let big = Span::new(usize::MAX, usize::MAX..usize::MAX);
+        assert_eq!(big.file_id(), u32::MAX as usize - 1);
+        assert_eq!(big.l(), u32::MAX as usize);
+        assert_eq!(big.r(), u32::MAX as usize);
+    }
 
     #[test]
     fn combine_keeps_a_missing_span_missing() {
