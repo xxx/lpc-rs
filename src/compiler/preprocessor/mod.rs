@@ -509,15 +509,14 @@ impl Preprocessor {
                     .collect::<Vec<_>>()
             };
 
+            // A body that is not an expression is still fine to substitute;
+            // only an `#if` over it is an error.
             let expr = if captures[2].is_empty() {
-                PreprocessorNode::Int(0)
+                Some(PreprocessorNode::Int(0))
             } else {
-                match preprocessor_parser::ExpressionParser::new()
+                preprocessor_parser::ExpressionParser::new()
                     .parse(LexWrapper::new(&captures[2]))
-                {
-                    Ok(i) => i,
-                    Err(e) => return Err(LpcError::from(e).with_span(Some(token.0))),
-                }
+                    .ok()
             };
 
             let define = Define::new_object(tokens, expr);
@@ -527,6 +526,14 @@ impl Preprocessor {
         } else {
             Err(lpc_error!(Some(token.0), "invalid `#define`."))
         }
+    }
+
+    fn not_an_expression(name: &str, span: Option<Span>) -> LpcError {
+        lpc_error!(
+            span,
+            "`{}` does not expand to a preprocessor expression",
+            name
+        )
     }
 
     #[instrument(skip(self))]
@@ -675,14 +682,15 @@ impl Preprocessor {
     #[instrument(skip(self, expr))]
     fn eval_expr_for_skipping(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<bool> {
         match expr {
-            PreprocessorNode::Var(x) => {
-                if let Some(Define::Object(ObjectMacro { expr, .. })) = self.defines.get(x) {
-                    let int_val = self.resolve_int(expr, span)?;
-                    Ok(int_val != 0)
-                } else {
-                    Ok(false)
+            PreprocessorNode::Var(x) => match self.defines.get(x) {
+                Some(Define::Object(ObjectMacro {
+                    expr: Some(expr), ..
+                })) => Ok(self.resolve_int(expr, span)? != 0),
+                Some(Define::Object(ObjectMacro { expr: None, .. })) => {
+                    Err(Self::not_an_expression(x, span))
                 }
-            }
+                _ => Ok(false),
+            },
             PreprocessorNode::Int(i) => Ok(i != &0),
             PreprocessorNode::String(_) => Ok(true),
             PreprocessorNode::Defined(x, negated) => {
@@ -716,7 +724,12 @@ impl Preprocessor {
             PreprocessorNode::Var(x) => {
                 if let Some(val) = self.defines.get(x) {
                     match val {
-                        Define::Object(ObjectMacro { expr, .. }) => self.resolve_int(expr, span),
+                        Define::Object(ObjectMacro {
+                            expr: Some(expr), ..
+                        }) => self.resolve_int(expr, span),
+                        Define::Object(ObjectMacro { expr: None, .. }) => {
+                            Err(Self::not_an_expression(x, span))
+                        }
                         Define::Function(_) => Ok(0),
                     }
                 } else {
@@ -1271,14 +1284,14 @@ mod tests {
                     assert!(matches!(
                         preprocessor.defines.get("ASS").unwrap(),
                         Define::Object(ObjectMacro {
-                            expr: PreprocessorNode::Int(1234),
+                            expr: Some(PreprocessorNode::Int(1234)),
                             ..
                         })
                     ));
                     assert!(matches!(
                         preprocessor.defines.get("MAR").unwrap(),
                         Define::Object(ObjectMacro {
-                            expr: PreprocessorNode::Int(0),
+                            expr: Some(PreprocessorNode::Int(0)),
                             ..
                         })
                     ));
@@ -1286,12 +1299,12 @@ mod tests {
                         preprocessor.defines.get("DOOD").unwrap()
                     {
                         assert_eq!(
-                            expr,
-                            &PreprocessorNode::BinaryOp(
+                            expr.as_ref(),
+                            Some(&PreprocessorNode::BinaryOp(
                                 BinaryOperation::Add,
                                 Box::new(PreprocessorNode::Int(666)),
                                 Box::new(PreprocessorNode::Var(String::from("MAR")))
-                            )
+                            ))
                         );
                     } else {
                         panic!("Failed to match.")
@@ -1299,16 +1312,13 @@ mod tests {
                     assert_matches!(
                         preprocessor.defines.get("SNUH").unwrap(),
                         Define::Object(ObjectMacro {
-                            expr: PreprocessorNode::Int(291),
+                            expr: Some(PreprocessorNode::Int(291)),
                             ..
                         })
                     );
                     assert_matches!(
                         preprocessor.defines.get("TO").unwrap(),
-                        Define::Object(ObjectMacro {
-                            expr: PreprocessorNode::Int(1),
-                            ..
-                        })
+                        Define::Object(ObjectMacro { expr: None, .. })
                     );
                 }
                 Err(e) => {
@@ -1349,7 +1359,7 @@ mod tests {
                     assert!(matches!(
                         preprocessor.defines.get("ASS").unwrap(),
                         Define::Object(ObjectMacro {
-                            expr: PreprocessorNode::Int(456),
+                            expr: Some(PreprocessorNode::Int(456)),
                             ..
                         })
                     ));
@@ -1375,7 +1385,7 @@ mod tests {
                     assert!(matches!(
                         preprocessor.defines.get("HELLO").unwrap(),
                         Define::Object(ObjectMacro {
-                            expr: PreprocessorNode::Int(123),
+                            expr: Some(PreprocessorNode::Int(123)),
                             ..
                         })
                     ));
@@ -1706,6 +1716,55 @@ mod tests {
 
     mod test_if {
         use super::*;
+
+        #[tokio::test]
+        async fn a_body_that_is_not_an_expression_substitutes_but_cannot_be_tested() {
+            let mut preprocessor = fixture();
+            preprocessor
+                .scan("/define_text.c", "#define FOO 1 +\nint a = FOO 2;\n")
+                .await
+                .unwrap();
+
+            let mut preprocessor = fixture();
+            let e = preprocessor
+                .scan("/define_text_if.c", "#define FOO 1 +\n#if FOO\n#endif\n")
+                .await
+                .unwrap_err();
+            assert_eq!(
+                e.to_string(),
+                "`FOO` does not expand to a preprocessor expression"
+            );
+            assert_eq!(e.span().and_then(|s| s.code()).as_deref(), Some("#if FOO"));
+        }
+
+        #[tokio::test]
+        async fn a_literal_one_takes_the_branch() {
+            let prog = indoc! { r##"
+                #if 1
+                "taken";
+                #endif
+                #if 0
+                "skipped";
+                #endif
+            "##};
+            let expected = [
+                Token::StringLiteral(StringToken(Span::new(0, 0..0), "taken".into())),
+                Token::Semi(Span::new(0, 0..0)),
+            ];
+            let mut preprocessor = fixture();
+            let tokens = preprocessor.scan("/if_literal.c", prog).await.unwrap();
+            let kinds: Vec<_> = tokens
+                .iter()
+                .map(|(_, t, _)| std::mem::discriminant(t))
+                .collect();
+            assert_eq!(
+                kinds,
+                expected
+                    .iter()
+                    .map(std::mem::discriminant)
+                    .collect::<Vec<_>>()
+            );
+        }
 
         #[tokio::test]
         async fn a_malformed_if_is_invalid() {

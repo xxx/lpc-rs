@@ -8,8 +8,9 @@ use crate::compiler::{
 pub struct ObjectMacro {
     /// The vector of Tokens being defined
     pub tokens: Vec<Spanned<Token>>,
-    /// The preprocessor-parsed expression, for evaluating `#if` directives
-    pub expr: PreprocessorNode,
+    /// The body as a preprocessor expression, for `#if`; `None` when the
+    /// body is substitution-only text that no `#if` can evaluate.
+    pub expr: Option<PreprocessorNode>,
 }
 
 /// A function macro, e.g. `#define FOO(a, b) (a * b)`
@@ -31,7 +32,7 @@ pub enum Define {
 
 impl Define {
     /// Create a new object macro
-    pub fn new_object(tokens: Vec<Spanned<Token>>, expr: PreprocessorNode) -> Self {
+    pub fn new_object(tokens: Vec<Spanned<Token>>, expr: Option<PreprocessorNode>) -> Self {
         Define::Object(ObjectMacro { tokens, expr })
     }
 
