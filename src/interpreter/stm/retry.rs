@@ -89,10 +89,9 @@ enum BackoffStep {
     Sleep(Duration),
 }
 
-/// The stagger for the attempt after loss number `losses`: nothing for the
-/// first loss, a jittered yield burst with a doubling cap while losses stay
-/// low, a jittered sleep between [`SLEEP_FLOOR`] and a doubling cap (at most
-/// [`SLEEP_CAP`]) once they persist. `roll(n)` supplies the jitter as a draw
+/// The stagger for the attempt after loss number `losses`: the first loss is
+/// free, low losses yield, persistent losses sleep, both on doubling caps
+/// ([`SLEEP_CAP`] tops the ladder). `roll(n)` supplies the jitter as a draw
 /// from `1..=n`.
 fn backoff_step(losses: u64, roll: impl FnOnce(u64) -> u64) -> BackoffStep {
     if losses <= FREE_LOSSES {
@@ -121,8 +120,7 @@ async fn stagger(losses: u64, rng: &mut u64) {
     }
 }
 
-/// One step of splitmix64 over `state`; cheap decorrelation, not randomness
-/// anyone may rely on.
+/// One step of splitmix64 over `state`; not randomness anyone may rely on.
 fn splitmix64(state: &mut u64) -> u64 {
     *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
     let mut z = *state;
