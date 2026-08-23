@@ -98,6 +98,10 @@ name = "bench_fib"
 harness = false
 
 [[bench]]
+name = "bench_cells"
+harness = false
+
+[[bench]]
 name = "bench_concurrency"
 harness = false
 
