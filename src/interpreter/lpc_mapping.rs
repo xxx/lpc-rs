@@ -40,6 +40,8 @@ impl LpcMapping {
             pub fn len(&self) -> usize;
             pub fn keys(&self) -> indexmap::map::Keys<'_, LpcRef, LpcRef>;
             pub fn values(&self) -> indexmap::map::Values<'_, LpcRef, LpcRef>;
+            pub fn retain<F>(&mut self, keep: F)
+                where F: FnMut(&LpcRef, &mut LpcRef) -> bool;
         }
     }
 }

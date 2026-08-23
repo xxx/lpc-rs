@@ -139,8 +139,17 @@ impl LpcRef {
     }
 
     /// Whether this is an object ref that no longer names a live object for `txn`.
-    fn is_dead_object(&self, txn: &TxnHandle) -> bool {
+    pub(crate) fn is_dead_object(&self, txn: &TxnHandle) -> bool {
         matches!(self, LpcRef::Object(_)) && self.live_object(txn).is_none()
+    }
+
+    /// This value as a mapping key: a destructed object is `0`.
+    pub(crate) fn mapping_key(&self, txn: &TxnHandle) -> LpcRef {
+        if self.is_dead_object(txn) {
+            NULL
+        } else {
+            self.clone()
+        }
     }
 
     /// The value as a condition sees it: `0`, `0.0` and a destructed object

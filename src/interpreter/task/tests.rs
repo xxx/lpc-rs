@@ -2329,6 +2329,128 @@ mod test_instructions {
         }
     }
 
+    mod test_destructed_mapping_keys {
+        use super::*;
+
+        async fn globals(code: &str) -> (Arc<GlobalState>, HashMap<String, LpcRef>) {
+            let task = run_prog(code).await;
+            let gs = task.context.global_state.clone();
+            let globals = committed_globals_by_name(&gs, &task.context.process);
+            (gs, globals)
+        }
+
+        fn committed_len(gs: &Arc<GlobalState>, mapping: &LpcRef) -> usize {
+            let LpcRef::Mapping(cell) = mapping else {
+                panic!("not a mapping: {mapping}");
+            };
+            gs.committed_mapping(cell.id).unwrap().len()
+        }
+
+        #[tokio::test]
+        async fn a_dead_key_reads_as_zero() {
+            let code = indoc! { r##"
+                mapping m = ([ 0: 7 ]);
+                int got;
+                void create() {
+                    object ob = clone_object("/clone_target");
+                    m[ob] = 1;
+                    destruct(ob);
+                    got = m[ob];
+                }
+            "##};
+
+            let (_, globals) = globals(code).await;
+            assert_eq!(globals["got"], LpcRef::from(7));
+        }
+
+        #[tokio::test]
+        async fn a_dead_key_stores_as_zero() {
+            let code = indoc! { r##"
+                mapping m = ([]);
+                int at_zero;
+                int size;
+                void create() {
+                    object ob = clone_object("/clone_target");
+                    destruct(ob);
+                    m[ob] = 9;
+                    at_zero = m[0];
+                    size = sizeof(m);
+                }
+            "##};
+
+            let (_, globals) = globals(code).await;
+            assert_eq!(globals["at_zero"], LpcRef::from(9));
+            assert_eq!(globals["size"], LpcRef::from(1));
+        }
+
+        #[tokio::test]
+        async fn a_dead_key_in_a_literal_is_zero() {
+            let code = indoc! { r##"
+                mapping m;
+                int got;
+                void create() {
+                    object ob = clone_object("/clone_target");
+                    destruct(ob);
+                    m = ([ ob: 5 ]);
+                    got = m[0];
+                }
+            "##};
+
+            let (_, globals) = globals(code).await;
+            assert_eq!(globals["got"], LpcRef::from(5));
+        }
+
+        #[tokio::test]
+        async fn sizeof_drops_entries_whose_key_died() {
+            let code = indoc! { r##"
+                mapping m = ([ "x": 2 ]);
+                int size;
+                void create() {
+                    object ob = clone_object("/clone_target");
+                    m[ob] = 1;
+                    destruct(ob);
+                    size = sizeof(m);
+                }
+            "##};
+
+            let (gs, globals) = globals(code).await;
+            assert_eq!(globals["size"], LpcRef::from(1));
+            assert_eq!(committed_len(&gs, &globals["m"]), 1);
+        }
+
+        #[tokio::test]
+        async fn foreach_skips_entries_whose_key_died() {
+            let code = indoc! { r##"
+                mapping m = ([ "x": 2 ]);
+                int seen;
+                void create() {
+                    object ob = clone_object("/clone_target");
+                    m[ob] = 1;
+                    destruct(ob);
+                    foreach(k, v: m) { seen++; }
+                }
+            "##};
+
+            let (_, globals) = globals(code).await;
+            assert_eq!(globals["seen"], LpcRef::from(1));
+        }
+
+        #[tokio::test]
+        async fn an_untraversed_mapping_is_not_written() {
+            let code = indoc! { r##"
+                mapping m = ([ "x": 2 ]);
+                void create() {
+                    object ob = clone_object("/clone_target");
+                    m[ob] = 1;
+                    destruct(ob);
+                }
+            "##};
+
+            let (gs, globals) = globals(code).await;
+            assert_eq!(committed_len(&gs, &globals["m"]), 2);
+        }
+    }
+
     mod test_sizeof {
         use std::sync::Arc;
 

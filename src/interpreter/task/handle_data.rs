@@ -272,9 +272,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 Ok(())
             }
             LpcRef::Mapping(_) => {
+                let key = lpc_ref.mapping_key(&self.context.txn);
                 let var = container_ref
                     .with_mapping(&self.context.txn, |map| {
-                        map.get(&lpc_ref).cloned().unwrap_or(NULL)
+                        map.get(&key).cloned().unwrap_or(NULL)
                     })
                     .unwrap_or(NULL);
 
@@ -396,8 +397,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             LpcRef::Mapping(_) => {
                 let value = get_location(&self.stack, &self.context.txn, value_loc)?.into_owned();
+                let key = index.mapping_key(&self.context.txn);
                 container.with_mapping_cow(&self.context.txn, |map| {
-                    map.insert(index.clone(), value);
+                    map.insert(key, value);
                 })?;
                 Ok(())
             }

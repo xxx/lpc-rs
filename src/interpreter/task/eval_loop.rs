@@ -257,7 +257,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 for chunk in &self.array_items.iter().copied().chunks(2) {
                     let (key, value) = chunk.into_iter().collect_tuple().unwrap();
                     register_map.insert(
-                        get_location(&self.stack, &self.context.txn, key)?.into_owned(),
+                        get_location(&self.stack, &self.context.txn, key)?
+                            .mapping_key(&self.context.txn),
                         get_location(&self.stack, &self.context.txn, value)?.into_owned(),
                     );
                 }
@@ -467,7 +468,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         LpcRef::Int(LpcInt(l as LpcIntInner))
                     }
                     LpcRef::Mapping(_) => {
-                        let l = lpc_ref.with_mapping(&self.context.txn, |m| m.len())?;
+                        let txn = &self.context.txn;
+                        // The COW closure holds the transaction lock, so liveness is checked before it.
+                        let dead = lpc_ref.with_mapping(txn, |m| {
+                            m.keys()
+                                .filter(|k| k.is_dead_object(txn))
+                                .cloned()
+                                .collect::<Vec<_>>()
+                        })?;
+                        if !dead.is_empty() {
+                            lpc_ref
+                                .with_mapping_cow(txn, |m| m.retain(|k, _| !dead.contains(k)))?;
+                        }
+                        let l = lpc_ref.with_mapping(txn, |m| m.len())?;
 
                         LpcRef::Int(LpcInt(l as LpcIntInner))
                     }
