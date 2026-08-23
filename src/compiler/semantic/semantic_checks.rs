@@ -331,25 +331,20 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                 CallChain::Root {
                     name, namespace, ..
                 } => {
-                    // first check to see if we're calling a function pointer that's
-                    // overridden the function with this name
-                    let or_else = || {
-                        context
-                            .lookup_function_complete(name.as_str(), namespace)
-                            .map_or(Ok(LpcType::Mixed(false)), |function_like| {
-                                Ok(function_like.as_ref().return_type)
-                            })
-                    };
-
-                    context
+                    // A function-typed variable is the call target; any other
+                    // same-named variable is ignored.
+                    let calls_pointer = context
                         .lookup_var(name.as_str())
-                        .map_or_else(or_else, |var| {
-                            if var.type_.matches_type(LpcType::Function(false)) {
-                                or_else()
-                            } else {
-                                Err(lpc_error!("invalid call: `{}` is not a function", name))
-                            }
-                        })
+                        .is_some_and(|var| var.type_.matches_type(LpcType::Function(false)));
+                    if calls_pointer {
+                        return Ok(LpcType::Mixed(false));
+                    }
+
+                    Ok(context
+                        .lookup_function_complete(name.as_str(), namespace)
+                        .map_or(LpcType::Mixed(false), |function_like| {
+                            function_like.as_ref().return_type
+                        }))
                 }
                 CallChain::Node(_) => Ok(LpcType::Mixed(false)),
             }
@@ -2116,6 +2111,52 @@ mod tests {
 
             use super::*;
             use crate::compiler::semantic::scope_tree::ScopeTree;
+
+            #[test]
+            fn call_through_a_function_typed_variable_is_mixed() {
+                let mut scope_tree = ScopeTree::default();
+                scope_tree.push_new();
+                scope_tree.current_mut().unwrap().insert(Symbol {
+                    name: "clone_object".to_string(),
+                    type_: LpcType::Function(false),
+                    ..Default::default()
+                });
+                let context = CompilationContext {
+                    scopes: scope_tree,
+                    ..Default::default()
+                };
+
+                let node = ExpressionNode::Call(create!(
+                    CallNode,
+                    chain: create!(CallChain, name: ustr("clone_object")),
+                    arguments: vec![ExpressionNode::from("foo/bar.c")],
+                ));
+
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(false));
+            }
+
+            #[test]
+            fn call_past_a_non_function_variable_is_the_function() {
+                let mut scope_tree = ScopeTree::default();
+                scope_tree.push_new();
+                scope_tree.current_mut().unwrap().insert(Symbol {
+                    name: "clone_object".to_string(),
+                    type_: LpcType::Int(false),
+                    ..Default::default()
+                });
+                let context = CompilationContext {
+                    scopes: scope_tree,
+                    ..Default::default()
+                };
+
+                let node = ExpressionNode::Call(create!(
+                    CallNode,
+                    chain: create!(CallChain, name: ustr("clone_object")),
+                    arguments: vec![ExpressionNode::from("foo/bar.c")],
+                ));
+
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Object(false));
+            }
 
             #[test]
             fn is_return_type_for_normal_functions() {

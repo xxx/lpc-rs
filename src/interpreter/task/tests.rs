@@ -383,6 +383,54 @@ mod test_instructions {
         }
 
         #[tokio::test]
+        async fn calls_the_function_past_a_same_named_variable() {
+            let code = indoc! { r##"
+                    int foo = 1;
+                    int foo() { return 2; }
+                    int global_shadow = foo();
+                    int local_shadow = bar();
+                    int bar() { int foo = 1; return foo(); }
+                "##};
+
+            let task = run_prog(code).await;
+            let ctx = task.context;
+
+            let values = committed_globals_by_name(&ctx.global_state, ctx.process());
+            BareVal::Int(2).assert_equal(&ctx.global_state, values.get("global_shadow").unwrap());
+            BareVal::Int(2).assert_equal(&ctx.global_state, values.get("local_shadow").unwrap());
+        }
+
+        #[tokio::test]
+        async fn calls_a_same_named_function_typed_variable() {
+            let code = indoc! { r##"
+                    function fp = (: "x" :);
+                    int fp() { return 4; }
+                    string s = fp();
+                "##};
+
+            let task = run_prog(code).await;
+            let ctx = task.context;
+
+            let values = committed_globals_by_name(&ctx.global_state, ctx.process());
+            BareVal::String("x".into()).assert_equal(&ctx.global_state, values.get("s").unwrap());
+        }
+
+        #[tokio::test]
+        async fn a_bare_function_name_is_a_reference() {
+            let code = indoc! { r##"
+                    int fp() { return 4; }
+                    function fp2 = fp;
+                    int v = fp2();
+                "##};
+
+            let task = run_prog(code).await;
+            let ctx = task.context;
+
+            let values = committed_globals_by_name(&ctx.global_state, ctx.process());
+            BareVal::Int(4).assert_equal(&ctx.global_state, values.get("v").unwrap());
+        }
+
+        #[tokio::test]
         async fn calls_correct_function_with_efuns() {
             let code = indoc! { r##"
                     object ob = clone_object("/std/object");
