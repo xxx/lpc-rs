@@ -918,6 +918,24 @@ mod test_instructions {
         use super::*;
 
         #[tokio::test]
+        async fn a_bug_is_not_caught() {
+            let code = indoc! { r##"
+                    mixed id = "a";
+                    string e = catch(remove_call_out(id));
+                "##};
+
+            let error = try_run_prog(code)
+                .await
+                .expect_err("a bug must fail the task");
+
+            assert!(error.is_bug());
+            assert_eq!(
+                error.to_string(),
+                "runtime bug: non-int call out ID sent to `remove_call_out`"
+            );
+        }
+
+        #[tokio::test]
         async fn stores_the_error_string() {
             let code = indoc! { r##"
                     void create() {

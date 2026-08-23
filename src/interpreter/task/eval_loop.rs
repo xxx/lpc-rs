@@ -4,7 +4,7 @@ use itertools::Itertools;
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::{LpcIntInner, RegisterSize};
 use lpc_rs_errors::lpc_error;
-use tracing::{instrument, trace, warn};
+use tracing::{error, instrument, trace, warn};
 
 use crate::{
     interpreter::{
@@ -42,7 +42,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 halted = match self.eval_one_instruction().await {
                     Ok(x) => x,
                     Err(mut e) => {
-                        if !self.catch_points.is_empty() {
+                        if e.is_bug() {
+                            error!("{}", e.diagnostic_string());
+                        }
+
+                        // `catch()` does not resume from a broken driver invariant.
+                        if !e.is_bug() && !self.catch_points.is_empty() {
                             self.catch_error(e)?;
 
                             false
