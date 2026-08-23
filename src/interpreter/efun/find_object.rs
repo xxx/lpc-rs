@@ -62,7 +62,7 @@ mod tests {
 
         let global_state = GlobalState::new(config, tx);
 
-        TaskContext::new(Arc::new(global_state), process, None, None)
+        TaskContext::new(Arc::new(global_state), process, None)
     }
 
     #[tokio::test]

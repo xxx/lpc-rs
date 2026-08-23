@@ -3,6 +3,7 @@ use std::{path::PathBuf, sync::Arc, thread::JoinHandle};
 use bit_set::BitSet;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
+use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::Sender;
@@ -12,10 +13,7 @@ use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
         call_outs::CallOuts,
-        function_type::{
-            function_address::FunctionAddress,
-            function_ptr::{FunctionPtr, PtrTriple},
-        },
+        function_type::{function_address::FunctionAddress, function_ptr::FunctionPtr},
         gc::{gc_bank::GcVarIdBank, mark::Mark},
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
@@ -25,9 +23,18 @@ use crate::{
             VarId, WorldRoot, gc_pass, resolve_or_create_object,
         },
         task::{Task, apply_function::apply_runtime_error, task_template::TaskTemplate},
+        task_context::TaskContext,
         vm::vm_op::VmOp,
     },
 };
+
+/// A stored function pointer resolved and ready to run: the context carries
+/// the receiver, the command giver, and the pointer's captures.
+pub struct PreparedCall {
+    pub context: TaskContext,
+    pub function: Arc<ProgramFunction>,
+    pub args: Vec<LpcRef>,
+}
 
 /// A type for globally-shared state that every [`Task`] will need access to.
 #[derive(Debug)]
@@ -124,7 +131,7 @@ impl GlobalState {
         self: &Arc<Self>,
         ptr: &FunctionPtr,
         this_player: Option<Arc<Process>>,
-    ) -> Result<Option<PtrTriple>> {
+    ) -> Result<Option<PreparedCall>> {
         // The transactional seam: a create-on-miss goes through the
         // committer, and a destruct in the committed-unflushed window is an
         // error instead of a resurrection.
@@ -134,7 +141,7 @@ impl GlobalState {
 
         if !self.is_initialized(&process) {
             let template = TaskTemplate::from(self.clone());
-            template.set_this_player(this_player);
+            template.set_this_player(this_player.clone());
             let ctx = template.into_task_context(process.clone());
             if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_process(ctx).await {
                 let template = TaskTemplate::from(self.clone());
@@ -148,7 +155,14 @@ impl GlobalState {
             }
         }
 
-        Ok(Some((process, function, args)))
+        let mut template = TaskTemplate::from(self.clone());
+        template.set_this_player(this_player);
+        template.upvalue_ptrs = Some(ptr.upvalue_ptrs.clone());
+        Ok(Some(PreparedCall {
+            context: template.into_task_context(process),
+            function,
+            args,
+        }))
     }
 
     /// Resolve the receiver of a dynamic function pointer whose first partial

@@ -123,7 +123,6 @@ impl TaskContext {
         global_state: Arc<GlobalState>,
         process: P,
         this_player: Option<Arc<Process>>,
-        upvalue_ptrs: Option<ThinVec<Register>>,
     ) -> Self
     where
         P: Into<Arc<Process>>,
@@ -136,7 +135,7 @@ impl TaskContext {
             result: TaskResult::new(),
             simul_efuns,
             this_player: ArcSwapAny::from(this_player),
-            upvalue_ptrs,
+            upvalue_ptrs: None,
             chain_count: 0,
             txn: TxnHandle::default(),
         }
@@ -440,7 +439,7 @@ mod tests {
         let process = Process::new(program);
         let (tx, _rx) = mpsc::channel(100);
         let global_state = GlobalState::new(test_config(), tx);
-        TaskContext::new(Arc::new(global_state), process, None, None)
+        TaskContext::new(Arc::new(global_state), process, None)
     }
 
     #[test]
@@ -477,7 +476,7 @@ mod tests {
         let process = Process::new(program);
         let (tx, _rx) = mpsc::channel(100);
         let global_state = GlobalState::new(config, tx);
-        let context = TaskContext::new(Arc::new(global_state), process, None, None);
+        let context = TaskContext::new(Arc::new(global_state), process, None);
 
         assert_eq!(context.in_game_cwd().to_str().unwrap(), "/foo/bar");
     }

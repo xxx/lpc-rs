@@ -29,6 +29,7 @@ use crate::{
             apply_function::{apply_function, apply_function_by_name, apply_runtime_error},
             task_template::TaskTemplate,
         },
+        vm::global_state::PreparedCall,
     },
     telnet::{
         connection::{Connection, InputTo},
@@ -365,8 +366,12 @@ impl Telnet {
             .global_state
             .prepare_function_ptr(&input_to.ptr, connection.process.load_full())
             .await;
-        let (process, function, mut args) = match prepared {
-            Ok(Some(triple)) => triple,
+        let PreparedCall {
+            context,
+            function,
+            mut args,
+        } = match prepared {
+            Ok(Some(prepared)) => prepared,
             Ok(None) => return,
             Err(_) => {
                 let _ = sink
@@ -384,18 +389,9 @@ impl Telnet {
             args.push(input_arg);
         }
 
-        let mut apply_template = template.clone();
-        apply_template.set_this_player(connection.process.load_full());
-        apply_template.upvalue_ptrs = Some(input_to.ptr.upvalue_ptrs.clone());
-
-        let max_execution_time = apply_template.global_state.config.max_execution_time;
-        let result = apply_function(
-            function,
-            &args,
-            apply_template.into_task_context(process.clone()),
-            Some(max_execution_time),
-        )
-        .await;
+        let process = context.process.clone();
+        let max_execution_time = template.global_state.config.max_execution_time;
+        let result = apply_function(function, &args, context, Some(max_execution_time)).await;
 
         if let Err(e) = result {
             let Some(Ok(_)) = apply_runtime_error(&e, Some(process), template.clone()).await else {

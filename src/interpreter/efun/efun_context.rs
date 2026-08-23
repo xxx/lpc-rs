@@ -332,7 +332,7 @@ mod tests {
             .build()
             .expect("program builder");
         let process = Arc::new(Process::new(program));
-        let task_context = TaskContext::new(Arc::new(global_state), process.clone(), None, None);
+        let task_context = TaskContext::new(Arc::new(global_state), process.clone(), None);
 
         let function = ProgramFunctionBuilder::default()
             .prototype(

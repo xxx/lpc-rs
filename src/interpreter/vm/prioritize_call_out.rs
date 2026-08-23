@@ -7,7 +7,7 @@ use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
         function_type::function_ptr::FunctionPtr, lpc_ref::LpcRef, task::Task,
-        task_context::TaskContext, vm::global_state::GlobalState,
+        vm::global_state::GlobalState,
     },
 };
 
@@ -40,16 +40,15 @@ impl GlobalState {
                 }
             };
 
-            let (process, function, args) =
-                match global_state.prepare_function_ptr(&ptr_arc, None).await {
-                    Ok(Some(triple)) => triple,
-                    Ok(None) => return,
-                    Err(e) => {
-                        global_state.with_call_outs_mut(|co| co.remove_by_id(id));
-                        e.emit_diagnostics();
-                        return;
-                    }
-                };
+            let prepared = match global_state.prepare_function_ptr(&ptr_arc, None).await {
+                Ok(Some(prepared)) => prepared,
+                Ok(None) => return,
+                Err(e) => {
+                    global_state.with_call_outs_mut(|co| co.remove_by_id(id));
+                    e.emit_diagnostics();
+                    return;
+                }
+            };
 
             global_state.with_call_outs_mut(|co| {
                 if repeating {
@@ -60,16 +59,12 @@ impl GlobalState {
             });
 
             let max_execution_time = global_state.config.max_execution_time;
-            let task_context = TaskContext::new(
-                global_state.clone(),
-                process,
-                None,
-                Some(&ptr_arc.upvalue_ptrs).cloned(),
-            );
+            let mut task = Task::<MAX_CALL_STACK_SIZE>::new(prepared.context);
 
-            let mut task = Task::<MAX_CALL_STACK_SIZE>::new(task_context);
-
-            if let Err(e) = task.timed_eval(function, &args, max_execution_time).await {
+            if let Err(e) = task
+                .timed_eval(prepared.function, &prepared.args, max_execution_time)
+                .await
+            {
                 e.with_stack_trace(task.stack.stack_trace())
                     .emit_diagnostics();
             }
