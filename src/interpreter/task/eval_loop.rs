@@ -28,7 +28,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         if f.prototype.is_efun() {
             // call the efun, then we're done with this Task
-            self.prepare_and_call_efun(f.name()).await?;
+            if let Err(e) = self.prepare_and_call_efun(f.name()).await {
+                return Err(e.with_stack_trace(self.stack.stack_trace()));
+            }
         } else {
             let mut halted = false;
 

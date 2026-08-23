@@ -80,18 +80,36 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             return Ok(proc);
         }
 
-        let debug_span = self.current_debug_span();
         let process = self
             .compile_process(path)
             .await
-            .map_err(|e| e.with_span(debug_span))?;
+            .map_err(|e| self.loaded_from_here(e))?;
 
         self.insert_process_transactional(&process);
         self.init_process_transactional(&process)
             .await
-            .map_err(|e| e.with_span(self.current_debug_span()))?;
+            .map_err(|e| self.loaded_from_here(e))?;
 
         Ok(process)
+    }
+
+    /// An error from loading an object keeps its own location; the call
+    /// site becomes a label, or the location when it had none.
+    fn loaded_from_here(&self, e: LpcError) -> LpcError {
+        let call_site = self.call_site_span();
+        if e.span().is_some() {
+            e.with_label("loaded from here", call_site)
+        } else {
+            e.with_span(call_site)
+        }
+    }
+
+    /// The span of the instruction that called this efun; an efun's own
+    /// frame carries no spans.
+    #[inline]
+    pub fn call_site_span(&self) -> Option<Span> {
+        self.previous_debug_span()
+            .or_else(|| self.current_debug_span())
     }
 
     /// Get a reference to the current [`CallFrame`]
@@ -162,16 +180,16 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
     }
 
-    /// A helper to generate an [`LpcError`] for runtime errors
+    /// A runtime error located at the instruction that called this efun.
     #[inline]
     pub fn runtime_error<T: AsRef<str>>(&self, msg: T) -> LpcError {
-        self.frame().runtime_error(msg)
+        LpcError::runtime(msg).with_span(self.call_site_span())
     }
 
-    /// A helper to generate an [`LpcError`] for runtime bugs
+    /// A runtime bug located at the instruction that called this efun.
     #[inline]
     pub fn runtime_bug<T: AsRef<str>>(&self, msg: T) -> LpcError {
-        self.frame().runtime_bug(msg)
+        LpcError::runtime_bug(msg).with_span(self.call_site_span())
     }
 
     /// Resolve a local register

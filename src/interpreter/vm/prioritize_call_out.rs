@@ -65,8 +65,7 @@ impl GlobalState {
                 .timed_eval(prepared.function, &prepared.args, max_execution_time)
                 .await
             {
-                e.with_stack_trace(task.stack.stack_trace())
-                    .emit_diagnostics();
+                e.emit_diagnostics();
             }
         })
     }

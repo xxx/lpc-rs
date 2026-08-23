@@ -7,7 +7,7 @@ use std::{
 use derive_builder::Builder;
 use itertools::Itertools;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{Result, lpc_bug, lpc_error};
+use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::ThinVec;
 
@@ -126,10 +126,10 @@ impl FunctionPtr {
         let (process, function) = match &self.address {
             FunctionAddress::Local(receiver, function) => {
                 let Some(process) = receiver.upgrade().filter(|p| p.is_live(txn)) else {
-                    return Err(lpc_error!(
+                    return Err(LpcError::runtime(format!(
                         "attempted to call a pointer to a function in a destructed object: {}",
                         self
-                    ));
+                    )));
                 };
                 (process, function.clone())
             }
@@ -142,10 +142,10 @@ impl FunctionPtr {
                 let process = match &receiver {
                     LpcRef::Object(_) => {
                         let Some(process) = receiver.live_object(txn) else {
-                            return Err(lpc_error!(
+                            return Err(LpcError::runtime(format!(
                                 "attempted to call `{}` on a destructed object",
                                 name
-                            ));
+                            )));
                         };
                         process
                     }
@@ -154,11 +154,10 @@ impl FunctionPtr {
                         match ctx.find_object(&path) {
                             ObjectLookup::Found(process) => process,
                             ObjectLookup::Removed => {
-                                return Err(lpc_error!(
+                                return Err(LpcError::runtime(format!(
                                     "attempted to call `{}` on a destructed object `{}`",
-                                    name,
-                                    path
-                                ));
+                                    name, path
+                                )));
                             }
                             ObjectLookup::NotCreated => {
                                 let process = ctx.compile_process(&path).await?;
@@ -168,11 +167,10 @@ impl FunctionPtr {
                         }
                     }
                     _ => {
-                        return Err(lpc_error!(
+                        return Err(LpcError::runtime(format!(
                             "`&->{}()` needs an object or path as its receiver, got `{}`",
-                            name,
-                            receiver
-                        ));
+                            name, receiver
+                        )));
                     }
                 };
                 let Some(function) = process.program.lookup_function(name).cloned() else {
@@ -182,19 +180,25 @@ impl FunctionPtr {
             }
             FunctionAddress::Efun(name) => {
                 let Some(owner) = self.owner.upgrade().filter(|p| p.is_live(txn)) else {
-                    return Err(lpc_error!(
+                    return Err(LpcError::runtime(format!(
                         "attempted to call an efun pointer whose owner is destructed: {}",
                         self
-                    ));
+                    )));
                 };
                 (owner, EFUN_FUNCTIONS[name.as_str()].clone())
             }
             FunctionAddress::SimulEfun(name) => {
                 let Some(simul_efuns) = ctx.simul_efuns() else {
-                    return Err(lpc_bug!("simul_efun pointer without simul_efuns: {}", self));
+                    return Err(LpcError::runtime_bug(format!(
+                        "simul_efun pointer without simul_efuns: {}",
+                        self
+                    )));
                 };
                 let Some(function) = simul_efuns.program.lookup_function(name) else {
-                    return Err(lpc_error!("call to unknown simul_efun `{}`", name));
+                    return Err(LpcError::runtime(format!(
+                        "call to unknown simul_efun `{}`",
+                        name
+                    )));
                 };
                 (simul_efuns.clone(), function.clone())
             }

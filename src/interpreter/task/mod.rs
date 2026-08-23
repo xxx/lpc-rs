@@ -268,7 +268,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 return Err(lpc_error!(
                     "evaluation limit of {}ms has been reached",
                     self.timeout_ms.unwrap_or(0)
-                ));
+                )
+                .with_stack_trace(self.stack.stack_trace()));
             }
         };
 

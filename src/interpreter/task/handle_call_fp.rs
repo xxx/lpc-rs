@@ -41,7 +41,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.stack.current_frame_mut()?.registers[0] = NULL;
                 return Ok(());
             }
-            Err(e) => return Err(self.runtime_error(e.to_string())),
+            Err(e) => return Err(e.or_span(self.stack.current_frame()?.current_debug_span())),
         };
 
         if !process.is_initialized(&self.context.txn) {

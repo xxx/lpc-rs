@@ -766,6 +766,54 @@ mod test_instructions {
         }
 
         #[tokio::test]
+        async fn a_pointer_call_keeps_the_bug_severity() {
+            use crate::{
+                compile_time_config::MAX_CALL_STACK_SIZE,
+                interpreter::{
+                    call_frame::CallFrame,
+                    function_type::{
+                        function_address::FunctionAddress, function_ptr::FunctionPtrBuilder,
+                    },
+                    object_space::ObjectSpace,
+                    task::task_template::TaskTemplate,
+                },
+                test_support::compile_prog,
+            };
+            use lpc_rs_core::register::Register;
+            use thin_vec::ThinVec;
+
+            let (program, config, _se_proc) = compile_prog("void create() { int x = 1; }").await;
+            let (tx, _rx) = tokio::sync::mpsc::channel(128);
+            let global_state = GlobalState::new(config, tx);
+            let process = Arc::new(Process::new(program));
+            ObjectSpace::insert_process_physical(&global_state.object_space, process.clone());
+            let context = TaskTemplate::from(global_state).into_task_context(process.clone());
+            assert!(context.simul_efuns().is_none());
+
+            let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context);
+            let create = process.program.lookup_function("create").unwrap().clone();
+            let mut frame = CallFrame::new(process.clone(), create, 0, None::<ThinVec<VarId>>);
+            let ptr = FunctionPtrBuilder::default()
+                .owner(Arc::downgrade(&process))
+                .address(FunctionAddress::SimulEfun(ustr("nope")))
+                .build()
+                .unwrap();
+            frame.registers[1] = ptr.into();
+            task.stack.push(frame).unwrap();
+
+            let e = task
+                .handle_call_fp(Register(1).as_local())
+                .await
+                .unwrap_err();
+            assert!(e.is_bug(), "{e}");
+            assert!(
+                e.to_string()
+                    .starts_with("runtime bug: simul_efun pointer without simul_efuns"),
+                "{e}"
+            );
+        }
+
+        #[tokio::test]
         async fn a_positional_arg_follows_a_captured_parameter() {
             let code = indoc! { r##"
                 mixed r;
@@ -1113,6 +1161,69 @@ mod test_instructions {
             ];
 
             BareVal::assert_vec_equal(&gs, &expected, &registers);
+        }
+    }
+
+    mod test_error_locations {
+        use super::*;
+
+        fn stack_trace_of(e: &LpcError) -> String {
+            e.to_diagnostics()[0]
+                .notes
+                .iter()
+                .find(|n| n.starts_with("Stack trace"))
+                .cloned()
+                .unwrap_or_default()
+        }
+
+        #[tokio::test]
+        async fn a_loaded_objects_compile_error_keeps_its_own_span() {
+            let code = indoc! { r##"
+                void create() {
+                    clone_object("/broken");
+                }
+            "##};
+            let e = try_run_prog(code).await.unwrap_err();
+            let location = e.span().map(|s| s.to_string()).unwrap_or_default();
+            assert!(location.contains("broken.c"), "{location}");
+            let labels = &e.to_diagnostics()[0].labels;
+            assert!(
+                labels.iter().any(|l| l.message == "loaded from here"),
+                "{labels:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_nested_trace_runs_from_the_entry_to_the_failing_frame() {
+            let code = indoc! { r##"
+                void create() {
+                    object o = clone_object("/ptr_target");
+                    o->fire((: 1 / 0 :));
+                }
+            "##};
+            let e = try_run_prog(code).await.unwrap_err();
+            let trace = stack_trace_of(&e);
+            assert!(trace.contains(" in create()"), "{trace}");
+            assert!(trace.contains(" in fire()"), "{trace}");
+        }
+
+        #[tokio::test]
+        async fn a_timeout_carries_the_trace_it_interrupted() {
+            use lpc_rs_utils::config::ConfigBuilder;
+
+            let code = indoc! { r##"
+                void create() {
+                    while(1) {}
+                }
+            "##};
+            let config = crate::test_config_builder!()
+                .max_execution_time(40_u64)
+                .build()
+                .unwrap();
+            let e = try_run_prog_with_config(code, Arc::new(config))
+                .await
+                .unwrap_err();
+            assert!(stack_trace_of(&e).contains(" in create()"), "{e:?}");
         }
     }
 

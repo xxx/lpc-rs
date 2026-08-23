@@ -230,7 +230,12 @@ impl LpcError {
         self
     }
 
-    pub fn with_stack_trace(mut self, stack_trace: Vec<String>) -> Self {
+    /// Frames, innermost task first: a later attachment comes from the
+    /// calling task, so its frames go in front.
+    pub fn with_stack_trace(mut self, mut stack_trace: Vec<String>) -> Self {
+        if let Some(inner) = self.0.stack_trace.take() {
+            stack_trace.extend(inner);
+        }
         self.0.stack_trace = Some(stack_trace);
 
         self
