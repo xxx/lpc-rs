@@ -77,26 +77,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
     }
 
-    /// Find or create (but don't initialize) an object by path.
-    /// Transactional: a create writes the object's cell and records a deferred
-    /// physical insert, so the object is usable within this transaction but
-    /// physically visible only after commit.
-    pub async fn create_object(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        if let ObjectLookup::Found(proc) = self.find_object(path) {
-            return Ok(proc);
-        }
-
-        let debug_span = self.current_debug_span();
-        let process = self.compile_process(path).await.map_err(|mut e| {
-            *e = e.with_span(debug_span);
-            e
-        })?;
-
-        self.insert_process_transactional(&process);
-
-        Ok(process)
-    }
-
     /// Find or initialize an object by path.
     /// Transactional: a new object gets a cell write and deferred physical
     /// insert, and its initializer runs in a sub-task that joins this
@@ -359,7 +339,7 @@ mod tests {
     };
 
     /// A fresh, uncommitted `EfunContext` whose call stack holds one real
-    /// frame: `create_object` records the caller's debug span, so `frame()`
+    /// frame: `load_object` records the caller's debug span, so `frame()`
     /// must resolve.
     fn efun_context() -> (TaskContext, CallStack<10>) {
         let (tx, _rx) = tokio::sync::mpsc::channel::<VmOp>(128);
@@ -417,7 +397,7 @@ mod tests {
 
         // Baseline: create once, and a second find (no destruct in between)
         // returns the same object.
-        let p1 = ctx.create_object(&path).await.expect("first create");
+        let p1 = ctx.load_object(&path).await.expect("first create");
         let ObjectLookup::Found(p1b) = ctx.find_object(&path) else {
             panic!("second find, no destruct, should be Found");
         };
@@ -431,7 +411,7 @@ mod tests {
         // still hold `p1` (the effects haven't landed).
         ctx.remove_process(p1.clone());
         let p2 = ctx
-            .create_object(&path)
+            .load_object(&path)
             .await
             .expect("re-create after destruct");
         assert!(
@@ -441,7 +421,7 @@ mod tests {
 
         // Cycle 2: the same sequence again; all three identities distinct.
         ctx.remove_process(p2.clone());
-        let p3 = ctx.create_object(&path).await.expect("second re-create");
+        let p3 = ctx.load_object(&path).await.expect("second re-create");
         assert!(
             !Arc::ptr_eq(&p2, &p3) && !Arc::ptr_eq(&p1, &p3),
             "second re-create must be a fresh object, distinct from both predecessors"

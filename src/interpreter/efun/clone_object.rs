@@ -27,7 +27,7 @@ async fn load_prototype<const N: usize>(
         return Err(context.runtime_error(format!("Cannot clone self: {}", path_str)));
     }
 
-    context.create_object(&full_path).await
+    context.load_object(&full_path).await
 }
 
 /// `clone_object`, the efun for creating new object instances.
@@ -60,14 +60,10 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         "new_clone must be a clone"
     );
 
-    // if the prototype is not initialized, we initialize the clone.
-    if !prototype.is_initialized(context.txn()) {
-        if context.chain_count() >= MAX_CLONE_CHAIN {
-            return Err(context.runtime_error("infinite clone recursion detected"));
-        }
-
-        context.init_process_transactional(&clone_process).await?;
+    if context.chain_count() >= MAX_CLONE_CHAIN {
+        return Err(context.runtime_error("infinite clone recursion detected"));
     }
+    context.init_process_transactional(&clone_process).await?;
 
     let result = LpcRef::from(Arc::downgrade(&clone_process));
     context.return_efun_result(result);
@@ -173,7 +169,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn initializes_clone_if_prototype_not_initialized() {
+    async fn initializes_clone_of_an_uninitialized_prototype() {
         let cloned = indoc! { r#"
             int i = 123;
         "# };
@@ -229,23 +225,81 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn handles_clone_self_recursion() {
-        // This tests the case where an uninitialized prototype is cloned, (which
-        // initializes the clone), and that clone then clones itself. This is
-        // an infinite loop because if the prototype is _not_ initialized, then
-        // the clone _will_ be initialized, and then clone itself, and so on.
+    async fn initializes_clone_of_an_initialized_prototype() {
+        let cloned = indoc! { r#"
+            int i = 123;
+        "# };
 
-        // This object will be initialized as a prototype, and so clones of it will
-        // _not_ be initialized. It's not self-cloning, as it has a different path
-        // than "self_clone".
+        let cloner = indoc! { r#"
+            object foo = clone_object("cloned");
+        "# };
+
+        let vm = Vm::new(test_config());
+        let cloned_proc = vm
+            .initialize_process_from_code("cloned.c", cloned)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert!(vm.global_state.is_initialized(&cloned_proc));
+
+        let cloner_proc = vm
+            .initialize_process_from_code("cloner.c", cloner)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let LpcRef::Object(foo) = committed_globals_by_name(&vm.global_state, &cloner_proc)
+            .get("foo")
+            .unwrap()
+            .clone()
+        else {
+            panic!("foo is not an object");
+        };
+        let foo = foo.upgrade().unwrap();
+
+        assert!(vm.global_state.is_initialized(&foo));
+        assert_eq!(
+            committed_globals_by_name(&vm.global_state, &foo)
+                .get("i")
+                .unwrap(),
+            &LpcRef::from(123)
+        );
+    }
+
+    #[tokio::test]
+    async fn initializes_a_missing_prototype_and_its_clone() {
+        let cloner = indoc! { r#"
+            object foo = clone_object("/clone_target");
+        "# };
+
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code("cloner.c", cloner)
+            .await
+            .unwrap();
+
+        let object_space = &vm.global_state.object_space;
+        for key in ["/clone_target", "/clone_target#0"] {
+            let process = object_space.lookup(key).unwrap();
+            assert!(vm.global_state.is_initialized(&process), "{key}");
+            assert_eq!(
+                committed_globals_by_name(&vm.global_state, &process)
+                    .get("i")
+                    .unwrap(),
+                &LpcRef::from(123),
+                "{key}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn handles_clone_self_recursion() {
+        // Each clone's initializer clones the same path again.
         let prototype = indoc! { r#"
             object foo = clone_object("self_clone");
         "# };
 
-        // This is the self-cloning object, which has a different path than the prototype,
-        // (even though the code is the same, which is just a coincidence). It will
-        // be cloned by the prototype above, _without_ its prototype being initialized,
-        // meaning it _will_ be initialized, and start a clone chain.
+        // Same code, different path, so "Cannot clone self" does not apply.
         let self_clone = indoc! { r#"
             object foo = clone_object("self_clone");
         "# };
@@ -274,9 +328,8 @@ mod tests {
             void create() {
                 "/clone"->set_name("proto foo");
 
-                // Prototype has been called, and so is initialized.
-                // Clone should not be initialized, and should not have a
-                // copy of the prototype's data
+                // The clone starts from its own initializer, not from a
+                // copy of the prototype's data.
                 object student = clone_object("/clone");
             }
         "# };

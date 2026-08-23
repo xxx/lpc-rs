@@ -32,7 +32,7 @@ mod tests {
         let code = r##"
             void create() {
                 dump(file_name(this_object()));
-                object ob = clone_object("/my_file"); // this file
+                object ob = clone_object("/clone_target");
                 dump(file_name(ob));
                 destruct(ob);
             }
@@ -47,8 +47,10 @@ mod tests {
             .map(|x| x.key().to_owned())
             .collect::<Vec<_>>();
 
-        assert!(space.contains(&"/my_file".to_owned())); // clone is removed
-        // The prototype and the simul-efun object `run_prog` inserts.
-        assert_eq!(result.context.object_space().len(), 2);
+        assert!(space.contains(&"/clone_target".to_owned()));
+        assert!(!space.contains(&"/clone_target#0".to_owned()));
+        // This file, the clone's prototype and the simul-efun object
+        // `run_prog` inserts.
+        assert_eq!(result.context.object_space().len(), 3);
     }
 }
