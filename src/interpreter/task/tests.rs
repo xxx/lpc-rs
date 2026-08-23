@@ -1253,6 +1253,25 @@ mod test_instructions {
         use super::*;
 
         #[tokio::test]
+        async fn an_inherited_closure_keeps_its_own_body() {
+            let code = indoc! { r##"
+                mixed r;
+                void create() {
+                    object o = clone_object("/inherit_closure_child");
+                    function pc = o->parent_closure();
+                    function cc = o->child_closure();
+                    r = o->parent_direct() + pc() * 1000 + cc() * 1000000;
+                }
+            "##};
+
+            let task = run_prog(code).await;
+            let globals =
+                committed_globals_by_name(&task.context.global_state, task.context.process());
+
+            assert_eq!(globals["r"], LpcRef::Int(LpcInt(2_000_101_101)));
+        }
+
+        #[tokio::test]
         async fn stores_the_value_for_efuns() {
             let code = indoc! { r##"
                     function f = dump;

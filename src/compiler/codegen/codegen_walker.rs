@@ -255,6 +255,7 @@ impl CodegenWalker {
         // but that should be fine, as they are inserted in the order they are processed.
         let unmangled_functions = functions
             .values()
+            .filter(|f| !f.is_closure())
             .map(|f| (f.prototype.name.to_string(), f.clone()))
             .collect::<IndexMap<_, _>>();
 
@@ -943,6 +944,13 @@ impl CodegenWalker {
                                 let idx = self.context.strings.get_or_intern(name);
                                 Instruction::CallSimulEfun(RegisterSize::try_from(idx.to_usize())?)
                             }
+                            FunctionKind::Closure => {
+                                return Err(lpc_bug!(
+                                    node.span,
+                                    "closure `{}` called by name",
+                                    name
+                                ));
+                            }
                         }
                     }
                 }
@@ -1349,7 +1357,8 @@ impl TreeWalker for CodegenWalker {
         self.context.scopes.pop();
         let mut func = self.function_stack.pop().unwrap();
 
-        let name_index = self.context.strings.get_or_intern(&*func.prototype.name);
+        // The mangled name carries the file, so inherited code keeps its own closures.
+        let name_index = self.context.strings.get_or_intern(func.mangle());
 
         func.num_locals = self.register_counter.number_emitted() - num_args;
         func.num_upvalues = self.context.scopes.get(scope_id).unwrap().num_upvalues;
@@ -3940,6 +3949,41 @@ mod tests {
             assert_eq!(func.local_variables.len(), 2);
             assert_eq!(func.local_variables.first().unwrap().name, "i");
             assert_eq!(func.local_variables.last().unwrap().name, "f");
+        }
+
+        #[tokio::test]
+        async fn a_closure_pointer_names_the_mangled_function() {
+            let code = indoc! {r##"
+                void create() { function f = (: 1 :); }
+            "##};
+            let walker = walk_prog(code).await;
+            let create = walker
+                .functions
+                .values()
+                .find(|f| f.name() == "create")
+                .unwrap();
+            let name_index = create
+                .instructions
+                .iter()
+                .find_map(|i| match i {
+                    Instruction::FunctionPtrConst { name_index, .. } => Some(*name_index),
+                    _ => None,
+                })
+                .unwrap();
+            let name = walker
+                .context
+                .strings
+                .resolve(DefaultSymbol::try_from_usize(name_index as usize).unwrap())
+                .unwrap()
+                .to_string();
+
+            let closure = &walker.functions[&name];
+            assert!(closure.is_closure());
+            assert_eq!(closure.name(), "closure-0");
+
+            let program = walker.into_program().unwrap();
+            assert!(program.functions.contains_key(&name));
+            assert!(!program.unmangled_functions.contains_key("closure-0"));
         }
 
         /// The function owning local `var`, with that local's location.

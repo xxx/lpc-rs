@@ -27,6 +27,9 @@ pub enum FunctionKind {
 
     /// An efun. These are implemented in Rust, and can be called from anywhere.
     Efun,
+
+    /// A closure: an anonymous function reached only through a pointer.
+    Closure,
 }
 
 impl Display for FunctionKind {
@@ -35,6 +38,7 @@ impl Display for FunctionKind {
             Self::Local => write!(f, "local"),
             Self::SimulEfun => write!(f, "simul_efun"),
             Self::Efun => write!(f, "efun"),
+            Self::Closure => write!(f, "closure"),
         }
     }
 }

@@ -69,6 +69,8 @@ impl TreeWalker for FunctionPrototypeWalker {
             .unwrap_or(0);
         let num_default_args = RegisterSize::try_from(num_default_args)?;
 
+        let kind = FunctionKind::Closure;
+
         let arg_types = node
             .parameters
             .as_ref()
@@ -102,6 +104,7 @@ impl TreeWalker for FunctionPrototypeWalker {
                 .name(node.name.to_owned())
                 .filename(self.context.filename.clone())
                 .return_type(node.return_type)
+                .kind(kind)
                 .arity(FunctionArity {
                     num_args,
                     num_default_args,
@@ -336,6 +339,7 @@ mod tests {
                 .name("closure-123")
                 .filename(Arc::new(LpcPath::new_server("/")))
                 .return_type(LpcType::Mixed(false))
+                .kind(FunctionKind::Closure)
                 .arity(FunctionArity::new(4))
                 .arg_types(vec![LpcType::Int(false), LpcType::Mapping(true)])
                 .build()

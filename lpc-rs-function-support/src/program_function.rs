@@ -20,7 +20,10 @@ use once_cell::sync::OnceCell;
 use string_interner::{DefaultBackend, StringInterner};
 use tracing::trace;
 
-use crate::{function_prototype::FunctionPrototype, symbol::Symbol};
+use crate::{
+    function_prototype::{FunctionKind, FunctionPrototype},
+    symbol::Symbol,
+};
 
 /// A `Program` function, which stores its actual code, along with
 /// metadata for type checking, etc.
@@ -169,7 +172,7 @@ impl ProgramFunction {
     /// Is this function a closure?
     #[inline]
     pub fn is_closure(&self) -> bool {
-        self.prototype.name.starts_with("closure-")
+        self.prototype.kind == FunctionKind::Closure
     }
 }
 
@@ -198,5 +201,30 @@ impl AsRef<FunctionPrototype> for Arc<ProgramFunction> {
     #[inline]
     fn as_ref(&self) -> &FunctionPrototype {
         &self.prototype
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType};
+
+    use super::*;
+    use crate::function_prototype::FunctionPrototypeBuilder;
+
+    fn function(kind: FunctionKind) -> ProgramFunction {
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("closure-0")
+            .filename(Arc::new(LpcPath::default()))
+            .return_type(LpcType::Mixed(false))
+            .kind(kind)
+            .build()
+            .unwrap();
+        ProgramFunction::new(prototype, 0)
+    }
+
+    #[test]
+    fn a_closure_is_known_by_its_kind_not_its_name() {
+        assert!(function(FunctionKind::Closure).is_closure());
+        assert!(!function(FunctionKind::Local).is_closure());
     }
 }
