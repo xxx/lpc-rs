@@ -289,7 +289,7 @@ mod tests {
     #[tokio::test]
     async fn clones_its_own_prototype() {
         let caller = indoc! { r#"
-            object made = "/self_copy"->copy();
+            object copy = "/self_copy"->copy();
         "# };
 
         let vm = Vm::new(test_config());
@@ -300,19 +300,19 @@ mod tests {
             .context
             .process;
 
-        let LpcRef::Object(made) = committed_globals_by_name(&vm.global_state, &caller_proc)
-            .get("made")
+        let LpcRef::Object(copy) = committed_globals_by_name(&vm.global_state, &caller_proc)
+            .get("copy")
             .unwrap()
             .clone()
         else {
-            panic!("made is not an object");
+            panic!("copy is not an object");
         };
-        let made = made.upgrade().unwrap();
+        let copy = copy.upgrade().unwrap();
 
-        assert_eq!(made.filename(), "/self_copy#0");
-        assert!(vm.global_state.is_initialized(&made));
+        assert_eq!(copy.filename(), "/self_copy#0");
+        assert!(vm.global_state.is_initialized(&copy));
         assert_eq!(
-            committed_globals_by_name(&vm.global_state, &made)
+            committed_globals_by_name(&vm.global_state, &copy)
                 .get("i")
                 .unwrap(),
             &LpcRef::from(123)

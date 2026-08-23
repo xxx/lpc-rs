@@ -2597,6 +2597,17 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn call_other_ignores_a_same_named_variable() {
+            let code = r#"
+                object copy = "/x"->copy();
+                int n = copy->copy();
+            "#;
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert!(context.errors.is_empty(), "{:?}", context.errors);
+        }
+
+        #[tokio::test]
         async fn logical_not_is_int() {
             let code = r#"
                 int a = !this_object();

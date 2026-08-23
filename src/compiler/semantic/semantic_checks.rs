@@ -324,6 +324,10 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         ExpressionNode::Assignment(AssignmentNode { lhs, .. }) => node_type(lhs, context),
         ExpressionNode::Call(call_node) => {
             match &call_node.chain {
+                // The name resolves on the receiver, not in this scope.
+                CallChain::Root {
+                    receiver: Some(_), ..
+                } => Ok(LpcType::Mixed(false)),
                 CallChain::Root {
                     name, namespace, ..
                 } => {
@@ -332,7 +336,6 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                     let or_else = || {
                         context
                             .lookup_function_complete(name.as_str(), namespace)
-                            // This `or` clause is where call_other checks end up
                             .map_or(Ok(LpcType::Mixed(false)), |function_like| {
                                 Ok(function_like.as_ref().return_type)
                             })
