@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, ffi::OsStr, fmt::Debug, io::ErrorKind, sync::Arc};
+use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, sync::Arc};
 
 use ast::{ast_node::AstNodeTrait, program_node::ProgramNode};
 use async_recursion::async_recursion;
@@ -13,7 +13,7 @@ use derive_builder::Builder;
 use educe::Educe;
 use lexer::{Spanned, Token, TokenVecWrapper};
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{self, LpcError, LpcErrorSeverity, Result, lpc_error, span::Span};
+use lpc_rs_errors::{self, LpcError, Result, lpc_error, span::Span};
 use lpc_rs_utils::{config::Config, read_lpc_file};
 use preprocessor::Preprocessor;
 use tracing::instrument;
@@ -28,6 +28,7 @@ use crate::{
 pub mod ast;
 pub mod codegen;
 pub mod compilation_context;
+pub mod diagnostics;
 pub mod lexer;
 pub mod parser;
 pub mod preprocessor;
@@ -42,26 +43,13 @@ macro_rules! apply_walker {
         let mut context = walker.into_context();
 
         if let Err(e) = result {
-            let e = e.with_additional_errors(context.errors);
-            return Err(e);
-        } else if $fatal
-            && context
-                .errors
-                .iter()
-                .any(|e| e.severity() == LpcErrorSeverity::Error)
-        {
-            let mut errors = std::mem::take(&mut context.errors);
-            // put all warnings first, but otherwise keep them in the original order
-            errors.sort_by(|a, b| match (a.severity(), b.severity()) {
-                (LpcErrorSeverity::Warning, _) => std::cmp::Ordering::Less,
-                (_, LpcErrorSeverity::Warning) => std::cmp::Ordering::Greater,
-                _ => std::cmp::Ordering::Equal,
-            });
-
-            // TODO: benchmark these type conversions vs `errors.remove(0)`
-            let mut deq = VecDeque::from(errors);
-            let e = deq.pop_front().unwrap();
-            return Err(e.with_additional_errors(Vec::from(deq)));
+            return Err(context.diagnostics.finish_with(e));
+        }
+        if $fatal && !context.diagnostics.is_clean() {
+            return Err(context
+                .diagnostics
+                .finish()
+                .expect_err("not clean, so finish fails"));
         }
 
         context
@@ -245,6 +233,13 @@ impl Compiler {
     ///     .expect("Failed to compile.");
     /// # });
     /// ```
+    /// Where a successful compile's warnings go.
+    async fn report_warnings(&self, warnings: Vec<LpcError>) {
+        for warning in warnings {
+            self.config.debug_log(warning.diagnostic_string()).await;
+        }
+    }
+
     #[instrument(skip_all)]
     pub async fn compile_string<T, U>(&self, path: T, code: U) -> Result<Program>
     where
@@ -280,29 +275,11 @@ impl Compiler {
 
         let mut asm_walker = CodegenWalker::new(context);
 
-        program_node.visit(&mut asm_walker).await?;
-
-        // emit warnings
-        let (warnings, errors): (Vec<_>, Vec<_>) = asm_walker
-            .context()
-            .errors
-            .iter()
-            .partition(|e| e.is_warning());
-
-        for warning in warnings {
-            asm_walker
-                .context()
-                .config
-                .debug_log(warning.diagnostic_string())
-                .await;
+        if let Err(e) = program_node.visit(&mut asm_walker).await {
+            return Err(asm_walker.context_mut().diagnostics.finish_with(e));
         }
-
-        if !errors.is_empty() {
-            return Err(errors[0].clone());
-        }
-        // for s in asm_walker.listing() {
-        //     println!("{}", s);
-        // }
+        let warnings = asm_walker.context_mut().diagnostics.finish()?;
+        self.report_warnings(warnings).await;
 
         let program = match asm_walker.into_program() {
             Ok(p) => p,
@@ -403,6 +380,46 @@ mod tests {
         use lpc_rs_utils::config::ConfigBuilder;
 
         use super::*;
+
+        #[tokio::test]
+        async fn a_failed_compile_leads_with_the_error_and_keeps_the_warning_once() {
+            let config: Arc<Config> = ConfigBuilder::default()
+                .lib_dir("tests/fixtures/code")
+                .build()
+                .unwrap()
+                .into();
+            let compiler = CompilerBuilder::default().config(config).build().unwrap();
+            let code = "int proto();\nvoid create() { 1++; }";
+
+            let e = compiler.compile_string("/lead.c", code).await.unwrap_err();
+
+            assert_eq!(e.to_string(), "Invalid operation on `int` literal");
+            let rendered: Vec<_> = e.to_diagnostics().into_iter().map(|d| d.message).collect();
+            assert_eq!(
+                rendered,
+                vec![
+                    "Invalid operation on `int` literal",
+                    "prototypes are ignored in this flavor of LPC",
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_recorded_error_leads_even_when_a_warning_came_first() {
+            let config: Arc<Config> = ConfigBuilder::default()
+                .lib_dir("tests/fixtures/code")
+                .build()
+                .unwrap()
+                .into();
+            let compiler = CompilerBuilder::default().config(config).build().unwrap();
+            let code = "int proto();\nvoid create() { break; }";
+
+            let e = compiler.compile_string("/lead.c", code).await.unwrap_err();
+
+            assert_eq!(e.to_string(), "Invalid `break`.");
+            assert!(!e.is_warning());
+            assert_eq!(e.to_diagnostics().len(), 2);
+        }
 
         #[tokio::test]
         async fn uses_auto_inherit_if_specified() {

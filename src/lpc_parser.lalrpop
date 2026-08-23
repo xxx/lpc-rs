@@ -187,7 +187,7 @@ Def: AstNode = {
         let span = Span::join(left, r);
 
         let warning = lpc_warning!(Some(span), "prototypes are ignored in this flavor of LPC");
-        context.errors.push(warning);
+        context.diagnostics.record(warning);
         AstNode::NoOp
     },
     <flags:GlobalFlag*> <mut node:Decl> ";" =>? {

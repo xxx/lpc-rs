@@ -343,7 +343,7 @@ impl TreeWalker for ScopeWalker {
             // We check for undefined vars here, in case a symbol is subsequently defined.
             let e = lpc_error!(node.span, "undefined variable `{}`", node.name);
 
-            self.context.errors.push(e);
+            self.context.diagnostics.record(e);
 
             return Ok(());
         };
@@ -359,7 +359,7 @@ impl TreeWalker for ScopeWalker {
             .with_span(node.span)
             .with_label("defined here", symbol.span);
 
-            self.context.errors.push(e);
+            self.context.diagnostics.record(e);
 
             return Ok(());
         }
@@ -392,7 +392,7 @@ impl TreeWalker for ScopeWalker {
         trace!("Defining variable {}", &node.name);
 
         if let Err(e) = check_var_redefinition(node, scope.unwrap()) {
-            self.context.errors.push(e);
+            self.context.diagnostics.record(e);
         }
 
         // Inserted first, so a closure in the initializer can capture the variable.
@@ -543,7 +543,7 @@ mod tests {
 
             let _ = walker.visit_var_init(&mut node).await;
 
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -554,7 +554,7 @@ mod tests {
 
             let _ = walker.visit_var_init(&mut node).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -621,7 +621,7 @@ mod tests {
             let _ = walker.visit_var(&mut node).await;
 
             assert_regex!(
-                walker.context.errors[0].message(),
+                walker.context.diagnostics.errors()[0].message(),
                 "undefined variable `foo`"
             );
         }
@@ -634,7 +634,7 @@ mod tests {
             let result = walker.visit_var(&mut node).await;
 
             assert_ok!(result);
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -660,7 +660,7 @@ mod tests {
             let _ = walker.visit_var(&mut node).await;
 
             assert_regex!(
-                walker.context.errors[0].message(),
+                walker.context.diagnostics.errors()[0].message(),
                 "private variable `foo` accessed outside of its file"
             );
         }
@@ -683,7 +683,7 @@ mod tests {
 
             let _ = walker.visit_var(&mut node).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -707,7 +707,7 @@ mod tests {
 
             let _ = walker.visit_var(&mut node).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
 
             let v = walker.context.lookup_var("foo").unwrap();
             assert!(v.upvalue);

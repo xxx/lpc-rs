@@ -619,7 +619,7 @@ async fn warning_on_prototype() {
     assert_ok!(program);
 
     assert_eq!(
-        &context.errors.first().unwrap().to_string(),
+        &context.diagnostics.errors().first().unwrap().to_string(),
         "prototypes are ignored in this flavor of LPC"
     );
 }

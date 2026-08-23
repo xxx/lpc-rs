@@ -120,7 +120,7 @@ impl SemanticCheckWalker {
         if receiver.is_some() {
             if namespace != &CallNamespace::Local {
                 let e = lpc_error!(node.span, "namespaced `call_other` is not allowed");
-                self.context.errors.push(e);
+                self.context.diagnostics.record(e);
             }
 
             // call_other is not type checked
@@ -132,7 +132,7 @@ impl SemanticCheckWalker {
             && namespace.as_str() != EFUN
         {
             let e = lpc_error!(node.span, "unknown namespace `{}`", namespace);
-            self.context.errors.push(e);
+            self.context.diagnostics.record(e);
         }
 
         for argument in &mut node.arguments {
@@ -146,7 +146,7 @@ impl SemanticCheckWalker {
             && (lookup.is_none() || !lookup.unwrap().type_.matches_type(LpcType::Function(false)))
         {
             let e = lpc_error!(node.span, "call to unknown function `{}`", name);
-            self.context.errors.push(e);
+            self.context.diagnostics.record(e);
             // Non-fatal. Continue.
         }
 
@@ -204,7 +204,9 @@ impl SemanticCheckWalker {
             }
         }
 
-        self.context.errors.append(&mut errors);
+        for e in errors {
+            self.context.diagnostics.record(e);
+        }
 
         Ok(())
     }
@@ -254,9 +256,7 @@ impl TreeWalker for SemanticCheckWalker {
                 right_type
             );
 
-            self.context.errors.push(e.clone());
-
-            Err(e)
+            Err(self.context.diagnostics.fail(e))
         }
     }
 
@@ -266,10 +266,7 @@ impl TreeWalker for SemanticCheckWalker {
 
         match check_binary_operation_types(node, &self.context) {
             Ok(_) => Ok(()),
-            Err(err) => {
-                self.context.errors.push(err.clone());
-                Err(err)
-            }
+            Err(err) => Err(self.context.diagnostics.fail(err)),
         }
     }
 
@@ -287,7 +284,7 @@ impl TreeWalker for SemanticCheckWalker {
     async fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
         if !self.can_break() {
             let e = lpc_error!(node.span, "Invalid `break`.");
-            self.context.errors.push(e);
+            self.context.diagnostics.record(e);
 
             // non-fatal
         }
@@ -325,7 +322,7 @@ impl TreeWalker for SemanticCheckWalker {
     async fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
         if !self.can_continue() {
             let e = lpc_error!(node.span, "invalid `continue`.");
-            self.context.errors.push(e);
+            self.context.diagnostics.record(e);
 
             // non-fatal
         }
@@ -378,7 +375,7 @@ impl TreeWalker for SemanticCheckWalker {
                 "`foreach` must iterate over an array or mapping, found {}",
                 collection_type
             );
-            self.context.errors.push(e);
+            self.context.diagnostics.record(e);
         }
 
         match &mut node.initializer {
@@ -391,7 +388,7 @@ impl TreeWalker for SemanticCheckWalker {
                         node.span,
                         "the key and value types for iterating a mapping via `foreach` must be of type `mixed`"
                     );
-                    self.context.errors.push(e);
+                    self.context.diagnostics.record(e);
                 }
 
                 let _ = key.visit(self).await;
@@ -470,7 +467,7 @@ impl TreeWalker for SemanticCheckWalker {
                     "A function pointer can only point to a private function if ",
                     "it is declared in the same file."
                 ));
-                self.context.errors.push(e);
+                self.context.diagnostics.record(e);
             }
         }
 
@@ -496,7 +493,7 @@ impl TreeWalker for SemanticCheckWalker {
             };
 
             let err = LpcError::new(msg).with_span(node.span);
-            self.context.errors.push(err);
+            self.context.diagnostics.record(err);
         }
 
         if let Some(expr) = &mut node.case {
@@ -564,9 +561,7 @@ impl TreeWalker for SemanticCheckWalker {
                 right_type
             );
 
-            self.context.errors.push(e.clone());
-
-            Err(e)
+            Err(self.context.diagnostics.fail(e))
         }
     }
 
@@ -597,7 +592,7 @@ impl TreeWalker for SemanticCheckWalker {
                         .with_span(node.span)
                         .with_label("defined here", function_def.span);
 
-                        self.context.errors.push(error);
+                        self.context.diagnostics.record(error);
                     }
                 }
             } else if function_def.return_type != LpcType::Void {
@@ -609,7 +604,7 @@ impl TreeWalker for SemanticCheckWalker {
                 .with_span(node.span)
                 .with_label("defined here", function_def.span);
 
-                self.context.errors.push(error);
+                self.context.diagnostics.record(error);
             }
         } // else warn?
 
@@ -642,7 +637,7 @@ impl TreeWalker for SemanticCheckWalker {
                 "differing types in ternary expression: `{body_type}` and `{else_type}`"
             ))
             .with_span(node.span);
-            self.context.errors.push(e);
+            self.context.diagnostics.record(e);
         }
 
         Ok(())
@@ -656,18 +651,14 @@ impl TreeWalker for SemanticCheckWalker {
                 UnaryOperation::Inc | UnaryOperation::Dec => {
                     if matches!(*node.expr, ExpressionNode::Int(_)) {
                         let err: LpcError = lpc_error!("Invalid operation on `int` literal");
-                        self.context.errors.push(err.clone());
-                        Err(err)
+                        Err(self.context.diagnostics.fail(err))
                     } else {
                         Ok(())
                     }
                 }
                 _ => Ok(()),
             },
-            Err(err) => {
-                self.context.errors.push(err.clone());
-                Err(err)
-            }
+            Err(err) => Err(self.context.diagnostics.fail(err)),
         }
     }
 
@@ -678,7 +669,7 @@ impl TreeWalker for SemanticCheckWalker {
                     node.span,
                     "positional argument variables can only be used within a closure",
                 );
-                self.context.errors.push(e);
+                self.context.diagnostics.record(e);
             }
 
             if closure_arg_number(node.name)? > MAX_CLOSURE_ARG_REFERENCE {
@@ -687,7 +678,7 @@ impl TreeWalker for SemanticCheckWalker {
                     "positional argument variables can only be used up to `${}`",
                     MAX_CLOSURE_ARG_REFERENCE
                 );
-                self.context.errors.push(e);
+                self.context.diagnostics.record(e);
             }
         }
 
@@ -707,8 +698,7 @@ impl TreeWalker for SemanticCheckWalker {
                 )
                 .with_span(node.span)
                 .with_label("Declared here", span);
-                self.context.errors.push(e.clone());
-                return Err(e);
+                return Err(self.context.diagnostics.fail(e));
             }
         }
 
@@ -732,7 +722,7 @@ impl TreeWalker for SemanticCheckWalker {
                     expr_type
                 );
 
-                self.context.errors.push(e);
+                self.context.diagnostics.record(e);
 
                 // Non-fatal error.
                 Ok(())
@@ -757,11 +747,7 @@ impl TreeWalker for SemanticCheckWalker {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::{HashMap, VecDeque},
-        default::Default,
-        sync::Arc,
-    };
+    use std::{collections::HashMap, default::Default, sync::Arc};
 
     use claims::*;
     use factori::create;
@@ -770,7 +756,6 @@ mod tests {
         call_namespace::CallNamespace, function_arity::FunctionArity, lpc_path::LpcPath,
         lpc_type::LpcType,
     };
-    use lpc_rs_errors::LpcErrorSeverity;
     use lpc_rs_function_support::symbol::Symbol;
     use ustr::ustr;
 
@@ -920,11 +905,11 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = init_node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
 
             let _ = assignment_node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -964,11 +949,11 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = init_node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
 
             let _ = assignment_node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1012,11 +997,11 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = init_node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
 
             let _ = assignment_node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
     }
 
@@ -1077,8 +1062,11 @@ mod tests {
             let code = "void create() { break; }";
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(!context.errors.is_empty());
-            assert_eq!(context.errors[0].to_string(), "Invalid `break`.");
+            assert!(!context.diagnostics.errors().is_empty());
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "Invalid `break`."
+            );
         }
 
         #[tokio::test]
@@ -1096,7 +1084,7 @@ mod tests {
                 }"#;
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(context.errors.is_empty());
+            assert!(context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1111,7 +1099,7 @@ mod tests {
                 }"#;
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(context.errors.is_empty());
+            assert!(context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1129,7 +1117,7 @@ mod tests {
                 }"#;
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(context.errors.is_empty());
+            assert!(context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1147,7 +1135,7 @@ mod tests {
                 }"#;
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(context.errors.is_empty());
+            assert!(context.diagnostics.errors().is_empty());
         }
     }
 
@@ -1193,7 +1181,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1226,7 +1214,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1259,7 +1247,7 @@ mod tests {
             let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1292,7 +1280,7 @@ mod tests {
             let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1326,9 +1314,9 @@ mod tests {
             let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
             assert_regex!(
-                walker.context.errors[0].message(),
+                walker.context.diagnostics.errors()[0].message(),
                 "call to private function `known`"
             );
         }
@@ -1367,7 +1355,7 @@ mod tests {
             let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1383,7 +1371,7 @@ mod tests {
             let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1421,9 +1409,9 @@ mod tests {
             let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
             assert_regex!(
-                walker.context.errors[0].message(),
+                walker.context.diagnostics.errors()[0].message(),
                 "call to private function `known`"
             );
         }
@@ -1459,9 +1447,9 @@ mod tests {
             let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
             assert_regex!(
-                walker.context.errors[0].message(),
+                walker.context.diagnostics.errors()[0].message(),
                 "unknown namespace `unknown_namespace`"
             );
         }
@@ -1497,9 +1485,9 @@ mod tests {
             let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
             assert_regex!(
-                walker.context.errors[0].message(),
+                walker.context.diagnostics.errors()[0].message(),
                 "call to private function `known`"
             );
         }
@@ -1516,7 +1504,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1539,7 +1527,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1562,7 +1550,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1589,7 +1577,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1612,9 +1600,15 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
             assert_eq!(
-                walker.context.errors.first().unwrap().to_string(),
+                walker
+                    .context
+                    .diagnostics
+                    .errors()
+                    .first()
+                    .unwrap()
+                    .to_string(),
                 "call to unknown function `my_non_function_pointer`"
             );
         }
@@ -1629,7 +1623,7 @@ mod tests {
             let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
-            assert_eq!(walker.context.errors.len(), 1);
+            assert_eq!(walker.context.diagnostics.errors().len(), 1);
         }
 
         #[tokio::test]
@@ -1642,7 +1636,7 @@ mod tests {
             let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
-            assert_eq!(walker.context.errors.len(), 1);
+            assert_eq!(walker.context.diagnostics.errors().len(), 1);
         }
 
         #[tokio::test]
@@ -1663,7 +1657,7 @@ mod tests {
             let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1704,7 +1698,7 @@ mod tests {
 
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1741,7 +1735,7 @@ mod tests {
 
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1775,7 +1769,7 @@ mod tests {
 
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
-            assert_eq!(walker.context.errors.len(), 1);
+            assert_eq!(walker.context.diagnostics.errors().len(), 1);
         }
 
         #[tokio::test]
@@ -1809,7 +1803,7 @@ mod tests {
 
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1824,7 +1818,7 @@ mod tests {
             let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1843,9 +1837,9 @@ mod tests {
             let context = empty_compilation_context();
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
             assert_regex!(
-                walker.context.errors[0].message(),
+                walker.context.diagnostics.errors()[0].message(),
                 "namespaced `call_other` is not allowed"
             );
         }
@@ -1866,7 +1860,7 @@ mod tests {
             "# };
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(context.errors.is_empty());
+            assert!(context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1881,7 +1875,7 @@ mod tests {
             "# };
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(context.errors.is_empty());
+            assert!(context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1896,7 +1890,7 @@ mod tests {
             "# };
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(context.errors.is_empty());
+            assert!(context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -1912,7 +1906,7 @@ mod tests {
             let context = walk_code(code).await.expect("failed to parse?");
 
             assert_eq!(
-                context.errors[0].to_string(),
+                context.diagnostics.errors()[0].to_string(),
                 "`foreach` must iterate over an array or mapping, found int"
             );
         }
@@ -2001,7 +1995,7 @@ mod tests {
             let _ = walker.visit_function_def(&mut function_def1).await;
             let _ = walker.visit_function_def(&mut function_def2).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -2069,7 +2063,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -2105,9 +2099,9 @@ mod tests {
             let result = node.visit(&mut walker).await;
 
             assert_ok!(result);
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
             assert_regex!(
-                walker.context.errors[0].message(),
+                walker.context.diagnostics.errors()[0].message(),
                 "attempt to point to private function `known`"
             );
         }
@@ -2125,7 +2119,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
     }
 
@@ -2137,8 +2131,11 @@ mod tests {
             let code = "void create() { case 12: 1; }";
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(!context.errors.is_empty());
-            assert_eq!(context.errors[0].to_string(), "invalid `case` statement.");
+            assert!(!context.diagnostics.errors().is_empty());
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "invalid `case` statement."
+            );
         }
 
         #[tokio::test]
@@ -2146,8 +2143,11 @@ mod tests {
             let code = "void create() { default: 1; }";
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(!context.errors.is_empty());
-            assert_eq!(context.errors[0].to_string(), "invalid `default`.");
+            assert!(!context.diagnostics.errors().is_empty());
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "invalid `default`."
+            );
         }
 
         #[tokio::test]
@@ -2164,7 +2164,7 @@ mod tests {
                     }
                 }"#;
             let context = walk_code(code).await.expect("failed to parse?");
-            assert!(context.errors.is_empty());
+            assert!(context.diagnostics.errors().is_empty());
         }
     }
 
@@ -2220,7 +2220,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -2243,7 +2243,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -2258,7 +2258,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -2273,7 +2273,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -2288,7 +2288,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
     }
 
@@ -2333,23 +2333,23 @@ mod tests {
             // return void from void function
             walker.current_function = Some(void_function_def.clone());
             let _ = void_node.visit(&mut walker).await;
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
 
             // return void from non-void function
             walker.current_function = Some(int_function_def);
             let _ = void_node.visit(&mut walker).await;
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
 
-            walker.context.errors = vec![];
+            walker.context.diagnostics.clear();
 
             // return int from int function
             let _ = int_node.visit(&mut walker).await;
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
 
             // return int from void function
             walker.current_function = Some(void_function_def);
             let _ = int_node.visit(&mut walker).await;
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -2378,7 +2378,7 @@ mod tests {
             walker.current_function = Some(void_function_def);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -2400,7 +2400,7 @@ mod tests {
             walker.current_function = Some(function_def);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -2421,14 +2421,14 @@ mod tests {
             walker.current_function = Some(function_def);
 
             let _ = node.visit(&mut walker).await;
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
 
-            walker.context.errors = vec![];
+            walker.context.diagnostics.clear();
 
             walker.closure_depth += 1;
 
             let _ = node.visit(&mut walker).await;
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
     }
 
@@ -2556,7 +2556,14 @@ mod tests {
             let _ = node.visit(&mut walker).await;
 
             assert_eq!(
-                walker.context.errors.first().unwrap().to_string().as_str(),
+                walker
+                    .context
+                    .diagnostics
+                    .errors()
+                    .first()
+                    .unwrap()
+                    .to_string()
+                    .as_str(),
                 "positional argument variables can only be used within a closure"
             );
 
@@ -2564,7 +2571,7 @@ mod tests {
             walker.closure_depth = 1;
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -2577,16 +2584,23 @@ mod tests {
             let _ = node.visit(&mut walker).await;
 
             assert_eq!(
-                walker.context.errors.first().unwrap().to_string().as_str(),
+                walker
+                    .context
+                    .diagnostics
+                    .errors()
+                    .first()
+                    .unwrap()
+                    .to_string()
+                    .as_str(),
                 "positional argument variables can only be used up to `$64`"
             );
 
-            walker.context.errors = vec![];
+            walker.context.diagnostics.clear();
 
             let mut node = create!(VarNode,name: ustr("$64"));
 
             let _ = node.visit(&mut walker).await;
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
     }
 
@@ -2607,7 +2621,11 @@ mod tests {
             "#;
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(context.errors.is_empty(), "{:?}", context.errors);
+            assert!(
+                context.diagnostics.errors().is_empty(),
+                "{:?}",
+                context.diagnostics.errors()
+            );
         }
 
         #[tokio::test]
@@ -2618,7 +2636,11 @@ mod tests {
             "#;
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(context.errors.is_empty(), "{:?}", context.errors);
+            assert!(
+                context.diagnostics.errors().is_empty(),
+                "{:?}",
+                context.diagnostics.errors()
+            );
         }
 
         #[tokio::test]
@@ -2631,7 +2653,11 @@ mod tests {
             "#;
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(context.errors.is_empty(), "{:?}", context.errors);
+            assert!(
+                context.diagnostics.errors().is_empty(),
+                "{:?}",
+                context.diagnostics.errors()
+            );
         }
 
         #[tokio::test]
@@ -2641,9 +2667,9 @@ mod tests {
             "#;
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert_eq!(context.errors.len(), 1);
+            assert_eq!(context.diagnostics.errors().len(), 1);
             assert_eq!(
-                context.errors[0].to_string(),
+                context.diagnostics.errors()[0].to_string(),
                 "mismatched types: `s` (string) = `\"a\" == \"b\"` (int)"
             );
         }
@@ -2664,7 +2690,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -2683,7 +2709,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(walker.context.errors.is_empty());
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -2708,7 +2734,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(context);
             let _ = node.visit(&mut walker).await;
 
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]
@@ -2817,10 +2843,17 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
             let _ = node.visit(&mut walker).await;
 
-            assert!(!walker.context.errors.is_empty());
+            assert!(!walker.context.diagnostics.errors().is_empty());
 
             assert_eq!(
-                walker.context.errors.first().unwrap().to_string().as_str(),
+                walker
+                    .context
+                    .diagnostics
+                    .errors()
+                    .first()
+                    .unwrap()
+                    .to_string()
+                    .as_str(),
                 "differing types in ternary expression: `int` and `string`"
             );
         }

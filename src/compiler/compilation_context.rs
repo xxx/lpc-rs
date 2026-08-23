@@ -1,11 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
+use crate::compiler::diagnostics::Diagnostics;
 use derive_builder::Builder;
 use indexmap::IndexMap;
 use lpc_rs_core::{
     EFUN, RegisterSize, call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags,
 };
-use lpc_rs_errors::LpcError;
 use lpc_rs_function_support::{
     function_like::FunctionLike, function_prototype::FunctionPrototype,
     program_function::ProgramFunction, symbol::Symbol,
@@ -45,8 +45,8 @@ pub struct CompilationContext {
     /// Storage for default function params, for the functions that have them
     pub default_function_params: HashMap<String, Vec<Option<ExpressionNode>>>,
 
-    /// Any warnings & errors that have been collected
-    pub errors: Vec<LpcError>,
+    /// Everything this compilation has reported so far.
+    pub diagnostics: Diagnostics,
 
     /// The pragmas that have been set
     pub pragmas: PragmaFlags,
@@ -254,7 +254,7 @@ impl Default for CompilationContext {
         Self {
             filename: LpcPath::default().into(),
             config: Arc::new(Config::default()),
-            errors: vec![],
+            diagnostics: Diagnostics::default(),
             scopes: ScopeTree::default(),
             default_function_params: HashMap::new(),
             function_prototypes: HashMap::new(),

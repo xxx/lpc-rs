@@ -696,6 +696,10 @@ impl CodegenWalker {
         &self.context
     }
 
+    pub fn context_mut(&mut self) -> &mut CompilationContext {
+        &mut self.context
+    }
+
     fn setup_populate_defaults(
         &mut self,
         span: Option<Span>,
@@ -1604,7 +1608,7 @@ impl TreeWalker for CodegenWalker {
                     && *sym.instructions.last().unwrap() != Instruction::Ret)
             {
                 if sym.return_type() != LpcType::Void {
-                    self.context.errors.push(lpc_warning!(
+                    self.context.diagnostics.record(lpc_warning!(
                         node.span,
                         "non-void function does not return a value. defaulting to 0."
                     ));
@@ -2320,13 +2324,13 @@ impl Default for CodegenWalker {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::VecDeque, sync::Arc};
+    use std::sync::Arc;
 
     use claims::assert_some;
     use factori::create;
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{LpcFloatInner, lpc_path::LpcPath, lpc_type::LpcType};
-    use lpc_rs_errors::{LpcErrorSeverity, Result, span::Span};
+    use lpc_rs_errors::{Result, span::Span};
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
@@ -3962,7 +3966,8 @@ mod tests {
             let walker = walk_prog(code).await;
             let errors: Vec<String> = walker
                 .context
-                .errors
+                .diagnostics
+                .errors()
                 .iter()
                 .map(|e| e.to_string())
                 .collect();

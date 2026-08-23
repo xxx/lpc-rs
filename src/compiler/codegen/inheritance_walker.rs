@@ -102,9 +102,7 @@ impl TreeWalker for InheritanceWalker {
                         program.filename
                     );
 
-                    self.context.errors.push(err.clone());
-
-                    return Err(err);
+                    return Err(self.context.diagnostics.fail(err));
                 }
 
                 if let Some(namespace) = &node.namespace {

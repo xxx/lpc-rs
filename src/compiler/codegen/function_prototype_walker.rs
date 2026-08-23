@@ -76,7 +76,7 @@ impl TreeWalker for FunctionPrototypeWalker {
         let parameters = node.parameters.get_or_insert_default();
         let declared = RegisterSize::try_from(parameters.len())?;
         if highest_positional > declared && parameters.iter().any(|p| p.value.is_some()) {
-            self.context.errors.push(lpc_error!(
+            self.context.diagnostics.record(lpc_error!(
                 node.span,
                 "positional `${}` lies beyond a defaulted parameter",
                 highest_positional
