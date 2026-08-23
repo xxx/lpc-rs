@@ -12,7 +12,7 @@ pub(crate) fn get_location<'a, const N: usize>(
     txn: &TxnHandle,
     location: RegisterVariant,
 ) -> Result<Cow<'a, LpcRef>> {
-    Ok(stack.current_frame()?.get_location(txn, location))
+    stack.current_frame()?.get_location(txn, location)
 }
 
 /// Write `location` in the current frame.
@@ -25,8 +25,7 @@ pub(crate) fn set_location<const N: usize>(
 ) -> Result<()> {
     stack
         .current_frame_mut()?
-        .set_location(txn, location, lpc_ref);
-    Ok(())
+        .set_location(txn, location, lpc_ref)
 }
 
 /// Apply `func` at `location` in the current frame.

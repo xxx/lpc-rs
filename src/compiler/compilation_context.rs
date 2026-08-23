@@ -74,9 +74,6 @@ pub struct CompilationContext {
     /// allocate for global variables.
     pub num_globals: RegisterSize,
 
-    /// How many variables need to be upvalued?
-    pub num_upvalues: RegisterSize,
-
     /// How many [`Register`](lpc_rs_core::register::Register)s were required
     /// for initializing global variables, in inherited-from parents?
     /// This is how we determine how much space the final [`Process`] needs to
@@ -278,7 +275,6 @@ impl Default for CompilationContext {
             inherited_functions: IndexMap::new(),
             inherit_depth: 0,
             num_globals: 0,
-            num_upvalues: 0,
             num_init_registers: 0,
             simul_efuns: None,
             closure_count: 0,

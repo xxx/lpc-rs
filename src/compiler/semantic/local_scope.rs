@@ -4,7 +4,7 @@ use std::{
 };
 
 use delegate::delegate;
-use lpc_rs_core::ScopeId;
+use lpc_rs_core::{RegisterSize, ScopeId};
 use lpc_rs_function_support::symbol::Symbol;
 
 /// A representation of a local scope / symbol table
@@ -15,6 +15,9 @@ pub struct LocalScope {
 
     /// Map of symbol names to the symbol itself
     pub symbols: HashMap<String, Symbol>,
+
+    /// For a function or closure scope: how many captured cells it allocates.
+    pub num_upvalues: RegisterSize,
 }
 
 impl LocalScope {
@@ -23,6 +26,7 @@ impl LocalScope {
         Self {
             id,
             symbols: HashMap::new(),
+            num_upvalues: 0,
         }
     }
 
@@ -89,10 +93,7 @@ mod tests {
 
     #[test]
     fn test_lookup_looks_up_the_symbols() {
-        let mut scope = LocalScope {
-            id: None,
-            symbols: HashMap::new(),
-        };
+        let mut scope = LocalScope::new(None);
 
         let sym = Symbol {
             name: "foo".to_string(),

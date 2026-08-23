@@ -297,8 +297,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         let ellipsis_vars = &arg_locations[num_args..];
                         ellipsis_vars
                             .iter()
-                            .map(|x| frame.get_location(&self.context.txn, *x).into_owned())
-                            .collect::<Vec<_>>()
+                            .map(|x| {
+                                frame
+                                    .get_location(&self.context.txn, *x)
+                                    .map(std::borrow::Cow::into_owned)
+                            })
+                            .collect::<lpc_rs_errors::Result<Vec<_>>>()?
                     }
                 };
 

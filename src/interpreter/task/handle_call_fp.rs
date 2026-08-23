@@ -133,9 +133,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         trace!("Copying argument {} ({}) to {}", i, r, loc);
 
         new_frame.arg_locations.push(loc);
-        new_frame.set_location(task.context.txn(), loc, r);
-
-        Ok(())
+        new_frame.set_location(task.context.txn(), loc, r)
     }
 
     async fn extract_ptr_data(

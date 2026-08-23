@@ -115,7 +115,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 new_frame.arg_locations.push(target_location);
 
-                new_frame.set_location(&self.context.txn, target_location, lpc_ref)
+                new_frame.set_location(&self.context.txn, target_location, lpc_ref)?;
             }
         }
 

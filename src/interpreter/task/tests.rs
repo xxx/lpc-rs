@@ -3159,6 +3159,57 @@ mod test_upvalues {
 
         check_local_vars(code, &expected).await;
     }
+
+    mod layout {
+        use super::*;
+
+        async fn committed_r(code: &str) -> LpcRef {
+            let task = run_prog(code).await;
+            let globals =
+                committed_globals_by_name(&task.context.global_state, task.context.process());
+            globals["r"].clone()
+        }
+
+        #[tokio::test]
+        async fn a_declaration_without_initializer_gets_a_cell() {
+            let code = indoc! { r##"
+                int r;
+                void create() {
+                    function fact;
+                    fact = (: if ($1 <= 1) return 1; return $1 * fact($1 - 1); :);
+                    r = fact(5);
+                }
+            "## };
+            assert_eq!(committed_r(code).await, LpcRef::Int(LpcInt(120)));
+        }
+
+        #[tokio::test]
+        async fn sibling_closures_each_own_their_captures() {
+            let code = indoc! { r##"
+                int r;
+                void create() {
+                    function a = (: int j = 1; function x = (: j :); return x(); :);
+                    function b = (: int k = 2; function y = (: k :); return y(); :);
+                    r = a() * 10 + b();
+                }
+            "## };
+            assert_eq!(committed_r(code).await, LpcRef::Int(LpcInt(12)));
+        }
+
+        #[tokio::test]
+        async fn a_capture_declared_after_a_capturing_closure_gets_a_cell() {
+            let code = indoc! { r##"
+                int r;
+                void create() {
+                    function a = (: int j = 1; function x = (: j :); return x(); :);
+                    int later = 5;
+                    function g = (: later :);
+                    r = a() * 10 + g();
+                }
+            "## };
+            assert_eq!(committed_r(code).await, LpcRef::Int(LpcInt(15)));
+        }
+    }
 }
 
 mod test_gc {

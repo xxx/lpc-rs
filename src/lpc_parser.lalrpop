@@ -1041,7 +1041,6 @@ Var: ExpressionNode = {
                 span: Some(name.0),
                 global: false,
                 function_name: false,
-                external_capture: false,
             }
         )
     },
@@ -1052,7 +1051,6 @@ Var: ExpressionNode = {
                 span: Some(var.0),
                 global: false,
                 function_name: false,
-                external_capture: false,
             }
         )
     }

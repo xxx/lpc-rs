@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use async_trait::async_trait;
 use if_chain::if_chain;
 use itertools::Itertools;
@@ -39,6 +41,9 @@ pub struct ScopeWalker {
     /// track the scope IDs of each closure, to help determine if
     /// a variable needs to be upvalued or not.
     closure_scope_stack: Vec<ScopeId>,
+
+    /// Every closure scope, for the capture layout at the end of the walk.
+    closure_scopes: HashSet<ScopeId>,
 }
 
 impl ScopeWalker {
@@ -47,6 +52,7 @@ impl ScopeWalker {
         Self {
             context,
             closure_scope_stack: vec![],
+            closure_scopes: HashSet::new(),
         }
     }
 
@@ -176,6 +182,7 @@ impl TreeWalker for ScopeWalker {
         trace!("Defining closure {}", &node.name);
 
         self.closure_scope_stack.push(scope_id);
+        self.closure_scopes.insert(scope_id);
 
         if let Some(parameters) = &mut node.parameters {
             for param in parameters {
@@ -306,6 +313,7 @@ impl TreeWalker for ScopeWalker {
             expr.visit(self).await?;
         }
 
+        self.context.scopes.layout_upvalues(&self.closure_scopes)?;
         self.context.scopes.pop();
         Ok(())
     }
@@ -367,10 +375,7 @@ impl TreeWalker for ScopeWalker {
         if self.should_upvalue_symbol(symbol) {
             trace!("upvaluing {}", &node.name);
             let symbol = self.context.lookup_var_mut(node.name).unwrap();
-            // *any* capture requires the symbol to be upvalued
             symbol.upvalue = true;
-            // we also mark this specific reference as a non-local capture
-            node.external_capture = true;
         }
 
         Ok(())
@@ -421,6 +426,7 @@ impl Default for ScopeWalker {
         Self {
             context,
             closure_scope_stack: vec![],
+            closure_scopes: HashSet::new(),
         }
     }
 }
@@ -584,7 +590,6 @@ mod tests {
                 span: None,
                 global: false,
                 function_name: false,
-                external_capture: false,
             };
 
             (walker, node)
@@ -706,7 +711,6 @@ mod tests {
 
             let v = walker.context.lookup_var("foo").unwrap();
             assert!(v.upvalue);
-            assert!(node.external_capture);
         }
     }
 }

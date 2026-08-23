@@ -220,13 +220,19 @@ impl CallFrame {
     }
 
     /// Resolve `location` to its slot in this frame.
-    pub(crate) fn slot(&self, location: RegisterVariant) -> Slot {
+    pub(crate) fn slot(&self, location: RegisterVariant) -> Result<Slot> {
         match location {
-            RegisterVariant::Local(reg) => Slot::Register(reg),
-            RegisterVariant::Global(reg) => Slot::Cell(self.process.var_id(reg.into())),
+            RegisterVariant::Local(reg) => Ok(Slot::Register(reg)),
+            RegisterVariant::Global(reg) => Ok(Slot::Cell(self.process.var_id(reg.into()))),
             RegisterVariant::Upvalue(reg) => {
-                let idx = self.upvalue_ptrs[reg.index() as usize];
-                Slot::Cell(self.with_upvalues(|uv| uv[idx]))
+                let Some(&idx) = self.upvalue_ptrs.get(reg.index() as usize) else {
+                    return Err(self.runtime_bug(format!(
+                        "upvalue {} is outside this frame's {} cells",
+                        reg.index(),
+                        self.upvalue_ptrs.len()
+                    )));
+                };
+                Ok(Slot::Cell(self.with_upvalues(|uv| uv[idx])))
             }
         }
     }
@@ -238,11 +244,11 @@ impl CallFrame {
         &self,
         txn: &TxnHandle,
         location: RegisterVariant,
-    ) -> Cow<'_, LpcRef> {
-        match self.slot(location) {
+    ) -> Result<Cow<'_, LpcRef>> {
+        Ok(match self.slot(location)? {
             Slot::Register(reg) => Cow::Borrowed(&self.registers[reg]),
             Slot::Cell(cell) => Cow::Owned(txn.with(|t| t.read(cell).unwrap_or(NULL))),
-        }
+        })
     }
 
     /// Assign an [`LpcRef`] to a specific location, based on the [`RegisterVariant`]
@@ -252,13 +258,14 @@ impl CallFrame {
         txn: &TxnHandle,
         location: RegisterVariant,
         lpc_ref: LpcRef,
-    ) {
-        match self.slot(location) {
+    ) -> Result<()> {
+        match self.slot(location)? {
             Slot::Register(reg) => self.registers[reg] = lpc_ref,
             // A blind in-txn write: the read that computed `lpc_ref` was
             // already tracked when the caller read it.
             Slot::Cell(cell) => txn.with(|t| t.write(cell, lpc_ref)),
         }
+        Ok(())
     }
 
     /// Apply `func` to the [`LpcRef`] at `location`, in place.
@@ -271,7 +278,7 @@ impl CallFrame {
     where
         F: FnOnce(&mut LpcRef) -> Result<()>,
     {
-        match self.slot(location) {
+        match self.slot(location)? {
             Slot::Register(reg) => func(&mut self.registers[reg]),
             // In-txn read-modify-write: the read is tracked, the write
             // lands in the in-flight changeset.
@@ -297,7 +304,8 @@ impl CallFrame {
                     return LocalVariable::new(var.name.clone(), NULL);
                 };
 
-                LocalVariable::new(var.name.clone(), self.get_location(txn, loc).into_owned())
+                let value = self.get_location(txn, loc).map_or(NULL, Cow::into_owned);
+                LocalVariable::new(var.name.clone(), value)
             })
             .collect()
     }
@@ -453,15 +461,38 @@ mod tests {
         );
 
         assert_eq!(
-            frame.slot(Register(2).as_local()),
+            frame.slot(Register(2).as_local()).unwrap(),
             Slot::Register(Register(2))
         );
         assert_eq!(
-            frame.slot(Register(0).as_global()),
+            frame.slot(Register(0).as_global()).unwrap(),
             Slot::Cell(frame.process.var_id(0))
         );
         let cell = frame.with_upvalues(|uv| uv[frame.upvalue_ptrs[0]]);
-        assert_eq!(frame.slot(Register(0).as_upvalue()), Slot::Cell(cell));
+        assert_eq!(
+            frame.slot(Register(0).as_upvalue()).unwrap(),
+            Slot::Cell(cell)
+        );
+    }
+
+    #[test]
+    fn an_upvalue_past_the_frame_is_an_error() {
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("my_function")
+            .filename(Arc::new("my_function".into()))
+            .return_type(LpcType::Void)
+            .build()
+            .unwrap();
+        let frame = CallFrame::new(
+            Process::new(Program::default()),
+            Arc::new(ProgramFunction::new(prototype, 0)),
+            0,
+            None::<&[Register]>,
+            Arc::new(RwLock::new(GcBank::default())),
+        );
+
+        let err = frame.slot(Register(0).as_upvalue()).unwrap_err();
+        assert!(err.to_string().contains("runtime bug"), "{err}");
     }
 
     mod test_with_minimum_arg_capacity {

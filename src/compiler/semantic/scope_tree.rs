@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use indextree::{Arena, Node, NodeId};
+use lpc_rs_core::{RegisterSize, ScopeId, register::Register};
 use lpc_rs_errors::{Result, lpc_bug};
 use lpc_rs_function_support::symbol::Symbol;
 
@@ -44,10 +45,7 @@ impl ScopeTree {
     pub fn push_new(&mut self) -> NodeId {
         let id = self.scopes.count();
 
-        let scope = LocalScope {
-            id: None,
-            symbols: HashMap::new(),
-        };
+        let scope = LocalScope::new(None);
 
         let new_id = self.scopes.new_node(scope);
 
@@ -141,6 +139,65 @@ impl ScopeTree {
                 name
             ))
         }
+    }
+
+    /// The [`LocalScope`] of the function named `name`.
+    pub fn function_scope(&self, name: &str) -> Option<&LocalScope> {
+        self.get(*self.function_scopes.get(name)?)
+    }
+
+    /// Assign every captured symbol its cell: a function numbers its own
+    /// captures from 0, a closure from the count of cells its creators hold,
+    /// and each function or closure scope records how many it allocates.
+    pub fn layout_upvalues(&mut self, closure_scopes: &HashSet<ScopeId>) -> Result<()> {
+        let Some(root) = self.root_id else {
+            return Ok(());
+        };
+        let mut units: HashSet<ScopeId> = self.function_scopes.values().copied().collect();
+        units.extend(closure_scopes);
+        self.layout_unit(root, 0, &units)
+    }
+
+    fn layout_unit(
+        &mut self,
+        unit: ScopeId,
+        inherited: RegisterSize,
+        units: &HashSet<ScopeId>,
+    ) -> Result<()> {
+        let mut captured = Vec::new();
+        let mut nested = Vec::new();
+        let mut pending = vec![unit];
+        while let Some(id) = pending.pop() {
+            let scope = self.scopes[id].get();
+            captured.extend(
+                scope
+                    .symbols
+                    .values()
+                    .filter(|sym| sym.upvalue)
+                    .map(|sym| (sym.span.map(|span| span.l), sym.name.clone(), id)),
+            );
+            for child in id.children(&self.scopes) {
+                if units.contains(&child) {
+                    nested.push(child);
+                } else {
+                    pending.push(child);
+                }
+            }
+        }
+        captured.sort_by(|a, b| (a.0, &a.1).cmp(&(b.0, &b.1)));
+
+        let own = RegisterSize::try_from(captured.len())?;
+        for (i, (_, name, id)) in captured.into_iter().enumerate() {
+            let index = inherited + RegisterSize::try_from(i)?;
+            let sym = self.scopes[id].get_mut().symbols.get_mut(&name).unwrap();
+            sym.location = Some(Register(index).as_upvalue());
+        }
+        self.scopes[unit].get_mut().num_upvalues = own;
+
+        for child in nested {
+            self.layout_unit(child, inherited + own, units)?;
+        }
+        Ok(())
     }
 
     /// Get a mutable [`LocalScope`] reference, by function name

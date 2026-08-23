@@ -32,9 +32,6 @@ pub struct VarNode {
     /// The alternate `&name()` syntax is parsed as a function pointer from the
     /// start.
     pub function_name: bool,
-
-    /// Is this variable captured from another function scope?
-    pub external_capture: bool,
 }
 
 impl VarNode {
@@ -44,7 +41,6 @@ impl VarNode {
             span: None,
             global: false,
             function_name: false,
-            external_capture: false,
         }
     }
 

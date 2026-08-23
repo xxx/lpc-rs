@@ -1954,7 +1954,6 @@ mod tests {
                         span: None,
                         global: false,
                         function_name: false,
-                        external_capture: false,
                     })),
                     span: None,
                 }))],
