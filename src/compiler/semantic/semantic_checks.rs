@@ -411,7 +411,10 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                 *op,
             ))
         }
-        ExpressionNode::UnaryOp(UnaryOpNode { expr, .. }) => Ok(node_type(expr, context)?),
+        ExpressionNode::UnaryOp(UnaryOpNode { expr, op, .. }) => match op {
+            UnaryOperation::Bang => Ok(LpcType::Int(false)),
+            _ => node_type(expr, context),
+        },
         ExpressionNode::Array(node) => {
             if node.value.is_empty() {
                 return Ok(LpcType::Mixed(true));

@@ -1915,10 +1915,10 @@ mod test_instructions {
             let code = indoc! { r##"
                     mixed a = !2;
                     mixed b = !!4;
-                    float c = !0.00;
-                    float d = !0.01;
-                    string e = !"";
-                    string f = !"asdf";
+                    int c = !0.00;
+                    int d = !0.01;
+                    int e = !"";
+                    int f = !"asdf";
                 "##};
 
             let task = run_prog(code).await;

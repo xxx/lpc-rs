@@ -2597,6 +2597,19 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn logical_not_is_int() {
+            let code = r#"
+                int a = !this_object();
+                int b = !"a";
+                int c = !({ 1 });
+                float f = -1.5;
+            "#;
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert!(context.errors.is_empty(), "{:?}", context.errors);
+        }
+
+        #[tokio::test]
         async fn comparison_result_is_not_the_operand_type() {
             let code = r#"
                 string s = "a" == "b";
