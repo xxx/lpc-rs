@@ -2956,6 +2956,47 @@ mod test_gc {
     }
 }
 
+mod object_identity {
+    use super::*;
+
+    #[tokio::test]
+    async fn objects_compare_and_key_by_identity() {
+        let code = indoc! { r##"
+            object o1 = this_object();
+            object o2 = this_object();
+            object w1 = clone_object("/std/widget");
+            object w2 = clone_object("/std/widget");
+            int same = o1 == o2;
+            int self_same = o1 == o1;
+            int diff = o1 != o2;
+            int other = o1 == w1;
+            int clones = w1 == w2;
+            mapping m = ([ o1: 1, w1: 2 ]);
+            int by_other_handle = m[o2];
+            int by_same_handle = m[o1];
+            int by_clone = m[w1];
+            int missing_clone = m[w2];
+        "##};
+
+        let task = run_prog(code).await;
+        let ctx = task.context;
+        let values = committed_globals_by_name(&ctx.global_state, ctx.process());
+        let expect = |name: &str, value: i64| {
+            BareVal::Int(value).assert_equal(&ctx.global_state, values.get(name).unwrap());
+        };
+
+        expect("same", 1);
+        expect("self_same", 1);
+        expect("diff", 0);
+        expect("other", 0);
+        expect("clones", 0);
+        expect("by_other_handle", 1);
+        expect("by_same_handle", 1);
+        expect("by_clone", 2);
+        expect("missing_clone", 0);
+    }
+}
+
 mod bare_val {
     use super::*;
 

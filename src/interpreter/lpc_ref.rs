@@ -561,7 +561,7 @@ impl Hash for LpcRef {
             LpcRef::String(s) => s.hash(state),
             LpcRef::Array(x) => x.id.hash(state),
             LpcRef::Mapping(x) => x.id.hash(state),
-            LpcRef::Object(x) => ptr::hash(x, state),
+            LpcRef::Object(x) => x.as_ptr().hash(state),
             LpcRef::Function(x) => ptr::hash(&**x, state),
         }
     }
@@ -574,7 +574,7 @@ impl PartialEq for LpcRef {
             (LpcRef::Float(x), LpcRef::Float(y)) => x == y,
             (LpcRef::Int(x), LpcRef::Int(y)) => x == y,
             (LpcRef::String(a), LpcRef::String(b)) => a == b,
-            (LpcRef::Object(x), LpcRef::Object(y)) => ptr::eq(x, y),
+            (LpcRef::Object(x), LpcRef::Object(y)) => Weak::ptr_eq(x, y),
             (LpcRef::Array(x), LpcRef::Array(y)) => x.id == y.id,
             (LpcRef::Mapping(x), LpcRef::Mapping(y)) => x.id == y.id,
             (LpcRef::Function(x), LpcRef::Function(y)) => ptr::eq(&**x, &**y),
@@ -588,13 +588,7 @@ impl Eq for LpcRef {}
 impl PartialEq<&Process> for LpcRef {
     fn eq(&self, other: &&Process) -> bool {
         match self {
-            LpcRef::Object(x) => {
-                let Some(x) = x.upgrade() else {
-                    return false;
-                };
-
-                ptr::eq(&*x, *other)
-            }
+            LpcRef::Object(x) => ptr::eq(x.as_ptr(), *other),
             _ => false,
         }
     }
@@ -673,6 +667,51 @@ mod tests {
 
     use super::*;
     use crate::{interpreter::lpc_array::LpcArray, test_support::factories::*};
+
+    mod test_object_identity {
+        use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+
+        use super::*;
+        use crate::interpreter::program::Program;
+
+        fn hash_of(r: &LpcRef) -> u64 {
+            BuildHasherDefault::<DefaultHasher>::default().hash_one(r)
+        }
+
+        #[test]
+        fn handles_to_one_process_are_equal() {
+            let process = Arc::new(Process::new(Program::default()));
+            let a = LpcRef::from(Arc::downgrade(&process));
+            let b = LpcRef::from(Arc::downgrade(&process));
+
+            assert_eq!(a, b);
+            assert_eq!(a, a.clone());
+            assert_eq!(hash_of(&a), hash_of(&b));
+            assert_eq!(a, &*process);
+        }
+
+        #[test]
+        fn handles_to_different_processes_are_not_equal() {
+            let p1 = Arc::new(Process::new(Program::default()));
+            let p2 = Arc::new(Process::new(Program::default()));
+            let a = LpcRef::from(Arc::downgrade(&p1));
+            let b = LpcRef::from(Arc::downgrade(&p2));
+
+            assert_ne!(a, b);
+            assert_ne!(a, &*p2);
+        }
+
+        #[test]
+        fn a_dropped_process_still_equals_itself() {
+            let process = Arc::new(Process::new(Program::default()));
+            let a = LpcRef::from(Arc::downgrade(&process));
+            let b = a.clone();
+            drop(process);
+
+            assert_eq!(a, b);
+            assert_eq!(hash_of(&a), hash_of(&b));
+        }
+    }
 
     mod test_accessors {
         use super::*;
