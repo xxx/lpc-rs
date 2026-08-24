@@ -85,6 +85,9 @@ pub(crate) struct Conflict;
 /// `pub(crate)` (not `pub`): the arms carry `pub(crate)` types, so the enum
 /// cannot be public without leaking them.
 #[derive(Debug)]
+// A `Commit` moves its whole changeset through the channel: boxing it would
+// buy back the size lint with an allocation per commit.
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum CommitProtocol {
     /// Start a transaction against the current world state.
     Start { reply: flume::Sender<LiveSnapshot> },
@@ -492,6 +495,22 @@ impl Committer {
             if changeset.conflicts_with(written_vars) {
                 self.stats.conflict();
                 return Err(Conflict);
+            }
+        }
+
+        // A merge applies to a value the attempt never observed, so its
+        // type is checked here; a mismatch rejects the whole changeset
+        // before anything applies.
+        for (var_id, ops) in changeset.merges() {
+            let mut current = self.snapshot.peek(*var_id).cloned();
+            for op in ops {
+                match op.apply_to(current.as_ref()) {
+                    Ok(value) => current = Some(value),
+                    Err(_) => {
+                        self.stats.conflict();
+                        return Err(Conflict);
+                    }
+                }
             }
         }
 

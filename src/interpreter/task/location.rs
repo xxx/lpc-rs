@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use lpc_rs_core::register::RegisterVariant;
+use lpc_rs_core::{LpcIntInner, register::RegisterVariant};
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{call_stack::CallStack, lpc_ref::LpcRef, stm::TxnHandle};
@@ -28,18 +28,15 @@ pub(crate) fn set_location<const N: usize>(
         .set_location(txn, location, lpc_ref)
 }
 
-/// Apply `func` at `location` in the current frame.
+/// Bump the int at `location` in the current frame by `delta`.
 #[inline]
-pub(crate) fn apply_in_location<F, const N: usize>(
+pub(crate) fn bump_in_location<const N: usize>(
     stack: &mut CallStack<N>,
     txn: &TxnHandle,
     location: RegisterVariant,
-    func: F,
-) -> Result<()>
-where
-    F: FnOnce(&mut LpcRef) -> Result<()>,
-{
+    delta: LpcIntInner,
+) -> Result<()> {
     stack
         .current_frame_mut()?
-        .apply_in_location(txn, location, func)
+        .bump_in_location(txn, location, delta)
 }

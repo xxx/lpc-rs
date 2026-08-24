@@ -63,7 +63,7 @@ pub static FIB: Workload = Workload {
 };
 
 /// Maximal shared-state pressure for the work done: one global read-modify-write.
-/// Does not use `++`, which compiles to an atomic op.
+/// Does not use `++`, which compiles to a merge write and stops conflicting.
 pub static COUNTER: Workload = Workload {
     name: "counter",
     task_label: "increment",
@@ -76,6 +76,29 @@ pub static COUNTER: Workload = Workload {
 
     void increment() {
         count = count + 1;
+    }
+"#,
+    },
+};
+
+/// The counter with `++`: compiles to a merge write, so concurrent bumps
+/// commute and the contention block should show zero conflicts.
+pub static COUNTER_ATOMIC: Workload = Workload {
+    name: "counter_atomic",
+    task_label: "increment_atomic",
+    entry: "increment",
+    total: 8192,
+    kind: Kind::Single {
+        path: "/bench_counter_atomic.c",
+        source: r#"
+    int count = 0;
+
+    void increment() {
+        count++;
+    }
+
+    int get() {
+        return count;
     }
 "#,
     },
@@ -160,7 +183,14 @@ pub static ARR_CHURN: Workload = Workload {
 };
 
 /// Every workload, in report order.
-pub static WORKLOADS: [&Workload; 5] = [&FIB, &COUNTER, &CALL_OTHER, &ARR_TOUCH, &ARR_CHURN];
+pub static WORKLOADS: [&Workload; 6] = [
+    &FIB,
+    &COUNTER,
+    &COUNTER_ATOMIC,
+    &CALL_OTHER,
+    &ARR_TOUCH,
+    &ARR_CHURN,
+];
 
 /// Initialize `workload`'s object(s) on `vm` and hand back the apply target.
 pub async fn setup_on(vm: &Vm, workload: &Workload) -> (Arc<Process>, TaskTemplate, u64) {
@@ -218,6 +248,42 @@ mod tests {
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
+
+    /// Concurrent `count++` commutes: the whole block commits without a
+    /// single conflict, and no update is lost.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn counter_atomic_commits_without_conflicts() {
+        const WORKERS: usize = 4;
+        const PER_WORKER: usize = 256;
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code")
+            .max_execution_time(30_000_u64)
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        let (proc, template, timeout) = setup_on(&vm, &COUNTER_ATOMIC).await;
+
+        let before = vm.global_state.attempt_telemetry.snapshot();
+        fan_out_applies(&template, &proc, "increment", WORKERS, PER_WORKER, timeout).await;
+        let after = vm.global_state.attempt_telemetry.snapshot();
+
+        assert_eq!(
+            after.conflicts - before.conflicts,
+            0,
+            "merge writes commute; concurrent ++ must not conflict"
+        );
+
+        let total = (WORKERS * PER_WORKER) as i64;
+        let result = apply_function_by_name("get", &[], proc.clone(), template, Some(timeout))
+            .await
+            .expect("the get apply failed")
+            .expect("the get apply returned an error");
+        assert_eq!(
+            result,
+            crate::interpreter::lpc_ref::LpcRef::from(total),
+            "no lost updates"
+        );
+    }
 
     #[tokio::test]
     async fn every_workload_sets_up_and_applies_once() {

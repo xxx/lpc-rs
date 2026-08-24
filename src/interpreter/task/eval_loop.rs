@@ -14,7 +14,7 @@ use crate::{
         lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
         lpc_string::LpcString,
-        task::{CatchPoint, Task, apply_in_location, get_location, set_location},
+        task::{CatchPoint, Task, bump_in_location, get_location, set_location},
     },
     pop_frame,
 };
@@ -171,7 +171,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 set_location(&mut self.stack, &self.context.txn, r2, new_ref)?;
             }
             Instruction::Dec(r1) => {
-                apply_in_location(&mut self.stack, &self.context.txn, r1, |x| x.dec())?;
+                bump_in_location(&mut self.stack, &self.context.txn, r1, -1)?;
             }
             Instruction::EqEq(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y, txn| x.eq_in(y, txn))?;
@@ -213,7 +213,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.rem(y))?;
             }
             Instruction::Inc(r1) => {
-                apply_in_location(&mut self.stack, &self.context.txn, r1, |x| x.inc())?;
+                bump_in_location(&mut self.stack, &self.context.txn, r1, 1)?;
             }
             Instruction::Jmp(address) => {
                 let frame = self.stack.current_frame_mut()?;

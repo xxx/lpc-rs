@@ -23,6 +23,7 @@ mod backoff;
 mod changeset;
 mod committer;
 mod effects;
+mod merge;
 mod retry;
 mod snapshot;
 mod world_value;
@@ -35,6 +36,7 @@ pub(crate) use committer::{
 };
 pub use committer::{GcRefused, GcReport};
 pub(crate) use effects::{CallOutSchedule, Effect, flush_effects};
+pub(crate) use merge::MergeOp;
 pub use retry::CommittedReader;
 #[cfg(test)]
 pub(crate) use retry::RetryStats;
@@ -129,8 +131,19 @@ impl Transaction {
             return Some(own);
         }
         let snapshot = &self.snapshot;
-        self.changeset
-            .read_through(var_id, || snapshot.read(var_id))
+        let world = self
+            .changeset
+            .read_through(var_id, || snapshot.read(var_id));
+        // A pending merge folds onto the world value. The read above is
+        // tracked and guards the base changing, so the merge stays a merge.
+        let mut value = world;
+        for op in self.changeset.pending_merges(var_id) {
+            value = Some(
+                op.apply_to(value.as_ref())
+                    .expect("the caller peeks the type before merging"),
+            );
+        }
+        value
     }
 
     /// Write a slot value to the changeset.
@@ -158,6 +171,32 @@ impl Transaction {
     /// a later write to it rejects the commit.
     pub(crate) fn track_read(&mut self, var_id: VarId) {
         self.changeset.track_read(var_id);
+    }
+
+    /// Record a merge write: the committer applies `op` to the committed
+    /// value at commit time. No read is tracked.
+    pub(crate) fn merge(&mut self, var_id: VarId, op: MergeOp) {
+        self.changeset.merge(var_id, op);
+    }
+
+    /// Whether the cell can take an int merge: it holds an int (or nothing)
+    /// as seen by this attempt. The world probe is untracked — tracking it
+    /// would re-buy the read the merge exists to avoid; a stale answer is
+    /// caught by the committer's type check.
+    pub(crate) fn peek_int(&self, var_id: VarId) -> bool {
+        if self.changeset.is_removed(var_id) {
+            return true; // absent: the op applies onto its identity
+        }
+        if let Some(own) = self.changeset.written(var_id) {
+            return matches!(own, WorldValue::Ref(LpcRef::Int(_)));
+        }
+        if !self.changeset.pending_merges(var_id).is_empty() {
+            return true; // an earlier peek already accepted the cell
+        }
+        !matches!(
+            self.snapshot.peek(var_id),
+            Some(value) if !matches!(value, WorldValue::Ref(LpcRef::Int(_)))
+        )
     }
 
     /// Whether this attempt removes the var; a removed cell must not be read

@@ -8,6 +8,7 @@ use std::{
 use derive_builder::Builder;
 use educe::Educe;
 use lpc_rs_asm::instruction::Instruction;
+use lpc_rs_core::LpcIntInner;
 use lpc_rs_core::{
     RegisterSize,
     register::{Register, RegisterVariant},
@@ -21,7 +22,7 @@ use crate::interpreter::{
     bank::RefBank,
     lpc_ref::{LpcRef, NULL},
     process::Process,
-    stm::{TxnHandle, VarId},
+    stm::{MergeOp, TxnHandle, VarId},
 };
 
 /// Where a [`RegisterVariant`] resolves in a frame: a local register, or the
@@ -257,25 +258,30 @@ impl CallFrame {
         Ok(())
     }
 
-    /// Apply `func` to the [`LpcRef`] at `location`, in place.
-    pub(crate) fn apply_in_location<F>(
+    /// Add `delta` (`++`/`--`, so ±1) to the int at `location`. A register
+    /// bumps in place. A cell holding an int (or nothing) records a merge
+    /// write — no read is tracked, so concurrent bumps commute — and any
+    /// other cell takes the tracked read-modify-write path to produce the
+    /// typed error.
+    pub(crate) fn bump_in_location(
         &mut self,
         txn: &TxnHandle,
         location: RegisterVariant,
-        func: F,
-    ) -> Result<()>
-    where
-        F: FnOnce(&mut LpcRef) -> Result<()>,
-    {
+        delta: LpcIntInner,
+    ) -> Result<()> {
+        let bump = |x: &mut LpcRef| if delta >= 0 { x.inc() } else { x.dec() };
         match self.slot(location)? {
-            Slot::Register(reg) => func(&mut self.registers[reg]),
-            // In-txn read-modify-write: the read is tracked, the write
-            // lands in the in-flight changeset.
+            Slot::Register(reg) => bump(&mut self.registers[reg]),
             Slot::Cell(cell) => txn.with(|t| {
-                let mut cur = t.read(cell).unwrap_or(NULL);
-                func(&mut cur)?;
-                t.write(cell, cur);
-                Ok(())
+                if t.peek_int(cell) {
+                    t.merge(cell, MergeOp::IntAdd(delta));
+                    Ok(())
+                } else {
+                    let mut cur = t.read(cell).unwrap_or(NULL);
+                    bump(&mut cur)?;
+                    t.write(cell, cur);
+                    Ok(())
+                }
             }),
         }
     }

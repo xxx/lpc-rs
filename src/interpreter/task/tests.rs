@@ -1665,6 +1665,30 @@ mod test_instructions {
         use super::*;
 
         #[tokio::test]
+        async fn errors_on_a_non_int_global() {
+            let code = indoc! { r##"
+                    mixed f() { return "x"; }
+                    int j = f();
+                    void create() { j++; }
+                "##};
+
+            let error = try_run_prog(code)
+                .await
+                .expect_err("++ on a string must error");
+            assert_eq!(error.to_string(), "runtime error: invalid increment");
+        }
+
+        #[tokio::test]
+        async fn wraps_at_the_int_maximum() {
+            let code = indoc! { r##"
+                    int j = 9223372036854775807;
+                    void create() { j++; }
+                "##};
+
+            check_committed_globals(code, &[("j", BareVal::Int(i64::MIN))]).await;
+        }
+
+        #[tokio::test]
         async fn stores_the_value_for_pre() {
             let code = indoc! { r##"
                     void create() {
@@ -2592,7 +2616,7 @@ mod test_upvalues {
     #[tokio::test]
     async fn upvalue_writes_survive_gc() {
         // a closure captures a *local*, so `i++` and `return i`
-        // route through the cell arm of `CallFrame::apply_in_location` /
+        // route through the cell arm of `CallFrame::bump_in_location` /
         // `CallFrame::get_location` via the transaction. The cell is committed
         // during the eval; after the frame that held the closure is gone, the
         // cell is no longer marked (no live `FunctionPtr` references it), so

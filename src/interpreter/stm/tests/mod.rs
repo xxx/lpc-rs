@@ -18,8 +18,8 @@ use crate::interpreter::{
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
     stm::{
-        Transaction, VarId, Version, WorldValue, changeset::Changeset, committer::Committer,
-        snapshot::Snapshot,
+        MergeOp, Transaction, VarId, Version, WorldValue, changeset::Changeset,
+        committer::Committer, snapshot::Snapshot,
     },
 };
 
@@ -149,4 +149,134 @@ fn a_mapping_payload_var_roundtrips_too() {
     committer.commit(seed).expect("mapping seed should commit");
 
     assert_eq!(committer.committed(payload), WorldValue::Mapping(contents));
+}
+
+#[test]
+fn a_read_of_a_merged_var_materializes_tracked_and_folded() {
+    let var_id = VarId::new();
+    let mut map = HashMap::new();
+    map.insert(var_id, WorldValue::ref_of(LpcRef::from(5)));
+    let mut transaction = Transaction::new(Snapshot::new(Version::new(), map));
+
+    transaction.merge(var_id, MergeOp::IntAdd(2));
+    assert_eq!(transaction.read(var_id), Some(LpcRef::from(7)));
+
+    // The read observed committed state, so it joined the conflict set;
+    // the merge stays a merge.
+    let (_, changeset) = transaction.into_parts();
+    assert!(changeset.conflicts_with(&[var_id].into_iter().collect()));
+    assert_eq!(changeset.pending_merges(var_id), &[MergeOp::IntAdd(2)]);
+}
+
+#[test]
+fn two_merge_only_changesets_from_one_base_both_commit() {
+    let mut committer = Committer::new();
+    let counter = VarId::new();
+    let mut seed = Changeset::new(committer.current_version());
+    seed.write(counter, WorldValue::ref_of(LpcRef::from(10)));
+    committer.commit(seed).expect("seed should commit");
+    let base = committer.current_version();
+
+    let mut a = Changeset::new(base);
+    a.merge(counter, MergeOp::IntAdd(1));
+    let mut b = Changeset::new(base);
+    b.merge(counter, MergeOp::IntAdd(1));
+
+    committer.commit(a).expect("first merge should commit");
+    committer.commit(b).expect("second merge must not conflict");
+    assert_eq!(
+        committer.committed(counter),
+        WorldValue::ref_of(LpcRef::from(12))
+    );
+}
+
+#[test]
+fn a_tracked_reader_conflicts_with_an_interleaved_merge_commit() {
+    let mut committer = Committer::new();
+    let counter = VarId::new();
+    let mut seed = Changeset::new(committer.current_version());
+    seed.write(counter, WorldValue::ref_of(LpcRef::from(0)));
+    committer.commit(seed).expect("seed should commit");
+    let base = committer.current_version();
+
+    let mut merger = Changeset::new(base);
+    merger.merge(counter, MergeOp::IntAdd(1));
+
+    let other = VarId::new();
+    let mut reader = Changeset::new(base);
+    reader.track_read(counter);
+    reader.write(other, WorldValue::ref_of(LpcRef::from(1)));
+
+    committer.commit(merger).expect("the merge should commit");
+    assert!(
+        committer.commit(reader).is_err(),
+        "a tracked read of a merged var must conflict"
+    );
+}
+
+#[test]
+fn a_merge_type_mismatch_rejects_as_conflict() {
+    let mut committer = Committer::new();
+    let cell = VarId::new();
+    let contents = WorldValue::ref_of(LpcRef::from("not an int"));
+    let mut seed = Changeset::new(committer.current_version());
+    seed.write(cell, contents.clone());
+    committer.commit(seed).expect("seed should commit");
+
+    let mut bumper = Changeset::new(committer.current_version());
+    bumper.merge(cell, MergeOp::IntAdd(1));
+
+    assert!(committer.commit(bumper).is_err(), "mismatch must reject");
+    assert_eq!(committer.committed(cell), contents, "value untouched");
+}
+
+#[test]
+fn a_merge_on_an_absent_var_applies_onto_the_identity() {
+    let mut committer = Committer::new();
+    let cell = VarId::new();
+
+    let mut bumper = Changeset::new(committer.current_version());
+    bumper.merge(cell, MergeOp::IntAdd(4));
+    committer.commit(bumper).expect("the merge should commit");
+
+    assert_eq!(
+        committer.committed(cell),
+        WorldValue::ref_of(LpcRef::from(4))
+    );
+}
+
+#[test]
+fn a_merge_only_commit_creates_a_version() {
+    let mut committer = Committer::new();
+    let cell = VarId::new();
+    let before = committer.current_version();
+
+    let mut bumper = Changeset::new(before);
+    bumper.merge(cell, MergeOp::IntAdd(1));
+    committer.commit(bumper).expect("the merge should commit");
+
+    let after = committer.current_version();
+    assert!(before < after, "a merge is a write, not a read-only commit");
+    assert!(
+        committer.retains_version(after),
+        "its write set joins history"
+    );
+}
+
+#[test]
+fn a_merge_wraps_like_the_eval_loop() {
+    let mut committer = Committer::new();
+    let cell = VarId::new();
+    let mut seed = Changeset::new(committer.current_version());
+    seed.write(cell, WorldValue::ref_of(LpcRef::from(i64::MAX)));
+    committer.commit(seed).expect("seed should commit");
+
+    let mut bumper = Changeset::new(committer.current_version());
+    bumper.merge(cell, MergeOp::IntAdd(1));
+    committer.commit(bumper).expect("the merge should commit");
+
+    assert_eq!(
+        committer.committed(cell),
+        WorldValue::ref_of(LpcRef::from(i64::MIN))
+    );
 }

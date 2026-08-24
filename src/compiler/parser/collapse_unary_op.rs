@@ -36,6 +36,19 @@ pub fn collapse_unary_op(node: UnaryOpNode) -> ExpressionNode {
     }
 }
 
+/// A statement-position `x++`/`x--` never uses its value, so it demotes to
+/// the pre form; the pre-value copy that saves would, on a cell, carry a
+/// tracked read and re-buy the conflict the merge write avoids.
+pub fn demote_statement_post_op(mut node: ExpressionNode) -> ExpressionNode {
+    if let ExpressionNode::UnaryOp(unary) = &mut node
+        && unary.is_post
+        && matches!(unary.op, UnaryOperation::Inc | UnaryOperation::Dec)
+    {
+        unary.is_post = false;
+    }
+    node
+}
+
 #[cfg(test)]
 mod tests {
     use decorum::Total;

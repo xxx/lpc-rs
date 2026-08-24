@@ -4,7 +4,7 @@ use std::collections::hash_map::Entry;
 
 use ahash::{AHashMap, AHashSet};
 
-use crate::interpreter::stm::{VarId, Version, WorldValue};
+use crate::interpreter::stm::{MergeOp, VarId, Version, WorldValue};
 
 /// One observed var: tracked for conflict detection, and — once a world
 /// lookup answered — carrying that answer so a re-read skips the world.
@@ -16,6 +16,13 @@ enum ReadEntry {
     Cached(Option<WorldValue>),
 }
 
+/// A changeset dismantled for application: writes, merges, removals.
+pub(crate) type ChangesetParts = (
+    AHashMap<VarId, WorldValue>,
+    AHashMap<VarId, Vec<MergeOp>>,
+    AHashSet<VarId>,
+);
+
 #[derive(Debug, Clone)]
 pub(crate) struct Changeset {
     version: Version,
@@ -25,6 +32,10 @@ pub(crate) struct Changeset {
     /// Kept out of `writes` so a `drop` isn't mistaken for a write of a new
     /// value; the committer removes them from the world on commit.
     removals: AHashSet<VarId>,
+    /// Merge writes, in record order per var; applied by the committer to
+    /// the committed value at commit time. A var never holds both a write
+    /// and merges: recording folds one into the other.
+    merges: AHashMap<VarId, Vec<MergeOp>>,
 }
 
 impl Changeset {
@@ -34,6 +45,7 @@ impl Changeset {
             writes: AHashMap::new(),
             reads: AHashMap::new(),
             removals: AHashSet::new(),
+            merges: AHashMap::new(),
         }
     }
 
@@ -71,10 +83,48 @@ impl Changeset {
         }
     }
 
-    /// Write a variable to the changeset.
+    /// Write a variable to the changeset. A write is the whole value, so it
+    /// supersedes any merges queued before it.
     pub(crate) fn write(&mut self, var_id: VarId, value: WorldValue) {
         self.removals.remove(&var_id);
+        self.merges.remove(&var_id);
         self.writes.insert(var_id, value);
+    }
+
+    /// Record a merge write of `var_id`: a pending removal or write absorbs
+    /// the op; otherwise it queues for the committer, folding into its
+    /// predecessor when the kinds compose.
+    pub(crate) fn merge(&mut self, var_id: VarId, op: MergeOp) {
+        if self.removals.remove(&var_id) {
+            let value = op.apply_to(None).expect("an op applies onto its identity");
+            self.writes.insert(var_id, value);
+            return;
+        }
+        if let Some(written) = self.writes.get_mut(&var_id) {
+            *written = op
+                .apply_to(Some(written))
+                .expect("the caller peeks the type before merging");
+            return;
+        }
+        let ops = self.merges.entry(var_id).or_default();
+        if !ops.last_mut().is_some_and(|last| last.fold(&op)) {
+            ops.push(op);
+        }
+    }
+
+    /// The pending merge writes by var, for the committer's type precheck.
+    pub(crate) fn merges(&self) -> impl Iterator<Item = (&VarId, &Vec<MergeOp>)> {
+        self.merges.iter()
+    }
+
+    /// The attempt's own written value for `var_id`, if any.
+    pub(crate) fn written(&self, var_id: VarId) -> Option<&WorldValue> {
+        self.writes.get(&var_id)
+    }
+
+    /// The pending merge writes for `var_id`, in record order.
+    pub(crate) fn pending_merges(&self, var_id: VarId) -> &[MergeOp] {
+        self.merges.get(&var_id).map(Vec::as_slice).unwrap_or(&[])
     }
 
     /// Record that this attempt removes a var from the world. A `destruct` of
@@ -83,6 +133,7 @@ impl Changeset {
     /// `None` in the changeset.
     pub(crate) fn drop_var(&mut self, var_id: VarId) {
         self.writes.remove(&var_id);
+        self.merges.remove(&var_id);
         self.removals.insert(var_id);
     }
 
@@ -141,24 +192,92 @@ impl Changeset {
     }
 
     /// The vars this attempt changes in any way, for conflict bookkeeping:
-    /// writes plus removals. Both count against the read-write conflict rule
-    /// (a concurrent reader of a removed var conflicts, so it re-runs).
+    /// writes, merges, and removals. All count against the read-write
+    /// conflict rule (a concurrent reader of a removed or merged var
+    /// conflicts, so it re-runs).
     pub(crate) fn touched_vars(&self) -> AHashSet<VarId> {
         let mut vars = self.writes.keys().copied().collect::<AHashSet<_>>();
+        vars.extend(self.merges.keys().copied());
         vars.extend(self.removals.iter().copied());
         vars
     }
 
-    /// The writes and removals this attempt made, for the snapshot to apply on
-    /// commit.
-    pub(crate) fn into_parts(self) -> (AHashMap<VarId, WorldValue>, AHashSet<VarId>) {
-        (self.writes, self.removals)
+    /// The writes, merges, and removals this attempt made, for the snapshot
+    /// to apply on commit.
+    pub(crate) fn into_parts(self) -> ChangesetParts {
+        (self.writes, self.merges, self.removals)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_merge_tracks_no_read() {
+        let mut changeset = Changeset::new(Version(0));
+        let var_id = VarId(0);
+        changeset.merge(var_id, MergeOp::IntAdd(1));
+
+        let written = [var_id].into_iter().collect();
+        assert!(!changeset.conflicts_with(&written));
+        assert!(changeset.touched_vars().contains(&var_id));
+    }
+
+    #[test]
+    fn a_write_then_merge_folds_into_the_write() {
+        let mut changeset = Changeset::new(Version(0));
+        let var_id = VarId(0);
+        changeset.write(var_id, WorldValue::ref_of(5.into()));
+        changeset.merge(var_id, MergeOp::IntAdd(2));
+
+        assert_eq!(changeset.read(var_id), Some(WorldValue::ref_of(7.into())));
+        assert!(changeset.pending_merges(var_id).is_empty());
+    }
+
+    #[test]
+    fn a_merge_then_write_drops_the_merges() {
+        let mut changeset = Changeset::new(Version(0));
+        let var_id = VarId(0);
+        changeset.merge(var_id, MergeOp::IntAdd(2));
+        changeset.write(var_id, WorldValue::ref_of(9.into()));
+
+        assert_eq!(changeset.read(var_id), Some(WorldValue::ref_of(9.into())));
+        assert!(changeset.pending_merges(var_id).is_empty());
+    }
+
+    #[test]
+    fn a_merge_then_drop_drops_the_merges() {
+        let mut changeset = Changeset::new(Version(0));
+        let var_id = VarId(0);
+        changeset.merge(var_id, MergeOp::IntAdd(2));
+        changeset.drop_var(var_id);
+
+        assert!(changeset.is_removed(var_id));
+        assert!(changeset.pending_merges(var_id).is_empty());
+    }
+
+    #[test]
+    fn a_drop_then_merge_becomes_a_write_on_the_identity() {
+        let mut changeset = Changeset::new(Version(0));
+        let var_id = VarId(0);
+        changeset.drop_var(var_id);
+        changeset.merge(var_id, MergeOp::IntAdd(3));
+
+        assert!(!changeset.is_removed(var_id));
+        assert_eq!(changeset.read(var_id), Some(WorldValue::ref_of(3.into())));
+        assert!(changeset.pending_merges(var_id).is_empty());
+    }
+
+    #[test]
+    fn consecutive_int_adds_fold_into_one_op() {
+        let mut changeset = Changeset::new(Version(0));
+        let var_id = VarId(0);
+        changeset.merge(var_id, MergeOp::IntAdd(1));
+        changeset.merge(var_id, MergeOp::IntAdd(1));
+
+        assert_eq!(changeset.pending_merges(var_id), &[MergeOp::IntAdd(2)]);
+    }
     #[test]
     fn read_returns_none_for_unwritten_var() {
         let changeset = Changeset::new(Version(0));

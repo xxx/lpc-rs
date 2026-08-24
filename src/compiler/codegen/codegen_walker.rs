@@ -4551,6 +4551,47 @@ mod tests {
         assert_eq!(walker_init_instructions(&mut walker), expected);
     }
 
+    mod test_statement_bump {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_statement_increment_on_a_global_emits_a_bare_inc() {
+            let mut walker = walk_prog("int g;\nvoid create() { g++; }").await;
+
+            let expected = vec![Inc(Register(0).as_global()), Ret];
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
+        }
+
+        #[tokio::test]
+        async fn a_used_post_increment_keeps_its_pre_value_copy() {
+            let mut walker = walk_prog("int g;\nvoid create() { int k = g++; }").await;
+
+            let instructions = walker_function_instructions(&mut walker, "create");
+            assert!(
+                instructions
+                    .iter()
+                    .any(|i| matches!(i, Copy(RegisterVariant::Global(_), _))),
+                "the observed pre-value needs its copy: {instructions:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_global_for_increment_emits_a_bare_inc() {
+            let mut walker =
+                walk_prog("int g;\nvoid create() { for (g = 0; g < 2; g++) {} }").await;
+
+            let instructions = walker_function_instructions(&mut walker, "create");
+            assert!(
+                instructions.iter().all(|i| !matches!(i, Copy(..))),
+                "a for-increment's value is unused: {instructions:?}"
+            );
+            assert!(instructions.contains(&Inc(Register(0).as_global())));
+        }
+    }
+
     mod test_coalesce {
         use super::*;
 
