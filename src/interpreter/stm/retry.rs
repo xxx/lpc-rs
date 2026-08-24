@@ -53,9 +53,9 @@ pub(crate) trait AttemptBody {
     ) -> Result<Option<LiveSnapshot>>;
 
     /// Commit the attempt's changeset and take its physical output for
-    /// delivery. The loop releases the `LiveSnapshot` only after this
-    /// returns: releasing earlier lets the committer evict history the
-    /// commit still needs, spurious-conflicting a sound attempt.
+    /// delivery. The handle arrives disarmed: the committer releases the
+    /// pin while processing the commit, after validation, so the history
+    /// the commit needs is never evicted under it.
     async fn commit_phase(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
@@ -155,10 +155,12 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
         };
 
         // A joiner: the caller's commit carries the writes.
-        let Some(live) = live else {
+        let Some(mut live) = live else {
             break Ok(());
         };
 
+        // Disarmed: the commit releases the pin, not the handle's drop.
+        live.disarm();
         let (commit, effects) = match body.commit_phase(tx, live).await {
             Ok(c) => c,
             Err(e) => break Err(e),
@@ -183,8 +185,7 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
     )
 }
 
-/// Send one request to the committer and await its reply; the blocking
-/// `flume` recv runs off the runtime via `spawn_blocking`.
+/// Send one request to the committer and await its reply on the runtime.
 async fn request<R: Send + 'static>(
     tx: &flume::Sender<CommitProtocol>,
     message: impl FnOnce(flume::Sender<R>) -> CommitProtocol,
@@ -192,11 +193,9 @@ async fn request<R: Send + 'static>(
     let (reply_tx, reply_rx) = flume::bounded(1);
     tx.send(message(reply_tx))
         .map_err(|_| -> lpc_rs_errors::LpcError { lpc_error!("committer channel closed") })?;
-    tokio::task::spawn_blocking(move || reply_rx.recv())
+    reply_rx
+        .recv_async()
         .await
-        .map_err(|e| -> lpc_rs_errors::LpcError {
-            lpc_error!("committer reply task panicked: {}", e)
-        })?
         .map_err(|_| -> lpc_rs_errors::LpcError { lpc_error!("no reply from committer") })
 }
 
@@ -220,13 +219,19 @@ pub(crate) async fn committer_stats(tx: &flume::Sender<CommitProtocol>) -> Resul
     request(tx, |reply| CommitProtocol::Stats { reply }).await
 }
 
-/// Commit a changeset and await the reply. `Ok(())` = committed;
-/// `Ok(Err(_))` = rejected (conflict).
+/// Commit a changeset from a disarmed attempt and await the reply; the
+/// commit carries the release of the base version's pin. `Ok(())` =
+/// committed; `Ok(Err(_))` = rejected (conflict).
 pub(crate) async fn commit_changeset(
     tx: &flume::Sender<CommitProtocol>,
     changeset: Changeset,
 ) -> Result<std::result::Result<(), Changeset>> {
-    request(tx, |reply| CommitProtocol::Commit { changeset, reply }).await
+    request(tx, |reply| CommitProtocol::Commit {
+        changeset,
+        releases_base: true,
+        reply,
+    })
+    .await
 }
 
 /// A sync "read the latest committed world" API for consistency-agnostic
@@ -429,6 +434,7 @@ mod tests {
         let (reply_tx, reply_rx) = flume::bounded(1);
         tx.send(CommitProtocol::Commit {
             changeset: seed,
+            releases_base: false,
             reply: reply_tx,
         })
         .expect("committer channel closed");

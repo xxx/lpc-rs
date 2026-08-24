@@ -63,6 +63,10 @@ pub(crate) enum CommitProtocol {
     /// Commit a changeset to the world state
     Commit {
         changeset: Changeset,
+        /// The commit carries the release of its base version's pin: true
+        /// only when the sender's [`LiveSnapshot`] was disarmed. A bare
+        /// commit (seed, probe) leaves other holders' pins alone.
+        releases_base: bool,
         reply: flume::Sender<Result<(), Changeset>>,
     },
     /// Drop the reference count of a [`Version`], called when a [`Snapshot`] is dropped.
@@ -113,12 +117,21 @@ pub struct GcReport {
 #[derive(Debug)]
 pub(crate) struct LiveSnapshot {
     pub(crate) inner: Snapshot,
-    release: flume::Sender<CommitProtocol>,
+    release: Option<flume::Sender<CommitProtocol>>,
 }
 
 impl LiveSnapshot {
     pub(crate) fn new(inner: Snapshot, release: flume::Sender<CommitProtocol>) -> Self {
-        Self { inner, release }
+        Self {
+            inner,
+            release: Some(release),
+        }
+    }
+
+    /// Disarm the drop-release: the commit built on this snapshot carries
+    /// the release instead.
+    pub(crate) fn disarm(&mut self) {
+        self.release = None;
     }
 }
 
@@ -132,9 +145,9 @@ impl Deref for LiveSnapshot {
 
 impl Drop for LiveSnapshot {
     fn drop(&mut self) {
-        let _ = self
-            .release
-            .send(CommitProtocol::Drop(self.inner.version()));
+        if let Some(release) = self.release.take() {
+            let _ = release.send(CommitProtocol::Drop(self.inner.version()));
+        }
     }
 }
 
@@ -205,9 +218,17 @@ impl Committer {
                     self.stats.error()
                 });
             }
-            CommitProtocol::Commit { changeset, reply } => {
+            CommitProtocol::Commit {
+                changeset,
+                releases_base,
+                reply,
+            } => {
+                let base = changeset.base_version();
                 let result = self.commit(changeset);
-                if result.is_ok() {
+                if releases_base {
+                    self.release(base);
+                }
+                if self.live_versions.is_empty() {
                     self.evict_old_versions();
                 }
                 reply.send(result).unwrap_or_else(|e| {
@@ -215,16 +236,7 @@ impl Committer {
                     self.stats.error()
                 });
             }
-            CommitProtocol::Drop(version) => {
-                let Some(count) = self.live_versions.get_mut(&version) else {
-                    unreachable!("drop for version {version:?} with no live count");
-                };
-                *count -= 1;
-                if *count == 0 {
-                    self.live_versions.remove(&version);
-                }
-                self.evict_old_versions();
-            }
+            CommitProtocol::Drop(version) => self.release(version),
             CommitProtocol::GcPass { roots, reply } => {
                 // Held snapshots across versions; `0` = quiescent.
                 let live: usize = self.live_versions.values().map(|&c| c as usize).sum();
@@ -354,6 +366,25 @@ impl Committer {
         }
     }
 
+    /// Release one live pin on `version`; a version with no pin is a no-op.
+    /// History is evicted only when the watermark actually moves.
+    fn release(&mut self, version: Version) {
+        let was_min = self
+            .live_versions
+            .first_key_value()
+            .is_some_and(|(k, _)| *k == version);
+        let Some(count) = self.live_versions.get_mut(&version) else {
+            return;
+        };
+        *count -= 1;
+        if *count == 0 {
+            self.live_versions.remove(&version);
+            if was_min {
+                self.evict_old_versions();
+            }
+        }
+    }
+
     /// Trim write history, and bookkeep oldest retained version.
     fn evict_old_versions(&mut self) {
         // watermark = oldest version still held by a live snapshot
@@ -376,13 +407,6 @@ impl Committer {
     ///
     /// Returns `Ok` on success, or `Err(changeset)` if the changeset conflicts.
     pub(crate) fn commit(&mut self, changeset: Changeset) -> Result<(), Changeset> {
-        // TODO: ensure empty changesets don't make it this far. They work fine, but
-        //       are unnecessary processing on a critical path.
-        // if changeset.read_vars().is_empty() && changeset.written_vars().is_empty() {
-        //     return Ok(());
-        // }
-        // debug_assert!(!changeset.read_vars().is_empty() || !changeset.written_vars().is_empty(), "empty changeset");
-
         let current_version = self.snapshot.version();
         let changeset_version = changeset.base_version();
 
@@ -413,14 +437,12 @@ impl Committer {
             }
         }
 
-        if changeset.touched_vars().is_empty() {
-            // Conflict-free read-only changeset, so we're done.
-            // No need for a new version or empty history insert.
-            // TODO: track stats for these?
+        let written_vars = changeset.touched_vars();
+        if written_vars.is_empty() {
+            // Conflict-free read-only changeset: no new version, no history.
             return Ok(());
         }
 
-        let written_vars = changeset.touched_vars();
         let new_version = Version::new();
         let new_snapshot = self.snapshot.apply(new_version, changeset);
         self.snapshot = new_snapshot;
@@ -480,9 +502,17 @@ impl Committer {
         let mut rejections_left = rejections;
         while let Ok(msg) = rx.recv() {
             if rejections_left > 0
-                && let CommitProtocol::Commit { changeset, reply } = msg
+                && let CommitProtocol::Commit {
+                    changeset,
+                    releases_base,
+                    reply,
+                } = msg
             {
                 rejections_left -= 1;
+                // A rejection releases the pin exactly as the real path does.
+                if releases_base {
+                    self.release(changeset.base_version());
+                }
                 let _ = reply.send(Err(changeset));
                 continue;
             }
@@ -511,6 +541,55 @@ mod tests {
         lpc_ref::LpcRef,
         stm::{SVar, Transaction, WorldValue, tests::*},
     };
+
+    #[test]
+    fn a_commit_releases_its_base_version_without_a_drop_message() {
+        let (tx, rx) = flume::unbounded();
+        let committer = Committer::new();
+        let committer_tx = tx.clone();
+        let handle = std::thread::spawn(move || committer.run(committer_tx, rx));
+
+        // Start pins the base version.
+        let (reply_tx, reply_rx) = flume::bounded(1);
+        tx.send(CommitProtocol::Start { reply: reply_tx })
+            .expect("committer channel closed");
+        let mut live = reply_rx.recv().expect("no reply from committer");
+
+        // Disarmed: dropping this handle sends no release.
+        live.disarm();
+        let base = live.version();
+        let var = VarId::new();
+        drop(live);
+
+        let mut changeset = Changeset::new(base);
+        changeset.write(var, WorldValue::ref_of(LpcRef::from(1)));
+        let (reply_tx, reply_rx) = flume::bounded(1);
+        tx.send(CommitProtocol::Commit {
+            changeset,
+            releases_base: true,
+            reply: reply_tx,
+        })
+        .expect("committer channel closed");
+        reply_rx
+            .recv()
+            .expect("no reply from committer")
+            .expect("commit should succeed");
+
+        // The commit released the pin: a GC pass finds nothing in flight.
+        let (reply_tx, reply_rx) = flume::bounded(1);
+        tx.send(CommitProtocol::GcPass {
+            roots: vec![WorldRoot::Var(var)],
+            reply: reply_tx,
+        })
+        .expect("committer channel closed");
+        let reply = reply_rx.recv().expect("no reply from committer");
+        assert!(reply.is_ok(), "gc must not be refused: {reply:?}");
+
+        tx.send(CommitProtocol::Close)
+            .expect("committer channel closed");
+        drop(tx);
+        handle.join().expect("committer panicked");
+    }
 
     /// Start a transaction against the committer's current world and hand
     /// back the [`LiveSnapshot`] handle.
@@ -575,6 +654,7 @@ mod tests {
                 let (reply_tx, reply_rx) = flume::bounded(1);
                 tx.send(CommitProtocol::Commit {
                     changeset,
+                    releases_base: false,
                     reply: reply_tx,
                 })
                 .expect("committer channel closed");
@@ -740,6 +820,7 @@ mod tests {
                 let (reply_tx, reply_rx) = flume::bounded(1);
                 tx.send(CommitProtocol::Commit {
                     changeset,
+                    releases_base: false,
                     reply: reply_tx,
                 })
                 .expect("committer channel closed");
@@ -812,6 +893,7 @@ mod tests {
                         let (reply_tx, reply_rx) = flume::bounded(1);
                         tx.send(CommitProtocol::Commit {
                             changeset,
+                            releases_base: false,
                             reply: reply_tx,
                         })
                         .expect("committer channel closed");
@@ -885,6 +967,7 @@ mod tests {
         let (reply_tx, reply_rx) = flume::bounded(1);
         tx.send(CommitProtocol::Commit {
             changeset,
+            releases_base: false,
             reply: reply_tx,
         })
         .expect("committer channel closed");

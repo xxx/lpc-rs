@@ -533,9 +533,10 @@ impl<const STACKSIZE: usize> AttemptBody for Task<STACKSIZE> {
         std::result::Result<(), crate::interpreter::stm::Changeset>,
         Vec<Effect>,
     )> {
-        // Clone, not take: `task.result()` is read through this handle after
-        // the commit, against a pre-commit snapshot.
-        let (_world, changeset) = self.context.txn.with(|t| t.clone()).into_parts();
+        // Clone the changeset, not take it: the result's payload is read
+        // through this handle after the commit, against the pre-commit
+        // snapshot plus this changeset.
+        let changeset = self.context.txn.with(|t| t.clone_changeset());
         let commit = commit_changeset(tx, changeset).await?;
         let effects = self.context.txn.with(|t| t.take_effects());
         Ok((commit, effects))

@@ -360,10 +360,11 @@ mod tests {
             .object_space
             .path_key(LpcPath::InGame(std::path::PathBuf::from("/dynamic_receiver")).as_ref());
         let cell_id = gs.object_space.cell_id(&key);
-        let live = start_txn(&gs.committer_tx).await?;
+        let mut live = start_txn(&gs.committer_tx).await?;
         let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
         txn.with(|t| t.write_process(cell_id, process));
         let changeset = txn.with(|t| t.take_changeset());
+        live.disarm(); // the commit carries the release
         let commit = commit_changeset(&gs.committer_tx, changeset).await?;
         let effects = txn.with(|t| t.take_effects());
         drop(live);
@@ -448,10 +449,11 @@ mod tests {
 
         // Commit a destruct: drop the cell, but never flush the physical
         // removal, leaving the destruct window open.
-        let live = start_txn(&gs.committer_tx).await.unwrap();
+        let mut live = start_txn(&gs.committer_tx).await.unwrap();
         let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
         txn.with(|t| t.drop_var(cell_id));
         let changeset = txn.with(|t| t.take_changeset());
+        live.disarm(); // the commit carries the release
         let commit = commit_changeset(&gs.committer_tx, changeset).await.unwrap();
         drop(live);
         commit.expect("destruct commit must succeed");
@@ -687,8 +689,8 @@ mod tests {
         let gs = Arc::new(GlobalState::new(test_config(), tx));
         let process = Arc::new(Process::default());
 
-        let a = start_txn(&gs.committer_tx).await.unwrap();
-        let b = start_txn(&gs.committer_tx).await.unwrap();
+        let mut a = start_txn(&gs.committer_tx).await.unwrap();
+        let mut b = start_txn(&gs.committer_tx).await.unwrap();
         let txn_a = TxnHandle::new(Transaction::new(a.inner.clone()));
         let txn_b = TxnHandle::new(Transaction::new(b.inner.clone()));
         assert!(process.claim_init(&txn_a));
@@ -700,6 +702,9 @@ mod tests {
 
         let changeset_a = txn_a.with(|t| t.take_changeset());
         let changeset_b = txn_b.with(|t| t.take_changeset());
+        // the commits carry the releases
+        a.disarm();
+        b.disarm();
         assert!(
             commit_changeset(&gs.committer_tx, changeset_a)
                 .await

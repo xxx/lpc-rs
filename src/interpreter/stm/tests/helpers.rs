@@ -78,6 +78,7 @@ pub(crate) fn drive_txn(
     committer.process(
         CommitProtocol::Commit {
             changeset,
+            releases_base: false,
             reply: reply_tx,
         },
         tx,

@@ -308,7 +308,14 @@ impl Transaction {
         std::mem::replace(&mut self.changeset, Changeset::new(self.snapshot.version()))
     }
 
+    /// Clone the changeset for commit, leaving it in place for reads that
+    /// follow the commit through this handle.
+    pub(crate) fn clone_changeset(&self) -> Changeset {
+        self.changeset.clone()
+    }
+
     /// Dismantle the transaction into its snapshot and changeset.
+    #[cfg(test)]
     pub(crate) fn into_parts(self) -> (Snapshot, Changeset) {
         (self.snapshot, self.changeset)
     }

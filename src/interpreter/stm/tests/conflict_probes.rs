@@ -12,13 +12,14 @@ use crate::interpreter::{
 
 /// One `counter = counter + 1` as a transactional RMW; `Ok` commits, `Err` is a rejected (conflicting) commit.
 async fn increment_once(tx: &flume::Sender<CommitProtocol>, counter: VarId) -> Result<(), ()> {
-    let live = start_txn(tx).await.expect("start failed");
+    let mut live = start_txn(tx).await.expect("start failed");
     let mut txn = Transaction::new(live.inner.clone());
     let LpcRef::Int(n) = txn.read(counter).expect("counter cell missing") else {
         panic!("counter cell is not an int");
     };
     txn.write(counter, LpcRef::from(n.wrapping_add(1)));
     let (_snap, changeset) = txn.clone().into_parts();
+    live.disarm(); // the commit carries the release
     let res = commit_changeset(tx, changeset)
         .await
         .expect("commit send failed");
