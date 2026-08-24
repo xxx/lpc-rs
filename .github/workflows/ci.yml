@@ -29,6 +29,8 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Run Clippy
         run: cargo clippy --workspace
+      - name: Compile Benches
+        run: cargo bench --workspace --no-run
       - name: Run Tests
 #        run: cargo test --workspace --verbose
         run: cargo nextest run --workspace --no-fail-fast

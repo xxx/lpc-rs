@@ -11,6 +11,8 @@ pub mod interpreter;
 pub mod telnet;
 pub mod util;
 
+pub mod bench_support;
+
 #[cfg(test)]
 pub mod test_support;
 

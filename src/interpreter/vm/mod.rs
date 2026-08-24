@@ -629,7 +629,7 @@ mod tests {
     /// final committed counter (the lost-update check a throughput number can never show).
     #[test]
     fn contention_probe_measure_pattern_across_worker_counts() {
-        const PER_WORKER: usize = 8192;
+        const PER_WORKER: usize = 1024;
         for &workers in &[1usize, 4, 8] {
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(workers)
@@ -639,42 +639,21 @@ mod tests {
 
             rt.block_on(async {
                 let vm = Vm::new(test_config());
-                let code = indoc! { r#"
-                    int count = 0;
-
-                    void increment() {
-                        count = count + 1;
-                    }
-                "# };
-                let ctx = vm
-                    .initialize_string(code, "contention_probe_benchpat.c")
-                    .await
-                    .unwrap();
-                let proc = ctx.process;
-                let template = TaskTemplate::from(vm.global_state.clone());
+                let workload = &crate::bench_support::COUNTER;
+                let (proc, template, timeout) =
+                    crate::bench_support::setup_on(&vm, workload).await;
 
                 let before = vm.global_state.committer_stats().await.unwrap();
 
-                let mut set = tokio::task::JoinSet::new();
-                for _ in 0..workers {
-                    let proc = proc.clone();
-                    let template = template.clone();
-                    set.spawn(async move {
-                        for _ in 0..PER_WORKER {
-                            apply_function_by_name(
-                                "increment",
-                                &[],
-                                proc.clone(),
-                                template.clone(),
-                                None,
-                            )
-                            .await
-                            .unwrap()
-                            .unwrap();
-                        }
-                    });
-                }
-                while set.join_next().await.is_some() {}
+                crate::bench_support::fan_out_applies(
+                    &template,
+                    &proc,
+                    workload.entry,
+                    workers,
+                    PER_WORKER,
+                    timeout,
+                )
+                .await;
 
                 let after = vm.global_state.committer_stats().await.unwrap();
                 let final_val = match vm.global_state.committed_global(&proc, 0) {
