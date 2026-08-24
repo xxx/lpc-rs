@@ -241,6 +241,73 @@ pub enum Instruction {
 }
 
 impl Instruction {
+    /// The register this instruction writes its value into, when that dest
+    /// is retargetable. `None` for everything else: calls write r0
+    /// implicitly, `Inc`/`Dec` modify in place, `CatchStart`'s register is
+    /// rebuilt as a Local at runtime, `PopulateArgv`'s is argv's home, and
+    /// `NewUpvalue` binds a cell rather than writing a value.
+    pub fn dest_register(&self) -> Option<RegisterVariant> {
+        match *self {
+            Self::AConst(d)
+            | Self::BitwiseNot(_, d)
+            | Self::Copy(_, d)
+            | Self::FConst(d, _)
+            | Self::FunctionPtrConst { location: d, .. }
+            | Self::IConst(d, _)
+            | Self::IConst0(d)
+            | Self::IConst1(d)
+            | Self::Load(_, _, d)
+            | Self::LoadMappingKey(_, _, d)
+            | Self::MapConst(d)
+            | Self::Not(_, d)
+            | Self::Range(_, _, _, d)
+            | Self::SConst(d, _)
+            | Self::Sizeof(_, d) => Some(d),
+            Self::And(_, _, d)
+            | Self::EqEq(_, _, d)
+            | Self::Gt(_, _, d)
+            | Self::Gte(_, _, d)
+            | Self::IAdd(_, _, d)
+            | Self::IDiv(_, _, d)
+            | Self::IMod(_, _, d)
+            | Self::IMul(_, _, d)
+            | Self::ISub(_, _, d)
+            | Self::Lt(_, _, d)
+            | Self::Lte(_, _, d)
+            | Self::MAdd(_, _, d)
+            | Self::MMul(_, _, d)
+            | Self::MSub(_, _, d)
+            | Self::NotEq(_, _, d)
+            | Self::Or(_, _, d)
+            | Self::Shl(_, _, d)
+            | Self::Shr(_, _, d)
+            | Self::Xor(_, _, d) => Some(d),
+            Self::Call(_)
+            | Self::CallEfun(_)
+            | Self::CallSimulEfun(_)
+            | Self::CallFp(_)
+            | Self::CallOther(_, _)
+            | Self::CatchEnd
+            | Self::CatchStart(_, _)
+            | Self::ClearArgs
+            | Self::ClearPartialArgs
+            | Self::ClearArrayItems
+            | Self::Dec(_)
+            | Self::Inc(_)
+            | Self::Jmp(_)
+            | Self::Jnz(_, _)
+            | Self::Jz(_, _)
+            | Self::NewUpvalue(_)
+            | Self::PopulateArgv(_, _, _)
+            | Self::PopulateDefaults
+            | Self::PushArg(_)
+            | Self::PushArrayItem(_)
+            | Self::PushPartialArg(_)
+            | Self::Ret
+            | Self::Store(_, _, _) => None,
+        }
+    }
+
     /// This instruction with `f` applied to every register operand.
     pub fn map_registers<F>(self, f: F) -> Self
     where
@@ -270,7 +337,12 @@ impl Instruction {
                 name,
             } => Self::FunctionPtrConst {
                 location: f(location),
-                receiver,
+                // A `Var` receiver names a register too; leaving it unmapped
+                // loses the receiver to register rewrites.
+                receiver: match receiver {
+                    FunctionReceiver::Var(r) => FunctionReceiver::Var(f(r)),
+                    other => other,
+                },
                 name,
             },
             Self::Gt(a0, a1, a2) => Self::Gt(f(a0), f(a1), f(a2)),
@@ -762,6 +834,71 @@ mod tests {
             SConst(r(), ustr("s")),
             Xor(r(), r(), r()),
         ]
+    }
+
+    #[test]
+    fn map_registers_reaches_a_var_receiver() {
+        let mapped = Instruction::FunctionPtrConst {
+            location: RegisterVariant::Local(Register(1)),
+            receiver: FunctionReceiver::Var(RegisterVariant::Local(Register(2))),
+            name: ustr("f"),
+        }
+        .map_registers(|r| match r {
+            RegisterVariant::Local(Register(2)) => RegisterVariant::Local(Register(9)),
+            other => other,
+        });
+
+        assert_eq!(
+            mapped,
+            Instruction::FunctionPtrConst {
+                location: RegisterVariant::Local(Register(1)),
+                receiver: FunctionReceiver::Var(RegisterVariant::Local(Register(9))),
+                name: ustr("f"),
+            }
+        );
+    }
+
+    #[test]
+    fn dest_register_names_the_written_operand_or_nothing() {
+        use Instruction::*;
+        let d = RegisterVariant::Local(Register(7));
+
+        assert_eq!(AConst(d).dest_register(), Some(d));
+        assert_eq!(IAdd(r(), r(), d).dest_register(), Some(d));
+        assert_eq!(BitwiseNot(r(), d).dest_register(), Some(d));
+        assert_eq!(Copy(r(), d).dest_register(), Some(d));
+        assert_eq!(Load(r(), r(), d).dest_register(), Some(d));
+        assert_eq!(Range(r(), r(), r(), d).dest_register(), Some(d));
+        assert_eq!(SConst(d, ustr("s")).dest_register(), Some(d));
+        assert_eq!(Sizeof(r(), d).dest_register(), Some(d));
+        assert_eq!(
+            FunctionPtrConst {
+                location: d,
+                receiver: FunctionReceiver::Local,
+                name: ustr("f"),
+            }
+            .dest_register(),
+            Some(d)
+        );
+
+        let none_count = every_variant()
+            .iter()
+            .filter(|i| i.dest_register().is_none())
+            .count();
+        assert_eq!(none_count, 23);
+        for i in [
+            Call(ustr("f")),
+            CallEfun(0),
+            CatchStart(r(), Address(0)),
+            Inc(r()),
+            Dec(r()),
+            Store(r(), r(), r()),
+            PopulateArgv(r(), 0, 0),
+            NewUpvalue(r()),
+            Ret,
+        ] {
+            assert_eq!(i.dest_register(), None, "{i}");
+        }
     }
 
     #[test]

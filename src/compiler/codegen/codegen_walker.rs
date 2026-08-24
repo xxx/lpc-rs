@@ -311,7 +311,12 @@ impl CodegenWalker {
     }
 
     fn ensure_sync(&self) -> Result<()> {
-        for func in self.functions.values() {
+        for func in self
+            .functions
+            .values()
+            .map(|f| f.as_ref())
+            .chain(self.initializer.as_deref())
+        {
             let a = func.instructions.len();
             let b = func.debug_spans.len();
             if a != b {
@@ -802,7 +807,7 @@ impl CodegenWalker {
 
     /// Seal the function on top of the stack: set its locals count (a
     /// captured parameter holds no register, so the count can fall short of
-    /// `num_args`), backpatch argv and labels, and hand the function back.
+    /// `num_args`), backpatch argv and labels, and coalesce copies.
     fn finalize_function(
         &mut self,
         num_args: RegisterSize,
@@ -819,6 +824,7 @@ impl CodegenWalker {
             Self::backpatch_populate_argv(&mut func, idx, span)?;
         }
         Self::backpatch(&backpatch_map, &mut func)?;
+        super::coalesce::coalesce(&mut func);
         Ok(func)
     }
 
@@ -2938,7 +2944,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), Address(18)),
+                Jz(RegisterVariant::Local(Register(3)), Address(17)),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(12),
@@ -2953,15 +2959,11 @@ mod tests {
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(6))),
                 CallEfun(12),
-                Jmp(Address(18)),
+                Jmp(Address(17)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(7)),
-                    RegisterVariant::Local(Register(8)),
-                ),
-                Copy(
-                    RegisterVariant::Local(Register(8)),
                     RegisterVariant::Local(Register(1)),
                 ),
                 Jmp(Address(0)),
@@ -2998,7 +3000,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), Address(22)),
+                Jz(RegisterVariant::Local(Register(3)), Address(20)),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(12),
@@ -3013,25 +3015,17 @@ mod tests {
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(6))),
                 CallEfun(12),
-                Jmp(Address(22)),
+                Jmp(Address(20)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(7)),
-                    RegisterVariant::Local(Register(8)),
-                ),
-                Copy(
-                    RegisterVariant::Local(Register(8)),
                     RegisterVariant::Local(Register(1)),
                 ),
                 IConst1(RegisterVariant::Local(Register(9))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(9)),
-                    RegisterVariant::Local(Register(10)),
-                ),
-                Copy(
-                    RegisterVariant::Local(Register(10)),
                     RegisterVariant::Local(Register(1)),
                 ),
                 Jmp(Address(1)),
@@ -3076,15 +3070,11 @@ mod tests {
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(4))),
                 CallEfun(12),
-                Jmp(Address(17)),
+                Jmp(Address(16)),
                 IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(5)),
-                    RegisterVariant::Local(Register(6)),
-                ),
-                Copy(
-                    RegisterVariant::Local(Register(6)),
                     RegisterVariant::Local(Register(1)),
                 ),
                 IConst(RegisterVariant::Local(Register(7)), 10),
@@ -3276,10 +3266,6 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Copy(
-                    RegisterVariant::Local(Register(0)),
-                    RegisterVariant::Local(Register(4)),
-                ),
                 Ret,
             ];
             check(r#""foo"->print(4 - 5)"#, expected).await;
@@ -3295,10 +3281,6 @@ mod tests {
                 CallOther(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2)),
-                ),
-                Copy(
-                    RegisterVariant::Local(Register(0)),
-                    RegisterVariant::Local(Register(4)),
                 ),
                 Ret,
             ];
@@ -3398,10 +3380,6 @@ mod tests {
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(2))),
                 CallFp(RegisterVariant::Local(Register(1))),
-                Copy(
-                    RegisterVariant::Local(Register(0)),
-                    RegisterVariant::Local(Register(3)),
-                ),
                 Ret,
             ];
 
@@ -3439,10 +3417,6 @@ mod tests {
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallFp(RegisterVariant::Global(Register(0))),
-                Copy(
-                    RegisterVariant::Local(Register(0)),
-                    RegisterVariant::Local(Register(2)),
-                ),
                 Ret,
             ];
 
@@ -3804,28 +3778,16 @@ mod tests {
                 walker_function_instructions(&mut walker, "closure-0"),
                 vec![
                     PopulateDefaults,
+                    Jmp(Address(5)),
                     Jmp(Address(6)),
-                    Jmp(Address(8)),
                     IMul(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2)),
-                        RegisterVariant::Local(Register(4)),
-                    ),
-                    Copy(
-                        RegisterVariant::Local(Register(4)),
                         RegisterVariant::Local(Register(0)),
                     ),
                     Ret,
-                    IConst(RegisterVariant::Local(Register(5)), 666),
-                    Copy(
-                        RegisterVariant::Local(Register(5)),
-                        RegisterVariant::Local(Register(2)),
-                    ),
-                    FConst(RegisterVariant::Local(Register(6)), 3.54.into()),
-                    Copy(
-                        RegisterVariant::Local(Register(6)),
-                        RegisterVariant::Local(Register(3)),
-                    ),
+                    IConst(RegisterVariant::Local(Register(2)), 666),
+                    FConst(RegisterVariant::Local(Register(3)), 3.54.into()),
                     Jmp(Address(3)),
                 ],
             );
@@ -3955,7 +3917,7 @@ mod tests {
                 .expect("the captured declaration mints its cell");
             let store = instructions
                 .iter()
-                .position(|i| matches!(i, Instruction::Copy(_, to) if *to == cell))
+                .position(|i| i.dest_register() == Some(cell))
                 .unwrap();
             assert!(mint < store);
             assert!(
@@ -4035,7 +3997,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), Address(18)),
+                Jz(RegisterVariant::Local(Register(3)), Address(17)),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(12),
@@ -4055,10 +4017,6 @@ mod tests {
                 IAdd(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(7)),
-                    RegisterVariant::Local(Register(8)),
-                ),
-                Copy(
-                    RegisterVariant::Local(Register(8)),
                     RegisterVariant::Local(Register(1)),
                 ),
                 Jmp(Address(0)),
@@ -4095,7 +4053,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), Address(22)),
+                Jz(RegisterVariant::Local(Register(3)), Address(20)),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(12),
@@ -4110,25 +4068,17 @@ mod tests {
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(6))),
                 CallEfun(12),
-                Jmp(Address(18)),
+                Jmp(Address(17)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(7)),
-                    RegisterVariant::Local(Register(8)),
-                ),
-                Copy(
-                    RegisterVariant::Local(Register(8)),
                     RegisterVariant::Local(Register(1)),
                 ),
                 IConst1(RegisterVariant::Local(Register(9))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(9)),
-                    RegisterVariant::Local(Register(10)),
-                ),
-                Copy(
-                    RegisterVariant::Local(Register(10)),
                     RegisterVariant::Local(Register(1)),
                 ),
                 Jmp(Address(1)),
@@ -4173,15 +4123,11 @@ mod tests {
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(4))),
                 CallEfun(12),
-                Jmp(Address(14)),
+                Jmp(Address(13)),
                 IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(5)),
-                    RegisterVariant::Local(Register(6)),
-                ),
-                Copy(
-                    RegisterVariant::Local(Register(6)),
                     RegisterVariant::Local(Register(1)),
                 ),
                 IConst(RegisterVariant::Local(Register(7)), 10),
@@ -4427,10 +4373,6 @@ mod tests {
                     IAdd(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2)),
-                        RegisterVariant::Local(Register(3)),
-                    ),
-                    Copy(
-                        RegisterVariant::Local(Register(3)),
                         RegisterVariant::Local(Register(0)),
                     ),
                     Ret,
@@ -4461,28 +4403,16 @@ mod tests {
                 "int main(int i, int j = 666, float d = 3.54) { return i * j; }",
                 vec![
                     PopulateDefaults,
+                    Jmp(Address(5)),
                     Jmp(Address(6)),
-                    Jmp(Address(8)),
                     IMul(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2)),
-                        RegisterVariant::Local(Register(4)),
-                    ),
-                    Copy(
-                        RegisterVariant::Local(Register(4)),
                         RegisterVariant::Local(Register(0)),
                     ),
                     Ret,
-                    IConst(RegisterVariant::Local(Register(5)), 666),
-                    Copy(
-                        RegisterVariant::Local(Register(5)),
-                        RegisterVariant::Local(Register(2)),
-                    ),
-                    FConst(RegisterVariant::Local(Register(6)), 3.54.into()),
-                    Copy(
-                        RegisterVariant::Local(Register(6)),
-                        RegisterVariant::Local(Register(3)),
-                    ),
+                    IConst(RegisterVariant::Local(Register(2)), 666),
+                    FConst(RegisterVariant::Local(Register(3)), 3.54.into()),
                     Jmp(Address(3)),
                 ],
             )
@@ -4621,6 +4551,78 @@ mod tests {
         assert_eq!(walker_init_instructions(&mut walker), expected);
     }
 
+    mod test_coalesce {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_global_assignment_lands_in_the_global() {
+            let mut walker = walk_prog("int c;\nvoid create() { c = c + 1; }").await;
+
+            let expected = vec![
+                IConst1(Register(1).as_local()),
+                IAdd(
+                    Register(0).as_global(),
+                    Register(1).as_local(),
+                    Register(0).as_global(),
+                ),
+                Ret,
+            ];
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
+        }
+
+        #[tokio::test]
+        async fn a_returned_expression_lands_in_r0() {
+            let mut walker = walk_prog(
+                "int f() { int a = 1; int b = 2; return a + b; }\nvoid create() { f(); }",
+            )
+            .await;
+
+            let expected = vec![
+                IConst1(Register(1).as_local()),
+                IConst(Register(2).as_local(), 2),
+                IAdd(
+                    Register(1).as_local(),
+                    Register(2).as_local(),
+                    Register(0).as_local(),
+                ),
+                Ret,
+            ];
+            assert_eq!(walker_function_instructions(&mut walker, "f"), expected);
+
+            // The statement-position call result is dead, so its copy is too.
+            let expected = vec![ClearArgs, Call(ustr("f__i____pb__")), Ret];
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
+        }
+
+        #[tokio::test]
+        async fn a_statement_increment_keeps_no_pre_value() {
+            let mut walker = walk_prog("void create() { int i; i++; }").await;
+
+            let expected = vec![Inc(Register(1).as_local()), Ret];
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
+        }
+
+        #[tokio::test]
+        async fn a_void_return_call_copies_nothing() {
+            let mut walker = walk_prog("void f() { }\nvoid create() { return f(); }").await;
+
+            let expected = vec![ClearArgs, Call(ustr("f__v____pb__")), Ret];
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
+        }
+    }
+
     mod test_visit_program {
         use super::*;
 
@@ -4678,16 +4680,8 @@ mod tests {
             let instructions = generate_init_instructions(prog).await;
 
             let expected = [
-                IConst(RegisterVariant::Local(Register(1)), 123),
-                Copy(
-                    RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Global(Register(0)),
-                ),
-                SConst(RegisterVariant::Local(Register(2)), ustr("cool")),
-                Copy(
-                    RegisterVariant::Local(Register(2)),
-                    RegisterVariant::Global(Register(1)),
-                ),
+                IConst(RegisterVariant::Global(Register(0)), 123),
+                SConst(RegisterVariant::Global(Register(1)), ustr("cool")),
                 Ret,
             ];
 
@@ -4732,16 +4726,8 @@ mod tests {
             let instructions = generate_init_instructions(prog).await;
 
             let expected = [
-                IConst(RegisterVariant::Local(Register(1)), 666),
-                Copy(
-                    RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Global(Register(0)),
-                ),
-                IConst(RegisterVariant::Local(Register(2)), 777),
-                Copy(
-                    RegisterVariant::Local(Register(2)),
-                    RegisterVariant::Global(Register(1)),
-                ),
+                IConst(RegisterVariant::Global(Register(0)), 666),
+                IConst(RegisterVariant::Global(Register(1)), 777),
                 Ret,
             ];
 
@@ -5705,8 +5691,8 @@ mod tests {
         let globals_written: Vec<_> = b_init
             .instructions
             .iter()
-            .filter_map(|i| match i {
-                Instruction::Copy(_, RegisterVariant::Global(r)) => Some(r.index()),
+            .filter_map(|i| match i.dest_register() {
+                Some(RegisterVariant::Global(r)) => Some(r.index()),
                 _ => None,
             })
             .collect();
