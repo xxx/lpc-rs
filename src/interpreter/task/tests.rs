@@ -4,10 +4,9 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use decorum::Total;
 use indexmap::IndexMap;
 use indoc::indoc;
-use lpc_rs_core::{LpcFloatInner, LpcIntInner, RegisterSize, register::RegisterVariant};
+use lpc_rs_core::{LpcFloatInner, LpcIntInner, register::RegisterVariant};
 use tokio::sync::mpsc;
 use ustr::ustr;
 
@@ -18,15 +17,6 @@ use crate::{
     },
     test_support::{initialize_program, run_prog, try_run_prog, try_run_prog_with_config},
 };
-
-/// Committed global values for a process, read through the committer.
-fn committed_global_values(gs: &Arc<GlobalState>, proc: &Process) -> Vec<LpcRef> {
-    let mut values = Vec::new();
-    for i in 0..gs.global_slot_count(proc) {
-        values.push(gs.committed_global(proc, i as RegisterSize));
-    }
-    values
-}
 
 /// Committed global values by name, read through the committer.
 fn committed_globals_by_name(gs: &Arc<GlobalState>, proc: &Process) -> HashMap<String, LpcRef> {
@@ -40,6 +30,55 @@ fn committed_globals_by_name(gs: &Arc<GlobalState>, proc: &Process) -> HashMap<S
             Some((name.clone(), gs.committed_global(proc, reg.index())))
         })
         .collect()
+}
+
+/// Run `code` and assert each named global's committed value.
+async fn check_committed_globals(code: &str, expected: &[(&str, BareVal)]) {
+    let task = run_prog(code).await;
+    let gs = &task.context.global_state;
+    let globals = committed_globals_by_name(gs, task.context.process());
+    for (name, value) in expected {
+        let actual = globals
+            .get(*name)
+            .unwrap_or_else(|| panic!("no global named `{name}`"));
+        value.assert_equal(gs, actual);
+    }
+}
+
+/// Run `code` and assert named variables in the last frame popped
+/// (init-globals for file-scope code, the last user function otherwise).
+async fn check_popped_vars(code: &str, expected: &[(&str, BareVal)]) {
+    let task = run_prog(code).await;
+    let frame = task.popped_frame.as_ref().expect("a frame was popped");
+    let vars = frame.local_variables(task.context.txn());
+    assert_named_vars(&task.context.global_state, &vars, expected);
+}
+
+/// Run `code` (which must call `debug("snapshot_stack")`) and assert named
+/// variables in the snapshotted frame that made the call.
+async fn check_snapshot_vars(code: &str, expected: &[(&str, BareVal)]) {
+    let mut task = run_prog(code).await;
+    let snapshot = &mut task.snapshots.pop().unwrap();
+    snapshot.pop(); // pop off the init frame
+    let frame = snapshot.pop().unwrap();
+    let vars = frame.local_variables(task.context.txn());
+    assert_named_vars(&task.context.global_state, &vars, expected);
+}
+
+/// Assert each `(name, value)` pair matches some variable of that name.
+fn assert_named_vars(
+    gs: &Arc<GlobalState>,
+    vars: &[crate::interpreter::call_frame::LocalVariable],
+    expected: &[(&str, BareVal)],
+) {
+    for (name, value) in expected {
+        let found = vars.iter().filter(|v| &v.name == name).collect::<Vec<_>>();
+        assert!(
+            found.iter().any(|v| value.equal_to_lpc_ref(gs, &v.value)),
+            "name: {name}, expected: {value}, found: {:?}",
+            found.iter().map(|v| &v.value).collect::<Vec<_>>()
+        );
+    }
 }
 
 #[allow(dead_code)]
@@ -216,21 +255,6 @@ impl Display for BareVal {
 
 mod test_instructions {
     use super::*;
-    use crate::interpreter::bank::RefBank;
-
-    async fn snapshot_registers(code: &str) -> (Arc<GlobalState>, RefBank) {
-        let mut task = run_prog(code).await;
-        let gs = task.context.global_state.clone();
-        let mut stack = task.snapshots.pop().unwrap();
-
-        // The top of the stack in the snapshot is the object initialization frame,
-        // which is not what we care about here, so we get the second-to-top frame
-        // instead.
-        let index = stack.len() - 2;
-
-        (gs, std::mem::take(&mut stack[index].registers))
-    }
-
     mod test_aconst {
         use super::*;
 
@@ -239,27 +263,19 @@ mod test_instructions {
             let code = indoc! { r##"
                     mixed *a = ({ 12, 4.3, "hello", ({ 1, 2, 3 }) });
                 "##};
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(12),
-                BareVal::Float(LpcFloatInner::from(4.3)),
-                BareVal::String("hello".into()),
-                BareVal::Int(1),
-                BareVal::Int(2),
-                BareVal::Int(3),
-                BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)]),
-                BareVal::Array(vec![
-                    BareVal::Int(12),
-                    BareVal::Float(LpcFloatInner::from(4.3)),
-                    BareVal::String("hello".into()),
-                    BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)]),
-                ]),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[(
+                    "a",
+                    BareVal::Array(vec![
+                        BareVal::Int(12),
+                        BareVal::Float(LpcFloatInner::from(4.3)),
+                        BareVal::String("hello".into()),
+                        BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)]),
+                    ]),
+                )],
+            )
+            .await;
         }
     }
 
@@ -273,17 +289,7 @@ mod test_instructions {
                     mixed b = 0 & a;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(11),
-                BareVal::Int(0),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("a", BareVal::Int(11)), ("b", BareVal::Int(0))]).await;
         }
     }
 
@@ -298,19 +304,15 @@ mod test_instructions {
                     mixed c = b && a;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(123),
-                BareVal::Int(333),
-                BareVal::Int(333),
-                BareVal::Int(0),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::Int(333)),
+                    ("b", BareVal::Int(0)),
+                    ("c", BareVal::Int(0)),
+                ],
+            )
+            .await;
         }
     }
 
@@ -325,17 +327,15 @@ mod test_instructions {
                     int c = ~b;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(-1),
-                BareVal::Int(7),
-                BareVal::Int(-8),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::Int(-1)),
+                    ("b", BareVal::Int(7)),
+                    ("c", BareVal::Int(-8)),
+                ],
+            )
+            .await;
         }
     }
 
@@ -349,12 +349,7 @@ mod test_instructions {
                     int tacos() { return 666; }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![BareVal::Int(666), BareVal::Int(666)];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("q", BareVal::Int(666))]).await;
         }
 
         #[tokio::test]
@@ -492,15 +487,7 @@ mod test_instructions {
                     mixed q = this_object();
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Object("/my_file".into()),
-                BareVal::Object("/my_file".into()),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("q", BareVal::Object("/my_file".into()))]).await;
         }
     }
 
@@ -513,16 +500,11 @@ mod test_instructions {
                     mixed q = simul_efun("marf");
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::String("this is a simul_efun: marf".into()),
-                BareVal::String("marf".into()),
-                BareVal::String("this is a simul_efun: marf".into()),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[("q", BareVal::String("this is a simul_efun: marf".into()))],
+            )
+            .await;
         }
     }
 
@@ -540,17 +522,14 @@ mod test_instructions {
                     int tacos(int j) { return j + 1; }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(667),
-                BareVal::Function("tacos".into(), vec![]),
-                BareVal::Int(666),
-                BareVal::Int(667),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("q", BareVal::Function("tacos".into(), vec![])),
+                    ("a", BareVal::Int(667)),
+                ],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -563,22 +542,20 @@ mod test_instructions {
                     }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::String("adding some! 670".into()),
-                BareVal::String("adding some!".into()),
-                BareVal::Function(
-                    "tacos".into(),
-                    vec![None, Some(BareVal::String("adding some!".into()))],
-                ),
-                BareVal::Int(666),
-                BareVal::Int(4),
-                BareVal::String("adding some! 670".into()),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    (
+                        "q",
+                        BareVal::Function(
+                            "tacos".into(),
+                            vec![None, Some(BareVal::String("adding some!".into()))],
+                        ),
+                    ),
+                    ("a", BareVal::String("adding some! 670".into())),
+                ],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -591,20 +568,20 @@ mod test_instructions {
                     }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::String("my_string! awesome!".into()),
-                BareVal::String("my_string!".into()),
-                BareVal::Function(
-                    "tacos".into(),
-                    vec![Some(BareVal::String("my_string!".into()))],
-                ),
-                BareVal::String("my_string! awesome!".into()),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    (
+                        "q",
+                        BareVal::Function(
+                            "tacos".into(),
+                            vec![Some(BareVal::String("my_string!".into()))],
+                        ),
+                    ),
+                    ("a", BareVal::String("my_string! awesome!".into())),
+                ],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -618,24 +595,21 @@ mod test_instructions {
                     }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::String("adding some! 223".into()),
-                BareVal::String("adding some!".into()),
-                BareVal::Function(
-                    "tacos".into(),
-                    vec![None, Some(BareVal::String("adding some!".into()))],
-                ),
-                BareVal::Int(666),
-                BareVal::Int(4),
-                BareVal::String("adding some! 670".into()),
-                BareVal::Int(123),
-                BareVal::String("adding some! 223".into()),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    (
+                        "q",
+                        BareVal::Function(
+                            "tacos".into(),
+                            vec![None, Some(BareVal::String("adding some!".into()))],
+                        ),
+                    ),
+                    ("a", BareVal::String("adding some! 670".into())),
+                    ("b", BareVal::String("adding some! 223".into())),
+                ],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -651,32 +625,27 @@ mod test_instructions {
                     }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(69),
-                BareVal::String("adding some!".into()),
-                BareVal::Int(666),
-                BareVal::Int(123),
-                BareVal::Function(
-                    "tacos".to_string(),
-                    vec![
-                        None,
-                        Some(BareVal::String("adding some!".into())),
-                        None,
-                        Some(BareVal::Int(666)),
-                        Some(BareVal::Int(123)),
-                    ],
-                ),
-                BareVal::Int(42),
-                BareVal::Int(4),
-                BareVal::String("should be in argv".into()),
-                BareVal::Int(46),
-                BareVal::Int(69),
-                BareVal::Int(69),
-            ];
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    (
+                        "q",
+                        BareVal::Function(
+                            "tacos".into(),
+                            vec![
+                                None,
+                                Some(BareVal::String("adding some!".into())),
+                                None,
+                                Some(BareVal::Int(666)),
+                                Some(BareVal::Int(123)),
+                            ],
+                        ),
+                    ),
+                    ("a", BareVal::Int(46)),
+                    ("b", BareVal::Int(69)),
+                ],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -692,26 +661,21 @@ mod test_instructions {
                     }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::String("widget: 42. awesome!".into()),
-                BareVal::String("awesome!".into()),
-                BareVal::Function(
-                    "name".into(),
-                    vec![None, None, Some(BareVal::String("awesome!".into()))],
-                ),
-                BareVal::Object("/my_file".into()),
-                BareVal::Int(666),
-                BareVal::String("me: 666. awesome!".into()),
-                BareVal::String("/std/widget".into()),
-                BareVal::Object("/std/widget#0".into()),
-                BareVal::Int(42),
-                BareVal::String("widget: 42. awesome!".into()),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    (
+                        "q",
+                        BareVal::Function(
+                            "name".into(),
+                            vec![None, None, Some(BareVal::String("awesome!".into()))],
+                        ),
+                    ),
+                    ("a", BareVal::String("me: 666. awesome!".into())),
+                    ("b", BareVal::String("widget: 42. awesome!".into())),
+                ],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -921,17 +885,14 @@ mod test_instructions {
                     }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(4),
-                BareVal::Function("tacos".into(), vec![]),
-                BareVal::Int(4),
-                BareVal::Int(4),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("q", BareVal::Function("tacos".into(), vec![])),
+                    ("a", BareVal::Int(4)),
+                ],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -1027,17 +988,7 @@ mod test_instructions {
                     int tacos() { return 666; }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = &task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(666),
-                BareVal::Object("/my_file".into()),
-                BareVal::String("tacos".into()),
-                BareVal::Int(666),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, registers);
+            check_committed_globals(code, &[("q", BareVal::Int(666))]).await;
         }
 
         #[tokio::test]
@@ -1047,17 +998,7 @@ mod test_instructions {
                     private int tacos() { return 666; }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = &task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Object("/my_file".into()),
-                BareVal::String("tacos".into()),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, registers);
+            check_committed_globals(code, &[("q", BareVal::Int(0))]).await;
         }
 
         #[tokio::test]
@@ -1067,17 +1008,7 @@ mod test_instructions {
                     protected int tacos() { return 666; }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = &task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Object("/my_file".into()),
-                BareVal::String("tacos".into()),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, registers);
+            check_committed_globals(code, &[("q", BareVal::Int(0))]).await;
         }
     }
 
@@ -1107,25 +1038,21 @@ mod test_instructions {
             let code = indoc! { r##"
                     void create() {
                         int j = 0;
-                        catch(10 / j);
-
-                        debug("snapshot_stack");
+                        mixed e = catch(10 / j);
                     }
                 "##};
 
-            let (gs, registers) = snapshot_registers(code).await;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(0),
-                BareVal::String("runtime error: Division by zero".into()),
-                BareVal::Int(10),
-                BareVal::Int(0),
-                BareVal::String("snapshot_stack".into()),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&gs, &expected, &registers);
+            check_popped_vars(
+                code,
+                &[
+                    ("j", BareVal::Int(0)),
+                    (
+                        "e",
+                        BareVal::String("runtime error: Division by zero".into()),
+                    ),
+                ],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -1133,25 +1060,11 @@ mod test_instructions {
             let code = indoc! { r##"
                     void create() {
                         int j = 5;
-                        catch(10 / j);
-
-                        debug("snapshot_stack");
+                        mixed e = catch(10 / j);
                     }
                 "##};
 
-            let (gs, registers) = snapshot_registers(code).await;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(5),
-                BareVal::Int(0),
-                BareVal::Int(10),
-                BareVal::Int(2),
-                BareVal::String("snapshot_stack".into()),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&gs, &expected, &registers);
+            check_popped_vars(code, &[("j", BareVal::Int(5)), ("e", BareVal::Int(0))]).await;
         }
     }
 
@@ -1283,22 +1196,11 @@ mod test_instructions {
             let code = indoc! { r##"
                     void create() {
                         int j = 0;
-                        --j;
-
-                        debug("snapshot_stack");
+                        int k = --j;
                     }
                 "##};
 
-            let (gs, registers) = snapshot_registers(code).await;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(-1),
-                BareVal::String("snapshot_stack".into()),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&gs, &expected, &registers);
+            check_popped_vars(code, &[("j", BareVal::Int(-1)), ("k", BareVal::Int(-1))]).await;
         }
 
         #[tokio::test]
@@ -1308,18 +1210,7 @@ mod test_instructions {
                     int k = --j;
                 "##};
 
-            let task = run_prog(code).await;
-            let ctx = task.context;
-
-            let expected = vec![BareVal::Int(4), BareVal::Int(4)];
-
-            let proc = ctx.process();
-
-            BareVal::assert_vec_equal(
-                &ctx.global_state,
-                &expected,
-                &committed_global_values(&ctx.global_state, proc),
-            );
+            check_committed_globals(code, &[("j", BareVal::Int(4)), ("k", BareVal::Int(4))]).await;
         }
 
         #[tokio::test]
@@ -1327,23 +1218,11 @@ mod test_instructions {
             let code = indoc! { r##"
                     void create() {
                         int j = 0;
-                        j--;
-
-                        debug("snapshot_stack");
+                        int k = j--;
                     }
                 "##};
 
-            let (gs, registers) = snapshot_registers(code).await;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(-1),
-                BareVal::Int(0),
-                BareVal::String("snapshot_stack".into()),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&gs, &expected, &registers);
+            check_popped_vars(code, &[("j", BareVal::Int(-1)), ("k", BareVal::Int(0))]).await;
         }
 
         #[tokio::test]
@@ -1353,18 +1232,7 @@ mod test_instructions {
                     int k = j--;
                 "##};
 
-            let task = run_prog(code).await;
-            let ctx = task.context;
-
-            let expected = vec![BareVal::Int(4), BareVal::Int(5)];
-
-            let proc = ctx.process();
-
-            BareVal::assert_vec_equal(
-                &ctx.global_state,
-                &expected,
-                &committed_global_values(&ctx.global_state, proc),
-            );
+            check_committed_globals(code, &[("j", BareVal::Int(4)), ("k", BareVal::Int(5))]).await;
         }
     }
 
@@ -1377,17 +1245,7 @@ mod test_instructions {
                     mixed q = 2 == 2;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(2),
-                BareVal::Int(2),
-                BareVal::Int(1),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("q", BareVal::Int(1))]).await;
         }
     }
 
@@ -1400,12 +1258,7 @@ mod test_instructions {
                     float π = 4.13;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![BareVal::Int(0), BareVal::Float(4.13.into())];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("π", BareVal::Float(4.13.into()))]).await;
         }
     }
 
@@ -1485,15 +1338,7 @@ mod test_instructions {
                     function f = dump;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Function("dump".to_string(), vec![]),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("f", BareVal::Function("dump".into(), vec![]))]).await;
         }
 
         #[tokio::test]
@@ -1502,15 +1347,11 @@ mod test_instructions {
                     function f = simul_efun;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Function("simul_efun".to_string(), vec![]),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[("f", BareVal::Function("simul_efun".into(), vec![]))],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -1523,16 +1364,8 @@ mod test_instructions {
                     }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Object("/my_file".into()),
-                BareVal::Object("/my_file".into()),
-                BareVal::Function("tacco".to_string(), vec![]),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("f", BareVal::Function("tacco".into(), vec![]))])
+                .await;
         }
 
         #[tokio::test]
@@ -1541,16 +1374,11 @@ mod test_instructions {
                     function f = &("/secure/simul_efuns")->simul_efun();
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::String("/secure/simul_efuns".into()),
-                BareVal::Function("simul_efun".to_string(), vec![]),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[("f", BareVal::Function("simul_efun".into(), vec![]))],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -1563,20 +1391,17 @@ mod test_instructions {
                     }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1),
-                BareVal::Int(666),
-                BareVal::Function(
-                    "tacco".to_string(),
-                    vec![Some(BareVal::Int(1)), Some(BareVal::Int(666))],
-                ),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[(
+                    "f",
+                    BareVal::Function(
+                        "tacco".into(),
+                        vec![Some(BareVal::Int(1)), Some(BareVal::Int(666))],
+                    ),
+                )],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -1589,26 +1414,23 @@ mod test_instructions {
                     }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1),
-                BareVal::Int(42),
-                BareVal::Function(
-                    "tacco".to_string(),
-                    vec![
-                        Some(BareVal::Int(1)),
-                        None,
-                        None,
-                        Some(BareVal::Int(42)),
-                        None,
-                    ],
-                ),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[(
+                    "f",
+                    BareVal::Function(
+                        "tacco".into(),
+                        vec![
+                            Some(BareVal::Int(1)),
+                            None,
+                            None,
+                            Some(BareVal::Int(42)),
+                            None,
+                        ],
+                    ),
+                )],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -1622,15 +1444,11 @@ mod test_instructions {
                     }
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Function("closure-0".to_string(), vec![]),
-                BareVal::Function("closure-0".to_string(), vec![]),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[("f", BareVal::Function("closure-0".into(), vec![]))],
+            )
+            .await;
         }
     }
 
@@ -1645,23 +1463,15 @@ mod test_instructions {
                     mixed s = 1200 > 1200;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1200),
-                BareVal::Int(1199),
-                BareVal::Int(1),
-                BareVal::Int(1199),
-                BareVal::Int(1200),
-                BareVal::Int(0),
-                BareVal::Int(1200),
-                BareVal::Int(1200),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("q", BareVal::Int(1)),
+                    ("r", BareVal::Int(0)),
+                    ("s", BareVal::Int(0)),
+                ],
+            )
+            .await;
         }
     }
 
@@ -1676,23 +1486,15 @@ mod test_instructions {
                     mixed s = 1200 >= 1200;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1200),
-                BareVal::Int(1199),
-                BareVal::Int(1),
-                BareVal::Int(1199),
-                BareVal::Int(1200),
-                BareVal::Int(0),
-                BareVal::Int(1200),
-                BareVal::Int(1200),
-                BareVal::Int(1),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("q", BareVal::Int(1)),
+                    ("r", BareVal::Int(0)),
+                    ("s", BareVal::Int(1)),
+                ],
+            )
+            .await;
         }
     }
 
@@ -1707,18 +1509,15 @@ mod test_instructions {
                     int s = q + r;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                // the constant expressions are folded at parse time
-                BareVal::Int(50),
-                BareVal::Int(8),
-                BareVal::Int(58),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("q", BareVal::Int(50)),
+                    ("r", BareVal::Int(8)),
+                    ("s", BareVal::Int(58)),
+                ],
+            )
+            .await;
         }
     }
 
@@ -1731,12 +1530,7 @@ mod test_instructions {
                     mixed q = 666;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![BareVal::Int(0), BareVal::Int(666)];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("q", BareVal::Int(666))]).await;
         }
     }
 
@@ -1749,12 +1543,7 @@ mod test_instructions {
                     mixed q = 0;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![BareVal::Int(0), BareVal::Int(0)];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("q", BareVal::Int(0))]).await;
         }
     }
 
@@ -1767,12 +1556,7 @@ mod test_instructions {
                     mixed q = 1;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![BareVal::Int(0), BareVal::Int(1)];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("q", BareVal::Int(1))]).await;
         }
     }
 
@@ -1787,18 +1571,15 @@ mod test_instructions {
                     mixed s = q / r;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                // the constant expressions are folded at parse time
-                BareVal::Int(8),
-                BareVal::Int(-3),
-                BareVal::Int(-2),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("q", BareVal::Int(8)),
+                    ("r", BareVal::Int(-3)),
+                    ("s", BareVal::Int(-2)),
+                ],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -1829,18 +1610,15 @@ mod test_instructions {
                     mixed s = q % r;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                // the constant expressions are folded at parse time
-                BareVal::Int(2),
-                BareVal::Int(5),
-                BareVal::Int(2),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("q", BareVal::Int(2)),
+                    ("r", BareVal::Int(5)),
+                    ("s", BareVal::Int(2)),
+                ],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -1871,17 +1649,15 @@ mod test_instructions {
                     int s = q * r;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(32),
-                BareVal::Int(-48),
-                BareVal::Int(-1536),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("q", BareVal::Int(32)),
+                    ("r", BareVal::Int(-48)),
+                    ("s", BareVal::Int(-1536)),
+                ],
+            )
+            .await;
         }
     }
 
@@ -1893,22 +1669,11 @@ mod test_instructions {
             let code = indoc! { r##"
                     void create() {
                         int j = 0;
-                        ++j;
-
-                        debug("snapshot_stack");
+                        int k = ++j;
                     }
                 "##};
 
-            let (gs, registers) = snapshot_registers(code).await;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1),
-                BareVal::String("snapshot_stack".into()),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&gs, &expected, &registers);
+            check_popped_vars(code, &[("j", BareVal::Int(1)), ("k", BareVal::Int(1))]).await;
         }
 
         #[tokio::test]
@@ -1918,18 +1683,7 @@ mod test_instructions {
                     int k = ++j;
                 "##};
 
-            let task = run_prog(code).await;
-            let ctx = task.context;
-
-            let expected = vec![BareVal::Int(1), BareVal::Int(1)];
-
-            let proc = ctx.process();
-
-            BareVal::assert_vec_equal(
-                &ctx.global_state,
-                &expected,
-                &committed_global_values(&ctx.global_state, proc),
-            );
+            check_committed_globals(code, &[("j", BareVal::Int(1)), ("k", BareVal::Int(1))]).await;
         }
 
         #[tokio::test]
@@ -1937,23 +1691,11 @@ mod test_instructions {
             let code = indoc! { r##"
                     void create() {
                         int j = 0;
-                        j++;
-
-                        debug("snapshot_stack");
+                        int k = j++;
                     }
                 "##};
 
-            let (gs, registers) = snapshot_registers(code).await;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1),
-                BareVal::Int(0),
-                BareVal::String("snapshot_stack".into()),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&gs, &expected, &registers);
+            check_popped_vars(code, &[("j", BareVal::Int(1)), ("k", BareVal::Int(0))]).await;
         }
 
         #[tokio::test]
@@ -1963,18 +1705,7 @@ mod test_instructions {
                     int k = j++;
                 "##};
 
-            let task = run_prog(code).await;
-            let ctx = task.context;
-
-            let expected = vec![BareVal::Int(6), BareVal::Int(5)];
-
-            let proc = ctx.process();
-
-            BareVal::assert_vec_equal(
-                &ctx.global_state,
-                &expected,
-                &committed_global_values(&ctx.global_state, proc),
-            );
+            check_committed_globals(code, &[("j", BareVal::Int(6)), ("k", BareVal::Int(5))]).await;
         }
     }
 
@@ -1989,17 +1720,15 @@ mod test_instructions {
                     int s = q - r;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(14),
-                BareVal::Int(16),
-                BareVal::Int(-2),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("q", BareVal::Int(14)),
+                    ("r", BareVal::Int(16)),
+                    ("s", BareVal::Int(-2)),
+                ],
+            )
+            .await;
         }
     }
 
@@ -2017,28 +1746,10 @@ mod test_instructions {
                         } else {
                             j = 3;
                         }
-
-                        // Store a snapshot, so we can test this even though this stack
-                        // frame would otherwise have been popped off into the aether.
-                        debug("snapshot_stack");
                     }
                 "##};
 
-            let (gs, registers) = snapshot_registers(code).await;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(69),
-                BareVal::Int(12),
-                BareVal::Int(10),
-                BareVal::Int(1),
-                BareVal::Int(69),
-                BareVal::Int(0),
-                BareVal::String("snapshot_stack".into()),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&gs, &expected, &registers);
+            check_popped_vars(code, &[("i", BareVal::Int(12)), ("j", BareVal::Int(69))]).await;
         }
     }
 
@@ -2053,27 +1764,10 @@ mod test_instructions {
                         do {
                             j += 1;
                         } while(j < 8);
-
-                        // Store a snapshot, so we can test this even though this stack
-                        // frame would otherwise have been popped off into the aether.
-                        debug("snapshot_stack");
                     }
                 "##};
 
-            let (gs, registers) = snapshot_registers(code).await;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(8),
-                BareVal::Int(1),
-                BareVal::Int(8),
-                BareVal::Int(8),
-                BareVal::Int(0),
-                BareVal::String("snapshot_stack".into()),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&gs, &expected, &registers);
+            check_popped_vars(code, &[("j", BareVal::Int(8))]).await;
         }
     }
 
@@ -2087,20 +1781,8 @@ mod test_instructions {
                             int j = i > 12 ? 10 : 1000;
                         "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(12),
-                BareVal::Int(1000),
-                BareVal::Int(12),
-                BareVal::Int(0),
-                BareVal::Int(0),
-                BareVal::Int(1000),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("i", BareVal::Int(12)), ("j", BareVal::Int(1000))])
+                .await;
         }
     }
 
@@ -2114,20 +1796,17 @@ mod test_instructions {
                     int j = i[1];
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1),
-                BareVal::Int(2),
-                BareVal::Int(3),
-                BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)]),
-                BareVal::Int(1),
-                BareVal::Int(2),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    (
+                        "i",
+                        BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)]),
+                    ),
+                    ("j", BareVal::Int(2)),
+                ],
+            )
+            .await;
         }
     }
 
@@ -2142,23 +1821,15 @@ mod test_instructions {
                     mixed s = 1200 < 1200;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1200),
-                BareVal::Int(1199),
-                BareVal::Int(0),
-                BareVal::Int(1199),
-                BareVal::Int(1200),
-                BareVal::Int(1),
-                BareVal::Int(1200),
-                BareVal::Int(1200),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("q", BareVal::Int(0)),
+                    ("r", BareVal::Int(1)),
+                    ("s", BareVal::Int(0)),
+                ],
+            )
+            .await;
         }
     }
 
@@ -2173,23 +1844,15 @@ mod test_instructions {
                     mixed s = 1200 <= 1200;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1200),
-                BareVal::Int(1199),
-                BareVal::Int(0),
-                BareVal::Int(1199),
-                BareVal::Int(1200),
-                BareVal::Int(1),
-                BareVal::Int(1200),
-                BareVal::Int(1200),
-                BareVal::Int(1),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("q", BareVal::Int(0)),
+                    ("r", BareVal::Int(1)),
+                    ("s", BareVal::Int(1)),
+                ],
+            )
+            .await;
         }
     }
 
@@ -2205,23 +1868,10 @@ mod test_instructions {
                     ]);
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
             let mut hashmap = HashMap::new();
             hashmap.insert(BareVal::String("asdf".into()), BareVal::Int(123));
             hashmap.insert(BareVal::Int(456), BareVal::Float(4.13.into()));
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::String("asdf".into()),
-                BareVal::Int(123),
-                BareVal::Int(456),
-                BareVal::Float(4.13.into()),
-                BareVal::Mapping(hashmap),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("q", BareVal::Mapping(hashmap))]).await;
         }
     }
 
@@ -2236,17 +1886,15 @@ mod test_instructions {
                     mixed c = a + b;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::String("abc".into()),
-                BareVal::Int(123),
-                BareVal::String("abc123".into()),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::String("abc".into())),
+                    ("b", BareVal::Int(123)),
+                    ("c", BareVal::String("abc123".into())),
+                ],
+            )
+            .await;
         }
     }
 
@@ -2261,17 +1909,15 @@ mod test_instructions {
                     mixed c = a * b;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::String("abc".into()),
-                BareVal::Int(4),
-                BareVal::String("abcabcabcabc".into()),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::String("abc".into())),
+                    ("b", BareVal::Int(4)),
+                    ("c", BareVal::String("abcabcabcabc".into())),
+                ],
+            )
+            .await;
         }
     }
 
@@ -2285,27 +1931,22 @@ mod test_instructions {
                     mixed b = a - ({ 1 });
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1),
-                BareVal::Int(1),
-                BareVal::Int(2),
-                BareVal::Int(3),
-                BareVal::Array(vec![
-                    BareVal::Int(1),
-                    BareVal::Int(1),
-                    BareVal::Int(2),
-                    BareVal::Int(3),
-                ]),
-                BareVal::Int(1),
-                BareVal::Array(vec![BareVal::Int(1)]),
-                BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)]),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    (
+                        "a",
+                        BareVal::Array(vec![
+                            BareVal::Int(1),
+                            BareVal::Int(1),
+                            BareVal::Int(2),
+                            BareVal::Int(3),
+                        ]),
+                    ),
+                    ("b", BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)])),
+                ],
+            )
+            .await;
         }
     }
 
@@ -2323,27 +1964,18 @@ mod test_instructions {
                     int f = !"asdf";
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(2),
-                BareVal::Int(0),
-                BareVal::Int(4),
-                BareVal::Int(0),
-                BareVal::Int(1),
-                BareVal::Float(Total::from(0.0)),
-                BareVal::Int(1),
-                BareVal::Float(Total::from(0.01)),
-                BareVal::Int(0),
-                BareVal::String("".into()),
-                BareVal::Int(0),
-                BareVal::String("asdf".into()),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::Int(0)),
+                    ("b", BareVal::Int(1)),
+                    ("c", BareVal::Int(1)),
+                    ("d", BareVal::Int(0)),
+                    ("e", BareVal::Int(0)),
+                    ("f", BareVal::Int(0)),
+                ],
+            )
+            .await;
         }
     }
 
@@ -2357,17 +1989,8 @@ mod test_instructions {
                     mixed b = 0 | a;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(31),
-                BareVal::Int(0),
-                BareVal::Int(31),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("a", BareVal::Int(31)), ("b", BareVal::Int(31))])
+                .await;
         }
     }
 
@@ -2382,19 +2005,15 @@ mod test_instructions {
                     mixed c = b || a;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(123),
-                BareVal::Int(123),
-                BareVal::Int(0),
-                BareVal::Int(0),
-                BareVal::Int(123),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::Int(123)),
+                    ("b", BareVal::Int(0)),
+                    ("c", BareVal::Int(123)),
+                ],
+            )
+            .await;
         }
     }
 
@@ -2414,38 +2033,29 @@ mod test_instructions {
                     }
                 "##};
 
-            let (gs, registers) = snapshot_registers(code).await;
-
             let mut mapping = HashMap::new();
             mapping.insert(BareVal::String("a".into()), BareVal::Int(123));
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1),
-                BareVal::Int(2),
-                BareVal::Array(vec![
-                    BareVal::Int(3),
-                    BareVal::String("foo".into()),
-                    BareVal::Array(vec![
-                        BareVal::String("bar".into()),
-                        BareVal::String("baz".into()),
-                        BareVal::Float(4.13.into()),
-                    ]),
-                    BareVal::Mapping(mapping.clone()),
-                ]),
-                BareVal::String("snapshot_stack".into()),
-                BareVal::Array(vec![
-                    BareVal::String("bar".into()),
-                    BareVal::String("baz".into()),
-                    BareVal::Float(4.13.into()),
-                ]),
-                BareVal::Mapping(mapping),
-                BareVal::Int(0),
-                BareVal::Int(0),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&gs, &expected, &registers);
+            check_snapshot_vars(
+                code,
+                &[
+                    ("a", BareVal::Int(1)),
+                    ("b", BareVal::Int(2)),
+                    (
+                        "argv",
+                        BareVal::Array(vec![
+                            BareVal::Int(3),
+                            BareVal::String("foo".into()),
+                            BareVal::Array(vec![
+                                BareVal::String("bar".into()),
+                                BareVal::String("baz".into()),
+                                BareVal::Float(4.13.into()),
+                            ]),
+                            BareVal::Mapping(mapping),
+                        ]),
+                    ),
+                ],
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -2474,18 +2084,14 @@ mod test_instructions {
                     }
                 "##};
 
-            let mut task = run_prog(code).await;
-            let snapshot = &mut task.snapshots.pop().unwrap();
-            snapshot.pop(); // pop off the init frame
-            let frame = snapshot.pop().unwrap();
-            let vars = frame.local_variables(task.context.txn());
-
-            let argv = vars
-                .iter()
-                .find(|v| v.name == "argv")
-                .expect("argv is a named local");
-            BareVal::Array(vec![BareVal::Int(3), BareVal::String("foo".into())])
-                .assert_equal(&task.context.global_state, &argv.value);
+            check_snapshot_vars(
+                code,
+                &[(
+                    "argv",
+                    BareVal::Array(vec![BareVal::Int(3), BareVal::String("foo".into())]),
+                )],
+            )
+            .await;
         }
     }
 
@@ -2504,37 +2110,24 @@ mod test_instructions {
                     }
                 "##};
 
-            let (gs, registers) = snapshot_registers(code).await;
-
-            let mut mapping = HashMap::new();
-            mapping.insert(BareVal::String("a".into()), BareVal::Int(123));
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(45),
-                BareVal::Int(34),
-                BareVal::Float(7.77.into()),
-                BareVal::String("snuh".into()),
-                BareVal::Array(vec![
-                    BareVal::String("a string".into()),
-                    BareVal::Int(3),
-                    BareVal::Float(2.44.into()),
-                ]),
-                BareVal::String("snapshot_stack".into()),
-                BareVal::Int(0),
-                BareVal::Int(0),
-                BareVal::String("snuh".into()),
-                BareVal::String("a string".into()),
-                BareVal::Int(3),
-                BareVal::Float(2.44.into()),
-                BareVal::Array(vec![
-                    BareVal::String("a string".into()),
-                    BareVal::Int(3),
-                    BareVal::Float(2.44.into()),
-                ]),
-            ];
-
-            BareVal::assert_vec_equal(&gs, &expected, &registers);
+            check_snapshot_vars(
+                code,
+                &[
+                    ("a", BareVal::Int(45)),
+                    ("b", BareVal::Int(34)),
+                    ("d", BareVal::Float(7.77.into())),
+                    ("s", BareVal::String("snuh".into())),
+                    (
+                        "muh",
+                        BareVal::Array(vec![
+                            BareVal::String("a string".into()),
+                            BareVal::Int(3),
+                            BareVal::Float(2.44.into()),
+                        ]),
+                    ),
+                ],
+            )
+            .await;
         }
     }
 
@@ -2547,21 +2140,11 @@ mod test_instructions {
                     mixed a = ({ 1, 2, 3 })[1..];
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1),
-                BareVal::Int(2),
-                BareVal::Int(3),
-                BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)]),
-                BareVal::Int(1),
-                BareVal::Int(-1),
-                BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)]),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(
+                code,
+                &[("a", BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)]))],
+            )
+            .await;
         }
     }
 
@@ -2575,12 +2158,7 @@ mod test_instructions {
                     mixed b = a;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![BareVal::Int(0), BareVal::Int(4)];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("a", BareVal::Int(4)), ("b", BareVal::Int(4))]).await;
         }
     }
 
@@ -2594,14 +2172,8 @@ mod test_instructions {
                 "##};
 
             let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(666), // return value from create()
-                BareVal::Int(666), // The copy of the call return value into its own register
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            BareVal::Int(666)
+                .assert_equal(&task.context.global_state, &task.context.result().unwrap());
         }
     }
 
@@ -2615,17 +2187,8 @@ mod test_instructions {
                     mixed b = 0 << a;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(790080),
-                BareVal::Int(0),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("a", BareVal::Int(790080)), ("b", BareVal::Int(0))])
+                .await;
         }
     }
 
@@ -2639,17 +2202,8 @@ mod test_instructions {
                     mixed b = 0 >> a;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(192),
-                BareVal::Int(0),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("a", BareVal::Int(192)), ("b", BareVal::Int(0))])
+                .await;
         }
     }
 
@@ -2792,19 +2346,7 @@ mod test_instructions {
                     int a = sizeof(({ 1, 2, 3 }));
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1),
-                BareVal::Int(2),
-                BareVal::Int(3),
-                BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)]),
-                BareVal::Int(3),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("a", BareVal::Int(3))]).await;
         }
 
         #[tokio::test]
@@ -2832,36 +2374,7 @@ mod test_instructions {
                     int a = sizeof(([ "a": 1, 'b': 2, 3: ({ 4, 5, 6 }), 0: 0 ]));
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let mut mapping = HashMap::new();
-            mapping.insert(BareVal::String("a".into()), BareVal::Int(1));
-            mapping.insert(BareVal::Int(98), BareVal::Int(2));
-            mapping.insert(
-                BareVal::Int(3),
-                BareVal::Array(vec![BareVal::Int(4), BareVal::Int(5), BareVal::Int(6)]),
-            );
-            mapping.insert(BareVal::Int(0), BareVal::Int(0));
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::String("a".into()),
-                BareVal::Int(1),
-                BareVal::Int(98),
-                BareVal::Int(2),
-                BareVal::Int(3),
-                BareVal::Int(4),
-                BareVal::Int(5),
-                BareVal::Int(6),
-                BareVal::Array(vec![BareVal::Int(4), BareVal::Int(5), BareVal::Int(6)]),
-                BareVal::Int(0),
-                BareVal::Int(0),
-                BareVal::Mapping(mapping),
-                BareVal::Int(4),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("a", BareVal::Int(4))]).await;
         }
 
         #[tokio::test]
@@ -2927,26 +2440,17 @@ mod test_instructions {
                     void create() {
                         mixed a = ({ 1, 2, 3 });
                         a[2] = 678;
-
-                        debug("snapshot_stack");
                     }
                 "##};
 
-            let (gs, registers) = snapshot_registers(code).await;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(1),
-                BareVal::Int(2),
-                BareVal::Int(3),
-                BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(678)]),
-                BareVal::Int(678),
-                BareVal::Int(2),
-                BareVal::String("snapshot_stack".into()),
-                BareVal::Int(0),
-            ];
-
-            BareVal::assert_vec_equal(&gs, &expected, &registers);
+            check_popped_vars(
+                code,
+                &[(
+                    "a",
+                    BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(678)]),
+                )],
+            )
+            .await;
         }
     }
 
@@ -2959,12 +2463,7 @@ mod test_instructions {
                     string foo = "lolwut";
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![BareVal::Int(0), BareVal::String("lolwut".into())];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("foo", BareVal::String("lolwut".into()))]).await;
         }
     }
 
@@ -2978,17 +2477,8 @@ mod test_instructions {
                     mixed b = 0 ^ a;
                 "##};
 
-            let task = run_prog(code).await;
-            let registers = task.popped_frame.unwrap().registers;
-
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::Int(20),
-                BareVal::Int(0),
-                BareVal::Int(20),
-            ];
-
-            BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
+            check_committed_globals(code, &[("a", BareVal::Int(20)), ("b", BareVal::Int(20))])
+                .await;
         }
     }
 }
@@ -3050,69 +2540,22 @@ mod test_globals {
                 int k = inc();
             "##};
 
-        let task = run_prog(code).await;
-        let registers = task.popped_frame.unwrap().registers;
-
-        let expected = vec![
-            Int(1),
-            Int(0),
-            Function("closure-0".to_string(), vec![]),
-            Int(0),
-            Int(1),
-        ];
-
-        BareVal::assert_vec_equal(&task.context.global_state, &expected, &registers);
-
-        let ctx = &task.context;
-        let proc = ctx.process();
-
-        let expected = vec![
-            Int(2),
-            Function("closure-0".to_string(), vec![]),
-            Int(0),
-            Int(1),
-        ];
-        BareVal::assert_vec_equal(
-            &ctx.global_state,
-            &expected,
-            &committed_global_values(&ctx.global_state, proc),
-        );
+        check_committed_globals(
+            code,
+            &[
+                ("i", Int(2)),
+                ("inc", Function("closure-0".to_string(), vec![])),
+                ("j", Int(0)),
+                ("k", Int(1)),
+            ],
+        )
+        .await;
     }
 }
 
 mod test_upvalues {
     use super::*;
     use crate::interpreter::task::tests::BareVal::*;
-
-    async fn check_local_vars<T>(code: &str, vars: &IndexMap<&str, T>)
-    where
-        T: Into<BareVal> + Clone,
-    {
-        let mut task = run_prog(code).await;
-
-        let snapshot = &mut task.snapshots.pop().unwrap();
-        snapshot.pop(); // pop off the init frame
-
-        let frame = snapshot.pop().unwrap();
-
-        let frame_vars = frame.local_variables(task.context.txn());
-
-        for (k, v) in vars {
-            let v: BareVal = v.clone().into();
-            let found = frame_vars
-                .iter()
-                .filter(|v| &v.name == k)
-                .collect::<Vec<_>>();
-            assert!(
-                found
-                    .iter()
-                    .any(|local| v.equal_to_lpc_ref(&task.context.global_state, &local.value)),
-                "key: {k}, value: {v}, found: {:?}",
-                found.iter().map(|v| &v.value).collect::<Vec<_>>()
-            );
-            // assert_eq!(&v, frame_vars.get(*k).unwrap(), "key: {}", k);
-        }
-    }
 
     async fn check_frame_upvalue_ptrs<T>(code: &str, upvalue_ptrs: &[T])
     where
@@ -3143,8 +2586,7 @@ mod test_upvalues {
         let expected = vec![Register(0)];
         check_frame_upvalue_ptrs(code, &expected).await;
 
-        let expected: IndexMap<&str, BareVal> = IndexMap::new();
-        check_local_vars(code, &expected).await;
+        check_snapshot_vars(code, &[]).await;
     }
 
     #[tokio::test]
@@ -3199,14 +2641,14 @@ mod test_upvalues {
                 }
             "##};
 
-        let expected = IndexMap::from([
+        let expected = [
             ("i", Int(2)),
             ("j", Int(0)),
             ("k", Int(1)),
             ("inc", Function("closure-0".to_string(), vec![])),
-        ]);
+        ];
 
-        check_local_vars(code, &expected).await;
+        check_snapshot_vars(code, &expected).await;
     }
 
     #[tokio::test]
@@ -3228,7 +2670,7 @@ mod test_upvalues {
                 }
             "##};
 
-        let expected = IndexMap::from([
+        let expected = [
             ("j", Int(10)),
             ("k", Int(-40)),
             ("l", Int(20)),
@@ -3236,8 +2678,8 @@ mod test_upvalues {
             ("n", Int(1332)),
             ("add", Function("closure-0".into(), vec![])),
             ("add2", Function("closure-0".into(), vec![])),
-        ]);
-        check_local_vars(code, &expected).await;
+        ];
+        check_snapshot_vars(code, &expected).await;
     }
 
     #[tokio::test]
@@ -3265,7 +2707,7 @@ mod test_upvalues {
                 }
             "##};
 
-        let expected = IndexMap::from([
+        let expected = [
             ("c1", Int(1)),
             ("c2", Int(5)),
             ("c3", Int(105)),
@@ -3273,9 +2715,9 @@ mod test_upvalues {
             ("counter1", Function("closure-0".into(), vec![])),
             ("counter2", Function("closure-0".into(), vec![])),
             ("counter3", Function("closure-0".into(), vec![])),
-        ]);
+        ];
 
-        check_local_vars(code, &expected).await;
+        check_snapshot_vars(code, &expected).await;
     }
 
     #[tokio::test]
@@ -3300,15 +2742,15 @@ mod test_upvalues {
                 }
             "##};
 
-        let expected = IndexMap::from([
+        let expected = [
             ("c1", Int(0)),
             ("c2", Int(69)),
             ("make", Function("closure-1".into(), vec![])),
             ("made1", Function("closure-0".into(), vec![])),
             ("made2", Function("closure-0".into(), vec![])),
-        ]);
+        ];
 
-        check_local_vars(code, &expected).await;
+        check_snapshot_vars(code, &expected).await;
     }
 
     #[tokio::test]
@@ -3336,7 +2778,7 @@ mod test_upvalues {
                 }
             "##};
 
-        let expected = IndexMap::from([
+        let expected = [
             ("c1", String("hello666 1 2 -4".into())),
             ("c2", String("hello666 3 77 69".into())),
             (
@@ -3346,9 +2788,9 @@ mod test_upvalues {
             ("maker", Function("closure-2".into(), vec![])),
             ("made1", Function("closure-1".into(), vec![])),
             ("made2", Function("closure-1".into(), vec![])),
-        ]);
+        ];
 
-        check_local_vars(code, &expected).await;
+        check_snapshot_vars(code, &expected).await;
     }
 
     #[tokio::test]
@@ -3377,7 +2819,7 @@ mod test_upvalues {
                 }
             "##};
 
-        let expected = IndexMap::from([
+        let expected = [
             ("c1", Int(123)),
             ("c2", Int(77)),
             (
@@ -3387,9 +2829,9 @@ mod test_upvalues {
             ("maker", Function("closure-2".into(), vec![])),
             ("made1", Function("closure-1".into(), vec![])),
             ("made2", Function("closure-1".into(), vec![])),
-        ]);
+        ];
 
-        check_local_vars(code, &expected).await;
+        check_snapshot_vars(code, &expected).await;
     }
 
     mod layout {
