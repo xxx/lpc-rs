@@ -2867,7 +2867,7 @@ mod test_instructions {
 
             let program = Program {
                 filename: path,
-                functions: Box::new(IndexMap::new()),
+                functions: Box::new(IndexMap::default()),
                 initializer: Some(initializer),
                 // num_init_registers: 2,
                 ..Default::default()

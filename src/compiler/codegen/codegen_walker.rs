@@ -279,7 +279,7 @@ impl CodegenWalker {
             &mut self.context.scopes.current_mut().unwrap().symbols,
         ));
 
-        let functions: IndexMap<_, _> = self
+        let functions: IndexMap<_, _, ahash::RandomState> = self
             .context
             .inherited_functions
             .into_iter()
@@ -292,7 +292,7 @@ impl CodegenWalker {
             .values()
             .filter(|f| !f.is_closure())
             .map(|f| (f.prototype.name.to_string(), f.clone()))
-            .collect::<IndexMap<_, _>>();
+            .collect::<IndexMap<_, _, ahash::RandomState>>();
 
         let num_globals = self.global_counter.number_emitted();
 
@@ -2408,8 +2408,8 @@ mod tests {
             .clone()
     }
 
-    fn find_function<'a, K>(
-        map: &'a IndexMap<K, Arc<ProgramFunction>>,
+    fn find_function<'a, K, S>(
+        map: &'a IndexMap<K, Arc<ProgramFunction>, S>,
         name: &str,
     ) -> Option<&'a Arc<ProgramFunction>> {
         map.values().find(|f| f.name() == name)

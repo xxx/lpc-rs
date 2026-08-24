@@ -15,6 +15,9 @@ pub struct CallStack<const STACKSIZE: usize> {
 impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     delegate! {
         to self.stack {
+            /// Drop every frame in place, keeping the stack's allocation.
+            pub fn clear(&mut self);
+
             /// Get a frame by index
             pub fn get(&self, index: usize) -> Option<&CallFrame>;
 

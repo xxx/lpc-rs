@@ -27,13 +27,13 @@ pub struct Program {
     pub filename: Arc<LpcPath>,
 
     /// function mapping of (mangled) name to the function
-    pub functions: Box<IndexMap<String, Arc<ProgramFunction>>>,
+    pub functions: Box<IndexMap<String, Arc<ProgramFunction>, ahash::RandomState>>,
 
     /// Function mapping of unmangled name to the function.
     /// This is needed for `call_other`.
     /// Due to unmangled names not being unique, only the last-defined
     /// function with a given unmangled name is referenced here.
-    pub unmangled_functions: Box<IndexMap<String, Arc<ProgramFunction>>>,
+    pub unmangled_functions: Box<IndexMap<String, Arc<ProgramFunction>, ahash::RandomState>>,
 
     /// The function that is called when the program is first loaded,
     /// which initializes the global variables. This function is

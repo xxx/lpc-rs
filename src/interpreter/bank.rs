@@ -23,7 +23,9 @@ impl RefBank {
         let dynamic_length = runtime_arg_count + function.num_locals + 1;
         let reservation = std::cmp::max(static_length, dynamic_length);
 
-        RefBank::new(vec![NULL; reservation as usize])
+        RefBank {
+            registers: thin_vec::thin_vec![NULL; reservation as usize],
+        }
     }
 }
 

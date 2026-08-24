@@ -180,7 +180,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// Rebuild the task to a blank slate for a retry re-run
     fn reset(&mut self) {
-        self.stack = CallStack::default();
+        // Cleared, not replaced: the ~3KB boxed stack survives the retry.
+        self.stack.clear();
         self.catch_points.clear();
         self.args.clear();
         self.partial_args.clear();
