@@ -4612,6 +4612,49 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn a_second_call_result_reads_r0_where_the_first_cannot() {
+            let mut walker =
+                walk_prog("int f() { return 1; }\nint g() { return 2; }\nint a = f() + g();").await;
+
+            let expected = vec![
+                ClearArgs,
+                Call(ustr("f__i____pb__")),
+                // g clobbers r0 before the add, so this copy must stay.
+                Copy(Register(0).as_local(), Register(1).as_local()),
+                ClearArgs,
+                Call(ustr("g__i____pb__")),
+                IAdd(
+                    Register(1).as_local(),
+                    Register(0).as_local(),
+                    Register(0).as_global(),
+                ),
+                Ret,
+            ];
+            assert_eq!(
+                walker_function_instructions(&mut walker, INIT_GLOBALS),
+                expected
+            );
+        }
+
+        #[tokio::test]
+        async fn a_staged_argument_reads_r0() {
+            let mut walker = walk_prog("int f() { return 1; }\nvoid create() { dump(f()); }").await;
+
+            let expected = vec![
+                ClearArgs,
+                Call(ustr("f__i____pb__")),
+                ClearArgs,
+                PushArg(Register(0).as_local()),
+                CallEfun(12),
+                Ret,
+            ];
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
+        }
+
+        #[tokio::test]
         async fn a_void_return_call_copies_nothing() {
             let mut walker = walk_prog("void f() { }\nvoid create() { return f(); }").await;
 

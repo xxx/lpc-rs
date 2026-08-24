@@ -8,6 +8,7 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 
 /// Rewrite `func` so values land where they are used: fold a
 /// define-into-fresh-temp followed by its `Copy` into a retargeted dest,
+/// read a call's result straight from r0 where no clobber intervenes,
 /// drop identity copies, and drop copies into temps nothing reads.
 pub fn coalesce(func: &mut ProgramFunction) {
     while pass(func) {}
@@ -66,6 +67,21 @@ fn pass(func: &mut ProgramFunction) -> bool {
             continue;
         }
 
+        // A call's result reads straight from r0.
+        if src == r0
+            && matches!(dst, RegisterVariant::Local(_))
+            && !named.contains(&dst)
+            && mentions(func, dst) == 2
+            && let Some(use_at) = propagation_use(func, i, dst, &jump_targets)
+            && !delete[use_at]
+        {
+            func.instructions[use_at] =
+                func.instructions[use_at].map_registers(|r| if r == dst { r0 } else { r });
+            delete[i] = true;
+            changed = true;
+            continue;
+        }
+
         // A Global/Upvalue source stays — its tracked read is part of
         // the attempt's conflict set.
         if matches!(src, RegisterVariant::Local(_))
@@ -89,16 +105,64 @@ fn pass(func: &mut ProgramFunction) -> bool {
 /// Whole-function, never a suffix — a loop back edge re-reads earlier
 /// addresses.
 fn mentions(func: &ProgramFunction, reg: RegisterVariant) -> usize {
+    func.instructions.iter().map(|i| mentions_in(i, reg)).sum()
+}
+
+/// How many of this instruction's operand slots name `reg`.
+fn mentions_in(instruction: &Instruction, reg: RegisterVariant) -> usize {
     let count = std::cell::Cell::new(0);
-    for instruction in &func.instructions {
-        instruction.map_registers(|r| {
-            if r == reg {
-                count.set(count.get() + 1);
-            }
-            r
-        });
-    }
+    instruction.map_registers(|r| {
+        if r == reg {
+            count.set(count.get() + 1);
+        }
+        r
+    });
     count.get()
+}
+
+/// The single use of `temp` reachable straight-line from the copy at
+/// `from`, or None when an r0 write, a control edge, or a join gets
+/// there first. Conditional branches fall through with r0 intact, so
+/// the scan continues past them.
+fn propagation_use(
+    func: &ProgramFunction,
+    from: usize,
+    temp: RegisterVariant,
+    jump_targets: &[Address],
+) -> Option<usize> {
+    let r0 = RegisterVariant::Local(Register(0));
+    for j in (from + 1)..func.instructions.len() {
+        // A join may arrive with a different r0, so it ends the scan
+        // even when it lands on the use itself.
+        if jump_targets.contains(&Address(j)) {
+            return None;
+        }
+        let instruction = &func.instructions[j];
+        if mentions_in(instruction, temp) > 0 {
+            return Some(j);
+        }
+        let clobbers_r0 = instruction.dest_register() == Some(r0)
+            || matches!(
+                instruction,
+                Instruction::Call(_)
+                    | Instruction::CallEfun(_)
+                    | Instruction::CallSimulEfun(_)
+                    | Instruction::CallFp(_)
+                    | Instruction::CallOther(_, _)
+            );
+        if clobbers_r0
+            || matches!(
+                instruction,
+                Instruction::Jmp(_)
+                    | Instruction::Ret
+                    | Instruction::CatchStart(_, _)
+                    | Instruction::CatchEnd
+            )
+        {
+            return None;
+        }
+    }
+    None
 }
 
 /// Drop the marked instructions, keeping `debug_spans` in lockstep and
@@ -258,6 +322,88 @@ mod tests {
         assert_eq!(
             func.instructions,
             vec![CatchStart(local(2), Address(1)), Ret]
+        );
+    }
+
+    #[test]
+    fn a_clobbered_result_keeps_its_copy() {
+        let instructions = vec![
+            Call(ustr::ustr("f")),
+            Copy(local(0), local(1)),
+            CallEfun(0),
+            PushArg(local(1)),
+            Ret,
+        ];
+        let mut func = func_with(instructions.clone());
+
+        coalesce(&mut func);
+
+        assert_eq!(func.instructions, instructions);
+    }
+
+    #[test]
+    fn a_join_inside_the_window_keeps_the_copy() {
+        let instructions = vec![
+            Copy(local(0), local(1)),
+            IConst0(local(3)),
+            PushArg(local(1)),
+            Jmp(Address(1)),
+            Ret,
+        ];
+        let mut func = func_with(instructions.clone());
+
+        coalesce(&mut func);
+
+        assert_eq!(func.instructions, instructions);
+    }
+
+    #[test]
+    fn a_use_beyond_a_jmp_keeps_the_copy() {
+        let instructions = vec![
+            Copy(local(0), local(1)),
+            Jmp(Address(3)),
+            PushArg(local(1)),
+            Ret,
+        ];
+        let mut func = func_with(instructions.clone());
+
+        coalesce(&mut func);
+
+        assert_eq!(func.instructions, instructions);
+    }
+
+    #[test]
+    fn a_branch_condition_reads_r0() {
+        let mut func = func_with(vec![
+            Copy(local(0), local(1)),
+            Jnz(local(1), Address(3)),
+            IConst0(local(2)),
+            Ret,
+        ]);
+
+        coalesce(&mut func);
+
+        assert_eq!(
+            func.instructions,
+            vec![Jnz(local(0), Address(2)), IConst0(local(2)), Ret]
+        );
+    }
+
+    #[test]
+    fn a_fall_through_use_past_a_branch_reads_r0() {
+        let mut func = func_with(vec![
+            Copy(local(0), local(1)),
+            Jz(local(2), Address(4)),
+            PushArg(local(1)),
+            Ret,
+            Ret,
+        ]);
+
+        coalesce(&mut func);
+
+        assert_eq!(
+            func.instructions,
+            vec![Jz(local(2), Address(3)), PushArg(local(0)), Ret, Ret]
         );
     }
 
