@@ -120,6 +120,11 @@ impl GlobalState {
         stm::committer_stats(&self.committer_tx).await
     }
 
+    /// The committer channel's current backlog.
+    pub fn committer_queue_len(&self) -> usize {
+        self.committer_tx.len()
+    }
+
     /// The attempt loop's lifetime totals; for bench measurement and
     /// tooling, not the hot path.
     pub fn attempt_telemetry(&self) -> stm::AttemptTelemetrySnapshot {

@@ -212,7 +212,9 @@ fn contention(c: &mut Criterion) {
             let t_after = vm.global_state.attempt_telemetry();
             let commits = after.commits.saturating_sub(before.commits);
             let conflicts = after.conflicts.saturating_sub(before.conflicts);
-            let errors = after.errors.saturating_sub(before.errors);
+            let reply_failures = after.reply_failures.saturating_sub(before.reply_failures);
+            let busy_ms = (after.busy_ns.saturating_sub(before.busy_ns)) as f64 / 1e6;
+            let q_peak = after.queue_peak;
             let rate = if commits > 0 {
                 conflicts as f64 / commits as f64
             } else {
@@ -236,7 +238,7 @@ fn contention(c: &mut Criterion) {
                 .as_secs_f64()
                 * 1e3;
             println!(
-                "[{name} w={workers}] commits={commits} conflicts={conflicts} errors={errors} rate={rate:.4} attempts_per_apply={attempts_per_apply:.3} backoff_yield_ms={yield_ms:.1} backoff_sleep_ms={sleep_ms:.1}"
+                "[{name} w={workers}] commits={commits} conflicts={conflicts} reply_fail={reply_failures} rate={rate:.4} attempts_per_apply={attempts_per_apply:.3} backoff_yield_ms={yield_ms:.1} backoff_sleep_ms={sleep_ms:.1} committer_busy_ms={busy_ms:.1} q_peak={q_peak}"
             );
         }
     }

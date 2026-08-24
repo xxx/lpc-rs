@@ -26,15 +26,33 @@ pub(crate) enum WorldRoot {
     Ref(LpcRef),
 }
 
-/// Committer's lifetime commit totals, read back over the `Stats` protocol message.
+/// Committer's lifetime totals and gauges, read back over the `Stats`
+/// protocol message. Counters only grow; the two gauges (`live_snapshots`,
+/// `versions_retained`) are refreshed at each read.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct CommitterStats {
-    /// Successful commits
+    /// Commits that wrote a new version.
     pub commits: usize,
+    /// Conflict-free commits with nothing to write; no version is created.
+    pub read_only_commits: usize,
     /// Commits that failed due to conflicts
     pub conflicts: usize,
-    /// Non-conflict errors that occurred during all operations.
-    pub errors: usize,
+    /// Replies the committer could not deliver (receiver gone).
+    pub reply_failures: usize,
+    /// Wall time servicing work messages; a `Stats` read accrues nothing.
+    pub busy_ns: u64,
+    /// Wall time inside the `Commit` arm alone.
+    pub commit_service_ns: u64,
+    /// History versions the conflict rule has walked, summed over commits.
+    pub validation_scanned_versions: u64,
+    /// Deepest backlog seen behind a message the run loop pulled.
+    pub queue_peak: usize,
+    /// Write-history versions evicted at the watermark.
+    pub evictions: usize,
+    /// Gauge: live snapshot pins at the last `Stats` read.
+    pub live_snapshots: usize,
+    /// Gauge: write-history versions held at the last `Stats` read.
+    pub versions_retained: usize,
 }
 
 impl CommitterStats {
@@ -42,12 +60,16 @@ impl CommitterStats {
         self.commits += 1;
     }
 
+    fn read_only_commit(&mut self) {
+        self.read_only_commits += 1;
+    }
+
     fn conflict(&mut self) {
         self.conflicts += 1;
     }
 
-    fn error(&mut self) {
-        self.errors += 1;
+    fn reply_failure(&mut self) {
+        self.reply_failures += 1;
     }
 }
 
@@ -196,6 +218,7 @@ impl Committer {
         rx: flume::Receiver<CommitProtocol>,
     ) -> Snapshot {
         while let Ok(msg) = rx.recv() {
+            self.stats.queue_peak = self.stats.queue_peak.max(rx.len());
             if !self.process(msg, &tx) {
                 break;
             }
@@ -209,6 +232,18 @@ impl Committer {
         msg: CommitProtocol,
         tx: &flume::Sender<CommitProtocol>,
     ) -> bool {
+        // A Stats read accrues nothing: two reads with no work between
+        // them must compare equal.
+        if matches!(msg, CommitProtocol::Stats { .. }) {
+            return self.dispatch(msg, tx);
+        }
+        let started = std::time::Instant::now();
+        let keep_running = self.dispatch(msg, tx);
+        self.stats.busy_ns += started.elapsed().as_nanos() as u64;
+        keep_running
+    }
+
+    fn dispatch(&mut self, msg: CommitProtocol, tx: &flume::Sender<CommitProtocol>) -> bool {
         match msg {
             CommitProtocol::Start { reply } => {
                 // Count before hand-out: a failed reply drops the
@@ -220,7 +255,7 @@ impl Committer {
                 let live_snapshot = LiveSnapshot::new(self.snapshot.clone(), tx.clone());
                 reply.send(live_snapshot).unwrap_or_else(|e| {
                     error!("Failed to send live snapshot: {e}");
-                    self.stats.error()
+                    self.stats.reply_failure()
                 });
             }
             CommitProtocol::Commit {
@@ -228,6 +263,7 @@ impl Committer {
                 releases_base,
                 reply,
             } => {
+                let started = std::time::Instant::now();
                 let base = changeset.base_version();
                 let result = self.commit(changeset);
                 if releases_base {
@@ -238,8 +274,9 @@ impl Committer {
                 }
                 reply.send(result).unwrap_or_else(|e| {
                     error!("Failed to send commit result: {e}");
-                    self.stats.error()
+                    self.stats.reply_failure()
                 });
+                self.stats.commit_service_ns += started.elapsed().as_nanos() as u64;
             }
             CommitProtocol::Drop(version) => self.release(version),
             CommitProtocol::GcPass { roots, reply } => {
@@ -253,9 +290,11 @@ impl Committer {
                 let _ = reply.send(Ok(GcReport { reclaimed }));
             }
             CommitProtocol::Stats { reply } => {
+                self.stats.live_snapshots = self.live_versions.values().map(|&c| c as usize).sum();
+                self.stats.versions_retained = self.write_history.len();
                 reply.send(self.stats).unwrap_or_else(|e| {
                     error!("Failed to send stats: {e}");
-                    self.stats.error()
+                    self.stats.reply_failure()
                 });
             }
             CommitProtocol::Close => {
@@ -398,7 +437,9 @@ impl Committer {
             .first_key_value()
             .map(|(k, _)| *k)
             .unwrap_or_else(|| self.snapshot.version()); // nothing live: retain nothing
+        let before = self.write_history.len();
         self.write_history.retain(|v, _| *v >= watermark);
+        self.stats.evictions += before - self.write_history.len();
         self.oldest_retained = watermark;
     }
 
@@ -436,6 +477,7 @@ impl Committer {
                 continue;
             }
 
+            self.stats.validation_scanned_versions += 1;
             if changeset.conflicts_with(written_vars) {
                 self.stats.conflict();
                 return Err(Conflict);
@@ -445,6 +487,7 @@ impl Committer {
         let written_vars = changeset.touched_vars();
         if written_vars.is_empty() {
             // Conflict-free read-only changeset: no new version, no history.
+            self.stats.read_only_commit();
             return Ok(());
         }
 
@@ -660,6 +703,125 @@ mod tests {
 
         tx.send(CommitProtocol::Close)
             .expect("committer channel closed");
+        drop(tx);
+        handle.join().expect("committer panicked");
+    }
+
+    #[test]
+    fn a_read_only_commit_is_counted_apart_from_writing_commits() {
+        let mut committer = Committer::new();
+        let x = VarId::new();
+
+        let mut seeder = Transaction::new(committer.snapshot_clone());
+        seeder.write(x, LpcRef::from(1));
+        let (_, changeset) = seeder.into_parts();
+        committer.commit(changeset).expect("seed commit");
+
+        let mut reader = Transaction::new(committer.snapshot_clone());
+        assert_eq!(reader.read(x), Some(LpcRef::from(1)));
+        let (_, changeset) = reader.into_parts();
+        committer.commit(changeset).expect("read-only commit");
+
+        assert_eq!(committer.stats.commits, 1);
+        assert_eq!(committer.stats.read_only_commits, 1);
+    }
+
+    #[test]
+    fn validation_scans_sum_the_history_the_conflict_rule_walks() {
+        let mut committer = Committer::new();
+        let (x, y, z) = (VarId::new(), VarId::new(), VarId::new());
+
+        let mut a = Transaction::new(committer.snapshot_clone());
+        let mut b = Transaction::new(committer.snapshot_clone());
+        let mut c = Transaction::new(committer.snapshot_clone());
+
+        a.write(x, LpcRef::from(1));
+        let (_, changeset) = a.into_parts();
+        committer.commit(changeset).expect("first commit");
+        assert_eq!(committer.stats.validation_scanned_versions, 0);
+
+        b.write(y, LpcRef::from(2));
+        let (_, changeset) = b.into_parts();
+        committer.commit(changeset).expect("second commit");
+        assert_eq!(committer.stats.validation_scanned_versions, 1);
+
+        c.write(z, LpcRef::from(3));
+        let (_, changeset) = c.into_parts();
+        committer.commit(changeset).expect("third commit");
+        assert_eq!(committer.stats.validation_scanned_versions, 3);
+    }
+
+    #[test]
+    fn service_time_accumulates_through_process() {
+        let (tx, _rx) = flume::unbounded();
+        let mut committer = Committer::new();
+
+        let mut t = Transaction::new(committer.snapshot_clone());
+        t.write(VarId::new(), LpcRef::from(1));
+        let (_, changeset) = t.into_parts();
+        let (reply_tx, reply_rx) = flume::bounded(1);
+        committer.process(
+            CommitProtocol::Commit {
+                changeset,
+                releases_base: false,
+                reply: reply_tx,
+            },
+            &tx,
+        );
+        reply_rx.recv().expect("no reply").expect("commit");
+
+        assert!(committer.stats.busy_ns > 0);
+        assert!(committer.stats.commit_service_ns > 0);
+        assert!(committer.stats.busy_ns >= committer.stats.commit_service_ns);
+    }
+
+    #[test]
+    fn evictions_count_the_history_trimmed_at_the_watermark() {
+        let (tx, _rx) = flume::unbounded();
+        let mut committer = Committer::new();
+
+        for i in 0..2_i64 {
+            let mut t = Transaction::new(committer.snapshot_clone());
+            t.write(VarId::new(), LpcRef::from(i));
+            let (_, changeset) = t.into_parts();
+            let (reply_tx, reply_rx) = flume::bounded(1);
+            committer.process(
+                CommitProtocol::Commit {
+                    changeset,
+                    releases_base: false,
+                    reply: reply_tx,
+                },
+                &tx,
+            );
+            reply_rx.recv().expect("no reply").expect("commit");
+        }
+
+        // The first pass finds only the current version; the second trims the first's.
+        assert_eq!(committer.stats.evictions, 1);
+    }
+
+    #[test]
+    fn the_run_loop_records_queue_peak_and_gauges() {
+        let (tx, rx) = flume::unbounded();
+        let committer = Committer::new();
+
+        // Three messages queued before the loop starts: after Start is pulled, two remain.
+        let (start_tx, start_rx) = flume::bounded(1);
+        tx.send(CommitProtocol::Start { reply: start_tx }).unwrap();
+        let (stats_tx, stats_rx) = flume::bounded(1);
+        tx.send(CommitProtocol::Stats { reply: stats_tx }).unwrap();
+        tx.send(CommitProtocol::Close).unwrap();
+
+        let committer_tx = tx.clone();
+        let handle = std::thread::spawn(move || committer.run(committer_tx, rx));
+
+        let live = start_rx.recv().expect("no start reply");
+        let stats = stats_rx.recv().expect("no stats reply");
+        assert_eq!(stats.queue_peak, 2);
+        assert_eq!(stats.live_snapshots, 1);
+        assert_eq!(stats.versions_retained, 0);
+
+        drop(live);
         drop(tx);
         handle.join().expect("committer panicked");
     }

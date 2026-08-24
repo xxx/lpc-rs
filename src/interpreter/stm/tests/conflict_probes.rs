@@ -184,5 +184,8 @@ async fn stats_accessor_is_monotonic_and_consistent() {
         s2.conflicts >= s1.conflicts,
         "conflicts only grow: {s1:?} -> {s2:?}"
     );
-    assert_eq!(s2.errors, s1.errors, "no errors expected");
+    assert_eq!(
+        s2.reply_failures, s1.reply_failures,
+        "no reply failures expected"
+    );
 }
