@@ -5,7 +5,10 @@
 //! output. Production runs a [`Task`](crate::interpreter::task::Task) or a
 //! `GlobalState::takeover`; tests run a bare [`Transaction`].
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, atomic::AtomicU64},
+    time::Duration,
+};
 
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::{Result, lpc_error};
@@ -33,6 +36,73 @@ pub(crate) struct RetryStats {
     pub(crate) conflicts: u64,
     /// Wall time of the whole loop, successful attempt included.
     pub(crate) duration: Duration,
+}
+
+/// Attempt-loop lifetime totals, recorded once per apply by `run_attempts`.
+#[derive(Debug, Default)]
+pub struct AttemptTelemetry {
+    applies: AtomicU64,
+    attempts: AtomicU64,
+    conflicts: AtomicU64,
+    errors: AtomicU64,
+    total_ns: AtomicU64,
+    backoff_yield_ns: AtomicU64,
+    backoff_sleep_ns: AtomicU64,
+}
+
+impl AttemptTelemetry {
+    /// Fold one finished attempt loop into the totals.
+    fn record(
+        &self,
+        stats: &RetryStats,
+        backoff_yield_ns: u64,
+        backoff_sleep_ns: u64,
+        errored: bool,
+    ) {
+        use std::sync::atomic::Ordering::Relaxed;
+        self.applies.fetch_add(1, Relaxed);
+        self.attempts.fetch_add(stats.attempts, Relaxed);
+        self.conflicts.fetch_add(stats.conflicts, Relaxed);
+        self.errors.fetch_add(u64::from(errored), Relaxed);
+        self.total_ns
+            .fetch_add(stats.duration.as_nanos() as u64, Relaxed);
+        self.backoff_yield_ns.fetch_add(backoff_yield_ns, Relaxed);
+        self.backoff_sleep_ns.fetch_add(backoff_sleep_ns, Relaxed);
+    }
+
+    /// Read the totals; fields are loaded individually, so an apply landing
+    /// mid-read may straddle the snapshot.
+    pub fn snapshot(&self) -> AttemptTelemetrySnapshot {
+        use std::sync::atomic::Ordering::Relaxed;
+        AttemptTelemetrySnapshot {
+            applies: self.applies.load(Relaxed),
+            attempts: self.attempts.load(Relaxed),
+            conflicts: self.conflicts.load(Relaxed),
+            errors: self.errors.load(Relaxed),
+            total: Duration::from_nanos(self.total_ns.load(Relaxed)),
+            backoff_yield: Duration::from_nanos(self.backoff_yield_ns.load(Relaxed)),
+            backoff_sleep: Duration::from_nanos(self.backoff_sleep_ns.load(Relaxed)),
+        }
+    }
+}
+
+/// One read of `AttemptTelemetry`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AttemptTelemetrySnapshot {
+    /// Finished attempt loops.
+    pub applies: u64,
+    /// Attempts across all loops: each apply's first plus one per conflict.
+    pub attempts: u64,
+    /// Conflicts observed across all loops.
+    pub conflicts: u64,
+    /// Loops that ended in an error.
+    pub errors: u64,
+    /// Wall time summed over whole loops, backoff included.
+    pub total: Duration,
+    /// Wall time spent in the yield backoff tier.
+    pub backoff_yield: Duration,
+    /// Wall time spent in the sleep backoff tier.
+    pub backoff_sleep: Duration,
 }
 
 /// One attempt of a transactional body. The body must keep two invariants
@@ -107,16 +177,23 @@ fn backoff_step(losses: u64, roll: impl FnOnce(u64) -> u64) -> BackoffStep {
     BackoffStep::Sleep(SLEEP_FLOOR + Duration::from_micros(roll(span)))
 }
 
-/// Execute one [`backoff_step`], drawing jitter from `rng`.
-async fn stagger(losses: u64, rng: &mut u64) {
+/// Execute one [`backoff_step`], drawing jitter from `rng`; returns the
+/// wall time spent as (yield_ns, sleep_ns).
+async fn stagger(losses: u64, rng: &mut u64) -> (u64, u64) {
     match backoff_step(losses, |n| splitmix64(rng) % n + 1) {
-        BackoffStep::None => {}
+        BackoffStep::None => (0, 0),
         BackoffStep::Yields(n) => {
+            let started = std::time::Instant::now();
             for _ in 0..n {
                 tokio::task::yield_now().await;
             }
+            (started.elapsed().as_nanos() as u64, 0)
         }
-        BackoffStep::Sleep(duration) => tokio::time::sleep(duration).await,
+        BackoffStep::Sleep(duration) => {
+            let started = std::time::Instant::now();
+            tokio::time::sleep(duration).await;
+            (0, started.elapsed().as_nanos() as u64)
+        }
     }
 }
 
@@ -134,11 +211,14 @@ fn splitmix64(state: &mut u64) -> u64 {
 /// `begin_attempt` stops after that single attempt without committing.
 pub(crate) async fn run_attempts<B: AttemptBody>(
     tx: &flume::Sender<CommitProtocol>,
+    telemetry: &AttemptTelemetry,
     body: &mut B,
 ) -> (Result<()>, RetryStats) {
     let started = std::time::Instant::now();
     let mut attempts = 0u64;
     let mut conflicts = 0u64;
+    let mut backoff_yield_ns = 0u64;
+    let mut backoff_sleep_ns = 0u64;
     // Seeded per loop so concurrent losers draw different jitter; the stack
     // address varies per worker, the clock per run.
     let mut rng = std::ptr::from_ref(&started) as u64
@@ -172,17 +252,18 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
             break body.deliver(effects).await;
         }
         conflicts += 1;
-        stagger(conflicts, &mut rng).await;
+        let (yielded, slept) = stagger(conflicts, &mut rng).await;
+        backoff_yield_ns += yielded;
+        backoff_sleep_ns += slept;
     };
 
-    (
-        result,
-        RetryStats {
-            attempts,
-            conflicts,
-            duration: started.elapsed(),
-        },
-    )
+    let stats = RetryStats {
+        attempts,
+        conflicts,
+        duration: started.elapsed(),
+    };
+    telemetry.record(&stats, backoff_yield_ns, backoff_sleep_ns, result.is_err());
+    (result, stats)
 }
 
 /// Send one request to the committer and await its reply on the runtime.
@@ -451,7 +532,7 @@ mod tests {
         seed(&tx, v0, counter, 5);
 
         let mut body = IncBody::new(counter);
-        let (res, stats) = run_attempts(&tx, &mut body).await;
+        let (res, stats) = run_attempts(&tx, &super::AttemptTelemetry::default(), &mut body).await;
 
         assert!(res.is_ok());
         assert_eq!(stats.attempts, 1);
@@ -498,7 +579,11 @@ mod tests {
                     let mut duration = std::time::Duration::ZERO;
                     for _ in 0..ROUNDS {
                         let mut body = IncBody::new(counter);
-                        let (res, stats) = rt.block_on(run_attempts(&tx, &mut body));
+                        let (res, stats) = rt.block_on(run_attempts(
+                            &tx,
+                            &super::AttemptTelemetry::default(),
+                            &mut body,
+                        ));
                         assert!(res.is_ok(), "attempt must commit");
                         attempts += stats.attempts;
                         conflicts += stats.conflicts;
@@ -566,7 +651,7 @@ mod async_tests {
 
         let (res, stats) = {
             let mut body = IncBody::new(counter);
-            run_attempts(&tx, &mut body).await
+            run_attempts(&tx, &super::AttemptTelemetry::default(), &mut body).await
         };
 
         assert!(res.is_ok());
@@ -597,7 +682,7 @@ mod async_tests {
 
         let (res, stats) = {
             let mut body = IncBody::new(counter);
-            run_attempts(&tx, &mut body).await
+            run_attempts(&tx, &super::AttemptTelemetry::default(), &mut body).await
         };
 
         assert!(res.is_ok());
@@ -631,7 +716,7 @@ mod async_tests {
 
         let (res, stats) = {
             let mut body = IncBody::new(counter);
-            run_attempts(&tx, &mut body).await
+            run_attempts(&tx, &super::AttemptTelemetry::default(), &mut body).await
         };
 
         assert!(res.is_ok());
@@ -647,6 +732,67 @@ mod async_tests {
             final_snapshot.read(counter),
             Some(WorldValue::ref_of(LpcRef::from(1)))
         );
+    }
+
+    #[tokio::test]
+    async fn telemetry_aggregates_the_storm_and_splits_backoff_tiers() {
+        let (tx, rx) = flume::bounded(4);
+        let mut committer = Committer::new();
+        let counter = VarId::new();
+        seed(&mut committer, counter, 0);
+        let committer_tx = tx.clone();
+        let handle = std::thread::spawn(move || committer.run_with_rejections(committer_tx, rx, 8));
+
+        let telemetry = AttemptTelemetry::default();
+        let (res, stats) = {
+            let mut body = IncBody::new(counter);
+            run_attempts(&tx, &telemetry, &mut body).await
+        };
+        assert!(res.is_ok());
+
+        let snap = telemetry.snapshot();
+        assert_eq!(snap.applies, 1);
+        assert_eq!(snap.attempts, stats.attempts);
+        assert_eq!(snap.conflicts, stats.conflicts);
+        assert_eq!(snap.errors, 0);
+        // Losses 2-6 yield and 7+ sleep, so eight rejections land time in both tiers.
+        assert!(snap.backoff_yield > Duration::ZERO);
+        assert!(snap.backoff_sleep > Duration::ZERO);
+        assert!(snap.total >= snap.backoff_sleep);
+
+        tx.send(CommitProtocol::Close)
+            .expect("committer channel closed");
+        drop(tx);
+        handle.join().expect("committer panicked");
+    }
+
+    #[tokio::test]
+    async fn a_conflict_free_run_records_no_backoff() {
+        let (tx, rx) = flume::bounded(4);
+        let mut committer = Committer::new();
+        let counter = VarId::new();
+        seed(&mut committer, counter, 0);
+        let committer_tx = tx.clone();
+        let handle = std::thread::spawn(move || committer.run_with_rejections(committer_tx, rx, 0));
+
+        let telemetry = AttemptTelemetry::default();
+        for _ in 0..3 {
+            let mut body = IncBody::new(counter);
+            let (res, _) = run_attempts(&tx, &telemetry, &mut body).await;
+            assert!(res.is_ok());
+        }
+
+        let snap = telemetry.snapshot();
+        assert_eq!(snap.applies, 3);
+        assert_eq!(snap.attempts, 3);
+        assert_eq!(snap.conflicts, 0);
+        assert_eq!(snap.backoff_yield, Duration::ZERO);
+        assert_eq!(snap.backoff_sleep, Duration::ZERO);
+
+        tx.send(CommitProtocol::Close)
+            .expect("committer channel closed");
+        drop(tx);
+        handle.join().expect("committer panicked");
     }
 }
 

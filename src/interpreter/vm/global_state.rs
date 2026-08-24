@@ -55,6 +55,9 @@ pub struct GlobalState {
 
     /// Handle to the committer thread.
     committer_handle: Option<JoinHandle<Snapshot>>,
+
+    /// Attempt-loop totals, recorded by `run_attempts`.
+    pub(crate) attempt_telemetry: Arc<stm::AttemptTelemetry>,
 }
 
 impl GlobalState {
@@ -72,6 +75,7 @@ impl GlobalState {
             tx,
             committer_tx,
             committer_handle: Some(committer_handle),
+            attempt_telemetry: Arc::default(),
         }
     }
 
@@ -114,6 +118,12 @@ impl GlobalState {
     /// for benches and tooling.
     pub async fn committer_stats(&self) -> Result<CommitterStats> {
         stm::committer_stats(&self.committer_tx).await
+    }
+
+    /// The attempt loop's lifetime totals; for bench measurement and
+    /// tooling, not the hot path.
+    pub fn attempt_telemetry(&self) -> stm::AttemptTelemetrySnapshot {
+        self.attempt_telemetry.snapshot()
     }
 
     /// Resolve `ptr` for a call started outside any task (`call_out`,

@@ -9,7 +9,6 @@ use std::{
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use parking_lot::RwLock;
-use tracing::trace;
 
 use crate::{
     interpreter::{
@@ -41,6 +40,7 @@ pub(crate) use retry::RetryStats;
 pub(crate) use retry::{
     AttemptBody, commit_changeset, committer_stats, gc_pass, run_attempts, start_txn,
 };
+pub use retry::{AttemptTelemetry, AttemptTelemetrySnapshot};
 pub(crate) use snapshot::Snapshot;
 pub(crate) use world_value::WorldValue;
 
@@ -448,13 +448,7 @@ pub(crate) async fn resolve_or_create_object(
         txn: None,
         process: None,
     };
-    let (res, stats) = run_attempts(&gs.committer_tx, &mut body).await;
-    trace!(
-        attempts = stats.attempts,
-        conflicts = stats.conflicts,
-        ?stats.duration,
-        "resolve_or_create_object finished"
-    );
+    let (res, _) = run_attempts(&gs.committer_tx, &gs.attempt_telemetry, &mut body).await;
     res?;
     Ok(body
         .process

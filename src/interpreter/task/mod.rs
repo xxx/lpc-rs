@@ -28,7 +28,7 @@ use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::{ThinVec, thin_vec};
 use tokio::time::timeout;
-use tracing::{error, instrument, trace, warn};
+use tracing::{error, instrument, warn};
 
 #[cfg(test)]
 use crate::interpreter::stm::RetryStats;
@@ -309,13 +309,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.timeout_ms = (timeout_ms != 0).then_some(timeout_ms);
         self.seed = Some(seed);
         let tx = self.context.global_state.committer_tx.clone();
-        let (res, stats) = run_attempts(&tx, self).await;
-        trace!(
-            attempts = stats.attempts,
-            conflicts = stats.conflicts,
-            ?stats.duration,
-            "task timed_eval finished"
-        );
+        let telemetry = self.context.global_state.attempt_telemetry.clone();
+        let (res, _) = run_attempts(&tx, &telemetry, self).await;
         res
     }
 
@@ -513,7 +508,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ) -> (Result<()>, RetryStats) {
         self.seed = Some(seed.clone());
         self.timeout_ms = None;
-        run_attempts(tx, self).await
+        run_attempts(
+            tx,
+            &crate::interpreter::stm::AttemptTelemetry::default(),
+            self,
+        )
+        .await
     }
 }
 

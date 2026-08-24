@@ -201,6 +201,7 @@ fn contention(c: &mut Criterion) {
             let (vm, proc, template, timeout) = rt.block_on(setup_for(name));
             let per_worker = total / workers;
             let before: CommitterStats = rt.block_on(vm.global_state.committer_stats()).unwrap();
+            let t_before = vm.global_state.attempt_telemetry();
 
             group.bench_with_input(BenchmarkId::new(name, workers), &workers, |b, &workers| {
                 b.to_async(&rt)
@@ -208,6 +209,7 @@ fn contention(c: &mut Criterion) {
             });
 
             let after: CommitterStats = rt.block_on(vm.global_state.committer_stats()).unwrap();
+            let t_after = vm.global_state.attempt_telemetry();
             let commits = after.commits.saturating_sub(before.commits);
             let conflicts = after.conflicts.saturating_sub(before.conflicts);
             let errors = after.errors.saturating_sub(before.errors);
@@ -216,8 +218,25 @@ fn contention(c: &mut Criterion) {
             } else {
                 0.0
             };
+            let applies = t_after.applies.saturating_sub(t_before.applies);
+            let attempts = t_after.attempts.saturating_sub(t_before.attempts);
+            let attempts_per_apply = if applies > 0 {
+                attempts as f64 / applies as f64
+            } else {
+                0.0
+            };
+            let yield_ms = t_after
+                .backoff_yield
+                .saturating_sub(t_before.backoff_yield)
+                .as_secs_f64()
+                * 1e3;
+            let sleep_ms = t_after
+                .backoff_sleep
+                .saturating_sub(t_before.backoff_sleep)
+                .as_secs_f64()
+                * 1e3;
             println!(
-                "[{name} w={workers}] commits={commits} conflicts={conflicts} errors={errors} rate={rate:.4}"
+                "[{name} w={workers}] commits={commits} conflicts={conflicts} errors={errors} rate={rate:.4} attempts_per_apply={attempts_per_apply:.3} backoff_yield_ms={yield_ms:.1} backoff_sleep_ms={sleep_ms:.1}"
             );
         }
     }

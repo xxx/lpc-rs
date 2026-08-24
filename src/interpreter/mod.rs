@@ -22,7 +22,7 @@ pub mod vm;
 /// Sync "read the latest committed world" API for non-transactional
 /// readers (test/debug/tooling).
 pub use stm::CommittedReader;
-pub use stm::CommitterStats;
+pub use stm::{AttemptTelemetrySnapshot, CommitterStats};
 pub use stm::{GcRefused, GcReport};
 
 // Applies - functions in LPC objects that are called directly by the driver at various times.

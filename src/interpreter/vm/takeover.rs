@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use lpc_rs_errors::Result;
-use tracing::{error, trace};
+use tracing::error;
 
 use crate::{
     interpreter::{
@@ -26,13 +26,7 @@ impl GlobalState {
             process,
             attempt: None,
         };
-        let (res, stats) = run_attempts(&self.committer_tx, &mut body).await;
-        trace!(
-            attempts = stats.attempts,
-            conflicts = stats.conflicts,
-            ?stats.duration,
-            "takeover finished"
-        );
+        let (res, _) = run_attempts(&self.committer_tx, &self.attempt_telemetry, &mut body).await;
         if let Err(e) = res {
             error!("takeover: committer failed: {e}");
         }
@@ -149,7 +143,12 @@ mod tests {
             process: process.clone(),
             attempt: None,
         };
-        let (res, stats) = run_attempts(&tx, &mut body).await;
+        let (res, stats) = run_attempts(
+            &tx,
+            &crate::interpreter::stm::AttemptTelemetry::default(),
+            &mut body,
+        )
+        .await;
         assert!(res.is_ok());
         assert_eq!(stats.attempts, 2, "one forced rejection, then a commit");
         assert_eq!(stats.conflicts, 1);
