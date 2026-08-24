@@ -251,10 +251,7 @@ impl CodegenWalker {
         };
         ret.visit(self).await?;
 
-        let backpatch_map = self.backpatch_maps.pop().unwrap();
-        let mut func = self.function_stack.pop().unwrap();
-        func.num_locals = self.register_counter.number_emitted();
-        Self::backpatch(&backpatch_map, &mut func)?;
+        let func = self.finalize_function(0, None, None)?;
         self.register_counter.pop();
 
         Ok(func)
@@ -803,6 +800,28 @@ impl CodegenWalker {
         Ok(())
     }
 
+    /// Seal the function on top of the stack: set its locals count (a
+    /// captured parameter holds no register, so the count can fall short of
+    /// `num_args`), backpatch argv and labels, and hand the function back.
+    fn finalize_function(
+        &mut self,
+        num_args: RegisterSize,
+        populate_argv_index: Option<Address>,
+        span: Option<Span>,
+    ) -> Result<ProgramFunction> {
+        let backpatch_map = self.backpatch_maps.pop().unwrap();
+        let mut func = self.function_stack.pop().unwrap();
+        func.num_locals = self
+            .register_counter
+            .number_emitted()
+            .saturating_sub(num_args);
+        if let Some(idx) = populate_argv_index {
+            Self::backpatch_populate_argv(&mut func, idx, span)?;
+        }
+        Self::backpatch(&backpatch_map, &mut func)?;
+        Ok(func)
+    }
+
     fn backpatch_populate_argv(
         func: &mut ProgramFunction,
         populate_argv_address: Address,
@@ -1310,28 +1329,17 @@ impl TreeWalker for CodegenWalker {
             .await?;
         }
 
-        let mut func = self.function_stack.pop().unwrap();
+        {
+            let func = self.function_stack.last_mut().unwrap();
+            func.num_upvalues = self.context.scopes.get(scope_id).unwrap().num_upvalues;
+            func.arg_locations = declared_arg_locations;
+        }
+        let func = self.finalize_function(num_args, populate_argv_index, node.span)?;
 
         // The mangled name carries the file, so inherited code keeps its own closures.
         let name = ustr(&func.mangle());
 
-        // A captured parameter holds no register, so the count can fall short of `num_args`.
-        func.num_locals = self
-            .register_counter
-            .number_emitted()
-            .saturating_sub(num_args);
-        func.num_upvalues = self.context.scopes.get(scope_id).unwrap().num_upvalues;
-        func.arg_locations = declared_arg_locations;
-
-        if let Some(idx) = populate_argv_index {
-            Self::backpatch_populate_argv(&mut func, idx, node.span)?;
-        }
-
-        let backpatch_map = self.backpatch_maps.pop().unwrap();
-        Self::backpatch(&backpatch_map, &mut func)?;
-
-        let mangled = func.mangle();
-        self.functions.insert(mangled, func.into());
+        self.functions.insert(func.mangle(), func.into());
 
         self.register_counter.pop();
 
@@ -1623,25 +1631,16 @@ impl TreeWalker for CodegenWalker {
         }
 
         self.context.scopes.pop();
-        let mut func = self.function_stack.pop().unwrap();
-        func.num_locals = self
-            .register_counter
-            .number_emitted()
-            .saturating_sub(num_args);
-        func.num_upvalues = self
-            .context
-            .scopes
-            .function_scope(&node.name)
-            .map_or(0, |scope| scope.num_upvalues);
-
-        func.arg_locations = declared_arg_locations;
-
-        if let Some(idx) = populate_argv_index {
-            Self::backpatch_populate_argv(&mut func, idx, node.span)?;
+        {
+            let func = self.function_stack.last_mut().unwrap();
+            func.num_upvalues = self
+                .context
+                .scopes
+                .function_scope(&node.name)
+                .map_or(0, |scope| scope.num_upvalues);
+            func.arg_locations = declared_arg_locations;
         }
-
-        let backpatch_map = self.backpatch_maps.pop().unwrap();
-        Self::backpatch(&backpatch_map, &mut func)?;
+        let func = self.finalize_function(num_args, populate_argv_index, node.span)?;
         self.functions.insert(func.mangle(), func.into());
 
         self.register_counter.pop();
@@ -1840,11 +1839,8 @@ impl TreeWalker for CodegenWalker {
         };
         ret.visit(self).await?;
 
-        let backpatch_map = self.backpatch_maps.pop().unwrap();
-        let mut init_globals = self.function_stack.pop().unwrap();
+        let init_globals = self.finalize_function(0, None, None)?;
         debug_assert!(init_globals.name() == INIT_GLOBALS);
-        init_globals.num_locals = self.register_counter.number_emitted();
-        Self::backpatch(&backpatch_map, &mut init_globals)?;
         let init_globals_name = ustr(&init_globals.mangle());
         self.functions
             .insert(init_globals.mangle(), init_globals.into());
