@@ -308,19 +308,27 @@ fn m1_task_cost(c: &mut Criterion) {
     ] {
         let (_vm, proc, template, timeout) = rt.block_on(setup(path, code));
 
+        #[cfg(feature = "opcode-profile")]
+        let ops_before = lpc_rs::interpreter::opcode_profile::snapshot();
         group.bench_function(label, |b| {
             b.to_async(&rt).iter(|| {
                 apply_function_by_name(func, &[], proc.clone(), template.clone(), Some(timeout))
             });
         });
+        #[cfg(feature = "opcode-profile")]
+        print_opcode_shares(label, &ops_before);
     }
 
     let (_vm, proc, template, timeout) = rt.block_on(setup_pair());
+    #[cfg(feature = "opcode-profile")]
+    let ops_before = lpc_rs::interpreter::opcode_profile::snapshot();
     group.bench_function("call_other", |b| {
         b.to_async(&rt).iter(|| {
             apply_function_by_name("bump", &[], proc.clone(), template.clone(), Some(timeout))
         });
     });
+    #[cfg(feature = "opcode-profile")]
+    print_opcode_shares("call_other", &ops_before);
 
     group.finish();
 }
@@ -331,3 +339,36 @@ criterion_group! {
     targets = m0_scaling, m1_task_cost, contention
 }
 criterion_main!(benches);
+
+/// Top opcodes dispatched since `before`, as counts and shares.
+#[cfg(feature = "opcode-profile")]
+fn print_opcode_shares(label: &str, before: &lpc_rs::interpreter::opcode_profile::Snapshot) {
+    use lpc_rs_asm::instruction::Instruction;
+
+    let after = lpc_rs::interpreter::opcode_profile::snapshot();
+    let mut deltas: Vec<(usize, u64)> = after
+        .iter()
+        .zip(before.iter())
+        .map(|(a, b)| a.saturating_sub(*b))
+        .enumerate()
+        .collect();
+    let total: u64 = deltas.iter().map(|(_, d)| d).sum();
+    if total == 0 {
+        return;
+    }
+    deltas.sort_by_key(|&(_, d)| std::cmp::Reverse(d));
+    let line = deltas
+        .iter()
+        .take(8)
+        .map(|&(i, d)| {
+            format!(
+                "{}={} ({:.1}%)",
+                Instruction::MNEMONICS[i],
+                d,
+                d as f64 * 100.0 / total as f64
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    println!("[opcodes:{label}] total={total} {line}");
+}

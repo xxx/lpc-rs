@@ -106,6 +106,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             instruction
         };
 
+        #[cfg(feature = "opcode-profile")]
+        crate::interpreter::opcode_profile::record(&instruction);
+
         match instruction {
             Instruction::AConst(location) => {
                 self.handle_aconst(location)?;

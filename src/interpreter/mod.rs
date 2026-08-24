@@ -12,6 +12,8 @@ pub mod lpc_mapping;
 pub mod lpc_ref;
 pub mod lpc_string;
 pub mod object_space;
+#[cfg(feature = "opcode-profile")]
+pub mod opcode_profile;
 pub mod process;
 pub mod program;
 pub(crate) mod stm;

@@ -349,184 +349,306 @@ impl Instruction {
     }
 }
 
+impl Instruction {
+    /// How many instruction variants exist.
+    pub const COUNT: usize = 57;
+
+    /// Every mnemonic, ordered by [`Instruction::index`].
+    pub const MNEMONICS: [&'static str; Self::COUNT] = [
+        "aconst",
+        "and",
+        "bitwise_not",
+        "call",
+        "call_efun",
+        "call_simul_efun",
+        "call_fp",
+        "call_other",
+        "catch_end",
+        "catch_start",
+        "clear_args",
+        "clear_partial_args",
+        "clear_array_items",
+        "copy",
+        "dec",
+        "eq_eq",
+        "f_const",
+        "function_ptr_const",
+        "gt",
+        "gte",
+        "i_add",
+        "i_const",
+        "i_const0",
+        "i_const1",
+        "i_div",
+        "i_mod",
+        "inc",
+        "i_mul",
+        "i_sub",
+        "jmp",
+        "jnz",
+        "jz",
+        "load",
+        "load_mapping_key",
+        "lt",
+        "lte",
+        "map_const",
+        "m_add",
+        "m_mul",
+        "m_sub",
+        "not",
+        "not_eq",
+        "new_upvalue",
+        "or",
+        "populate_argv",
+        "populate_defaults",
+        "push_arg",
+        "push_array_item",
+        "push_partial_arg",
+        "range",
+        "ret",
+        "shl",
+        "shr",
+        "sizeof",
+        "store",
+        "s_const",
+        "xor",
+    ];
+
+    /// This variant's dense index, `0..Self::COUNT`, in declaration order.
+    pub const fn index(&self) -> u8 {
+        match self {
+            Self::AConst(..) => 0,
+            Self::And(..) => 1,
+            Self::BitwiseNot(..) => 2,
+            Self::Call(..) => 3,
+            Self::CallEfun(..) => 4,
+            Self::CallSimulEfun(..) => 5,
+            Self::CallFp(..) => 6,
+            Self::CallOther(..) => 7,
+            Self::CatchEnd => 8,
+            Self::CatchStart(..) => 9,
+            Self::ClearArgs => 10,
+            Self::ClearPartialArgs => 11,
+            Self::ClearArrayItems => 12,
+            Self::Copy(..) => 13,
+            Self::Dec(..) => 14,
+            Self::EqEq(..) => 15,
+            Self::FConst(..) => 16,
+            Self::FunctionPtrConst { .. } => 17,
+            Self::Gt(..) => 18,
+            Self::Gte(..) => 19,
+            Self::IAdd(..) => 20,
+            Self::IConst(..) => 21,
+            Self::IConst0(..) => 22,
+            Self::IConst1(..) => 23,
+            Self::IDiv(..) => 24,
+            Self::IMod(..) => 25,
+            Self::Inc(..) => 26,
+            Self::IMul(..) => 27,
+            Self::ISub(..) => 28,
+            Self::Jmp(..) => 29,
+            Self::Jnz(..) => 30,
+            Self::Jz(..) => 31,
+            Self::Load(..) => 32,
+            Self::LoadMappingKey(..) => 33,
+            Self::Lt(..) => 34,
+            Self::Lte(..) => 35,
+            Self::MapConst(..) => 36,
+            Self::MAdd(..) => 37,
+            Self::MMul(..) => 38,
+            Self::MSub(..) => 39,
+            Self::Not(..) => 40,
+            Self::NotEq(..) => 41,
+            Self::NewUpvalue(..) => 42,
+            Self::Or(..) => 43,
+            Self::PopulateArgv(..) => 44,
+            Self::PopulateDefaults => 45,
+            Self::PushArg(..) => 46,
+            Self::PushArrayItem(..) => 47,
+            Self::PushPartialArg(..) => 48,
+            Self::Range(..) => 49,
+            Self::Ret => 50,
+            Self::Shl(..) => 51,
+            Self::Shr(..) => 52,
+            Self::Sizeof(..) => 53,
+            Self::Store(..) => 54,
+            Self::SConst(..) => 55,
+            Self::Xor(..) => 56,
+        }
+    }
+
+    /// The instruction's name without operands.
+    pub fn mnemonic(&self) -> &'static str {
+        Self::MNEMONICS[self.index() as usize]
+    }
+}
+
 impl Display for Instruction {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Instruction::AConst(r1) => {
-                write!(f, "aconst {r1}")
+                write!(f, "{} {r1}", self.mnemonic())
             }
             Instruction::And(r1, r2, r3) => {
-                write!(f, "and {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::BitwiseNot(r1, r2) => {
-                write!(f, "bitwise_not {r1}, {r2}")
+                write!(f, "{} {r1}, {r2}", self.mnemonic())
             }
-            Instruction::CatchEnd => {
-                write!(f, "catch_end")
-            }
+            Instruction::CatchEnd => f.write_str(self.mnemonic()),
             Instruction::CatchStart(r1, label) => {
-                write!(f, "catch_start {r1}, {label}")
+                write!(f, "{} {r1}, {label}", self.mnemonic())
             }
             Instruction::Call(name) => {
-                write!(f, "call {name}")
+                write!(f, "{} {name}", self.mnemonic())
             }
             Instruction::CallEfun(name_index) => {
-                write!(f, "call_efun {name_index}")
+                write!(f, "{} {name_index}", self.mnemonic())
             }
             Instruction::CallFp(location) => {
-                write!(f, "call_fp {location}")
+                write!(f, "{} {location}", self.mnemonic())
             }
             Instruction::CallOther(receiver, name) => {
-                write!(f, "call_other {receiver}, {name}")
+                write!(f, "{} {receiver}, {name}", self.mnemonic())
             }
             Instruction::CallSimulEfun(name) => {
-                write!(f, "call_simul_efun {name}")
+                write!(f, "{} {name}", self.mnemonic())
             }
-            Instruction::ClearArgs => {
-                write!(f, "clear_args")
-            }
-            Instruction::ClearArrayItems => {
-                write!(f, "clear_array_items")
-            }
-            Instruction::ClearPartialArgs => {
-                write!(f, "clear_partial_args")
-            }
+            Instruction::ClearArgs => f.write_str(self.mnemonic()),
+            Instruction::ClearArrayItems => f.write_str(self.mnemonic()),
+            Instruction::ClearPartialArgs => f.write_str(self.mnemonic()),
             Instruction::Copy(r1, r2) => {
-                write!(f, "copy {r1}, {r2}")
+                write!(f, "{} {r1}, {r2}", self.mnemonic())
             }
             Instruction::Dec(r) => {
-                write!(f, "dec {r}")
+                write!(f, "{} {r}", self.mnemonic())
             }
             Instruction::EqEq(r1, r2, r3) => {
-                write!(f, "eq_eq {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::FConst(r, fl) => {
-                write!(f, "f_const {r}, {fl}")
+                write!(f, "{} {r}, {fl}", self.mnemonic())
             }
             Instruction::FunctionPtrConst {
                 location,
                 receiver,
                 name,
             } => {
-                write!(f, "function_ptr_const {location}, {receiver}, {name}")
+                write!(f, "{} {location}, {receiver}, {name}", self.mnemonic())
             }
             Instruction::Gt(r1, r2, r3) => {
-                write!(f, "gt {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Gte(r1, r2, r3) => {
-                write!(f, "gte {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::IAdd(r1, r2, r3) => {
-                write!(f, "i_add {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::IConst(r, i) => {
-                write!(f, "i_const {r}, {i}")
+                write!(f, "{} {r}, {i}", self.mnemonic())
             }
             Instruction::IConst0(r) => {
-                write!(f, "i_const0 {r}")
+                write!(f, "{} {r}", self.mnemonic())
             }
             Instruction::IConst1(r) => {
-                write!(f, "i_const1 {r}")
+                write!(f, "{} {r}", self.mnemonic())
             }
             Instruction::IDiv(r1, r2, r3) => {
-                write!(f, "i_div {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::IMod(r1, r2, r3) => {
-                write!(f, "i_mod {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Inc(r) => {
-                write!(f, "inc {r}")
+                write!(f, "{} {r}", self.mnemonic())
             }
             Instruction::IMul(r1, r2, r3) => {
-                write!(f, "i_mul {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::ISub(r1, r2, r3) => {
-                write!(f, "i_sub {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Jmp(address) => {
-                write!(f, "jmp {address}")
+                write!(f, "{} {address}", self.mnemonic())
             }
             Instruction::Jnz(r1, address) => {
-                write!(f, "jnz {r1}, {address}")
+                write!(f, "{} {r1}, {address}", self.mnemonic())
             }
             Instruction::Jz(r1, address) => {
-                write!(f, "jz {r1}, {address}")
+                write!(f, "{} {r1}, {address}", self.mnemonic())
             }
             Instruction::Load(r1, r2, r3) => {
-                write!(f, "load {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::LoadMappingKey(r1, r2, r3) => {
-                write!(f, "load_mapping_key {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Lt(r1, r2, r3) => {
-                write!(f, "lt {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Lte(r1, r2, r3) => {
-                write!(f, "lte {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::MapConst(r) => {
-                write!(f, "map_const {r}")
+                write!(f, "{} {r}", self.mnemonic())
             }
             Instruction::MAdd(r1, r2, r3) => {
-                write!(f, "m_add {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::MMul(r1, r2, r3) => {
-                write!(f, "m_mul {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::MSub(r1, r2, r3) => {
-                write!(f, "m_sub {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::NewUpvalue(r) => {
-                write!(f, "new_upvalue {r}")
+                write!(f, "{} {r}", self.mnemonic())
             }
             Instruction::Not(r1, r2) => {
-                write!(f, "not {r1}, {r2}")
+                write!(f, "{} {r1}, {r2}", self.mnemonic())
             }
             Instruction::NotEq(r1, r2, r3) => {
-                write!(f, "not_eq {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Or(r1, r2, r3) => {
-                write!(f, "or {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::PopulateArgv(r, num_args, num_locals) => {
-                write!(f, "populate_argv {r}, {num_args}, {num_locals}")
+                write!(f, "{} {r}, {num_args}, {num_locals}", self.mnemonic())
             }
-            Instruction::PopulateDefaults => {
-                write!(f, "populate_defaults")
-            }
+            Instruction::PopulateDefaults => f.write_str(self.mnemonic()),
             Instruction::PushArg(r) => {
-                write!(f, "push_arg {r}")
+                write!(f, "{} {r}", self.mnemonic())
             }
             Instruction::PushArrayItem(r1) => {
-                write!(f, "push_array_item {r1}")
+                write!(f, "{} {r1}", self.mnemonic())
             }
             Instruction::PushPartialArg(r) => {
                 let s = r.map(|r| r.to_string()).unwrap_or_default();
-                write!(f, "push_partial_arg {s}")
+                write!(f, "{} {s}", self.mnemonic())
             }
             Instruction::Range(r1, r2, r3, r4) => {
-                write!(f, "range {r1}, {r2}, {r3}, {r4}")
+                write!(f, "{} {r1}, {r2}, {r3}, {r4}", self.mnemonic())
             }
-            Instruction::Ret => {
-                write!(f, "ret")
-            }
+            Instruction::Ret => f.write_str(self.mnemonic()),
             Instruction::Shl(r1, r2, r3) => {
-                write!(f, "shl {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Shr(r1, r2, r3) => {
-                write!(f, "shr {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Sizeof(r1, r2) => {
-                write!(f, "sizeof {r1}, {r2}")
+                write!(f, "{} {r1}, {r2}", self.mnemonic())
             }
             Instruction::Store(r1, r2, r3) => {
-                write!(f, "store {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::SConst(r, s) => {
-                write!(f, "s_const {r}, {:?}", s.as_str())
+                write!(f, "{} {r}, {:?}", self.mnemonic(), s.as_str())
             }
             Instruction::Xor(r1, r2, r3) => {
-                write!(f, "xor {r1}, {r2}, {r3}")
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
         }
     }
@@ -568,5 +690,99 @@ mod tests {
             .to_string(),
             "function_ptr_const r1, local, baz"
         );
+    }
+
+    fn r() -> RegisterVariant {
+        RegisterVariant::Local(Register(0))
+    }
+
+    /// One instance of every variant, in declaration order.
+    fn every_variant() -> Vec<Instruction> {
+        use Instruction::*;
+        vec![
+            AConst(r()),
+            And(r(), r(), r()),
+            BitwiseNot(r(), r()),
+            Call(ustr("f")),
+            CallEfun(0),
+            CallSimulEfun(ustr("f")),
+            CallFp(r()),
+            CallOther(r(), r()),
+            CatchEnd,
+            CatchStart(r(), Address(0)),
+            ClearArgs,
+            ClearPartialArgs,
+            ClearArrayItems,
+            Copy(r(), r()),
+            Dec(r()),
+            EqEq(r(), r(), r()),
+            FConst(r(), LpcFloatInner::from(0.0)),
+            FunctionPtrConst {
+                location: r(),
+                receiver: FunctionReceiver::Local,
+                name: ustr("f"),
+            },
+            Gt(r(), r(), r()),
+            Gte(r(), r(), r()),
+            IAdd(r(), r(), r()),
+            IConst(r(), 0),
+            IConst0(r()),
+            IConst1(r()),
+            IDiv(r(), r(), r()),
+            IMod(r(), r(), r()),
+            Inc(r()),
+            IMul(r(), r(), r()),
+            ISub(r(), r(), r()),
+            Jmp(Address(0)),
+            Jnz(r(), Address(0)),
+            Jz(r(), Address(0)),
+            Load(r(), r(), r()),
+            LoadMappingKey(r(), r(), r()),
+            Lt(r(), r(), r()),
+            Lte(r(), r(), r()),
+            MapConst(r()),
+            MAdd(r(), r(), r()),
+            MMul(r(), r(), r()),
+            MSub(r(), r(), r()),
+            Not(r(), r()),
+            NotEq(r(), r(), r()),
+            NewUpvalue(r()),
+            Or(r(), r(), r()),
+            PopulateArgv(r(), 0, 0),
+            PopulateDefaults,
+            PushArg(r()),
+            PushArrayItem(r()),
+            PushPartialArg(Some(r())),
+            Range(r(), r(), r(), r()),
+            Ret,
+            Shl(r(), r(), r()),
+            Shr(r(), r(), r()),
+            Sizeof(r(), r()),
+            Store(r(), r(), r()),
+            SConst(r(), ustr("s")),
+            Xor(r(), r(), r()),
+        ]
+    }
+
+    #[test]
+    fn every_variant_has_a_dense_index_and_a_display_matching_mnemonic() {
+        let samples = every_variant();
+        assert_eq!(samples.len(), Instruction::COUNT);
+
+        let mut seen = [false; Instruction::COUNT];
+        for instruction in &samples {
+            let index = instruction.index() as usize;
+            assert!(index < Instruction::COUNT, "{instruction}");
+            assert!(!seen[index], "duplicate index {index}");
+            seen[index] = true;
+
+            let rendered = instruction.to_string();
+            let mnemonic = instruction.mnemonic();
+            assert!(
+                rendered == mnemonic || rendered.starts_with(&format!("{mnemonic} ")),
+                "display {rendered:?} does not open with mnemonic {mnemonic:?}"
+            );
+        }
+        assert!(seen.iter().all(|s| *s), "an index was never produced");
     }
 }

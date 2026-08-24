@@ -79,6 +79,9 @@ jemalloc-ctl = "0.5.0"
 [features]
 default = ["max_level_trace", "release_max_level_info"]
 
+# Per-opcode dispatch counters in the eval loop.
+opcode-profile = []
+
 # Max log level (development build)
 max_level_off = ["tracing/max_level_off"]
 max_level_error = ["tracing/max_level_error"]

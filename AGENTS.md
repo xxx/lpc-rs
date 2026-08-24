@@ -74,6 +74,9 @@ writes `target/criterion/<group>/<id>/profile/flamegraph.svg` — 999Hz, all
 threads, no measurement in profile mode. External `perf` works on the bench
 binaries too, now that symbols are present.
 
+`cargo bench --features opcode-profile --bench bench_concurrency -- m1_task_cost`
+adds per-workload opcode histograms (`[opcodes:fib10] ...`) to the output.
+
 Quick start: create `lib/hello.c` with `void create() { dump("hi"); }` and run
 `cargo run -p lpc-rs-lpcc lib/hello.c` (`-p` selects the CLI and builds it plus
 `lpc-rs`; it is not the whole-workspace gate above).
