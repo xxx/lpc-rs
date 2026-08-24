@@ -11,6 +11,9 @@ use lpc_rs::{
 };
 use lpc_rs_utils::config::Config;
 
+#[path = "support/profiler.rs"]
+mod profiler;
+
 /// One loop of 20k iterations per case, so the per-access cost of a
 /// register, a global cell and a captured cell can be compared.
 const CASES: &[(&str, &str)] = &[
@@ -61,5 +64,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, criterion_benchmark);
+criterion_group! {
+    name = benches;
+    config = profiler::profiled();
+    targets = criterion_benchmark
+}
 criterion_main!(benches);

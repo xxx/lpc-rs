@@ -10,6 +10,9 @@ use lpc_rs::{
 };
 use lpc_rs_utils::config::Config;
 
+#[path = "support/profiler.rs"]
+mod profiler;
+
 pub fn criterion_benchmark(c: &mut Criterion) {
     let code = r#"
         int fib(int n) {
@@ -45,5 +48,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, criterion_benchmark);
+criterion_group! {
+    name = benches;
+    config = profiler::profiled();
+    targets = criterion_benchmark
+}
 criterion_main!(benches);

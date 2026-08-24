@@ -15,6 +15,9 @@ use lpc_rs::interpreter::{
 use lpc_rs_utils::config::ConfigBuilder;
 use tokio::{runtime::Runtime, task::JoinSet};
 
+#[path = "support/profiler.rs"]
+mod profiler;
+
 /// Compute-bound, touches essentially no shared state.
 const FIB: &str = r#"
     int fib(int n) {
@@ -301,5 +304,9 @@ fn m1_task_cost(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, m0_scaling, m1_task_cost, contention);
+criterion_group! {
+    name = benches;
+    config = profiler::profiled();
+    targets = m0_scaling, m1_task_cost, contention
+}
 criterion_main!(benches);

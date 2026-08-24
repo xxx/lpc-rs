@@ -68,6 +68,7 @@ criterion = { version = "0.8.2", default-features = false, features = ["cargo_be
 factori = "1.1.0"
 fake = "5.1.0"
 indoc = "2.0.0"
+pprof = { version = "0.15.0", default-features = false, features = ["flamegraph"] }
 rpds = "1.2.1"
 tokio-test = "0.4.2"
 
@@ -131,4 +132,4 @@ incremental = true
 incremental = true
 
 [profile.bench]
-incremental = true
+debug = 1

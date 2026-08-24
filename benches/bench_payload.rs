@@ -5,6 +5,9 @@ use indexmap::IndexMap;
 use lpc_rs::interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef};
 use thin_vec::ThinVec;
 
+#[path = "support/profiler.rs"]
+mod profiler;
+
 /// Common operations benchmarked for each candidate payload container.
 ///
 /// `set` and `push` return a new container, which models the persistent
@@ -254,5 +257,9 @@ fn criterion_benchmark(c: &mut Criterion) {
     bench_mapping_clone(c);
 }
 
-criterion_group!(benches, criterion_benchmark);
+criterion_group! {
+    name = benches;
+    config = profiler::profiled();
+    targets = criterion_benchmark
+}
 criterion_main!(benches);

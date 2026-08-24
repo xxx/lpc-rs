@@ -60,6 +60,20 @@ CI (`.github/workflows/ci.yml`) runs: `cargo clippy --workspace`,
 entirely environment variables (`.env` supported); see `default.env` for the commented
 list. Compile-time constants live in `src/compile_time_config.rs`.
 
+### Profiling the benches
+
+`[profile.bench]` carries `debug = 1` and no `incremental` override, so sampled
+stacks resolve and bench codegen matches release. Every bench installs a pprof
+sampler on criterion's `--profile-time` hook (`benches/support/profiler.rs`):
+
+```sh
+cargo bench --bench bench_concurrency -- --profile-time 10 'm1_task_cost/fib10'
+```
+
+writes `target/criterion/<group>/<id>/profile/flamegraph.svg` — 999Hz, all
+threads, no measurement in profile mode. External `perf` works on the bench
+binaries too, now that symbols are present.
+
 Quick start: create `lib/hello.c` with `void create() { dump("hi"); }` and run
 `cargo run -p lpc-rs-lpcc lib/hello.c` (`-p` selects the CLI and builds it plus
 `lpc-rs`; it is not the whole-workspace gate above).
