@@ -15,7 +15,7 @@ use crate::{
         lpc_ref::LpcRef,
         process::util::AllEnvironment,
         program::Program,
-        stm::{SVar, Transaction, TxnHandle, VarId, WorldValue},
+        stm::{MergeOp, SVar, Transaction, TxnHandle, VarId, WorldValue},
     },
     telnet::connection::Connection,
 };
@@ -184,11 +184,10 @@ impl Process {
 
     /// Move `object` into `new_environment`, through the caller's transaction.
     ///
-    /// A pure read-modify-write over the position cells: the old and new
-    /// environments' inventories plus the object's environment pointer are
-    /// read (tracked) and written into the in-flight changeset. No physical
-    /// mutation, no locking — concurrent moves to the same environment
-    /// conflict at commit and the loser re-runs.
+    /// The object's environment pointer is read (tracked) and written, so
+    /// two moves of one object conflict and the loser re-runs; the room
+    /// inventories change through merge writes, so moves of distinct
+    /// objects through one room commute.
     pub(crate) fn move_to(txn: &TxnHandle, object: &Arc<Process>, new_environment: &Arc<Process>) {
         let object_cell = object.position.environment.id;
         let new_cell = new_environment.position.inventory.id;
@@ -209,21 +208,14 @@ impl Process {
 
             // Remove from the current environment's inventory, if it has one.
             if let Some(old) = current_env {
-                t.with_array_cow(old.position.inventory.id, |inventory| {
-                    inventory
-                        .array
-                        .retain(|item| !Self::is_same_object(item, object));
-                    Ok(())
-                })
-                .expect("the retain closure is infallible");
+                t.merge(
+                    old.position.inventory.id,
+                    MergeOp::ArrayRemoveValue(new_member.clone()),
+                );
             }
 
             // Add to the new environment's inventory and point the object at it.
-            t.with_array_cow(new_cell, |inventory| {
-                inventory.array.push(new_member);
-                Ok(())
-            })
-            .expect("the push closure is infallible");
+            t.merge(new_cell, MergeOp::ArrayAppend(vec![new_member]));
             t.write(object_cell, new_env_ref);
         });
     }
@@ -239,18 +231,6 @@ impl Process {
         })
     }
 
-    /// Whether an inventory slot holds `object`, compared by referent because
-    /// the cells' `Weak` handles are distinct allocations.
-    fn is_same_object(slot: &LpcRef, object: &Arc<Process>) -> bool {
-        let LpcRef::Object(weak) = slot else {
-            return false;
-        };
-
-        weak.upgrade()
-            .is_some_and(|upgraded| std::ptr::eq(upgraded.as_ref(), object.as_ref()))
-    }
-
-    /// Whether the initializer has run, read through `txn` and tracked.
     /// Whether this object is still live for `txn`: not removed by a
     /// committed destruct, nor by this attempt.
     pub(crate) fn is_live(&self, txn: &TxnHandle) -> bool {
@@ -260,6 +240,7 @@ impl Process {
             .is_some_and(|&cell| txn.with(|t| t.is_removed(cell)))
     }
 
+    /// Whether the initializer has run, read through `txn` and tracked.
     pub(crate) fn is_initialized(&self, txn: &TxnHandle) -> bool {
         txn.with(|t| t.read(self.initialized.id).is_some())
     }

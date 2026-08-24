@@ -645,13 +645,13 @@ mod tests {
 
                 let before = vm.global_state.committer_stats().await.unwrap();
 
-                crate::bench_support::fan_out_applies(
-                    &template,
+                crate::bench_support::fan_out_applies(&template,
                     &proc,
                     workload.entry,
                     workers,
                     PER_WORKER,
                     timeout,
+                 workload.indexed,
                 )
                 .await;
 

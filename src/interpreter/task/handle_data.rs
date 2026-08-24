@@ -13,6 +13,7 @@ use crate::interpreter::{
     lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL},
     lpc_string::LpcString,
+    stm::MergeOp,
     task::{Task, get_location, set_location},
     task_context::ObjectLookup,
 };
@@ -354,13 +355,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 })?;
                 Ok(())
             }
-            LpcRef::Mapping(_) => {
+            LpcRef::Mapping(cell) => {
                 let value = get_location(&self.stack, &self.context.txn, value_loc)?.into_owned();
                 let key = index.mapping_key(&self.context.txn);
-                container.with_mapping_cow(&self.context.txn, |map| {
-                    map.insert(key, value);
-                    Ok(())
-                })?;
+                // A mapping cell only ever holds a mapping, so the insert
+                // needs no type peek and tracks no read.
+                self.context
+                    .txn
+                    .with(|t| t.merge(cell.id, MergeOp::MapInsert(key, value)));
                 Ok(())
             }
             x => Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x))),

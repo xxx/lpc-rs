@@ -107,8 +107,13 @@ impl Changeset {
             return;
         }
         let ops = self.merges.entry(var_id).or_default();
-        if !ops.last_mut().is_some_and(|last| last.fold(&op)) {
-            ops.push(op);
+        match ops.last_mut() {
+            Some(last) => {
+                if let Some(op) = last.fold(op) {
+                    ops.push(op);
+                }
+            }
+            None => ops.push(op),
         }
     }
 
@@ -267,6 +272,35 @@ mod tests {
         assert!(!changeset.is_removed(var_id));
         assert_eq!(changeset.read(var_id), Some(WorldValue::ref_of(3.into())));
         assert!(changeset.pending_merges(var_id).is_empty());
+    }
+
+    #[test]
+    fn consecutive_appends_fold_into_one_op() {
+        let mut changeset = Changeset::new(Version(0));
+        let var_id = VarId(0);
+        changeset.merge(var_id, MergeOp::ArrayAppend(vec![1.into()]));
+        changeset.merge(var_id, MergeOp::ArrayAppend(vec![2.into()]));
+
+        assert_eq!(
+            changeset.pending_merges(var_id),
+            &[MergeOp::ArrayAppend(vec![1.into(), 2.into()])]
+        );
+    }
+
+    #[test]
+    fn an_append_and_a_remove_keep_their_order() {
+        let mut changeset = Changeset::new(Version(0));
+        let var_id = VarId(0);
+        changeset.merge(var_id, MergeOp::ArrayAppend(vec![1.into()]));
+        changeset.merge(var_id, MergeOp::ArrayRemoveValue(1.into()));
+
+        assert_eq!(
+            changeset.pending_merges(var_id),
+            &[
+                MergeOp::ArrayAppend(vec![1.into()]),
+                MergeOp::ArrayRemoveValue(1.into()),
+            ]
+        );
     }
 
     #[test]

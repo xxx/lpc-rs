@@ -23,6 +23,11 @@ pub enum Kind {
     },
     /// The `call_other` pair: a target object plus the caller that applies against it.
     Pair,
+    /// A set of objects compiled in order; the apply target is the last one.
+    Set {
+        /// `(path, source)` per object, dependency-first.
+        objects: &'static [(&'static str, &'static str)],
+    },
 }
 
 /// One measurement workload: its LPC source, entry point, and contention volume.
@@ -35,6 +40,8 @@ pub struct Workload {
     pub entry: &'static str,
     /// Fixed total applies for a contention block.
     pub total: usize,
+    /// Whether each worker passes its index as the entry's argument.
+    pub indexed: bool,
     /// Object placement.
     pub kind: Kind,
 }
@@ -45,6 +52,7 @@ pub static FIB: Workload = Workload {
     task_label: "fib10",
     entry: "run",
     total: 256,
+    indexed: false,
     kind: Kind::Single {
         path: "/bench_fib.c",
         source: r#"
@@ -69,6 +77,7 @@ pub static COUNTER: Workload = Workload {
     task_label: "increment",
     entry: "increment",
     total: 8192,
+    indexed: false,
     kind: Kind::Single {
         path: "/bench_counter.c",
         source: r#"
@@ -88,6 +97,7 @@ pub static COUNTER_ATOMIC: Workload = Workload {
     task_label: "increment_atomic",
     entry: "increment",
     total: 8192,
+    indexed: false,
     kind: Kind::Single {
         path: "/bench_counter_atomic.c",
         source: r#"
@@ -111,6 +121,7 @@ pub static CALL_OTHER: Workload = Workload {
     task_label: "call_other",
     entry: "bump",
     total: 2048,
+    indexed: false,
     kind: Kind::Pair,
 };
 
@@ -139,6 +150,7 @@ pub static ARR_TOUCH: Workload = Workload {
     task_label: "arr_touch",
     entry: "touch",
     total: 4096,
+    indexed: false,
     kind: Kind::Single {
         path: "/bench_arr_touch.c",
         source: r#"
@@ -160,6 +172,7 @@ pub static ARR_CHURN: Workload = Workload {
     task_label: "arr_churn",
     entry: "churn",
     total: 1024,
+    indexed: false,
     kind: Kind::Single {
         path: "/bench_arr_churn.c",
         source: r#"
@@ -182,14 +195,67 @@ pub static ARR_CHURN: Workload = Workload {
     },
 };
 
+/// Distinct tokens shuttling through two shared rooms: every move merges
+/// both room inventories, so nothing conflicts across workers.
+pub static MOVE_CHURN: Workload = Workload {
+    name: "move_churn",
+    task_label: "move_churn",
+    entry: "shuttle",
+    total: 1024,
+    indexed: true,
+    kind: Kind::Set {
+        objects: &[
+            ("/bench_token.c", TOKEN_SOURCE),
+            ("/bench_room_a.c", ""),
+            ("/bench_room_b.c", ""),
+            ("/bench_move.c", MOVE_SOURCE),
+        ],
+    },
+};
+
+const TOKEN_SOURCE: &str = r#"
+    void shuttle(object dest) {
+        move_object(dest);
+    }
+"#;
+
+const MOVE_SOURCE: &str = r#"
+    object *tokens;
+    object room_a;
+    object room_b;
+
+    void create() {
+        int i;
+        room_a = find_object("/bench_room_a");
+        room_b = find_object("/bench_room_b");
+        tokens = ({ clone_object("/bench_token"), clone_object("/bench_token"),
+                    clone_object("/bench_token"), clone_object("/bench_token"),
+                    clone_object("/bench_token"), clone_object("/bench_token"),
+                    clone_object("/bench_token"), clone_object("/bench_token") });
+        for (i = 0; i < 8; i += 1) {
+            tokens[i]->shuttle(room_a);
+        }
+    }
+
+    void shuttle(int k) {
+        object t = tokens[k];
+        if (environment(t) == room_a) {
+            t->shuttle(room_b);
+        } else {
+            t->shuttle(room_a);
+        }
+    }
+"#;
+
 /// Every workload, in report order.
-pub static WORKLOADS: [&Workload; 6] = [
+pub static WORKLOADS: [&Workload; 7] = [
     &FIB,
     &COUNTER,
     &COUNTER_ATOMIC,
     &CALL_OTHER,
     &ARR_TOUCH,
     &ARR_CHURN,
+    &MOVE_CHURN,
 ];
 
 /// Initialize `workload`'s object(s) on `vm` and hand back the apply target.
@@ -207,6 +273,17 @@ pub async fn setup_on(vm: &Vm, workload: &Workload) -> (Arc<Process>, TaskTempla
                 .await
                 .expect("the caller object failed to initialize")
         }
+        Kind::Set { objects } => {
+            let mut last = None;
+            for (path, source) in *objects {
+                last = Some(
+                    vm.initialize_process_from_code(path, source)
+                        .await
+                        .unwrap_or_else(|e| panic!("{path} failed to initialize: {e}")),
+                );
+            }
+            last.expect("a Set workload places at least one object")
+        }
     };
     let proc = task.context.process.clone();
     let template = TaskTemplate::from(vm.global_state.clone());
@@ -215,7 +292,8 @@ pub async fn setup_on(vm: &Vm, workload: &Workload) -> (Arc<Process>, TaskTempla
 }
 
 /// Drive `workers` concurrent tasks, each applying `entry` `per_worker`
-/// times; a failed apply or a panicked worker fails the caller.
+/// times; `indexed` passes each worker's index as the entry's argument. A
+/// failed apply or a panicked worker fails the caller.
 pub async fn fan_out_applies(
     template: &TaskTemplate,
     proc: &Arc<Process>,
@@ -223,18 +301,30 @@ pub async fn fan_out_applies(
     workers: usize,
     per_worker: usize,
     timeout: u64,
+    indexed: bool,
 ) {
     let mut set = JoinSet::new();
-    for _ in 0..workers {
+    for worker in 0..workers {
         let proc = proc.clone();
         let template = template.clone();
         let entry = entry.to_owned();
+        let args = if indexed {
+            vec![crate::interpreter::lpc_ref::LpcRef::from(worker as i64)]
+        } else {
+            vec![]
+        };
         set.spawn(async move {
             for _ in 0..per_worker {
-                apply_function_by_name(&entry, &[], proc.clone(), template.clone(), Some(timeout))
-                    .await
-                    .expect("the apply failed")
-                    .expect("the apply returned an error");
+                apply_function_by_name(
+                    &entry,
+                    &args,
+                    proc.clone(),
+                    template.clone(),
+                    Some(timeout),
+                )
+                .await
+                .expect("the apply failed")
+                .expect("the apply returned an error");
             }
         });
     }
@@ -248,6 +338,34 @@ mod tests {
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
+
+    /// Distinct tokens through shared rooms: inventory merges commute, so
+    /// the whole block commits without a single conflict.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn move_churn_commits_without_conflicts() {
+        const WORKERS: usize = 4;
+        const PER_WORKER: usize = 128;
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code")
+            .max_execution_time(30_000_u64)
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        let (proc, template, timeout) = setup_on(&vm, &MOVE_CHURN).await;
+
+        let before = vm.global_state.attempt_telemetry.snapshot();
+        fan_out_applies(
+            &template, &proc, "shuttle", WORKERS, PER_WORKER, timeout, true,
+        )
+        .await;
+        let after = vm.global_state.attempt_telemetry.snapshot();
+
+        assert_eq!(
+            after.conflicts - before.conflicts,
+            0,
+            "inventory merges commute; distinct tokens must not conflict"
+        );
+    }
 
     /// Concurrent `count++` commutes: the whole block commits without a
     /// single conflict, and no update is lost.
@@ -264,7 +382,16 @@ mod tests {
         let (proc, template, timeout) = setup_on(&vm, &COUNTER_ATOMIC).await;
 
         let before = vm.global_state.attempt_telemetry.snapshot();
-        fan_out_applies(&template, &proc, "increment", WORKERS, PER_WORKER, timeout).await;
+        fan_out_applies(
+            &template,
+            &proc,
+            "increment",
+            WORKERS,
+            PER_WORKER,
+            timeout,
+            false,
+        )
+        .await;
         let after = vm.global_state.attempt_telemetry.snapshot();
 
         assert_eq!(
@@ -295,7 +422,16 @@ mod tests {
                 .unwrap();
             let vm = Vm::new(config);
             let (proc, template, timeout) = setup_on(&vm, workload).await;
-            fan_out_applies(&template, &proc, workload.entry, 1, 1, timeout).await;
+            fan_out_applies(
+                &template,
+                &proc,
+                workload.entry,
+                1,
+                1,
+                timeout,
+                workload.indexed,
+            )
+            .await;
         }
     }
 }

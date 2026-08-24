@@ -72,6 +72,7 @@ fn contention(c: &mut Criterion) {
                         workers,
                         per_worker,
                         timeout,
+                        workload.indexed,
                     )
                 });
             });
@@ -155,6 +156,7 @@ fn m0_scaling(c: &mut Criterion) {
                             workers,
                             per_worker,
                             timeout,
+                            workload.indexed,
                         )
                     });
                 },

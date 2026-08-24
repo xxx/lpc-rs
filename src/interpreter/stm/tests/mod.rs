@@ -280,3 +280,203 @@ fn a_merge_wraps_like_the_eval_loop() {
         WorldValue::ref_of(LpcRef::from(i64::MIN))
     );
 }
+
+fn committed_array(committer: &Committer, var_id: VarId) -> Vec<LpcRef> {
+    match committer.committed(var_id) {
+        WorldValue::Array(a) => a.array.to_vec(),
+        other => panic!("expected an array, got {other:?}"),
+    }
+}
+
+#[test]
+fn an_append_then_a_remove_of_the_same_value_leaves_it_absent() {
+    let mut committer = Committer::new();
+    let cell = VarId::new();
+
+    let mut changeset = Changeset::new(committer.current_version());
+    changeset.merge(cell, MergeOp::ArrayAppend(vec![LpcRef::from(1)]));
+    changeset.merge(cell, MergeOp::ArrayRemoveValue(LpcRef::from(1)));
+    committer
+        .commit(changeset)
+        .expect("the merges should commit");
+
+    assert!(committed_array(&committer, cell).is_empty());
+}
+
+#[test]
+fn a_remove_then_an_append_keeps_the_value() {
+    let mut committer = Committer::new();
+    let cell = VarId::new();
+
+    let mut changeset = Changeset::new(committer.current_version());
+    changeset.merge(cell, MergeOp::ArrayRemoveValue(LpcRef::from(1)));
+    changeset.merge(cell, MergeOp::ArrayAppend(vec![LpcRef::from(1)]));
+    committer
+        .commit(changeset)
+        .expect("the merges should commit");
+
+    assert_eq!(committed_array(&committer, cell), vec![LpcRef::from(1)]);
+}
+
+#[test]
+fn a_remove_value_removes_every_match() {
+    let mut committer = Committer::new();
+    let cell = VarId::new();
+    let mut seed = Changeset::new(committer.current_version());
+    seed.write(
+        cell,
+        WorldValue::Array(Arc::new(LpcArray::new([
+            LpcRef::from(1),
+            LpcRef::from(2),
+            LpcRef::from(1),
+        ]))),
+    );
+    committer.commit(seed).expect("seed should commit");
+
+    let mut remover = Changeset::new(committer.current_version());
+    remover.merge(cell, MergeOp::ArrayRemoveValue(LpcRef::from(1)));
+    committer.commit(remover).expect("the remove should commit");
+
+    assert_eq!(committed_array(&committer, cell), vec![LpcRef::from(2)]);
+}
+
+#[test]
+fn appends_land_in_commit_order() {
+    let mut committer = Committer::new();
+    let cell = VarId::new();
+    let base = committer.current_version();
+
+    let mut a = Changeset::new(base);
+    a.merge(cell, MergeOp::ArrayAppend(vec![LpcRef::from(1)]));
+    let mut b = Changeset::new(base);
+    b.merge(cell, MergeOp::ArrayAppend(vec![LpcRef::from(2)]));
+
+    committer.commit(a).expect("first append should commit");
+    committer
+        .commit(b)
+        .expect("second append must not conflict");
+
+    assert_eq!(
+        committed_array(&committer, cell),
+        vec![LpcRef::from(1), LpcRef::from(2)]
+    );
+}
+
+#[test]
+fn a_container_merge_type_mismatch_rejects() {
+    let mut committer = Committer::new();
+    let cell = VarId::new();
+    let contents = WorldValue::ref_of(LpcRef::from(5));
+    let mut seed = Changeset::new(committer.current_version());
+    seed.write(cell, contents.clone());
+    committer.commit(seed).expect("seed should commit");
+
+    let mut appender = Changeset::new(committer.current_version());
+    appender.merge(cell, MergeOp::ArrayAppend(vec![LpcRef::from(1)]));
+
+    assert!(committer.commit(appender).is_err());
+    assert_eq!(committer.committed(cell), contents, "value untouched");
+}
+
+#[test]
+fn map_inserts_apply_in_order_and_overwrite() {
+    let mut committer = Committer::new();
+    let cell = VarId::new();
+
+    let mut inserter = Changeset::new(committer.current_version());
+    inserter.merge(cell, MergeOp::MapInsert(LpcRef::from("a"), LpcRef::from(1)));
+    inserter.merge(cell, MergeOp::MapInsert(LpcRef::from("b"), LpcRef::from(2)));
+    committer
+        .commit(inserter)
+        .expect("the inserts should commit");
+
+    let mut overwriter = Changeset::new(committer.current_version());
+    overwriter.merge(cell, MergeOp::MapInsert(LpcRef::from("a"), LpcRef::from(9)));
+    committer
+        .commit(overwriter)
+        .expect("the overwrite should commit");
+
+    match committer.committed(cell) {
+        WorldValue::Mapping(m) => {
+            assert_eq!(m.len(), 2);
+            assert_eq!(
+                m.iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect::<Vec<_>>(),
+                vec![
+                    (LpcRef::from("a"), LpcRef::from(9)),
+                    (LpcRef::from("b"), LpcRef::from(2)),
+                ],
+                "insertion order survives an overwrite"
+            );
+        }
+        other => panic!("expected a mapping, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_cow_store_after_a_merge_materializes_into_a_write() {
+    let cell = VarId::new();
+    let mut map = HashMap::new();
+    map.insert(
+        cell,
+        WorldValue::Array(Arc::new(LpcArray::new([LpcRef::from(1), LpcRef::from(2)]))),
+    );
+    let mut transaction = Transaction::new(Snapshot::new(Version::new(), map));
+
+    transaction.merge(cell, MergeOp::ArrayAppend(vec![LpcRef::from(3)]));
+    transaction
+        .with_array_cow(cell, |array| {
+            array.array[0] = LpcRef::from(9);
+            Ok(())
+        })
+        .expect("the store closure is infallible");
+
+    let contents = transaction.read_array(cell).expect("the cell has contents");
+    assert_eq!(
+        contents.array.to_vec(),
+        vec![LpcRef::from(9), LpcRef::from(2), LpcRef::from(3)]
+    );
+
+    let (_, changeset) = transaction.into_parts();
+    assert!(changeset.pending_merges(cell).is_empty());
+    assert!(changeset.conflicts_with(&[cell].into_iter().collect()));
+}
+
+/// The move shape: both movers read and write their own token's environment
+/// cell and merge the shared room's inventory.
+#[test]
+fn movers_of_distinct_tokens_commute_and_same_token_movers_conflict() {
+    let mut committer = Committer::new();
+    let room_inventory = VarId::new();
+    let env_a = VarId::new();
+    let env_b = VarId::new();
+    let base = committer.current_version();
+
+    let mover = |env: VarId, token: i64, base| {
+        let mut changeset = Changeset::new(base);
+        changeset.track_read(env);
+        changeset.write(env, WorldValue::ref_of(LpcRef::from(1)));
+        changeset.merge(
+            room_inventory,
+            MergeOp::ArrayAppend(vec![LpcRef::from(token)]),
+        );
+        changeset
+    };
+
+    let a = mover(env_a, 1, base);
+    let b = mover(env_b, 2, base);
+    committer.commit(a).expect("first mover should commit");
+    committer
+        .commit(b)
+        .expect("a distinct token's move must not conflict");
+
+    let base = committer.current_version();
+    let c = mover(env_a, 1, base);
+    let d = mover(env_a, 1, base);
+    committer.commit(c).expect("the winner commits");
+    assert!(
+        committer.commit(d).is_err(),
+        "two movers of one token conflict on its environment cell"
+    );
+}
