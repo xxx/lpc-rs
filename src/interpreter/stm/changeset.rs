@@ -47,6 +47,30 @@ impl Changeset {
         self.writes.get(&var_id).cloned()
     }
 
+    /// The attempt's own written array payload for `var_id`, mutably —
+    /// `None` if this attempt has not written an array there (or removed it).
+    pub(crate) fn written_array_mut(
+        &mut self,
+        var_id: VarId,
+    ) -> Option<&mut std::sync::Arc<crate::interpreter::lpc_array::LpcArray>> {
+        match self.writes.get_mut(&var_id) {
+            Some(WorldValue::Array(arc)) => Some(arc),
+            _ => None,
+        }
+    }
+
+    /// The attempt's own written mapping payload for `var_id`, mutably, as
+    /// in [`written_array_mut`](Self::written_array_mut).
+    pub(crate) fn written_mapping_mut(
+        &mut self,
+        var_id: VarId,
+    ) -> Option<&mut std::sync::Arc<crate::interpreter::lpc_mapping::LpcMapping>> {
+        match self.writes.get_mut(&var_id) {
+            Some(WorldValue::Mapping(arc)) => Some(arc),
+            _ => None,
+        }
+    }
+
     /// Write a variable to the changeset.
     pub(crate) fn write(&mut self, var_id: VarId, value: WorldValue) {
         self.removals.remove(&var_id);

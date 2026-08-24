@@ -13,7 +13,6 @@ use crate::interpreter::{
     lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL},
     lpc_string::LpcString,
-    stm::WorldValue,
     task::{Task, get_location, set_location},
     task_context::ObjectLookup,
 };
@@ -336,32 +335,22 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let array_idx = if let LpcRef::Int(i) = index { i.0 } else { 0 };
 
         match &container {
-            LpcRef::Array(cell) => {
-                // Resolve the cell's current length so the index can be bounds-checked
-                // before the COW; the value read must also happen before it, since the
-                // COW closure runs under the transaction write lock and cannot re-enter.
-                let Some(cell_len) =
-                    self.context
-                        .txn
-                        .with(|t| t.read_value(cell.id))
-                        .and_then(|v| match v {
-                            WorldValue::Array(a) => Some(a.len()),
-                            _ => None,
-                        })
-                else {
-                    return Err(self.runtime_error("store into an absent array cell"));
-                };
-                let idx = if array_idx >= 0 {
-                    array_idx
-                } else {
-                    cell_len as LpcIntInner + array_idx
-                };
-                if !(idx >= 0 && (idx as usize) < cell_len) {
-                    return Err(self.array_index_error(idx, cell_len));
-                }
+            LpcRef::Array(_) => {
+                // The value read happens before the COW: the closure runs
+                // under the transaction write lock and cannot re-enter it.
                 let value = (*get_location(&self.stack, &self.context.txn, value_loc)?).clone();
                 container.with_array_cow(&self.context.txn, |vec| {
+                    let cell_len = vec.len();
+                    let idx = if array_idx >= 0 {
+                        array_idx
+                    } else {
+                        cell_len as LpcIntInner + array_idx
+                    };
+                    if !(idx >= 0 && (idx as usize) < cell_len) {
+                        return Err(self.array_index_error(idx, cell_len));
+                    }
                     vec[idx as usize] = value;
+                    Ok(())
                 })?;
                 Ok(())
             }
@@ -370,6 +359,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let key = index.mapping_key(&self.context.txn);
                 container.with_mapping_cow(&self.context.txn, |map| {
                     map.insert(key, value);
+                    Ok(())
                 })?;
                 Ok(())
             }

@@ -548,6 +548,47 @@ mod tests {
     };
 
     #[test]
+    fn a_second_store_mutates_the_attempts_own_copy_and_the_world_only_at_commit() {
+        let mut committer = Committer::new();
+        let mut txn = Transaction::new(committer.snapshot_clone());
+
+        let mut seeded = LpcArray::default();
+        seeded.array.push(LpcRef::from(1_i64));
+        seeded.array.push(LpcRef::from(2_i64));
+        let cell = txn.mint_array(seeded);
+        txn.with_array_cow(cell.id, |a| {
+            a[0] = LpcRef::from(10_i64);
+            Ok(())
+        })
+        .expect("first store");
+        txn.with_array_cow(cell.id, |a| {
+            a[1] = LpcRef::from(20_i64);
+            Ok(())
+        })
+        .expect("second store");
+
+        // Both edits landed in the attempt's copy...
+        let owned = txn.read_array(cell.id).expect("attempt sees its array");
+        assert_eq!(
+            &owned.array[..],
+            [LpcRef::from(10_i64), LpcRef::from(20_i64)]
+        );
+        // ...and the world has no such var until the commit applies it.
+        assert_eq!(committer.snapshot_clone().read(cell.id), None);
+
+        let (_, changeset) = txn.into_parts();
+        committer.commit(changeset).expect("commit succeeds");
+        let committed = committer
+            .snapshot_clone()
+            .read(cell.id)
+            .expect("cell committed");
+        let WorldValue::Array(arr) = committed else {
+            panic!("expected an array world value");
+        };
+        assert_eq!(&arr.array[..], [LpcRef::from(10_i64), LpcRef::from(20_i64)]);
+    }
+
+    #[test]
     fn a_read_of_the_attempts_own_blind_write_does_not_conflict() {
         let mut committer = Committer::new();
         let x = VarId::new();

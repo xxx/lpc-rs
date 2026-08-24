@@ -281,13 +281,10 @@ impl LpcRef {
     /// same var. The committed contents are never mutated in place.
     pub(crate) fn with_array_cow<F>(&self, txn: &TxnHandle, f: F) -> Result<()>
     where
-        F: FnOnce(&mut LpcArray),
+        F: FnOnce(&mut LpcArray) -> Result<()>,
     {
         match self {
-            LpcRef::Array(cell) => {
-                txn.with(|t| t.with_array_cow(cell.id, f));
-                Ok(())
-            }
+            LpcRef::Array(cell) => txn.with(|t| t.with_array_cow(cell.id, f)),
             _ => Err(self.expected_array_error()),
         }
     }
@@ -295,13 +292,10 @@ impl LpcRef {
     /// Copy-on-write this mapping cell, as in [`with_array_cow`].
     pub(crate) fn with_mapping_cow<F>(&self, txn: &TxnHandle, f: F) -> Result<()>
     where
-        F: FnOnce(&mut LpcMapping),
+        F: FnOnce(&mut LpcMapping) -> Result<()>,
     {
         match self {
-            LpcRef::Mapping(cell) => {
-                txn.with(|t| t.with_mapping_cow(cell.id, f));
-                Ok(())
-            }
+            LpcRef::Mapping(cell) => txn.with(|t| t.with_mapping_cow(cell.id, f)),
             _ => Err(self.expected_mapping_error()),
         }
     }

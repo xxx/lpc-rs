@@ -226,32 +226,54 @@ impl Transaction {
         self.read_value(var_id)?.into_connection()
     }
 
-    /// Copy-on-write the array cell `var_id`: read its contents, clone into a
-    /// new `Arc`, mutate the clone, and write it back under the same var.
-    /// The first world read is tracked (conflict-checked); a re-read of the
-    /// attempt's own write is not. The contents are never mutated in place
-    /// in the committed world.
-    pub(crate) fn with_array_cow(&mut self, var_id: VarId, f: impl FnOnce(&mut LpcArray)) {
+    /// Copy-on-write the array cell `var_id`. The first write in an attempt
+    /// clones the world's contents once into the changeset (that world read
+    /// is tracked; an absent cell starts empty); later writes mutate the
+    /// attempt's own copy in place (`Arc::make_mut` re-clones only if a
+    /// read handed the `Arc` out). The committed world is never mutated in
+    /// place. A failing closure leaves no new write, but on the own-copy
+    /// path it may already have mutated — callers check before mutating.
+    pub(crate) fn with_array_cow(
+        &mut self,
+        var_id: VarId,
+        f: impl FnOnce(&mut LpcArray) -> Result<()>,
+    ) -> Result<()> {
+        if !self.changeset.is_removed(var_id)
+            && let Some(own) = self.changeset.written_array_mut(var_id)
+        {
+            return f(Arc::make_mut(own));
+        }
         let current = self
             .read_value(var_id)
             .and_then(WorldValue::into_array)
             .unwrap_or_else(|| Arc::new(LpcArray::default()));
         let mut clone = (*current).clone();
-        f(&mut clone);
+        f(&mut clone)?;
         self.changeset
             .write(var_id, WorldValue::Array(Arc::new(clone)));
+        Ok(())
     }
 
     /// Copy-on-write the mapping cell `var_id`, as in [`with_array_cow`].
-    pub(crate) fn with_mapping_cow(&mut self, var_id: VarId, f: impl FnOnce(&mut LpcMapping)) {
+    pub(crate) fn with_mapping_cow(
+        &mut self,
+        var_id: VarId,
+        f: impl FnOnce(&mut LpcMapping) -> Result<()>,
+    ) -> Result<()> {
+        if !self.changeset.is_removed(var_id)
+            && let Some(own) = self.changeset.written_mapping_mut(var_id)
+        {
+            return f(Arc::make_mut(own));
+        }
         let current = self
             .read_value(var_id)
             .and_then(WorldValue::into_mapping)
             .unwrap_or_else(|| Arc::new(LpcMapping::default()));
         let mut clone = (*current).clone();
-        f(&mut clone);
+        f(&mut clone)?;
         self.changeset
             .write(var_id, WorldValue::Mapping(Arc::new(clone)));
+        Ok(())
     }
 
     /// Record a physical side effect for delivery after this attempt commits.

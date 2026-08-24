@@ -213,13 +213,17 @@ impl Process {
                     inventory
                         .array
                         .retain(|item| !Self::is_same_object(item, object));
-                });
+                    Ok(())
+                })
+                .expect("the retain closure is infallible");
             }
 
             // Add to the new environment's inventory and point the object at it.
             t.with_array_cow(new_cell, |inventory| {
                 inventory.array.push(new_member);
-            });
+                Ok(())
+            })
+            .expect("the push closure is infallible");
             t.write(object_cell, new_env_ref);
         });
     }

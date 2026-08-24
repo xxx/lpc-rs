@@ -484,8 +484,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 .collect::<Vec<_>>()
                         })?;
                         if !dead.is_empty() {
-                            lpc_ref
-                                .with_mapping_cow(txn, |m| m.retain(|k, _| !dead.contains(k)))?;
+                            lpc_ref.with_mapping_cow(txn, |m| {
+                                m.retain(|k, _| !dead.contains(k));
+                                Ok(())
+                            })?;
                         }
                         let l = lpc_ref.with_mapping(txn, |m| m.len())?;
 
