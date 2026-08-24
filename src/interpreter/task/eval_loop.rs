@@ -75,9 +75,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// # Returns
     ///
     /// A [`lpc_rs_errors::Result`], with a boolean indicating whether we are at the end of input
-    #[instrument(skip_all)]
+    // Not boxed: the recursion cycle is already broken by the boxed
+    // futures on `resume` and `handle_call_other`.
+    #[instrument(level = "debug", skip_all)]
     #[inline]
-    #[async_recursion]
     async fn eval_one_instruction(&mut self) -> lpc_rs_errors::Result<bool> {
         if self.stack.is_empty() {
             return Ok(true);

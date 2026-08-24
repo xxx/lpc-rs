@@ -19,7 +19,7 @@ use crate::interpreter::{
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     #[inline]
     pub(crate) fn handle_aconst(&mut self, location: RegisterVariant) -> lpc_rs_errors::Result<()> {
         let items = &self.array_items;
@@ -32,7 +32,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         set_location(&mut self.stack, &self.context.txn, location, new_ref)
     }
 
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     #[inline]
     pub(crate) fn handle_functionptrconst(
         &mut self,
@@ -153,7 +153,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         set_location(&mut self.stack, &self.context.txn, location, new_ref)
     }
 
-    // #[instrument(skip_all)]
+    // #[instrument(level = "debug", skip_all)]
     // fn capture_environment(&mut self) -> Result<Vec<Register>> {
     //     let frame = self.stack.current_frame_mut()?;
     //     let mut upvalues = self.context.upvalues().write();
@@ -175,7 +175,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     //         .collect::<Result<Vec<Register>>>()
     // }
 
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     #[inline]
     pub(crate) fn handle_load(
         &mut self,
@@ -263,7 +263,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
     }
 
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     #[inline]
     pub(crate) fn handle_load_mapping_key(
         &mut self,
@@ -307,7 +307,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         set_location(&mut self.stack, &self.context.txn, destination, var)
     }
 
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     #[inline]
     pub(crate) fn handle_sconst(
         &mut self,
@@ -323,7 +323,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         set_location(&mut self.stack, &self.context.txn, location, new_ref)
     }
 
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     #[inline]
     pub(crate) fn handle_store(
         &mut self,

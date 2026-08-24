@@ -364,7 +364,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     fn binary_operation<F>(
         &mut self,
         r1: RegisterVariant,
@@ -391,7 +391,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     fn unary_operation<F>(
         &mut self,
         r1: RegisterVariant,
@@ -417,7 +417,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Binary operations that return a boolean value (e.g. comparisons)
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     fn binary_boolean_operation<F>(
         &mut self,
         r1: RegisterVariant,

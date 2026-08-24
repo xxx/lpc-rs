@@ -159,7 +159,7 @@ impl CallFrame {
 
     /// Mint this call's own captured cells, after the inherited ones. A cell
     /// is an identity only; its value lives in the committer's world once written.
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     fn populate_upvalues(&mut self) {
         let num_upvalues = self.function.num_upvalues;
         trace!("populating upvalues: {}", num_upvalues);
@@ -227,7 +227,7 @@ impl CallFrame {
     }
 
     /// Read the [`LpcRef`] at `location`; an unwritten cell reads `NULL`.
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip_all)]
     #[inline]
     pub(crate) fn get_location(
         &self,

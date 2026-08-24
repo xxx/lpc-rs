@@ -12,7 +12,7 @@ use crate::interpreter::{
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     #[inline]
     pub(crate) async fn handle_call_fp(&mut self, location: RegisterVariant) -> Result<()> {
         let ptr = {

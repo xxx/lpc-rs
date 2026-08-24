@@ -20,7 +20,7 @@ use crate::{
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     pub(crate) async fn handle_call(&mut self, name: Ustr) -> lpc_rs_errors::Result<()> {
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
@@ -60,7 +60,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Prepare and populate a new [`CallFrame`] for a call to a static function.
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     pub(crate) async fn prepare_new_call_frame(
         &mut self,
         process: Arc<Process>,
@@ -143,7 +143,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
-    #[instrument(skip_all)]
+    #[instrument(level = "debug", skip_all)]
     #[inline]
     pub(crate) async fn handle_call_simul_efun(
         &mut self,
