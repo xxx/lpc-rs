@@ -1,11 +1,17 @@
 //! Shared test drivers for the commit protocol, used by `committer::tests`,
-//! `retry::tests`, and `soak`. Kept in one gated module so the production
-//! surface stays protocol-only.
+//! `retry::tests`, `conflict_probes`, and `soak`. Kept in one gated module so
+//! the production surface stays protocol-only.
 
-use crate::interpreter::stm::{
-    Transaction, Version,
-    committer::{CommitProtocol, Committer, LiveSnapshot},
-    snapshot::Snapshot,
+use lpc_rs_errors::Result;
+
+use crate::interpreter::{
+    lpc_ref::LpcRef,
+    stm::{
+        AttemptBody, Conflict, Effect, Transaction, VarId, Version, commit_changeset,
+        committer::{CommitProtocol, Committer, LiveSnapshot},
+        snapshot::Snapshot,
+        start_txn,
+    },
 };
 
 /// Spawn the committer thread on a bounded channel. Returns the
@@ -67,7 +73,7 @@ pub(crate) fn drive_txn(
     tx: &flume::Sender<CommitProtocol>,
     rx: &flume::Receiver<CommitProtocol>,
     f: impl FnOnce(&mut Transaction),
-) -> (Version, Result<(), crate::interpreter::stm::Conflict>) {
+) -> (Version, std::result::Result<(), Conflict>) {
     let live = start_live(committer, tx);
     let mut transaction = Transaction::new(live.inner.clone());
     f(&mut transaction);
@@ -86,4 +92,54 @@ pub(crate) fn drive_txn(
     drop(live);
     pump(committer, tx, rx);
     (base, result)
+}
+
+/// A test-only body: one bare transaction per attempt, no task machinery.
+pub(crate) struct IncBody {
+    pub(crate) counter: VarId,
+    attempt: Option<Transaction>,
+}
+
+impl IncBody {
+    pub(crate) fn new(counter: VarId) -> Self {
+        Self {
+            counter,
+            attempt: None,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl AttemptBody for IncBody {
+    async fn begin_attempt(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+    ) -> Result<Option<LiveSnapshot>> {
+        let live = start_txn(tx).await?;
+        let mut t = Transaction::new(live.inner.clone());
+        let LpcRef::Int(n) = t.read(self.counter).expect("counter cell missing") else {
+            panic!("counter cell is not an int");
+        };
+        t.write(self.counter, LpcRef::from(n.wrapping_add(1)));
+        self.attempt = Some(t);
+        Ok(Some(live))
+    }
+
+    async fn commit_phase(
+        &mut self,
+        tx: &flume::Sender<CommitProtocol>,
+        _live: LiveSnapshot,
+    ) -> Result<(std::result::Result<(), Conflict>, Vec<Effect>)> {
+        let (_, changeset) = self
+            .attempt
+            .take()
+            .expect("attempt present until committed")
+            .into_parts();
+        let commit = commit_changeset(tx, changeset).await?;
+        Ok((commit, Vec::new()))
+    }
+
+    async fn deliver(&mut self, _effects: Vec<Effect>) -> Result<()> {
+        Ok(())
+    }
 }

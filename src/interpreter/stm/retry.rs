@@ -384,71 +384,13 @@ impl GlobalState {
 }
 
 #[cfg(test)]
-use crate::interpreter::stm::Transaction;
-
-#[cfg(test)]
-/// A test-only body: one bare transaction per attempt, no task machinery.
-pub(crate) struct IncBody {
-    pub(crate) counter: VarId,
-    attempt: Option<Transaction>,
-}
-
-#[cfg(test)]
-impl IncBody {
-    pub(crate) fn new(counter: VarId) -> Self {
-        Self {
-            counter,
-            attempt: None,
-        }
-    }
-}
-
-#[async_trait::async_trait]
-#[cfg(test)]
-impl AttemptBody for IncBody {
-    async fn begin_attempt(
-        &mut self,
-        tx: &flume::Sender<CommitProtocol>,
-    ) -> Result<Option<LiveSnapshot>> {
-        let live = start_txn(tx).await?;
-        let mut t = Transaction::new(live.inner.clone());
-        let LpcRef::Int(n) = t.read(self.counter).expect("counter cell missing") else {
-            panic!("counter cell is not an int");
-        };
-        t.write(self.counter, LpcRef::from(n.wrapping_add(1)));
-        self.attempt = Some(t);
-        Ok(Some(live))
-    }
-
-    async fn commit_phase(
-        &mut self,
-        tx: &flume::Sender<CommitProtocol>,
-        _live: LiveSnapshot,
-    ) -> Result<(
-        std::result::Result<(), Conflict>,
-        Vec<crate::interpreter::stm::Effect>,
-    )> {
-        let (_, changeset) = self
-            .attempt
-            .take()
-            .expect("attempt present until committed")
-            .into_parts();
-        let commit = commit_changeset(tx, changeset).await?;
-        Ok((commit, Vec::new()))
-    }
-
-    async fn deliver(&mut self, _effects: Vec<crate::interpreter::stm::Effect>) -> Result<()> {
-        Ok(())
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use std::sync::{Arc, Barrier};
 
     use lpc_rs_core::LpcIntInner;
 
-    use super::{IncBody, run_attempts};
+    use super::run_attempts;
+    use crate::interpreter::stm::tests::IncBody;
     use crate::interpreter::{
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
@@ -577,6 +519,7 @@ mod async_tests {
     use lpc_rs_core::LpcIntInner;
 
     use super::*;
+    use crate::interpreter::stm::tests::IncBody;
     use crate::interpreter::{
         lpc_ref::LpcRef,
         stm::{Changeset, CommitProtocol, Committer, VarId, WorldValue},
