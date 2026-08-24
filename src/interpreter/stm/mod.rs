@@ -19,6 +19,7 @@ use crate::{
     util::process_builder::compile_process_from_path,
 };
 
+mod backoff;
 mod changeset;
 mod committer;
 mod effects;

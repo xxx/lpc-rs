@@ -20,6 +20,7 @@ use crate::interpreter::{
     process::Process,
     stm::{
         GcPassReply, VarId, WorldRoot, WorldValue,
+        backoff::{Backoff, BackoffSpent},
         changeset::Changeset,
         committer::{CommitProtocol, CommitterStats, Conflict, LiveSnapshot},
     },
@@ -36,6 +37,8 @@ pub(crate) struct RetryStats {
     pub(crate) conflicts: u64,
     /// Wall time of the whole loop, successful attempt included.
     pub(crate) duration: Duration,
+    /// Realized backoff totals for the loop.
+    pub(crate) backoff: BackoffSpent,
 }
 
 /// Attempt-loop lifetime totals, recorded once per apply by `run_attempts`.
@@ -48,17 +51,12 @@ pub struct AttemptTelemetry {
     total_ns: AtomicU64,
     backoff_yield_ns: AtomicU64,
     backoff_sleep_ns: AtomicU64,
+    backoff_sleep_requested_ns: AtomicU64,
 }
 
 impl AttemptTelemetry {
     /// Fold one finished attempt loop into the totals.
-    fn record(
-        &self,
-        stats: &RetryStats,
-        backoff_yield_ns: u64,
-        backoff_sleep_ns: u64,
-        errored: bool,
-    ) {
+    fn record(&self, stats: &RetryStats, errored: bool) {
         use std::sync::atomic::Ordering::Relaxed;
         self.applies.fetch_add(1, Relaxed);
         self.attempts.fetch_add(stats.attempts, Relaxed);
@@ -66,8 +64,12 @@ impl AttemptTelemetry {
         self.errors.fetch_add(u64::from(errored), Relaxed);
         self.total_ns
             .fetch_add(stats.duration.as_nanos() as u64, Relaxed);
-        self.backoff_yield_ns.fetch_add(backoff_yield_ns, Relaxed);
-        self.backoff_sleep_ns.fetch_add(backoff_sleep_ns, Relaxed);
+        self.backoff_yield_ns
+            .fetch_add(stats.backoff.yielded.as_nanos() as u64, Relaxed);
+        self.backoff_sleep_ns
+            .fetch_add(stats.backoff.slept.as_nanos() as u64, Relaxed);
+        self.backoff_sleep_requested_ns
+            .fetch_add(stats.backoff.sleep_requested.as_nanos() as u64, Relaxed);
     }
 
     /// Read the totals; fields are loaded individually, so an apply landing
@@ -82,6 +84,9 @@ impl AttemptTelemetry {
             total: Duration::from_nanos(self.total_ns.load(Relaxed)),
             backoff_yield: Duration::from_nanos(self.backoff_yield_ns.load(Relaxed)),
             backoff_sleep: Duration::from_nanos(self.backoff_sleep_ns.load(Relaxed)),
+            backoff_sleep_requested: Duration::from_nanos(
+                self.backoff_sleep_requested_ns.load(Relaxed),
+            ),
         }
     }
 }
@@ -103,6 +108,8 @@ pub struct AttemptTelemetrySnapshot {
     pub backoff_yield: Duration,
     /// Wall time spent in the sleep backoff tier.
     pub backoff_sleep: Duration,
+    /// Sleep as the ladder requested it, before timer rounding.
+    pub backoff_sleep_requested: Duration,
 }
 
 /// One attempt of a transactional body. The body must keep two invariants
@@ -139,75 +146,8 @@ pub(crate) trait AttemptBody {
     async fn deliver(&mut self, effects: Vec<crate::interpreter::stm::Effect>) -> Result<()>;
 }
 
-/// Losses that re-run immediately: the rebase usually wins on its own.
-const FREE_LOSSES: u64 = 1;
-/// Highest loss count staggered by yielding; past it the loop sleeps.
-const MAX_YIELD_LOSSES: u64 = 6;
-/// Sleep bounds for persistent losers; tokio's timer fires sub-millisecond
-/// sleeps at the next ~1ms tick.
-const SLEEP_FLOOR: Duration = Duration::from_millis(1);
-const SLEEP_CAP: Duration = Duration::from_millis(8);
-
-/// How the loop staggers a conflicted attempt before re-running it.
-#[derive(Debug, PartialEq)]
-enum BackoffStep {
-    /// Re-run at once.
-    None,
-    /// Yield to the scheduler this many times.
-    Yields(u32),
-    /// Sleep this long.
-    Sleep(Duration),
-}
-
-/// The stagger for the attempt after loss number `losses`: the first loss is
-/// free, low losses yield, persistent losses sleep, both on doubling caps
-/// ([`SLEEP_CAP`] tops the ladder). `roll(n)` supplies the jitter as a draw
-/// from `1..=n`.
-fn backoff_step(losses: u64, roll: impl FnOnce(u64) -> u64) -> BackoffStep {
-    if losses <= FREE_LOSSES {
-        return BackoffStep::None;
-    }
-    if losses <= MAX_YIELD_LOSSES {
-        let cap = 1u64 << (losses - FREE_LOSSES - 1);
-        return BackoffStep::Yields(roll(cap) as u32);
-    }
-    let doublings = (losses - MAX_YIELD_LOSSES).min(3) as u32;
-    let cap = SLEEP_CAP.min(SLEEP_FLOOR.saturating_mul(1 << doublings));
-    let span = (cap - SLEEP_FLOOR).as_micros() as u64;
-    BackoffStep::Sleep(SLEEP_FLOOR + Duration::from_micros(roll(span)))
-}
-
-/// Execute one [`backoff_step`], drawing jitter from `rng`; returns the
-/// wall time spent as (yield_ns, sleep_ns).
-async fn stagger(losses: u64, rng: &mut u64) -> (u64, u64) {
-    match backoff_step(losses, |n| splitmix64(rng) % n + 1) {
-        BackoffStep::None => (0, 0),
-        BackoffStep::Yields(n) => {
-            let started = std::time::Instant::now();
-            for _ in 0..n {
-                tokio::task::yield_now().await;
-            }
-            (started.elapsed().as_nanos() as u64, 0)
-        }
-        BackoffStep::Sleep(duration) => {
-            let started = std::time::Instant::now();
-            tokio::time::sleep(duration).await;
-            (0, started.elapsed().as_nanos() as u64)
-        }
-    }
-}
-
-/// One step of splitmix64 over `state`; not randomness anyone may rely on.
-fn splitmix64(state: &mut u64) -> u64 {
-    *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    let mut z = *state;
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
-
 /// Re-run `body`'s attempts until one commits, staggering repeat losers by
-/// [`backoff_step`]; each attempt re-bases on the newest world. `None` from
+/// [`Backoff`]; each attempt re-bases on the newest world. `None` from
 /// `begin_attempt` stops after that single attempt without committing.
 pub(crate) async fn run_attempts<B: AttemptBody>(
     tx: &flume::Sender<CommitProtocol>,
@@ -216,15 +156,7 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
 ) -> (Result<()>, RetryStats) {
     let started = std::time::Instant::now();
     let mut attempts = 0u64;
-    let mut conflicts = 0u64;
-    let mut backoff_yield_ns = 0u64;
-    let mut backoff_sleep_ns = 0u64;
-    // Seeded per loop so concurrent losers draw different jitter; the stack
-    // address varies per worker, the clock per run.
-    let mut rng = std::ptr::from_ref(&started) as u64
-        ^ std::time::UNIX_EPOCH
-            .elapsed()
-            .map_or(0, |d| u64::from(d.subsec_nanos()));
+    let mut backoff = Backoff::new();
 
     let result = loop {
         attempts += 1;
@@ -251,18 +183,16 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
         if commit.is_ok() {
             break body.deliver(effects).await;
         }
-        conflicts += 1;
-        let (yielded, slept) = stagger(conflicts, &mut rng).await;
-        backoff_yield_ns += yielded;
-        backoff_sleep_ns += slept;
+        backoff.stagger().await;
     };
 
     let stats = RetryStats {
         attempts,
-        conflicts,
+        conflicts: backoff.losses(),
         duration: started.elapsed(),
+        backoff: backoff.spent(),
     };
-    telemetry.record(&stats, backoff_yield_ns, backoff_sleep_ns, result.is_err());
+    telemetry.record(&stats, result.is_err());
     (result, stats)
 }
 
@@ -704,7 +634,7 @@ mod async_tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn async_rejection_storm_crosses_the_sleep_tier_and_still_commits() {
         let (tx, rx) = flume::bounded(4);
         let mut committer = Committer::new();
@@ -758,6 +688,9 @@ mod async_tests {
         // Losses 2-6 yield and 7+ sleep, so eight rejections land time in both tiers.
         assert!(snap.backoff_yield > Duration::ZERO);
         assert!(snap.backoff_sleep > Duration::ZERO);
+        // The requested-vs-realized split makes the timer's tick-rounding overshoot measurable.
+        assert!(snap.backoff_sleep_requested > Duration::ZERO);
+        assert!(snap.backoff_sleep >= snap.backoff_sleep_requested);
         assert!(snap.total >= snap.backoff_sleep);
 
         tx.send(CommitProtocol::Close)
@@ -788,64 +721,11 @@ mod async_tests {
         assert_eq!(snap.conflicts, 0);
         assert_eq!(snap.backoff_yield, Duration::ZERO);
         assert_eq!(snap.backoff_sleep, Duration::ZERO);
+        assert_eq!(snap.backoff_sleep_requested, Duration::ZERO);
 
         tx.send(CommitProtocol::Close)
             .expect("committer channel closed");
         drop(tx);
         handle.join().expect("committer panicked");
-    }
-}
-
-#[cfg(test)]
-mod backoff_tests {
-    use std::time::Duration;
-
-    use super::{BackoffStep, MAX_YIELD_LOSSES, SLEEP_CAP, SLEEP_FLOOR, backoff_step};
-
-    /// A roll that always takes the maximum of its range.
-    fn max_roll(n: u64) -> u64 {
-        n
-    }
-
-    #[test]
-    fn the_first_loss_retries_immediately() {
-        assert_eq!(backoff_step(1, max_roll), BackoffStep::None);
-    }
-
-    #[test]
-    fn early_losses_yield_with_doubling_jittered_caps() {
-        for losses in 2..=MAX_YIELD_LOSSES {
-            let BackoffStep::Yields(cap) = backoff_step(losses, max_roll) else {
-                panic!("losses={losses} should yield");
-            };
-            assert_eq!(u64::from(cap), 1 << (losses - 2));
-
-            let BackoffStep::Yields(low) = backoff_step(losses, |_| 1) else {
-                panic!("losses={losses} should yield");
-            };
-            assert_eq!(low, 1);
-        }
-    }
-
-    #[test]
-    fn persistent_losses_sleep_between_floor_and_a_doubling_cap() {
-        let mut previous = Duration::ZERO;
-        for losses in (MAX_YIELD_LOSSES + 1)..=(MAX_YIELD_LOSSES + 5) {
-            let BackoffStep::Sleep(longest) = backoff_step(losses, max_roll) else {
-                panic!("losses={losses} should sleep");
-            };
-            assert!(longest > SLEEP_FLOOR);
-            assert!(longest <= SLEEP_CAP);
-            assert!(longest >= previous, "caps never shrink");
-            previous = longest;
-
-            let BackoffStep::Sleep(shortest) = backoff_step(losses, |_| 1) else {
-                panic!("losses={losses} should sleep");
-            };
-            assert!(shortest > SLEEP_FLOOR);
-            assert!(shortest < longest || longest == shortest);
-        }
-        // the ladder tops out at the cap
-        assert_eq!(previous, SLEEP_CAP);
     }
 }

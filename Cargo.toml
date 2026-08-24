@@ -70,6 +70,8 @@ fake = "5.1.0"
 indoc = "2.0.0"
 pprof = { version = "0.15.0", default-features = false, features = ["flamegraph"] }
 rpds = "1.2.1"
+# Adds test-util (the paused clock) to test builds; production builds carry no dev-deps.
+tokio = { version = "1", features = ["test-util"] }
 tokio-test = "0.4.2"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
