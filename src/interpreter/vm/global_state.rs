@@ -58,6 +58,9 @@ pub struct GlobalState {
 
     /// Attempt-loop totals, recorded by `run_attempts`.
     pub(crate) attempt_telemetry: Arc<stm::AttemptTelemetry>,
+
+    /// Subscription to the committer's per-commit watermark.
+    pub(crate) commit_watch: tokio::sync::watch::Receiver<stm::Version>,
 }
 
 impl GlobalState {
@@ -66,7 +69,7 @@ impl GlobalState {
         C: Into<Arc<Config>>,
     {
         let conf = config.into();
-        let (committer_tx, committer_handle) = Self::spawn_committer();
+        let (committer_tx, commit_watch, committer_handle) = Self::spawn_committer();
 
         Self {
             object_space: Arc::new(ObjectSpace::new(conf.clone())),
@@ -76,18 +79,26 @@ impl GlobalState {
             committer_tx,
             committer_handle: Some(committer_handle),
             attempt_telemetry: Arc::default(),
+            commit_watch,
         }
     }
 
-    /// Spawn a committer thread; return its sender and join handle.
-    fn spawn_committer() -> (flume::Sender<CommitProtocol>, JoinHandle<Snapshot>) {
+    /// Spawn a committer thread; return its sender, watermark subscription,
+    /// and join handle.
+    fn spawn_committer() -> (
+        flume::Sender<CommitProtocol>,
+        tokio::sync::watch::Receiver<stm::Version>,
+        JoinHandle<Snapshot>,
+    ) {
         let (tx, rx) = flume::unbounded();
         let committer_tx = tx.clone();
+        let committer = Committer::new();
+        let commit_watch = committer.commit_watch();
         let handle = std::thread::Builder::new()
             .name("stm-committer".into())
-            .spawn(move || Committer::new().run(committer_tx, rx))
+            .spawn(move || committer.run(committer_tx, rx))
             .expect("failed to spawn committer thread");
-        (tx, handle)
+        (tx, commit_watch, handle)
     }
 
     /// A state whose committer rejects its first `rejections` commits.
@@ -100,9 +111,10 @@ impl GlobalState {
         }
         let (committer_tx, rx) = flume::unbounded();
         let loop_tx = committer_tx.clone();
-        let handle = std::thread::spawn(move || {
-            Committer::new().run_with_rejections(loop_tx, rx, rejections)
-        });
+        let committer = Committer::new();
+        state.commit_watch = committer.commit_watch();
+        let handle =
+            std::thread::spawn(move || committer.run_with_rejections(loop_tx, rx, rejections));
         state.committer_tx = committer_tx;
         state.committer_handle = Some(handle);
         state

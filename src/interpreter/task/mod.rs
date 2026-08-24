@@ -310,7 +310,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.seed = Some(seed);
         let tx = self.context.global_state.committer_tx.clone();
         let telemetry = self.context.global_state.attempt_telemetry.clone();
-        let (res, _) = run_attempts(&tx, &telemetry, self).await;
+        let commit_watch = self.context.global_state.commit_watch.clone();
+        let (res, _) = run_attempts(&tx, &telemetry, Some(commit_watch), self).await;
         res
     }
 
@@ -511,6 +512,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         run_attempts(
             tx,
             &crate::interpreter::stm::AttemptTelemetry::default(),
+            None,
             self,
         )
         .await

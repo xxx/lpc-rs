@@ -110,8 +110,14 @@ fn contention(c: &mut Criterion) {
                 .saturating_sub(t_before.backoff_sleep_requested)
                 .as_secs_f64()
                 * 1e3;
+            let wakes = t_after
+                .backoff_commit_wakes
+                .saturating_sub(t_before.backoff_commit_wakes);
+            let expiries = t_after
+                .backoff_cap_expiries
+                .saturating_sub(t_before.backoff_cap_expiries);
             println!(
-                "[{name} w={workers}] commits={commits} conflicts={conflicts} reply_fail={reply_failures} rate={rate:.4} attempts_per_apply={attempts_per_apply:.3} backoff_yield_ms={yield_ms:.1} backoff_sleep_ms={sleep_ms:.1} backoff_sleep_req_ms={sleep_req_ms:.1} committer_busy_ms={busy_ms:.1} q_peak={q_peak}"
+                "[{name} w={workers}] commits={commits} conflicts={conflicts} reply_fail={reply_failures} rate={rate:.4} attempts_per_apply={attempts_per_apply:.3} backoff_yield_ms={yield_ms:.1} backoff_sleep_ms={sleep_ms:.1} backoff_sleep_req_ms={sleep_req_ms:.1} wakes={wakes} expiries={expiries} committer_busy_ms={busy_ms:.1} q_peak={q_peak}"
             );
         }
     }

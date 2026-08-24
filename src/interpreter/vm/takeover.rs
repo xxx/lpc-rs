@@ -26,7 +26,13 @@ impl GlobalState {
             process,
             attempt: None,
         };
-        let (res, _) = run_attempts(&self.committer_tx, &self.attempt_telemetry, &mut body).await;
+        let (res, _) = run_attempts(
+            &self.committer_tx,
+            &self.attempt_telemetry,
+            Some(self.commit_watch.clone()),
+            &mut body,
+        )
+        .await;
         if let Err(e) = res {
             error!("takeover: committer failed: {e}");
         }
@@ -146,6 +152,7 @@ mod tests {
         let (res, stats) = run_attempts(
             &tx,
             &crate::interpreter::stm::AttemptTelemetry::default(),
+            None,
             &mut body,
         )
         .await;

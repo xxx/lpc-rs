@@ -1,9 +1,15 @@
 //! Contention backoff: how a conflicted attempt staggers before re-running.
 //!
 //! One [`Backoff`] per attempt loop owns the loss count, the jitter RNG, and
-//! the realized-time totals; the loop only calls [`Backoff::stagger`].
+//! the realized-time totals; the loop only calls [`Backoff::stagger`]. A
+//! watching ladder's sleep tier awaits the committer's watermark under the
+//! jittered cap.
 
 use std::time::Duration;
+
+use tokio::sync::watch;
+
+use super::Version;
 
 /// Losses that re-run immediately: the rebase usually wins on its own.
 const FREE_LOSSES: u64 = 1;
@@ -55,12 +61,17 @@ fn splitmix64(state: &mut u64) -> u64 {
 /// Realized backoff totals for one attempt loop.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct BackoffSpent {
-    /// Sleep as the ladder requested it, before timer rounding.
+    /// Sleep as the ladder requested it; realized runs above on timer
+    /// rounding, below when a commit wake cuts the wait short.
     pub(crate) sleep_requested: Duration,
     /// Wall time in the sleep tier.
     pub(crate) slept: Duration,
     /// Wall time in the yield tier.
     pub(crate) yielded: Duration,
+    /// Sleep-tier waits ended by a commit bump.
+    pub(crate) commit_wakes: u64,
+    /// Sleep-tier waits that ran the full cap; every plain timer sleep counts.
+    pub(crate) cap_expiries: u64,
 }
 
 /// One attempt loop's contention backoff: counts losses, draws jitter,
@@ -70,6 +81,7 @@ pub(crate) struct Backoff {
     losses: u64,
     rng: u64,
     spent: BackoffSpent,
+    commit_watch: Option<watch::Receiver<Version>>,
 }
 
 impl Default for Backoff {
@@ -92,6 +104,16 @@ impl Backoff {
             losses: 0,
             rng,
             spent: BackoffSpent::default(),
+            commit_watch: None,
+        }
+    }
+
+    /// A ladder whose sleep tier waits on `commit_watch` — the committer's
+    /// per-commit watermark — capped by the jittered ladder.
+    pub(crate) fn watching(commit_watch: watch::Receiver<Version>) -> Self {
+        Self {
+            commit_watch: Some(commit_watch),
+            ..Self::new()
         }
     }
 
@@ -120,8 +142,22 @@ impl Backoff {
             }
             BackoffStep::Sleep(duration) => {
                 let started = tokio::time::Instant::now();
-                tokio::time::sleep(duration).await;
                 self.spent.sleep_requested += duration;
+                match &mut self.commit_watch {
+                    Some(watch) => {
+                        // The wait is for further progress, not the commit
+                        // that caused this loss.
+                        watch.borrow_and_update();
+                        match tokio::time::timeout(duration, watch.changed()).await {
+                            Ok(_) => self.spent.commit_wakes += 1,
+                            Err(_) => self.spent.cap_expiries += 1,
+                        }
+                    }
+                    None => {
+                        tokio::time::sleep(duration).await;
+                        self.spent.cap_expiries += 1;
+                    }
+                }
                 self.spent.slept += started.elapsed();
             }
         }
@@ -181,6 +217,46 @@ mod tests {
         }
         // the ladder tops out at the cap
         assert_eq!(previous, SLEEP_CAP);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_commit_bump_wakes_the_sleep_tier_early() {
+        let (bump, rx) = tokio::sync::watch::channel(crate::interpreter::stm::Version::new());
+        let mut backoff = Backoff::watching(rx);
+        for _ in 0..MAX_YIELD_LOSSES {
+            backoff.stagger().await;
+        }
+        assert_eq!(
+            backoff.spent().commit_wakes,
+            0,
+            "yield tier never waits on the watch"
+        );
+
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_micros(100)).await;
+            bump.send_replace(crate::interpreter::stm::Version::new());
+        });
+        backoff.stagger().await;
+
+        let spent = backoff.spent();
+        assert_eq!(spent.commit_wakes, 1);
+        assert_eq!(spent.cap_expiries, 0);
+        // Woken at 100µs against a >1ms cap: realized stays under the ask.
+        assert!(spent.slept < spent.sleep_requested);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_quiet_watch_runs_the_full_cap() {
+        let (_bump, rx) = tokio::sync::watch::channel(crate::interpreter::stm::Version::new());
+        let mut backoff = Backoff::watching(rx);
+        for _ in 0..7 {
+            backoff.stagger().await;
+        }
+
+        let spent = backoff.spent();
+        assert_eq!(spent.commit_wakes, 0);
+        assert_eq!(spent.cap_expiries, 1);
+        assert!(spent.slept >= spent.sleep_requested);
     }
 
     #[tokio::test(start_paused = true)]

@@ -19,7 +19,7 @@ use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
     process::Process,
     stm::{
-        GcPassReply, VarId, WorldRoot, WorldValue,
+        GcPassReply, VarId, Version, WorldRoot, WorldValue,
         backoff::{Backoff, BackoffSpent},
         changeset::Changeset,
         committer::{CommitProtocol, CommitterStats, Conflict, LiveSnapshot},
@@ -52,6 +52,8 @@ pub struct AttemptTelemetry {
     backoff_yield_ns: AtomicU64,
     backoff_sleep_ns: AtomicU64,
     backoff_sleep_requested_ns: AtomicU64,
+    backoff_commit_wakes: AtomicU64,
+    backoff_cap_expiries: AtomicU64,
 }
 
 impl AttemptTelemetry {
@@ -70,6 +72,10 @@ impl AttemptTelemetry {
             .fetch_add(stats.backoff.slept.as_nanos() as u64, Relaxed);
         self.backoff_sleep_requested_ns
             .fetch_add(stats.backoff.sleep_requested.as_nanos() as u64, Relaxed);
+        self.backoff_commit_wakes
+            .fetch_add(stats.backoff.commit_wakes, Relaxed);
+        self.backoff_cap_expiries
+            .fetch_add(stats.backoff.cap_expiries, Relaxed);
     }
 
     /// Read the totals; fields are loaded individually, so an apply landing
@@ -87,6 +93,8 @@ impl AttemptTelemetry {
             backoff_sleep_requested: Duration::from_nanos(
                 self.backoff_sleep_requested_ns.load(Relaxed),
             ),
+            backoff_commit_wakes: self.backoff_commit_wakes.load(Relaxed),
+            backoff_cap_expiries: self.backoff_cap_expiries.load(Relaxed),
         }
     }
 }
@@ -110,6 +118,10 @@ pub struct AttemptTelemetrySnapshot {
     pub backoff_sleep: Duration,
     /// Sleep as the ladder requested it, before timer rounding.
     pub backoff_sleep_requested: Duration,
+    /// Sleep-tier waits ended by a commit bump.
+    pub backoff_commit_wakes: u64,
+    /// Sleep-tier waits that ran the full cap.
+    pub backoff_cap_expiries: u64,
 }
 
 /// One attempt of a transactional body. The body must keep two invariants
@@ -149,14 +161,20 @@ pub(crate) trait AttemptBody {
 /// Re-run `body`'s attempts until one commits, staggering repeat losers by
 /// [`Backoff`]; each attempt re-bases on the newest world. `None` from
 /// `begin_attempt` stops after that single attempt without committing.
+/// `commit_watch` lets the sleep tier wake on the committer's watermark
+/// instead of running its full cap.
 pub(crate) async fn run_attempts<B: AttemptBody>(
     tx: &flume::Sender<CommitProtocol>,
     telemetry: &AttemptTelemetry,
+    commit_watch: Option<tokio::sync::watch::Receiver<Version>>,
     body: &mut B,
 ) -> (Result<()>, RetryStats) {
     let started = std::time::Instant::now();
     let mut attempts = 0u64;
-    let mut backoff = Backoff::new();
+    let mut backoff = match commit_watch {
+        Some(watch) => Backoff::watching(watch),
+        None => Backoff::new(),
+    };
 
     let result = loop {
         attempts += 1;
@@ -462,7 +480,8 @@ mod tests {
         seed(&tx, v0, counter, 5);
 
         let mut body = IncBody::new(counter);
-        let (res, stats) = run_attempts(&tx, &super::AttemptTelemetry::default(), &mut body).await;
+        let (res, stats) =
+            run_attempts(&tx, &super::AttemptTelemetry::default(), None, &mut body).await;
 
         assert!(res.is_ok());
         assert_eq!(stats.attempts, 1);
@@ -512,6 +531,7 @@ mod tests {
                         let (res, stats) = rt.block_on(run_attempts(
                             &tx,
                             &super::AttemptTelemetry::default(),
+                            None,
                             &mut body,
                         ));
                         assert!(res.is_ok(), "attempt must commit");
@@ -581,7 +601,7 @@ mod async_tests {
 
         let (res, stats) = {
             let mut body = IncBody::new(counter);
-            run_attempts(&tx, &super::AttemptTelemetry::default(), &mut body).await
+            run_attempts(&tx, &super::AttemptTelemetry::default(), None, &mut body).await
         };
 
         assert!(res.is_ok());
@@ -612,7 +632,7 @@ mod async_tests {
 
         let (res, stats) = {
             let mut body = IncBody::new(counter);
-            run_attempts(&tx, &super::AttemptTelemetry::default(), &mut body).await
+            run_attempts(&tx, &super::AttemptTelemetry::default(), None, &mut body).await
         };
 
         assert!(res.is_ok());
@@ -646,12 +666,14 @@ mod async_tests {
 
         let (res, stats) = {
             let mut body = IncBody::new(counter);
-            run_attempts(&tx, &super::AttemptTelemetry::default(), &mut body).await
+            run_attempts(&tx, &super::AttemptTelemetry::default(), None, &mut body).await
         };
 
         assert!(res.is_ok());
         assert_eq!(stats.attempts, 9);
         assert_eq!(stats.conflicts, 8);
+        assert_eq!(stats.backoff.cap_expiries, 2, "losses 7 and 8 sleep");
+        assert_eq!(stats.backoff.commit_wakes, 0);
 
         tx.send(CommitProtocol::Close)
             .expect("committer channel closed");
@@ -676,7 +698,7 @@ mod async_tests {
         let telemetry = AttemptTelemetry::default();
         let (res, stats) = {
             let mut body = IncBody::new(counter);
-            run_attempts(&tx, &telemetry, &mut body).await
+            run_attempts(&tx, &telemetry, None, &mut body).await
         };
         assert!(res.is_ok());
 
@@ -691,6 +713,8 @@ mod async_tests {
         // The requested-vs-realized split makes the timer's tick-rounding overshoot measurable.
         assert!(snap.backoff_sleep_requested > Duration::ZERO);
         assert!(snap.backoff_sleep >= snap.backoff_sleep_requested);
+        assert_eq!(snap.backoff_cap_expiries, 2);
+        assert_eq!(snap.backoff_commit_wakes, 0);
         assert!(snap.total >= snap.backoff_sleep);
 
         tx.send(CommitProtocol::Close)
@@ -711,7 +735,7 @@ mod async_tests {
         let telemetry = AttemptTelemetry::default();
         for _ in 0..3 {
             let mut body = IncBody::new(counter);
-            let (res, _) = run_attempts(&tx, &telemetry, &mut body).await;
+            let (res, _) = run_attempts(&tx, &telemetry, None, &mut body).await;
             assert!(res.is_ok());
         }
 
@@ -722,6 +746,8 @@ mod async_tests {
         assert_eq!(snap.backoff_yield, Duration::ZERO);
         assert_eq!(snap.backoff_sleep, Duration::ZERO);
         assert_eq!(snap.backoff_sleep_requested, Duration::ZERO);
+        assert_eq!(snap.backoff_commit_wakes, 0);
+        assert_eq!(snap.backoff_cap_expiries, 0);
 
         tx.send(CommitProtocol::Close)
             .expect("committer channel closed");

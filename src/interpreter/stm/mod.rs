@@ -449,7 +449,13 @@ pub(crate) async fn resolve_or_create_object(
         txn: None,
         process: None,
     };
-    let (res, _) = run_attempts(&gs.committer_tx, &gs.attempt_telemetry, &mut body).await;
+    let (res, _) = run_attempts(
+        &gs.committer_tx,
+        &gs.attempt_telemetry,
+        Some(gs.commit_watch.clone()),
+        &mut body,
+    )
+    .await;
     res?;
     Ok(body
         .process

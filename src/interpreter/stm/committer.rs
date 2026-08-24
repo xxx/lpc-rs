@@ -3,6 +3,7 @@ use std::{
     ops::Deref,
 };
 
+use tokio::sync::watch;
 use tracing::error;
 
 use crate::interpreter::{
@@ -193,6 +194,9 @@ pub(crate) struct Committer {
     live_versions: BTreeMap<Version, u32>,
     /// Statistics related to the committer's activities
     stats: CommitterStats,
+
+    /// Fan-out watermark: bumped once per written commit for losers to await.
+    commit_watch: watch::Sender<Version>,
 }
 
 impl Committer {
@@ -201,13 +205,20 @@ impl Committer {
     pub(crate) fn new() -> Self {
         let version = Version::new();
         let snapshot = Snapshot::new(version, imbl::HashMap::new());
+        let (commit_watch, _) = watch::channel(version);
         Self {
             snapshot,
             write_history: BTreeMap::new(),
             oldest_retained: version,
             live_versions: BTreeMap::new(),
             stats: CommitterStats::default(),
+            commit_watch,
         }
+    }
+
+    /// Subscribe to the per-commit watermark bump.
+    pub(crate) fn commit_watch(&self) -> watch::Receiver<Version> {
+        self.commit_watch.subscribe()
     }
 
     /// Committer's main loop.
@@ -499,6 +510,7 @@ impl Committer {
         // all transactions conflicting in the future.
         self.write_history.insert(new_version, written_vars);
         self.stats.commit();
+        self.commit_watch.send_replace(new_version);
 
         Ok(())
     }
