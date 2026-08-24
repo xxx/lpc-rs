@@ -27,6 +27,7 @@ async-recursion = "1.0.4"
 async-trait = "0.1.68"
 bit-set = "0.11.1"
 bytes = "1.4.0"
+ahash = "0.8"
 chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
 dashmap = "6.2.1"
 decorum = "0.4.0"

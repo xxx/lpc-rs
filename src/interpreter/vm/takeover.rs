@@ -7,8 +7,8 @@ use crate::{
     interpreter::{
         process::Process,
         stm::{
-            AttemptBody, Changeset, CommitProtocol, Effect, LiveSnapshot, Transaction,
-            commit_changeset, flush_effects, run_attempts, start_txn,
+            AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, commit_changeset,
+            flush_effects, run_attempts, start_txn,
         },
         vm::global_state::GlobalState,
     },
@@ -76,7 +76,10 @@ impl AttemptBody for TakeoverBody {
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
         _live: LiveSnapshot,
-    ) -> Result<(std::result::Result<(), Changeset>, Vec<Effect>)> {
+    ) -> Result<(
+        std::result::Result<(), crate::interpreter::stm::Conflict>,
+        Vec<Effect>,
+    )> {
         let mut txn = self
             .attempt
             .take()

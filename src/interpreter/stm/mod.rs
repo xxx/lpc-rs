@@ -30,7 +30,9 @@ mod world_value;
 pub(crate) use changeset::Changeset;
 /// Public API surface re-exports (read-only, for benches/tooling/tests).
 pub use committer::CommitterStats;
-pub(crate) use committer::{CommitProtocol, Committer, GcPassReply, LiveSnapshot, WorldRoot};
+pub(crate) use committer::{
+    CommitProtocol, Committer, Conflict, GcPassReply, LiveSnapshot, WorldRoot,
+};
 pub use committer::{GcRefused, GcReport};
 pub(crate) use effects::{CallOutSchedule, Effect, flush_effects};
 pub use retry::CommittedReader;
@@ -115,16 +117,19 @@ impl Transaction {
     /// Read the world value of a var: `Ref` for slots, payload contents for
     /// payload vars. A var this attempt removed reads back as absent: the
     /// committed world still holds its old value until commit, so falling
-    /// through to the snapshot would resurrect a removed var.
+    /// through to the snapshot would resurrect a removed var. A read
+    /// satisfied by the attempt's own write or removal observes no committed
+    /// state, so it is not tracked; world reads are tracked and memoized.
     pub(crate) fn read_value(&mut self, var_id: VarId) -> Option<WorldValue> {
-        self.changeset.track_read(var_id);
-
         if self.changeset.is_removed(var_id) {
             return None;
         }
+        if let Some(own) = self.changeset.read(var_id) {
+            return Some(own);
+        }
+        let snapshot = &self.snapshot;
         self.changeset
-            .read(var_id)
-            .or_else(|| self.snapshot.read(var_id))
+            .read_through(var_id, || snapshot.read(var_id))
     }
 
     /// Write a slot value to the changeset.
@@ -223,8 +228,9 @@ impl Transaction {
 
     /// Copy-on-write the array cell `var_id`: read its contents, clone into a
     /// new `Arc`, mutate the clone, and write it back under the same var.
-    /// One read tracked in the changeset (conflict-checked) plus one blind
-    /// write; the contents are never mutated in place in the committed world.
+    /// The first world read is tracked (conflict-checked); a re-read of the
+    /// attempt's own write is not. The contents are never mutated in place
+    /// in the committed world.
     pub(crate) fn with_array_cow(&mut self, var_id: VarId, f: impl FnOnce(&mut LpcArray)) {
         let current = self
             .read_value(var_id)
@@ -336,7 +342,7 @@ impl TxnHandle {
     /// contexts). Not joinable: its holder is top-level and must open its
     /// own attempt.
     pub(crate) fn empty() -> Self {
-        let mut txn = Transaction::new(Snapshot::new(Version::new(), imbl::OrdMap::new()));
+        let mut txn = Transaction::new(Snapshot::new(Version::new(), imbl::HashMap::new()));
         txn.joinable = false;
         Self::new(txn)
     }
@@ -468,7 +474,7 @@ impl AttemptBody for ResolveObjectBody<'_> {
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
         _live: LiveSnapshot,
-    ) -> Result<(std::result::Result<(), Changeset>, Vec<Effect>)> {
+    ) -> Result<(std::result::Result<(), Conflict>, Vec<Effect>)> {
         let txn = self.txn.take().expect("attempt present until committed");
         let commit = commit_changeset(tx, txn.with(|t| t.take_changeset())).await?;
         Ok((commit, txn.with(|t| t.take_effects())))

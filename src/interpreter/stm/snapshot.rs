@@ -1,18 +1,18 @@
 //! Immutable view of world state at a single [`Version`].
 
-use imbl::OrdMap;
+use imbl::HashMap;
 
 use crate::interpreter::stm::{VarId, Version, WorldValue, changeset::Changeset};
 
 #[derive(Debug, Clone)]
 pub(crate) struct Snapshot {
     version: Version,
-    // OrdMap, so that transactions always replay in the same order, plus O(1) clones
-    state: OrdMap<VarId, WorldValue>,
+    // HAMT: O(1) structurally-shared clones, hash-probed lookups.
+    state: HashMap<VarId, WorldValue>,
 }
 
 impl Snapshot {
-    pub(crate) fn new(version: Version, state: OrdMap<VarId, WorldValue>) -> Self {
+    pub(crate) fn new(version: Version, state: HashMap<VarId, WorldValue>) -> Self {
         Self { version, state }
     }
 
@@ -55,7 +55,7 @@ mod tests {
 
     #[test]
     fn read_returns_none_for_missing_var_id() {
-        let snapshot = Snapshot::new(Version::new(), OrdMap::new());
+        let snapshot = Snapshot::new(Version::new(), HashMap::new());
         assert_eq!(snapshot.read(VarId::new()), None);
     }
 }

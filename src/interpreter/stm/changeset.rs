@@ -1,27 +1,39 @@
 //! Tracking for writes accumulated over a transaction
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::hash_map::Entry;
+
+use ahash::{AHashMap, AHashSet};
 
 use crate::interpreter::stm::{VarId, Version, WorldValue};
+
+/// One observed var: tracked for conflict detection, and — once a world
+/// lookup answered — carrying that answer so a re-read skips the world.
+#[derive(Debug, Clone)]
+enum ReadEntry {
+    /// Observed; no world answer cached yet.
+    Tracked,
+    /// Observed, with the world's answer (`None` = absent) memoized.
+    Cached(Option<WorldValue>),
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct Changeset {
     version: Version,
-    writes: BTreeMap<VarId, WorldValue>,
-    reads: BTreeSet<VarId>,
+    writes: AHashMap<VarId, WorldValue>,
+    reads: AHashMap<VarId, ReadEntry>,
     /// Vars this attempt removes from the world (a transactional `destruct`).
     /// Kept out of `writes` so a `drop` isn't mistaken for a write of a new
     /// value; the committer removes them from the world on commit.
-    removals: BTreeSet<VarId>,
+    removals: AHashSet<VarId>,
 }
 
 impl Changeset {
     pub(crate) fn new(version: Version) -> Self {
         Self {
             version,
-            writes: BTreeMap::new(),
-            reads: BTreeSet::new(),
-            removals: BTreeSet::new(),
+            writes: AHashMap::new(),
+            reads: AHashMap::new(),
+            removals: AHashSet::new(),
         }
     }
 
@@ -58,9 +70,45 @@ impl Changeset {
         self.removals.contains(&var_id)
     }
 
-    /// Track the read of a variable. Needed for conflict detection.
+    /// Track the read of a variable. Needed for conflict detection. An
+    /// entry that already caches a world answer keeps it.
     pub(crate) fn track_read(&mut self, var_id: VarId) {
-        self.reads.insert(var_id);
+        self.reads.entry(var_id).or_insert(ReadEntry::Tracked);
+    }
+
+    /// The tracked-and-memoized world read: a cached answer is returned as
+    /// is; otherwise `miss` supplies it and the answer (absence included) is
+    /// cached — sound because the snapshot never changes within an attempt.
+    pub(crate) fn read_through(
+        &mut self,
+        var_id: VarId,
+        miss: impl FnOnce() -> Option<WorldValue>,
+    ) -> Option<WorldValue> {
+        match self.reads.entry(var_id) {
+            Entry::Occupied(mut occupied) => match occupied.get() {
+                ReadEntry::Cached(value) => value.clone(),
+                ReadEntry::Tracked => {
+                    let value = miss();
+                    occupied.insert(ReadEntry::Cached(value.clone()));
+                    value
+                }
+            },
+            Entry::Vacant(vacant) => {
+                let value = miss();
+                vacant.insert(ReadEntry::Cached(value.clone()));
+                value
+            }
+        }
+    }
+
+    /// Whether any var this attempt read is in `written` — the read side of
+    /// the conflict rule.
+    pub(crate) fn conflicts_with(&self, written: &AHashSet<VarId>) -> bool {
+        if written.len() <= self.reads.len() {
+            written.iter().any(|var| self.reads.contains_key(var))
+        } else {
+            self.reads.keys().any(|var| written.contains(var))
+        }
     }
 
     /// The version that was current when this changeset was created.
@@ -68,22 +116,18 @@ impl Changeset {
         self.version
     }
 
-    pub(crate) fn read_set(&self) -> &BTreeSet<VarId> {
-        &self.reads
-    }
-
     /// The vars this attempt changes in any way, for conflict bookkeeping:
     /// writes plus removals. Both count against the read-write conflict rule
     /// (a concurrent reader of a removed var conflicts, so it re-runs).
-    pub(crate) fn touched_vars(&self) -> BTreeSet<VarId> {
-        let mut vars = self.writes.keys().copied().collect::<BTreeSet<_>>();
+    pub(crate) fn touched_vars(&self) -> AHashSet<VarId> {
+        let mut vars = self.writes.keys().copied().collect::<AHashSet<_>>();
         vars.extend(self.removals.iter().copied());
         vars
     }
 
     /// The writes and removals this attempt made, for the snapshot to apply on
     /// commit.
-    pub(crate) fn into_parts(self) -> (BTreeMap<VarId, WorldValue>, BTreeSet<VarId>) {
+    pub(crate) fn into_parts(self) -> (AHashMap<VarId, WorldValue>, AHashSet<VarId>) {
         (self.writes, self.removals)
     }
 }

@@ -18,7 +18,7 @@ use crate::interpreter::{
     stm::{
         GcPassReply, VarId, WorldRoot, WorldValue,
         changeset::Changeset,
-        committer::{CommitProtocol, CommitterStats, LiveSnapshot},
+        committer::{CommitProtocol, CommitterStats, Conflict, LiveSnapshot},
     },
     vm::global_state::GlobalState,
 };
@@ -61,7 +61,7 @@ pub(crate) trait AttemptBody {
         tx: &flume::Sender<CommitProtocol>,
         live: LiveSnapshot,
     ) -> Result<(
-        std::result::Result<(), Changeset>,
+        std::result::Result<(), Conflict>,
         Vec<crate::interpreter::stm::Effect>,
     )>;
 
@@ -221,11 +221,11 @@ pub(crate) async fn committer_stats(tx: &flume::Sender<CommitProtocol>) -> Resul
 
 /// Commit a changeset from a disarmed attempt and await the reply; the
 /// commit carries the release of the base version's pin. `Ok(())` =
-/// committed; `Ok(Err(_))` = rejected (conflict).
+/// committed; `Ok(Err(Conflict))` = rejected.
 pub(crate) async fn commit_changeset(
     tx: &flume::Sender<CommitProtocol>,
     changeset: Changeset,
-) -> Result<std::result::Result<(), Changeset>> {
+) -> Result<std::result::Result<(), Conflict>> {
     request(tx, |reply| CommitProtocol::Commit {
         changeset,
         releases_base: true,
@@ -396,7 +396,7 @@ impl AttemptBody for IncBody {
         tx: &flume::Sender<CommitProtocol>,
         _live: LiveSnapshot,
     ) -> Result<(
-        std::result::Result<(), Changeset>,
+        std::result::Result<(), Conflict>,
         Vec<crate::interpreter::stm::Effect>,
     )> {
         let (_, changeset) = self

@@ -530,7 +530,7 @@ impl<const STACKSIZE: usize> AttemptBody for Task<STACKSIZE> {
         tx: &flume::Sender<CommitProtocol>,
         _live: LiveSnapshot,
     ) -> Result<(
-        std::result::Result<(), crate::interpreter::stm::Changeset>,
+        std::result::Result<(), crate::interpreter::stm::Conflict>,
         Vec<Effect>,
     )> {
         // Clone the changeset, not take it: the result's payload is read

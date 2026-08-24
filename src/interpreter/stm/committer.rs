@@ -3,7 +3,6 @@ use std::{
     ops::Deref,
 };
 
-use imbl::OrdMap;
 use tracing::error;
 
 use crate::interpreter::{
@@ -52,6 +51,12 @@ impl CommitterStats {
     }
 }
 
+/// A rejected commit: the changeset read state a later commit wrote. The
+/// changeset itself is not returned — the loser re-runs from a fresh
+/// snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Conflict;
+
 /// Channel protocol for communication with [`Committer`]s.
 ///
 /// `pub(crate)` (not `pub`): the arms carry `pub(crate)` types, so the enum
@@ -67,7 +72,7 @@ pub(crate) enum CommitProtocol {
         /// only when the sender's [`LiveSnapshot`] was disarmed. A bare
         /// commit (seed, probe) leaves other holders' pins alone.
         releases_base: bool,
-        reply: flume::Sender<Result<(), Changeset>>,
+        reply: flume::Sender<Result<(), Conflict>>,
     },
     /// Drop the reference count of a [`Version`], called when a [`Snapshot`] is dropped.
     Drop(Version),
@@ -158,7 +163,7 @@ pub(crate) struct Committer {
     /// The current snapshot of the world
     snapshot: Snapshot,
     /// The history of written variables by version, used to check for conflicts during commit operations.
-    write_history: BTreeMap<Version, BTreeSet<VarId>>,
+    write_history: BTreeMap<Version, ahash::AHashSet<VarId>>,
     /// The oldest retained version. If we are trying to commit a [`Changeset`] with a base version
     /// that is older than this, it automatically fails.
     oldest_retained: Version,
@@ -173,7 +178,7 @@ impl Committer {
     /// Sets up the initial [`Version`] and [`Snapshot`].
     pub(crate) fn new() -> Self {
         let version = Version::new();
-        let snapshot = Snapshot::new(version, OrdMap::new());
+        let snapshot = Snapshot::new(version, imbl::HashMap::new());
         Self {
             snapshot,
             write_history: BTreeMap::new(),
@@ -405,21 +410,21 @@ impl Committer {
     /// *NOTE* Blind writes (var is written, but never read within the same transaction) are _not_
     /// conflict-checked, and are applied in the order they are committed.
     ///
-    /// Returns `Ok` on success, or `Err(changeset)` if the changeset conflicts.
-    pub(crate) fn commit(&mut self, changeset: Changeset) -> Result<(), Changeset> {
+    /// Returns `Ok` on success, or `Err(Conflict)` if the changeset conflicts.
+    pub(crate) fn commit(&mut self, changeset: Changeset) -> Result<(), Conflict> {
         let current_version = self.snapshot.version();
         let changeset_version = changeset.base_version();
 
         // Should not occur in practice - it implies versions are being created in more than one place.
         if current_version < changeset_version {
             self.stats.conflict();
-            return Err(changeset);
+            return Err(Conflict);
         }
 
         // changeset's base evicted → not enough history to resolve the conflict rule
         if changeset_version < self.oldest_retained {
             self.stats.conflict();
-            return Err(changeset);
+            return Err(Conflict);
         }
 
         // check the conflict rule
@@ -431,9 +436,9 @@ impl Committer {
                 continue;
             }
 
-            if !written_vars.is_disjoint(changeset.read_set()) {
+            if changeset.conflicts_with(written_vars) {
                 self.stats.conflict();
-                return Err(changeset);
+                return Err(Conflict);
             }
         }
 
@@ -492,7 +497,7 @@ impl Committer {
 
     /// Run the committer loop, rejecting the first `n` `Commit`s it
     /// receives. The rejection is a synthetic abort with the same
-    /// `Err(changeset)` reply the conflict rule would send.
+    /// `Err(Conflict)` reply the conflict rule would send.
     pub(crate) fn run_with_rejections(
         mut self,
         tx: flume::Sender<CommitProtocol>,
@@ -513,7 +518,7 @@ impl Committer {
                 if releases_base {
                     self.release(changeset.base_version());
                 }
-                let _ = reply.send(Err(changeset));
+                let _ = reply.send(Err(Conflict));
                 continue;
             }
             if !self.process(msg, &tx) {
@@ -541,6 +546,33 @@ mod tests {
         lpc_ref::LpcRef,
         stm::{SVar, Transaction, WorldValue, tests::*},
     };
+
+    #[test]
+    fn a_read_of_the_attempts_own_blind_write_does_not_conflict() {
+        let mut committer = Committer::new();
+        let x = VarId::new();
+        let mut seed = Changeset::new(committer.current_version());
+        seed.write(x, WorldValue::ref_of(LpcRef::from(1)));
+        committer.commit(seed).expect("seed should commit");
+
+        // A bases on the current world, then B commits a write to x.
+        let mut a = Transaction::new(committer.snapshot_clone());
+        let mut b = Transaction::new(committer.snapshot_clone());
+        b.write(x, LpcRef::from(2));
+        let (_, b_changeset) = b.into_parts();
+        committer.commit(b_changeset).expect("b should commit");
+
+        // A blind-writes x and reads its own write back.
+        a.write(x, LpcRef::from(5));
+        assert_eq!(a.read(x), Some(LpcRef::from(5)));
+
+        // The read observed no committed state, so B's write is no conflict.
+        let (_, a_changeset) = a.into_parts();
+        assert!(
+            committer.commit(a_changeset).is_ok(),
+            "an own-write read must not enter the conflict rule"
+        );
+    }
 
     #[test]
     fn a_commit_releases_its_base_version_without_a_drop_message() {

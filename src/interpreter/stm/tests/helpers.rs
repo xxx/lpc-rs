@@ -4,7 +4,6 @@
 
 use crate::interpreter::stm::{
     Transaction, Version,
-    changeset::Changeset,
     committer::{CommitProtocol, Committer, LiveSnapshot},
     snapshot::Snapshot,
 };
@@ -68,7 +67,7 @@ pub(crate) fn drive_txn(
     tx: &flume::Sender<CommitProtocol>,
     rx: &flume::Receiver<CommitProtocol>,
     f: impl FnOnce(&mut Transaction),
-) -> (Version, Result<(), Changeset>) {
+) -> (Version, Result<(), crate::interpreter::stm::Conflict>) {
     let live = start_live(committer, tx);
     let mut transaction = Transaction::new(live.inner.clone());
     f(&mut transaction);

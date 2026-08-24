@@ -10,7 +10,7 @@ mod soak;
 use std::sync::Arc;
 
 pub(crate) use helpers::*;
-use imbl::OrdMap;
+use imbl::HashMap;
 use indexmap::IndexMap;
 
 use crate::interpreter::{
@@ -26,7 +26,7 @@ use crate::interpreter::{
 #[test]
 fn multiple_variables_are_isolated() {
     let var_id = VarId::new();
-    let mut map = OrdMap::new();
+    let mut map = HashMap::new();
     map.insert(var_id, WorldValue::ref_of(LpcRef::from(123)));
 
     let snapshot = Snapshot::new(Version::new(), map);
@@ -40,7 +40,7 @@ fn multiple_variables_are_isolated() {
 #[test]
 fn read_sees_previous_writes_before_falling_back_to_state() {
     let var_id = VarId::new();
-    let mut map = OrdMap::new();
+    let mut map = HashMap::new();
     map.insert(var_id, WorldValue::ref_of(LpcRef::from(123)));
 
     let snapshot = Snapshot::new(Version::new(), map);
