@@ -2461,6 +2461,32 @@ mod test_instructions {
             let ctx = task.context;
             BareVal::Array(vec![]).assert_equal(&ctx.global_state, &ctx.result().unwrap());
         }
+
+        #[tokio::test]
+        async fn argv_is_a_named_local() {
+            let code = indoc! { r##"
+                    void create() {
+                        do_thing(1, 2, 3, "foo");
+                    }
+
+                    void do_thing(int a, int b, ...) {
+                        debug("snapshot_stack");
+                    }
+                "##};
+
+            let mut task = run_prog(code).await;
+            let snapshot = &mut task.snapshots.pop().unwrap();
+            snapshot.pop(); // pop off the init frame
+            let frame = snapshot.pop().unwrap();
+            let vars = frame.local_variables(task.context.txn());
+
+            let argv = vars
+                .iter()
+                .find(|v| v.name == "argv")
+                .expect("argv is a named local");
+            BareVal::Array(vec![BareVal::Int(3), BareVal::String("foo".into())])
+                .assert_equal(&task.context.global_state, &argv.value);
+        }
     }
 
     mod test_populate_defaults {

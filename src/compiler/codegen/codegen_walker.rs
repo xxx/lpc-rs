@@ -732,6 +732,12 @@ impl CodegenWalker {
         if ellipsis {
             let argv_location = self.assign_sym_location(ARGV)?;
 
+            if let Some(sym) = self.context.lookup_var(ARGV)
+                && let Some(func) = self.function_stack.last_mut()
+            {
+                func.local_variables.push(sym.clone())
+            }
+
             // We don't set `argv_location` as `self.current_result`, because it's
             // being assigned implicitly, and doesn't need to be made available
             // to more complex expressions. Expressions that use `argv` explicitly
