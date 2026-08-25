@@ -5,4 +5,5 @@
 pub mod dispatch;
 pub mod frontend;
 pub mod grammar;
+pub mod presence;
 pub mod registry;

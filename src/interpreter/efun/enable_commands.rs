@@ -1,14 +1,26 @@
+use std::sync::Arc;
+
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
+use crate::interpreter::{
+    efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process, stm::MergeOp,
+};
 
 /// `enable_commands`, an efun that enables an object to interact with the game world.
 pub async fn enable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let proc = &context.frame().process;
+    let proc = context.frame().process.clone();
+    let already = proc.commands_enabled(context.txn());
+    let environment = Process::environment_of(context.txn(), &proc);
 
-    context
-        .txn()
-        .with(|t| t.write(proc.commands_enabled.id, LpcRef::from(1)));
+    context.txn().with(|t| {
+        t.write(proc.commands_enabled.id, LpcRef::from(1));
+        if !already && let Some(env) = environment {
+            t.merge(
+                env.position.livings.id,
+                MergeOp::ArrayAppend(vec![LpcRef::Object(Arc::downgrade(&proc))]),
+            );
+        }
+    });
 
     Ok(())
 }

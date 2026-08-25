@@ -36,6 +36,9 @@ pub struct ProcessPosition {
     /// The cell holding the objects that this object contains: an array
     /// payload of `LpcRef::Object`, one per contained object.
     pub inventory: SVar<LpcArray>,
+
+    /// The living objects among this object's contents.
+    pub livings: SVar<LpcArray>,
 }
 
 impl Default for ProcessPosition {
@@ -43,6 +46,7 @@ impl Default for ProcessPosition {
         Self {
             environment: SVar::new(),
             inventory: SVar::new(),
+            livings: SVar::new(),
         }
     }
 }
@@ -189,17 +193,38 @@ impl Process {
         })
     }
 
+    /// The committed living members of `process`'s contents as seen through
+    /// `txn`, destructed members filtered out.
+    pub(crate) fn livings_of(txn: &TxnHandle, process: &Arc<Process>) -> Vec<Arc<Process>> {
+        txn.with(|t| {
+            let Some(WorldValue::Array(livings)) = t.read_value(process.position.livings.id) else {
+                return Vec::new();
+            };
+
+            livings
+                .iter()
+                .filter_map(|item| match item {
+                    LpcRef::Object(weak) => weak.upgrade(),
+                    _ => None,
+                })
+                .collect()
+        })
+    }
+
     /// Move `object` into `new_environment`, through the caller's transaction.
     ///
     /// The object's environment pointer is read (tracked) and written, so
     /// two moves of one object conflict and the loser re-runs; the room
     /// inventories change through merge writes, so moves of distinct
-    /// objects through one room commute.
+    /// objects through one room commute. A living mover also updates the
+    /// rooms' living-member cells, so a non-living arrival need not read the
+    /// whole inventory to find them.
     pub(crate) fn move_to(txn: &TxnHandle, object: &Arc<Process>, new_environment: &Arc<Process>) {
         let object_cell = object.position.environment.id;
         let new_cell = new_environment.position.inventory.id;
         let new_env_ref = LpcRef::Object(Arc::downgrade(new_environment));
         let new_member = LpcRef::Object(Arc::downgrade(object));
+        let mover_is_living = object.commands_enabled(txn);
 
         txn.with(|t| {
             let current_env = Self::environment_of_inner(t, object);
@@ -219,10 +244,22 @@ impl Process {
                     old.position.inventory.id,
                     MergeOp::ArrayRemoveValue(new_member.clone()),
                 );
+                if mover_is_living {
+                    t.merge(
+                        old.position.livings.id,
+                        MergeOp::ArrayRemoveValue(new_member.clone()),
+                    );
+                }
             }
 
             // Add to the new environment's inventory and point the object at it.
-            t.merge(new_cell, MergeOp::ArrayAppend(vec![new_member]));
+            t.merge(new_cell, MergeOp::ArrayAppend(vec![new_member.clone()]));
+            if mover_is_living {
+                t.merge(
+                    new_environment.position.livings.id,
+                    MergeOp::ArrayAppend(vec![new_member]),
+                );
+            }
             t.write(object_cell, new_env_ref);
         });
     }
@@ -296,6 +333,7 @@ impl Process {
                 self.rules.id,
                 self.position.environment.id,
                 self.position.inventory.id,
+                self.position.livings.id,
                 self.connection.id,
             ])
             .collect()

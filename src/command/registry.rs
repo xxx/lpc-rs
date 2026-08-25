@@ -177,7 +177,11 @@ impl PartialEq for Scope {
 pub(crate) fn scope_of(txn: &TxnHandle, living: &Arc<Process>) -> Scope {
     let mut members = vec![living.clone()];
     if let Some(environment) = Process::environment_of(txn, living) {
-        members.extend(Process::inventory_of(txn, &environment));
+        members.extend(
+            Process::inventory_of(txn, &environment)
+                .into_iter()
+                .filter(|ob| !Arc::ptr_eq(ob, living)),
+        );
         members.push(environment);
     }
     members.extend(Process::inventory_of(txn, living));

@@ -32,10 +32,8 @@ pub(crate) enum MergeOp {
     /// Remove the rule with this id.
     RulesRemove(RuleId),
     /// Remove every rule registered by an owner in the scope.
-    #[cfg_attr(not(test), expect(dead_code, reason = "used once dispatch lands"))]
     RulesRemoveOwners(Scope),
     /// Keep only rules registered by an owner in the scope.
-    #[cfg_attr(not(test), expect(dead_code, reason = "used once dispatch lands"))]
     RulesRetainOwners(Scope),
 }
 

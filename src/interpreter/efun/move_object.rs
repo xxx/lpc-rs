@@ -1,7 +1,12 @@
+use std::sync::Arc;
+
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process};
+use crate::{
+    command::presence::{after_move, before_move},
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process},
+};
 
 /// `move_object`, for moving objects between each other.
 ///
@@ -9,7 +14,9 @@ use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, proce
 /// is staged into this task's in-flight changeset and becomes visible to other
 /// tasks only when the attempt commits. A conflicting concurrent move makes
 /// one attempt re-run from its snapshot, so the room inventories and
-/// environment pointers always converge to a consistent state.
+/// environment pointers always converge to a consistent state. It also fires
+/// `init()` on the mover and its new surroundings, and expires the rules the
+/// move leaves out of scope.
 pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
     let destination = match arg_ref {
@@ -38,15 +45,19 @@ pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         }
     };
 
-    let this_object = &context.frame().process;
+    let this_object = context.frame().process.clone();
+    let ctx = context.task_context();
+    let already_there = Process::environment_of(ctx.txn(), &this_object)
+        .is_some_and(|env| Arc::ptr_eq(&env, &destination));
+    if already_there {
+        return Ok(());
+    }
 
-    // TODO: remove old commands
-
-    Process::move_to(context.txn(), this_object, &destination);
+    before_move(ctx.txn(), &this_object, &destination);
+    Process::move_to(ctx.txn(), &this_object, &destination);
+    after_move(ctx, &this_object, &destination).await?;
 
     Ok(())
-
-    // TODO: add new commands
 }
 
 #[cfg(test)]

@@ -14,7 +14,7 @@ use crate::interpreter::{
     object_space::ObjectSpace,
     process::Process,
     program::Program,
-    stm::{Effect, TxnHandle},
+    stm::{Effect, MergeOp, TxnHandle},
     task::Task,
     task_context::{ObjectLookup, TaskContext},
 };
@@ -283,7 +283,18 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         let var_id = *process
             .cell
             .get_or_init(|| self.object_space().cell_id(&key));
-        self.txn().with(|t| t.drop_var(var_id));
+        let is_living = process.commands_enabled(self.txn());
+        let environment = Process::environment_of(self.txn(), &process);
+        crate::command::presence::forget_owner(self.txn(), &process);
+        self.txn().with(|t| {
+            t.drop_var(var_id);
+            if is_living && let Some(env) = &environment {
+                t.merge(
+                    env.position.livings.id,
+                    MergeOp::ArrayRemoveValue(LpcRef::Object(Arc::downgrade(&process))),
+                );
+            }
+        });
         self.record_effect(Effect::RemoveObject { key, process });
     }
 
