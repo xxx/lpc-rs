@@ -89,8 +89,20 @@ pub struct TaskSeed {
 
 impl TaskSeed {
     /// Build the entry [`CallFrame`] for one attempt; `self.args` land in
-    /// registers `1..=len`.
+    /// registers `1..=len`. This path (`call_other`, process init) can only
+    /// ever seed plain values, so a `ref` parameter here is always a refusal
+    /// — `CallFrame::push_arg` covers the same case for a direct `Call`.
     pub(crate) fn build_call_frame(&self, upvalue_ptrs: Option<&[VarId]>) -> Result<CallFrame> {
+        for i in 0..self.args.len() {
+            if self.function.prototype.is_ref_param(i) {
+                return Err(LpcError::runtime(format!(
+                    "argument {} of `{}` must be passed by reference",
+                    i + 1,
+                    self.function.name()
+                )));
+            }
+        }
+
         let mut frame = CallFrame::new(
             self.process.clone(),
             self.function.clone(),

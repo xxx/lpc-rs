@@ -19,6 +19,8 @@ pub mod program;
 pub(crate) mod stm;
 pub mod task;
 pub mod task_context;
+#[cfg(test)]
+mod tests;
 pub mod vm;
 
 /// Sync "read the latest committed world" API for non-transactional

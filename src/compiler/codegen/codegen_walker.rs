@@ -119,6 +119,29 @@ impl SwitchCase {
     }
 }
 
+/// A call argument as codegen pushes it: a value register, or the cell a
+/// `ref` argument names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ArgOperand {
+    Value(RegisterVariant),
+    Ref(RegisterVariant),
+}
+
+impl ArgOperand {
+    /// The value register, for a position semantic checks already guarantee
+    /// never receives a `ref` (`sizeof`'s argument, `call_other`'s receiver
+    /// and name).
+    fn expect_value(self, span: Option<Span>) -> Result<RegisterVariant> {
+        match self {
+            ArgOperand::Value(r) => Ok(r),
+            ArgOperand::Ref(_) => Err(lpc_bug!(
+                span,
+                "a `ref` argument reached a value-only position"
+            )),
+        }
+    }
+}
+
 /// A tree walker that generates assembly language instructions based on an AST.
 #[derive(Debug)]
 pub struct CodegenWalker {
@@ -1085,16 +1108,54 @@ impl TreeWalker for CodegenWalker {
         }
 
         let argument_len = node.arguments.len();
-        let mut arg_results = Vec::with_capacity(argument_len);
 
-        for argument in &mut node.arguments {
-            argument.visit(self).await?;
-            arg_results.push(self.current_result);
+        // Resolved before the arguments are visited: an implicit efun lvalue
+        // is pushed as a cell, never evaluated.
+        let implicit_refs: Vec<bool> = match (receiver.is_none(), self.context.lookup_var(name)) {
+            (true, var) if !var.is_some_and(|v| v.type_.matches_type(LpcType::Function(false))) => {
+                self.context
+                    .lookup_function_complete(name, namespace)
+                    .map(|f| {
+                        let proto = f.as_ref();
+                        (0..argument_len).map(|i| proto.is_ref_param(i)).collect()
+                    })
+                    .unwrap_or_default()
+            }
+            _ => Vec::new(),
+        };
+
+        let mut arg_results: Vec<ArgOperand> = Vec::with_capacity(argument_len);
+        for (index, argument) in node.arguments.iter_mut().enumerate() {
+            let by_ref = match argument {
+                ExpressionNode::Ref(r) => Some((r.name, r.span)),
+                ExpressionNode::Var(v) if implicit_refs.get(index).copied().unwrap_or(false) => {
+                    Some((v.name, v.span))
+                }
+                _ => None,
+            };
+            match by_ref {
+                Some((var_name, span)) => {
+                    let loc = self.location_of(&var_name)?;
+                    if matches!(loc, RegisterVariant::Local(_)) {
+                        return Err(lpc_bug!(
+                            span,
+                            "`ref {}` resolved to a register, not a cell",
+                            var_name
+                        ));
+                    }
+                    arg_results.push(ArgOperand::Ref(loc));
+                }
+                None => {
+                    argument.visit(self).await?;
+                    arg_results.push(ArgOperand::Value(self.current_result));
+                }
+            }
         }
 
         if name.as_str() == SIZEOF {
             let result = self.register_counter.next().unwrap().as_local();
-            let instruction = Instruction::Sizeof(*arg_results.first().unwrap(), result);
+            let arg = arg_results.first().unwrap().expect_value(node.span)?;
+            let instruction = Instruction::Sizeof(arg, result);
             push_instruction!(self, instruction, node.span);
             self.current_result = result;
 
@@ -1106,7 +1167,14 @@ impl TreeWalker for CodegenWalker {
 
             // populate the args vector
             for result in &arg_results {
-                push_instruction!(self, Instruction::PushArg(*result), node.span);
+                push_instruction!(
+                    self,
+                    match *result {
+                        ArgOperand::Value(r) => Instruction::PushArg(r),
+                        ArgOperand::Ref(r) => Instruction::PushRef(r),
+                    },
+                    node.span
+                );
             }
 
             if let Some(rcvr) = receiver {
@@ -1123,8 +1191,8 @@ impl TreeWalker for CodegenWalker {
                     arg_results.len() >= 2,
                     "CallOther requires at least 2 arguments, for the receiver and function name"
                 );
-                let receiver = arg_results[0];
-                let name_index = arg_results[1];
+                let receiver = arg_results[0].expect_value(node.span)?;
+                let name_index = arg_results[1].expect_value(node.span)?;
 
                 Instruction::CallOther(receiver, name_index)
             } else {
@@ -1881,6 +1949,13 @@ impl TreeWalker for CodegenWalker {
         self.visit_range_results = Some((result_left, result_right));
 
         Ok(())
+    }
+
+    /// `visit_call_root` resolves every `ref` argument itself, before
+    /// visiting it; reaching here means one slipped through outside a call.
+    #[instrument(skip_all)]
+    async fn visit_ref(&mut self, node: &mut RefNode) -> Result<()> {
+        Err(lpc_bug!(node.span, "`ref` outside an argument list"))
     }
 
     #[instrument(skip_all)]
@@ -5844,5 +5919,54 @@ mod tests {
             .current_mut()
             .expect("No current scope to insert the symbol into.")
             .insert(symbol)
+    }
+
+    mod references {
+        // `Instruction::*` is already in scope via `super::*` (outer `mod tests`).
+        use super::*;
+
+        #[tokio::test]
+        async fn a_ref_argument_pushes_its_cell() {
+            let mut walker =
+                walk_prog("void inc(int ref x) { x++; } void f() { int y = 1; inc(ref y); }").await;
+            let instructions = walker_function_instructions(&mut walker, "f");
+            assert!(
+                instructions.contains(&PushRef(RegisterVariant::Upvalue(Register(0)))),
+                "{instructions:?}"
+            );
+            assert!(instructions.contains(&NewUpvalue(RegisterVariant::Upvalue(Register(0)))));
+            assert!(!instructions.iter().any(|i| matches!(i, PushArg(_))));
+        }
+
+        #[tokio::test]
+        async fn a_ref_of_a_global_pushes_the_global() {
+            let mut walker =
+                walk_prog("int g; void inc(int ref x) { x++; } void f() { inc(ref g); }").await;
+            let instructions = walker_function_instructions(&mut walker, "f");
+            assert!(
+                instructions.contains(&PushRef(RegisterVariant::Global(Register(0)))),
+                "{instructions:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_ref_parameter_gets_no_fresh_cell() {
+            let mut walker = walk_prog("void inc(int ref x) { x++; }").await;
+            let instructions = walker_function_instructions(&mut walker, "inc");
+            assert!(
+                !instructions.iter().any(|i| matches!(i, NewUpvalue(_))),
+                "{instructions:?}"
+            );
+            let inc = walker
+                .functions
+                .values()
+                .find(|f| f.name() == "inc")
+                .unwrap();
+            assert_eq!(
+                inc.arg_locations,
+                vec![RegisterVariant::Upvalue(Register(0))]
+            );
+            assert_eq!(inc.num_upvalues, 1);
+        }
     }
 }

@@ -420,4 +420,23 @@ mod tests {
 
         assert_eq!(func.instructions, vec![IConst(global(0), 5), Ret]);
     }
+
+    #[test]
+    fn a_push_ref_operand_is_never_rewritten() {
+        let mut func = func_with(vec![
+            IConst(local(1), 1),
+            Copy(local(1), RegisterVariant::Upvalue(Register(0))),
+            ClearArgs,
+            PushRef(RegisterVariant::Upvalue(Register(0))),
+            Call(ustr::ustr("inc")),
+            Ret,
+        ]);
+
+        coalesce(&mut func);
+
+        assert!(
+            func.instructions
+                .contains(&PushRef(RegisterVariant::Upvalue(Register(0))))
+        );
+    }
 }
