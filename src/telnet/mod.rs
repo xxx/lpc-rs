@@ -21,13 +21,12 @@ use tokio_util::codec::{Decoder, Framed};
 use tracing::{error, info, instrument, trace, warn};
 
 use crate::{
+    command::command_task::run_command_line,
     interpreter::{
-        PROCESS_INPUT,
-        lpc_int::LpcInt,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
         task::{
-            apply_function::{apply_function, apply_function_by_name, apply_runtime_error},
+            apply_function::{apply_function, apply_runtime_error},
             task_template::TaskTemplate,
         },
         vm::global_state::PreparedCall,
@@ -291,36 +290,10 @@ impl Telnet {
                     return;
                 };
 
-                let arg = LpcString::from(msg).into();
-                let timeout = Some(template.global_state.config.max_execution_time);
-
                 let template = template.clone();
-                template.this_player.store(Some(proc.clone()));
-
-                match apply_function_by_name(PROCESS_INPUT, &[arg], proc, template.clone(), timeout)
-                    .await
-                {
-                    Some(Ok(LpcRef::Int(LpcInt(0)))) => {
-                        // TODO: notify_fail is handled here, but will require updating the apply functions to return the Task itself,
-                        //       rather than just the result.
-                        let _ = sink.send(TelnetEvent::Message("What?".to_string())).await;
-
-                        // nothing else to do here unless / until add_action support is added
-                    }
-                    Some(Ok(_)) => {
-                        // nothing to do here unless / until add_action support is added
-                    }
-                    Some(Err(x)) => {
-                        apply_runtime_error(&x, connection.process.load_full(), template.clone())
-                            .await;
-                    }
-                    None => {
-                        let err = concat!(
-                            "Error: *I* received your command, but the game hasn't implemented any way to handle it. ",
-                            "Please tell the game's owner to implement `process_input` in your body."
-                        );
-                        let _ = sink.send(TelnetEvent::Message(err.to_string())).await;
-                    }
+                template.set_this_player(Some(proc.clone()));
+                if let Err(e) = run_command_line(&template, proc.clone(), msg).await {
+                    apply_runtime_error(&e, connection.process.load_full(), template.clone()).await;
                 }
             }
             TelnetEvent::RawMessage(msg) => {
