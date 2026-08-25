@@ -143,8 +143,7 @@ enum Piece {
     Slash,
 }
 
-/// Split `pattern` into pieces; a bare word is the porter's most common
-/// mistake, so it is reported with the quoted form.
+/// Split `pattern` into pieces; a bare word is reported with its quoted form.
 fn scan(pattern: &str) -> Result<Vec<Piece>, PatternError> {
     let mut pieces = Vec::new();
     let mut rest = pattern;
