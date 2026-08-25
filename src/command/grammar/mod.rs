@@ -6,9 +6,12 @@
 mod earley;
 mod model;
 mod tokenizer;
+mod tree;
 
+pub use earley::{Parses, parse};
 pub use model::{
     Element, Grammar, GrammarBuilder, GrammarError, Label, NtId, Options, ProdId, Production,
     Symbol, TokenClass, lit, nt, tok,
 };
 pub use tokenizer::{Scan, Token};
+pub use tree::{Child, Node, Parse};
