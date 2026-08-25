@@ -13,14 +13,17 @@ use crate::{
         registry::{Frontend, Rule, scope_of},
     },
     interpreter::{
-        PROCESS_INPUT,
+        CATCH_TELL, COMMAND_NOT_FOUND, PROCESS_INPUT,
+        function_type::function_ptr::FunctionPtr,
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
         process::Process,
+        stm::Effect,
         task::apply_function::apply_function,
         task_context::{CommandState, TaskContext},
     },
+    telnet::ops::ConnectionOp,
 };
 
 /// Whether a line was handled by a rule or the pre-hook.
@@ -48,6 +51,20 @@ pub async fn dispatch(ctx: &TaskContext, actor: Arc<Process>, line: &str) -> Res
         notify_fail: None,
     });
     let outcome = trial(ctx, &actor, &line, &first_word).await;
+    let outcome = match outcome {
+        Ok(Outcome::Unhandled) => {
+            // The trial left the last candidate's verb behind; the fallback reports the typed one.
+            ctx.with_command(|state| {
+                if let Some(state) = state {
+                    state.verb_reported = state.verb_typed.clone();
+                }
+            });
+            fallback(ctx, &actor, &line)
+                .await
+                .map(|()| Outcome::Unhandled)
+        }
+        other => other,
+    };
     ctx.command.lock().pop();
     outcome
 }
@@ -140,6 +157,124 @@ pub(crate) async fn apply_on(
     nested.this_player.store(Some(this_player.clone()));
     let timeout = ctx.config().max_execution_time;
     apply_function(function, args, nested, Some(timeout)).await
+}
+
+/// The message for a line nothing handled: the pending `notify_fail`, else
+/// the master's `command_not_found`, else the driver default.
+async fn fallback(ctx: &TaskContext, actor: &Arc<Process>, line: &str) -> Result<()> {
+    let pending = ctx.with_command(|state| state.and_then(|state| state.notify_fail.take()));
+    let message = match pending {
+        Some(LpcRef::String(message)) => Some(message.to_string()),
+        Some(LpcRef::Function(closure)) => notify_closure(ctx, actor, &closure).await?,
+        Some(_) => None,
+        None => master_message(ctx, actor, line).await?,
+    };
+    if let Some(message) = message {
+        deliver(ctx, actor, &message).await?;
+    }
+    Ok(())
+}
+
+/// A `notify_fail` closure's string is the message; any other result means
+/// it reported the failure itself.
+async fn notify_closure(
+    ctx: &TaskContext,
+    actor: &Arc<Process>,
+    closure: &FunctionPtr,
+) -> Result<Option<String>> {
+    let handler_ctx = ctx.clone().with_process(actor.clone());
+    handler_ctx.this_player.store(Some(actor.clone()));
+    let Some(resolved) = closure.prepare_call(&[], &handler_ctx).await? else {
+        return Ok(None);
+    };
+    let timeout = ctx.config().max_execution_time;
+    let result = apply_function(
+        resolved.function,
+        &resolved.args,
+        handler_ctx.with_process(resolved.process),
+        Some(timeout),
+    )
+    .await?;
+    Ok(match result {
+        LpcRef::String(message) => Some(message.to_string()),
+        _ => None,
+    })
+}
+
+/// `master->command_not_found(actor, line)`: a string is the message, `0`
+/// is silence; an undefined hook yields the driver default.
+async fn master_message(
+    ctx: &TaskContext,
+    actor: &Arc<Process>,
+    line: &str,
+) -> Result<Option<String>> {
+    let master = ctx.object_space().master_object();
+    let hook = master.as_ref().and_then(|master| {
+        master
+            .program
+            .unmangled_functions
+            .get(COMMAND_NOT_FOUND)
+            .cloned()
+    });
+    let (Some(master), Some(hook)) = (master, hook) else {
+        return Ok(Some(default_message(ctx, actor)));
+    };
+    let args = [
+        LpcRef::Object(Arc::downgrade(actor)),
+        LpcString::from(line).into(),
+    ];
+    Ok(match apply_on(ctx, &master, actor, hook, &args).await? {
+        LpcRef::String(message) => Some(message.to_string()),
+        _ => None,
+    })
+}
+
+const NOT_IMPLEMENTED_HINT: &str = concat!(
+    "Error: *I* received your command, but the game hasn't implemented any way to handle it. ",
+    "Please tell the game's owner to implement `process_input` in your body."
+);
+
+/// `What?`, or the implementation hint for a living with neither a pre-hook
+/// nor any rule.
+fn default_message(ctx: &TaskContext, actor: &Arc<Process>) -> String {
+    let bare = actor
+        .program
+        .unmangled_functions
+        .get(PROCESS_INPUT)
+        .is_none()
+        && actor.rules_of(ctx.txn()).is_empty();
+    if bare {
+        NOT_IMPLEMENTED_HINT.to_owned()
+    } else {
+        "What?".to_owned()
+    }
+}
+
+/// Deliver `message` to `actor` through `catch_tell`, else straight to its
+/// connection, else the debug log — as effects, so nothing reaches the
+/// player unless the command commits.
+pub(crate) async fn deliver(ctx: &TaskContext, actor: &Arc<Process>, message: &str) -> Result<()> {
+    if let Some(catch_tell) = actor.program.unmangled_functions.get(CATCH_TELL).cloned() {
+        apply_on(
+            ctx,
+            actor,
+            actor,
+            catch_tell,
+            &[LpcString::from(message).into()],
+        )
+        .await?;
+        return Ok(());
+    }
+    let connection = ctx.txn().with(|t| t.read_connection(actor.connection.id));
+    let effect = match connection {
+        Some(connection) => Effect::Socket {
+            op: ConnectionOp::SendMessage(message.to_owned()),
+            tx: connection.tx.clone(),
+        },
+        None => Effect::DebugLog(message.to_owned()),
+    };
+    ctx.txn().with(|t| t.record_effect(effect));
+    Ok(())
 }
 
 #[cfg(test)]
@@ -334,5 +469,157 @@ mod tests {
         vm.initialize_process_from_code("/player.c", code)
             .await
             .expect_err("the handler divides by zero");
+    }
+
+    #[tokio::test]
+    async fn notify_fail_is_delivered_when_nothing_handles_the_line() {
+        let code = indoc! { r#"
+            string heard; int r;
+            void create() { set_this_player(this_object()); enable_commands(); add_action("do_open", "open"); r = command("open door"); }
+            int do_open(string a) { notify_fail("The door is stuck.\n"); return 0; }
+            void catch_tell(string m) { heard = m; }
+        "# };
+        assert_eq!(
+            globals(code, 2).await,
+            vec![s("The door is stuck.\n"), LpcRef::from(0)]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_last_notify_fail_wins_and_returns_zero() {
+        let code = indoc! { r#"
+            string heard; int first; mixed pending;
+            void create() { set_this_player(this_object()); enable_commands(); add_action("do_a", "go"); add_action("do_b", "go"); command("go"); }
+            int do_b(string a) { first = notify_fail("b\n"); return 0; }
+            int do_a(string a) { notify_fail("a\n"); pending = query_notify_fail(); return 0; }
+            void catch_tell(string m) { heard = m; }
+        "# };
+        assert_eq!(
+            globals(code, 3).await,
+            vec![s("a\n"), LpcRef::from(0), s("a\n")]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_notify_fail_closure_supplies_the_message() {
+        let code = indoc! { r#"
+            string heard;
+            void create() { set_this_player(this_object()); enable_commands(); add_action("do_open", "open"); command("open door"); }
+            int do_open(string a) { notify_fail((: "You can't " + query_verb() + " that.\n" :)); return 0; }
+            void catch_tell(string m) { heard = m; }
+        "# };
+        assert_eq!(globals(code, 1).await, vec![s("You can't open that.\n")]);
+    }
+
+    #[tokio::test]
+    async fn a_notify_fail_closure_sees_the_typed_verb_after_other_rules_were_tried() {
+        let code = indoc! { r#"
+            string heard;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                add_action("do_open", "open");
+                add_action("do_other", "op", 1);
+                command("open door");
+            }
+            int do_other(string a) { return 0; }
+            int do_open(string a) { notify_fail((: query_verb() + "?\n" :)); return 0; }
+            void catch_tell(string m) { heard = m; }
+        "# };
+        assert_eq!(globals(code, 1).await, vec![s("open?\n")]);
+    }
+
+    #[tokio::test]
+    async fn a_handled_line_delivers_nothing() {
+        let code = indoc! { r#"
+            mixed heard;
+            void create() { set_this_player(this_object()); enable_commands(); add_action("do_open", "open"); command("open door"); }
+            int do_open(string a) { notify_fail("never\n"); return 1; }
+            void catch_tell(string m) { heard = m; }
+        "# };
+        assert_eq!(globals(code, 1).await, vec![LpcRef::from(0)]);
+    }
+
+    #[tokio::test]
+    async fn without_notify_fail_the_master_supplies_the_message() {
+        let master = indoc! { r#"
+            string seen;
+            string command_not_found(object who, string line) { seen = line; return "Huh? " + line + "\n"; }
+        "# };
+        let player = indoc! { r#"
+            string heard;
+            void create() { set_this_player(this_object()); enable_commands(); add_action("do_look", "look"); command("xyzzy plugh"); }
+            int do_look(string a) { return 1; }
+            void catch_tell(string m) { heard = m; }
+        "# };
+        let vm = Vm::new(test_config());
+        let master_proc = vm
+            .initialize_process_from_code("/secure/master.c", master)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let player_proc = vm
+            .initialize_process_from_code("/player.c", player)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&master_proc, 0u16),
+            s("xyzzy plugh")
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&player_proc, 0u16),
+            s("Huh? xyzzy plugh\n")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_zero_from_the_master_is_silent() {
+        let master = indoc! { r#"
+            int command_not_found(object who, string line) { return 0; }
+        "# };
+        let player = indoc! { r#"
+            mixed heard;
+            void create() { set_this_player(this_object()); enable_commands(); command("xyzzy"); }
+            void catch_tell(string m) { heard = m; }
+        "# };
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code("/secure/master.c", master)
+            .await
+            .unwrap();
+        let player_proc = vm
+            .initialize_process_from_code("/player.c", player)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&player_proc, 0u16),
+            LpcRef::from(0)
+        );
+    }
+
+    #[tokio::test]
+    async fn the_driver_default_is_what_or_the_hint() {
+        let with_rules = indoc! { r#"
+            string heard;
+            void create() { set_this_player(this_object()); enable_commands(); add_action("do_look", "look"); command("xyzzy"); }
+            int do_look(string a) { return 1; }
+            void catch_tell(string m) { heard = m; }
+        "# };
+        assert_eq!(globals(with_rules, 1).await, vec![s("What?")]);
+
+        let bare = indoc! { r#"
+            string heard;
+            void create() { set_this_player(this_object()); enable_commands(); command("xyzzy"); }
+            void catch_tell(string m) { heard = m; }
+        "# };
+        let heard = globals(bare, 1).await.remove(0).to_string();
+        assert!(
+            heard.starts_with("Error: *I* received your command"),
+            "{heard}"
+        );
     }
 }

@@ -23,10 +23,12 @@ pub(crate) mod input_to;
 pub(crate) mod interactive;
 pub(crate) mod living;
 pub(crate) mod move_object;
+pub(crate) mod notify_fail;
 pub(crate) mod papplyv;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
 pub(crate) mod query_command;
+pub(crate) mod query_notify_fail;
 pub(crate) mod query_resident_memory;
 pub(crate) mod query_verb;
 pub(crate) mod remove_action;
@@ -304,6 +306,11 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false) | LpcType::Object(false)],
     },
+    notify_fail => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::String(false) | LpcType::Function(false)],
+    },
     objectp [in type_predicates] => {
         returns: LpcType::Int(false),
         arity: 1,
@@ -325,6 +332,9 @@ efuns! {
     },
     query_command => {
         returns: LpcType::String(false),
+    },
+    query_notify_fail => {
+        returns: LpcType::Mixed(false),
     },
     query_resident_memory => {
         returns: LpcType::Int(false),
@@ -487,11 +497,13 @@ mod tests {
                 "living",
                 "mappingp",
                 "move_object",
+                "notify_fail",
                 "objectp",
                 "papplyv",
                 "query_call_out",
                 "query_call_outs",
                 "query_command",
+                "query_notify_fail",
                 "query_resident_memory",
                 "query_verb",
                 "remove_action",

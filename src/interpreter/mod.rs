@@ -29,6 +29,7 @@ pub use stm::{GcRefused, GcReport};
 
 // Applies - functions in LPC objects that are called directly by the driver at various times.
 pub const CATCH_TELL: &str = "catch_tell";
+pub const COMMAND_NOT_FOUND: &str = "command_not_found";
 pub const CONNECT: &str = "connect";
 pub const ERROR_HANDLER: &str = "error_handler";
 pub const LOGON: &str = "logon";
