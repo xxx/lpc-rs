@@ -245,3 +245,132 @@ fn builtins_are_memoized_per_builder() {
     let g = b.build().unwrap();
     assert_eq!(parse(&g, "a b c").count(), 1);
 }
+
+/// A pattern-frontend element, the shape the differential test generates.
+#[derive(Clone, Debug)]
+enum Elem {
+    Lit(&'static str),
+    WordLike,
+    WordsPlus,
+    WordsStar,
+    Optional(&'static str),
+}
+
+const ALPHABET: [&str; 3] = ["a", "b", "c"];
+
+/// A deterministic 64-bit LCG; `rand` is not a dependency and the cases must replay.
+struct Lcg(u64);
+
+impl Lcg {
+    fn next(&mut self, bound: usize) -> usize {
+        self.0 = self
+            .0
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        ((self.0 >> 33) as usize) % bound
+    }
+}
+
+fn random_elems(rng: &mut Lcg) -> Vec<Elem> {
+    let len = 1 + rng.next(5);
+    (0..len)
+        .map(|_| match rng.next(5) {
+            0 => Elem::Lit(ALPHABET[rng.next(3)]),
+            1 => Elem::WordLike,
+            2 => Elem::WordsPlus,
+            3 => Elem::WordsStar,
+            _ => Elem::Optional(ALPHABET[rng.next(3)]),
+        })
+        .collect()
+}
+
+fn random_tokens(rng: &mut Lcg) -> Vec<&'static str> {
+    let len = rng.next(7);
+    (0..len).map(|_| ALPHABET[rng.next(3)]).collect()
+}
+
+fn build(elems: &[Elem]) -> super::Grammar {
+    let mut b = GrammarBuilder::new();
+    b.max_parses(100_000);
+    let w = b.words_tokens();
+    let mut rhs = Vec::new();
+    for (i, e) in elems.iter().enumerate() {
+        let label = Label(i as u32);
+        let element = match e {
+            Elem::Lit(s) => lit(s),
+            Elem::WordLike => nt(b.word_like(&w)),
+            Elem::WordsPlus => nt(b.words_plus(&w)),
+            Elem::WordsStar => nt(b.words_star(&w)),
+            Elem::Optional(s) => nt(b.optional(lit(s))),
+        };
+        rhs.push(element.labeled(label));
+    }
+    let s = b.nonterminal("S");
+    b.production(s, rhs);
+    b.start(s);
+    b.build().unwrap()
+}
+
+/// Every way `elems` can cover `toks[pos..]`, as the span of each element.
+fn naive(
+    elems: &[Elem],
+    pos: usize,
+    toks: &[&str],
+    acc: &mut Vec<(usize, usize)>,
+    out: &mut Vec<Vec<(usize, usize)>>,
+) {
+    let Some((first, rest)) = elems.split_first() else {
+        if pos == toks.len() {
+            out.push(acc.clone());
+        }
+        return;
+    };
+    let ends: Vec<usize> = match first {
+        Elem::Lit(w) => (pos < toks.len() && toks[pos] == *w)
+            .then_some(pos + 1)
+            .into_iter()
+            .collect(),
+        Elem::WordLike => (pos < toks.len()).then_some(pos + 1).into_iter().collect(),
+        Elem::WordsPlus => (pos + 1..=toks.len()).collect(),
+        Elem::WordsStar => (pos..=toks.len()).collect(),
+        Elem::Optional(w) => {
+            let mut ends = vec![pos];
+            if pos < toks.len() && toks[pos] == *w {
+                ends.push(pos + 1);
+            }
+            ends
+        }
+    };
+    for end in ends {
+        acc.push((pos, end));
+        naive(rest, end, toks, acc, out);
+        acc.pop();
+    }
+}
+
+#[test]
+fn earley_agrees_with_the_naive_matcher() {
+    let mut rng = Lcg(0x5eed);
+    for _ in 0..500 {
+        let elems = random_elems(&mut rng);
+        let toks = random_tokens(&mut rng);
+        let input = toks.join(" ");
+        let g = build(&elems);
+
+        let mut expected = Vec::new();
+        naive(&elems, 0, &toks, &mut Vec::new(), &mut expected);
+        expected.sort();
+
+        let mut got: Vec<Vec<(usize, usize)>> = parse(&g, &input)
+            .map(|p| {
+                p.capture_spans()
+                    .into_iter()
+                    .map(|(_, span)| (span.start, span.end))
+                    .collect()
+            })
+            .collect();
+        got.sort();
+
+        assert_eq!(got, expected, "elems {elems:?} input {input:?}");
+    }
+}
