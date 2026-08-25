@@ -37,8 +37,8 @@ impl CaptureKind {
         Label((slot << KIND_BITS) | self as u32)
     }
 
-    /// The slot and kind a label packs, or `None` for a label this module
-    /// did not make.
+    /// The slot and kind a label packs, or `None` for a label whose kind
+    /// bits name no capture kind.
     fn unpack(label: Label) -> Option<(u32, CaptureKind)> {
         let kind = match label.0 & ((1 << KIND_BITS) - 1) {
             0 => CaptureKind::Word,
@@ -117,6 +117,8 @@ pub struct Compiled {
     pub grammar: Arc<Grammar>,
 }
 
+// The key is the pattern text alone; it must also carry the preposition set
+// once %p exists.
 static PATTERNS: LazyLock<DashMap<String, Compiled>> = LazyLock::new(DashMap::new);
 
 /// Compile `pattern`, once per text; only successes are cached, so a
@@ -126,8 +128,10 @@ pub fn compile(pattern: &str) -> Result<Compiled, PatternError> {
         return Ok(hit.clone());
     }
     let compiled = build(&group(scan(pattern)?)?)?;
-    PATTERNS.insert(pattern.to_owned(), compiled.clone());
-    Ok(compiled)
+    Ok(PATTERNS
+        .entry(pattern.to_owned())
+        .or_insert_with(|| compiled)
+        .clone())
 }
 
 /// One lexical piece of a pattern.
@@ -263,12 +267,24 @@ fn group(pieces: Vec<Piece>) -> Result<Vec<Group>, PatternError> {
     }
 }
 
+/// `words` with later repeats of an already-seen word dropped, order kept.
+fn dedup_words(words: &[String]) -> Vec<&String> {
+    let mut out: Vec<&String> = Vec::with_capacity(words.len());
+    for word in words {
+        if !out.contains(&word) {
+            out.push(word);
+        }
+    }
+    out
+}
+
 /// `S → group…` over plain words, one production; captures are labelled
 /// with their slot and kind.
 fn build(groups: &[Group]) -> Result<Compiled, PatternError> {
     let Some(Group::Words(verbs)) = groups.first() else {
         return Err(PatternError::NoVerb);
     };
+    let verbs = dedup_words(verbs);
     let mut b = GrammarBuilder::new();
     let s = b.nonterminal("S");
     let words = b.words_tokens();
@@ -276,10 +292,13 @@ fn build(groups: &[Group]) -> Result<Compiled, PatternError> {
     let mut rhs: Vec<Element> = Vec::with_capacity(groups.len());
     for group in groups {
         rhs.push(match group {
-            Group::Words(alternatives) => match alternatives.as_slice() {
-                [word] => lit(word),
-                many => nt(b.alternatives(many.iter().map(|w| lit(w)))),
-            },
+            Group::Words(alternatives) => {
+                let alternatives = dedup_words(alternatives);
+                match alternatives.as_slice() {
+                    [word] => lit(word.as_str()),
+                    many => nt(b.alternatives(many.iter().map(|w| lit(w.as_str())))),
+                }
+            }
             Group::Optional(word) => nt(b.optional(lit(word))),
             Group::Capture(kind) => {
                 let element = match kind {
@@ -297,7 +316,7 @@ fn build(groups: &[Group]) -> Result<Compiled, PatternError> {
     b.start(s);
     let grammar = b.build().map_err(PatternError::Grammar)?;
     Ok(Compiled {
-        verbs: verbs.iter().map(|v| Ustr::from(v)).collect(),
+        verbs: verbs.iter().map(|v| Ustr::from(v.as_str())).collect(),
         grammar: Arc::new(grammar),
     })
 }
@@ -367,12 +386,25 @@ mod tests {
     }
 
     #[test]
+    fn a_repeated_verb_alternative_registers_once() {
+        assert_eq!(verbs("'get' / 'get' %w"), vec!["get"]);
+    }
+
+    #[test]
     fn a_word_capture_takes_one_word_and_a_words_capture_the_rest_verbatim() {
         assert_eq!(
             args("'give' %w 'to' %s", "give sword to bob   the guard"),
             Some(vec![s("sword"), s("bob   the guard")])
         );
         assert_eq!(args("'give' %w 'to' %s", "give long sword to bob"), None);
+    }
+
+    #[test]
+    fn a_words_capture_is_greedy_before_a_later_literal() {
+        assert_eq!(
+            args("'say' %s 'to' %w", "say hi to bob to sam"),
+            Some(vec![s("hi to bob"), s("sam")])
+        );
     }
 
     #[test]
@@ -398,6 +430,12 @@ mod tests {
         assert_eq!(args("'look' [at] %w", "look at bob"), Some(vec![s("bob")]));
         assert_eq!(args("'look' [at] %w", "look bob"), Some(vec![s("bob")]));
         assert_eq!(args("'look' [at] %w", "look at"), Some(vec![s("at")]));
+    }
+
+    #[test]
+    fn an_optional_word_in_final_position_may_be_absent() {
+        assert_eq!(args("'look' [around]", "look around"), Some(vec![]));
+        assert_eq!(args("'look' [around]", "look"), Some(vec![]));
     }
 
     #[test]

@@ -9,4 +9,4 @@ consumes the line — nothing else runs.
 
 ### See also
 
-`command`, `add_action`, `notify_fail`, `command_not_found`
+`command`, `add_action`, `add_rule`, `notify_fail`, `command_not_found`

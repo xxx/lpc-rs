@@ -7,11 +7,12 @@ that player types a line the pattern matches, `handler` is called with one
 argument per capture, in pattern order. A string handler names a function of
 the calling object (any visibility); a function pointer must have its
 receiver bound, as `call_out` requires. Returns the rule's id, which
-`remove_rule` takes.
+`remove_rule` takes. No living `this_player()` is a runtime error.
 
 Rules are tried most recently registered first, native and `add_action` rules
 alike; a handler returning 0 passes the line to the next rule, and any other
-return handles it.
+return handles it. A line the pattern does not match — or a `%d` too large
+for an int — passes to the next rule the same way.
 
 ### The pattern
 
@@ -27,12 +28,16 @@ must be a quoted verb; the rest describe the words after it.
 | `%s` | zero or more words | string, spacing intact, `""` when none |
 | `%d` | a run of digits | int |
 
-Matching is by whole words and case-sensitive. `%s` is greedy: in
-`'say' %s 'to' %w`, the line `say hi to bob to sam` gives `%s` the text
-`hi to bob` and `%w` the word `sam`. A `%d` too large for an int does not
-match. A bare unquoted word, an unclosed quote or bracket, a quoted phrase of
-several words, or a `/` not between two quoted words is a runtime error
-naming the fault.
+`%d` matches digits only: `-5` and spelled-out numbers do not, unlike
+`parse_command` in other drivers.
+
+Matching is by whole words and case-sensitive — unlike `parse_command` in
+other drivers, and like `add_action` here. A quoted word cannot contain `'`.
+`%s` is greedy: in `'say' %s 'to' %w`, the line `say hi to bob to sam` gives
+`%s` the text `hi to bob` and `%w` the word `sam`. A `%d` too large for an int
+does not match. A bare unquoted word, an unclosed quote or bracket, a quoted
+phrase of several words, or a `/` not between two quoted words is a runtime
+error naming the fault.
 
 `%o`, `%l`, `%i`, and `%p` need the noun resolver, which this driver does not
 have yet; a pattern using them is a runtime error.

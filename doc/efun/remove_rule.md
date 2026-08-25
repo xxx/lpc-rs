@@ -7,7 +7,8 @@ it — from `this_player()`. Returns 1 when such a rule was there, 0 otherwise
 (an unknown id, or a rule another object registered). No `this_player()` is a
 runtime error.
 
-`remove_action(verb)` also reaches native rules by verb.
+`remove_action(verb)` removes a native registration whole when `verb` is one
+of its alternatives, and counts every alternative it removed.
 
 ### See also
 

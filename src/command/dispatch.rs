@@ -775,19 +775,25 @@ mod tests {
     #[tokio::test]
     async fn a_number_capture_arrives_as_an_int_and_a_word_does_not_match_it() {
         let code = indoc! { r#"
-            mixed count; int words; int r;
+            mixed count; int words; int r; int overflowed;
             void create() {
                 set_this_player(this_object());
                 enable_commands();
                 add_rule("'take' %d", "do_take");
                 words = command("take five");
                 r = command("take 5");
+                overflowed = command("take 99999999999999999999");
             }
             int do_take(int n) { count = n; return 1; }
         "# };
         assert_eq!(
-            globals(code, 3).await,
-            vec![LpcRef::from(5), LpcRef::from(0), LpcRef::from(1)]
+            globals(code, 4).await,
+            vec![
+                LpcRef::from(5),
+                LpcRef::from(0),
+                LpcRef::from(1),
+                LpcRef::from(0)
+            ]
         );
     }
 
@@ -806,5 +812,59 @@ mod tests {
             int do_look(string arg) { action_arg = arg; return 1; }
         "# };
         assert_eq!(globals(code, 2).await, vec![s("bob"), s("at bob")]);
+    }
+
+    #[tokio::test]
+    async fn a_room_rule_registered_from_init_dispatches_after_the_move() {
+        let room = indoc! { r#"
+            string seen;
+            void init() { add_rule("'look' [at] %w", "do_look"); }
+            int do_look(string what) { seen = what; return 1; }
+        "# };
+        let player = indoc! { r#"
+            int r;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                move_object("/room");
+                r = command("look at sign");
+            }
+        "# };
+        let vm = Vm::new(test_config());
+        let room_proc = vm.create_process_from_code("/room.c", room).await.unwrap();
+        let player_proc = vm
+            .initialize_process_from_code("/player.c", player)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&room_proc, 0u16),
+            s("sign")
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&player_proc, 0u16),
+            LpcRef::from(1)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_native_handler_returning_zero_falls_through_to_the_next_native_rule() {
+        let code = indoc! { r#"
+            int earlier_ran; int later_ran; int r;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                add_rule("'look'", "do_earlier");
+                add_rule("'look'", "do_later");
+                r = command("look");
+            }
+            int do_earlier() { earlier_ran = 1; return 1; }
+            int do_later() { later_ran = 1; return 0; }
+        "# };
+        assert_eq!(
+            globals(code, 3).await,
+            vec![LpcRef::from(1), LpcRef::from(1), LpcRef::from(1)]
+        );
     }
 }

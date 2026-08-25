@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
@@ -47,7 +47,7 @@ pub async fn remove_action<const N: usize>(context: &mut EfunContext<'_, N>) -> 
     };
 
     let rules = target.rules_of(context.txn());
-    let doomed: Vec<_> = rules
+    let doomed: HashSet<_> = rules
         .iter()
         .filter(|rule| rule.verb.as_str() == verb)
         .filter(|rule| std::ptr::eq(rule.owner.as_ptr(), Arc::as_ptr(&this_object)))
@@ -58,12 +58,17 @@ pub async fn remove_action<const N: usize>(context: &mut EfunContext<'_, N>) -> 
         })
         .map(|rule| rule.id)
         .collect();
+    // A native registration shares one id across every verb, so a doomed id can match several rules here.
+    let removed = rules
+        .iter()
+        .filter(|rule| doomed.contains(&rule.id))
+        .count();
     context.txn().with(|t| {
         for id in &doomed {
             t.merge(target.rules.id, MergeOp::RulesRemove(*id));
         }
     });
-    context.return_efun_result(LpcRef::from(doomed.len() as i64));
+    context.return_efun_result(LpcRef::from(removed as i64));
     Ok(())
 }
 
@@ -160,6 +165,23 @@ mod tests {
         let (verbs, removed) = verbs_after(code).await;
         assert!(verbs.is_empty());
         assert_eq!(removed, LpcRef::from(1));
+    }
+
+    #[tokio::test]
+    async fn removing_one_verb_of_a_native_registration_removes_every_alternative() {
+        let code = indoc! { r#"
+            int removed;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                add_rule("'give' / 'hand' %w", "do_give");
+                removed = remove_action("give");
+            }
+            int do_give(string what) { return 1; }
+        "# };
+        let (verbs, removed) = verbs_after(code).await;
+        assert!(verbs.is_empty());
+        assert_eq!(removed, LpcRef::from(2));
     }
 
     #[tokio::test]

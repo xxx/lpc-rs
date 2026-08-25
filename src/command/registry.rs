@@ -133,7 +133,7 @@ impl Rule {
     }
 
     /// The same registration under another verb: it shares this rule's id,
-    /// so a removal by id drops both.
+    /// so a removal by id drops them all.
     pub fn sibling(&self, verb: Ustr) -> Rule {
         Rule {
             verb,

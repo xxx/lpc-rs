@@ -23,4 +23,4 @@ int do_open(string what) {
 
 ### See also
 
-`query_notify_fail`, `command_not_found`, `add_action`
+`query_notify_fail`, `command_not_found`, `add_action`, `add_rule`
