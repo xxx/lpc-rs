@@ -496,6 +496,14 @@ mod tests {
                 "private variable `priv` accessed outside of its file"
             );
         }
+
+        #[tokio::test]
+        async fn an_implicit_efun_lvalue_promotes_the_local_to_a_cell() {
+            let walker = walk(r#"void f() { int n; sscanf("1", "%d", n); }"#).await;
+            let scope = walker.context.scopes.function_scope("f").unwrap();
+            let n = scope.lookup("n").unwrap();
+            assert!(n.upvalue);
+        }
     }
 
     mod test_visit_closure {

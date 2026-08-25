@@ -127,10 +127,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     }
 
     /// Write `value` back through by-reference argument `index` (0-based).
-    #[expect(
-        dead_code,
-        reason = "wired up once an efun (e.g. sscanf) reads ref_cells"
-    )]
     pub(crate) fn write_ref(&self, index: RegisterSize, value: LpcRef) -> Result<()> {
         let Some(&(_, cell)) = self.frame().ref_cells.iter().find(|(i, _)| *i == index) else {
             return Err(self.runtime_bug(format!(
@@ -456,6 +452,17 @@ mod tests {
         assert!(
             Arc::ptr_eq(&p3, &p3b),
             "find returns the live object's identity"
+        );
+    }
+
+    #[test]
+    fn write_ref_to_an_index_with_no_cell_is_a_runtime_bug() {
+        let (task_context, mut stack) = efun_context();
+        let ctx = EfunContext::new(&mut stack, &task_context);
+        let err = ctx.write_ref(2, LpcRef::from(1)).unwrap_err().to_string();
+        assert!(
+            err.contains("argument 2 of `efun_test` is not a by-reference argument"),
+            "{err}"
         );
     }
 }

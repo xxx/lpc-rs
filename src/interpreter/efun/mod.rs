@@ -36,6 +36,7 @@ pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
 pub(crate) mod remove_rule;
 pub(crate) mod set_this_player;
+pub(crate) mod sscanf;
 pub(crate) mod tell_object;
 pub(crate) mod this_object;
 pub(crate) mod this_player;
@@ -78,6 +79,8 @@ pub const SIZEOF: &str = "sizeof";
 /// `arity` and `args` may be omitted.
 /// `[in module]` dispatches to `module::name` instead of `name::name`;
 /// `[prototype only]` marks a special form: no module, no dispatch.
+/// `refs: from N` marks every argument from index `N` (0-based) as an
+/// lvalue the efun writes back through `write_ref`.
 macro_rules! efuns {
     (@dispatch $name:ident, $context:ident) => {
         $name::$name($context).await
@@ -114,6 +117,7 @@ macro_rules! efuns {
         returns: $returns:expr
         $(, arity: $arity:tt)?
         $(, args: [$($arg:expr),* $(,)?])?
+        $(, refs: from $ref_from:literal)?
         $(,)?
     }) => {
         FunctionPrototypeBuilder::default()
@@ -124,6 +128,7 @@ macro_rules! efuns {
             .arity(efuns!(@arity $($arity)?))
             .arg_types(vec![$($($arg),*)?])
             .flags(efuns!(@flags $($arity)?))
+            .ref_tail(None $(.or(Some($ref_from)))?)
             .build()
             .expect(concat!("failed to build ", stringify!($name)))
     };
@@ -380,6 +385,12 @@ efuns! {
         arity: 1,
         args: [LpcType::Mixed(true) | LpcType::Mapping(false)],
     },
+    sscanf => {
+        returns: LpcType::Int(false),
+        arity: (2, 0, ellipsis),
+        args: [LpcType::String(false), LpcType::String(false)],
+        refs: from 2,
+    },
     stringp [in type_predicates] => {
         returns: LpcType::Int(false),
         arity: 1,
@@ -527,6 +538,7 @@ mod tests {
                 "remove_rule",
                 "set_this_player",
                 "sizeof",
+                "sscanf",
                 "stringp",
                 "tell_object",
                 "this_object",

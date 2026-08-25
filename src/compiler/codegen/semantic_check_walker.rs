@@ -3001,5 +3001,17 @@ mod tests {
                 "a function pointer cannot take an argument by reference",
             );
         }
+
+        #[tokio::test]
+        async fn an_efun_ref_position_needs_a_variable() {
+            let errors = errors_of(r#"void f() { sscanf("1", "%d", 3); }"#).await;
+            assert_one_error(&errors, "argument 3 of `sscanf` must be a variable");
+        }
+
+        #[tokio::test]
+        async fn a_bare_variable_at_an_efun_ref_position_is_clean() {
+            let errors = errors_of(r#"void f() { int n; sscanf("1", "%d", n); }"#).await;
+            assert!(errors.is_empty(), "{errors:?}");
+        }
     }
 }

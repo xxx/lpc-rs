@@ -5968,5 +5968,25 @@ mod tests {
             );
             assert_eq!(inc.num_upvalues, 1);
         }
+
+        #[tokio::test]
+        async fn an_implicit_efun_lvalue_pushes_its_cell() {
+            let mut walker = walk_prog(r#"void f() { int n; sscanf("1", "%d", n); }"#).await;
+            let instructions = walker_function_instructions(&mut walker, "f");
+            assert!(
+                instructions
+                    .iter()
+                    .any(|i| matches!(i, PushRef(RegisterVariant::Upvalue(_)))),
+                "{instructions:?}"
+            );
+            assert_eq!(
+                instructions
+                    .iter()
+                    .filter(|i| matches!(i, PushArg(_)))
+                    .count(),
+                2,
+                "{instructions:?}"
+            );
+        }
     }
 }
