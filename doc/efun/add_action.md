@@ -43,4 +43,4 @@ int do_say(string text) {
 
 ### See also
 
-`remove_action`, `command`, `query_verb`, `notify_fail`, `init`, `enable_commands`
+`remove_action`, `add_rule`, `command`, `query_verb`, `notify_fail`, `init`, `enable_commands`

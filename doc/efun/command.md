@@ -20,4 +20,4 @@ command("look");
 
 ### See also
 
-`add_action`, `process_input`, `notify_fail`
+`add_action`, `add_rule`, `process_input`, `notify_fail`

@@ -10,4 +10,4 @@ with an object second — from that living. Returns how many rules were removed.
 
 ### See also
 
-`add_action`
+`add_action`, `remove_rule`
