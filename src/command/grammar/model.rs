@@ -277,6 +277,17 @@ impl GrammarBuilder {
         self
     }
 
+    /// Whether `nt` has at least one production so far.
+    pub(crate) fn is_defined(&self, nt: NtId) -> bool {
+        self.productions.iter().any(|p| p.lhs == nt)
+    }
+
+    /// A nonterminal no name can collide with.
+    pub(crate) fn fresh(&mut self, prefix: &str) -> NtId {
+        let name = format!("{prefix}#{}", self.nonterminals.len());
+        self.nonterminal(&name)
+    }
+
     /// Validate and build the grammar; fails with `GrammarError` if invalid.
     pub fn build(self) -> Result<Grammar, GrammarError> {
         let Self {

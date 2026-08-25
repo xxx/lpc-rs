@@ -3,11 +3,15 @@
 //! or transactions: frontends compile their surface syntax into a [`Grammar`]
 //! and read captures back out of a parse.
 
+mod builtins;
 mod earley;
 mod model;
+#[cfg(test)]
+mod tests;
 mod tokenizer;
 mod tree;
 
+pub use builtins::Words;
 pub use earley::{Parses, parse};
 pub use model::{
     Element, Grammar, GrammarBuilder, GrammarError, Label, NtId, Options, ProdId, Production,
