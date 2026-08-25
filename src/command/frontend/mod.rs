@@ -2,6 +2,7 @@
 //! and the registry's rules.
 
 pub mod add_action;
+pub mod native;
 
 use crate::{
     command::{
