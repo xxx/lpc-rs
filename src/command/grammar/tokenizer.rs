@@ -28,35 +28,40 @@ pub(crate) struct TokenSet {
 }
 
 impl TokenSet {
+    /// Compile `rules` into one joint DFA; on failure, a per-rule build
+    /// attributes the error to its rule, or to the combination if every rule
+    /// builds alone.
     pub(crate) fn build(rules: &[TokenRule], case_insensitive: bool) -> Result<Self, GrammarError> {
         let syntax = syntax::Config::new().case_insensitive(case_insensitive);
-
-        // A per-rule build attributes a syntax error to its rule; the joint build cannot.
-        for rule in rules {
-            dense::Builder::new()
-                .syntax(syntax)
-                .build(&rule.pattern)
-                .map_err(|e| GrammarError::BadRegex {
-                    class: rule.name.clone(),
-                    message: e.to_string(),
-                })?;
-        }
-
         let patterns: Vec<&str> = rules.iter().map(|r| r.pattern.as_str()).collect();
+
         let dfa = if patterns.is_empty() {
             None
         } else {
-            Some(
-                dense::Builder::new()
-                    .syntax(syntax)
-                    .configure(
-                        dense::Config::new()
-                            .match_kind(MatchKind::All)
-                            .start_kind(StartKind::Anchored),
-                    )
-                    .build_many(&patterns)
-                    .map_err(|e| GrammarError::DfaBuild(e.to_string()))?,
-            )
+            match dense::Builder::new()
+                .syntax(syntax)
+                .configure(
+                    dense::Config::new()
+                        .match_kind(MatchKind::All)
+                        .start_kind(StartKind::Anchored),
+                )
+                .build_many(&patterns)
+            {
+                Ok(dfa) => Some(dfa),
+                Err(e) => {
+                    // The joint build failed; a per-rule build attributes the failure to its rule.
+                    for rule in rules {
+                        dense::Builder::new()
+                            .syntax(syntax)
+                            .build(&rule.pattern)
+                            .map_err(|e| GrammarError::BadRegex {
+                                class: rule.name.clone(),
+                                message: e.to_string(),
+                            })?;
+                    }
+                    return Err(GrammarError::DfaBuild(e.to_string()));
+                }
+            }
         };
 
         Ok(TokenSet {
@@ -72,15 +77,22 @@ impl TokenSet {
         let mut pos = 0;
         while pos < input.len() {
             let dfa = self.dfa.as_ref()?;
+            // A MatchError is unreachable for an anchored dense DFA without quit
+            // bytes, so `.ok().flatten()` only reshapes the type, never actually
+            // maps a real error to `None`.
             let found = dfa
-                .try_search_fwd(&Input::new(&input[pos..]).anchored(Anchored::Yes))
+                .try_search_fwd(
+                    &Input::new(input)
+                        .span(pos..input.len())
+                        .anchored(Anchored::Yes),
+                )
                 .ok()
                 .flatten()?;
-            if found.offset() == 0 {
+            let end = found.offset();
+            if end == pos {
                 return None;
             }
             let class = TokenClass(found.pattern().as_u32());
-            let end = pos + found.offset();
             if !self.skip[class.0 as usize] {
                 tokens.push(Token {
                     class,
@@ -103,6 +115,8 @@ pub struct Scan {
 }
 
 impl Scan {
+    /// Pair `tokens` with the input they were scanned from, folding each
+    /// token's text to lowercase when the grammar is case-insensitive.
     pub(crate) fn new(input: &str, tokens: Vec<Token>, case_insensitive: bool) -> Self {
         let folded = case_insensitive.then(|| {
             tokens
@@ -294,5 +308,27 @@ mod tests {
         assert_eq!(scan.match_text(0), "Abc");
         assert_eq!(scan.tokens().len(), 1);
         assert_eq!(scan.input(), "Abc");
+    }
+
+    #[test]
+    fn multi_byte_input_keeps_byte_offsets() {
+        let input = "look ünïcödé";
+        let tokens = set(&[("whitespace", r"\s+", true), ("word", r"\S+", false)])
+            .tokenize(input)
+            .unwrap();
+        let second_len = "ünïcödé".len();
+        assert_eq!(
+            tokens,
+            vec![
+                Token {
+                    class: TokenClass(1),
+                    range: 0..4
+                },
+                Token {
+                    class: TokenClass(1),
+                    range: 5..5 + second_len
+                },
+            ]
+        );
     }
 }

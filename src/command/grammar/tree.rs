@@ -76,7 +76,9 @@ impl<'g> Parse<'g> {
         self.scan.token_text(i)
     }
 
-    /// The input under a token span with its spacing intact; an empty span is `""`.
+    /// The input under a token span with its spacing intact; an empty span is
+    /// `""`. `span` must be a token span of this parse; an out-of-range span
+    /// panics like slice indexing.
     pub fn text(&self, span: Range<usize>) -> &str {
         if span.is_empty() {
             return "";

@@ -246,8 +246,19 @@ fn builtins_are_memoized_per_builder() {
     assert_eq!(parse(&g, "a b c").count(), 1);
 }
 
+#[test]
+fn builtins_without_an_explicit_start_parse_the_first_builtin() {
+    let mut b = GrammarBuilder::new();
+    let w = b.words_tokens();
+    b.word_like(&w);
+    let s = b.nonterminal("S");
+    b.production(s, [lit("a")]);
+    let g = b.build().unwrap();
+    assert_eq!(g.nonterminal_name(g.start()), "%word_like");
+}
+
 /// A pattern-frontend element, the shape the differential test generates.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 enum Elem {
     Lit(&'static str),
     WordLike,
@@ -256,7 +267,7 @@ enum Elem {
     Optional(&'static str),
 }
 
-const ALPHABET: [&str; 3] = ["a", "b", "c"];
+const ALPHABET: [&str; 4] = ["a", "b", "c", "1"];
 
 /// A deterministic 64-bit LCG; `rand` is not a dependency and the cases must replay.
 struct Lcg(u64);
@@ -275,18 +286,18 @@ fn random_elems(rng: &mut Lcg) -> Vec<Elem> {
     let len = 1 + rng.next(5);
     (0..len)
         .map(|_| match rng.next(5) {
-            0 => Elem::Lit(ALPHABET[rng.next(3)]),
+            0 => Elem::Lit(ALPHABET[rng.next(4)]),
             1 => Elem::WordLike,
             2 => Elem::WordsPlus,
             3 => Elem::WordsStar,
-            _ => Elem::Optional(ALPHABET[rng.next(3)]),
+            _ => Elem::Optional(ALPHABET[rng.next(4)]),
         })
         .collect()
 }
 
 fn random_tokens(rng: &mut Lcg) -> Vec<&'static str> {
     let len = rng.next(7);
-    (0..len).map(|_| ALPHABET[rng.next(3)]).collect()
+    (0..len).map(|_| ALPHABET[rng.next(4)]).collect()
 }
 
 fn build(elems: &[Elem]) -> super::Grammar {

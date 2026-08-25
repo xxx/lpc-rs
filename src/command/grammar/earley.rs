@@ -257,7 +257,14 @@ fn derive_rhs<'g>(
     match &rhs[k].symbol {
         Symbol::NonTerminal(nt) => {
             let nt = *nt;
-            Box::new((pos..=end).rev().flat_map(move |mid| {
+            // A nonterminal in the last rhs position can only span pos..end,
+            // so enumerating shorter spans there is pure waste.
+            let mids: Box<dyn Iterator<Item = usize> + Send> = if k + 1 == rhs.len() {
+                Box::new(iter::once(end))
+            } else {
+                Box::new((pos..=end).rev())
+            };
+            Box::new(mids.flat_map(move |mid| {
                 let ctx_rest = ctx.clone();
                 let path_rest = path.clone();
                 derive(ctx.clone(), nt, pos, mid, path.clone()).flat_map(move |node| {
@@ -322,7 +329,9 @@ pub fn parse<'g>(grammar: &'g Grammar, input: &str) -> Parses<'g> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::grammar::{GrammarBuilder, TokenClass, lit, nt, tok};
+    use crate::command::grammar::{
+        Child, GrammarBuilder, Label, Node, Parse, Parses, TokenClass, lit, nt, parse, tok,
+    };
 
     /// A builder with the plain-words rules and the classes they got.
     fn words() -> (GrammarBuilder, TokenClass, TokenClass) {
@@ -438,6 +447,7 @@ mod tests {
         assert!(recognize(&g, "3 apples"));
         assert!(recognize(&g, "3 four"));
         assert!(!recognize(&g, "three apples"));
+        assert!(!recognize(&g, "3 4"));
     }
 
     #[test]
@@ -466,8 +476,6 @@ mod tests {
         let g = b.build().unwrap();
         assert!(!recognize(&g, "a!"));
     }
-
-    use crate::command::grammar::{Child, Label, Node, Parse, Parses, parse};
 
     #[test]
     fn a_single_parse_has_the_expected_tree() {
@@ -498,6 +506,7 @@ mod tests {
         assert_eq!(parses[0].tokens().len(), 2);
         assert_eq!(parses[0].token_text(1), "b");
         assert_eq!(parses[0].text(0..2), "a b");
+        assert!(std::ptr::eq(parses[0].grammar(), &g));
     }
 
     #[test]
@@ -579,6 +588,7 @@ mod tests {
         let s = b.nonterminal("S");
         b.production(s, [nt(s), nt(s)]);
         b.production(s, [lit("a")]);
+        b.max_parses(usize::MAX);
         let g = b.build().unwrap();
         let input = ["a"; 20].join(" ");
         assert_eq!(parse(&g, &input).take(2).count(), 2);
@@ -606,7 +616,7 @@ mod tests {
         b.production(t, [nt(s)]);
         let g = b.build().unwrap();
         let count = parse(&g, "").count();
-        assert!((1..1000).contains(&count), "{count}");
+        assert_eq!(count, 1);
     }
 
     #[test]
@@ -634,7 +644,30 @@ mod tests {
     #[test]
     fn parses_are_send() {
         fn assert_send<T: Send>() {}
+        fn assert_send_sync<T: Send + Sync>() {}
         assert_send::<Parses<'static>>();
         assert_send::<Parse<'static>>();
+        assert_send_sync::<Grammar>();
+    }
+
+    #[test]
+    fn two_adjacent_word_lists_give_the_first_the_longest_span() {
+        let (mut b, _, word) = words();
+        let s = b.nonterminal("S");
+        let rest = b.nonterminal("Rest");
+        b.production(
+            s,
+            [
+                lit("say"),
+                nt(rest).labeled(Label(0)),
+                nt(rest).labeled(Label(1)),
+            ],
+        );
+        b.production(rest, [tok(word)]);
+        b.production(rest, [nt(rest), tok(word)]);
+        let g = b.build().unwrap();
+
+        let p = parse(&g, "say a b c").next().unwrap();
+        assert_eq!(p.captures(), vec![(Label(0), "a b"), (Label(1), "c")]);
     }
 }

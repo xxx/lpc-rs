@@ -25,7 +25,8 @@ impl GrammarBuilder {
         }
     }
 
-    /// `word_like → word | number`
+    /// `word_like → word | number`; a grammar that calls this must set its
+    /// start explicitly, since these injected productions come first.
     pub fn word_like(&mut self, words: &Words) -> NtId {
         let id = self.nonterminal("%word_like");
         if !self.is_defined(id) {
@@ -35,7 +36,9 @@ impl GrammarBuilder {
         id
     }
 
-    /// `words_plus → word_like | words_plus word_like`
+    /// `words_plus → word_like | words_plus word_like`; a grammar that calls
+    /// this must set its start explicitly, since these injected productions
+    /// come first.
     pub fn words_plus(&mut self, words: &Words) -> NtId {
         let word_like = self.word_like(words);
         let id = self.nonterminal("%words_plus");
@@ -46,7 +49,9 @@ impl GrammarBuilder {
         id
     }
 
-    /// `words_star → ε | words_star word_like`
+    /// `words_star → ε | words_star word_like`; a grammar that calls this
+    /// must set its start explicitly, since these injected productions come
+    /// first.
     pub fn words_star(&mut self, words: &Words) -> NtId {
         let word_like = self.word_like(words);
         let id = self.nonterminal("%words_star");
@@ -57,8 +62,10 @@ impl GrammarBuilder {
         id
     }
 
-    /// A fresh `opt → x | ε`; the consuming alternative first so the first
-    /// parse takes the word when it is there.
+    /// A fresh `opt → x | ε`; greediness comes from longest-span-first
+    /// enumeration, not production order, which matters only when `element`
+    /// is itself nullable. A grammar that calls this must set its start
+    /// explicitly, since these injected productions come first.
     pub fn optional(&mut self, element: Element) -> NtId {
         let id = self.fresh("%opt");
         self.production(id, [element]);
@@ -66,7 +73,9 @@ impl GrammarBuilder {
         id
     }
 
-    /// A fresh `alt → a | b | …`, one production per alternative.
+    /// A fresh `alt → a | b | …`, one production per alternative; a grammar
+    /// that calls this must set its start explicitly, since these injected
+    /// productions come first.
     pub fn alternatives(&mut self, elements: impl IntoIterator<Item = Element>) -> NtId {
         let id = self.fresh("%alt");
         for element in elements {

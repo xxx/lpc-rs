@@ -83,9 +83,11 @@ pub struct Production {
 }
 
 /// Settings that configure the grammar's parser behavior.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Options {
-    /// Fold literals and input to lowercase before matching.
+    /// Fold literals and input to lowercase before matching; token rules are
+    /// also compiled case-insensitively, which changes token classification,
+    /// not only literal comparison.
     pub case_insensitive: bool,
     /// Derivations enumerated per input before the iterator ends.
     pub max_parses: usize,
@@ -104,7 +106,9 @@ impl Default for Options {
 /// A token rule as the builder collected it; the grammar compiles them together.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TokenRule {
+    /// The rule's name; becomes the token class's name in the grammar.
     pub name: String,
+    /// The rule's regex pattern.
     pub pattern: String,
     /// Matched and dropped, never a token.
     pub skip: bool,
@@ -119,7 +123,8 @@ pub enum GrammarError {
     UnknownNonTerminal { name: String },
     /// A token rule pattern is not a valid regex.
     BadRegex { class: String, message: String },
-    /// The token rules cannot compile to a DFA.
+    /// The joint-build fallback when per-rule attribution cannot reach the
+    /// failure: a combination of rules exceeding the DFA's size limit.
     DfaBuild(String),
 }
 
@@ -260,6 +265,9 @@ impl GrammarBuilder {
     }
 
     /// Set the start symbol; the first production's left-hand side when unset.
+    /// A grammar using the builtins (`word_like`, `words_plus`, `words_star`,
+    /// `optional`, `alternatives`) must call this explicitly, since their
+    /// injected productions come first.
     pub fn start(&mut self, nt: NtId) -> &mut Self {
         self.start = Some(nt);
         self
@@ -306,6 +314,11 @@ impl GrammarBuilder {
 
         let mut by_lhs = vec![Vec::new(); nonterminals.len()];
         for (i, p) in productions.iter().enumerate() {
+            if p.lhs.0 as usize >= nonterminals.len() {
+                return Err(GrammarError::UnknownNonTerminal {
+                    name: format!("#{}", p.lhs.0),
+                });
+            }
             by_lhs[p.lhs.0 as usize].push(ProdId(i as u32));
         }
 
@@ -316,6 +329,11 @@ impl GrammarBuilder {
             })
         }));
         for n in referenced {
+            if n.0 as usize >= nonterminals.len() {
+                return Err(GrammarError::UnknownNonTerminal {
+                    name: format!("#{}", n.0),
+                });
+            }
             if by_lhs[n.0 as usize].is_empty() {
                 return Err(GrammarError::UnknownNonTerminal {
                     name: nonterminals[n.0 as usize].clone(),
@@ -404,6 +422,17 @@ mod tests {
             GrammarError::UnknownNonTerminal {
                 name: "Ghost".into()
             }
+        );
+    }
+
+    #[test]
+    fn a_foreign_nonterminal_id_is_an_error() {
+        let mut b = GrammarBuilder::new();
+        let s = b.nonterminal("S");
+        b.production(s, [nt(NtId(99))]);
+        assert_eq!(
+            b.build().unwrap_err(),
+            GrammarError::UnknownNonTerminal { name: "#99".into() }
         );
     }
 
