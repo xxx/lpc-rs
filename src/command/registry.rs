@@ -83,6 +83,8 @@ impl VerbMatch {
 pub enum Frontend {
     /// Registered by the `add_action()` efun.
     AddAction,
+    /// Registered by the `add_rule()` efun.
+    Native,
 }
 
 /// One registered command rule.
@@ -128,6 +130,15 @@ impl Rule {
     /// The owner, if it has not been dropped.
     pub fn owner(&self) -> Option<Arc<Process>> {
         self.owner.upgrade()
+    }
+
+    /// The same registration under another verb: it shares this rule's id,
+    /// so a removal by id drops both.
+    pub fn sibling(&self, verb: Ustr) -> Rule {
+        Rule {
+            verb,
+            ..self.clone()
+        }
     }
 }
 

@@ -33,6 +33,7 @@ pub async fn add_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
     let handler = handler_from(
         context,
         context.resolve_local_register(1 as RegisterSize).clone(),
+        "add_action",
     )?;
 
     let verb_ref = context.resolve_local_register(2 as RegisterSize);
@@ -94,18 +95,19 @@ pub async fn add_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
     Ok(())
 }
 
-/// The handler for a verb: a function of this object by name, or a bound
-/// function pointer as `call_out` requires.
+/// The handler for a rule: a function of this object by name, or a bound
+/// function pointer as `call_out` requires; `efun` prefixes the messages.
 pub(crate) fn handler_from<const N: usize>(
     context: &EfunContext<'_, N>,
     arg: LpcRef,
+    efun: &str,
 ) -> Result<Arc<FunctionPtr>> {
     match arg {
         LpcRef::String(name) => {
             let this_object = &context.frame().process;
             let Some(function) = this_object.program.unmangled_functions.get(name.to_str()) else {
                 return Err(context.runtime_error(format!(
-                    "add_action: no function `{}` in {}",
+                    "{efun}: no function `{}` in {}",
                     name.to_str(),
                     this_object.filename()
                 )));
@@ -115,20 +117,20 @@ pub(crate) fn handler_from<const N: usize>(
                 .owner(owner.clone())
                 .address(FunctionAddress::Local(owner, function.clone()))
                 .build()
-                .map_err(|e| context.runtime_bug(format!("add_action: {e}")))?;
+                .map_err(|e| context.runtime_bug(format!("{efun}: {e}")))?;
             Ok(Arc::new(ptr))
         }
         LpcRef::Function(ptr) => {
             if !ptr.receiver_bound() {
-                return Err(context.runtime_error(
-                    "add_action: the receiver of a dynamic function pointer must be bound",
-                ));
+                return Err(context.runtime_error(format!(
+                    "{efun}: the receiver of a dynamic function pointer must be bound"
+                )));
             }
             Ok(ptr)
         }
-        _ => Err(context.runtime_error(
-            "add_action: the handler must be a function name or a function pointer",
-        )),
+        _ => Err(context.runtime_error(format!(
+            "{efun}: the handler must be a function name or a function pointer"
+        ))),
     }
 }
 

@@ -1,6 +1,7 @@
 pub mod efun_context;
 
 pub(crate) mod add_action;
+pub(crate) mod add_rule;
 pub(crate) mod all_environment;
 pub(crate) mod all_inventory;
 pub(crate) mod call_out;
@@ -157,6 +158,14 @@ efuns! {
             LpcType::Function(false) | LpcType::String(false),
             LpcType::String(false) | LpcType::String(true),
             LpcType::Int(false),
+        ],
+    },
+    add_rule => {
+        returns: LpcType::Int(false),
+        arity: 2,
+        args: [
+            LpcType::String(false),
+            LpcType::Function(false) | LpcType::String(false),
         ],
     },
     all_environment => {
@@ -468,6 +477,7 @@ mod tests {
             names,
             [
                 "add_action",
+                "add_rule",
                 "all_environment",
                 "all_inventory",
                 "arrayp",

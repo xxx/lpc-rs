@@ -141,7 +141,9 @@ async fn trial(
         if !rule.handler.receiver_is_live(ctx.txn()) {
             continue;
         }
-        let (args, reported) = arguments_and_verb(rule, &parsed, line);
+        let Some((args, reported)) = arguments_and_verb(rule, &parsed, line) else {
+            continue;
+        };
         ctx.with_command(|state| {
             if let Some(state) = state {
                 state.verb_reported = reported;
@@ -750,5 +752,59 @@ mod tests {
             .expect("a thread with room for the recursion");
         let err = runner.join().expect("the runner panicked");
         assert!(err.contains("nesting deeper than 16"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn a_native_rule_passes_each_capture_as_its_own_argument() {
+        let code = indoc! { r#"
+            string item; string target; string verb; int r;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                add_rule("'give' / 'hand' %w 'to' %s", "do_give");
+                r = command("hand sword to the  guard");
+            }
+            int do_give(string what, string whom) { item = what; target = whom; verb = query_verb(); return 1; }
+        "# };
+        assert_eq!(
+            globals(code, 4).await,
+            vec![s("sword"), s("the  guard"), s("hand"), LpcRef::from(1)]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_number_capture_arrives_as_an_int_and_a_word_does_not_match_it() {
+        let code = indoc! { r#"
+            mixed count; int words; int r;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                add_rule("'take' %d", "do_take");
+                words = command("take five");
+                r = command("take 5");
+            }
+            int do_take(int n) { count = n; return 1; }
+        "# };
+        assert_eq!(
+            globals(code, 3).await,
+            vec![LpcRef::from(5), LpcRef::from(0), LpcRef::from(1)]
+        );
+    }
+
+    #[tokio::test]
+    async fn native_and_add_action_rules_share_one_precedence_order() {
+        let code = indoc! { r#"
+            string native_arg; string action_arg;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                add_action("do_look", "look");
+                add_rule("'look' [at] %w", "do_look_at");
+                command("look at bob");
+            }
+            int do_look_at(string who) { native_arg = who; return 0; }
+            int do_look(string arg) { action_arg = arg; return 1; }
+        "# };
+        assert_eq!(globals(code, 2).await, vec![s("bob"), s("at bob")]);
     }
 }
