@@ -1,6 +1,6 @@
 //! The command system: one grammar engine that every parsing frontend
-//! compiles into. Only the engine exists yet; the rule registry, dispatch,
-//! noun resolver, and the frontends build on it.
+//! compiles into. The registry, dispatch, presence, and the add_action
+//! frontend now exist; the resolver and the other frontends follow.
 
 pub(crate) mod command_task;
 pub mod dispatch;
