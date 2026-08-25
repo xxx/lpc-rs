@@ -275,7 +275,6 @@ impl Process {
     }
 
     /// This object's rule list as seen through `txn` (a tracked read).
-    #[expect(dead_code, reason = "used once dispatch lands")]
     pub(crate) fn rules_of(&self, txn: &TxnHandle) -> RuleList {
         txn.with(|t| t.read_rules(self.rules.id))
     }

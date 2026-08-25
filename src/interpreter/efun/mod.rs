@@ -1,5 +1,6 @@
 pub mod efun_context;
 
+pub(crate) mod add_action;
 pub(crate) mod all_environment;
 pub(crate) mod all_inventory;
 pub(crate) mod call_out;
@@ -25,6 +26,7 @@ pub(crate) mod papplyv;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
 pub(crate) mod query_resident_memory;
+pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
 pub(crate) mod set_this_player;
 pub(crate) mod tell_object;
@@ -143,6 +145,15 @@ macro_rules! efuns {
 }
 
 efuns! {
+    add_action => {
+        returns: LpcType::Void,
+        arity: (3, 1),
+        args: [
+            LpcType::Function(false) | LpcType::String(false),
+            LpcType::String(false) | LpcType::String(true),
+            LpcType::Int(false),
+        ],
+    },
     all_environment => {
         returns: LpcType::Object(true),
         arity: (1, 1),
@@ -308,6 +319,11 @@ efuns! {
         returns: LpcType::Int(false),
         arity: 0,
     },
+    remove_action => {
+        returns: LpcType::Int(false),
+        arity: (2, 1),
+        args: [LpcType::String(false), LpcType::String(false) | LpcType::Object(false)],
+    },
     remove_call_out => {
         returns: LpcType::Int(false),
         arity: 1,
@@ -425,6 +441,7 @@ mod tests {
         assert_eq!(
             names,
             [
+                "add_action",
                 "all_environment",
                 "all_inventory",
                 "arrayp",
@@ -458,6 +475,7 @@ mod tests {
                 "query_call_out",
                 "query_call_outs",
                 "query_resident_memory",
+                "remove_action",
                 "remove_call_out",
                 "set_this_player",
                 "sizeof",

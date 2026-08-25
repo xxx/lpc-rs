@@ -28,10 +28,8 @@ pub(crate) enum MergeOp {
     /// Insert or overwrite one key; an absent cell is the empty mapping.
     MapInsert(LpcRef, LpcRef),
     /// Append one rule; an absent cell is the empty list.
-    #[cfg_attr(not(test), expect(dead_code, reason = "used once dispatch lands"))]
     RulesAppend(Rule),
     /// Remove the rule with this id.
-    #[cfg_attr(not(test), expect(dead_code, reason = "used once dispatch lands"))]
     RulesRemove(RuleId),
     /// Remove every rule registered by an owner in the scope.
     #[cfg_attr(not(test), expect(dead_code, reason = "used once dispatch lands"))]

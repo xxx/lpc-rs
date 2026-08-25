@@ -2904,7 +2904,7 @@ mod tests {
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
                 PushArg(RegisterVariant::Local(Register(2))),
-                CallEfun(7),
+                CallEfun(8),
                 Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(3)),
@@ -2947,7 +2947,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(3)), Address(17)),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
-                CallEfun(12),
+                CallEfun(13),
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -2958,7 +2958,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(6)), ustr("breaking")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(6))),
-                CallEfun(12),
+                CallEfun(13),
                 Jmp(Address(17)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
@@ -3003,7 +3003,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(3)), Address(20)),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
-                CallEfun(12),
+                CallEfun(13),
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -3014,7 +3014,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(6)), ustr("breaking")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(6))),
-                CallEfun(12),
+                CallEfun(13),
                 Jmp(Address(20)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
@@ -3058,7 +3058,7 @@ mod tests {
             let expected = vec![
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
-                CallEfun(12),
+                CallEfun(13),
                 IConst(RegisterVariant::Local(Register(2)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -3069,7 +3069,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(4)), ustr("breaking")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(4))),
-                CallEfun(12),
+                CallEfun(13),
                 Jmp(Address(16)),
                 IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
@@ -3118,16 +3118,16 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(2)), ustr("YEAH BABY")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(2))),
-                CallEfun(12),
+                CallEfun(13),
                 Jmp(Address(26)),
                 SConst(RegisterVariant::Local(Register(3)), ustr("very")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(3))),
-                CallEfun(12),
+                CallEfun(13),
                 SConst(RegisterVariant::Local(Register(4)), ustr("weak")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(4))),
-                CallEfun(12),
+                CallEfun(13),
                 Jmp(Address(26)),
                 IConst(RegisterVariant::Local(Register(5)), 666),
                 EqEq(
@@ -3218,7 +3218,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), -1),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
-                CallEfun(12),
+                CallEfun(13),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3501,7 +3501,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(1)), ustr("/foo.c")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
-                CallEfun(6),
+                CallEfun(7),
                 Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(2)),
@@ -3523,7 +3523,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(1)), ustr("lkajsdflkajsdf")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
-                CallEfun(12),
+                CallEfun(13),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3600,7 +3600,7 @@ mod tests {
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
                 PushArg(RegisterVariant::Local(Register(4))),
-                CallEfun(29),
+                CallEfun(30),
                 Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(5)),
@@ -3651,7 +3651,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(1)), 127983),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
-                CallEfun(12),
+                CallEfun(13),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3746,7 +3746,7 @@ mod tests {
                     ),
                     ClearArgs,
                     PushArg(RegisterVariant::Local(Register(3))),
-                    CallEfun(12),
+                    CallEfun(13),
                     Ret
                 ]
             );
@@ -4000,7 +4000,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(3)), Address(17)),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
-                CallEfun(12),
+                CallEfun(13),
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -4011,7 +4011,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(6)), ustr("goin' infinite!")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(6))),
-                CallEfun(12),
+                CallEfun(13),
                 Jmp(Address(0)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
@@ -4056,7 +4056,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(3)), Address(20)),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
-                CallEfun(12),
+                CallEfun(13),
                 IConst(RegisterVariant::Local(Register(4)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -4067,7 +4067,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(6)), ustr("goin' infinite!")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(6))),
-                CallEfun(12),
+                CallEfun(13),
                 Jmp(Address(17)),
                 IConst1(RegisterVariant::Local(Register(7))),
                 IAdd(
@@ -4111,7 +4111,7 @@ mod tests {
             let expected = vec![
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
-                CallEfun(12),
+                CallEfun(13),
                 IConst(RegisterVariant::Local(Register(2)), 5),
                 Gt(
                     RegisterVariant::Local(Register(1)),
@@ -4122,7 +4122,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(4)), ustr("goin' infinite!")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(4))),
-                CallEfun(12),
+                CallEfun(13),
                 Jmp(Address(13)),
                 IConst1(RegisterVariant::Local(Register(5))),
                 IAdd(
@@ -4234,7 +4234,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(1)), ustr("body")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
-                CallEfun(12),
+                CallEfun(13),
                 IConst(RegisterVariant::Local(Register(2)), 666),
                 IConst(RegisterVariant::Local(Register(3)), 777),
                 EqEq(
@@ -4313,7 +4313,7 @@ mod tests {
                 Jz(RegisterVariant::Local(Register(1)), Address(0)),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
-                CallEfun(12),
+                CallEfun(13),
                 IConst1(RegisterVariant::Local(Register(2))),
                 ISub(
                     RegisterVariant::Local(Register(1)),
@@ -4518,12 +4518,12 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(4)), ustr("true")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(4))),
-                CallEfun(12),
+                CallEfun(13),
                 Jmp(Address(0)),
                 SConst(RegisterVariant::Local(Register(5)), ustr("false")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(5))),
-                CallEfun(12),
+                CallEfun(13),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4686,7 +4686,7 @@ mod tests {
                 Call(ustr("f__i____pb__")),
                 ClearArgs,
                 PushArg(Register(0).as_local()),
-                CallEfun(12),
+                CallEfun(13),
                 Ret,
             ];
             assert_eq!(
@@ -4736,7 +4736,7 @@ mod tests {
                 IConst(RegisterVariant::Local(Register(2)), 9),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(2))),
-                CallEfun(12),
+                CallEfun(13),
                 Ret, // Automatically added due to no explicit return
             ];
 
@@ -4902,17 +4902,17 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(2)), ustr("one")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(2))),
-                CallEfun(12),
+                CallEfun(13),
                 Jmp(Address(24)),
                 SConst(RegisterVariant::Local(Register(3)), ustr("two")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(3))),
-                CallEfun(12),
+                CallEfun(13),
                 Jmp(Address(24)),
                 SConst(RegisterVariant::Local(Register(4)), ustr("default")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(4))),
-                CallEfun(12),
+                CallEfun(13),
                 Jmp(Address(24)),
                 IConst1(RegisterVariant::Local(Register(5))),
                 EqEq(
@@ -5228,7 +5228,7 @@ mod tests {
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(1))),
                 PushArg(RegisterVariant::Upvalue(Register(0))), /* This is what we're really testing for */
-                CallEfun(12),
+                CallEfun(13),
                 // ...etc. We don't care about the rest.
             ];
             assert_eq!(&instructions[0..=4], expected);
@@ -5486,7 +5486,7 @@ mod tests {
                     SConst(RegisterVariant::Local(Register(1)), ustr("/foo/bar.c")),
                     ClearArgs,
                     PushArg(RegisterVariant::Local(Register(1))),
-                    CallEfun(6),
+                    CallEfun(7),
                     Copy(
                         RegisterVariant::Local(Register(0)),
                         RegisterVariant::Local(Register(2))
@@ -5678,7 +5678,7 @@ mod tests {
                 SConst(RegisterVariant::Local(Register(4)), ustr("body")),
                 ClearArgs,
                 PushArg(RegisterVariant::Local(Register(4))),
-                CallEfun(12),
+                CallEfun(13),
                 Jmp(Address(0)),
             ];
 
