@@ -3,6 +3,7 @@
 //! or transactions: frontends compile their surface syntax into a [`Grammar`]
 //! and read captures back out of a parse.
 
+mod earley;
 mod model;
 mod tokenizer;
 

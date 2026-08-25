@@ -133,7 +133,6 @@ impl Scan {
     }
 
     /// The text literals compare against: folded under case-insensitivity.
-    #[cfg_attr(not(test), expect(dead_code, reason = "used once the parser lands"))]
     pub(crate) fn match_text(&self, i: usize) -> &str {
         match &self.folded {
             Some(folded) => &folded[i],
