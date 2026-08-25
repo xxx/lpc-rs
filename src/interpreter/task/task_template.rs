@@ -58,6 +58,7 @@ impl TaskTemplate {
             // A template from a live task carries its in-flight attempt, so
             // this context joins it.
             txn: self.txn,
+            command: Arc::default(),
         }
     }
 }

@@ -19,6 +19,21 @@ use crate::{
     util::{get_simul_efuns, process_builder::compile_process_from_path},
 };
 
+/// The command a task is running: what `query_verb`, `query_command`, and
+/// `notify_fail` read and write.
+#[derive(Debug, Default)]
+pub struct CommandState {
+    /// The line `dispatch` is trying, after any `process_input` rewrite.
+    pub line: String,
+    /// The first word as typed.
+    pub verb_typed: String,
+    /// What `query_verb()` returns for the rule being tried.
+    pub verb_reported: String,
+    /// The `notify_fail` argument (a string or a function pointer), set by
+    /// the efun of the same name.
+    pub notify_fail: Option<LpcRef>,
+}
+
 /// The task's final result, resettable between retry attempts.
 #[derive(Debug)]
 pub struct TaskResult {
@@ -114,6 +129,10 @@ pub struct TaskContext {
     /// This task's transaction handle. Top-level tasks re-base it per
     /// attempt; sub-tasks adopt their caller's handle.
     pub(crate) txn: TxnHandle,
+
+    /// Commands in progress, innermost last; shared by every clone of this
+    /// context so a handler's `query_verb()` sees the dispatch that called it.
+    pub(crate) command: Arc<parking_lot::Mutex<Vec<CommandState>>>,
 }
 
 impl TaskContext {
@@ -137,6 +156,7 @@ impl TaskContext {
             upvalue_ptrs: None,
             chain_count: 0,
             txn: TxnHandle::default(),
+            command: Arc::default(),
         }
     }
 
@@ -377,6 +397,12 @@ impl TaskContext {
         &self.txn
     }
 
+    /// Run `f` over the innermost command in progress, if any.
+    pub(crate) fn with_command<R>(&self, f: impl FnOnce(Option<&mut CommandState>) -> R) -> R {
+        let mut commands = self.command.lock();
+        f(commands.last_mut())
+    }
+
     /// Return the [`ObjectSpace`]
     #[inline]
     pub fn object_space(&self) -> &Arc<ObjectSpace> {
@@ -415,6 +441,7 @@ impl Clone for TaskContext {
             chain_count: self.chain_count,
             // Cloning the handle shares the in-flight transaction.
             txn: self.txn.clone(),
+            command: self.command.clone(),
         }
     }
 }

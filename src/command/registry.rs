@@ -10,7 +10,7 @@ use ustr::Ustr;
 
 use crate::{
     command::grammar::Grammar,
-    interpreter::{function_type::function_ptr::FunctionPtr, process::Process},
+    interpreter::{function_type::function_ptr::FunctionPtr, process::Process, stm::TxnHandle},
 };
 
 /// A rule's identity; ids increase with registration order, which is the
@@ -170,6 +170,18 @@ impl PartialEq for Scope {
         self.0.len() == other.0.len()
             && self.0.iter().zip(&other.0).all(|(a, b)| Weak::ptr_eq(a, b))
     }
+}
+
+/// The objects whose rules `living` may use: itself, its environment, that
+/// environment's contents, and its own contents.
+pub(crate) fn scope_of(txn: &TxnHandle, living: &Arc<Process>) -> Scope {
+    let mut members = vec![living.clone()];
+    if let Some(environment) = Process::environment_of(txn, living) {
+        members.extend(Process::inventory_of(txn, &environment));
+        members.push(environment);
+    }
+    members.extend(Process::inventory_of(txn, living));
+    Scope::new(members)
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@ pub(crate) mod all_environment;
 pub(crate) mod all_inventory;
 pub(crate) mod call_out;
 pub(crate) mod clone_object;
+pub(crate) mod command;
 pub(crate) mod compose;
 pub(crate) mod debug;
 pub(crate) mod deep_inventory;
@@ -25,7 +26,9 @@ pub(crate) mod move_object;
 pub(crate) mod papplyv;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
+pub(crate) mod query_command;
 pub(crate) mod query_resident_memory;
+pub(crate) mod query_verb;
 pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
 pub(crate) mod set_this_player;
@@ -196,6 +199,11 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false)],
     },
+    command => {
+        returns: LpcType::Int(false),
+        arity: (2, 1),
+        args: [LpcType::String(false), LpcType::Object(false)],
+    },
     compose => {
         returns: LpcType::Function(false),
         arity: 2,
@@ -315,9 +323,17 @@ efuns! {
         returns: LpcType::Mixed(true),
         arity: (1, 1),
     },
+    query_command => {
+        returns: LpcType::String(false),
+    },
     query_resident_memory => {
         returns: LpcType::Int(false),
         arity: 0,
+    },
+    query_verb => {
+        returns: LpcType::String(false),
+        arity: (1, 1),
+        args: [LpcType::Int(false)],
     },
     remove_action => {
         returns: LpcType::Int(false),
@@ -449,6 +465,7 @@ mod tests {
                 "call_other",
                 "catch",
                 "clone_object",
+                "command",
                 "compose",
                 "debug",
                 "deep_inventory",
@@ -474,7 +491,9 @@ mod tests {
                 "papplyv",
                 "query_call_out",
                 "query_call_outs",
+                "query_command",
                 "query_resident_memory",
+                "query_verb",
                 "remove_action",
                 "remove_call_out",
                 "set_this_player",
