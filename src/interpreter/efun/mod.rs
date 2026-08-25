@@ -34,6 +34,7 @@ pub(crate) mod query_resident_memory;
 pub(crate) mod query_verb;
 pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
+pub(crate) mod remove_rule;
 pub(crate) mod set_this_player;
 pub(crate) mod tell_object;
 pub(crate) mod this_object;
@@ -364,6 +365,11 @@ efuns! {
         arity: 1,
         args: [LpcType::Int(false)],
     },
+    remove_rule => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Int(false)],
+    },
     set_this_player => {
         returns: LpcType::Object(false),
         arity: 1,
@@ -518,6 +524,7 @@ mod tests {
                 "query_verb",
                 "remove_action",
                 "remove_call_out",
+                "remove_rule",
                 "set_this_player",
                 "sizeof",
                 "stringp",
