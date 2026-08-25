@@ -11,7 +11,7 @@ use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::ThinVec;
 
-use crate::interpreter::stm::VarId;
+use crate::interpreter::stm::{TxnHandle, VarId};
 use crate::interpreter::{
     efun::EFUN_FUNCTIONS,
     function_type::function_address::FunctionAddress,
@@ -108,6 +108,22 @@ impl FunctionPtr {
     pub fn receiver_bound(&self) -> bool {
         !matches!(self.address, FunctionAddress::Dynamic(_))
             || matches!(self.partial_args.first(), Some(Some(_)))
+    }
+
+    /// Whether a call would find a live receiver: a rule whose handler points
+    /// into a destructed object is skipped rather than raising the error
+    /// [`prepare_call`](Self::prepare_call) would.
+    pub(crate) fn receiver_is_live(&self, txn: &TxnHandle) -> bool {
+        match &self.address {
+            FunctionAddress::Local(receiver, _) => {
+                receiver.upgrade().is_some_and(|p| p.is_live(txn))
+            }
+            FunctionAddress::Dynamic(_) => match self.partial_args.first() {
+                Some(Some(receiver @ LpcRef::Object(_))) => receiver.live_object(txn).is_some(),
+                _ => true,
+            },
+            FunctionAddress::Efun(_) | FunctionAddress::SimulEfun(_) => true,
+        }
     }
 
     /// Resolve this pointer for a call with `passed` arguments: the receiver

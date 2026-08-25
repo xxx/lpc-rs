@@ -1,25 +1,18 @@
-use std::sync::Arc;
-
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process, stm::MergeOp,
-};
+use crate::interpreter::{efun::efun_context::EfunContext, process::Process};
 
 /// `disable_commands`, an efun that disables an object from being able to interact with the game world.
 pub async fn disable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let proc = context.frame().process.clone();
+    let proc = &context.frame().process;
     let was_enabled = proc.commands_enabled(context.txn());
-    let environment = Process::environment_of(context.txn(), &proc);
+    let environment = Process::environment_of(context.txn(), proc);
 
     context.txn().with(|t| {
         t.drop_var(proc.commands_enabled.id);
         t.drop_var(proc.rules.id);
         if was_enabled && let Some(env) = environment {
-            t.merge(
-                env.position.livings.id,
-                MergeOp::ArrayRemoveValue(LpcRef::Object(Arc::downgrade(&proc))),
-            );
+            Process::unmark_living(t, proc, &env);
         }
     });
 

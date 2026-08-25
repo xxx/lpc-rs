@@ -17,6 +17,9 @@ the whole word, and the rest of the word joins the argument; `AA_NOSPACE` (2) â€
 as `AA_SHORT` but `query_verb()` reports the verb as registered;
 `AA_IMM_ARGS` (3) â€” as `AA_NOSPACE` with only the rest of the word as the argument.
 
+An empty verb (`""`) with a prefix flag matches every line, which is how a
+mudlib registers a catch-all handler.
+
 The driver defines no `AA_*` names; a mudlib's include file does
 (`#define AA_SHORT 1` etc.).
 

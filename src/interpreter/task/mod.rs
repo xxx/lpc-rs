@@ -239,6 +239,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         if let Some(live) = &live {
             self.context.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+            self.context.clear_commands();
         }
 
         let seed = self

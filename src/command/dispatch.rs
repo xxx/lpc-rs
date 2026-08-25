@@ -3,15 +3,16 @@
 
 use std::sync::Arc;
 
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{Result, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::{
     command::{
-        frontend::add_action::{argument, reported_verb, verb_matches},
+        frontend::{add_action::verb_matches, arguments_and_verb},
         grammar::parse,
-        registry::{Frontend, Rule, scope_of},
+        registry::{Rule, scope_of},
     },
+    compile_time_config::MAX_COMMAND_DEPTH,
     interpreter::{
         CATCH_TELL, COMMAND_NOT_FOUND, PROCESS_INPUT,
         function_type::function_ptr::FunctionPtr,
@@ -37,8 +38,13 @@ pub enum Outcome {
 
 /// Run `line` as `actor` inside `ctx`'s transaction.
 pub async fn dispatch(ctx: &TaskContext, actor: Arc<Process>, line: &str) -> Result<Outcome> {
-    if !actor.commands_enabled(ctx.txn()) {
+    if !actor.is_live(ctx.txn()) || !actor.commands_enabled(ctx.txn()) {
         return Ok(Outcome::Unhandled);
+    }
+    if ctx.command.lock().len() >= MAX_COMMAND_DEPTH {
+        return Err(lpc_error!(
+            "command: nesting deeper than {MAX_COMMAND_DEPTH}"
+        ));
     }
     let Some(line) = pre_hook(ctx, &actor, line).await? else {
         return Ok(Outcome::Handled);
@@ -67,6 +73,27 @@ pub async fn dispatch(ctx: &TaskContext, actor: Arc<Process>, line: &str) -> Res
     };
     ctx.command.lock().pop();
     outcome
+}
+
+/// Run `line` as `actor` for a connection: a body that never called
+/// `enable_commands()` still gets the pre-hook and the fallback.
+pub(crate) async fn dispatch_from_connection(
+    ctx: &TaskContext,
+    actor: Arc<Process>,
+    line: &str,
+) -> Result<Outcome> {
+    if !actor.is_live(ctx.txn()) {
+        return Ok(Outcome::Unhandled);
+    }
+    if actor.commands_enabled(ctx.txn()) {
+        return dispatch(ctx, actor, line).await;
+    }
+    if pre_hook(ctx, &actor, line).await?.is_none() {
+        return Ok(Outcome::Handled);
+    }
+    let message = default_message(ctx, &actor);
+    deliver(ctx, &actor, &message).await?;
+    Ok(Outcome::Unhandled)
 }
 
 /// `process_input`: a string replaces the line, `0` or no hook passes it
@@ -111,13 +138,10 @@ async fn trial(
         let Some(parsed) = parse(&rule.grammar, line).next() else {
             continue;
         };
-        let args = match rule.source {
-            Frontend::AddAction => {
-                let arg = argument(rule.verb.as_str(), rule.matching, &parsed, line);
-                vec![LpcString::from(arg.as_str()).into()]
-            }
-        };
-        let reported = reported_verb(rule.verb.as_str(), rule.matching, &parsed, line);
+        if !rule.handler.receiver_is_live(ctx.txn()) {
+            continue;
+        }
+        let (args, reported) = arguments_and_verb(rule, &parsed, line);
         ctx.with_command(|state| {
             if let Some(state) = state {
                 state.verb_reported = reported;
@@ -182,6 +206,9 @@ async fn notify_closure(
     actor: &Arc<Process>,
     closure: &FunctionPtr,
 ) -> Result<Option<String>> {
+    if !closure.receiver_is_live(ctx.txn()) {
+        return Ok(None);
+    }
     let handler_ctx = ctx.clone().with_process(actor.clone());
     handler_ctx.this_player.store(Some(actor.clone()));
     let Some(resolved) = closure.prepare_call(&[], &handler_ctx).await? else {
@@ -231,10 +258,11 @@ async fn master_message(
 
 const NOT_IMPLEMENTED_HINT: &str = concat!(
     "Error: *I* received your command, but the game hasn't implemented any way to handle it. ",
-    "Please tell the game's owner to implement `process_input` in your body."
+    "Please tell the game's owner to implement `process_input` (and call `enable_commands()`) ",
+    "in your body.\n"
 );
 
-/// `What?`, or the implementation hint for a living with neither a pre-hook
+/// `What?`, or the implementation hint for a body with neither a pre-hook
 /// nor any rule.
 fn default_message(ctx: &TaskContext, actor: &Arc<Process>) -> String {
     let bare = actor
@@ -246,7 +274,7 @@ fn default_message(ctx: &TaskContext, actor: &Arc<Process>) -> String {
     if bare {
         NOT_IMPLEMENTED_HINT.to_owned()
     } else {
-        "What?".to_owned()
+        "What?\n".to_owned()
     }
 }
 
@@ -609,7 +637,7 @@ mod tests {
             int do_look(string a) { return 1; }
             void catch_tell(string m) { heard = m; }
         "# };
-        assert_eq!(globals(with_rules, 1).await, vec![s("What?")]);
+        assert_eq!(globals(with_rules, 1).await, vec![s("What?\n")]);
 
         let bare = indoc! { r#"
             string heard;
@@ -621,5 +649,108 @@ mod tests {
             heard.starts_with("Error: *I* received your command"),
             "{heard}"
         );
+        assert!(heard.ends_with("in your body.\n"), "{heard}");
+    }
+
+    #[tokio::test]
+    async fn a_destructed_actor_runs_nothing() {
+        let victim = indoc! { r#"
+            int ran;
+            void create() { set_this_player(this_object()); enable_commands(); add_action("do_look", "look"); }
+            int do_look(string a) { ran = 1; return 1; }
+        "# };
+        let player = indoc! { r#"
+            int r;
+            void create() { object v = find_object("/victim"); destruct(v); r = command("look", v); }
+        "# };
+        let vm = Vm::new(test_config());
+        let victim_proc = vm
+            .initialize_process_from_code("/victim.c", victim)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let player_proc = vm
+            .initialize_process_from_code("/player.c", player)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&player_proc, 0u16),
+            LpcRef::from(0)
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&victim_proc, 0u16),
+            LpcRef::from(0)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_rule_whose_handler_receiver_is_destructed_is_skipped() {
+        let third = "int do_look(string a) { return 1; }";
+        let player = indoc! { r#"
+            string arg; int r;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                add_action("do_look", "look");
+                add_action(&(find_object("/third"))->do_look(), "look");
+                destruct(find_object("/third"));
+                r = command("look here");
+            }
+            int do_look(string a) { arg = a; return 1; }
+        "# };
+        let vm = Vm::new(test_config());
+        vm.create_process_from_code("/third.c", third)
+            .await
+            .unwrap();
+        let player_proc = vm
+            .initialize_process_from_code("/player.c", player)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&player_proc, 0u16),
+            s("here")
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&player_proc, 1u16),
+            LpcRef::from(1)
+        );
+    }
+
+    /// One nested command costs ~85KB of native stack in a debug build, so the
+    /// recursion runs where the cap has room to fire.
+    #[test]
+    fn nesting_deeper_than_the_cap_is_an_error() {
+        let code = indoc! { r#"
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                add_action("do_again", "again");
+                command("again");
+            }
+            int do_again(string a) { command("again"); return 1; }
+        "# };
+        let runner = std::thread::Builder::new()
+            .stack_size(16 * 1024 * 1024)
+            .spawn(move || {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("a current-thread runtime")
+                    .block_on(async {
+                        let vm = Vm::new(test_config());
+                        vm.initialize_process_from_code("/player.c", code)
+                            .await
+                            .expect_err("the handler recurses forever")
+                            .to_string()
+                    })
+            })
+            .expect("a thread with room for the recursion");
+        let err = runner.join().expect("the runner panicked");
+        assert!(err.contains("nesting deeper than 16"), "{err}");
     }
 }

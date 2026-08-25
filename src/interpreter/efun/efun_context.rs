@@ -6,6 +6,7 @@ use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_utils::config::Config;
 
+use crate::command::presence::forget_destruct;
 use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,
@@ -14,7 +15,7 @@ use crate::interpreter::{
     object_space::ObjectSpace,
     process::Process,
     program::Program,
-    stm::{Effect, MergeOp, TxnHandle},
+    stm::{Effect, TxnHandle},
     task::Task,
     task_context::{ObjectLookup, TaskContext},
 };
@@ -285,14 +286,13 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             .get_or_init(|| self.object_space().cell_id(&key));
         let is_living = process.commands_enabled(self.txn());
         let environment = Process::environment_of(self.txn(), &process);
-        crate::command::presence::forget_owner(self.txn(), &process);
+        forget_destruct(self.txn(), &process);
         self.txn().with(|t| {
             t.drop_var(var_id);
+            t.drop_var(process.rules.id);
+            t.drop_var(process.position.livings.id);
             if is_living && let Some(env) = &environment {
-                t.merge(
-                    env.position.livings.id,
-                    MergeOp::ArrayRemoveValue(LpcRef::Object(Arc::downgrade(&process))),
-                );
+                Process::unmark_living(t, &process, env);
             }
         });
         self.record_effect(Effect::RemoveObject { key, process });

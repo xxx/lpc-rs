@@ -422,6 +422,14 @@ impl TaskContext {
         self.result.reset()
     }
 
+    /// Drop any command in progress, so a re-run starts from the pre-hook
+    /// with a fresh command state; a joiner shares its parent's stack and
+    /// must never call this.
+    #[inline]
+    pub(crate) fn clear_commands(&self) {
+        self.command.lock().clear();
+    }
+
     /// Get the `tx` channel for this task
     #[inline]
     pub fn tx(&self) -> Sender<VmOp> {

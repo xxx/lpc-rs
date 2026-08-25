@@ -67,6 +67,7 @@ pub async fn remove_action<const N: usize>(context: &mut EfunContext<'_, N>) -> 
     Ok(())
 }
 
+/// The living the rules hang on: `this_player()`, or a runtime error.
 fn player<const N: usize>(context: &EfunContext<'_, N>) -> Result<Arc<Process>> {
     context
         .this_player()

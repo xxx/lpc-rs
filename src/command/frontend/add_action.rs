@@ -6,43 +6,48 @@ use std::sync::{Arc, LazyLock};
 use dashmap::DashMap;
 
 use crate::command::{
-    grammar::{Grammar, GrammarBuilder, Label, Parse, Words, lit, nt, tok},
+    grammar::{Grammar, GrammarBuilder, Label, Parse, lit, nt},
     registry::{ArgSpan, Reported, VerbMatch},
 };
 
-static GRAMMARS: LazyLock<DashMap<(String, VerbMatch), Arc<Grammar>>> = LazyLock::new(DashMap::new);
+/// The cache key: every prefix rule shares one grammar, an exact verb gets
+/// its own.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Key {
+    /// `S → 'verb' words_star⟨0⟩` for this verb.
+    Exact(String),
+    /// `S → word_like words_star⟨0⟩`, whatever the verb.
+    Prefix(VerbMatch),
+}
 
-/// The grammar for `verb` under `matching`, built once per pair.
+static GRAMMARS: LazyLock<DashMap<Key, Arc<Grammar>>> = LazyLock::new(DashMap::new);
+
+/// The grammar for `verb` under `matching`, built once per key.
 pub fn grammar_for(verb: &str, matching: VerbMatch) -> Arc<Grammar> {
+    let key = match matching {
+        VerbMatch::Exact => Key::Exact(verb.to_owned()),
+        VerbMatch::Prefix { .. } => Key::Prefix(matching),
+    };
     GRAMMARS
-        .entry((verb.to_owned(), matching))
+        .entry(key)
         .or_insert_with(|| Arc::new(build(verb, matching)))
         .clone()
 }
 
-/// `S → verb words_star⟨0⟩`; a prefix verb is its own token rule ahead of
-/// `word`, so it wins the longest-match tie for the first word.
+/// `S → 'verb' words_star⟨0⟩`, or `S → word_like words_star⟨0⟩` for a prefix
+/// verb, whose first word [`verb_matches`] has already established.
 fn build(verb: &str, matching: VerbMatch) -> Grammar {
     let mut b = GrammarBuilder::new();
     let s = b.nonterminal("S");
+    let w = b.words_tokens();
+    let star = b.words_star(&w);
     match matching {
         VerbMatch::Exact => {
-            let w = b.words_tokens();
-            let star = b.words_star(&w);
             b.production(s, [lit(verb), nt(star).labeled(Label(0))]);
         }
         VerbMatch::Prefix { .. } => {
-            let whitespace = b.skip_token("whitespace", r"\s+");
-            let verb_token = b.token("verb", &format!("{}\\S*", regex::escape(verb)));
-            let number = b.token("number", "[0-9]+");
-            let word = b.token("word", r"\S+");
-            let w = Words {
-                whitespace,
-                number,
-                word,
-            };
-            let star = b.words_star(&w);
-            b.production(s, [tok(verb_token), nt(star).labeled(Label(0))]);
+            let word_like = b.word_like(&w);
+            b.production(s, [nt(word_like), nt(star).labeled(Label(0))]);
         }
     }
     b.start(s);
@@ -116,7 +121,12 @@ mod tests {
         args: ArgSpan::RestOfWord,
     };
 
+    /// The dispatch pipeline for one rule: the pre-filter, then the grammar.
     fn first(verb: &str, matching: VerbMatch, line: &str) -> Option<(String, String)> {
+        let first_word = line.split_whitespace().next().unwrap_or("");
+        if !verb_matches(verb, matching, first_word) {
+            return None;
+        }
         let g = grammar_for(verb, matching);
         let p = parse(&g, line).next()?;
         Some((
@@ -169,6 +179,18 @@ mod tests {
     }
 
     #[test]
+    fn a_later_word_starting_with_the_verb_still_parses() {
+        assert_eq!(
+            first("'", SHORT, "'he said 'hi'"),
+            Some(("he said 'hi'".into(), "'he".into()))
+        );
+        assert_eq!(
+            first("kill", SHORT, "kill killer"),
+            Some(("killer".into(), "kill".into()))
+        );
+    }
+
+    #[test]
     fn a_prefix_verb_with_regex_characters_is_literal() {
         assert_eq!(
             first("*", SHORT, "*wave"),
@@ -193,6 +215,18 @@ mod tests {
         assert!(!std::sync::Arc::ptr_eq(
             &grammar_for("look", VerbMatch::Exact),
             &grammar_for("look", SHORT)
+        ));
+        assert!(!std::sync::Arc::ptr_eq(
+            &grammar_for("look", VerbMatch::Exact),
+            &grammar_for("peek", VerbMatch::Exact)
+        ));
+    }
+
+    #[test]
+    fn every_prefix_verb_shares_one_grammar() {
+        assert!(std::sync::Arc::ptr_eq(
+            &grammar_for("'", SHORT),
+            &grammar_for("kill", SHORT)
         ));
     }
 }

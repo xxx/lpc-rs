@@ -6,7 +6,7 @@ use std::sync::Arc;
 use lpc_rs_errors::{Result, lpc_bug};
 
 use crate::{
-    command::dispatch::{Outcome, dispatch},
+    command::dispatch::{Outcome, dispatch_from_connection},
     interpreter::{
         process::Process,
         stm::{
@@ -52,7 +52,7 @@ impl AttemptBody for CommandTask {
         template.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
         template.set_this_player(Some(self.actor.clone()));
         let ctx = template.into_task_context(self.actor.clone());
-        match dispatch(&ctx, self.actor.clone(), &self.line).await {
+        match dispatch_from_connection(&ctx, self.actor.clone(), &self.line).await {
             Ok(outcome) => {
                 self.outcome = outcome;
                 self.context = Some(ctx);
@@ -170,7 +170,60 @@ mod tests {
         assert_eq!(outcome, Outcome::Unhandled);
         assert_eq!(
             vm.global_state.committed_global(&player, 1u16),
-            LpcRef::from(LpcString::from("What?"))
+            LpcRef::from(LpcString::from("What?\n"))
+        );
+    }
+
+    #[tokio::test]
+    async fn a_body_that_never_enabled_commands_hears_the_hint() {
+        let code = indoc! { r#"
+            string heard;
+            void create() {}
+            void catch_tell(string m) { heard = m; }
+        "# };
+        let vm = Vm::new(test_config());
+        let player = vm
+            .initialize_process_from_code("/player.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let template = TaskTemplate::from(vm.global_state.clone());
+        let outcome = run_command_line(&template, player.clone(), "dance".into())
+            .await
+            .unwrap();
+        assert_eq!(outcome, Outcome::Unhandled);
+        let heard = vm.global_state.committed_global(&player, 0u16).to_string();
+        assert!(heard.contains("enable_commands()"), "{heard}");
+    }
+
+    #[tokio::test]
+    async fn a_body_whose_process_input_consumes_the_line_hears_nothing() {
+        let code = indoc! { r#"
+            mixed heard; string seen;
+            void create() {}
+            int process_input(string line) { seen = line; return 1; }
+            void catch_tell(string m) { heard = m; }
+        "# };
+        let vm = Vm::new(test_config());
+        let player = vm
+            .initialize_process_from_code("/player.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let template = TaskTemplate::from(vm.global_state.clone());
+        let outcome = run_command_line(&template, player.clone(), "dance".into())
+            .await
+            .unwrap();
+        assert_eq!(outcome, Outcome::Handled);
+        assert_eq!(
+            vm.global_state.committed_global(&player, 0u16),
+            LpcRef::from(0)
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&player, 1u16),
+            LpcRef::from(LpcString::from("dance"))
         );
     }
 

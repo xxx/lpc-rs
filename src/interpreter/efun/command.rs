@@ -16,7 +16,7 @@ pub async fn command<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
     let actor = match context.try_resolve_local_register(2 as RegisterSize) {
         None => context.this_player().load_full(),
         Some(given) if given.is_null() => context.this_player().load_full(),
-        Some(LpcRef::Object(weak)) => weak.upgrade(),
+        Some(given @ LpcRef::Object(_)) => given.live_object(context.txn()),
         Some(_) => return Err(context.runtime_error("command: the actor must be an object")),
     };
     let Some(actor) = actor else {

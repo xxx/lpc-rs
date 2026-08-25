@@ -8,6 +8,9 @@ Returns 1 when the line was handled, 0 otherwise (including when `living` is
 not a living object or `this_player()` is unset). Rules `init()` registered
 earlier in the same task are already usable.
 
+A handler may run `command()` of its own, nested at most 16 deep; deeper is a
+runtime error.
+
 ### Examples
 
 ```c

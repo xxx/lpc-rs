@@ -71,20 +71,25 @@ pub async fn add_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
         return Err(context.runtime_error(format!("add_action: unknown flag {flag}")));
     };
 
-    let owner = context.frame().process.clone();
-    for verb in verbs {
-        let rule = Rule::new(
-            &owner,
-            verb,
-            matching,
-            grammar_for(verb.as_str(), matching),
-            handler.clone(),
-            Frontend::AddAction,
-        );
-        context
-            .txn()
-            .with(|t| t.merge(player.rules.id, MergeOp::RulesAppend(rule)));
-    }
+    let owner = &context.frame().process;
+    let rules: Vec<Rule> = verbs
+        .into_iter()
+        .map(|verb| {
+            Rule::new(
+                owner,
+                verb,
+                matching,
+                grammar_for(verb.as_str(), matching),
+                handler.clone(),
+                Frontend::AddAction,
+            )
+        })
+        .collect();
+    context.txn().with(|t| {
+        for rule in rules {
+            t.merge(player.rules.id, MergeOp::RulesAppend(rule));
+        }
+    });
 
     Ok(())
 }

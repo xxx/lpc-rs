@@ -174,16 +174,27 @@ impl Process {
         })
     }
 
-    /// The committed inventory of `process` as seen through `txn`, destructed
+    /// The committed inventory of `process` as seen through `txn`, dropped
     /// members filtered out.
     pub(crate) fn inventory_of(txn: &TxnHandle, process: &Arc<Process>) -> Vec<Arc<Process>> {
+        Self::objects_in(txn, process.position.inventory.id)
+    }
+
+    /// The committed living members of `process`'s contents as seen through
+    /// `txn`, dropped members filtered out.
+    pub(crate) fn livings_of(txn: &TxnHandle, process: &Arc<Process>) -> Vec<Arc<Process>> {
+        Self::objects_in(txn, process.position.livings.id)
+    }
+
+    /// The objects an array cell names, as seen through `txn`; a member whose
+    /// `Process` is gone is dropped, a non-object member ignored.
+    fn objects_in(txn: &TxnHandle, var_id: VarId) -> Vec<Arc<Process>> {
         txn.with(|t| {
-            let Some(WorldValue::Array(inventory)) = t.read_value(process.position.inventory.id)
-            else {
+            let Some(WorldValue::Array(members)) = t.read_value(var_id) else {
                 return Vec::new();
             };
 
-            inventory
+            members
                 .iter()
                 .filter_map(|item| match item {
                     LpcRef::Object(weak) => weak.upgrade(),
@@ -193,22 +204,29 @@ impl Process {
         })
     }
 
-    /// The committed living members of `process`'s contents as seen through
-    /// `txn`, destructed members filtered out.
-    pub(crate) fn livings_of(txn: &TxnHandle, process: &Arc<Process>) -> Vec<Arc<Process>> {
-        txn.with(|t| {
-            let Some(WorldValue::Array(livings)) = t.read_value(process.position.livings.id) else {
-                return Vec::new();
-            };
+    /// Record `object` among `environment`'s living members; the caller
+    /// already holds the transaction.
+    pub(crate) fn mark_living(
+        t: &mut Transaction,
+        object: &Arc<Process>,
+        environment: &Arc<Process>,
+    ) {
+        t.merge(
+            environment.position.livings.id,
+            MergeOp::ArrayAppend(vec![LpcRef::Object(Arc::downgrade(object))]),
+        );
+    }
 
-            livings
-                .iter()
-                .filter_map(|item| match item {
-                    LpcRef::Object(weak) => weak.upgrade(),
-                    _ => None,
-                })
-                .collect()
-        })
+    /// Drop `object` from `environment`'s living members.
+    pub(crate) fn unmark_living(
+        t: &mut Transaction,
+        object: &Arc<Process>,
+        environment: &Arc<Process>,
+    ) {
+        t.merge(
+            environment.position.livings.id,
+            MergeOp::ArrayRemoveValue(LpcRef::Object(Arc::downgrade(object))),
+        );
     }
 
     /// Move `object` into `new_environment`, through the caller's transaction.
@@ -245,20 +263,14 @@ impl Process {
                     MergeOp::ArrayRemoveValue(new_member.clone()),
                 );
                 if mover_is_living {
-                    t.merge(
-                        old.position.livings.id,
-                        MergeOp::ArrayRemoveValue(new_member.clone()),
-                    );
+                    Self::unmark_living(t, object, &old);
                 }
             }
 
             // Add to the new environment's inventory and point the object at it.
-            t.merge(new_cell, MergeOp::ArrayAppend(vec![new_member.clone()]));
+            t.merge(new_cell, MergeOp::ArrayAppend(vec![new_member]));
             if mover_is_living {
-                t.merge(
-                    new_environment.position.livings.id,
-                    MergeOp::ArrayAppend(vec![new_member]),
-                );
+                Self::mark_living(t, object, new_environment);
             }
             t.write(object_cell, new_env_ref);
         });

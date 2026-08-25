@@ -15,7 +15,8 @@ int do_open(string what) {
     if (what != "door") {
         return notify_fail("Open what?\n");
     }
-    ...
+
+    write("You open the door.\n");
     return 1;
 }
 ```
