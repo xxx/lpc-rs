@@ -13,18 +13,21 @@ use std::{
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::{Result, lpc_error};
 
-use crate::interpreter::{
-    lpc_array::LpcArray,
-    lpc_mapping::LpcMapping,
-    lpc_ref::{LpcRef, NULL},
-    process::Process,
-    stm::{
-        GcPassReply, VarId, Version, WorldRoot, WorldValue,
-        backoff::{Backoff, BackoffSpent},
-        changeset::Changeset,
-        committer::{CommitProtocol, CommitterStats, Conflict, LiveSnapshot},
+use crate::{
+    command::registry::RuleList,
+    interpreter::{
+        lpc_array::LpcArray,
+        lpc_mapping::LpcMapping,
+        lpc_ref::{LpcRef, NULL},
+        process::Process,
+        stm::{
+            GcPassReply, VarId, Version, WorldRoot, WorldValue,
+            backoff::{Backoff, BackoffSpent},
+            changeset::Changeset,
+            committer::{CommitProtocol, CommitterStats, Conflict, LiveSnapshot},
+        },
+        vm::global_state::GlobalState,
     },
-    vm::global_state::GlobalState,
 };
 
 /// Per-attempt statistics, owned by the attempt loop: the committer can't
@@ -296,6 +299,9 @@ pub trait CommittedReader {
     /// The committed inventory of `process`: its contained objects, destructed
     /// members filtered out.
     fn committed_inventory(&self, process: &Process) -> Vec<Arc<Process>>;
+
+    /// The committed rule list of `process`, empty when absent.
+    fn committed_rules(&self, process: &Process) -> RuleList;
 }
 
 impl CommittedReader for Arc<GlobalState> {
@@ -360,6 +366,12 @@ impl CommittedReader for Arc<GlobalState> {
                 weak.upgrade()
             })
             .collect()
+    }
+
+    fn committed_rules(&self, process: &Process) -> RuleList {
+        self.committed_value(process.rules.id)
+            .and_then(WorldValue::into_rules)
+            .unwrap_or_else(|| Arc::from(Vec::new()))
     }
 }
 

@@ -11,6 +11,7 @@ use lpc_rs_errors::Result;
 use parking_lot::RwLock;
 
 use crate::{
+    command::registry::RuleList,
     interpreter::{
         lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, object_space::ObjectSpace,
         process::Process, task_context::ObjectLookup, vm::global_state::GlobalState,
@@ -264,6 +265,14 @@ impl Transaction {
     /// an `exec` that has not yet committed.
     pub(crate) fn read_connection(&mut self, var_id: VarId) -> Option<Arc<Connection>> {
         self.read_value(var_id)?.into_connection()
+    }
+
+    /// The rule list in a cell var, empty when absent; a tracked read, so a
+    /// command sees a consistent list and re-runs if a registration lands.
+    pub(crate) fn read_rules(&mut self, var_id: VarId) -> RuleList {
+        self.read_value(var_id)
+            .and_then(WorldValue::into_rules)
+            .unwrap_or_else(|| Arc::from(Vec::new()))
     }
 
     /// Copy-on-write the array cell `var_id`. The first write in an attempt

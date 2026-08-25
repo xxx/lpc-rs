@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use crate::{
+    command::registry::RuleList,
     interpreter::{
         lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, process::Process,
     },
@@ -27,6 +28,9 @@ pub(crate) enum WorldValue {
     /// slot. Held strongly so the binding stays alive between an in-transaction
     /// write and the commit that makes it visible; `None` clears the binding.
     Connection(Option<Arc<Connection>>),
+    /// A living's rule list: what it can command. Not an `LpcRef`, so it is
+    /// carried here as the connection binding is.
+    Rules(RuleList),
 }
 
 impl WorldValue {
@@ -39,7 +43,11 @@ impl WorldValue {
     pub(crate) fn lpc_ref(self) -> LpcRef {
         match self {
             Self::Ref(lpc_ref) => lpc_ref,
-            Self::Array(_) | Self::Mapping(_) | Self::Process(_) | Self::Connection(_) => {
+            Self::Array(_)
+            | Self::Mapping(_)
+            | Self::Process(_)
+            | Self::Connection(_)
+            | Self::Rules(_) => {
                 unreachable!("a payload or identity var read through a slot access")
             }
         }
@@ -79,6 +87,14 @@ impl WorldValue {
     pub(crate) fn into_connection(self) -> Option<Arc<Connection>> {
         match self {
             Self::Connection(connection) => connection,
+            _ => None,
+        }
+    }
+
+    /// The rule list, or `None` for any other kind.
+    pub(crate) fn into_rules(self) -> Option<RuleList> {
+        match self {
+            Self::Rules(rules) => Some(rules),
             _ => None,
         }
     }

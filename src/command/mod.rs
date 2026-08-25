@@ -3,3 +3,4 @@
 //! noun resolver, and the frontends build on it.
 
 pub mod grammar;
+pub mod registry;

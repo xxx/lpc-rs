@@ -10,6 +10,7 @@ use std::{
 use lpc_rs_core::RegisterSize;
 
 use crate::{
+    command::registry::RuleList,
     interpreter::{
         lpc_array::LpcArray,
         lpc_ref::LpcRef,
@@ -77,6 +78,9 @@ pub struct Process {
     /// The cell marking that commands are enabled; absent means disabled.
     pub commands_enabled: SVar<LpcRef>,
 
+    /// The cell holding what this object can command; absent means no rules.
+    pub rules: SVar<RuleList>,
+
     /// The object-space cell this process lives under, known once it is
     /// inserted or destructed transactionally.
     pub cell: OnceLock<VarId>,
@@ -96,6 +100,7 @@ impl Default for Process {
             connection: SVar::new(),
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
+            rules: SVar::new(),
             cell: OnceLock::new(),
             position: Default::default(),
         }
@@ -121,6 +126,7 @@ impl Process {
             connection: SVar::new(),
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
+            rules: SVar::new(),
             cell: OnceLock::new(),
             position: Default::default(),
         }
@@ -141,6 +147,7 @@ impl Process {
             connection: SVar::new(),
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
+            rules: SVar::new(),
             cell: OnceLock::new(),
             position: Default::default(),
         }
@@ -267,6 +274,12 @@ impl Process {
         txn.with(|t| t.read(self.commands_enabled.id).is_some())
     }
 
+    /// This object's rule list as seen through `txn` (a tracked read).
+    #[expect(dead_code, reason = "used once dispatch lands")]
+    pub(crate) fn rules_of(&self, txn: &TxnHandle) -> RuleList {
+        txn.with(|t| t.read_rules(self.rules.id))
+    }
+
     /// The committer-world identity of a global slot.
     pub(crate) fn var_id(&self, reg: RegisterSize) -> VarId {
         self.globals[reg as usize].id
@@ -281,6 +294,7 @@ impl Process {
             .chain([
                 self.initialized.id,
                 self.commands_enabled.id,
+                self.rules.id,
                 self.position.environment.id,
                 self.position.inventory.id,
                 self.connection.id,
@@ -364,5 +378,18 @@ mod tests {
         assert_eq!(proc.localized_filename("/foo"), "/bar/baz");
 
         assert_eq!(proc.localized_filename("/alksdjf"), "/foo/bar/baz");
+    }
+
+    #[tokio::test]
+    async fn an_object_starts_with_no_rules() {
+        let vm = crate::interpreter::vm::Vm::new(crate::test_support::test_config());
+        let proc = vm
+            .initialize_process_from_code("/ob.c", "void create() {}")
+            .await
+            .unwrap()
+            .context
+            .process;
+        use crate::interpreter::CommittedReader;
+        assert!(vm.global_state.committed_rules(&proc).is_empty());
     }
 }
