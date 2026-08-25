@@ -15,6 +15,7 @@ use lpc_rs::{
             function_ptr_node::FunctionPtrNode,
             int_node::IntNode,
             program_node::ProgramNode,
+            ref_node::RefNode,
             string_node::StringNode,
             var_init_node::VarInitNode,
             var_node::VarNode,
@@ -77,6 +78,7 @@ fn program_global_vars() {
                     global: true,
                     span: Some(Span::new(0, 4..11)),
                     flags: Some(GlobalVarFlags::new().with_visibility(Visibility::Public)),
+                    by_ref: false,
                 }],
             }),
             AstNode::from(DeclNode {
@@ -102,6 +104,7 @@ fn program_global_vars() {
                     global: true,
                     span: Some(Span::new(0, 25..34)),
                     flags: Some(GlobalVarFlags::new().with_visibility(Visibility::Private)),
+                    by_ref: false,
                 }],
             }),
             AstNode::from(DeclNode {
@@ -118,6 +121,7 @@ fn program_global_vars() {
                             .with_visibility(Visibility::Private)
                             .with_is_static(true),
                     ),
+                    by_ref: false,
                 }],
             }),
         ],
@@ -590,4 +594,60 @@ async fn parse_prog(prog: &str) -> Result<ProgramNode> {
     lpc_parser::ProgramParser::new()
         .parse(&mut context, code)
         .map_err(lpc_rs_errors::LpcError::from)
+}
+
+#[test]
+fn a_ref_parameter_is_marked() {
+    let prog = "void inc(int ref x) { }";
+    let lexer = LexWrapper::new(prog);
+    let node = lpc_parser::ProgramParser::new()
+        .parse(&mut CompilationContext::default(), lexer)
+        .unwrap();
+    let AstNode::FunctionDef(def) = &node.body[0] else {
+        panic!("expected a function");
+    };
+    assert_eq!(def.parameters.len(), 1);
+    assert_eq!(def.parameters[0].name, ustr("x"));
+    assert_eq!(def.parameters[0].type_, LpcType::Int(false));
+    assert!(def.parameters[0].by_ref);
+}
+
+#[test]
+fn a_ref_argument_parses_to_a_ref_node() {
+    let prog = "void f() { inc(ref y); }";
+    let lexer = LexWrapper::new(prog);
+    let node = lpc_parser::ProgramParser::new()
+        .parse(&mut CompilationContext::default(), lexer)
+        .unwrap();
+    let AstNode::FunctionDef(def) = &node.body[0] else {
+        panic!("expected a function");
+    };
+    let AstNode::Expression(ExpressionNode::Call(call)) = &def.body[0] else {
+        panic!("expected a call");
+    };
+    assert_eq!(
+        call.arguments,
+        vec![ExpressionNode::Ref(RefNode {
+            name: ustr("y"),
+            span: Some(Span::new(0, 15..20)),
+            global: false,
+        })]
+    );
+}
+
+#[test]
+fn ref_needs_a_bare_variable() {
+    for prog in [
+        "void f() { inc(ref a[1]); }",
+        "void f() { inc(ref g()); }",
+        "int ref x;",
+    ] {
+        let lexer = LexWrapper::new(prog);
+        assert!(
+            lpc_parser::ProgramParser::new()
+                .parse(&mut CompilationContext::default(), lexer)
+                .is_err(),
+            "{prog} must not parse"
+        );
+    }
 }

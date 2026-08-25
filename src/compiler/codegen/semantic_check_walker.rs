@@ -785,6 +785,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             let var_node = VarNode::new("foo");
@@ -824,6 +825,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             let var_node = VarNode::new("foo");
@@ -868,6 +870,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             let var_node = VarNode::new("foo");
@@ -1836,6 +1839,7 @@ mod tests {
                 global: true,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             let param1 = VarInitNode {
@@ -1846,6 +1850,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             let param2 = VarInitNode {
@@ -1856,6 +1861,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             let mut function_def1 = FunctionDefNode {
@@ -2080,6 +2086,7 @@ mod tests {
                 inherits: vec![],
                 body: vec![AstNode::from(VarInitNode {
                     type_: LpcType::String(false),
+                    by_ref: false,
                     name: ustr("mapping"),
                     value: None,
                     array: false,
@@ -2586,6 +2593,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             let context = empty_compilation_context();
@@ -2605,6 +2613,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             let context = empty_compilation_context();
@@ -2624,6 +2633,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             let mut scopes = ScopeTree::default();
@@ -2649,6 +2659,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             let context = empty_compilation_context();
@@ -2672,6 +2683,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             let context = empty_compilation_context();
@@ -2709,6 +2721,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             let context = empty_compilation_context();

@@ -29,6 +29,7 @@ use crate::compiler::{
         mapping_node::MappingNode,
         program_node::ProgramNode,
         range_node::RangeNode,
+        ref_node::RefNode,
         return_node::ReturnNode,
         string_node::StringNode,
         switch_node::SwitchNode,
@@ -717,6 +718,14 @@ pub trait TreeWalker {
 
     /// Visit a variable use node
     async fn visit_var(&mut self, _node: &mut VarNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        Ok(())
+    }
+
+    /// Visit a by-reference argument
+    async fn visit_ref(&mut self, _node: &mut RefNode) -> Result<()>
     where
         Self: Sized,
     {

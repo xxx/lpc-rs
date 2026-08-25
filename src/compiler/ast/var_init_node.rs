@@ -41,6 +41,9 @@ pub struct VarInitNode {
 
     /// The flags for this variable. Only applicable for globals.
     pub flags: Option<GlobalVarFlags>,
+
+    /// Whether this parameter is declared `ref`.
+    pub by_ref: bool,
 }
 
 impl VarInitNode {
@@ -53,6 +56,7 @@ impl VarInitNode {
             global: false,
             span: None,
             flags: None,
+            by_ref: false,
         }
     }
 
@@ -125,6 +129,7 @@ mod tests {
             global: false,
             span: None,
             flags: None,
+            by_ref: false,
         };
 
         node.update_type(LpcType::Int(false));

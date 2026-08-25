@@ -14,5 +14,6 @@ factori!(VarInitNode, {
         global = false,
         span = None,
         flags = None,
+        by_ref = false,
     }
 });

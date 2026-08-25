@@ -28,6 +28,7 @@ use crate::compiler::ast::label_node::LabelNode;
 use crate::compiler::ast::mapping_node::MappingNode;
 use crate::compiler::ast::program_node::ProgramNode;
 use crate::compiler::ast::range_node::RangeNode;
+use crate::compiler::ast::ref_node::RefNode;
 use crate::compiler::ast::return_node::ReturnNode;
 use crate::compiler::ast::string_node::StringNode;
 use crate::compiler::ast::switch_node::SwitchNode;
@@ -122,6 +123,7 @@ extern {
         "static" => Token::Static(<Span>),
         "varargs" => Token::Varargs(<Span>),
         "nomask" => Token::Nomask(<Span>),
+        "ref" => Token::Ref(<Span>),
         "efun" => Token::Efun(<Span>),
         "switch" => Token::Switch(<Span>),
         "default" => Token::Default(<Span>),
@@ -339,10 +341,11 @@ ParameterList: Vec<VarInitNode> = {
 }
 
 ArgName: VarInitNode = {
-    <var_type:Type> <mut init:VarInit> => {
+    <var_type:Type> <by_ref:"ref"?> <mut init:VarInit> => {
         let new_type = LpcType::from(var_type.1);
 
         init.type_ = new_type.as_array(init.array);
+        init.by_ref = by_ref.is_some();
 
         init
     }
@@ -542,6 +545,7 @@ VarInit: VarInitNode = {
             global: false,
             span: Some(Span::new(file_id, l..r)),
             flags: None,
+            by_ref: false,
         }
     }
 }
@@ -911,9 +915,20 @@ ExpressionList: Vec<ExpressionNode> = {
     }
 };
 
+ArgumentExpression: ExpressionNode = {
+    <l:"ref"> <name:"ID"> => {
+        ExpressionNode::Ref(RefNode {
+            name: ustr(&name.1),
+            span: Some(Span::join(l, name.0)),
+            global: false,
+        })
+    },
+    <e:AssignmentExpression> => e,
+};
+
 ArgumentExpressionList: Vec<ExpressionNode> = {
-    <AssignmentExpression> => vec![<>],
-    <list:ArgumentExpressionList> "," <arg:AssignmentExpression> => {
+    <ArgumentExpression> => vec![<>],
+    <list:ArgumentExpressionList> "," <arg:ArgumentExpression> => {
         let mut v = list;
         v.push(arg);
         v

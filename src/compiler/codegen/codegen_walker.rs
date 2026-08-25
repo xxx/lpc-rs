@@ -55,6 +55,7 @@ use crate::{
             mapping_node::MappingNode,
             program_node::ProgramNode,
             range_node::RangeNode,
+            ref_node::RefNode,
             return_node::ReturnNode,
             string_node::StringNode,
             switch_node::SwitchNode,
@@ -386,8 +387,9 @@ impl CodegenWalker {
                     OperationType::Memory
                 }
             }
-            ExpressionNode::Var(v) => {
-                match self.context.lookup_var(v.name) {
+            ExpressionNode::Var(VarNode { name, .. })
+            | ExpressionNode::Ref(RefNode { name, .. }) => {
+                match self.context.lookup_var(name) {
                     Some(Symbol { type_: ty, .. }) => match ty {
                         LpcType::Int(false) => OperationType::Register,
                         LpcType::Float(false) => OperationType::Register,
@@ -4271,6 +4273,7 @@ mod tests {
                     global: false,
                     span: None,
                     flags: None,
+                    by_ref: false,
                 }))),
                 condition: Some(ExpressionNode::Var(var.clone())),
                 incrementer: Some(ExpressionNode::Assignment(AssignmentNode {
@@ -5267,6 +5270,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             let mut new_sym = Symbol::from(&mut node.clone());
@@ -5285,6 +5289,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             insert_symbol(walker, Symbol::from(&mut node));
@@ -5474,6 +5479,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
@@ -5518,6 +5524,7 @@ mod tests {
                 global: true,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             insert_symbol(&mut walker, Symbol::from(&mut node.clone()));
@@ -5530,6 +5537,7 @@ mod tests {
                 global: true,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             insert_symbol(&mut walker, Symbol::from(&mut node.clone()));

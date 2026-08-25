@@ -113,6 +113,12 @@ impl TreeWalker for FunctionPrototypeWalker {
                 .span(node.span)
                 .arg_spans(arg_spans)
                 .flags(node.flags)
+                .ref_params(
+                    parameters
+                        .iter()
+                        .map(|parm| parm.by_ref)
+                        .collect::<Vec<_>>(),
+                )
                 .build()
                 .expect("Failed to build function prototype"),
         );
@@ -176,6 +182,12 @@ impl TreeWalker for FunctionPrototypeWalker {
                         .collect::<Vec<_>>()
                 })
                 .flags(node.flags)
+                .ref_params(
+                    node.parameters
+                        .iter()
+                        .map(|parm| parm.by_ref)
+                        .collect::<Vec<_>>(),
+                )
                 .build()
                 .expect("Failed to build function prototype"),
         );
@@ -295,6 +307,7 @@ mod tests {
                 .return_type(LpcType::Mixed(false))
                 .arity(FunctionArity::new(2))
                 .arg_types(vec![LpcType::Int(false), LpcType::Mapping(true)])
+                .ref_params(vec![false, false])
                 .build()
                 .expect("Failed to build function prototype"),
         )
@@ -338,6 +351,7 @@ mod tests {
                     LpcType::Mixed(false),
                     LpcType::Mixed(false),
                 ])
+                .ref_params(vec![false, false, false, false])
                 .build()
                 .expect("Failed to build function prototype"),
         )

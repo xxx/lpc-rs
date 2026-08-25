@@ -1,8 +1,9 @@
 //! Utility functions for doing various semantic checks.
 
 use lpc_rs_core::{call_namespace::CallNamespace, lpc_type::LpcType};
-use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
+use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, span::Span};
 use phf::phf_set;
+use ustr::Ustr;
 
 use crate::compiler::{
     ast::{
@@ -13,6 +14,7 @@ use crate::compiler::{
         closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
+        ref_node::RefNode,
         ternary_node::TernaryNode,
         unary_op_node::{UnaryOpNode, UnaryOperation},
         var_init_node::VarInitNode,
@@ -364,24 +366,8 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         ExpressionNode::Int(_) => Ok(LpcType::Int(false)),
         ExpressionNode::Range(_) => Ok(LpcType::Int(false)),
         ExpressionNode::String(_) => Ok(LpcType::String(false)),
-        ExpressionNode::Var(VarNode { name, span, .. }) => {
-            if name.starts_with('$') {
-                Ok(LpcType::Mixed(false))
-            } else {
-                match context.lookup_var(name) {
-                    Some(sym) => Ok(sym.type_),
-                    None => {
-                        if context
-                            .contains_function_complete(name.as_str(), &CallNamespace::default())
-                        {
-                            Ok(LpcType::Function(false))
-                        } else {
-                            Err(lpc_error!(*span, "undefined symbol {name}"))
-                        }
-                    }
-                }
-            }
-        }
+        ExpressionNode::Var(VarNode { name, span, .. }) => var_type(name, *span, context),
+        ExpressionNode::Ref(RefNode { name, span, .. }) => var_type(name, *span, context),
         ExpressionNode::BinaryOp(BinaryOpNode { l, r, op, .. }) => {
             if op == &BinaryOperation::Index {
                 let left_type = node_type(l, context)?;
@@ -432,6 +418,32 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         ExpressionNode::Ternary(TernaryNode { body, .. }) => Ok(node_type(body, context)?),
         ExpressionNode::Mapping(_) => Ok(LpcType::Mapping(false)),
         ExpressionNode::FunctionPtr(_) => Ok(LpcType::Function(false)),
+    }
+}
+
+/// Resolve a variable name (a plain `Var` or a `ref` argument) down to its `LpcType`.
+///
+/// # Arguments
+/// * `name` - The variable's name.
+/// * `span` - The span of the reference, for error reporting.
+/// * `context` - The current [`CompilationContext`]
+///
+/// # Returns
+/// The `LpcType` of the named variable.
+fn var_type(name: &Ustr, span: Option<Span>, context: &CompilationContext) -> Result<LpcType> {
+    if name.starts_with('$') {
+        Ok(LpcType::Mixed(false))
+    } else {
+        match context.lookup_var(name) {
+            Some(sym) => Ok(sym.type_),
+            None => {
+                if context.contains_function_complete(name.as_str(), &CallNamespace::default()) {
+                    Ok(LpcType::Function(false))
+                } else {
+                    Err(lpc_error!(span, "undefined symbol {name}"))
+                }
+            }
+        }
     }
 }
 

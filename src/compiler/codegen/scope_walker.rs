@@ -451,6 +451,7 @@ mod tests {
                 global: false,
                 span: None,
                 flags: None,
+                by_ref: false,
             };
 
             walker.insert_symbol(Symbol {
