@@ -205,8 +205,7 @@ fn on_path(path: &Path, nt: NtId, span: (usize, usize)) -> bool {
     false
 }
 
-// Recursive lazy enumeration cannot name its own iterator type, so each level
-// is boxed; dynamic dispatch is the exception, not the norm, in this codebase.
+// Recursive lazy enumeration cannot name its own iterator type, so each level is boxed.
 type Nodes<'g> = Box<dyn Iterator<Item = Node> + Send + 'g>;
 type Children<'g> = Box<dyn Iterator<Item = Vec<Child>> + Send + 'g>;
 
@@ -220,7 +219,7 @@ fn derive<'g>(ctx: Arc<Ctx<'g>>, nt: NtId, start: usize, end: usize, path: Path)
     let Some(prods) = ctx.chart.completed(end, nt, start) else {
         return Box::new(iter::empty());
     };
-    // `completed` is in chart-discovery order, not id order: sort so productions enumerate in id order.
+    // `completed` is in chart-discovery order, not id order.
     let mut prods = prods.to_vec();
     prods.sort_unstable_by_key(|p| p.0);
     let path: Path = Some(Arc::new(PathNode {

@@ -5,8 +5,8 @@ extern crate core;
 
 use lalrpop_util::lalrpop_mod;
 
-pub mod compile_time_config;
 pub mod command;
+pub mod compile_time_config;
 pub mod compiler;
 pub mod interpreter;
 pub mod telnet;
