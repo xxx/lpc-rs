@@ -71,6 +71,16 @@ pub struct FunctionPrototype {
     #[builder(default)]
     pub arg_types: Vec<LpcType>,
 
+    /// Which declared parameters are `ref`, parallel to `arg_types`; empty
+    /// when none is.
+    #[builder(default)]
+    pub ref_params: Vec<bool>,
+
+    /// The first position of an efun's by-reference tail: every argument
+    /// from here on is an lvalue (`sscanf`'s variables).
+    #[builder(default)]
+    pub ref_tail: Option<RegisterSize>,
+
     /// The span of the definition of this function, for use in error messaging.
     /// When None, we assume this is an Efun prototype.
     #[builder(default)]
@@ -108,6 +118,20 @@ impl FunctionPrototype {
             (false, true) => len >= required,
             (false, false) => (required..=arity.num_args).contains(&len),
         }
+    }
+
+    /// Whether argument `i` (0-based) is passed by reference.
+    pub fn is_ref_param(&self, i: usize) -> bool {
+        self.ref_params.get(i).copied().unwrap_or(false)
+            || self.ref_tail.is_some_and(|from| i >= usize::from(from))
+    }
+
+    /// The lowest by-reference position, if the function takes any.
+    pub fn first_ref_param(&self) -> Option<usize> {
+        self.ref_params
+            .iter()
+            .position(|&by_ref| by_ref)
+            .or_else(|| self.ref_tail.map(usize::from))
     }
 }
 
@@ -203,5 +227,43 @@ mod tests {
         assert!(
             !prototype(FunctionFlags::default().with_ellipsis(true)).accepts_arg_count(usize::MAX)
         );
+    }
+
+    fn proto(ref_params: Vec<bool>, ref_tail: Option<RegisterSize>) -> FunctionPrototype {
+        FunctionPrototypeBuilder::default()
+            .name("f")
+            .filename(Arc::new("f.c".into()))
+            .return_type(LpcType::Void)
+            .arity(FunctionArity::new(2))
+            .arg_types(vec![LpcType::Int(false), LpcType::Int(false)])
+            .ref_params(ref_params)
+            .ref_tail(ref_tail)
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn a_declared_ref_parameter_is_a_ref_position() {
+        let p = proto(vec![false, true], None);
+        assert!(!p.is_ref_param(0));
+        assert!(p.is_ref_param(1));
+        assert!(!p.is_ref_param(2));
+        assert_eq!(p.first_ref_param(), Some(1));
+    }
+
+    #[test]
+    fn a_ref_tail_covers_every_position_from_its_start() {
+        let p = proto(vec![false, false], Some(2));
+        assert!(!p.is_ref_param(1));
+        assert!(p.is_ref_param(2));
+        assert!(p.is_ref_param(40));
+        assert_eq!(p.first_ref_param(), Some(2));
+    }
+
+    #[test]
+    fn a_plain_prototype_has_no_ref_position() {
+        let p = proto(vec![], None);
+        assert!(!p.is_ref_param(0));
+        assert_eq!(p.first_ref_param(), None);
     }
 }

@@ -27,6 +27,8 @@ pub struct Symbol {
     /// need to store it beyond the invocation of the function it's defined
     /// within.
     pub upvalue: bool,
+    /// Whether this is a `ref` parameter: its cell is the caller's variable.
+    pub by_ref: bool,
 }
 
 impl Symbol {
@@ -40,6 +42,7 @@ impl Symbol {
             span: None,
             flags: GlobalVarFlags::default(),
             upvalue: false,
+            by_ref: false,
         }
     }
 
@@ -73,6 +76,7 @@ impl From<&FunctionPrototype> for Symbol {
             span: proto.span,
             flags: GlobalVarFlags::default(),
             upvalue: false,
+            by_ref: false,
         }
     }
 }
@@ -93,6 +97,7 @@ impl Default for Symbol {
             span: None,
             flags: GlobalVarFlags::default(),
             upvalue: false,
+            by_ref: false,
         }
     }
 }

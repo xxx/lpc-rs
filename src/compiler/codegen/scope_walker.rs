@@ -69,6 +69,7 @@ impl ScopeWalker {
             span,
             flags: GlobalVarFlags::default(),
             upvalue: false,
+            by_ref: false,
         };
 
         self.insert_symbol(sym);
@@ -211,6 +212,7 @@ impl TreeWalker for ScopeWalker {
             span: node.span,
             flags: GlobalVarFlags::default(),
             upvalue: false,
+            by_ref: false,
         };
 
         self.insert_symbol(make_sym(FOREACH_INDEX));
@@ -459,6 +461,7 @@ mod tests {
                 span: None,
                 flags: GlobalVarFlags::default(),
                 upvalue: false,
+                by_ref: false,
             });
 
             (walker, node)
@@ -534,6 +537,7 @@ mod tests {
                 span: None,
                 flags: GlobalVarFlags::default(),
                 upvalue: false,
+                by_ref: false,
             });
 
             let _ = walker.visit_var(&mut node).await;
@@ -578,6 +582,7 @@ mod tests {
                 span: None,
                 flags: GlobalVarFlags::from(vec!["private"]),
                 upvalue: false,
+                by_ref: false,
             };
 
             inherited.global_variables.insert("foo".to_string(), sym);
@@ -604,6 +609,7 @@ mod tests {
                 span: None,
                 flags: GlobalVarFlags::from(vec!["private"]),
                 upvalue: false,
+                by_ref: false,
             };
 
             walker.insert_symbol(sym);

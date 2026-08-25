@@ -337,6 +337,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::PushPartialArg(r) => {
                 self.partial_args.push(r);
             }
+            Instruction::PushRef(_) => {
+                // No compiler emits this yet; aliasing arrives in a later change.
+                return Err(self.runtime_bug("PushRef is not yet supported"));
+            }
             Instruction::Range(r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]
 

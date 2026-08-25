@@ -204,6 +204,10 @@ pub enum Instruction {
     /// function pointer literals
     PushPartialArg(Option<RegisterVariant>),
 
+    /// Push the location as a by-reference argument: the callee aliases the
+    /// cell behind it instead of copying its value.
+    PushRef(RegisterVariant),
+
     /// Create a new value from some range of another value
     /// x.4 = x.1[x.2 .. x.3]
     Range(
@@ -303,6 +307,7 @@ impl Instruction {
             | Self::PushArg(_)
             | Self::PushArrayItem(_)
             | Self::PushPartialArg(_)
+            | Self::PushRef(_)
             | Self::Ret
             | Self::Store(_, _, _) => None,
         }
@@ -376,6 +381,7 @@ impl Instruction {
             Self::PushArg(a0) => Self::PushArg(f(a0)),
             Self::PushArrayItem(a0) => Self::PushArrayItem(f(a0)),
             Self::PushPartialArg(a0) => Self::PushPartialArg(a0.map(&f)),
+            Self::PushRef(a0) => Self::PushRef(f(a0)),
             Self::Range(a0, a1, a2, a3) => Self::Range(f(a0), f(a1), f(a2), f(a3)),
             Self::Ret => Self::Ret,
             Self::Shl(a0, a1, a2) => Self::Shl(f(a0), f(a1), f(a2)),
@@ -423,7 +429,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 57;
+    pub const COUNT: usize = 58;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -476,6 +482,7 @@ impl Instruction {
         "push_arg",
         "push_array_item",
         "push_partial_arg",
+        "push_ref",
         "range",
         "ret",
         "shl",
@@ -538,14 +545,15 @@ impl Instruction {
             Self::PushArg(..) => 46,
             Self::PushArrayItem(..) => 47,
             Self::PushPartialArg(..) => 48,
-            Self::Range(..) => 49,
-            Self::Ret => 50,
-            Self::Shl(..) => 51,
-            Self::Shr(..) => 52,
-            Self::Sizeof(..) => 53,
-            Self::Store(..) => 54,
-            Self::SConst(..) => 55,
-            Self::Xor(..) => 56,
+            Self::PushRef(..) => 49,
+            Self::Range(..) => 50,
+            Self::Ret => 51,
+            Self::Shl(..) => 52,
+            Self::Shr(..) => 53,
+            Self::Sizeof(..) => 54,
+            Self::Store(..) => 55,
+            Self::SConst(..) => 56,
+            Self::Xor(..) => 57,
         }
     }
 
@@ -700,6 +708,7 @@ impl Display for Instruction {
                 let s = r.map(|r| r.to_string()).unwrap_or_default();
                 write!(f, "{} {s}", self.mnemonic())
             }
+            Instruction::PushRef(r) => write!(f, "{} {r}", self.mnemonic()),
             Instruction::Range(r1, r2, r3, r4) => {
                 write!(f, "{} {r1}, {r2}, {r3}, {r4}", self.mnemonic())
             }
@@ -825,6 +834,7 @@ mod tests {
             PushArg(r()),
             PushArrayItem(r()),
             PushPartialArg(Some(r())),
+            PushRef(r()),
             Range(r(), r(), r(), r()),
             Ret,
             Shl(r(), r(), r()),
@@ -885,7 +895,7 @@ mod tests {
             .iter()
             .filter(|i| i.dest_register().is_none())
             .count();
-        assert_eq!(none_count, 23);
+        assert_eq!(none_count, 24);
         for i in [
             Call(ustr("f")),
             CallEfun(0),
@@ -899,6 +909,18 @@ mod tests {
         ] {
             assert_eq!(i.dest_register(), None, "{i}");
         }
+    }
+
+    #[test]
+    fn push_ref_is_an_operand_without_a_dest() {
+        let i = Instruction::PushRef(RegisterVariant::Upvalue(Register(3)));
+        assert_eq!(i.dest_register(), None);
+        assert_eq!(
+            i.map_registers(|_| RegisterVariant::Global(Register(9))),
+            Instruction::PushRef(RegisterVariant::Global(Register(9)))
+        );
+        assert_eq!(i.mnemonic(), "push_ref");
+        assert_eq!(i.to_string(), "push_ref u3");
     }
 
     #[test]
