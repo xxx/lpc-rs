@@ -14,7 +14,7 @@ use crate::{
         efun::{call_efun, efun_context::EfunContext},
         lpc_ref::{LpcRef, NULL},
         process::Process,
-        task::{Task, get_location},
+        task::{Arg, Task, get_location},
     },
     pop_frame,
 };
@@ -77,9 +77,22 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         );
 
         trace!("copying arguments to new frame: {num_args}");
+        let caller_span = self.stack.current_frame()?.current_debug_span();
         for (i, arg) in self.args.iter().enumerate() {
-            let lpc_ref = get_location(&self.stack, &self.context.txn, *arg)?.into_owned();
-            new_frame.push_arg(&self.context.txn, i, lpc_ref)?;
+            match *arg {
+                Arg::Value(loc) => {
+                    let lpc_ref = get_location(&self.stack, &self.context.txn, loc)?.into_owned();
+                    new_frame
+                        .push_arg(&self.context.txn, i, lpc_ref)
+                        .map_err(|e| e.or_span(caller_span))?;
+                }
+                Arg::Ref(loc) => {
+                    let cell = self.stack.current_frame()?.ref_cell(loc)?;
+                    new_frame
+                        .push_ref(&self.context.txn, i, cell)
+                        .map_err(|e| e.or_span(caller_span))?;
+                }
+            }
         }
 
         Ok(new_frame)

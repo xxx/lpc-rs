@@ -13,7 +13,7 @@ use crate::{
         lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
         process::Process,
-        task::{Task, get_location},
+        task::{Arg, Task, get_location},
         task_context::{ObjectLookup, TaskContext},
     },
 };
@@ -41,11 +41,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
             trace!("Calling call_other: {}->{}", receiver_ref, function_name);
 
-            let args = self
-                .args
-                .iter()
-                .map(|i| get_location(&self.stack, &self.context.txn, *i).map(|r| r.into_owned()))
-                .collect::<Result<Vec<_>>>()?;
+            let args =
+                self.args
+                    .iter()
+                    .map(|arg| match *arg {
+                        Arg::Value(loc) => get_location(&self.stack, &self.context.txn, loc)
+                            .map(|r| r.into_owned()),
+                        Arg::Ref(_) => {
+                            Err(self.runtime_bug("a by-reference argument reached call_other"))
+                        }
+                    })
+                    .collect::<Result<Vec<_>>>()?;
 
             let function_name = Arc::new(function_name);
 

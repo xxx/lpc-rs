@@ -8,7 +8,7 @@ use crate::interpreter::{
     call_frame::CallFrame,
     function_type::function_ptr::ResolvedCall,
     lpc_ref::{LpcRef, NULL},
-    task::{Task, get_location},
+    task::{Arg, Task, get_location},
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
@@ -28,7 +28,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let passed = self
             .args
             .iter()
-            .map(|arg| get_location(&self.stack, &self.context.txn, *arg).map(Cow::into_owned))
+            .map(|arg| match *arg {
+                Arg::Value(loc) => {
+                    get_location(&self.stack, &self.context.txn, loc).map(Cow::into_owned)
+                }
+                Arg::Ref(_) => {
+                    Err(self.runtime_bug("a by-reference argument reached a function pointer call"))
+                }
+            })
             .collect::<Result<Vec<_>>>()?;
 
         let ResolvedCall {

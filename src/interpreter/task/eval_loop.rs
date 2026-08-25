@@ -14,7 +14,7 @@ use crate::{
         lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
         lpc_string::LpcString,
-        task::{CatchPoint, Task, bump_in_location, get_location, set_location},
+        task::{Arg, CatchPoint, Task, bump_in_location, get_location, set_location},
     },
     pop_frame,
 };
@@ -330,17 +330,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let jump = num_default_args - defaults_to_init;
                 frame.set_pc(frame.pc() + jump as usize);
             }
-            Instruction::PushArg(r) => self.args.push(r),
+            Instruction::PushArg(r) => self.args.push(Arg::Value(r)),
             Instruction::PushArrayItem(r1) => {
                 self.array_items.push(r1);
             }
             Instruction::PushPartialArg(r) => {
                 self.partial_args.push(r);
             }
-            Instruction::PushRef(_) => {
-                // No compiler emits this yet; aliasing arrives in a later change.
-                return Err(self.runtime_bug("PushRef is not yet supported"));
-            }
+            Instruction::PushRef(r) => self.args.push(Arg::Ref(r)),
             Instruction::Range(r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]
 

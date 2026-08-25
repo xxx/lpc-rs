@@ -105,6 +105,14 @@ impl TaskSeed {
     }
 }
 
+/// One argument of the pending call: a value to copy into the callee, or
+/// a cell the callee aliases.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Arg {
+    Value(RegisterVariant),
+    Ref(RegisterVariant),
+}
+
 /// An abstraction to allow for isolated running to completion of a specified
 /// function. It represents a single thread of execution
 #[derive(Educe, Clone)]
@@ -117,7 +125,7 @@ pub struct Task<const STACKSIZE: usize> {
     catch_points: ThinVec<CatchPoint>,
 
     /// The arg vector, populated prior to executing any of the `Call`-family [`Instruction`](lpc_rs_asm::instruction::Instruction)s
-    pub args: ThinVec<RegisterVariant>,
+    pub args: ThinVec<Arg>,
 
     /// The vector used to collect arguments when creating a partially-applied function pointer
     pub partial_args: ThinVec<Option<RegisterVariant>>,

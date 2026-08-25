@@ -126,6 +126,22 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         frame.registers[0] = result;
     }
 
+    /// Write `value` back through by-reference argument `index` (0-based).
+    #[expect(
+        dead_code,
+        reason = "wired up once an efun (e.g. sscanf) reads ref_cells"
+    )]
+    pub(crate) fn write_ref(&self, index: RegisterSize, value: LpcRef) -> Result<()> {
+        let Some(&(_, cell)) = self.frame().ref_cells.iter().find(|(i, _)| *i == index) else {
+            return Err(self.runtime_bug(format!(
+                "argument {index} of `{}` is not a by-reference argument",
+                self.frame().function.name()
+            )));
+        };
+        self.txn().with(|t| t.write(cell, value));
+        Ok(())
+    }
+
     /// Mint `items` as an array in this efun's transaction.
     pub(crate) fn mint_array<I>(&self, items: I) -> LpcRef
     where

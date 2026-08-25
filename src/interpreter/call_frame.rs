@@ -86,6 +86,11 @@ pub struct CallFrame {
     /// The captured cells this call can reach: its creators' first, then its own.
     #[builder(default, setter(into))]
     pub upvalue_ptrs: ThinVec<VarId>,
+
+    /// The by-reference arguments an efun frame received: `(argument
+    /// index, cell)`, written back through `EfunContext::write_ref`.
+    #[builder(default)]
+    pub ref_cells: ThinVec<(RegisterSize, VarId)>,
 }
 
 impl CallFrame {
@@ -151,6 +156,7 @@ impl CallFrame {
             pc: 0,
             called_with_num_args,
             upvalue_ptrs: ups,
+            ref_cells: ThinVec::new(),
         };
 
         instance.populate_upvalues();
@@ -187,7 +193,7 @@ impl CallFrame {
 
     /// Store argument `i` where the function declares it, or in the next
     /// local register past the last argument for one beyond the declared list.
-    pub(crate) fn push_arg(&mut self, txn: &TxnHandle, i: usize, value: LpcRef) -> Result<()> {
+    fn store_arg(&mut self, txn: &TxnHandle, i: usize, value: LpcRef) -> Result<()> {
         let target = self
             .function
             .arg_locations
@@ -207,6 +213,63 @@ impl CallFrame {
             });
         self.arg_locations.push(target);
         self.set_location(txn, target, value)
+    }
+
+    /// Store argument `i` by value; a `ref` parameter refuses a value.
+    pub(crate) fn push_arg(&mut self, txn: &TxnHandle, i: usize, value: LpcRef) -> Result<()> {
+        if self.function.prototype.is_ref_param(i) {
+            return Err(self.runtime_error(format!(
+                "argument {} of `{}` must be passed by reference",
+                i + 1,
+                self.function.name()
+            )));
+        }
+        self.store_arg(txn, i, value)
+    }
+
+    /// Bind argument `i` to `cell`: an LPC callee's parameter aliases it;
+    /// an efun gets the cell's value in its register and the cell in
+    /// `ref_cells` for writing back.
+    pub(crate) fn push_ref(&mut self, txn: &TxnHandle, i: usize, cell: VarId) -> Result<()> {
+        let name = self.function.name();
+        if !self.function.prototype.is_ref_param(i) {
+            return Err(self.runtime_error(format!(
+                "`{name}` does not take argument {} by reference",
+                i + 1
+            )));
+        }
+        if self.function.prototype.is_efun() {
+            let value = txn.with(|t| t.read(cell).unwrap_or(NULL));
+            self.ref_cells.push((RegisterSize::try_from(i)?, cell));
+            return self.store_arg(txn, i, value);
+        }
+        let Some(RegisterVariant::Upvalue(reg)) = self.function.arg_locations.get(i).copied()
+        else {
+            return Err(self.runtime_bug(format!(
+                "ref parameter {} of `{name}` was not laid out as a cell",
+                i + 1
+            )));
+        };
+        let Some(slot) = self.upvalue_ptrs.get_mut(reg.index() as usize) else {
+            return Err(self.runtime_bug(format!(
+                "upvalue {} is outside this frame's {} cells",
+                reg.index(),
+                self.upvalue_ptrs.len()
+            )));
+        };
+        *slot = cell;
+        self.arg_locations.push(RegisterVariant::Upvalue(reg));
+        Ok(())
+    }
+
+    /// The cell behind `location`, for passing by reference.
+    pub(crate) fn ref_cell(&self, location: RegisterVariant) -> Result<VarId> {
+        match self.slot(location)? {
+            Slot::Cell(cell) => Ok(cell),
+            Slot::Register(_) => Err(self.runtime_bug(format!(
+                "by-reference argument {location} is a register, not a cell"
+            ))),
+        }
     }
 
     /// Resolve `location` to its slot in this frame.
@@ -374,7 +437,7 @@ mod tests {
     use std::sync::Arc;
 
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
-    use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
+    use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototypeBuilder};
 
     use super::*;
     use crate::interpreter::program::Program;
@@ -429,6 +492,117 @@ mod tests {
             frame.slot(Register(0).as_upvalue()).unwrap(),
             Slot::Cell(cell)
         );
+    }
+
+    /// A function `f(int ref x)`: one cell, the parameter living in it.
+    fn ref_function() -> Arc<ProgramFunction> {
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("f")
+            .filename(Arc::new("f.c".into()))
+            .return_type(LpcType::Void)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Int(false)])
+            .ref_params(vec![true])
+            .build()
+            .unwrap();
+        let mut pf = ProgramFunction::new(prototype, 0);
+        pf.num_upvalues = 1;
+        pf.arg_locations = vec![Register(0).as_upvalue()];
+        Arc::new(pf)
+    }
+
+    fn value_function() -> Arc<ProgramFunction> {
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("g")
+            .filename(Arc::new("g.c".into()))
+            .return_type(LpcType::Void)
+            .arity(FunctionArity::new(1))
+            .arg_types(vec![LpcType::Int(false)])
+            .build()
+            .unwrap();
+        let mut pf = ProgramFunction::new(prototype, 0);
+        pf.arg_locations = vec![Register(1).as_local()];
+        Arc::new(pf)
+    }
+
+    #[test]
+    fn push_ref_aliases_the_callers_cell() {
+        let txn = TxnHandle::empty();
+        let cell = VarId::new();
+        txn.with(|t| t.write(cell, LpcRef::from(41)));
+        let mut frame = CallFrame::new(Process::default(), ref_function(), 1, None::<&[VarId]>);
+        frame.push_ref(&txn, 0, cell).unwrap();
+        assert_eq!(
+            frame.slot(Register(0).as_upvalue()).unwrap(),
+            Slot::Cell(cell)
+        );
+        assert_eq!(frame.arg_locations.as_slice(), &[Register(0).as_upvalue()]);
+        assert_eq!(
+            *frame.get_location(&txn, Register(0).as_upvalue()).unwrap(),
+            LpcRef::from(41)
+        );
+    }
+
+    #[test]
+    fn a_value_into_a_ref_parameter_is_a_runtime_error() {
+        let txn = TxnHandle::empty();
+        let mut frame = CallFrame::new(Process::default(), ref_function(), 1, None::<&[VarId]>);
+        let err = frame
+            .push_arg(&txn, 0, LpcRef::from(1))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("argument 1 of `f` must be passed by reference"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_ref_into_a_value_parameter_is_a_runtime_error() {
+        let txn = TxnHandle::empty();
+        let mut frame = CallFrame::new(Process::default(), value_function(), 1, None::<&[VarId]>);
+        let err = frame
+            .push_ref(&txn, 0, VarId::new())
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("`g` does not take argument 1 by reference"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn an_efun_frame_copies_the_value_and_records_the_cell() {
+        let txn = TxnHandle::empty();
+        let cell = VarId::new();
+        txn.with(|t| t.write(cell, LpcRef::from("seed")));
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("sscanf")
+            .filename(Arc::new("".into()))
+            .return_type(LpcType::Int(false))
+            .kind(FunctionKind::Efun)
+            .arity(FunctionArity::new(2))
+            .ref_tail(Some(2))
+            .build()
+            .unwrap();
+        let pf = Arc::new(ProgramFunction::new(prototype, 0));
+        let mut frame =
+            CallFrame::with_minimum_arg_capacity(Process::default(), pf, 3, 3, None::<&[VarId]>);
+        frame.push_arg(&txn, 0, LpcRef::from("a b")).unwrap();
+        frame.push_arg(&txn, 1, LpcRef::from("%s")).unwrap();
+        frame.push_ref(&txn, 2, cell).unwrap();
+        assert_eq!(frame.registers[Register(3)], LpcRef::from("seed"));
+        assert_eq!(frame.ref_cells.as_slice(), &[(2, cell)]);
+    }
+
+    #[test]
+    fn a_register_location_is_not_a_cell() {
+        let frame = CallFrame::new(Process::default(), value_function(), 0, None::<&[VarId]>);
+        let err = frame
+            .ref_cell(Register(1).as_local())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("is a register, not a cell"), "{err}");
     }
 
     #[test]

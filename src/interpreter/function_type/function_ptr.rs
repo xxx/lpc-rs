@@ -218,6 +218,14 @@ impl FunctionPtr {
             }
         };
 
+        if let Some(i) = function.prototype.first_ref_param() {
+            return Err(LpcError::runtime(format!(
+                "`{}` takes argument {} by reference; call it directly",
+                function.name(),
+                i + 1
+            )));
+        }
+
         Ok(Some(ResolvedCall {
             process,
             function,
