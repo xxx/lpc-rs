@@ -372,6 +372,21 @@ impl TreeWalker for SemanticCheckWalker {
             return Err(lpc_error!(node.span, "invalid call chain"));
         };
 
+        // A chained call's callee is a computed function value with no
+        // declared parameter list to check `ref` against, so it never
+        // accepts one either.
+        if let Some(arg) = node
+            .arguments
+            .iter()
+            .find(|a| matches!(a, ExpressionNode::Ref(_)))
+        {
+            let e = lpc_error!(
+                arg.span(),
+                "a function pointer cannot take an argument by reference"
+            );
+            self.context.diagnostics.record(e);
+        }
+
         chain_node.visit(self).await?;
 
         for argument in &mut node.arguments {
@@ -2973,6 +2988,17 @@ mod tests {
                 walk_code("void g(int ref x) { } void f() { int y; function p = &g(ref y); }")
                     .await
                     .is_err()
+            );
+        }
+
+        #[tokio::test]
+        async fn a_chained_call_cannot_pass_a_ref() {
+            let errors =
+                errors_of("mixed get_fp() { return 0; } void f() { int y; get_fp()(ref y); }")
+                    .await;
+            assert_one_error(
+                &errors,
+                "a function pointer cannot take an argument by reference",
             );
         }
     }

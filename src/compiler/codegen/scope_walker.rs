@@ -88,6 +88,30 @@ impl ScopeWalker {
         }
     }
 
+    /// The "accessed outside of its file" diagnostic for `name`'s `symbol`,
+    /// or `None` when it's public or defined in the current file. Shared by
+    /// `visit_var` and `visit_ref`.
+    fn visibility_error(
+        name: Ustr,
+        symbol: &Symbol,
+        is_local: bool,
+        span: Option<Span>,
+    ) -> Option<LpcError> {
+        if symbol.public() || is_local {
+            return None;
+        }
+
+        Some(
+            LpcError::new(format!(
+                "{} variable `{}` accessed outside of its file",
+                symbol.flags.visibility(),
+                name
+            ))
+            .with_span(span)
+            .with_label("defined here", symbol.span),
+        )
+    }
+
     fn should_upvalue_symbol(&self, symbol: &Symbol) -> bool {
         if_chain! {
             if !symbol.is_global();
@@ -320,15 +344,7 @@ impl TreeWalker for ScopeWalker {
 
         trace!("found symbol: {}", symbol);
 
-        if !symbol.public() && !is_local {
-            let e = LpcError::new(format!(
-                "{} variable `{}` accessed outside of its file",
-                symbol.flags.visibility(),
-                node.name
-            ))
-            .with_span(node.span)
-            .with_label("defined here", symbol.span);
-
+        if let Some(e) = Self::visibility_error(node.name, symbol, is_local, node.span) {
             self.context.diagnostics.record(e);
 
             return Ok(());
@@ -351,11 +367,18 @@ impl TreeWalker for ScopeWalker {
     }
 
     async fn visit_ref(&mut self, node: &mut RefNode) -> Result<()> {
+        let is_local = self.context.scopes.lookup(&node.name).is_some();
+
         let Some(symbol) = self.context.lookup_var(node.name) else {
             let e = lpc_error!(node.span, "undefined variable `{}`", node.name);
             self.context.diagnostics.record(e);
             return Ok(());
         };
+
+        if let Some(e) = Self::visibility_error(node.name, symbol, is_local, node.span) {
+            self.context.diagnostics.record(e);
+            return Ok(());
+        }
 
         node.set_global(symbol.is_global());
 
@@ -458,6 +481,20 @@ mod tests {
             let walker = walk("int g; void inc(int ref x) { x++; } void f() { inc(ref g); }").await;
             let g = walker.context.scopes.lookup_global("g").unwrap();
             assert!(!g.upvalue);
+        }
+
+        #[tokio::test]
+        async fn a_ref_of_a_private_inherited_global_is_rejected() {
+            // `parent.c` declares `private int priv`, so `f` here is a
+            // different file from where `priv` is defined.
+            let walker = walk(
+                "inherit \"./parent\"; void inc(int ref x) { x++; } void f() { inc(ref priv); }",
+            )
+            .await;
+            assert_regex!(
+                walker.context.diagnostics.errors()[0].message(),
+                "private variable `priv` accessed outside of its file"
+            );
         }
     }
 
