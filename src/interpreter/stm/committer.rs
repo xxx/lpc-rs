@@ -421,8 +421,7 @@ impl Committer {
                     Vec::new()
                 }
             }
-            // A rule keeps its handler alive: its bound arguments and
-            // captured cells are roots while the rule is registered.
+            // A registered rule keeps its handler alive.
             WorldValue::Rules(rules) => rules
                 .iter()
                 .map(|rule| MarkWork::Ref(LpcRef::Function(rule.handler.clone())))

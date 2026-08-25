@@ -28,8 +28,7 @@ pub(crate) enum WorldValue {
     /// slot. Held strongly so the binding stays alive between an in-transaction
     /// write and the commit that makes it visible; `None` clears the binding.
     Connection(Option<Arc<Connection>>),
-    /// A living's rule list: what it can command. Not an `LpcRef`, so it is
-    /// carried here as the connection binding is.
+    /// A living's rule list: what it can command.
     Rules(RuleList),
 }
 

@@ -204,8 +204,7 @@ impl Process {
         })
     }
 
-    /// Record `object` among `environment`'s living members; the caller
-    /// already holds the transaction.
+    /// Record `object` among `environment`'s living members.
     pub(crate) fn mark_living(
         t: &mut Transaction,
         object: &Arc<Process>,
@@ -235,8 +234,7 @@ impl Process {
     /// two moves of one object conflict and the loser re-runs; the room
     /// inventories change through merge writes, so moves of distinct
     /// objects through one room commute. A living mover also updates the
-    /// rooms' living-member cells, so a non-living arrival need not read the
-    /// whole inventory to find them.
+    /// rooms' living-member cells.
     pub(crate) fn move_to(txn: &TxnHandle, object: &Arc<Process>, new_environment: &Arc<Process>) {
         let object_cell = object.position.environment.id;
         let new_cell = new_environment.position.inventory.id;

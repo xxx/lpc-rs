@@ -59,7 +59,7 @@ pub async fn dispatch(ctx: &TaskContext, actor: Arc<Process>, line: &str) -> Res
     let outcome = trial(ctx, &actor, &line, &first_word).await;
     let outcome = match outcome {
         Ok(Outcome::Unhandled) => {
-            // The trial left the last candidate's verb behind; the fallback reports the typed one.
+            // The trial left the last candidate's verb behind.
             ctx.with_command(|state| {
                 if let Some(state) = state {
                     state.verb_reported = state.verb_typed.clone();
@@ -279,8 +279,7 @@ fn default_message(ctx: &TaskContext, actor: &Arc<Process>) -> String {
 }
 
 /// Deliver `message` to `actor` through `catch_tell`, else straight to its
-/// connection, else the debug log — as effects, so nothing reaches the
-/// player unless the command commits.
+/// connection, else the debug log, as effects.
 pub(crate) async fn deliver(ctx: &TaskContext, actor: &Arc<Process>, message: &str) -> Result<()> {
     if let Some(catch_tell) = actor.program.unmangled_functions.get(CATCH_TELL).cloned() {
         apply_on(
@@ -721,8 +720,7 @@ mod tests {
         );
     }
 
-    /// One nested command costs ~85KB of native stack in a debug build, so the
-    /// recursion runs where the cap has room to fire.
+    /// The 16MiB thread gives the cap room to fire before a debug-build stack runs out.
     #[test]
     fn nesting_deeper_than_the_cap_is_an_error() {
         let code = indoc! { r#"

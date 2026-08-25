@@ -16,9 +16,8 @@ pub const MAX_CLOSURE_ARG_REFERENCE: RegisterSize = 64;
 /// Any more than that will be dropped.
 pub const VM_CHANNEL_CAPACITY: usize = 1024;
 
-/// How deep can `command()` nest, before we error out? One nested `command()`
-/// costs on the order of 85KB of native stack in a debug build, so 16 levels
-/// fit the 2MiB stack tokio gives a worker thread.
+/// How deep `command()` may nest: a level costs ~85KB of native stack in a
+/// debug build, and 16 fit the 2MiB stack tokio gives a worker thread.
 pub const MAX_COMMAND_DEPTH: usize = 16;
 
 /// How long can a chain of object clones continue, before we error out? This is

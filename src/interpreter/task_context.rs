@@ -422,8 +422,7 @@ impl TaskContext {
         self.result.reset()
     }
 
-    /// Drop any command in progress, so a re-run starts from the pre-hook
-    /// with a fresh command state; a joiner shares its parent's stack and
+    /// Drop every command in progress; a joiner shares its parent's stack and
     /// must never call this.
     #[inline]
     pub(crate) fn clear_commands(&self) {

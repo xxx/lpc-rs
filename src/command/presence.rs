@@ -40,7 +40,7 @@ pub(crate) fn before_move(txn: &TxnHandle, mover: &Arc<Process>, new_env: &Arc<P
 }
 
 /// The livings `object` leaves behind forget the rules it registered; its own
-/// contents travel with it, so they keep theirs.
+/// contents keep theirs.
 pub(crate) fn forget_departure(txn: &TxnHandle, object: &Arc<Process>) {
     forget(txn, object, &witnesses_left_behind(txn, object));
 }
@@ -48,7 +48,7 @@ pub(crate) fn forget_departure(txn: &TxnHandle, object: &Arc<Process>) {
 /// Every living holding `object`'s rules forgets them: those it leaves
 /// behind, plus the living contents that go down with it.
 pub(crate) fn forget_destruct(txn: &TxnHandle, object: &Arc<Process>) {
-    // Living-ness is read before the lock: `commands_enabled` takes the handle.
+    // `commands_enabled` takes the handle; inside the lock it would deadlock.
     let mut livings = witnesses_left_behind(txn, object);
     livings.extend(
         Process::inventory_of(txn, object)
@@ -58,10 +58,9 @@ pub(crate) fn forget_destruct(txn: &TxnHandle, object: &Arc<Process>) {
     forget(txn, object, &livings);
 }
 
-/// The livings around `object` that its rules can have reached: its
-/// environment's members come from that environment's `livings` cell, not its
-/// whole inventory, so this does not conflict with a concurrent non-living
-/// mover.
+/// The livings around `object` that its rules can have reached; do not read
+/// the environment's whole inventory here, a concurrent non-living mover
+/// would conflict.
 fn witnesses_left_behind(txn: &TxnHandle, object: &Arc<Process>) -> Vec<Arc<Process>> {
     let Some(environment) = Process::environment_of(txn, object) else {
         return Vec::new();
@@ -91,8 +90,7 @@ fn forget(txn: &TxnHandle, object: &Arc<Process>, livings: &[Arc<Process>]) {
 
 /// After a move: `init()` in MudOS order, with `this_player` the living
 /// each object is meeting; a non-living mover reads only `new_env`'s
-/// `livings` cell, a living one reads the whole inventory since it must
-/// `init()` every object there.
+/// `livings` cell, a living one the whole inventory.
 pub(crate) async fn after_move(
     ctx: &TaskContext,
     mover: &Arc<Process>,

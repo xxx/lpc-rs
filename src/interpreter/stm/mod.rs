@@ -267,8 +267,7 @@ impl Transaction {
         self.read_value(var_id)?.into_connection()
     }
 
-    /// The rule list in a cell var, empty when absent; a tracked read, so a
-    /// command sees a consistent list and re-runs if a registration lands.
+    /// The rule list in a cell var, empty when absent; a tracked read.
     pub(crate) fn read_rules(&mut self, var_id: VarId) -> RuleList {
         self.read_value(var_id)
             .and_then(WorldValue::into_rules)

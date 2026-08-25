@@ -110,9 +110,7 @@ impl FunctionPtr {
             || matches!(self.partial_args.first(), Some(Some(_)))
     }
 
-    /// Whether a call would find a live receiver: a rule whose handler points
-    /// into a destructed object is skipped rather than raising the error
-    /// [`prepare_call`](Self::prepare_call) would.
+    /// Whether [`prepare_call`](Self::prepare_call) would find its receiver alive.
     pub(crate) fn receiver_is_live(&self, txn: &TxnHandle) -> bool {
         match &self.address {
             FunctionAddress::Local(receiver, _) => {
