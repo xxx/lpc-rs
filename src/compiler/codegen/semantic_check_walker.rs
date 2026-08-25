@@ -45,6 +45,7 @@ use crate::{
             check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
         },
     },
+    interpreter::efun::CALL_OTHER,
 };
 
 struct BreakAllowed(bool);
@@ -194,6 +195,18 @@ impl TreeWalker for SemanticCheckWalker {
             return Err(lpc_error!(node.span, "invalid call chain"));
         };
 
+        // `ref` aliases a variable's cell; a receiver puts that cell in
+        // another object's address space, which the VM cannot reach into.
+        if (receiver.is_some() || name.as_str() == CALL_OTHER)
+            && let Some(arg) = node
+                .arguments
+                .iter()
+                .find(|a| matches!(a, ExpressionNode::Ref(_)))
+        {
+            let e = lpc_error!(arg.span(), "`ref` cannot cross objects");
+            self.context.diagnostics.record(e);
+        }
+
         if receiver.is_some() {
             if namespace != &CallNamespace::Local {
                 let e = lpc_error!(node.span, "namespaced `call_other` is not allowed");
@@ -217,14 +230,32 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         let lookup = self.context.lookup_var(*name);
+        let is_function_pointer =
+            lookup.is_some_and(|sym| sym.type_.matches_type(LpcType::Function(false)));
+
         // Check function existence.
         if !self.context.contains_function_complete(name.as_str(), &CallNamespace::Local)
             // check for function pointers & closures
-            && (lookup.is_none() || !lookup.unwrap().type_.matches_type(LpcType::Function(false)))
+            && (lookup.is_none() || !is_function_pointer)
         {
             let e = lpc_error!(node.span, "call to unknown function `{}`", name);
             self.context.diagnostics.record(e);
             // Non-fatal. Continue.
+        }
+
+        // A call through a function-typed variable has no declared parameter
+        // list to check `ref` against, so it never accepts one.
+        if is_function_pointer
+            && let Some(arg) = node
+                .arguments
+                .iter()
+                .find(|a| matches!(a, ExpressionNode::Ref(_)))
+        {
+            let e = lpc_error!(
+                arg.span(),
+                "a function pointer cannot take an argument by reference"
+            );
+            self.context.diagnostics.record(e);
         }
 
         // Further checks require access to the function prototype for error messaging
@@ -257,6 +288,54 @@ impl TreeWalker for SemanticCheckWalker {
                 .with_span(node.span)
                 .with_label("defined here", prototype.span);
                 errors.push(e);
+            }
+
+            // `call_other`'s `ref` mismatches are already the cross-object
+            // error above; every other direct call gets R1/R2 here.
+            if name.as_str() != CALL_OTHER {
+                for (index, arg) in node.arguments.iter().enumerate() {
+                    let is_ref_arg = matches!(arg, ExpressionNode::Ref(_));
+                    let wants_ref = prototype.is_ref_param(index);
+                    if wants_ref && !is_ref_arg {
+                        // An implicit efun lvalue accepts a bare variable.
+                        if prototype.is_efun() && matches!(arg, ExpressionNode::Var(_)) {
+                            continue;
+                        }
+                        let e = if prototype.is_efun() {
+                            LpcError::new(format!(
+                                "argument {} of `{}` must be a variable",
+                                index + 1,
+                                name
+                            ))
+                        } else {
+                            let hint = match arg {
+                                ExpressionNode::Var(v) => format!(": `ref {}`", v.name),
+                                _ => String::new(),
+                            };
+                            LpcError::new(format!(
+                                "argument {} of `{}` must be passed by reference{hint}",
+                                index + 1,
+                                name
+                            ))
+                        };
+                        errors.push(
+                            e.with_span(arg.span()).with_label(
+                                "declared here",
+                                prototype.arg_spans.get(index).cloned(),
+                            ),
+                        );
+                    } else if is_ref_arg && !wants_ref {
+                        errors.push(
+                            LpcError::new(format!(
+                                "`{}` does not take argument {} by reference",
+                                name,
+                                index + 1
+                            ))
+                            .with_span(arg.span())
+                            .with_label("declared here", prototype.arg_spans.get(index).cloned()),
+                        );
+                    }
+                }
             }
 
             // Check argument types.
@@ -304,6 +383,16 @@ impl TreeWalker for SemanticCheckWalker {
 
     async fn visit_closure(&mut self, node: &mut ClosureNode) -> Result<()> {
         self.closure_depth += 1;
+
+        // A closure has no caller frame to alias into, so it cannot take `ref`.
+        if let Some(parameters) = &node.parameters {
+            for param in parameters {
+                if param.by_ref {
+                    let e = lpc_error!(param.span, "a closure cannot take a `ref` parameter");
+                    self.context.diagnostics.record(e);
+                }
+            }
+        }
 
         walk_closure(self, node).await?;
 
@@ -377,6 +466,21 @@ impl TreeWalker for SemanticCheckWalker {
 
         self.context.scopes.goto_function(&node.name)?;
         self.current_function = Some(node.clone());
+
+        if let Some(prototype) = self.context.function_prototypes.get(node.name.as_str()) {
+            let arity = prototype.arity;
+            let required = (arity.num_args - arity.num_default_args) as usize;
+            for (index, param) in node.parameters.iter().enumerate() {
+                // A default value is already the other `ref` error; don't double-report.
+                if param.by_ref
+                    && param.value.is_none()
+                    && (node.flags.varargs() || index >= required)
+                {
+                    let e = lpc_error!(param.span, "a `ref` parameter cannot be optional");
+                    self.context.diagnostics.record(e);
+                }
+            }
+        }
 
         walk_function_def(self, node).await?;
 
@@ -603,6 +707,11 @@ impl TreeWalker for SemanticCheckWalker {
 
     async fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
         is_keyword(node.name)?;
+
+        if node.by_ref && node.value.is_some() {
+            let e = lpc_error!(node.span, "a `ref` parameter cannot have a default value");
+            self.context.diagnostics.record(e);
+        }
 
         if_chain! {
             if node.name == ARGV;
@@ -2770,6 +2879,100 @@ mod tests {
                     .to_string()
                     .as_str(),
                 "differing types in ternary expression: `int` and `string`"
+            );
+        }
+    }
+
+    mod references {
+        use super::*;
+
+        async fn errors_of(code: &str) -> Vec<String> {
+            let context = walk_code(code).await.unwrap();
+            context
+                .diagnostics
+                .errors()
+                .iter()
+                .map(|e| e.to_string())
+                .collect()
+        }
+
+        fn assert_one_error(errors: &[String], expected: &str) {
+            assert_eq!(errors.len(), 1, "{errors:?}");
+            assert!(errors[0].contains(expected), "{}", errors[0]);
+        }
+
+        #[tokio::test]
+        async fn a_matching_ref_call_is_clean() {
+            let errors =
+                errors_of("void inc(int ref x) { x++; } void f() { int y; inc(ref y); }").await;
+            assert!(errors.is_empty(), "{errors:?}");
+        }
+
+        #[tokio::test]
+        async fn a_ref_parameter_needs_a_ref_argument() {
+            let errors = errors_of("void inc(int ref x) { } void f() { int y; inc(y); }").await;
+            assert_one_error(
+                &errors,
+                "argument 1 of `inc` must be passed by reference: `ref y`",
+            );
+        }
+
+        #[tokio::test]
+        async fn a_plain_parameter_refuses_a_ref_argument() {
+            let errors = errors_of("void inc(int x) { } void f() { int y; inc(ref y); }").await;
+            assert_one_error(&errors, "`inc` does not take argument 1 by reference");
+        }
+
+        #[tokio::test]
+        async fn a_ref_argument_is_type_checked() {
+            let errors =
+                errors_of("void inc(int ref x) { } void f() { string s; inc(ref s); }").await;
+            assert_one_error(&errors, "unexpected argument type to `inc`");
+        }
+
+        #[tokio::test]
+        async fn a_ref_parameter_cannot_have_a_default() {
+            let errors = errors_of("void inc(int ref x = 3) { }").await;
+            assert_one_error(&errors, "a `ref` parameter cannot have a default value");
+        }
+
+        #[tokio::test]
+        async fn a_ref_parameter_cannot_be_optional() {
+            let errors = errors_of("varargs void inc(int ref x) { }").await;
+            assert_one_error(&errors, "a `ref` parameter cannot be optional");
+        }
+
+        #[tokio::test]
+        async fn a_closure_cannot_take_a_ref_parameter() {
+            let errors = errors_of("void f() { function g = (: [int ref x] x++ :); }").await;
+            assert_one_error(&errors, "a closure cannot take a `ref` parameter");
+        }
+
+        #[tokio::test]
+        async fn a_pointer_call_cannot_pass_a_ref() {
+            let errors = errors_of("void f(function fp) { int y; fp(ref y); }").await;
+            assert_one_error(
+                &errors,
+                "a function pointer cannot take an argument by reference",
+            );
+        }
+
+        #[tokio::test]
+        async fn a_ref_cannot_cross_objects() {
+            let errors = errors_of("void f(object o) { int y; o->g(ref y); }").await;
+            assert_one_error(&errors, "`ref` cannot cross objects");
+            let errors =
+                errors_of("void f(object o) { int y; call_other(o, \"g\", ref y); }").await;
+            assert_one_error(&errors, "`ref` cannot cross objects");
+        }
+
+        #[tokio::test]
+        async fn a_partial_application_cannot_take_a_ref() {
+            // The grammar refuses it: no ref item in a partial argument list.
+            assert!(
+                walk_code("void g(int ref x) { } void f() { int y; function p = &g(ref y); }")
+                    .await
+                    .is_err()
             );
         }
     }

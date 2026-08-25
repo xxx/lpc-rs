@@ -9,15 +9,18 @@ use lpc_rs_core::{
 use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, span::Span};
 use lpc_rs_function_support::symbol::Symbol;
 use tracing::trace;
+use ustr::Ustr;
 
 use crate::compiler::{
     ast::{
         ast_node::AstNodeTrait,
         call_node::{CallChain, CallNode},
         closure_node::ClosureNode,
+        expression_node::ExpressionNode,
         for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachNode},
         function_def_node::{ARGV, FunctionDefNode},
         program_node::ProgramNode,
+        ref_node::RefNode,
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
@@ -75,6 +78,16 @@ impl ScopeWalker {
         self.insert_symbol(sym);
     }
 
+    /// Promote a local's symbol into a cell for its whole life, the way a
+    /// captured local is upvalued; globals are left alone.
+    fn mark_cell(&mut self, name: Ustr) {
+        if let Some(symbol) = self.context.lookup_var_mut(name)
+            && !symbol.is_global()
+        {
+            symbol.upvalue = true;
+        }
+    }
+
     fn should_upvalue_symbol(&self, symbol: &Symbol) -> bool {
         if_chain! {
             if !symbol.is_global();
@@ -122,7 +135,7 @@ impl TreeWalker for ScopeWalker {
         let CallChain::Root {
             receiver,
             name,
-            namespace: _,
+            namespace,
         } = &mut node.chain
         else {
             return Err(lpc_error!(
@@ -137,6 +150,25 @@ impl TreeWalker for ScopeWalker {
 
         for argument in &mut node.arguments {
             argument.visit(self).await?;
+        }
+
+        // An implicit efun lvalue (e.g. `sscanf`'s trailing variables) promotes
+        // its bare-variable argument the same way an explicit `ref` does.
+        if receiver.is_none() {
+            let mut to_mark: Vec<Ustr> = Vec::new();
+            if let Some(function_like) = self.context.lookup_function_complete(*name, namespace) {
+                let prototype = function_like.as_ref();
+                for (index, argument) in node.arguments.iter().enumerate() {
+                    if prototype.is_ref_param(index)
+                        && let ExpressionNode::Var(var) = argument
+                    {
+                        to_mark.push(var.name);
+                    }
+                }
+            }
+            for var_name in to_mark {
+                self.mark_cell(var_name);
+            }
         }
 
         if_chain! {
@@ -318,6 +350,22 @@ impl TreeWalker for ScopeWalker {
         Ok(())
     }
 
+    async fn visit_ref(&mut self, node: &mut RefNode) -> Result<()> {
+        let Some(symbol) = self.context.lookup_var(node.name) else {
+            let e = lpc_error!(node.span, "undefined variable `{}`", node.name);
+            self.context.diagnostics.record(e);
+            return Ok(());
+        };
+
+        node.set_global(symbol.is_global());
+
+        // The callee aliases the variable, so it lives in a cell for its
+        // whole life, as a captured local does.
+        self.mark_cell(node.name);
+
+        Ok(())
+    }
+
     async fn visit_var_init(&mut self, node: &mut VarInitNode) -> Result<()> {
         let scope = self.context.scopes.current();
 
@@ -334,7 +382,14 @@ impl TreeWalker for ScopeWalker {
         }
 
         // Inserted first, so a closure in the initializer can capture the variable.
-        self.insert_symbol(Symbol::from(&mut *node));
+        let mut symbol = Symbol::from(&mut *node);
+        symbol.by_ref = node.by_ref;
+        if node.by_ref {
+            // A `ref` parameter's cell is the caller's variable, for its
+            // whole life, like a captured local.
+            symbol.upvalue = true;
+        }
+        self.insert_symbol(symbol);
 
         if let Some(expr_node) = &mut node.value {
             expr_node.visit(self).await?;
@@ -366,6 +421,45 @@ mod tests {
 
     use super::*;
     use crate::{assert_regex, test_support::factories::*};
+
+    mod references {
+        use lpc_rs_core::register::{Register, RegisterVariant};
+
+        use super::*;
+        use crate::test_support::CompileThrough;
+
+        async fn walk(code: &str) -> ScopeWalker {
+            ScopeWalker::compile_through(code).await.unwrap()
+        }
+
+        #[tokio::test]
+        async fn a_ref_argument_promotes_the_local_to_a_cell() {
+            let walker =
+                walk("void inc(int ref x) { x++; } void f() { int y = 1; inc(ref y); }").await;
+            let scope = walker.context.scopes.function_scope("f").unwrap();
+            let y = scope.lookup("y").unwrap();
+            assert!(y.upvalue);
+            assert!(!y.by_ref);
+            assert!(matches!(y.location, Some(RegisterVariant::Upvalue(_))));
+        }
+
+        #[tokio::test]
+        async fn a_ref_parameter_is_a_by_ref_cell() {
+            let walker = walk("void inc(int ref x) { x++; }").await;
+            let scope = walker.context.scopes.function_scope("inc").unwrap();
+            let x = scope.lookup("x").unwrap();
+            assert!(x.by_ref);
+            assert!(x.upvalue);
+            assert_eq!(x.location, Some(Register(0).as_upvalue()));
+        }
+
+        #[tokio::test]
+        async fn a_ref_of_a_global_stays_global() {
+            let walker = walk("int g; void inc(int ref x) { x++; } void f() { inc(ref g); }").await;
+            let g = walker.context.scopes.lookup_global("g").unwrap();
+            assert!(!g.upvalue);
+        }
+    }
 
     mod test_visit_closure {
         use lpc_rs_core::{function_flags::FunctionFlags, lpc_type::LpcType};
