@@ -2,6 +2,8 @@
 
 use std::{collections::HashMap, fmt, iter};
 
+use super::tokenizer::{Scan, TokenSet};
+
 /// A nonterminal, by index in the grammar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct NtId(pub u32);
@@ -49,7 +51,10 @@ impl Element {
 impl From<Symbol> for Element {
     /// Convert a symbol to an unlabeled element.
     fn from(symbol: Symbol) -> Self {
-        Element { symbol, label: None }
+        Element {
+            symbol,
+            label: None,
+        }
     }
 }
 
@@ -140,6 +145,7 @@ impl std::error::Error for GrammarError {}
 #[derive(Debug)]
 pub struct Grammar {
     token_rules: Vec<TokenRule>,
+    tokens: TokenSet,
     nonterminals: Vec<String>,
     productions: Vec<Production>,
     by_lhs: Vec<Vec<ProdId>>,
@@ -184,10 +190,15 @@ impl Grammar {
         &self.nonterminals[nt.0 as usize]
     }
 
-    /// The token rules that define the tokenizer.
-    #[expect(dead_code, reason = "used once the tokenizer lands")]
-    pub(crate) fn token_rules(&self) -> &[TokenRule] {
-        &self.token_rules
+    /// The name of a token class.
+    pub fn token_name(&self, class: TokenClass) -> &str {
+        &self.token_rules[class.0 as usize].name
+    }
+
+    /// Tokenizes `input` under this grammar's rules, `None` where no rule matches.
+    pub fn tokenize(&self, input: &str) -> Option<Scan> {
+        let tokens = self.tokens.tokenize(input)?;
+        Some(Scan::new(input, tokens, self.options.case_insensitive))
     }
 }
 
@@ -309,10 +320,12 @@ impl GrammarBuilder {
             }
         }
 
+        let tokens = TokenSet::build(&token_rules, options.case_insensitive)?;
         let nullable = compute_nullable(&productions, nonterminals.len());
 
         Ok(Grammar {
             token_rules,
+            tokens,
             nonterminals,
             productions,
             by_lhs,
@@ -363,7 +376,10 @@ mod tests {
 
     #[test]
     fn empty_grammar_is_an_error() {
-        assert_eq!(GrammarBuilder::new().build().unwrap_err(), GrammarError::EmptyGrammar);
+        assert_eq!(
+            GrammarBuilder::new().build().unwrap_err(),
+            GrammarError::EmptyGrammar
+        );
     }
 
     #[test]
@@ -374,7 +390,9 @@ mod tests {
         b.production(s, [nt(ghost)]);
         assert_eq!(
             b.build().unwrap_err(),
-            GrammarError::UnknownNonTerminal { name: "Ghost".into() }
+            GrammarError::UnknownNonTerminal {
+                name: "Ghost".into()
+            }
         );
     }
 
@@ -408,7 +426,10 @@ mod tests {
         let s = b.nonterminal("S");
         let p = b.production(s, [lit("LOOK")]);
         let g = b.build().unwrap();
-        assert_eq!(g.production(p).rhs[0].symbol, Symbol::Literal("look".into()));
+        assert_eq!(
+            g.production(p).rhs[0].symbol,
+            Symbol::Literal("look".into())
+        );
         assert!(g.options().case_insensitive);
     }
 
@@ -442,5 +463,20 @@ mod tests {
         assert_eq!(e.label, Some(Label(3)));
         assert_eq!(e.symbol, Symbol::Literal("get".into()));
         assert_eq!(Element::from(Symbol::Token(TokenClass(1))).label, None);
+    }
+
+    #[test]
+    fn grammar_tokenizes_with_its_rules() {
+        let mut b = GrammarBuilder::new();
+        b.skip_token("ws", r"\s+");
+        let word = b.token("word", r"\S+");
+        let s = b.nonterminal("S");
+        b.production(s, [tok(word)]);
+        let g = b.build().unwrap();
+        let scan = g.tokenize("hi there").unwrap();
+        assert_eq!(scan.tokens().len(), 2);
+        assert_eq!(scan.token_text(1), "there");
+        assert_eq!(g.token_name(word), "word");
+        assert!(g.tokenize("").unwrap().tokens().is_empty());
     }
 }

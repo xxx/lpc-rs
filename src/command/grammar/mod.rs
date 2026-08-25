@@ -4,8 +4,10 @@
 //! and read captures back out of a parse.
 
 mod model;
+mod tokenizer;
 
 pub use model::{
     Element, Grammar, GrammarBuilder, GrammarError, Label, NtId, Options, ProdId, Production,
     Symbol, TokenClass, lit, nt, tok,
 };
+pub use tokenizer::{Scan, Token};

@@ -1411,6 +1411,7 @@ dependencies = [
  "pprof",
  "readonly",
  "regex",
+ "regex-automata",
  "rpds",
  "stable-vec",
  "syn 1.0.109",
