@@ -3,6 +3,7 @@
 //! of a parse.
 
 pub mod add_action;
+pub mod dgd;
 pub mod native;
 
 use std::sync::Arc;
