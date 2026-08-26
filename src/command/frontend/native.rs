@@ -660,7 +660,7 @@ mod tests {
 
     #[test]
     fn every_kind_letter_is_a_capture() {
-        let compiled = compile("'x' %w %s %d %o %l %i %p").unwrap();
+        let compiled = compile("'x' %w %s %d %o %l %L %i %p").unwrap();
         assert_eq!(
             compiled.kinds,
             vec![
@@ -669,6 +669,7 @@ mod tests {
                 CaptureKind::Number,
                 CaptureKind::Object,
                 CaptureKind::Living,
+                CaptureKind::Liv,
                 CaptureKind::Items,
                 CaptureKind::Preposition,
             ]
