@@ -247,8 +247,25 @@ const MOVE_SOURCE: &str = r#"
     }
 "#;
 
+/// Workers resolving `this_object()` through `parse_command`: the applies
+/// only read, so the block commits without a conflict.
+pub static RESOLVE_SELF: Workload = Workload {
+    name: "resolve_self",
+    task_label: "resolve_self",
+    entry: "resolve",
+    total: 512,
+    indexed: false,
+    kind: Kind::Single {
+        path: "/resolve_self.c",
+        source: r#"
+            string *parse_command_id_list() { return ({ "thing" }); }
+            int resolve() { mixed *items; parse_command("thing", ({ this_object() }), "%i", items); return items[0]; }
+        "#,
+    },
+};
+
 /// Every workload, in report order.
-pub static WORKLOADS: [&Workload; 7] = [
+pub static WORKLOADS: [&Workload; 8] = [
     &FIB,
     &COUNTER,
     &COUNTER_ATOMIC,
@@ -256,6 +273,7 @@ pub static WORKLOADS: [&Workload; 7] = [
     &ARR_TOUCH,
     &ARR_CHURN,
     &MOVE_CHURN,
+    &RESOLVE_SELF,
 ];
 
 /// Initialize `workload`'s object(s) on `vm` and hand back the apply target.
@@ -449,6 +467,30 @@ mod tests {
             after.conflicts - before.conflicts,
             0,
             "locals are private cells; no conflict"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn parse_command_over_a_shared_scope_commits_without_conflicts() {
+        const WORKERS: usize = 4;
+        const PER_WORKER: usize = 128;
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code")
+            .max_execution_time(30_000_u64)
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        let (proc, template, timeout) = setup_on(&vm, &RESOLVE_SELF).await;
+        let before = vm.global_state.attempt_telemetry.snapshot();
+        fan_out_applies(
+            &template, &proc, "resolve", WORKERS, PER_WORKER, timeout, false,
+        )
+        .await;
+        let after = vm.global_state.attempt_telemetry.snapshot();
+        assert_eq!(
+            after.conflicts - before.conflicts,
+            0,
+            "the applies only read"
         );
     }
 

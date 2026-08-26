@@ -30,6 +30,27 @@ fn give_rule() -> Grammar {
     b.build().unwrap()
 }
 
+/// `[the] %i 'from' %o`, a `parse_command` pattern: two word runs whose
+/// split the resolver may have to search.
+fn items_pattern() -> Grammar {
+    let mut b = GrammarBuilder::new();
+    let w = b.words_tokens();
+    let the = b.optional(lit("the"));
+    let items = b.words_plus(&w);
+    let s = b.nonterminal("S");
+    b.production(
+        s,
+        [
+            nt(the),
+            nt(items).labeled(Label(0)),
+            lit("from"),
+            nt(items).labeled(Label(1)),
+        ],
+    );
+    b.start(s);
+    b.build().unwrap()
+}
+
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("grammar/build/give_rule", |b| b.iter(give_rule));
 
@@ -45,6 +66,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     });
     c.bench_function("grammar/parse_miss/give_rule", |b| {
         b.iter(|| parse(&g, black_box("look at the sword")).next().is_none())
+    });
+
+    let p = items_pattern();
+    c.bench_function("grammar/parse_all/items_pattern", |b| {
+        b.iter(|| parse(&p, black_box("the red sword from the old bag")).count())
     });
 }
 

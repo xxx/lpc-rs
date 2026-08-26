@@ -27,6 +27,10 @@ must be a quoted verb; the rest describe the words after it.
 | `%w` | one word | string |
 | `%s` | zero or more words | string, spacing intact, `""` when none |
 | `%d` | a run of digits | int |
+| `%o` | words naming one object | object |
+| `%i` | words naming objects, with a numeral | `({ numeral, ob... })` |
+| `%l` | as `%i`, over the livings in scope | `({ numeral, ob... })` |
+| `%p` | a preposition | the matched preposition from the master's list, as a string |
 
 `%d` matches digits only: `-5` and spelled-out numbers do not, unlike
 `parse_command` in other drivers.
@@ -39,8 +43,10 @@ does not match. A bare unquoted word, an unclosed quote or bracket, a quoted
 phrase of several words, or a `/` not between two quoted words is a runtime
 error naming the fault.
 
-`%o`, `%l`, `%i`, and `%p` need the noun resolver, which this driver does not
-have yet; a pattern using them is a runtime error.
+Noun captures resolve against the player's scope — the player, its
+environment, and both inventories — through the identification protocol
+described in `parse_command`; a line whose noun captures name nothing under
+any parse passes to the next rule.
 
 `query_verb()` inside the handler reports the verb alternative the player
 typed. Rules registered from `init()` last until the player leaves the

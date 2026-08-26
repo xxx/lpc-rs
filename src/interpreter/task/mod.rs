@@ -705,6 +705,35 @@ mod stm_retry_tests {
         let _ = handle.join();
     }
 
+    const RESOLVE_CODE: &str = indoc! { r##"
+        int hits;
+        string *parse_command_id_list() { return ({ "thing" }); }
+        int foo() { mixed *items; parse_command("thing", ({ this_object() }), "%i", items); hits += items[0]; return hits; }
+    "##};
+
+    /// The resolver is rebuilt by the retry: a leaked first-attempt result
+    /// would read 2 instead of 1.
+    #[tokio::test]
+    async fn a_retried_task_resolves_from_scratch() {
+        let mut task = run_prog(RESOLVE_CODE).await;
+        let (tx, rx) = flume::bounded(4);
+        let committer_tx = tx.clone();
+        let handle =
+            std::thread::spawn(move || Committer::new().run_with_rejections(committer_tx, rx, 1));
+        let (res, stats) = eval_foo(&mut task, &tx).await;
+        assert!(res.is_ok());
+        assert_eq!(stats.attempts, 2, "first commit rejected, re-run commits");
+        assert_eq!(stats.conflicts, 1);
+        let LpcRef::Int(LpcInt(v)) = task.result().expect("result should be set") else {
+            panic!("result is not an int");
+        };
+        assert_eq!(v, 1, "foo() must return 1");
+        tx.send(CommitProtocol::Close)
+            .expect("committer channel closed");
+        drop(tx);
+        let _ = handle.join();
+    }
+
     /// Forwards bytes written to it (via `AsyncWriteExt::write_all`) to a
     /// channel, so a test can read exactly what a [`DebugLog`] emitted.
     struct CapturingWriter(tokio::sync::mpsc::Sender<Vec<u8>>);
