@@ -577,7 +577,7 @@ impl RuleParser<'_> {
 }
 
 /// Translate a DGD regex to `regex-automata` syntax: DGD's metacharacters
-/// are `. [ ] \ * + ? ( ) |`, everything else literal, `.` includes newline;
+/// are `. [ \ * + ? ( ) |`, everything else literal (`]` too), `.` includes newline;
 /// `None` when the regex is malformed under DGD's rules.
 fn translate_regex(dgd: &str) -> Option<String> {
     if dgd.is_empty() {
@@ -1012,8 +1012,9 @@ mod tests {
     }
 
     /// The translator doesn't cap nesting depth, but the engine's regex
-    /// parser has a fixed recursion limit — deep enough nesting reaches it
-    /// as a genuine `BadRegex`.
+    /// parser has a fixed recursion limit (`regex-syntax`'s default
+    /// `nest_limit`, 250) — deep enough nesting reaches it as a genuine
+    /// `BadRegex`.
     #[test]
     fn a_regex_nested_past_the_engines_limit_is_its_error() {
         let deep = format!("{}a{}", "(".repeat(300), ")".repeat(300));

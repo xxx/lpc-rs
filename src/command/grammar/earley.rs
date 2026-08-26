@@ -747,6 +747,16 @@ mod tests {
     }
 
     #[test]
+    fn a_budget_is_exhausted_only_once_a_step_is_refused() {
+        let budget = Budget::new(2);
+        assert!(budget.step());
+        assert!(budget.step());
+        assert!(!budget.exhausted());
+        assert!(!budget.step());
+        assert!(budget.exhausted());
+    }
+
+    #[test]
     fn the_default_budget_is_unbounded() {
         assert_eq!(Options::default().max_steps, usize::MAX);
         let g = ambiguous(usize::MAX);

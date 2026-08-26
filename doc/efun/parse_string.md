@@ -20,7 +20,7 @@ A token rule is `name = /regexp/` or `name = nomatch`. The regexp dialect:
 | `c` | the character `c`, for any `c` but `. [ \ * + ? ( ) \| /` |
 | `\c` | the character `c`, including those |
 | `.` | any single character, newline included |
-| `[set]`, `[^set]` | a character in, or not in, the set: single characters and ranges like `a-z`; `\` escapes `]`, `^`, `-`, `\` |
+| `[set]`, `[^set]` | a character in, or not in, the set: single characters and ranges like `a-z` (ascending); `\` escapes `]`, `^`, `-`, `\` |
 | `a*` `a?` `a+` | zero or more, zero or one, one or more `a` |
 | `ab` | `a` then `b` |
 | `a\|b` | `a` or `b` |
@@ -125,7 +125,7 @@ texts stay compiled; a text not among them is compiled again on its next use.
 | alternatives ordered by the topmost differing rule | the engine's order: productions as written, longest span first |
 | the grammar is compiled per object, one at a time | one driver-wide cache of 64 texts |
 | automata built incrementally per sentence seen | built whole, once per text |
-| `Rule N is too long`, `Grammar too large`, `regular expression too large` | no size limits; the parse budget bounds the work |
+| `Rule N is too long`, `Grammar too large`, `regular expression too large` | no text-size limits (groups nest at most 250 deep); the parse budget bounds the work |
 | a runaway parse is bounded by ticks | the step budget |
 | bytes | UTF-8 characters |
 | `< func` stored | accepted, ignored |
