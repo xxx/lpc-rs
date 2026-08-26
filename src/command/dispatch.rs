@@ -141,7 +141,7 @@ async fn trial(
             continue;
         }
         let Some((args, reported)) =
-            arguments_and_verb(ctx, &members, &mut resolver, rule, line).await?
+            Box::pin(arguments_and_verb(ctx, &members, &mut resolver, rule, line)).await?
         else {
             continue;
         };

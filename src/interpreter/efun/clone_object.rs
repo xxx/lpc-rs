@@ -310,10 +310,8 @@ mod tests {
         );
     }
 
-    /// The 16MiB thread gives the clone-chain cap room to fire before a
-    /// debug-build stack runs out.
-    #[test]
-    fn handles_clone_self_recursion() {
+    #[tokio::test]
+    async fn handles_clone_self_recursion() {
         // Each clone's initializer clones the same path again.
         let prototype = indoc! { r#"
             object foo = clone_object("self_clone");
@@ -323,27 +321,22 @@ mod tests {
             object foo = clone_object("self_clone");
         "# };
 
-        let runner = std::thread::Builder::new()
-            .stack_size(16 * 1024 * 1024)
-            .spawn(move || {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .expect("a current-thread runtime")
-                    .block_on(async {
-                        let vm = Vm::new(test_config());
-                        vm.create_process_from_code("self_clone.c", self_clone)
-                            .await
-                            .unwrap();
-                        vm.initialize_process_from_code("prototype.c", prototype)
-                            .await
-                            .expect_err("the clone chain recurses forever")
-                            .to_string()
-                    })
-            })
-            .expect("a thread with room for the recursion");
-        let err = runner.join().expect("the runner panicked");
-        assert!(err.contains("infinite clone recursion detected"), "{err}");
+        let vm = Vm::new(test_config());
+        let _self_clone_proc = vm
+            .create_process_from_code("self_clone.c", self_clone)
+            .await
+            .unwrap();
+
+        let prototype_proc = vm
+            .initialize_process_from_code("prototype.c", prototype)
+            .await;
+
+        assert!(
+            prototype_proc
+                .unwrap_err()
+                .to_string()
+                .contains("infinite clone recursion detected")
+        );
     }
 
     #[tokio::test]
