@@ -463,6 +463,21 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn a_string_slice_is_a_string_and_a_string_index_is_an_int() {
+            let config: Arc<Config> = ConfigBuilder::default()
+                .lib_dir("tests/fixtures/code")
+                .build()
+                .unwrap()
+                .into();
+            let compiler = CompilerBuilder::default().config(config).build().unwrap();
+            let code = "void create() { string s = \"hello\"; string t = s[1..2]; int c = s[0]; }";
+
+            let compiled = compiler.compile_string("/slice.c", code).await;
+
+            assert!(compiled.is_ok(), "{}", compiled.unwrap_err().diagnostic_string());
+        }
+
+        #[tokio::test]
         async fn a_recorded_error_leads_even_when_a_warning_came_first() {
             let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests/fixtures/code")

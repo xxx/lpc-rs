@@ -378,11 +378,18 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                     return Ok(LpcType::Mixed(false));
                 }
 
-                if let &ExpressionNode::Range(_) = &**r {
-                    return Ok(left_type.as_array(true));
+                let ranged = matches!(**r, ExpressionNode::Range(_));
+
+                // A string slice is a string; a string index is the character's code.
+                if left_type == LpcType::String(false) {
+                    return Ok(if ranged {
+                        LpcType::String(false)
+                    } else {
+                        LpcType::Int(false)
+                    });
                 }
 
-                return Ok(left_type.as_array(false));
+                return Ok(left_type.as_array(ranged));
             }
 
             if op == &BinaryOperation::Compose {
@@ -2080,6 +2087,37 @@ mod tests {
 
                 let nt = node_type(&node, &CompilationContext::default()).unwrap();
                 assert_eq!(nt, LpcType::Int(true));
+            }
+
+            #[test]
+            fn test_index_string_with_int_is_int() {
+                let node = ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from("hello")),
+                    r: Box::new(ExpressionNode::from(1)),
+                    op: BinaryOperation::Index,
+                    span: None,
+                });
+
+                let nt = node_type(&node, &CompilationContext::default()).unwrap();
+                assert_eq!(nt, LpcType::Int(false));
+            }
+
+            #[test]
+            fn test_index_string_with_range_is_string() {
+                let right = ExpressionNode::Range(RangeNode {
+                    l: Box::new(Some(ExpressionNode::from(1))),
+                    r: Box::new(Some(ExpressionNode::from(3))),
+                    span: None,
+                });
+                let node = ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::from("hello")),
+                    r: Box::new(right),
+                    op: BinaryOperation::Index,
+                    span: None,
+                });
+
+                let nt = node_type(&node, &CompilationContext::default()).unwrap();
+                assert_eq!(nt, LpcType::String(false));
             }
 
             #[test]

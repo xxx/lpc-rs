@@ -75,9 +75,7 @@ const BAG: (&str, &str) = (
 "# },
 );
 
-/// `doc/efun/parse_command.md`'s example master, verbatim; its `word[a..b]`
-/// slices are `mixed` because this compiler types a range-indexed string as
-/// `string *`.
+/// `doc/efun/parse_command.md`'s example master, verbatim.
 const ENGLISH_MASTER: &str = indoc! { r#"
     string parse_command_all_word() { return "all"; }
 
@@ -134,17 +132,17 @@ const ENGLISH_MASTER: &str = indoc! { r#"
         mapping irregular = ([ "ox": "oxen", "tooth": "teeth", "foot": "feet",
             "man": "men", "woman": "women", "child": "children", "goose": "geese",
             "mouse": "mice", "deer": "deer", "moose": "moose", "sheep": "sheep" ]);
-        mixed last = word[-1..];
-        mixed last2 = word[-2..];
-        mixed before = word[-2..-2];
+        string last = word[-1..];
+        string last2 = word[-2..];
+        string before = word[-2..-2];
 
         if (irregular[word]) return irregular[word];
         if (last2 == "ch" || last2 == "sh" || last == "s" || last == "x")
             return word + "es";
-        if (last2 == "fe") { mixed head = word[..-3]; return head + "ves"; }
-        if (last == "f") { mixed head = word[..-2]; return head + "ves"; }
+        if (last2 == "fe") { string head = word[..-3]; return head + "ves"; }
+        if (last == "f") { string head = word[..-2]; return head + "ves"; }
         if (last == "y" && before != "a" && before != "e" && before != "i" && before != "o" && before != "u") {
-            mixed head = word[..-2];
+            string head = word[..-2];
             return head + "ies";
         }
         return word + "s";

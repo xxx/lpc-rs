@@ -141,17 +141,17 @@ string pluralize_word(string word)
     mapping irregular = ([ "ox": "oxen", "tooth": "teeth", "foot": "feet",
         "man": "men", "woman": "women", "child": "children", "goose": "geese",
         "mouse": "mice", "deer": "deer", "moose": "moose", "sheep": "sheep" ]);
-    mixed last = word[-1..];
-    mixed last2 = word[-2..];
-    mixed before = word[-2..-2];
+    string last = word[-1..];
+    string last2 = word[-2..];
+    string before = word[-2..-2];
 
     if (irregular[word]) return irregular[word];
     if (last2 == "ch" || last2 == "sh" || last == "s" || last == "x")
         return word + "es";
-    if (last2 == "fe") { mixed head = word[..-3]; return head + "ves"; }
-    if (last == "f") { mixed head = word[..-2]; return head + "ves"; }
+    if (last2 == "fe") { string head = word[..-3]; return head + "ves"; }
+    if (last == "f") { string head = word[..-2]; return head + "ves"; }
     if (last == "y" && before != "a" && before != "e" && before != "i" && before != "o" && before != "u") {
-        mixed head = word[..-2];
+        string head = word[..-2];
         return head + "ies";
     }
     return word + "s";
@@ -176,10 +176,6 @@ string *parse_command_pluralize(string *singulars)
     return plurals;
 }
 ```
-
-This compiler currently types a range-indexed string (`word[-2..]`) as
-`string *`, not `string`, so `pluralize_word`'s locals holding such slices are
-declared `mixed` above until that is fixed.
 
 ### Departures from CD's parse_command
 

@@ -28,8 +28,9 @@
       with the contents of both strings.
     - Two literal `string`s next to each other will be concatenated, e.g. `"hello" "world"` is
       equivalent to `"hello" + "world"`.
-    - `string`s can be indexed with the `[]` operator, which will return the character at the
-      given index. Indexing starts at 0.
+    - `string`s can be indexed with the `[]` operator: `s[i]` is the character code (an
+      `int`) at index `i`, and `s[a..b]` is the substring from `a` to `b` inclusive (a
+      `string`). Indexing starts at 0; negative indices count from the end.
     - `string`s can be repeated with the `*` operator, which will create a new `string` with
       the contents of the original repeated the given number of times.
     - `string`s are mutable, and are _value_ types in LPC, meaning they are
