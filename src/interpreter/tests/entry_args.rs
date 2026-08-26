@@ -1,5 +1,5 @@
 //! Arguments that enter a task at its seed — `call_other`, applies, process
-//! init — must land where the function declares them, like a direct call's.
+//! init — land where the function declares them.
 
 use indoc::indoc;
 
