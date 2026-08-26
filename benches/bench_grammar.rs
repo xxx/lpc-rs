@@ -2,8 +2,10 @@
 //! command line against it, hit and miss.
 
 use std::hint::black_box;
+use std::sync::Arc;
 
 use criterion::{Criterion, criterion_group, criterion_main};
+use lpc_rs::command::frontend::dgd;
 use lpc_rs::command::grammar::{Grammar, GrammarBuilder, Label, lit, nt, parse};
 
 #[path = "support/profiler.rs"]
@@ -51,6 +53,23 @@ fn items_pattern() -> Grammar {
     b.build().unwrap()
 }
 
+/// `doc/efun/parse_string.md`'s expression grammar, through the DGD frontend.
+const DGD_EXPR: &str = "
+    whitespace = /[ \t]+/
+    number = /[0-9]+/
+    Expr: Term
+    Expr: Expr '+' Term ? add
+    Expr: Expr '-' Term ? subtract
+    Term: Factor
+    Term: Term '*' Factor ? multiply
+    Factor: number ? value
+    Factor: '(' Expr ')' ? group
+";
+
+fn dgd_expr() -> Arc<Grammar> {
+    dgd::compile(DGD_EXPR).unwrap().grammar
+}
+
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("grammar/build/give_rule", |b| b.iter(give_rule));
 
@@ -71,6 +90,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let p = items_pattern();
     c.bench_function("grammar/parse_all/items_pattern", |b| {
         b.iter(|| parse(&p, black_box("the red sword from the old bag")).count())
+    });
+
+    c.bench_function("grammar/build/dgd_expr", |b| b.iter(dgd_expr));
+
+    let e = dgd_expr();
+    c.bench_function("grammar/parse_all/dgd_expr", |b| {
+        b.iter(|| parse(&e, black_box("2 + 3 * (4 - 1)")).count())
     });
 }
 

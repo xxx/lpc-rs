@@ -264,8 +264,38 @@ pub static RESOLVE_SELF: Workload = Workload {
     },
 };
 
+/// Workers evaluating an expression through `parse_string`: the actions
+/// only compute, so the block commits without a conflict.
+pub static PARSE_STRING: Workload = Workload {
+    name: "parse_string",
+    task_label: "parse_string",
+    entry: "evaluate",
+    total: 512,
+    indexed: false,
+    kind: Kind::Single {
+        path: "/parse_string.c",
+        source: r#"
+            string grammar = "
+                whitespace = /[ \t]+/
+                number = /[0-9]+/
+                Expr: Term
+                Expr: Expr '+' Term ? add
+                Term: Factor
+                Term: Term '*' Factor ? multiply
+                Factor: number ? value
+                Factor: '(' Expr ')' ? group
+            ";
+            mixed *value(mixed *tree) { int n; sscanf(tree[0], "%d", n); return ({ n }); }
+            mixed *add(mixed *tree) { return ({ tree[0] + tree[2] }); }
+            mixed *multiply(mixed *tree) { return ({ tree[0] * tree[2] }); }
+            mixed *group(mixed *tree) { return ({ tree[1] }); }
+            int evaluate() { return parse_string(grammar, "2 + 3 * (4 + 1)")[0]; }
+        "#,
+    },
+};
+
 /// Every workload, in report order.
-pub static WORKLOADS: [&Workload; 8] = [
+pub static WORKLOADS: [&Workload; 9] = [
     &FIB,
     &COUNTER,
     &COUNTER_ATOMIC,
@@ -274,6 +304,7 @@ pub static WORKLOADS: [&Workload; 8] = [
     &ARR_CHURN,
     &MOVE_CHURN,
     &RESOLVE_SELF,
+    &PARSE_STRING,
 ];
 
 /// Initialize `workload`'s object(s) on `vm` and hand back the apply target.
@@ -491,6 +522,30 @@ mod tests {
             after.conflicts - before.conflicts,
             0,
             "the applies only read"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn parse_string_actions_commit_without_conflicts() {
+        const WORKERS: usize = 4;
+        const PER_WORKER: usize = 128;
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code")
+            .max_execution_time(30_000_u64)
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        let (proc, template, timeout) = setup_on(&vm, &PARSE_STRING).await;
+        let before = vm.global_state.attempt_telemetry.snapshot();
+        fan_out_applies(
+            &template, &proc, "evaluate", WORKERS, PER_WORKER, timeout, false,
+        )
+        .await;
+        let after = vm.global_state.attempt_telemetry.snapshot();
+        assert_eq!(
+            after.conflicts - before.conflicts,
+            0,
+            "the actions only compute"
         );
     }
 
