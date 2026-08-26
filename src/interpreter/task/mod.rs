@@ -675,6 +675,30 @@ mod stm_retry_tests {
         let _ = handle.join();
     }
 
+    const SCAN_CODE: &str = indoc! { r##"
+        int hits;
+        int foo() { sscanf("hits 10", "hits %d", hits); return hits; }
+    "##};
+
+    /// The re-run assigns the global through `write_ref` again from
+    /// scratch: `result() == 10` (not 20, not stale) is load-bearing.
+    #[tokio::test]
+    async fn a_retried_task_writes_its_ref_arguments_once() {
+        let mut task = run_prog(SCAN_CODE).await;
+        let (tx, rx) = flume::bounded(4);
+        let committer_tx = tx.clone();
+        let handle =
+            std::thread::spawn(move || Committer::new().run_with_rejections(committer_tx, rx, 1));
+        let (res, stats) = eval_foo(&mut task, &tx).await;
+        assert!(res.is_ok());
+        assert_eq!(stats.attempts, 2, "first commit rejected, re-run commits");
+        assert_result_is_ten!(task);
+        tx.send(CommitProtocol::Close)
+            .expect("committer channel closed");
+        drop(tx);
+        let _ = handle.join();
+    }
+
     /// Forwards bytes written to it (via `AsyncWriteExt::write_all`) to a
     /// channel, so a test can read exactly what a [`DebugLog`] emitted.
     struct CapturingWriter(tokio::sync::mpsc::Sender<Vec<u8>>);

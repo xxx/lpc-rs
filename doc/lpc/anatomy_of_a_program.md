@@ -26,3 +26,4 @@ notes:
 - decls can be anywhere in the body (globals are hoisted for codegen, but not for semantic analysis)
 - globals are 'global' only to the program, and cannot be accessed from other programs. they just outlive function invocations.
 - globals are initialized when the object is created, prior to calling `create`, (which happens automatically)
+- a parameter declared `ref` is the caller's variable; see [references](references.md)

@@ -412,6 +412,46 @@ mod tests {
         );
     }
 
+    /// Workers scanning into their own locals through `sscanf`: no shared
+    /// cell is written, so the block commits without a conflict.
+    static SCAN_LOCALS: Workload = Workload {
+        name: "scan_locals",
+        task_label: "scan_locals",
+        entry: "scan",
+        total: 512,
+        indexed: false,
+        kind: Kind::Single {
+            path: "/scan_locals.c",
+            source: r#"
+                int scan() { int n; string s; sscanf("hp 12 left", "hp %d %s", n, s); return n; }
+            "#,
+        },
+    };
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn sscanf_into_locals_commits_without_conflicts() {
+        const WORKERS: usize = 4;
+        const PER_WORKER: usize = 128;
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code")
+            .max_execution_time(30_000_u64)
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        let (proc, template, timeout) = setup_on(&vm, &SCAN_LOCALS).await;
+        let before = vm.global_state.attempt_telemetry.snapshot();
+        fan_out_applies(
+            &template, &proc, "scan", WORKERS, PER_WORKER, timeout, false,
+        )
+        .await;
+        let after = vm.global_state.attempt_telemetry.snapshot();
+        assert_eq!(
+            after.conflicts - before.conflicts,
+            0,
+            "locals are private cells; no conflict"
+        );
+    }
+
     #[tokio::test]
     async fn every_workload_sets_up_and_applies_once() {
         for workload in WORKLOADS {

@@ -31,7 +31,10 @@ input left over and an unused variable remains, the leftover is assigned to
 it and counts. A `%d` too large for an int does not match.
 
 Runtime errors: two adjacent `%s`; `fmt` ending in `%`; an unknown
-conversion letter; fewer variables than non-skip conversions.
+conversion letter; fewer variables than non-skip conversions. That count is
+checked before scanning starts, so it fires on every call regardless of
+input, unlike FluffOS, which raises it only when a conversion is reached
+with no variable left.
 
 Unlike other drivers, `%(regex)` is not supported.
 
