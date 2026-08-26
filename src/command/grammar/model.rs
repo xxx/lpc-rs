@@ -91,14 +91,19 @@ pub struct Options {
     pub case_insensitive: bool,
     /// Derivations enumerated per input before the iterator ends.
     pub max_parses: usize,
+    /// Work one parse may do — chart items added plus derivation nodes
+    /// visited — before it stops; unbounded by default.
+    pub max_steps: usize,
 }
 
 impl Default for Options {
-    /// The default grammar settings: case-sensitive, up to 32 parses per input.
+    /// The default grammar settings: case-sensitive, up to 32 parses per
+    /// input, no step budget.
     fn default() -> Self {
         Options {
             case_insensitive: false,
             max_parses: 32,
+            max_steps: usize::MAX,
         }
     }
 }
@@ -303,6 +308,12 @@ impl GrammarBuilder {
     /// Set the maximum number of parses per input.
     pub fn max_parses(&mut self, n: usize) -> &mut Self {
         self.options.max_parses = n;
+        self
+    }
+
+    /// Set the step budget one parse may spend; see [`Options::max_steps`].
+    pub fn max_steps(&mut self, n: usize) -> &mut Self {
+        self.options.max_steps = n;
         self
     }
 

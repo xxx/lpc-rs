@@ -5,7 +5,10 @@
 use std::{
     collections::{HashMap, HashSet},
     iter,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 use super::{
@@ -21,6 +24,39 @@ struct Item {
     origin: usize,
 }
 
+/// The work one parse may do before it stops.
+#[derive(Debug)]
+pub(crate) struct Budget {
+    limit: usize,
+    used: AtomicUsize,
+}
+
+impl Budget {
+    /// A budget of `limit` steps.
+    pub(crate) fn new(limit: usize) -> Self {
+        Budget {
+            limit,
+            used: AtomicUsize::new(0),
+        }
+    }
+
+    /// Spend one step; `false` once the budget is exhausted.
+    pub(crate) fn step(&self) -> bool {
+        self.used.fetch_add(1, Ordering::Relaxed) < self.limit
+    }
+
+    /// Whether the budget has been spent.
+    pub(crate) fn exhausted(&self) -> bool {
+        self.used.load(Ordering::Relaxed) >= self.limit
+    }
+
+    /// Steps spent so far; test-only introspection.
+    #[cfg(test)]
+    pub(crate) fn used(&self) -> usize {
+        self.used.load(Ordering::Relaxed)
+    }
+}
+
 /// One Earley set per token boundary plus the index of completed items that
 /// derivation enumeration walks.
 #[derive(Debug)]
@@ -32,8 +68,9 @@ pub(crate) struct Chart {
 }
 
 impl Chart {
-    /// Build the Earley chart for `scan` under `grammar`.
-    pub(crate) fn build(grammar: &Grammar, scan: &Scan) -> Chart {
+    /// Build the Earley chart for `scan` under `grammar`, spending one step
+    /// of `budget` per item added; an exhausted budget stops construction.
+    pub(crate) fn build(grammar: &Grammar, scan: &Scan, budget: &Budget) -> Chart {
         let n = scan.tokens().len();
         let mut chart = Chart {
             sets: vec![Vec::new(); n + 1],
@@ -44,6 +81,7 @@ impl Chart {
         for &prod in grammar.productions_of(grammar.start()) {
             chart.add(
                 grammar,
+                budget,
                 0,
                 Item {
                     prod,
@@ -64,12 +102,13 @@ impl Chart {
                     .get(item.dot)
                     .map(|e| &e.symbol);
                 match next {
-                    None => chart.complete(grammar, i, item),
-                    Some(Symbol::NonTerminal(nt)) => chart.predict(grammar, i, item, *nt),
+                    None => chart.complete(grammar, budget, i, item),
+                    Some(Symbol::NonTerminal(nt)) => chart.predict(grammar, budget, i, item, *nt),
                     Some(terminal) => {
                         if i < n && terminal_matches(terminal, scan, i) {
                             chart.add(
                                 grammar,
+                                budget,
                                 i + 1,
                                 Item {
                                     dot: item.dot + 1,
@@ -85,10 +124,11 @@ impl Chart {
         chart
     }
 
-    fn add(&mut self, grammar: &Grammar, i: usize, item: Item) {
-        if !self.seen[i].insert(item) {
+    fn add(&mut self, grammar: &Grammar, budget: &Budget, i: usize, item: Item) {
+        if self.seen[i].contains(&item) || !budget.step() {
             return;
         }
+        self.seen[i].insert(item);
         self.sets[i].push(item);
         let prod = grammar.production(item.prod);
         if item.dot == prod.rhs.len() {
@@ -99,10 +139,11 @@ impl Chart {
         }
     }
 
-    fn predict(&mut self, grammar: &Grammar, i: usize, item: Item, nt: NtId) {
+    fn predict(&mut self, grammar: &Grammar, budget: &Budget, i: usize, item: Item, nt: NtId) {
         for &prod in grammar.productions_of(nt) {
             self.add(
                 grammar,
+                budget,
                 i,
                 Item {
                     prod,
@@ -115,6 +156,7 @@ impl Chart {
         if grammar.is_nullable(nt) {
             self.add(
                 grammar,
+                budget,
                 i,
                 Item {
                     dot: item.dot + 1,
@@ -124,7 +166,7 @@ impl Chart {
         }
     }
 
-    fn complete(&mut self, grammar: &Grammar, i: usize, item: Item) {
+    fn complete(&mut self, grammar: &Grammar, budget: &Budget, i: usize, item: Item) {
         let lhs = grammar.production(item.prod).lhs;
         let waiting: Vec<Item> = self.sets[item.origin]
             .iter()
@@ -139,6 +181,7 @@ impl Chart {
         for w in waiting {
             self.add(
                 grammar,
+                budget,
                 i,
                 Item {
                     dot: w.dot + 1,
@@ -169,7 +212,7 @@ pub(crate) fn recognize(grammar: &Grammar, input: &str) -> bool {
     match grammar.tokenize(input) {
         Some(scan) => {
             let n = scan.tokens().len();
-            Chart::build(grammar, &scan)
+            Chart::build(grammar, &scan, &Budget::new(usize::MAX))
                 .completed(n, grammar.start(), 0)
                 .is_some()
         }
@@ -177,11 +220,13 @@ pub(crate) fn recognize(grammar: &Grammar, input: &str) -> bool {
     }
 }
 
-/// What derivation enumeration walks: the grammar, its chart, and the scan.
+/// What derivation enumeration walks: the grammar, its chart, the scan, and
+/// the step budget shared across the whole derivation.
 struct Ctx<'g> {
     grammar: &'g Grammar,
     chart: Chart,
     scan: Arc<Scan>,
+    budget: Arc<Budget>,
 }
 
 /// The nonterminals being derived on the current path, innermost first.
@@ -213,7 +258,7 @@ type Children<'g> = Box<dyn Iterator<Item = Vec<Child>> + Send + 'g>;
 /// nonterminal child longest first. A nonterminal already on the path over
 /// the same span is a cycle and is skipped.
 fn derive<'g>(ctx: Arc<Ctx<'g>>, nt: NtId, start: usize, end: usize, path: Path) -> Nodes<'g> {
-    if on_path(&path, nt, (start, end)) {
+    if !ctx.budget.step() || on_path(&path, nt, (start, end)) {
         return Box::new(iter::empty());
     }
     let Some(prods) = ctx.chart.completed(end, nt, start) else {
@@ -292,9 +337,11 @@ fn derive_rhs<'g>(
     }
 }
 
-/// The derivations of one input, lazily, at most `Options::max_parses` of them.
+/// The derivations of one input, lazily, at most `Options::max_parses` of
+/// them and within `Options::max_steps`.
 pub struct Parses<'g> {
     inner: Box<dyn Iterator<Item = Parse<'g>> + Send + 'g>,
+    budget: Arc<Budget>,
 }
 
 impl<'g> Iterator for Parses<'g> {
@@ -305,24 +352,35 @@ impl<'g> Iterator for Parses<'g> {
     }
 }
 
+impl Parses<'_> {
+    /// Whether the step budget ran out — derivations may be missing.
+    pub fn over_budget(&self) -> bool {
+        self.budget.exhausted()
+    }
+}
+
 /// Parses `input` under `grammar`; untokenizable input yields no parses.
 pub fn parse<'g>(grammar: &'g Grammar, input: &str) -> Parses<'g> {
+    let budget = Arc::new(Budget::new(grammar.options().max_steps));
     let Some(scan) = grammar.tokenize(input) else {
         return Parses {
             inner: Box::new(iter::empty()),
+            budget,
         };
     };
     let scan = Arc::new(scan);
-    let chart = Chart::build(grammar, &scan);
+    let chart = Chart::build(grammar, &scan, &budget);
     let n = scan.tokens().len();
     let ctx = Arc::new(Ctx {
         grammar,
         chart,
         scan: scan.clone(),
+        budget: budget.clone(),
     });
     let roots = derive(ctx, grammar.start(), 0, n, None).take(grammar.options().max_parses);
     Parses {
         inner: Box::new(roots.map(move |root| Parse::new(grammar, scan.clone(), root))),
+        budget,
     }
 }
 
@@ -330,7 +388,7 @@ pub fn parse<'g>(grammar: &'g Grammar, input: &str) -> Parses<'g> {
 mod tests {
     use super::*;
     use crate::command::grammar::{
-        Child, GrammarBuilder, Label, Node, Parse, Parses, TokenClass, lit, nt, parse, tok,
+        Child, GrammarBuilder, Label, Node, Options, Parse, Parses, TokenClass, lit, nt, parse, tok,
     };
 
     /// A builder with the plain-words rules and the classes they got.
@@ -669,5 +727,63 @@ mod tests {
 
         let p = parse(&g, "say a b c").next().unwrap();
         assert_eq!(p.captures(), vec![(Label(0), "a b"), (Label(1), "c")]);
+    }
+
+    /// `E → E E | word`, whose derivation count grows with the input.
+    fn ambiguous(max_steps: usize) -> Grammar {
+        let mut b = GrammarBuilder::new();
+        let w = b.words_tokens();
+        let e = b.nonterminal("E");
+        b.production(e, [nt(e), nt(e)]);
+        b.production(e, [tok(w.word)]);
+        b.start(e);
+        b.max_steps(max_steps);
+        b.build().unwrap()
+    }
+
+    #[test]
+    fn the_default_budget_is_unbounded() {
+        assert_eq!(Options::default().max_steps, usize::MAX);
+        let g = ambiguous(usize::MAX);
+        let mut parses = parse(&g, "a b c d");
+        assert_eq!(parses.by_ref().count(), 5);
+        assert!(!parses.over_budget());
+    }
+
+    #[test]
+    fn an_exhausted_budget_stops_chart_construction() {
+        let g = ambiguous(3);
+        let mut parses = parse(&g, "a b c d");
+        assert_eq!(parses.by_ref().count(), 0);
+        assert!(parses.over_budget());
+    }
+
+    #[test]
+    fn an_exhausted_budget_stops_enumeration() {
+        let unbounded = ambiguous(usize::MAX);
+        let scan = unbounded.tokenize("a b c d").unwrap();
+        let chart_budget = Budget::new(usize::MAX);
+        Chart::build(&unbounded, &scan, &chart_budget);
+        let chart_steps = chart_budget.used();
+
+        let g = ambiguous(chart_steps + 2);
+        let mut parses = parse(&g, "a b c d");
+        assert!(parses.by_ref().count() < 5);
+        assert!(parses.over_budget());
+    }
+
+    /// `"!"` matches no rule and there is no nomatch rule, so `parse` returns
+    /// before the chart is built and no step is spent.
+    #[test]
+    fn untokenizable_input_is_not_over_budget() {
+        let mut b = GrammarBuilder::new();
+        let word = b.token("word", "[a-z]+");
+        let s = b.nonterminal("S");
+        b.production(s, [tok(word)]);
+        b.max_steps(1);
+        let g = b.build().unwrap();
+        let mut parses = parse(&g, "!");
+        assert_eq!(parses.by_ref().count(), 0);
+        assert!(!parses.over_budget());
     }
 }
