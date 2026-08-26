@@ -229,3 +229,30 @@ async fn an_action_may_call_parse_string() {
     .await;
     assert_eq!(r, vec![s("nested")]);
 }
+
+/// An action taken from another object's function pointer runs in that
+/// object, not in the caller nor `TaskContext::process`'s original owner.
+const ACTOR: (&str, &str) = (
+    "/actor.c",
+    indoc! { r#"
+        mixed *act(mixed *t) { return ({ "acted" }); }
+        mixed *go() { return parse_string("w = /a/ S: w ? act", "a"); }
+        function get_go() { return &go(); }
+    "# },
+);
+
+#[tokio::test]
+async fn an_action_runs_in_the_pointers_owner_not_the_caller() {
+    let r = run(
+        "",
+        &[ACTOR],
+        indoc! { r#"
+        mixed create() {
+            function f = "/actor"->get_go();
+            return f();
+        }
+    "# },
+    )
+    .await;
+    assert_eq!(r, vec![s("acted")]);
+}
