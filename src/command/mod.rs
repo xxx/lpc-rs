@@ -7,6 +7,8 @@ pub(crate) mod command_task;
 pub mod dispatch;
 pub mod frontend;
 pub mod grammar;
+#[expect(dead_code, reason = "parser::run is wired to dispatch in a later task")]
+pub(crate) mod parser;
 pub mod presence;
 pub mod registry;
 pub(crate) mod resolve;

@@ -33,10 +33,6 @@ impl<'a> LpcVocabulary<'a> {
 
     /// Over `scope`, each candidate answering to `extras[i]` as well as its
     /// own ids; `extras` must be `scope.len()` long.
-    #[expect(
-        dead_code,
-        reason = "wired to the parser package's dispatch in a later task"
-    )]
     pub fn with_extras(
         ctx: &'a TaskContext,
         scope: Vec<Arc<Process>>,

@@ -1,0 +1,499 @@
+//! The parser package's protocol for one matched rule: scope, resolution
+//! with `direct_`/`indirect_` filtering, disambiguation, `can_` and `do_`,
+//! and the failure the master is asked to describe.
+
+mod handlers;
+mod scope;
+
+use std::sync::Arc;
+
+use lpc_rs_errors::Result;
+
+use crate::{
+    command::{
+        dispatch::apply_on,
+        frontend::native::{Capture, captures},
+        grammar::parse,
+        registry::{ParserRule, Slot},
+        resolve::{Kind as ResolveKind, LpcVocabulary, Resolved, Resolver},
+    },
+    interpreter::{
+        PARSER_ERROR_MESSAGE, lpc_array::LpcArray, lpc_ref::LpcRef, process::Process,
+        task_context::TaskContext,
+    },
+};
+
+use handlers::{Arg, Failure, Family, Kind, Reply, best_reason, call, furthest};
+use scope::Candidate;
+
+/// How one parser rule fared against a line.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Verdict {
+    /// `do_` ran.
+    Handled,
+    /// No parse of the line fitted the rule's grammar.
+    NoParse,
+    /// A handler refused and the master gave no message.
+    Refused,
+    /// An object phrase did not resolve and the master gave no message.
+    Unresolved,
+    /// The master's message for the failure.
+    Message(String),
+}
+
+/// A `parse_sentence` nickname: `name` also names `object`.
+#[derive(Clone, Debug)]
+pub(crate) struct Nickname {
+    pub(crate) name: String,
+    pub(crate) object: Arc<Process>,
+}
+
+/// Run `rule` (owned by `owner`) for `actor` over `rest`, the line after
+/// its verb; `scope` replaces the default walk when given.
+pub(crate) async fn run(
+    ctx: &TaskContext,
+    actor: &Arc<Process>,
+    owner: &Arc<Process>,
+    rule: &ParserRule,
+    rest: &str,
+    scope: Option<Vec<Arc<Process>>>,
+    nicknames: &[Nickname],
+) -> Result<Verdict> {
+    let candidates = match scope {
+        Some(objects) => objects
+            .into_iter()
+            .map(|object| Candidate {
+                object,
+                reachable: true,
+            })
+            .collect(),
+        None => scope::walk(ctx, actor).await?,
+    };
+    let needs_livings = rule
+        .slots
+        .iter()
+        .any(|s| matches!(s, Slot::Living | Slot::Livings));
+    let mut all = candidates;
+    if needs_livings {
+        for user in scope::users(ctx, actor).await? {
+            if !all.iter().any(|c| Arc::ptr_eq(&c.object, &user)) {
+                all.push(Candidate {
+                    object: user,
+                    reachable: true,
+                });
+            }
+        }
+    }
+    let objects: Vec<Arc<Process>> = all.iter().map(|c| c.object.clone()).collect();
+    let extras: Vec<Vec<String>> = objects
+        .iter()
+        .map(|object| {
+            nicknames
+                .iter()
+                .filter(|n| Arc::ptr_eq(&n.object, object))
+                .map(|n| n.name.clone())
+                .collect()
+        })
+        .collect();
+    let vocabulary = LpcVocabulary::with_extras(ctx, objects, extras);
+    let mut resolver = Resolver::new(vocabulary, None).await?;
+
+    let mut failures: Vec<Failure> = Vec::new();
+    let mut any_parse = false;
+    for parsed in parse(&rule.compiled.grammar, rest) {
+        let Some(caps) = captures(&parsed) else {
+            continue;
+        };
+        if caps
+            .iter()
+            .zip(&rule.slots)
+            .any(|(c, s)| *s == Slot::Words && c.text.is_empty())
+        {
+            continue; // STR is one or more words
+        }
+        any_parse = true;
+        match attempt(ctx, actor, owner, rule, &caps, &all, &mut resolver).await? {
+            Ok(()) => return Ok(Verdict::Handled),
+            Err(failure) => failures.push(failure),
+        }
+    }
+    if !any_parse {
+        return Ok(Verdict::NoParse);
+    }
+    let Some(failure) = furthest(failures) else {
+        return Ok(Verdict::NoParse);
+    };
+    report(ctx, actor, failure).await
+}
+
+/// The words of each object slot as typed, in slot order.
+fn typed_words(caps: &[Capture], slots: &[Slot]) -> Vec<LpcRef> {
+    caps.iter()
+        .zip(slots)
+        .filter(|(_, s)| s.is_object())
+        .map(|(c, _)| LpcRef::from(c.text.as_str()))
+        .collect()
+}
+
+/// The slot values plus the typed words of the object slots, in that order:
+/// what every handler family receives.
+fn with_words(values: &[LpcRef], words: &[LpcRef]) -> Vec<LpcRef> {
+    values
+        .iter()
+        .cloned()
+        .chain(words.iter().cloned())
+        .collect()
+}
+
+/// A failure with no object, arg, or flag beyond what is given.
+fn fail(
+    kind: Kind,
+    object: Option<Arc<Process>>,
+    arg: Arg,
+    flag: bool,
+    progress: usize,
+) -> Failure {
+    Failure {
+        kind,
+        object,
+        arg,
+        flag,
+        progress,
+    }
+}
+
+/// One parse: `can_`, each object slot resolved and filtered, the final
+/// re-ask, `do_`. `Err` is this parse's failure.
+async fn attempt(
+    ctx: &TaskContext,
+    actor: &Arc<Process>,
+    owner: &Arc<Process>,
+    rule: &ParserRule,
+    caps: &[Capture],
+    candidates: &[Candidate],
+    resolver: &mut Resolver<LpcVocabulary<'_>>,
+) -> Result<std::result::Result<(), Failure>> {
+    let words = typed_words(caps, &rule.slots);
+    // Slot values: strings for WRD/STR, 0 until an object slot is chosen.
+    let mut values: Vec<LpcRef> = caps
+        .iter()
+        .zip(&rule.slots)
+        .map(|(c, s)| {
+            if s.is_object() {
+                LpcRef::from(0)
+            } else {
+                LpcRef::from(c.text.as_str())
+            }
+        })
+        .collect();
+
+    match call(
+        ctx,
+        actor,
+        owner,
+        Family::Can,
+        rule,
+        &with_words(&values, &words),
+    )
+    .await?
+    {
+        Reply::No => return Ok(Err(fail(Kind::Refused, None, Arg::None, false, 0))),
+        Reply::Reason { text, .. } => {
+            return Ok(Err(fail(
+                Kind::Allocated,
+                Some(owner.clone()),
+                Arg::Text(text),
+                false,
+                0,
+            )));
+        }
+        Reply::Yes | Reply::Absent => {}
+    }
+
+    let mut chosen: Vec<(usize, Vec<Arc<Process>>)> = Vec::new(); // (slot index, objects)
+    let mut object_slot = 0usize;
+    for (index, (cap, slot)) in caps.iter().zip(&rule.slots).enumerate() {
+        if !slot.is_object() {
+            continue;
+        }
+        let family = if object_slot == 0 {
+            Family::Direct
+        } else {
+            Family::Indirect
+        };
+        let kind = match slot {
+            Slot::Living | Slot::Livings => ResolveKind::Living,
+            _ => ResolveKind::Items,
+        };
+        let progress = object_slot;
+        let Some(Resolved::Items {
+            numeral,
+            candidates: matched,
+        }) = resolver.resolve(kind, &cap.text).await?
+        else {
+            let living_slot = matches!(slot, Slot::Living | Slot::Livings);
+            let kind = if living_slot
+                && resolver
+                    .resolve(ResolveKind::Items, &cap.text)
+                    .await?
+                    .is_some()
+            {
+                Kind::NotLiving
+            } else {
+                Kind::ThereIsNo
+            };
+            let plural = matches!(slot, Slot::Objects | Slot::Livings);
+            return Ok(Err(fail(
+                kind,
+                None,
+                Arg::Text(cap.text.clone()),
+                plural,
+                progress,
+            )));
+        };
+        let mut qualified: Vec<Arc<Process>> = Vec::new();
+        let mut reasons: Vec<(usize, Reply)> = Vec::new();
+        let mut unreachable = false;
+        for &candidate in &matched {
+            let object = &candidates[candidate];
+            if !object.reachable {
+                unreachable = true;
+                continue;
+            }
+            match call(
+                ctx,
+                actor,
+                &object.object,
+                family,
+                rule,
+                &with_words(&values, &words),
+            )
+            .await?
+            {
+                Reply::Yes => qualified.push(object.object.clone()),
+                Reply::No | Reply::Absent => {}
+                reason @ Reply::Reason { .. } => reasons.push((candidate, reason)),
+            }
+        }
+        if qualified.is_empty() {
+            return Ok(Err(match best_reason(&reasons) {
+                Some((candidate, text)) => fail(
+                    Kind::Allocated,
+                    Some(candidates[candidate].object.clone()),
+                    Arg::Text(text),
+                    false,
+                    progress,
+                ),
+                None if unreachable => fail(
+                    Kind::NotAccessible,
+                    None,
+                    Arg::Text(cap.text.clone()),
+                    slot.is_many(),
+                    progress,
+                ),
+                None => fail(
+                    Kind::ThereIsNo,
+                    None,
+                    Arg::Text(cap.text.clone()),
+                    slot.is_many(),
+                    progress,
+                ),
+            }));
+        }
+        let picked: Vec<Arc<Process>> = if slot.is_many() {
+            match numeral {
+                n if n > 0 => qualified.iter().take(n as usize).cloned().collect(),
+                n if n < 0 => match qualified.get((-n - 1) as usize) {
+                    Some(one) => vec![one.clone()],
+                    None => {
+                        return Ok(Err(fail(
+                            Kind::Ordinal,
+                            None,
+                            Arg::Count(qualified.len() as i64),
+                            false,
+                            progress,
+                        )));
+                    }
+                },
+                _ => qualified.clone(),
+            }
+        } else {
+            match numeral {
+                0 => {
+                    return Ok(Err(fail(
+                        Kind::BadMultiple,
+                        None,
+                        Arg::None,
+                        false,
+                        progress,
+                    )));
+                }
+                n if n > 1 => {
+                    return Ok(Err(fail(
+                        Kind::BadMultiple,
+                        None,
+                        Arg::None,
+                        false,
+                        progress,
+                    )));
+                }
+                n if n < 0 => match qualified.get((-n - 1) as usize) {
+                    Some(one) => vec![one.clone()],
+                    None => {
+                        return Ok(Err(fail(
+                            Kind::Ordinal,
+                            None,
+                            Arg::Count(qualified.len() as i64),
+                            false,
+                            progress,
+                        )));
+                    }
+                },
+                _ if qualified.len() > 1 => {
+                    return Ok(Err(fail(
+                        Kind::Ambig,
+                        None,
+                        Arg::Objects(qualified),
+                        false,
+                        progress,
+                    )));
+                }
+                _ => qualified.clone(),
+            }
+        };
+        values[index] = if slot.is_many() {
+            mint_mixed(ctx, &picked, &reasons)
+        } else {
+            LpcRef::from(Arc::downgrade(&picked[0]))
+        };
+        chosen.push((index, picked));
+        object_slot += 1;
+    }
+
+    // The all-filled re-ask.
+    for (slot_number, (_, picked)) in chosen.iter().enumerate() {
+        let family = if slot_number == 0 {
+            Family::Direct
+        } else {
+            Family::Indirect
+        };
+        for object in picked {
+            match call(
+                ctx,
+                actor,
+                object,
+                family,
+                rule,
+                &with_words(&values, &words),
+            )
+            .await?
+            {
+                Reply::No => {
+                    return Ok(Err(fail(
+                        Kind::Refused,
+                        Some(object.clone()),
+                        Arg::None,
+                        false,
+                        chosen.len(),
+                    )));
+                }
+                Reply::Reason { text, .. } => {
+                    return Ok(Err(fail(
+                        Kind::Allocated,
+                        Some(object.clone()),
+                        Arg::Text(text),
+                        false,
+                        chosen.len(),
+                    )));
+                }
+                Reply::Yes | Reply::Absent => {}
+            }
+        }
+    }
+
+    match call(
+        ctx,
+        actor,
+        owner,
+        Family::Do,
+        rule,
+        &with_words(&values, &words),
+    )
+    .await?
+    {
+        Reply::Absent => Ok(Err(fail(
+            Kind::Refused,
+            None,
+            Arg::None,
+            false,
+            chosen.len(),
+        ))),
+        _ => Ok(Ok(())),
+    }
+}
+
+/// `({ ob... })` for a many slot's `do_` argument.
+fn mint_objects(ctx: &TaskContext, objects: &[Arc<Process>]) -> LpcRef {
+    let array: LpcArray = objects
+        .iter()
+        .map(|o| LpcRef::from(Arc::downgrade(o)))
+        .collect();
+    LpcRef::Array(ctx.txn().with(|t| t.mint_array(array)))
+}
+
+/// `({ ob... })` for a many slot's `do_` argument: the qualifying objects,
+/// then each plain (non-`#`) reason from `reasons`, in candidate order.
+fn mint_mixed(ctx: &TaskContext, picked: &[Arc<Process>], reasons: &[(usize, Reply)]) -> LpcRef {
+    let array: LpcArray = picked
+        .iter()
+        .map(|o| LpcRef::from(Arc::downgrade(o)))
+        .chain(reasons.iter().filter_map(|(_, reply)| match reply {
+            Reply::Reason { text, soft: false } => Some(LpcRef::from(text.as_str())),
+            _ => None,
+        }))
+        .collect();
+    LpcRef::Array(ctx.txn().with(|t| t.mint_array(array)))
+}
+
+/// Ask the master to describe `failure`; a string is the verdict's
+/// message, anything else leaves `Refused`/`Unresolved`.
+async fn report(ctx: &TaskContext, actor: &Arc<Process>, failure: Failure) -> Result<Verdict> {
+    let silent = if failure.kind == Kind::Refused {
+        Verdict::Refused
+    } else {
+        Verdict::Unresolved
+    };
+    if failure.kind == Kind::Refused {
+        return Ok(silent);
+    }
+    let Some(master) = ctx.object_space().master_object() else {
+        return Ok(silent);
+    };
+    let Some(function) = master
+        .program
+        .unmangled_functions
+        .get(PARSER_ERROR_MESSAGE)
+        .cloned()
+    else {
+        return Ok(silent);
+    };
+    let arg = match failure.arg {
+        Arg::None => LpcRef::from(0),
+        Arg::Text(text) => LpcRef::from(text.as_str()),
+        Arg::Count(n) => LpcRef::from(n),
+        Arg::Objects(objects) => mint_objects(ctx, &objects),
+    };
+    let object = failure
+        .object
+        .map_or(LpcRef::from(0), |o| LpcRef::from(Arc::downgrade(&o)));
+    let args = [
+        LpcRef::from(failure.kind as i64),
+        object,
+        arg,
+        LpcRef::from(i64::from(failure.flag)),
+    ];
+    match apply_on(ctx, &master, actor, function, &args).await? {
+        LpcRef::String(message) => Ok(Verdict::Message(message.to_string())),
+        _ => Ok(silent),
+    }
+}

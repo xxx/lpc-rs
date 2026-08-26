@@ -42,6 +42,10 @@ pub const ERROR_HANDLER: &str = "error_handler";
 pub const ID: &str = "id";
 /// Object apply: called on each object that comes into a living's presence (`doc/apply/object/init.md`).
 pub const INIT: &str = "init";
+/// Object apply: whether a container's contents can be reached by the parser package (`doc/apply/object/inventory_accessible.md`).
+pub const INVENTORY_ACCESSIBLE: &str = "inventory_accessible";
+/// Object apply: whether a container's contents are in the parser package's scope (`doc/apply/object/inventory_visible.md`).
+pub const INVENTORY_VISIBLE: &str = "inventory_visible";
 /// Object apply: called in the body `connect` returned (`doc/apply/master/connect.md`).
 pub const LOGON: &str = "logon";
 /// Object/master apply: the adjectives a phrase may put before the object's ids (`doc/apply/object/parse_command_adjectiv_id_list.md`).
@@ -58,6 +62,10 @@ pub const PARSE_COMMAND_PLURALIZE: &str = "parse_command_pluralize";
 pub const PARSE_COMMAND_PLURAL_ID_LIST: &str = "parse_command_plural_id_list";
 /// Master apply: the prepositions `%p` recognises when a rule gives none (`doc/apply/master/parse_command_prepos_list.md`).
 pub const PARSE_COMMAND_PREPOS_LIST: &str = "parse_command_prepos_list";
+/// Master apply: the livings `LIV`/`LVS` may name beyond the scope (`doc/apply/master/parse_command_users.md`).
+pub const PARSE_COMMAND_USERS: &str = "parse_command_users";
+/// Master apply: the message for a parser-package failure (`doc/apply/master/parser_error_message.md`).
+pub const PARSER_ERROR_MESSAGE: &str = "parser_error_message";
 /// Living apply: sees each command line before dispatch (`doc/apply/living/process_input.md`).
 pub const PROCESS_INPUT: &str = "process_input";
 /// Master apply: called as the driver shuts down (`doc/apply/master/shutdown.md`).
