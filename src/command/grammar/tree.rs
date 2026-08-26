@@ -9,7 +9,7 @@ use super::{
 };
 
 /// One derivation node: which production, over which token span.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Node {
     /// The production this node derives from.
     pub production: ProdId,
@@ -20,7 +20,7 @@ pub struct Node {
 }
 
 /// One child of a derivation node: a terminal or a nested nonterminal.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Child {
     /// A terminal, by token index.
     Token(usize),

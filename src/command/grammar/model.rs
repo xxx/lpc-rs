@@ -103,13 +103,23 @@ impl Default for Options {
     }
 }
 
+/// What a token rule matches: a regex, or every run no regex rule matches.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Pattern {
+    /// A regex in `regex-automata` syntax.
+    Regex(String),
+    /// The run of characters from a position no rule matches up to the next
+    /// position one does; at most one rule per grammar takes effect.
+    Nomatch,
+}
+
 /// A token rule as the builder collected it; the grammar compiles them together.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TokenRule {
     /// The rule's name; becomes the token class's name in the grammar.
     pub name: String,
-    /// The rule's regex pattern.
-    pub pattern: String,
+    /// What the rule matches.
+    pub pattern: Pattern,
     /// Matched and dropped, never a token.
     pub skip: bool,
 }
@@ -227,18 +237,29 @@ impl GrammarBuilder {
 
     /// Append a token rule; rule order decides ties between equal-length matches.
     pub fn token(&mut self, name: &str, pattern: &str) -> TokenClass {
-        self.push_rule(name, pattern, false)
+        self.push_rule(name, Pattern::Regex(pattern.to_owned()), false)
     }
 
     /// Append a token rule whose matches are dropped from the stream.
     pub fn skip_token(&mut self, name: &str, pattern: &str) -> TokenClass {
-        self.push_rule(name, pattern, true)
+        self.push_rule(name, Pattern::Regex(pattern.to_owned()), true)
     }
 
-    fn push_rule(&mut self, name: &str, pattern: &str, skip: bool) -> TokenClass {
+    /// Append the rule that takes every run no other rule matches; a later
+    /// nomatch rule replaces an earlier one.
+    pub fn nomatch(&mut self, name: &str) -> TokenClass {
+        self.push_rule(name, Pattern::Nomatch, false)
+    }
+
+    /// Append a nomatch rule whose runs are dropped from the stream.
+    pub fn skip_nomatch(&mut self, name: &str) -> TokenClass {
+        self.push_rule(name, Pattern::Nomatch, true)
+    }
+
+    fn push_rule(&mut self, name: &str, pattern: Pattern, skip: bool) -> TokenClass {
         self.token_rules.push(TokenRule {
             name: name.to_owned(),
-            pattern: pattern.to_owned(),
+            pattern,
             skip,
         });
         TokenClass(self.token_rules.len() as u32 - 1)

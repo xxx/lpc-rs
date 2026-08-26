@@ -9,7 +9,7 @@ use regex_automata::{
     util::syntax,
 };
 
-use super::model::{GrammarError, TokenClass, TokenRule};
+use super::model::{GrammarError, Pattern, TokenClass, TokenRule};
 
 /// One token: its rule and its byte range in the input.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -20,24 +20,42 @@ pub struct Token {
     pub range: Range<usize>,
 }
 
-/// Every token rule as one multi-pattern DFA; the pattern id is the class.
+/// Every regex token rule as one multi-pattern DFA, plus the nomatch class
+/// that takes the runs the DFA rejects.
 #[derive(Debug)]
 pub(crate) struct TokenSet {
     dfa: Option<dense::DFA<Vec<u32>>>,
+    /// The class of each DFA pattern, in pattern order.
+    classes: Vec<TokenClass>,
+    /// Whether each class is dropped from the stream, by class.
     skip: Vec<bool>,
+    nomatch: Option<TokenClass>,
 }
 
 impl TokenSet {
     /// Compile `rules` into one joint DFA; on failure, a per-rule build
     /// attributes the error to its rule, or to the combination if every rule
-    /// builds alone.
+    /// builds alone. The last nomatch rule, if any, is the nomatch class.
     pub(crate) fn build(rules: &[TokenRule], case_insensitive: bool) -> Result<Self, GrammarError> {
         let syntax = syntax::Config::new().case_insensitive(case_insensitive);
-        let patterns: Vec<&str> = rules.iter().map(|r| r.pattern.as_str()).collect();
+        let mut patterns = Vec::new();
+        let mut classes = Vec::new();
+        let mut nomatch = None;
+        for (i, rule) in rules.iter().enumerate() {
+            let class = TokenClass(i as u32);
+            match &rule.pattern {
+                Pattern::Regex(pattern) => {
+                    patterns.push((rule.name.as_str(), pattern.as_str()));
+                    classes.push(class);
+                }
+                Pattern::Nomatch => nomatch = Some(class),
+            }
+        }
 
         let dfa = if patterns.is_empty() {
             None
         } else {
+            let texts: Vec<&str> = patterns.iter().map(|(_, p)| *p).collect();
             match dense::Builder::new()
                 .syntax(syntax)
                 .configure(
@@ -45,17 +63,17 @@ impl TokenSet {
                         .match_kind(MatchKind::All)
                         .start_kind(StartKind::Anchored),
                 )
-                .build_many(&patterns)
+                .build_many(&texts)
             {
                 Ok(dfa) => Some(dfa),
                 Err(e) => {
                     // The joint build failed; a per-rule build attributes the failure to its rule.
-                    for rule in rules {
+                    for (name, pattern) in &patterns {
                         dense::Builder::new()
                             .syntax(syntax)
-                            .build(&rule.pattern)
+                            .build(pattern)
                             .map_err(|e| GrammarError::BadRegex {
-                                class: rule.name.clone(),
+                                class: (*name).to_owned(),
                                 message: e.to_string(),
                             })?;
                     }
@@ -66,33 +84,22 @@ impl TokenSet {
 
         Ok(TokenSet {
             dfa,
+            classes,
             skip: rules.iter().map(|r| r.skip).collect(),
+            nomatch,
         })
     }
 
-    /// The tokens of `input`, or `None` at the first position no rule matches;
-    /// an empty match counts as no match.
+    /// The tokens of `input`, or `None` at the first position no rule matches
+    /// when there is no nomatch rule; an empty match counts as no match.
     pub(crate) fn tokenize(&self, input: &str) -> Option<Vec<Token>> {
         let mut tokens = Vec::new();
         let mut pos = 0;
         while pos < input.len() {
-            let dfa = self.dfa.as_ref()?;
-            // A MatchError is unreachable for an anchored dense DFA without quit
-            // bytes, so `.ok().flatten()` only reshapes the type, never actually
-            // maps a real error to `None`.
-            let found = dfa
-                .try_search_fwd(
-                    &Input::new(input)
-                        .span(pos..input.len())
-                        .anchored(Anchored::Yes),
-                )
-                .ok()
-                .flatten()?;
-            let end = found.offset();
-            if end == pos {
-                return None;
-            }
-            let class = TokenClass(found.pattern().as_u32());
+            let (class, end) = match self.longest_match(input, pos) {
+                Some(found) => found,
+                None => (self.nomatch?, self.next_match_start(input, pos)),
+            };
             if !self.skip[class.0 as usize] {
                 tokens.push(Token {
                     class,
@@ -102,6 +109,35 @@ impl TokenSet {
             pos = end;
         }
         Some(tokens)
+    }
+
+    /// The longest non-empty match at `pos` and where it ends.
+    fn longest_match(&self, input: &str, pos: usize) -> Option<(TokenClass, usize)> {
+        let dfa = self.dfa.as_ref()?;
+        // A MatchError is unreachable for an anchored dense DFA without quit
+        // bytes, so `.ok().flatten()` only reshapes the type, never actually
+        // maps a real error to `None`.
+        let found = dfa
+            .try_search_fwd(
+                &Input::new(input)
+                    .span(pos..input.len())
+                    .anchored(Anchored::Yes),
+            )
+            .ok()
+            .flatten()?;
+        let end = found.offset();
+        (end > pos).then(|| (self.classes[found.pattern().as_usize()], end))
+    }
+
+    /// The first character boundary after `from` where some rule matches, or
+    /// the end of `input`.
+    fn next_match_start(&self, input: &str, from: usize) -> usize {
+        input[from..]
+            .char_indices()
+            .skip(1)
+            .map(|(i, _)| from + i)
+            .find(|&p| self.longest_match(input, p).is_some())
+            .unwrap_or(input.len())
     }
 }
 
@@ -157,6 +193,7 @@ impl Scan {
 
 #[cfg(test)]
 mod tests {
+    use super::super::model::Pattern;
     use super::*;
 
     fn rules(specs: &[(&str, &str, bool)]) -> Vec<TokenRule> {
@@ -164,10 +201,28 @@ mod tests {
             .iter()
             .map(|(name, pattern, skip)| TokenRule {
                 name: (*name).to_owned(),
-                pattern: (*pattern).to_owned(),
+                pattern: Pattern::Regex((*pattern).to_owned()),
                 skip: *skip,
             })
             .collect()
+    }
+
+    /// `word`, skipped whitespace, and a nomatch rule named `other`.
+    fn with_nomatch(skip_nomatch: bool) -> TokenSet {
+        let mut rules = rules(&[("word", "[a-z]+", false), ("ws", r"\s+", true)]);
+        rules.push(TokenRule {
+            name: "other".to_owned(),
+            pattern: Pattern::Nomatch,
+            skip: skip_nomatch,
+        });
+        TokenSet::build(&rules, false).unwrap()
+    }
+
+    fn token(class: u32, range: Range<usize>) -> Token {
+        Token {
+            class: TokenClass(class),
+            range,
+        }
     }
 
     fn set(specs: &[(&str, &str, bool)]) -> TokenSet {
@@ -329,6 +384,47 @@ mod tests {
                     range: 5..5 + second_len
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn a_nomatch_run_ends_where_the_next_rule_matches() {
+        assert_eq!(
+            with_nomatch(false).tokenize("ab!?cd").unwrap(),
+            vec![token(0, 0..2), token(2, 2..4), token(0, 4..6)]
+        );
+    }
+
+    #[test]
+    fn a_nomatch_run_at_the_end_runs_to_the_end() {
+        assert_eq!(
+            with_nomatch(false).tokenize("ab!?").unwrap(),
+            vec![token(0, 0..2), token(2, 2..4)]
+        );
+    }
+
+    #[test]
+    fn a_nomatch_run_stops_at_skipped_whitespace() {
+        assert_eq!(
+            with_nomatch(false).tokenize("ab !? cd").unwrap(),
+            vec![token(0, 0..2), token(2, 3..5), token(0, 6..8)]
+        );
+    }
+
+    #[test]
+    fn a_skipped_nomatch_run_leaves_no_token() {
+        assert_eq!(
+            with_nomatch(true).tokenize("ab!?cd").unwrap(),
+            vec![token(0, 0..2), token(0, 4..6)]
+        );
+    }
+
+    #[test]
+    fn a_nomatch_run_advances_by_whole_characters() {
+        let input = "ab€cd";
+        assert_eq!(
+            with_nomatch(false).tokenize(input).unwrap(),
+            vec![token(0, 0..2), token(2, 2..2 + "€".len()), token(0, 5..7)]
         );
     }
 }

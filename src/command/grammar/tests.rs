@@ -385,3 +385,21 @@ fn earley_agrees_with_the_naive_matcher() {
         assert_eq!(got, expected, "elems {elems:?} input {input:?}");
     }
 }
+
+#[test]
+fn a_nomatch_class_is_a_production_symbol() {
+    let mut b = GrammarBuilder::new();
+    b.skip_token("whitespace", r"\s+");
+    let word = b.token("word", "[a-z]+");
+    let other = b.nomatch("other");
+    let s = b.nonterminal("S");
+    b.production(s, [tok(word), tok(other).labeled(Label(0))]);
+    b.start(s);
+    let g = b.build().unwrap();
+
+    assert_eq!(
+        captured(&first(&g, "ab !?").unwrap()),
+        vec![(0, "!?".into())]
+    );
+    assert!(first(&g, "ab cd").is_none());
+}
