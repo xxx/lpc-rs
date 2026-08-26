@@ -40,6 +40,12 @@ pub trait Vocabulary {
     fn is_live(&self, candidate: usize) -> bool;
     /// Whether `candidate` has commands enabled.
     fn is_living(&self, candidate: usize) -> bool;
+    /// Whether `candidate` is outside the actor's surroundings — nameable
+    /// only through a living slot (`master->parse_command_users()`);
+    /// `false` by default.
+    fn is_remote(&self, _candidate: usize) -> bool {
+        false
+    }
     /// The master's lists and all word.
     async fn defaults(&mut self) -> Result<Defaults>;
     /// `master->parse_command_numeral(word)`: `> 0` a count, `< 0` an

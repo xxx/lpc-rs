@@ -101,6 +101,9 @@ impl<V: Vocabulary> Resolver<V> {
 
     async fn object(&mut self, words: &[&str]) -> Result<Option<Resolved>> {
         for candidate in 0..self.lexicons.len() {
+            if self.vocabulary.is_remote(candidate) {
+                continue;
+            }
             if self.matches(candidate, words, false).await?.is_some() {
                 return Ok(Some(Resolved::Object(candidate)));
             }
@@ -140,6 +143,9 @@ impl<V: Vocabulary> Resolver<V> {
         let mut any_plural = false;
         for candidate in 0..self.lexicons.len() {
             if living_only && !self.vocabulary.is_living(candidate) {
+                continue;
+            }
+            if !living_only && self.vocabulary.is_remote(candidate) {
                 continue;
             }
             if rest.is_empty() {
@@ -203,12 +209,14 @@ mod tests {
 
     /// An in-memory vocabulary: `numerals` is the master's table, `id_true`
     /// the phrases `IdFunction` candidates answer yes to, `asked` every word
-    /// the master was asked as a numeral.
+    /// the master was asked as a numeral, `remote` the candidates outside
+    /// the scope proper (`parse_command_users()`).
     struct Fake {
         defaults: Defaults,
         lexicons: Vec<Lexicon>,
         living: Vec<bool>,
         live: Vec<bool>,
+        remote: Vec<bool>,
         numerals: HashMap<&'static str, i64>,
         id_true: Vec<&'static str>,
         asked: Vec<String>,
@@ -222,6 +230,7 @@ mod tests {
                 lexicons,
                 living: vec![false; n],
                 live: vec![true; n],
+                remote: vec![false; n],
                 numerals: HashMap::new(),
                 id_true: vec![],
                 asked: vec![],
@@ -238,6 +247,9 @@ mod tests {
         }
         fn is_living(&self, candidate: usize) -> bool {
             self.living[candidate]
+        }
+        fn is_remote(&self, candidate: usize) -> bool {
+            self.remote[candidate]
         }
         async fn defaults(&mut self) -> Result<Defaults> {
             Ok(self.defaults.clone())
@@ -415,6 +427,27 @@ mod tests {
         );
         assert_eq!(resolve(scene(), Kind::Living, "sword").await, None);
         assert_eq!(resolve(scene(), Kind::Living, "all").await, items(0, &[3]));
+    }
+
+    /// The guard (3), marked remote — a `parse_command_users()` living.
+    fn remote_scene() -> Fake {
+        let mut fake = scene();
+        fake.remote[3] = true;
+        fake
+    }
+
+    #[tokio::test]
+    async fn a_remote_candidate_is_named_only_by_a_living_slot() {
+        assert_eq!(
+            resolve(remote_scene(), Kind::Living, "guard").await,
+            items(1, &[3])
+        );
+        assert_eq!(
+            resolve(remote_scene(), Kind::Liv, "guard").await,
+            Some(Resolved::Object(3))
+        );
+        assert_eq!(resolve(remote_scene(), Kind::Items, "guard").await, None);
+        assert_eq!(resolve(remote_scene(), Kind::Object, "guard").await, None);
     }
 
     #[tokio::test]

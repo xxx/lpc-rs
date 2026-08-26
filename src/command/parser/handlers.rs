@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use lpc_rs_errors::Result;
 
+use super::Verdict;
 use crate::{
     command::{dispatch::apply_on, registry::ParserRule},
     interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, process::Process, task_context::TaskContext},
@@ -169,6 +170,11 @@ pub(crate) struct Failure {
     pub(crate) flag: bool,
     /// Object slots chosen before failing.
     pub(crate) progress: usize,
+    /// The verdict when the master's `parser_error_message` gives no
+    /// string: `Refused` from the actor's own handlers (`can_`, the
+    /// re-ask, a missing `do_`), `Unresolved` from resolving or
+    /// disambiguating an object slot.
+    pub(crate) silent: Verdict,
 }
 
 /// The failure to report: the furthest, ties to the earliest.
@@ -272,6 +278,7 @@ mod tests {
             arg: Arg::Text("x".into()),
             flag: false,
             progress: 1,
+            silent: Verdict::Unresolved,
         };
         let b = Failure {
             kind: Kind::Refused,
@@ -279,6 +286,7 @@ mod tests {
             arg: Arg::None,
             flag: false,
             progress: 2,
+            silent: Verdict::Refused,
         };
         let c = Failure {
             kind: Kind::ThereIsNo,
@@ -286,10 +294,11 @@ mod tests {
             arg: Arg::Text("y".into()),
             flag: false,
             progress: 2,
+            silent: Verdict::Unresolved,
         };
         assert_eq!(
-            furthest(vec![a.clone(), b.clone(), c]).map(|f| f.arg),
-            Some(Arg::None)
+            furthest(vec![a.clone(), b.clone(), c]).map(|f| (f.arg, f.silent)),
+            Some((Arg::None, Verdict::Refused))
         );
         assert_eq!(furthest(vec![a.clone()]).map(|f| f.progress), Some(1));
         assert!(furthest(vec![]).is_none());

@@ -85,7 +85,7 @@ pub(crate) async fn walk(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec<
     Ok(out)
 }
 
-/// `master->parse_command_users()`'s live objects; empty without the apply.
+/// `master->parse_command_users()`'s livings; empty without the apply.
 pub(crate) async fn users(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec<Arc<Process>>> {
     let Some(master) = ctx.object_space().master_object() else {
         return Ok(Vec::new());
@@ -103,6 +103,7 @@ pub(crate) async fn users(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec
         LpcRef::Array(_) => value.with_array(ctx.txn(), |a| {
             a.iter()
                 .filter_map(|item| item.live_object(ctx.txn()))
+                .filter(|object| object.commands_enabled(ctx.txn()))
                 .collect()
         }),
         _ => Ok(Vec::new()),

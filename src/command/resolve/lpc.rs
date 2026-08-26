@@ -22,24 +22,40 @@ pub struct LpcVocabulary<'a> {
     scope: Vec<Arc<Process>>,
     /// Extra ids per candidate (the parser package's nicknames).
     extras: Vec<Vec<String>>,
+    /// Candidates at or after this index are remote (`parse_command_users()`
+    /// additions), nameable only through a living slot.
+    remote_from: usize,
 }
 
 impl<'a> LpcVocabulary<'a> {
     /// Over `scope`, in the order `%o` prefers.
     pub fn new(ctx: &'a TaskContext, scope: Vec<Arc<Process>>) -> Self {
         let extras = vec![Vec::new(); scope.len()];
-        LpcVocabulary { ctx, scope, extras }
+        let remote_from = scope.len();
+        LpcVocabulary {
+            ctx,
+            scope,
+            extras,
+            remote_from,
+        }
     }
 
     /// Over `scope`, each candidate answering to `extras[i]` as well as its
-    /// own ids; `extras` must be `scope.len()` long.
+    /// own ids; `extras` must be `scope.len()` long. Candidates at or after
+    /// `remote_from` are remote.
     pub fn with_extras(
         ctx: &'a TaskContext,
         scope: Vec<Arc<Process>>,
         extras: Vec<Vec<String>>,
+        remote_from: usize,
     ) -> Self {
         debug_assert_eq!(extras.len(), scope.len());
-        LpcVocabulary { ctx, scope, extras }
+        LpcVocabulary {
+            ctx,
+            scope,
+            extras,
+            remote_from,
+        }
     }
 
     /// The candidates behind the resolver's indices.
@@ -104,6 +120,10 @@ impl Vocabulary for LpcVocabulary<'_> {
 
     fn is_living(&self, candidate: usize) -> bool {
         self.scope[candidate].commands_enabled(self.ctx.txn())
+    }
+
+    fn is_remote(&self, candidate: usize) -> bool {
+        candidate >= self.remote_from
     }
 
     async fn defaults(&mut self) -> Result<Defaults> {

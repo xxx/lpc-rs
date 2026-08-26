@@ -48,6 +48,11 @@ pub(crate) struct Nickname {
     pub(crate) object: Arc<Process>,
 }
 
+/// One object slot chosen in `attempt`: its capture index, the objects
+/// picked for it, and the reasons the candidates that did not qualify
+/// returned.
+type ChosenSlot = (usize, Vec<Arc<Process>>, Vec<(usize, Reply)>);
+
 /// Run `rule` (owned by `owner`) for `actor` over `rest`, the line after
 /// its verb; `scope` replaces the default walk when given.
 pub(crate) async fn run(
@@ -69,6 +74,7 @@ pub(crate) async fn run(
             .collect(),
         None => scope::walk(ctx, actor).await?,
     };
+    let remote_from = candidates.len();
     let needs_livings = rule
         .slots
         .iter()
@@ -95,7 +101,7 @@ pub(crate) async fn run(
                 .collect()
         })
         .collect();
-    let vocabulary = LpcVocabulary::with_extras(ctx, objects, extras);
+    let vocabulary = LpcVocabulary::with_extras(ctx, objects, extras, remote_from);
     let mut resolver = Resolver::new(vocabulary, None).await?;
 
     let mut failures: Vec<Failure> = Vec::new();
@@ -145,8 +151,10 @@ fn with_words(values: &[LpcRef], words: &[LpcRef]) -> Vec<LpcRef> {
         .collect()
 }
 
-/// A failure with no object, arg, or flag beyond what is given.
-fn fail(
+/// A failure whose silent fallback (when the master gives no message) is
+/// `Refused`: from the actor's own handlers — `can_`, the all-filled
+/// re-ask, or a missing `do_`.
+fn refused(
     kind: Kind,
     object: Option<Arc<Process>>,
     arg: Arg,
@@ -159,6 +167,26 @@ fn fail(
         arg,
         flag,
         progress,
+        silent: Verdict::Refused,
+    }
+}
+
+/// A failure whose silent fallback is `Unresolved`: from resolving or
+/// disambiguating an object slot.
+fn unresolved(
+    kind: Kind,
+    object: Option<Arc<Process>>,
+    arg: Arg,
+    flag: bool,
+    progress: usize,
+) -> Failure {
+    Failure {
+        kind,
+        object,
+        arg,
+        flag,
+        progress,
+        silent: Verdict::Unresolved,
     }
 }
 
@@ -197,9 +225,9 @@ async fn attempt(
     )
     .await?
     {
-        Reply::No => return Ok(Err(fail(Kind::Refused, None, Arg::None, false, 0))),
+        Reply::No => return Ok(Err(refused(Kind::Refused, None, Arg::None, false, 0))),
         Reply::Reason { text, .. } => {
-            return Ok(Err(fail(
+            return Ok(Err(refused(
                 Kind::Allocated,
                 Some(owner.clone()),
                 Arg::Text(text),
@@ -210,7 +238,7 @@ async fn attempt(
         Reply::Yes | Reply::Absent => {}
     }
 
-    let mut chosen: Vec<(usize, Vec<Arc<Process>>)> = Vec::new(); // (slot index, objects)
+    let mut chosen: Vec<ChosenSlot> = Vec::new();
     let mut object_slot = 0usize;
     for (index, (cap, slot)) in caps.iter().zip(&rule.slots).enumerate() {
         if !slot.is_object() {
@@ -243,7 +271,7 @@ async fn attempt(
                 Kind::ThereIsNo
             };
             let plural = matches!(slot, Slot::Objects | Slot::Livings);
-            return Ok(Err(fail(
+            return Ok(Err(unresolved(
                 kind,
                 None,
                 Arg::Text(cap.text.clone()),
@@ -277,21 +305,21 @@ async fn attempt(
         }
         if qualified.is_empty() {
             return Ok(Err(match best_reason(&reasons) {
-                Some((candidate, text)) => fail(
+                Some((candidate, text)) => unresolved(
                     Kind::Allocated,
                     Some(candidates[candidate].object.clone()),
                     Arg::Text(text),
                     false,
                     progress,
                 ),
-                None if unreachable => fail(
+                None if unreachable => unresolved(
                     Kind::NotAccessible,
                     None,
                     Arg::Text(cap.text.clone()),
                     slot.is_many(),
                     progress,
                 ),
-                None => fail(
+                None => unresolved(
                     Kind::ThereIsNo,
                     None,
                     Arg::Text(cap.text.clone()),
@@ -306,7 +334,7 @@ async fn attempt(
                 n if n < 0 => match qualified.get((-n - 1) as usize) {
                     Some(one) => vec![one.clone()],
                     None => {
-                        return Ok(Err(fail(
+                        return Ok(Err(unresolved(
                             Kind::Ordinal,
                             None,
                             Arg::Count(qualified.len() as i64),
@@ -320,7 +348,7 @@ async fn attempt(
         } else {
             match numeral {
                 0 => {
-                    return Ok(Err(fail(
+                    return Ok(Err(unresolved(
                         Kind::BadMultiple,
                         None,
                         Arg::None,
@@ -329,7 +357,7 @@ async fn attempt(
                     )));
                 }
                 n if n > 1 => {
-                    return Ok(Err(fail(
+                    return Ok(Err(unresolved(
                         Kind::BadMultiple,
                         None,
                         Arg::None,
@@ -340,7 +368,7 @@ async fn attempt(
                 n if n < 0 => match qualified.get((-n - 1) as usize) {
                     Some(one) => vec![one.clone()],
                     None => {
-                        return Ok(Err(fail(
+                        return Ok(Err(unresolved(
                             Kind::Ordinal,
                             None,
                             Arg::Count(qualified.len() as i64),
@@ -350,7 +378,7 @@ async fn attempt(
                     }
                 },
                 _ if qualified.len() > 1 => {
-                    return Ok(Err(fail(
+                    return Ok(Err(unresolved(
                         Kind::Ambig,
                         None,
                         Arg::Objects(qualified),
@@ -362,16 +390,16 @@ async fn attempt(
             }
         };
         values[index] = if slot.is_many() {
-            mint_mixed(ctx, &picked, &reasons)
+            mint_objects(ctx, &picked)
         } else {
             LpcRef::from(Arc::downgrade(&picked[0]))
         };
-        chosen.push((index, picked));
+        chosen.push((index, picked, reasons));
         object_slot += 1;
     }
 
-    // The all-filled re-ask.
-    for (slot_number, (_, picked)) in chosen.iter().enumerate() {
+    // The all-filled re-ask: the chosen objects only, never the reasons.
+    for (slot_number, (_, picked, _)) in chosen.iter().enumerate() {
         let family = if slot_number == 0 {
             Family::Direct
         } else {
@@ -389,7 +417,7 @@ async fn attempt(
             .await?
             {
                 Reply::No => {
-                    return Ok(Err(fail(
+                    return Ok(Err(refused(
                         Kind::Refused,
                         Some(object.clone()),
                         Arg::None,
@@ -398,7 +426,7 @@ async fn attempt(
                     )));
                 }
                 Reply::Reason { text, .. } => {
-                    return Ok(Err(fail(
+                    return Ok(Err(refused(
                         Kind::Allocated,
                         Some(object.clone()),
                         Arg::Text(text),
@@ -411,17 +439,24 @@ async fn attempt(
         }
     }
 
+    // Only `do_` sees a many slot as the mixed array of objects and reasons.
+    let mut do_values = values.clone();
+    for (index, picked, reasons) in &chosen {
+        if rule.slots[*index].is_many() {
+            do_values[*index] = mint_mixed(ctx, picked, reasons);
+        }
+    }
     match call(
         ctx,
         actor,
         owner,
         Family::Do,
         rule,
-        &with_words(&values, &words),
+        &with_words(&do_values, &words),
     )
     .await?
     {
-        Reply::Absent => Ok(Err(fail(
+        Reply::Absent => Ok(Err(refused(
             Kind::Refused,
             None,
             Arg::None,
@@ -432,7 +467,9 @@ async fn attempt(
     }
 }
 
-/// `({ ob... })` for a many slot's `do_` argument.
+/// `({ ob... })`: a many slot's value everywhere but `do_` (`can_`,
+/// `direct_`/`indirect_`, the re-ask), and an ambiguous failure's
+/// `Arg::Objects` reported to the master.
 fn mint_objects(ctx: &TaskContext, objects: &[Arc<Process>]) -> LpcRef {
     let array: LpcArray = objects
         .iter()
@@ -456,13 +493,10 @@ fn mint_mixed(ctx: &TaskContext, picked: &[Arc<Process>], reasons: &[(usize, Rep
 }
 
 /// Ask the master to describe `failure`; a string is the verdict's
-/// message, anything else leaves `Refused`/`Unresolved`.
+/// message, anything else falls back to `failure.silent`. `Kind::Refused`
+/// never reaches the master — it carries no message.
 async fn report(ctx: &TaskContext, actor: &Arc<Process>, failure: Failure) -> Result<Verdict> {
-    let silent = if failure.kind == Kind::Refused {
-        Verdict::Refused
-    } else {
-        Verdict::Unresolved
-    };
+    let silent = failure.silent;
     if failure.kind == Kind::Refused {
         return Ok(silent);
     }
