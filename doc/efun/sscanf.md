@@ -36,6 +36,10 @@ checked before scanning starts, so it fires on every call regardless of
 input, unlike FluffOS, which raises it only when a conversion is reached
 with no variable left.
 
+A non-string `str` or `fmt` returns 0 rather than raising an error, unlike
+FluffOS. `%f` accepts a magnitude too large for a float as infinity, where
+`%d` fails to match on the equivalent integer overflow.
+
 Unlike other drivers, `%(regex)` is not supported.
 
 ### Examples

@@ -6,7 +6,6 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_float::LpcFloat, lpc_ref::LpcRef};
 
 /// One `%` conversion.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Conversion {
     Int,
     Hex,
@@ -16,7 +15,6 @@ enum Conversion {
 
 /// One piece of a format: literal text, a conversion (skipped or assigned),
 /// or a literal `%`.
-#[derive(Clone, Debug, PartialEq, Eq)]
 enum Piece<'f> {
     Literal(&'f str),
     Convert { kind: Conversion, skip: bool },
@@ -97,14 +95,12 @@ struct Scanned {
 /// does not fit.
 fn scan_int(input: &str, radix: u32) -> Option<Scanned> {
     let trimmed = input.trim_start();
-    let mut i = input.len() - trimmed.len();
-    let mut negative = false;
-    if trimmed.starts_with('-') {
-        negative = true;
-        i += 1;
-    } else if trimmed.starts_with('+') {
+    let sign_start = input.len() - trimmed.len();
+    let mut i = sign_start;
+    if trimmed.starts_with('-') || trimmed.starts_with('+') {
         i += 1;
     }
+    let mut has_prefix = false;
     if radix == 16 {
         let after_sign = &input[i..];
         if after_sign.len() >= 3
@@ -112,6 +108,7 @@ fn scan_int(input: &str, radix: u32) -> Option<Scanned> {
             && after_sign.as_bytes()[2].is_ascii_hexdigit()
         {
             i += 2;
+            has_prefix = true;
         }
     }
     let digits: usize = input[i..]
@@ -122,11 +119,12 @@ fn scan_int(input: &str, radix: u32) -> Option<Scanned> {
     if digits == 0 {
         return None;
     }
-    let magnitude = i64::from_str_radix(&input[i..i + digits], radix).ok()?;
-    let value = if negative {
-        magnitude.checked_neg()?
+    // `from_str_radix` accepts a leading sign but not an `0x` prefix between it and the digits.
+    let value = if has_prefix {
+        let parsed = format!("{}{}", &input[sign_start..i - 2], &input[i..i + digits]);
+        i64::from_str_radix(&parsed, radix).ok()?
     } else {
-        magnitude
+        i64::from_str_radix(&input[sign_start..i + digits], radix).ok()?
     };
     Some(Scanned {
         value: LpcRef::from(value),
@@ -134,21 +132,39 @@ fn scan_int(input: &str, radix: u32) -> Option<Scanned> {
     })
 }
 
-/// `strtod`-style: the longest prefix Rust's float parser accepts.
+/// `strtod`-style: optional sign, digits, an optional `.`-and-digits part,
+/// an optional exponent; `str::parse` is the sole validity check on the
+/// lexed slice, so no `inf`/`nan` word can ever reach it.
 fn scan_float(input: &str) -> Option<Scanned> {
     let trimmed = input.trim_start();
     let lead = input.len() - trimmed.len();
-    let mut best = None;
-    for end in (1..=trimmed.len()).filter(|&e| trimmed.is_char_boundary(e)) {
-        if let Ok(f) = trimmed[..end].parse::<f64>() {
-            // A trailing 'e' or '.' parses as part of a longer token only.
-            best = Some((f, end));
+    let bytes = trimmed.as_bytes();
+    let mut i = 0;
+    if i < bytes.len() && matches!(bytes[i], b'-' | b'+') {
+        i += 1;
+    }
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i < bytes.len() && bytes[i] == b'.' {
+        i += 1;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
         }
     }
-    let (f, end) = best?;
+    if i < bytes.len() && matches!(bytes[i], b'e' | b'E') {
+        i += 1;
+        if i < bytes.len() && matches!(bytes[i], b'-' | b'+') {
+            i += 1;
+        }
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+    }
+    let f: f64 = trimmed[..i].parse().ok()?;
     Some(Scanned {
         value: LpcRef::from(LpcFloat::from(f)),
-        len: lead + end,
+        len: lead + i,
     })
 }
 
@@ -352,6 +368,35 @@ mod tests {
     async fn x_reads_hex_with_or_without_a_prefix() {
         let r = scan(r#"int a, b; sscanf("ff 0x10", "%x %x", a, b); return ({ a, b });"#).await;
         assert_eq!(r, vec![LpcRef::from(255), LpcRef::from(16)]);
+    }
+
+    #[tokio::test]
+    async fn d_and_x_handle_i64_min_and_signed_hex() {
+        let r =
+            scan(r#"int n; int c = sscanf("-9223372036854775808", "%d", n); return ({ c, n });"#)
+                .await;
+        assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(i64::MIN)]);
+
+        let r = scan(r#"int n; int c = sscanf("-0x10", "%x", n); return ({ c, n });"#).await;
+        assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(-16)]);
+    }
+
+    #[tokio::test]
+    async fn f_lexes_one_token() {
+        let r = scan(r#"float f; int c = sscanf("1.5e3x", "%fx", f); return ({ c, f });"#).await;
+        assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1500.0)]);
+
+        let r = scan(r#"float f; int c = sscanf("1e", "%f", f); return ({ c });"#).await;
+        assert_eq!(r, vec![LpcRef::from(0)]);
+
+        let r = scan(r#"float f; int c = sscanf("1", "%f", f); return ({ c, f });"#).await;
+        assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1.0)]);
+    }
+
+    #[tokio::test]
+    async fn an_explicit_ref_at_an_implicit_position_is_identical() {
+        let r = scan(r#"int n; int c = sscanf("7", "%d", ref n); return ({ c, n });"#).await;
+        assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(7)]);
     }
 
     #[tokio::test]
