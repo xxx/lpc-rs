@@ -469,10 +469,12 @@ fn translate_set(
     Some(())
 }
 
-/// Append `c` inside a class, escaped unless alphanumeric, so none of Rust's
-/// class syntax (`&&`, `--`, `~~`, `[:name:]`) can form.
+/// Append `c` inside a class, escaped when ASCII, non-alphanumeric, and not
+/// `<`/`>` — `regex-syntax` refuses to escape those two, and any non-ASCII
+/// character, so leaving them bare still keeps `&&`, `--`, `~~`, `[:name:]`
+/// from forming.
 fn push_set_member(out: &mut String, c: char) {
-    if !c.is_alphanumeric() {
+    if c.is_ascii() && !c.is_alphanumeric() && c != '<' && c != '>' {
         out.push('\\');
     }
     out.push(c);
@@ -586,7 +588,12 @@ mod tests {
 
     #[test]
     fn regex_translation_neutralises_rusts_extra_syntax() {
-        let t = |s: &str| translate_regex(s).unwrap();
+        let t = |s: &str| {
+            let out = translate_regex(s).unwrap();
+            regex_automata::dfa::dense::DFA::new(&out)
+                .unwrap_or_else(|e| panic!("{s:?} -> {out:?}: {e}"));
+            out
+        };
         assert_eq!(t(r"\d"), "d");
         assert_eq!(t(r"a\.b"), r"a\.b");
         assert_eq!(t(r"\/"), "/");
@@ -600,6 +607,10 @@ mod tests {
         assert_eq!(t("[[:alpha:]]"), r"[\[\:alpha\:]\]");
         assert_eq!(t("a]"), r"a\]");
         assert_eq!(t("(a|b)*c?d+"), "(a|b)*c?d+");
+        assert_eq!(t("[<>]"), "[<>]");
+        assert_eq!(t("[a€]"), "[a€]");
+        assert_eq!(t("[«»]"), "[«»]");
+        assert_eq!(t("[ .-]"), r"[\ \.\-]");
     }
 
     #[test]
