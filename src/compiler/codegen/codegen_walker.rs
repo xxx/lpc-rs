@@ -1154,6 +1154,7 @@ impl TreeWalker for CodegenWalker {
 
         if name.as_str() == SIZEOF {
             let result = self.register_counter.next().unwrap().as_local();
+            // `sizeof`'s arity is checked by the semantic walker, fatal before codegen runs.
             let arg = arg_results.first().unwrap().expect_value(node.span)?;
             let instruction = Instruction::Sizeof(arg, result);
             push_instruction!(self, instruction, node.span);

@@ -916,12 +916,20 @@ ExpressionList: Vec<ExpressionNode> = {
 };
 
 ArgumentExpression: ExpressionNode = {
-    <l:"ref"> <name:"ID"> => {
-        ExpressionNode::Ref(RefNode {
-            name: ustr(&name.1),
-            span: Some(Span::join(l, name.0)),
+    <l:"ref"> <e:AssignmentExpression> =>? {
+        let Some(r) = e.span() else {
+            let error = lpc_bug!(Some(l), "argument to `ref` has no span");
+            return Err(ParseError::User { error });
+        };
+        let ExpressionNode::Var(v) = e else {
+            let error = lpc_error!(Some(Span::join(l, r)), "only a variable can be passed by reference");
+            return Err(ParseError::User { error });
+        };
+        Ok(ExpressionNode::Ref(RefNode {
+            name: v.name,
+            span: Some(Span::join(l, r)),
             global: false,
-        })
+        }))
     },
     <e:AssignmentExpression> => e,
 };

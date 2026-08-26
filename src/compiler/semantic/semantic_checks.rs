@@ -47,6 +47,7 @@ static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "private",
     "protected",
     "public",
+    "ref",
     "return",
     "static",
     "string",

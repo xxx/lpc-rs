@@ -637,17 +637,23 @@ fn a_ref_argument_parses_to_a_ref_node() {
 
 #[test]
 fn ref_needs_a_bare_variable() {
-    for prog in [
-        "void f() { inc(ref a[1]); }",
-        "void f() { inc(ref g()); }",
-        "int ref x;",
-    ] {
+    for prog in ["void f() { inc(ref a[1]); }", "void f() { inc(ref g()); }"] {
         let lexer = LexWrapper::new(prog);
-        assert!(
-            lpc_parser::ProgramParser::new()
-                .parse(&mut CompilationContext::default(), lexer)
-                .is_err(),
-            "{prog} must not parse"
+        let error = lpc_parser::ProgramParser::new()
+            .parse(&mut CompilationContext::default(), lexer)
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "only a variable can be passed by reference",
+            "{prog}"
         );
     }
+
+    let lexer = LexWrapper::new("int ref x;");
+    assert!(
+        lpc_parser::ProgramParser::new()
+            .parse(&mut CompilationContext::default(), lexer)
+            .is_err(),
+        "int ref x; must not parse"
+    );
 }

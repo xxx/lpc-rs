@@ -12,6 +12,8 @@ int create() {
 }
 ```
 
+`ref` is a reserved word and cannot name a variable or function.
+
 `ref` qualifies a parameter (`type ref name`); the argument is written
 `ref name`, where `name` is a variable of the calling program — a local, a
 parameter, a captured variable, or a global. Only a variable can be passed
@@ -42,7 +44,7 @@ take a `ref` parameter.
 
 - Through a function pointer: `fp(ref y)` is a compile error, and calling a
   `ref`-taking function through any pointer (`call_out`, `input_to`, a
-  closure, `evaluate`) is a runtime error naming the function.
+  closure) is a runtime error naming the function.
 - Across objects: `o->f(ref y)` and `call_other(o, "f", ref y)` are compile
   errors.
 - In partial application: `&f(ref y)` does not parse.
