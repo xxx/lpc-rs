@@ -43,10 +43,8 @@ pub async fn parse_string<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     }
     let compiled = dgd::compile_cached(grammar)
         .map_err(|e| context.runtime_error(format!("parse_string: {e}")))?;
-    // The frame's own object, not `TaskContext::process` (documented
-    // inaccurate across call_others and function-pointer calls): actions
-    // run where the caller actually is, same as `this_object()`.
-    let this = context.frame().process.clone();
+    // The frame's own object, same as `this_object()`, not `TaskContext::process`.
+    let this = context.process().clone();
 
     // Boxed to stay out of `call_efun`'s unboxed future union, which every
     // efun call pays for.
@@ -59,7 +57,7 @@ pub async fn parse_string<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     .await?;
     match outcome {
         Outcome::Values(values) => context.return_array(values),
-        Outcome::None => context.return_efun_result(LpcRef::from(0)),
+        Outcome::Blocked => context.return_efun_result(LpcRef::from(0)),
         Outcome::OverBudget => {
             return Err(context.runtime_error("parse_string: parse budget exhausted"));
         }
@@ -72,7 +70,7 @@ enum Outcome {
     /// A derivation survived; its flat values.
     Values(Vec<LpcRef>),
     /// Every derivation was blocked, or there was none.
-    None,
+    Blocked,
     /// The step budget ran out before a derivation survived.
     OverBudget,
 }
@@ -100,7 +98,7 @@ async fn first_surviving(
     Ok(if parses.over_budget() {
         Outcome::OverBudget
     } else {
-        Outcome::None
+        Outcome::Blocked
     })
 }
 
@@ -159,14 +157,21 @@ impl Evaluator<'_> {
                 }
             }
             let key: Key = (node.production, node.span.clone(), hasher.finish());
-            if let Some(hit) = self.memo.get(&key) {
+            let action = self.compiled.action(node.production);
+            // Action-less nodes skip the memo — their values are just their
+            // already-evaluated children's, so caching saves nothing.
+            if action.is_some()
+                && let Some(hit) = self.memo.get(&key)
+            {
                 return Ok(hit.clone().map(|v| (key, v)));
             }
-            let evaluated = match self.compiled.action(node.production) {
+            let evaluated = match action {
                 None => Some(values),
                 Some(name) => self.apply(name, values).await?,
             };
-            self.memo.insert(key.clone(), evaluated.clone());
+            if action.is_some() {
+                self.memo.insert(key.clone(), evaluated.clone());
+            }
             Ok(evaluated.map(|v| (key, v)))
         })
     }

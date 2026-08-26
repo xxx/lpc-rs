@@ -129,6 +129,29 @@ async fn a_subtree_shared_by_two_derivations_runs_its_action_once() {
 }
 
 #[tokio::test]
+async fn a_blocked_child_blocks_its_parent() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
+        int calls;
+        mixed reject(mixed *t) { calls++; return 0; }
+        mixed *keep(mixed *t) { return t; }
+        mixed *keep2(mixed *t) { return t; }
+        mixed *create() {
+            mixed first = parse_string("w = /a/ S: X ? keep X: w ? reject", "a");
+            mixed second = parse_string(
+                "w = /a/ S: X ? keep S: X ? keep2 X: w ? reject", "a"
+            );
+            return ({ first, second, calls });
+        }
+    "# },
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(0), LpcRef::from(0), LpcRef::from(2)]);
+}
+
+#[tokio::test]
 async fn nothing_parsing_and_untokenizable_input_return_zero() {
     let r = run("", &[], indoc! { r#"
         mixed *create() {
@@ -198,6 +221,8 @@ async fn a_malformed_grammar_is_a_prefixed_error() {
     );
 }
 
+/// The loop bound (69) is sized against `dgd::MAX_STEPS` under `cfg(test)`
+/// (4096), not the production budget of 2²⁰.
 #[tokio::test]
 async fn an_exhausted_budget_is_a_prefixed_error() {
     let e = fails(
@@ -235,7 +260,7 @@ async fn an_action_may_call_parse_string() {
 const ACTOR: (&str, &str) = (
     "/actor.c",
     indoc! { r#"
-        mixed *act(mixed *t) { return ({ "acted" }); }
+        mixed *act(mixed *t) { return ({ file_name(this_object()) }); }
         mixed *go() { return parse_string("w = /a/ S: w ? act", "a"); }
         function get_go() { return &go(); }
     "# },
@@ -254,5 +279,5 @@ async fn an_action_runs_in_the_pointers_owner_not_the_caller() {
     "# },
     )
     .await;
-    assert_eq!(r, vec![s("acted")]);
+    assert_eq!(r, vec![s("/actor")]);
 }
