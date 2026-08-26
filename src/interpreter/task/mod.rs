@@ -88,10 +88,16 @@ pub struct TaskSeed {
 }
 
 impl TaskSeed {
-    /// Build the entry [`CallFrame`] for one attempt; `self.args` land in
-    /// registers `1..=len`. This path (`call_other`, process init) can only
-    /// ever seed plain values, so a `ref` parameter here is always a refusal.
-    pub(crate) fn build_call_frame(&self, upvalue_ptrs: Option<&[VarId]>) -> Result<CallFrame> {
+    /// Build the entry [`CallFrame`] for one attempt, storing `self.args`
+    /// where the function declares them — a captured parameter's cell, the
+    /// ellipsis tail — exactly as a direct call would. This path
+    /// (`call_other`, process init) can only ever seed plain values, so a
+    /// `ref` parameter here is always a refusal.
+    pub(crate) fn build_call_frame(
+        &self,
+        txn: &TxnHandle,
+        upvalue_ptrs: Option<&[VarId]>,
+    ) -> Result<CallFrame> {
         if let Some(i) = self.function.prototype.first_ref_param() {
             return Err(LpcError::runtime(format!(
                 "argument {} of `{}` must be passed by reference",
@@ -106,9 +112,8 @@ impl TaskSeed {
             RegisterSize::try_from(self.args.len())?,
             upvalue_ptrs,
         );
-        if !self.args.is_empty() {
-            // `Bank`'s own `Index` impls stop the indexing autoderef.
-            (*frame.registers)[1..=self.args.len()].clone_from_slice(&self.args);
+        for (i, arg) in self.args.iter().enumerate() {
+            frame.push_arg(txn, i, arg.clone())?;
         }
         Ok(frame)
     }
@@ -274,7 +279,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Ok(live);
         }
 
-        let frame = seed.build_call_frame(self.context.upvalue_ptrs.as_deref())?;
+        let frame =
+            seed.build_call_frame(&self.context.txn, self.context.upvalue_ptrs.as_deref())?;
         self.stack.push(frame)?;
 
         // One timeout per attempt; the committer's conflict rule is the sole
