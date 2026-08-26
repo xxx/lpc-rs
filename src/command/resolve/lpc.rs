@@ -56,17 +56,17 @@ impl<'a> LpcVocabulary<'a> {
             .map(Some)
     }
 
-    /// The string members of an array result; anything else is nothing.
-    fn strings(&self, value: Option<LpcRef>) -> Vec<String> {
+    /// The string members of an array result; anything else is nothing. The
+    /// array arm's only failure is the world losing a cell it just handed
+    /// us, a driver bug that must surface rather than read as "no strings".
+    fn strings(&self, value: Option<LpcRef>) -> Result<Vec<String>> {
         match value {
-            Some(array @ LpcRef::Array(_)) => array
-                .with_array(self.ctx.txn(), |a| {
-                    a.iter()
-                        .filter_map(|item| item.as_str().map(str::to_owned))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            _ => Vec::new(),
+            Some(array @ LpcRef::Array(_)) => array.with_array(self.ctx.txn(), |a| {
+                a.iter()
+                    .filter_map(|item| item.as_str().map(str::to_owned))
+                    .collect()
+            }),
+            _ => Ok(Vec::new()),
         }
     }
 
@@ -75,7 +75,7 @@ impl<'a> LpcVocabulary<'a> {
             return Ok(Vec::new());
         };
         let value = self.apply(&master, name, args).await?;
-        Ok(self.strings(value))
+        self.strings(value)
     }
 }
 
@@ -133,12 +133,12 @@ impl Vocabulary for LpcVocabulary<'_> {
         let Some(ids) = self.apply(&object, PARSE_COMMAND_ID_LIST, &[]).await? else {
             return Ok(Lexicon::IdFunction);
         };
-        let ids = self.strings(Some(ids));
+        let ids = self.strings(Some(ids))?;
         let plurals = match self
             .apply(&object, PARSE_COMMAND_PLURAL_ID_LIST, &[])
             .await?
         {
-            Some(array @ LpcRef::Array(_)) => self.strings(Some(array)),
+            Some(array @ LpcRef::Array(_)) => self.strings(Some(array))?,
             _ => {
                 let singulars = ids
                     .iter()
@@ -155,14 +155,14 @@ impl Vocabulary for LpcVocabulary<'_> {
         Ok(Lexicon::Lists(Lists {
             ids,
             plurals,
-            adjectives: self.strings(adjectives),
+            adjectives: self.strings(adjectives)?,
         }))
     }
 
     async fn id(&mut self, candidate: usize, phrase: &str) -> Result<bool> {
         let object = self.scope[candidate].clone();
         let answer = self.apply(&object, ID, &[LpcRef::from(phrase)]).await?;
-        Ok(matches!(answer, Some(value) if !matches!(value, LpcRef::Int(LpcInt(0)))))
+        Ok(matches!(answer, Some(value) if value.is_truthy(self.ctx.txn())))
     }
 }
 

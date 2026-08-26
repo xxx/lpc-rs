@@ -175,7 +175,7 @@ impl Scope {
         self.0.iter().any(|w| Weak::ptr_eq(w, owner))
     }
 
-    /// The members still alive, in scope order.
+    /// The members not yet dropped, in scope order.
     pub fn members(&self) -> Vec<Arc<Process>> {
         self.0.iter().filter_map(Weak::upgrade).collect()
     }

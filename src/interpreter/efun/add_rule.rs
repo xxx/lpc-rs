@@ -152,7 +152,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_noun_capture_pattern_registers_but_does_not_yet_match() {
+    async fn a_noun_capture_with_nothing_in_scope_is_no_match() {
         let code = indoc! { r#"
             int id; int matched;
             void create() {
@@ -180,7 +180,7 @@ mod tests {
         assert_eq!(
             vm.global_state.committed_global(&proc, 1u16),
             LpcRef::from(0),
-            "a noun capture has no plain value yet, so the rule cannot match"
+            "the rule fails because nothing in scope answers to `sword`"
         );
     }
 

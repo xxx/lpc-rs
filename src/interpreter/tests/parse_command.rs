@@ -183,6 +183,32 @@ async fn plain_captures_write_their_destinations() {
 }
 
 #[tokio::test]
+async fn a_plain_only_pattern_makes_no_master_apply() {
+    let master = indoc! { r#"
+        int calls;
+        string *parse_command_id_list() { calls++; return ({}); }
+        int query_calls() { return calls; }
+    "# };
+    let r = run(
+        master,
+        &[],
+        indoc! { r#"
+        mixed *create() {
+            string a; string b; int n;
+            int r = parse_command("give sword to bob 3", ({}), "'give' %w 'to' %w %d", a, b, n);
+            int after_plain = "/secure/master"->query_calls();
+            mixed *items;
+            parse_command("sword", ({}), "%i", items);
+            int after_noun = "/secure/master"->query_calls();
+            return ({ r, after_plain, after_noun });
+        }
+    "# },
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(0), LpcRef::from(1)]);
+}
+
+#[tokio::test]
 async fn items_writes_a_numeral_and_the_objects() {
     let r = run("", &[SWORD], indoc! { r#"
         mixed *create() { mixed *items; int r = parse_command("red sword", ({ find_object("/sword") }), "%i", items); return ({ r, sizeof(items), items[0], items[1] == find_object("/sword") }); }
@@ -248,6 +274,43 @@ async fn a_preposition_array_destination_gets_the_match_swapped_to_the_front() {
 }
 
 #[tokio::test]
+async fn an_extra_destination_is_left_untouched() {
+    let r = run("", &[], indoc! { r#"
+        mixed *create() { string a; string keep = "kept"; int r = parse_command("give sword", ({}), "'give' %w", a, keep); return ({ r, a, keep }); }
+    "# }).await;
+    assert_eq!(r, vec![LpcRef::from(1), s("sword"), s("kept")]);
+}
+
+#[tokio::test]
+async fn two_preposition_captures_share_the_first_array_list() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
+        mixed *create() {
+            string *first = ({ "in", "on" });
+            string *second = ({ "under", "over" });
+            string w;
+            int r = parse_command("on box in", ({}), "%p %w %p", first, w, second);
+            return ({ r, first[0], first[1], w, second[0], second[1] });
+        }
+    "# },
+    )
+    .await;
+    assert_eq!(
+        r,
+        vec![
+            LpcRef::from(1),
+            s("on"),
+            s("in"),
+            s("box"),
+            s("in"),
+            s("on")
+        ]
+    );
+}
+
+#[tokio::test]
 async fn a_preposition_without_an_array_destination_uses_the_masters_list() {
     let master = r#"string *parse_command_prepos_list() { return ({ "under" }); }"#;
     let r = run(master, &[], indoc! { r#"
@@ -266,7 +329,7 @@ async fn an_object_scope_is_the_object_and_its_deep_inventory() {
         &[SWORD, BAG],
         indoc! { r#"
         mixed *create() {
-            object ob; object me;
+            object ob;
             "/bag"->go(this_object());
             "/sword"->go(find_object("/bag"));
             int r = parse_command("sword", this_object(), "%o", ob);

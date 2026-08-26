@@ -32,7 +32,8 @@ spaces, any of
 
 Matching is case-sensitive. `%s` is greedy: when several splits of the line
 fit the pattern, the earlier `%s` takes the most words it can, and a split is
-abandoned only when one of its noun captures names nothing.
+abandoned when one of its noun captures names nothing, or when a `%d` does
+not fit an int.
 
 ### Nouns
 
@@ -46,13 +47,14 @@ the phrase after the numeral and no adjective handling.
 
 The numeral is written first in `%i`/`%l`'s array: `> 0` for a count (`3`,
 `three`), `< 0` for an ordinal (`2nd`, `second`), `0` for the master's all
-word or for a bare plural (`swords`). A count or the all word makes the phrase
-plural, so only the plural ids are tried. The efun makes no use of the
-numeral beyond reporting it: `second sword` returns every sword, and the
-caller decides what second means. The driver recognizes only digit runs by
-itself; every other numeral, the all word, and plural forms come from the
-master's `parse_command_numeral()`, `parse_command_all_word()`, and
-`parse_command_pluralize()`, so a lib in any language needs no driver change.
+word or for a bare plural (`swords`). A count above one or the all word
+makes the phrase plural, so only the plural ids are tried. The efun makes
+no use of the numeral beyond reporting it: `second sword` returns every
+sword, and the caller decides what second means. The driver recognizes
+only digit runs by itself; every other numeral, the all word, and plural
+forms come from the master's `parse_command_numeral()`,
+`parse_command_all_word()`, and `parse_command_pluralize()`, so a lib in
+any language needs no driver change.
 
 `%p` matches an entry of a preposition list, which may be several words. When
 its destination already holds an array of strings, that array is the list and
@@ -186,7 +188,10 @@ run (CD's `sscanf` accepts `5x` as 5); destinations are written only on success
 (CD writes as it matches); a malformed pattern and too few destinations are
 errors (CD warns, or discards); `%l` has no `find_living` fallback; there is
 no built-in all word, numeral table, or pluralizer; a phrase's adjectives must
-all be listed; the id must end the phrase.
+all be listed; the id must end the phrase; `%p` takes whichever split resolves
+rather than the first list entry matching at the current word with no
+backtrack; an object with no `parse_command_id_list()` is asked `id(phrase)`
+and the master's shared ids do not apply to it.
 
 ### See also
 

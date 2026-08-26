@@ -53,23 +53,36 @@ pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> 
         .iter()
         .enumerate()
         .map(|(slot, kind)| {
-            (*kind == CaptureKind::Preposition)
-                .then(|| preposition_list(context, slot))
-                .flatten()
+            if *kind == CaptureKind::Preposition {
+                preposition_list(context, slot)
+            } else {
+                Ok(None)
+            }
         })
-        .collect();
+        .collect::<Result<Vec<_>>>()?;
     let callers_list = array_lists.iter().flatten().next().cloned();
 
-    // Boxed so the borrowed future does not join the stack of `call_efun`'s
-    // single unboxed union, which every other efun's future also shares.
-    let matched = Box::pin(resolve_against_scope(
-        context.task_context(),
-        scope,
-        &compiled.grammar,
-        cmd,
-        callers_list,
-    ))
-    .await?;
+    // A pattern with no noun capture needs no candidate resolution, so no
+    // master apply runs for it — only the noun path pays for `Resolver::new`'s
+    // defaults lookup.
+    let has_noun = compiled
+        .kinds
+        .iter()
+        .any(|kind| kind.resolver_kind().is_some());
+    let matched = if has_noun {
+        // Boxed so the borrowed future does not join the stack of `call_efun`'s
+        // single unboxed union, which every other efun's future also shares.
+        Box::pin(resolve_nouns(
+            context.task_context(),
+            scope,
+            &compiled.grammar,
+            cmd,
+            callers_list,
+        ))
+        .await?
+    } else {
+        plain_matches(&compiled.grammar, cmd).map(|values| (values, Vec::new()))
+    };
     let Some((found, in_force)) = matched else {
         context.return_efun_result(LpcRef::from(0));
         return Ok(());
@@ -80,6 +93,8 @@ pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> 
             (Some(_), Some(matched)) => swapped_to_front(context, &in_force, matched),
             _ => value,
         };
+        // `write_ref` takes a 0-based argument index (`cmd`, `scope`, `pattern` are 0..3),
+        // not the register number `destination` computes for reads.
         let Some(index) = RegisterSize::try_from(3 + slot).ok() else {
             return Err(context.runtime_bug(format!("capture slot {slot} does not fit a register")));
         };
@@ -92,7 +107,7 @@ pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> 
 /// Every parse of `cmd` under `grammar`, tried in turn until one's captures
 /// all resolve against `scope`'s vocabulary; the resolved values and the
 /// preposition list that was in force, or `None` when nothing resolves.
-async fn resolve_against_scope(
+async fn resolve_nouns(
     ctx: &TaskContext,
     scope: Vec<Arc<Process>>,
     grammar: &Grammar,
@@ -110,6 +125,19 @@ async fn resolve_against_scope(
         }
     }
     Ok(None)
+}
+
+/// Every parse of `cmd` under `grammar`, tried in turn, taking each
+/// capture's value directly with [`native::plain_value`] — no candidate,
+/// so no vocabulary and no master apply. Only reached when the pattern has
+/// no noun capture.
+fn plain_matches(grammar: &Grammar, cmd: &str) -> Option<Vec<LpcRef>> {
+    parse(grammar, cmd).find_map(|parsed| {
+        native::captures(&parsed)?
+            .iter()
+            .map(native::plain_value)
+            .collect()
+    })
 }
 
 /// The candidates `arg` names: an object with its deep inventory, or an
@@ -149,19 +177,24 @@ fn deep_scope(txn: &TxnHandle, root: &Arc<Process>) -> Vec<Arc<Process>> {
 }
 
 /// The string members of the array in `slot`'s destination, or `None` when
-/// it holds no array.
+/// it holds no array. A destination that is an array but whose contents the
+/// world has lost is a driver bug and surfaces as an error, not `None`.
 fn preposition_list<const N: usize>(
     context: &EfunContext<'_, N>,
     slot: usize,
-) -> Option<Vec<String>> {
-    let value = context.resolve_local_register(destination(slot)?);
-    value
-        .with_array(context.txn(), |a| {
-            a.iter()
-                .filter_map(|item| item.as_str().map(str::to_owned))
-                .collect::<Vec<_>>()
-        })
-        .ok()
+) -> Result<Option<Vec<String>>> {
+    let Some(register) = destination(slot) else {
+        return Ok(None);
+    };
+    let value = context.resolve_local_register(register);
+    if !matches!(value, LpcRef::Array(_)) {
+        return Ok(None);
+    }
+    Ok(Some(value.with_array(context.txn(), |a| {
+        a.iter()
+            .filter_map(|item| item.as_str().map(str::to_owned))
+            .collect::<Vec<_>>()
+    })?))
 }
 
 /// A new array of `list` with `matched` swapped into `[0]`, as CD returns a
