@@ -105,13 +105,10 @@ async fn first_surviving(
 /// A blocked subtree is `None`; a surviving one is its values.
 type Evaluated = Option<Vec<LpcRef>>;
 
-/// A derivation node's structural identity: its production and token span,
+/// A derivation node's structural identity: its production and token span
 /// plus a digest of its children's keys in order (a token contributes its
-/// index). Two nodes key equal exactly when their subtrees look identical
-/// — production, span, and every descendant in the same shape — so a
-/// subtree shared by several derivations runs its action once, without the
-/// memo cloning or hashing whole node trees. A 64-bit digest collision
-/// would wrongly alias two distinct subtrees under one key; accepted odds.
+/// index) — a 64-bit digest collision would alias two distinct subtrees,
+/// accepted odds.
 type Key = (ProdId, Range<usize>, u64);
 
 /// `Evaluator::evaluate`'s result: the node's key paired with its values,
