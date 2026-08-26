@@ -677,11 +677,12 @@ mod stm_retry_tests {
 
     const SCAN_CODE: &str = indoc! { r##"
         int hits;
-        int foo() { sscanf("hits 10", "hits %d", hits); return hits; }
+        int foo() { int n; sscanf("hits 10", "hits %d", n); hits += n; return hits; }
     "##};
 
-    /// The re-run assigns the global through `write_ref` again from
-    /// scratch: `result() == 10` (not 20, not stale) is load-bearing.
+    /// `n` is a `ref` `sscanf` writes into on every attempt; `hits` only
+    /// accumulates correctly if the rejected attempt's `+=` is discarded —
+    /// a leaked first-attempt write would double it to 20 instead of 10.
     #[tokio::test]
     async fn a_retried_task_writes_its_ref_arguments_once() {
         let mut task = run_prog(SCAN_CODE).await;
@@ -692,6 +693,7 @@ mod stm_retry_tests {
         let (res, stats) = eval_foo(&mut task, &tx).await;
         assert!(res.is_ok());
         assert_eq!(stats.attempts, 2, "first commit rejected, re-run commits");
+        assert_eq!(stats.conflicts, 1);
         assert_result_is_ten!(task);
         tx.send(CommitProtocol::Close)
             .expect("committer channel closed");
