@@ -758,17 +758,20 @@ mod tests {
         assert!(parses.over_budget());
     }
 
+    /// A budget sized to exactly the steps the first derivation costs
+    /// admits that one derivation and then runs out, proving a partial —
+    /// not merely empty — enumeration.
     #[test]
     fn an_exhausted_budget_stops_enumeration() {
         let unbounded = ambiguous(usize::MAX);
-        let scan = unbounded.tokenize("a b c d").unwrap();
-        let chart_budget = Budget::new(usize::MAX);
-        Chart::build(&unbounded, &scan, &chart_budget);
-        let chart_steps = chart_budget.used();
+        let mut parses = parse(&unbounded, "a b c d");
+        parses.next().unwrap();
+        let steps_to_first = parses.budget.used();
 
-        let g = ambiguous(chart_steps + 2);
+        let g = ambiguous(steps_to_first);
         let mut parses = parse(&g, "a b c d");
-        assert!(parses.by_ref().count() < 5);
+        let n = parses.by_ref().count();
+        assert!((1..5).contains(&n), "{n}");
         assert!(parses.over_budget());
     }
 
