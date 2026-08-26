@@ -75,10 +75,9 @@ const BAG: (&str, &str) = (
 "# },
 );
 
-/// `doc/efun/parse_command.md`'s example master, verbatim except that
-/// `pluralize_word` spells out its vowel check (`member_array` is not an
-/// efun in this driver) and holds every `word[a..b]` slice in a `mixed`,
-/// since this compiler types a range-indexed string as `string *`.
+/// `doc/efun/parse_command.md`'s example master, verbatim; its `word[a..b]`
+/// slices are `mixed` because this compiler types a range-indexed string as
+/// `string *`.
 const ENGLISH_MASTER: &str = indoc! { r#"
     string parse_command_all_word() { return "all"; }
 

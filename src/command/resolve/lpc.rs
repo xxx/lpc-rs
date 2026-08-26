@@ -56,9 +56,9 @@ impl<'a> LpcVocabulary<'a> {
             .map(Some)
     }
 
-    /// The string members of an array result; anything else is nothing. The
-    /// array arm's only failure is the world losing a cell it just handed
-    /// us, a driver bug that must surface rather than read as "no strings".
+    /// The string members of an array result; anything else is nothing. Do
+    /// not swallow the array arm's error — its only cause is a cell the world
+    /// just handed us going missing, a driver bug.
     fn strings(&self, value: Option<LpcRef>) -> Result<Vec<String>> {
         match value {
             Some(array @ LpcRef::Array(_)) => array.with_array(self.ctx.txn(), |a| {

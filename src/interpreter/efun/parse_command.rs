@@ -62,16 +62,15 @@ pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> 
         .collect::<Result<Vec<_>>>()?;
     let callers_list = array_lists.iter().flatten().next().cloned();
 
-    // A pattern with no noun capture needs no candidate resolution, so no
-    // master apply runs for it — only the noun path pays for `Resolver::new`'s
-    // defaults lookup.
+    // A pattern with no noun capture skips the resolver, so no master apply
+    // runs for it.
     let has_noun = compiled
         .kinds
         .iter()
         .any(|kind| kind.resolver_kind().is_some());
     let matched = if has_noun {
-        // Boxed so the borrowed future does not join the stack of `call_efun`'s
-        // single unboxed union, which every other efun's future also shares.
+        // Boxed to stay out of `call_efun`'s unboxed future union, which every
+        // efun call pays for.
         Box::pin(resolve_nouns(
             context.task_context(),
             scope,
@@ -127,10 +126,9 @@ async fn resolve_nouns(
     Ok(None)
 }
 
-/// Every parse of `cmd` under `grammar`, tried in turn, taking each
-/// capture's value directly with [`native::plain_value`] — no candidate,
-/// so no vocabulary and no master apply. Only reached when the pattern has
-/// no noun capture.
+/// Every parse of `cmd` under `grammar`, tried in turn, each capture valued
+/// by [`native::plain_value`]; for a pattern with no noun capture, so no
+/// master apply runs.
 fn plain_matches(grammar: &Grammar, cmd: &str) -> Option<Vec<LpcRef>> {
     parse(grammar, cmd).find_map(|parsed| {
         native::captures(&parsed)?
@@ -177,8 +175,8 @@ fn deep_scope(txn: &TxnHandle, root: &Arc<Process>) -> Vec<Arc<Process>> {
 }
 
 /// The string members of the array in `slot`'s destination, or `None` when
-/// it holds no array. A destination that is an array but whose contents the
-/// world has lost is a driver bug and surfaces as an error, not `None`.
+/// it holds no array; an array whose contents the world has lost is an
+/// error, not `None` — a driver bug must surface.
 fn preposition_list<const N: usize>(
     context: &EfunContext<'_, N>,
     slot: usize,
