@@ -1,10 +1,245 @@
 //! DGD's `parse_string` grammar text: its lexer and rule parser, its regex
-//! dialect translated to `regex-automata` syntax, and (Task 4) the compiler
-//! onto the engine's builder with the grammar cache.
+//! dialect translated to `regex-automata` syntax, and the compiler onto the
+//! engine's builder with the grammar cache.
 
-use std::{fmt, iter::Peekable, str::CharIndices};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    fmt,
+    iter::Peekable,
+    str::CharIndices,
+    sync::{Arc, LazyLock, Mutex, PoisonError},
+};
 
-use crate::command::grammar::GrammarError;
+use indexmap::IndexMap;
+
+use crate::command::grammar::{
+    Element, Grammar, GrammarBuilder, GrammarError, ProdId, TokenClass, nt, tok,
+};
+
+/// Derivations pulled per `parse_string` call before it gives up.
+pub const MAX_PARSES: usize = 64;
+/// Steps one `parse_string` parse may spend; see `Options::max_steps`.
+pub const MAX_STEPS: usize = 1 << 20;
+/// Compiled grammars kept, least recently used first out.
+pub const GRAMMAR_CACHE: usize = 64;
+
+/// A grammar text compiled for the engine.
+#[derive(Debug)]
+pub struct Compiled {
+    /// The built grammar.
+    pub grammar: Arc<Grammar>,
+    /// The `? func` action of each production, by `ProdId`; productions the
+    /// builtins injected have none.
+    pub actions: Vec<Option<String>>,
+}
+
+impl Compiled {
+    /// The action attached to `prod`, if any.
+    pub fn action(&self, prod: ProdId) -> Option<&str> {
+        self.actions.get(prod.0 as usize).and_then(Option::as_deref)
+    }
+}
+
+/// Compile a grammar text, uncached.
+pub fn compile(text: &str) -> Result<Compiled, DgdError> {
+    emit(parse_rules(text)?)
+}
+
+/// Compile a grammar text through the cache; only successes are cached.
+pub fn compile_cached(text: &str) -> Result<Arc<Compiled>, DgdError> {
+    if let Some(hit) = lock().get(text) {
+        return Ok(hit);
+    }
+    let compiled = Arc::new(compile(text)?);
+    lock().insert(text, compiled.clone());
+    Ok(compiled)
+}
+
+static GRAMMARS: LazyLock<Mutex<Lru>> = LazyLock::new(|| Mutex::new(Lru::new(GRAMMAR_CACHE)));
+
+/// The cache; a poisoned lock holds a consistent map, so it is reused.
+fn lock() -> std::sync::MutexGuard<'static, Lru> {
+    GRAMMARS.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Compiled grammars by text, most recently used last.
+#[derive(Debug)]
+struct Lru {
+    capacity: usize,
+    entries: IndexMap<String, Arc<Compiled>>,
+}
+
+impl Lru {
+    fn new(capacity: usize) -> Self {
+        Lru {
+            capacity,
+            entries: IndexMap::new(),
+        }
+    }
+
+    /// The entry for `text`, moved to most recent.
+    fn get(&mut self, text: &str) -> Option<Arc<Compiled>> {
+        let hit = self.entries.shift_remove(text)?;
+        self.entries.insert(text.to_owned(), hit.clone());
+        Some(hit)
+    }
+
+    /// Insert as most recent, dropping the least recent at capacity.
+    fn insert(&mut self, text: &str, compiled: Arc<Compiled>) {
+        if self.entries.shift_remove(text).is_none() && self.entries.len() >= self.capacity {
+            self.entries.shift_remove_index(0);
+        }
+        self.entries.insert(text.to_owned(), compiled);
+    }
+}
+
+/// Build the engine's grammar from parsed rules.
+fn emit(rules: Rules) -> Result<Compiled, DgdError> {
+    if rules.token_rules.is_empty() {
+        return Err(DgdError::NoTokens);
+    }
+    let Some(start) = rules.productions.first() else {
+        return Err(DgdError::NoStartingRule);
+    };
+    check_redefinitions(&rules)?;
+
+    let reachable = reachable_productions(&rules.productions, &start.lhs);
+    let mut b = GrammarBuilder::new();
+
+    // String constants are token rules ahead of every regex rule: the
+    // earliest rule wins a tie, which is DGD's precedence for them.
+    let mut constants: HashMap<&str, TokenClass> = HashMap::new();
+    for constant in rules
+        .productions
+        .iter()
+        .flat_map(|p| p.rhs.iter())
+        .filter_map(|e| match e {
+            RhsText::Constant(text) => Some(text.as_str()),
+            RhsText::Symbol(_) => None,
+        })
+    {
+        if !constants.contains_key(constant) {
+            let class = b.token(&format!("'{constant}'"), &regex::escape(constant));
+            constants.insert(constant, class);
+        }
+    }
+
+    let mut token_classes: HashMap<&str, Vec<TokenClass>> = HashMap::new();
+    for rule in &rules.token_rules {
+        let skip = rule.name == "whitespace";
+        let class = match (&rule.pattern, skip) {
+            (TokenPattern::Regex(p), false) => b.token(&rule.name, p),
+            (TokenPattern::Regex(p), true) => b.skip_token(&rule.name, p),
+            (TokenPattern::Nomatch, false) => b.nomatch(&rule.name),
+            (TokenPattern::Nomatch, true) => b.skip_nomatch(&rule.name),
+        };
+        token_classes
+            .entry(rule.name.as_str())
+            .or_default()
+            .push(class);
+    }
+
+    let production_names: HashSet<&str> =
+        rules.productions.iter().map(|p| p.lhs.as_str()).collect();
+    let mut token_symbols: HashMap<String, Element> = HashMap::new();
+    let mut symbol = |b: &mut GrammarBuilder, name: &str| -> Element {
+        if production_names.contains(name) {
+            return nt(b.nonterminal(name));
+        }
+        if let Some(element) = token_symbols.get(name) {
+            return element.clone();
+        }
+        let element = match token_classes.get(name).map(Vec::as_slice) {
+            Some([class]) => tok(*class),
+            Some(classes) => nt(b.alternatives(classes.iter().map(|c| tok(*c)))),
+            None => nt(b.nonterminal(name)),
+        };
+        token_symbols.insert(name.to_owned(), element.clone());
+        element
+    };
+
+    let mut actions: Vec<Option<String>> = Vec::new();
+    let start_nt = b.nonterminal(&start.lhs);
+    for production in rules
+        .productions
+        .iter()
+        .filter(|p| reachable.contains(p.lhs.as_str()))
+    {
+        let lhs = b.nonterminal(&production.lhs);
+        let rhs: Vec<Element> = production
+            .rhs
+            .iter()
+            .map(|e| match e {
+                RhsText::Constant(text) => tok(constants[text.as_str()]),
+                RhsText::Symbol(name) => symbol(&mut b, name),
+            })
+            .collect();
+        let id = b.production(lhs, rhs);
+        let slot = id.0 as usize;
+        if actions.len() <= slot {
+            actions.resize(slot + 1, None);
+        }
+        actions[slot] = production.action.clone();
+    }
+    b.start(start_nt);
+    b.max_parses(MAX_PARSES);
+    b.max_steps(MAX_STEPS);
+    Ok(Compiled {
+        grammar: Arc::new(b.build()?),
+        actions,
+    })
+}
+
+/// The later of a token rule and a production rule sharing a name.
+fn check_redefinitions(rules: &Rules) -> Result<(), DgdError> {
+    let tokens: HashMap<&str, usize> = rules
+        .token_rules
+        .iter()
+        .map(|r| (r.name.as_str(), r.number))
+        .collect();
+    let productions: HashMap<&str, usize> = rules
+        .productions
+        .iter()
+        .map(|p| (p.lhs.as_str(), p.number))
+        .collect();
+    let mut clashes: Vec<(usize, &'static str)> = tokens
+        .iter()
+        .filter_map(|(name, &token_number)| {
+            let &production_number = productions.get(name)?;
+            Some(if token_number < production_number {
+                (production_number, "token")
+            } else {
+                (token_number, "production")
+            })
+        })
+        .collect();
+    clashes.sort_unstable();
+    match clashes.first() {
+        Some(&(number, kind)) => Err(DgdError::Redefined { number, kind }),
+        None => Ok(()),
+    }
+}
+
+/// The production names reachable from `start` through right-hand sides.
+fn reachable_productions<'r>(
+    productions: &'r [ProductionText],
+    start: &'r str,
+) -> HashSet<&'r str> {
+    let mut reachable = HashSet::from([start]);
+    let mut queue = VecDeque::from([start]);
+    while let Some(name) = queue.pop_front() {
+        for production in productions.iter().filter(|p| p.lhs == name) {
+            for element in &production.rhs {
+                if let RhsText::Symbol(next) = element
+                    && reachable.insert(next.as_str())
+                {
+                    queue.push_back(next.as_str());
+                }
+            }
+        }
+    }
+    reachable
+}
 
 /// Why a grammar text failed to compile.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -187,10 +422,6 @@ fn delimited(
 }
 
 /// Parse a grammar text into its rules; the first fault is the error.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "consumed by the emitter (Task 4)")
-)]
 pub(crate) fn parse_rules(text: &str) -> Result<Rules, DgdError> {
     let pieces = lex(text);
     let mut parser = RuleParser {
@@ -638,5 +869,163 @@ mod tests {
         assert_eq!(hit("dx{2}"), Some(5));
         assert_eq!(hit("d.{2}"), Some(5));
         assert_eq!(hit("5x{2}"), None);
+    }
+
+    use crate::command::grammar::parse;
+
+    fn compiled(text: &str) -> Compiled {
+        compile(text).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    /// The token texts of the first parse, with the action name of the root.
+    fn first_parse(text: &str, input: &str) -> Option<(Vec<String>, Option<String>)> {
+        let c = compiled(text);
+        let p = parse(&c.grammar, input).next()?;
+        let tokens = (0..p.tokens().len())
+            .map(|i| p.token_text(i).to_owned())
+            .collect();
+        Some((tokens, c.action(p.root().production).map(str::to_owned)))
+    }
+
+    #[test]
+    fn a_string_constant_beats_a_regex_of_equal_length() {
+        let g = "whitespace = /[ ]+/ word = /[a-z]+/ S: 'to' word";
+        assert!(first_parse(g, "to me").is_some());
+        // `word` never matches "to": the constant's rule wins the tie.
+        let g = "whitespace = /[ ]+/ word = /[a-z]+/ S: word word T: 'to'";
+        assert!(first_parse(g, "to me").is_none());
+    }
+
+    #[test]
+    fn a_longer_regex_match_beats_a_string_constant() {
+        let g = "whitespace = /[ ]+/ word = /[a-z]+/ S: word T: 'to'";
+        assert!(first_parse(g, "tome").is_some());
+    }
+
+    #[test]
+    fn the_first_production_is_the_start() {
+        let g = "w = /[a-z]+/ S: w w T: w";
+        assert!(first_parse(g, "a").is_none());
+        let g = "w = /[a-z]+/ T: w S: w w";
+        assert!(first_parse(g, "a").is_some());
+    }
+
+    #[test]
+    fn whitespace_rules_skip_and_several_may_exist() {
+        let g = "whitespace = /[ ]+/ whitespace = /,/ w = /[a-z]+/ S: w w";
+        assert_eq!(
+            first_parse(g, "a, b").unwrap().0,
+            vec!["a".to_owned(), "b".to_owned()]
+        );
+    }
+
+    #[test]
+    fn two_rules_for_one_token_name_both_match_the_symbol() {
+        let g = "num = /[0-9]+/ num = /[a-f]+/ S: num num";
+        assert!(first_parse(g, "12ab").is_some());
+    }
+
+    #[test]
+    fn a_nomatch_rule_compiles_and_a_whitespace_nomatch_skips() {
+        let g = "w = /[a-z]+/ rest = nomatch S: w rest";
+        assert_eq!(
+            first_parse(g, "ab!?").unwrap().0,
+            vec!["ab".to_owned(), "!?".to_owned()]
+        );
+        let g = "w = /[a-z]+/ whitespace = nomatch S: w w";
+        assert_eq!(
+            first_parse(g, "ab!?cd").unwrap().0,
+            vec!["ab".to_owned(), "cd".to_owned()]
+        );
+    }
+
+    #[test]
+    fn actions_are_recorded_by_production() {
+        let (_, action) = first_parse("w = /a/ S: w ? handle", "a").unwrap();
+        assert_eq!(action.as_deref(), Some("handle"));
+        let (_, action) = first_parse("w = /a/ S: w", "a").unwrap();
+        assert_eq!(action, None);
+    }
+
+    #[test]
+    fn unreachable_productions_are_dropped_with_their_dangling_symbols() {
+        let g = "w = /a/ S: w Orphan: nowhere";
+        assert!(first_parse(g, "a").is_some());
+    }
+
+    #[test]
+    fn a_reachable_undefined_symbol_is_the_engines_error() {
+        let e = compile("w = /a/ S: nowhere").unwrap_err();
+        assert!(
+            matches!(
+                e,
+                DgdError::Grammar(GrammarError::UnknownNonTerminal { .. })
+            ),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn a_name_defined_both_ways_is_reported_at_the_later_rule() {
+        assert_eq!(
+            compile("w = /a/ w: w").unwrap_err().to_string(),
+            "Rule 2 previously defined as token rule"
+        );
+        assert_eq!(
+            compile("S: w w = /a/ S = /b/").unwrap_err().to_string(),
+            "Rule 3 previously defined as production rule"
+        );
+    }
+
+    #[test]
+    fn missing_tokens_and_missing_start_are_reported() {
+        assert_eq!(compile("S: 'a'").unwrap_err().to_string(), "No tokens");
+        assert_eq!(
+            compile("w = /a/").unwrap_err().to_string(),
+            "No starting rule"
+        );
+        assert_eq!(compile("").unwrap_err().to_string(), "No tokens");
+    }
+
+    #[test]
+    fn a_bad_regex_is_the_engines_error() {
+        let e = compile("w = /a/ x = /[/ S: w").unwrap_err().to_string();
+        assert_eq!(e, "Rule 2: malformed regular expression");
+    }
+
+    #[test]
+    fn the_options_are_the_constants() {
+        let c = compiled("w = /a/ S: w");
+        assert_eq!(c.grammar.options().max_parses, MAX_PARSES);
+        assert_eq!(c.grammar.options().max_steps, MAX_STEPS);
+        assert!(!c.grammar.options().case_insensitive);
+    }
+
+    #[test]
+    fn the_cache_returns_the_same_build_for_the_same_text() {
+        let a = compile_cached("w = /a/ S: w").unwrap();
+        let b = compile_cached("w = /a/ S: w").unwrap();
+        assert!(Arc::ptr_eq(&a, &b));
+    }
+
+    #[test]
+    fn a_malformed_grammar_is_not_cached() {
+        assert!(compile_cached("w = ").is_err());
+        assert!(compile_cached("w = ").is_err());
+    }
+
+    #[test]
+    fn the_lru_evicts_the_least_recently_used_text() {
+        let mut lru = Lru::new(2);
+        let one = Arc::new(compiled("w = /a/ S: w"));
+        let two = Arc::new(compiled("w = /b/ S: w"));
+        let three = Arc::new(compiled("w = /c/ S: w"));
+        lru.insert("one", one.clone());
+        lru.insert("two", two.clone());
+        assert!(lru.get("one").is_some());
+        lru.insert("three", three);
+        assert!(lru.get("two").is_none());
+        assert!(lru.get("one").is_some());
+        assert!(lru.get("three").is_some());
     }
 }
