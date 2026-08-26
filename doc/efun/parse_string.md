@@ -17,7 +17,7 @@ A token rule is `name = /regexp/` or `name = nomatch`. The regexp dialect:
 
 | syntax | matches |
 |---|---|
-| `c` | the character `c`, for any `c` but `. [ ] \ * + ? ( ) \| /` |
+| `c` | the character `c`, for any `c` but `. [ \ * + ? ( ) \| /` |
 | `\c` | the character `c`, including those |
 | `.` | any single character, newline included |
 | `[set]`, `[^set]` | a character in, or not in, the set: single characters and ranges like `a-z`; `\` escapes `]`, `^`, `-`, `\` |
@@ -25,6 +25,8 @@ A token rule is `name = /regexp/` or `name = nomatch`. The regexp dialect:
 | `ab` | `a` then `b` |
 | `a\|b` | `a` or `b` |
 | `(a)` | grouping |
+
+`]` outside a set is a literal.
 
 At each position the longest match across every rule wins; on a tie the rule
 written first does. The name `whitespace` is special: its matches are dropped
@@ -38,7 +40,8 @@ A production rule is `name : rhs`, `rhs` zero or more symbols — token names,
 production names — and `'string constants'` (`\'` for a quote inside). A string
 constant matches that text exactly and takes precedence over any regexp rule of
 the same length. The first production rule's name is the start symbol;
-production rules unreachable from it are ignored, and every symbol a reachable
+production rules unreachable from it are ignored, though their string
+constants still take part in tokenization, and every symbol a reachable
 rule uses must be defined. Matching is case-sensitive.
 
 A production may end in `? func`: a semantic action, described below. A
@@ -121,6 +124,7 @@ texts stay compiled; a text not among them is compiled again on its next use.
 | `alternatives` keeps N extra alternatives per branch point, nested as sub-arrays | 0 only; anything else is an error |
 | alternatives ordered by the topmost differing rule | the engine's order: productions as written, longest span first |
 | the grammar is compiled per object, one at a time | one driver-wide cache of 64 texts |
+| automata built incrementally per sentence seen | built whole, once per text |
 | `Rule N is too long`, `Grammar too large`, `regular expression too large` | no size limits; the parse budget bounds the work |
 | a runaway parse is bounded by ticks | the step budget |
 | bytes | UTF-8 characters |
