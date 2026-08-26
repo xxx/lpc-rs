@@ -6,7 +6,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     fmt,
     iter::Peekable,
-    str::CharIndices,
+    str::{CharIndices, Chars},
     sync::{Arc, LazyLock, Mutex, PoisonError},
 };
 
@@ -80,8 +80,8 @@ impl Lru {
 
     /// The entry for `text`, moved to most recent.
     fn get(&mut self, text: &str) -> Option<Arc<Compiled>> {
-        let hit = self.entries.shift_remove(text)?;
-        self.entries.insert(text.to_owned(), hit.clone());
+        let (_, key, hit) = self.entries.shift_remove_full(text)?;
+        self.entries.insert(key, hit.clone());
         Some(hit)
     }
 
@@ -171,6 +171,8 @@ fn emit(rules: Rules) -> Result<Compiled, DgdError> {
             .rhs
             .iter()
             .map(|e| match e {
+                // Total: `constants` was filled from every production above, not just the
+                // reachable ones being emitted here.
                 RhsText::Constant(text) => tok(constants[text.as_str()]),
                 RhsText::Symbol(name) => symbol(&mut b, name),
             })
@@ -293,7 +295,7 @@ impl From<GrammarError> for DgdError {
 
 /// A token rule as written.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct TokenRuleText {
+struct TokenRuleText {
     /// The rule's number in text order, from 1.
     pub number: usize,
     /// The token's name.
@@ -304,7 +306,7 @@ pub(crate) struct TokenRuleText {
 
 /// A token rule's right-hand side.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum TokenPattern {
+enum TokenPattern {
     /// A regex, already translated to `regex-automata` syntax.
     Regex(String),
     /// `nomatch`.
@@ -313,7 +315,7 @@ pub(crate) enum TokenPattern {
 
 /// A production rule as written.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ProductionText {
+struct ProductionText {
     /// The rule's number in text order, from 1.
     pub number: usize,
     /// The symbol it defines.
@@ -326,7 +328,7 @@ pub(crate) struct ProductionText {
 
 /// One element of a production's right-hand side.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum RhsText {
+enum RhsText {
     /// A token or production name.
     Symbol(String),
     /// A `'string constant'`, unescaped.
@@ -335,7 +337,7 @@ pub(crate) enum RhsText {
 
 /// A grammar text, parsed but not yet built.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Rules {
+struct Rules {
     /// Every `name = …` rule, in text order.
     pub token_rules: Vec<TokenRuleText>,
     /// Every `name : …` rule, in text order.
@@ -423,7 +425,7 @@ fn delimited(
 }
 
 /// Parse a grammar text into its rules; the first fault is the error.
-pub(crate) fn parse_rules(text: &str) -> Result<Rules, DgdError> {
+fn parse_rules(text: &str) -> Result<Rules, DgdError> {
     let pieces = lex(text);
     let mut parser = RuleParser {
         pieces: &pieces,
@@ -577,7 +579,7 @@ impl RuleParser<'_> {
 /// Translate a DGD regex to `regex-automata` syntax: DGD's metacharacters
 /// are `. [ ] \ * + ? ( ) |`, everything else literal, `.` includes newline;
 /// `None` when the regex is malformed under DGD's rules.
-pub(crate) fn translate_regex(dgd: &str) -> Option<String> {
+fn translate_regex(dgd: &str) -> Option<String> {
     if dgd.is_empty() {
         return None;
     }
@@ -661,11 +663,8 @@ fn push_literal(out: &mut String, c: char) {
 
 /// Translate a `[set]` whose `[` was consumed: an optional leading `^`,
 /// then characters and `a-z` ranges, `\c` escaping any one; `None` for an
-/// empty or unterminated set.
-fn translate_set(
-    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
-    out: &mut String,
-) -> Option<()> {
+/// empty or unterminated set, or a range whose bounds are reversed.
+fn translate_set(chars: &mut Peekable<Chars<'_>>, out: &mut String) -> Option<()> {
     out.push('[');
     if chars.next_if_eq(&'^').is_some() {
         out.push('^');
@@ -690,6 +689,9 @@ fn translate_set(
                 }
                 hi => hi,
             };
+            if hi < member {
+                return None;
+            }
             out.push('-');
             push_set_member(out, hi);
         }
@@ -715,6 +717,7 @@ fn push_set_member(out: &mut String, c: char) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::command::grammar::parse;
 
     fn rules(text: &str) -> Rules {
         parse_rules(text).unwrap()
@@ -848,7 +851,7 @@ mod tests {
     #[test]
     fn malformed_regexes_are_rejected() {
         for bad in [
-            "", "*a", "(a", "a)", "a|", "|a", "(|a)", "[]", "[^]", "[a", r"a\", "a**",
+            "", "*a", "(a", "a)", "a|", "|a", "(|a)", "[]", "[^]", "[a", r"a\", "a**", "[z-a]",
         ] {
             assert_eq!(translate_regex(bad), None, "{bad:?}");
         }
@@ -871,8 +874,6 @@ mod tests {
         assert_eq!(hit("d.{2}"), Some(5));
         assert_eq!(hit("5x{2}"), None);
     }
-
-    use crate::command::grammar::parse;
 
     fn compiled(text: &str) -> Compiled {
         compile(text).unwrap_or_else(|e| panic!("{e}"))
@@ -1005,9 +1006,23 @@ mod tests {
     }
 
     #[test]
-    fn a_bad_regex_is_the_engines_error() {
+    fn a_malformed_regex_is_rejected_with_its_rule_number() {
         let e = compile("w = /a/ x = /[/ S: w").unwrap_err().to_string();
         assert_eq!(e, "Rule 2: malformed regular expression");
+    }
+
+    /// The translator doesn't cap nesting depth, but the engine's regex
+    /// parser has a fixed recursion limit — deep enough nesting reaches it
+    /// as a genuine `BadRegex`.
+    #[test]
+    fn a_regex_nested_past_the_engines_limit_is_its_error() {
+        let deep = format!("{}a{}", "(".repeat(300), ")".repeat(300));
+        assert!(translate_regex(&deep).is_some());
+        let e = compile(&format!("w = /{deep}/ S: w")).unwrap_err();
+        assert!(
+            matches!(&e, DgdError::Grammar(GrammarError::BadRegex { class, .. }) if class == "w"),
+            "{e}"
+        );
     }
 
     #[test]
