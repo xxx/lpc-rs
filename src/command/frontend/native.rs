@@ -1,6 +1,6 @@
-//! The native rule shape: an `add_rule` pattern in the `parse_command`
-//! dialect compiled to an engine grammar, and the handler's arguments taken
-//! from the parse's captures.
+//! The native rule shape: an `add_rule` or `parse_command` pattern compiled
+//! to an engine grammar, and the handler's arguments taken from the parse's
+//! captures.
 
 use std::{
     fmt,
@@ -11,8 +11,9 @@ use dashmap::DashMap;
 use ustr::Ustr;
 
 use crate::{
-    command::grammar::{
-        Element, Grammar, GrammarBuilder, GrammarError, Label, Parse, lit, nt, tok,
+    command::{
+        grammar::{Element, Grammar, GrammarBuilder, GrammarError, Label, Parse, lit, nt, tok},
+        resolve::Kind,
     },
     interpreter::{lpc_ref::LpcRef, lpc_string::LpcString},
 };
@@ -26,10 +27,18 @@ pub enum CaptureKind {
     Words = 1,
     /// `%d`: a run of digits, as an int.
     Number = 2,
+    /// `%o`: one or more words naming an object.
+    Object = 3,
+    /// `%l`: one or more words naming livings.
+    Living = 4,
+    /// `%i`: one or more words naming objects, with a numeral.
+    Items = 5,
+    /// `%p`: one or more words that are a preposition.
+    Preposition = 6,
 }
 
 /// The low bits of a label hold the kind; the slot sits above them.
-const KIND_BITS: u32 = 2;
+const KIND_BITS: u32 = 3;
 
 impl CaptureKind {
     /// The label for this capture in slot `slot`.
@@ -44,9 +53,24 @@ impl CaptureKind {
             0 => CaptureKind::Word,
             1 => CaptureKind::Words,
             2 => CaptureKind::Number,
+            3 => CaptureKind::Object,
+            4 => CaptureKind::Living,
+            5 => CaptureKind::Items,
+            6 => CaptureKind::Preposition,
             _ => return None,
         };
         Some((label.0 >> KIND_BITS, kind))
+    }
+
+    /// The resolver kind behind this capture, or `None` for a plain one.
+    pub fn resolver_kind(self) -> Option<Kind> {
+        match self {
+            CaptureKind::Object => Some(Kind::Object),
+            CaptureKind::Living => Some(Kind::Living),
+            CaptureKind::Items => Some(Kind::Items),
+            CaptureKind::Preposition => Some(Kind::Preposition),
+            CaptureKind::Word | CaptureKind::Words | CaptureKind::Number => None,
+        }
     }
 }
 
@@ -71,8 +95,6 @@ pub enum PatternError {
     BareCapture,
     /// A `%` capture letter this dialect does not have.
     UnknownCapture(char),
-    /// A `%o`/`%l`/`%i`/`%p` capture, which needs the noun resolver.
-    Unresolvable(char),
     /// A `/` not between two quoted words.
     BadAlternative,
     /// The engine rejected the built grammar.
@@ -91,14 +113,13 @@ impl fmt::Display for PatternError {
             PatternError::UnterminatedBracket => write!(f, "a `[` is not closed"),
             PatternError::EmptyWord => write!(f, "quotes and brackets must hold a word"),
             PatternError::NotOneWord(text) => write!(f, "`{text}` must be one word"),
-            PatternError::BareCapture => write!(f, "`%` must be followed by w, s or d"),
+            PatternError::BareCapture => write!(f, "`%` must be followed by w, s, d, o, l, i or p"),
             PatternError::UnknownCapture(c) => {
-                write!(f, "`%{c}` is not a capture; use %w, %s or %d")
+                write!(
+                    f,
+                    "`%{c}` is not a capture; use %w, %s, %d, %o, %l, %i or %p"
+                )
             }
-            PatternError::Unresolvable(c) => write!(
-                f,
-                "`%{c}` needs the noun resolver, which this driver does not have yet"
-            ),
             PatternError::BadAlternative => write!(f, "`/` must sit between quoted words"),
             PatternError::Grammar(e) => write!(f, "{e}"),
         }
@@ -107,28 +128,54 @@ impl fmt::Display for PatternError {
 
 impl std::error::Error for PatternError {}
 
-/// A compiled pattern: the verbs the pre-filter accepts and the grammar the
-/// line must parse against.
+/// A compiled pattern: the verbs the pre-filter accepts, the grammar the
+/// line must parse against, and the kind of each capture by slot.
 #[derive(Clone, Debug)]
 pub struct Compiled {
-    /// The leading verb alternatives, in pattern order; never empty.
+    /// The leading verb alternatives, in pattern order; empty for a
+    /// `compile_pattern` pattern.
     pub verbs: Arc<[Ustr]>,
-    /// `S → verb elements…`, shared by every rule registered from this pattern.
+    /// `S → elements…`, shared by every rule registered from this pattern.
     pub grammar: Arc<Grammar>,
+    /// The kind of each `%` capture, in slot order.
+    pub kinds: Vec<CaptureKind>,
 }
 
-// The key is the pattern text alone; it must also carry the preposition set
-// once %p exists.
+/// Whether the first element must be a quoted verb.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Verb {
+    /// `add_rule`: the verb is the dispatch pre-filter.
+    Required,
+    /// `parse_command`: the verb was stripped before the call.
+    Optional,
+}
+
+// The same text is a different grammar under each dialect.
+static RULES: LazyLock<DashMap<String, Compiled>> = LazyLock::new(DashMap::new);
 static PATTERNS: LazyLock<DashMap<String, Compiled>> = LazyLock::new(DashMap::new);
 
-/// Compile `pattern`, once per text; only successes are cached, so a
-/// malformed pattern reports its fault on every call.
+/// Compile an `add_rule` pattern, once per text; only successes are cached,
+/// so a malformed pattern reports its fault on every call.
 pub fn compile(pattern: &str) -> Result<Compiled, PatternError> {
-    if let Some(hit) = PATTERNS.get(pattern) {
+    compile_in(&RULES, pattern, Verb::Required)
+}
+
+/// Compile a `parse_command` pattern, which needs no leading verb; cached
+/// like [`compile`].
+pub fn compile_pattern(pattern: &str) -> Result<Compiled, PatternError> {
+    compile_in(&PATTERNS, pattern, Verb::Optional)
+}
+
+fn compile_in(
+    cache: &DashMap<String, Compiled>,
+    pattern: &str,
+    verb: Verb,
+) -> Result<Compiled, PatternError> {
+    if let Some(hit) = cache.get(pattern) {
         return Ok(hit.clone());
     }
-    let compiled = build(&group(scan(pattern)?)?)?;
-    Ok(PATTERNS
+    let compiled = build(&group(scan(pattern)?, verb)?, verb)?;
+    Ok(cache
         .entry(pattern.to_owned())
         .or_insert_with(|| compiled)
         .clone())
@@ -207,7 +254,10 @@ fn capture_kind(letter: char) -> Result<CaptureKind, PatternError> {
         'w' => Ok(CaptureKind::Word),
         's' => Ok(CaptureKind::Words),
         'd' => Ok(CaptureKind::Number),
-        'o' | 'l' | 'i' | 'p' => Err(PatternError::Unresolvable(letter)),
+        'o' => Ok(CaptureKind::Object),
+        'l' => Ok(CaptureKind::Living),
+        'i' => Ok(CaptureKind::Items),
+        'p' => Ok(CaptureKind::Preposition),
         other => Err(PatternError::UnknownCapture(other)),
     }
 }
@@ -221,9 +271,9 @@ enum Group {
     Optional(String),
 }
 
-/// Join `/`-separated quoted words into one group; the first group must be
-/// the verb.
-fn group(pieces: Vec<Piece>) -> Result<Vec<Group>, PatternError> {
+/// Join `/`-separated quoted words into one group; under [`Verb::Required`]
+/// the first group must be the verb.
+fn group(pieces: Vec<Piece>, verb: Verb) -> Result<Vec<Group>, PatternError> {
     let mut groups: Vec<Group> = Vec::new();
     // The words a `/` is joining, awaiting the word on its right.
     let mut pending: Option<Vec<String>> = None;
@@ -263,7 +313,8 @@ fn group(pieces: Vec<Piece>) -> Result<Vec<Group>, PatternError> {
     match groups.first() {
         None => Err(PatternError::Empty),
         Some(Group::Words(_)) => Ok(groups),
-        Some(_) => Err(PatternError::NoVerb),
+        Some(_) if verb == Verb::Required => Err(PatternError::NoVerb),
+        Some(_) => Ok(groups),
     }
 }
 
@@ -280,15 +331,17 @@ fn dedup_words(words: &[String]) -> Vec<&String> {
 
 /// `S → group…` over plain words, one production; captures are labelled
 /// with their slot and kind.
-fn build(groups: &[Group]) -> Result<Compiled, PatternError> {
-    let Some(Group::Words(verbs)) = groups.first() else {
-        return Err(PatternError::NoVerb);
+fn build(groups: &[Group], verb: Verb) -> Result<Compiled, PatternError> {
+    let verbs: Vec<&String> = match (verb, groups.first()) {
+        (Verb::Required, Some(Group::Words(words))) => dedup_words(words),
+        (Verb::Required, _) => return Err(PatternError::NoVerb),
+        (Verb::Optional, _) => Vec::new(),
     };
-    let verbs = dedup_words(verbs);
     let mut b = GrammarBuilder::new();
     let s = b.nonterminal("S");
     let words = b.words_tokens();
-    let mut slot = 0;
+    let mut kinds: Vec<CaptureKind> = Vec::new();
+    let mut slot: u32 = 0;
     let mut rhs: Vec<Element> = Vec::with_capacity(groups.len());
     for group in groups {
         rhs.push(match group {
@@ -305,8 +358,13 @@ fn build(groups: &[Group]) -> Result<Compiled, PatternError> {
                     CaptureKind::Word => nt(b.word_like(&words)),
                     CaptureKind::Words => nt(b.words_star(&words)),
                     CaptureKind::Number => tok(words.number),
+                    CaptureKind::Object
+                    | CaptureKind::Living
+                    | CaptureKind::Items
+                    | CaptureKind::Preposition => nt(b.words_plus(&words)),
                 };
                 let labeled = element.labeled(kind.label(slot));
+                kinds.push(*kind);
                 slot += 1;
                 labeled
             }
@@ -318,23 +376,59 @@ fn build(groups: &[Group]) -> Result<Compiled, PatternError> {
     Ok(Compiled {
         verbs: verbs.iter().map(|v| Ustr::from(v.as_str())).collect(),
         grammar: Arc::new(grammar),
+        kinds,
     })
 }
 
-/// The handler's arguments, one per capture in slot order; `None` when a
-/// `%d` does not fit an int, which makes the rule no match.
-pub fn arguments(parse: &Parse) -> Option<Vec<LpcRef>> {
-    let mut captures: Vec<(u32, LpcRef)> = Vec::new();
+/// One `%` capture of a parse.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Capture {
+    /// Its position among the pattern's captures.
+    pub slot: u32,
+    /// What it yields.
+    pub kind: CaptureKind,
+    /// The captured input, spacing intact.
+    pub text: String,
+}
+
+/// The parse's captures in slot order; `None` when a `%d` does not fit an
+/// int, which makes the parse no match.
+pub fn captures(parse: &Parse) -> Option<Vec<Capture>> {
+    let mut out: Vec<Capture> = Vec::new();
     for (label, text) in parse.captures() {
         let (slot, kind) = CaptureKind::unpack(label)?;
-        let value = match kind {
-            CaptureKind::Word | CaptureKind::Words => LpcString::from(text).into(),
-            CaptureKind::Number => LpcRef::from(text.parse::<i64>().ok()?),
-        };
-        captures.push((slot, value));
+        if kind == CaptureKind::Number {
+            text.parse::<i64>().ok()?;
+        }
+        out.push(Capture {
+            slot,
+            kind,
+            text: text.to_owned(),
+        });
     }
-    captures.sort_by_key(|(slot, _)| *slot);
-    Some(captures.into_iter().map(|(_, value)| value).collect())
+    out.sort_by_key(|capture| capture.slot);
+    Some(out)
+}
+
+/// The value of a capture that needs no resolver: a string for `%w`/`%s`,
+/// an int for `%d`; `None` for a noun capture.
+pub fn plain_value(capture: &Capture) -> Option<LpcRef> {
+    match capture.kind {
+        CaptureKind::Word | CaptureKind::Words => {
+            Some(LpcString::from(capture.text.as_str()).into())
+        }
+        CaptureKind::Number => capture.text.parse::<i64>().ok().map(LpcRef::from),
+        CaptureKind::Object
+        | CaptureKind::Living
+        | CaptureKind::Items
+        | CaptureKind::Preposition => None,
+    }
+}
+
+/// The handler's arguments, one per capture in slot order; `None` when a
+/// `%d` does not fit an int or a capture needs the resolver.
+pub fn arguments(parse: &Parse) -> Option<Vec<LpcRef>> {
+    captures(parse)?.iter().map(plain_value).collect()
 }
 
 #[cfg(test)]
@@ -494,20 +588,6 @@ mod tests {
     }
 
     #[test]
-    fn resolver_captures_are_rejected_until_the_resolver_exists() {
-        for kind in ['o', 'l', 'i', 'p'] {
-            assert_eq!(
-                compile(&format!("'get' %{kind}")).unwrap_err(),
-                PatternError::Unresolvable(kind)
-            );
-        }
-        assert_eq!(
-            PatternError::Unresolvable('o').to_string(),
-            "`%o` needs the noun resolver, which this driver does not have yet"
-        );
-    }
-
-    #[test]
     fn every_error_displays_as_one_sentence_without_a_period() {
         let errors = [
             PatternError::Empty,
@@ -541,14 +621,116 @@ mod tests {
     }
 
     #[test]
+    fn resolver_kinds_compile_to_word_run_captures() {
+        let compiled = compile("'get' %i 'from' %o").unwrap();
+        assert_eq!(
+            compiled.kinds,
+            vec![CaptureKind::Items, CaptureKind::Object]
+        );
+        let parsed = parse(&compiled.grammar, "get red sword from old bag")
+            .next()
+            .unwrap();
+        let captures = captures(&parsed).unwrap();
+        assert_eq!(captures.len(), 2);
+        assert_eq!(
+            (
+                captures[0].slot,
+                captures[0].kind,
+                captures[0].text.as_str()
+            ),
+            (0, CaptureKind::Items, "red sword")
+        );
+        assert_eq!(
+            (
+                captures[1].slot,
+                captures[1].kind,
+                captures[1].text.as_str()
+            ),
+            (1, CaptureKind::Object, "old bag")
+        );
+        assert_eq!(
+            arguments(&parsed),
+            None,
+            "noun captures have no plain value"
+        );
+    }
+
+    #[test]
+    fn every_kind_letter_is_a_capture() {
+        let compiled = compile("'x' %w %s %d %o %l %i %p").unwrap();
+        assert_eq!(
+            compiled.kinds,
+            vec![
+                CaptureKind::Word,
+                CaptureKind::Words,
+                CaptureKind::Number,
+                CaptureKind::Object,
+                CaptureKind::Living,
+                CaptureKind::Items,
+                CaptureKind::Preposition,
+            ]
+        );
+        assert_eq!(compile("'x'").unwrap().kinds, vec![]);
+    }
+
+    #[test]
+    fn a_pattern_needs_no_verb_and_a_rule_still_does() {
+        let compiled = compile_pattern("[the] %i").unwrap();
+        assert!(compiled.verbs.is_empty());
+        assert_eq!(compiled.kinds, vec![CaptureKind::Items]);
+        let parsed = parse(&compiled.grammar, "the red sword").next().unwrap();
+        assert_eq!(captures(&parsed).unwrap()[0].text, "red sword");
+        assert!(parse(&compiled.grammar, "sword").next().is_some());
+
+        let with_verb = compile_pattern(" 'get' / 'take' %i ").unwrap();
+        assert!(with_verb.verbs.is_empty());
+        assert!(parse(&with_verb.grammar, "take sword").next().is_some());
+        assert!(parse(&with_verb.grammar, "sword").next().is_none());
+
+        assert_eq!(compile("%i").unwrap_err(), PatternError::NoVerb);
+        assert_eq!(compile_pattern("").unwrap_err(), PatternError::Empty);
+        assert_eq!(
+            compile_pattern("look").unwrap_err(),
+            PatternError::UnquotedWord("look".into())
+        );
+    }
+
+    #[test]
+    fn the_two_dialects_cache_separately() {
+        let rule = compile("'get' %i").unwrap();
+        let pattern = compile_pattern("'get' %i").unwrap();
+        assert!(!Arc::ptr_eq(&rule.grammar, &pattern.grammar));
+        assert!(Arc::ptr_eq(
+            &pattern.grammar,
+            &compile_pattern("'get' %i").unwrap().grammar
+        ));
+    }
+
+    #[test]
     fn a_label_round_trips_its_slot_and_kind() {
         for (slot, kind) in [
             (0, CaptureKind::Word),
             (7, CaptureKind::Words),
             (2, CaptureKind::Number),
+            (3, CaptureKind::Object),
+            (1, CaptureKind::Living),
+            (9, CaptureKind::Items),
+            (4, CaptureKind::Preposition),
         ] {
             assert_eq!(CaptureKind::unpack(kind.label(slot)), Some((slot, kind)));
         }
-        assert_eq!(CaptureKind::unpack(Label(3)), None);
+        assert_eq!(CaptureKind::unpack(Label(7)), None);
+    }
+
+    #[test]
+    fn capture_error_texts_list_every_letter() {
+        assert_eq!(
+            PatternError::BareCapture.to_string(),
+            "`%` must be followed by w, s, d, o, l, i or p"
+        );
+        assert_eq!(
+            PatternError::UnknownCapture('x').to_string(),
+            "`%x` is not a capture; use %w, %s, %d, %o, %l, %i or %p"
+        );
     }
 }

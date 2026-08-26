@@ -139,20 +139,6 @@ mod tests {
 
     #[tokio::test]
     async fn a_pattern_fault_reaches_the_caller_with_its_text() {
-        let unresolvable = indoc! { r#"
-            void create() {
-                set_this_player(this_object());
-                enable_commands();
-                add_rule("'get' %o", "do_get");
-            }
-            int do_get(mixed ob) { return 1; }
-        "# };
-        let err = error_of(unresolvable).await;
-        assert!(
-            err.contains("add_rule: `%o` needs the noun resolver"),
-            "{err}"
-        );
-
         let unterminated = indoc! { r#"
             void create() {
                 set_this_player(this_object());
@@ -163,6 +149,39 @@ mod tests {
         "# };
         let err = error_of(unterminated).await;
         assert!(err.contains("add_rule: a quote is not closed"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn a_noun_capture_pattern_registers_but_does_not_yet_match() {
+        let code = indoc! { r#"
+            int id; int matched;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                id = add_rule("'get' %o", "do_get");
+                matched = command("get sword");
+            }
+            int do_get(mixed ob) { return 1; }
+        "# };
+        let vm = Vm::new(test_config());
+        let proc = vm
+            .initialize_process_from_code("/player.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let rules = vm.global_state.committed_rules(&proc);
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].verb.as_str(), "get");
+        let LpcRef::Int(id) = vm.global_state.committed_global(&proc, 0u16) else {
+            panic!("add_rule returns an int");
+        };
+        assert!(id.0 > 0, "the rule id should be a positive int");
+        assert_eq!(
+            vm.global_state.committed_global(&proc, 1u16),
+            LpcRef::from(0),
+            "a noun capture has no plain value yet, so the rule cannot match"
+        );
     }
 
     #[tokio::test]
