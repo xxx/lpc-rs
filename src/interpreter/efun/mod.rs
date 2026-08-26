@@ -27,6 +27,7 @@ pub(crate) mod move_object;
 pub(crate) mod notify_fail;
 pub(crate) mod papplyv;
 pub(crate) mod parse_command;
+pub(crate) mod parse_string;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
 pub(crate) mod query_command;
@@ -347,6 +348,15 @@ efuns! {
         ],
         refs: from 3,
     },
+    parse_string => {
+        returns: LpcType::Mixed(true),
+        arity: (3, 1),
+        args: [
+            LpcType::String(false),
+            LpcType::String(false),
+            LpcType::Int(false),
+        ],
+    },
     query_call_out => {
         returns: LpcType::Mixed(true),
         arity: 1,
@@ -539,6 +549,7 @@ mod tests {
                 "objectp",
                 "papplyv",
                 "parse_command",
+                "parse_string",
                 "query_call_out",
                 "query_call_outs",
                 "query_command",

@@ -1,0 +1,231 @@
+//! `parse_string`, end to end: the result shape, actions and their
+//! blocking, the memo, `nomatch`, the errors.
+
+use indoc::indoc;
+
+use super::{fails, run, s};
+use crate::interpreter::lpc_ref::LpcRef;
+
+/// `doc/efun/parse_string.md`'s example, verbatim.
+const EXPRESSION: &str = indoc! { r#"
+    string grammar = "
+        whitespace = /[ \t]+/
+        number = /[0-9]+/
+        Expr: Term
+        Expr: Expr '+' Term ? add
+        Expr: Expr '-' Term ? subtract
+        Term: Factor
+        Term: Term '*' Factor ? multiply
+        Factor: number ? value
+        Factor: '(' Expr ')' ? group
+    ";
+
+    mixed *value(mixed *tree) { int n; sscanf(tree[0], "%d", n); return ({ n }); }
+    mixed *add(mixed *tree) { return ({ tree[0] + tree[2] }); }
+    mixed *subtract(mixed *tree) { return ({ tree[0] - tree[2] }); }
+    mixed *multiply(mixed *tree) { return ({ tree[0] * tree[2] }); }
+    mixed *group(mixed *tree) { return ({ tree[1] }); }
+
+    mixed *evaluate(string s) { return parse_string(grammar, s); }
+"# };
+
+#[tokio::test]
+async fn the_doc_example_evaluates_an_expression() {
+    let main = format!("{EXPRESSION}\nmixed *create() {{ return evaluate(\"2 + 3 * (4 - 1)\"); }}");
+    assert_eq!(run("", &[], &main).await, vec![LpcRef::from(11)]);
+}
+
+#[tokio::test]
+async fn without_actions_the_result_is_the_flat_token_list() {
+    let r = run("", &[], indoc! { r#"
+        mixed *create() { return parse_string("whitespace = /[ ]+/ w = /[a-z]+/ S: w T T: w w", "a b c"); }
+    "# }).await;
+    assert_eq!(r, vec![s("a"), s("b"), s("c")]);
+}
+
+#[tokio::test]
+async fn an_actions_array_is_spliced_and_a_nested_array_stays_nested() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
+        mixed *two(mixed *t) { return ({ "x", "y" }); }
+        mixed *nested(mixed *t) { return ({ ({ 1 }) }); }
+        mixed *create() {
+            mixed *flat = parse_string("w = /a/ S: T T T: w ? two", "aa");
+            mixed *deep = parse_string("w = /a/ S: w ? nested", "a");
+            return ({ sizeof(flat), flat[3], sizeof(deep), arrayp(deep[0]) });
+        }
+    "# },
+    )
+    .await;
+    assert_eq!(
+        r,
+        vec![LpcRef::from(4), s("y"), LpcRef::from(1), LpcRef::from(1)]
+    );
+}
+
+#[tokio::test]
+async fn a_blocked_derivation_yields_to_the_next() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
+        mixed reject(mixed *t) { return 0; }
+        mixed *keep(mixed *t) { return ({ "kept" }); }
+        mixed *create() { return parse_string("w = /a/ S: A ? reject S: B ? keep A: w B: w", "a"); }
+    "# },
+    )
+    .await;
+    assert_eq!(r, vec![s("kept")]);
+}
+
+#[tokio::test]
+async fn a_missing_action_function_blocks() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
+        mixed *create() { return ({ parse_string("w = /a/ S: w ? nowhere", "a") }); }
+    "# },
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(0)]);
+}
+
+#[tokio::test]
+async fn an_action_error_propagates_as_itself() {
+    let e = fails(
+        "",
+        &[],
+        indoc! { r#"
+        mixed *boom(mixed *t) { throw("boom"); return t; }
+        mixed *create() { return parse_string("w = /a/ S: w ? boom", "a"); }
+    "# },
+    )
+    .await;
+    assert!(e.contains("boom"), "{e}");
+    assert!(!e.contains("parse_string:"), "{e}");
+}
+
+#[tokio::test]
+async fn a_subtree_shared_by_two_derivations_runs_its_action_once() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
+        int calls;
+        mixed reject(mixed *t) { return 0; }
+        mixed *keep(mixed *t) { return t; }
+        mixed *count(mixed *t) { calls++; return t; }
+        mixed *create() {
+            parse_string("w = /a/ S: X ? reject S: X ? keep X: w ? count", "a");
+            return ({ calls });
+        }
+    "# },
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(1)]);
+}
+
+#[tokio::test]
+async fn nothing_parsing_and_untokenizable_input_return_zero() {
+    let r = run("", &[], indoc! { r#"
+        mixed *create() {
+            return ({ parse_string("w = /[a-z]+/ S: w w", "a"), parse_string("w = /[a-z]+/ S: w w", "a b") });
+        }
+    "# }).await;
+    assert_eq!(r, vec![LpcRef::from(0), LpcRef::from(0)]);
+}
+
+#[tokio::test]
+async fn a_nomatch_run_is_a_token() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
+        mixed *create() { return parse_string("w = /[a-z]+/ rest = nomatch S: w rest", "ab!?"); }
+    "# },
+    )
+    .await;
+    assert_eq!(r, vec![s("ab"), s("!?")]);
+}
+
+#[tokio::test]
+async fn alternatives_other_than_zero_are_rejected() {
+    for value in ["1", "-1"] {
+        let e = fails(
+            "",
+            &[],
+            &format!(
+                "mixed *create() {{ return parse_string(\"w = /a/ S: w\", \"a\", {value}); }}"
+            ),
+        )
+        .await;
+        assert!(
+            e.contains("parse_string: alternatives are not supported"),
+            "{e}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn zero_alternatives_is_the_default() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
+        mixed *create() { return parse_string("w = /a/ S: w", "a", 0); }
+    "# },
+    )
+    .await;
+    assert_eq!(r, vec![s("a")]);
+}
+
+#[tokio::test]
+async fn a_malformed_grammar_is_a_prefixed_error() {
+    let e = fails(
+        "",
+        &[],
+        indoc! { r#"
+        mixed *create() { return parse_string("w = ", "a"); }
+    "# },
+    )
+    .await;
+    assert!(
+        e.contains("parse_string: Rule 1: regular expression expected"),
+        "{e}"
+    );
+}
+
+#[tokio::test]
+async fn an_exhausted_budget_is_a_prefixed_error() {
+    let e = fails(
+        "",
+        &[],
+        indoc! { r#"
+        mixed *create() {
+            string input = "a";
+            int i;
+            for (i = 0; i < 1049; i++) input += " a";
+            return parse_string("whitespace = /[ ]+/ w = /a/ E: E E E: w", input);
+        }
+    "# },
+    )
+    .await;
+    assert!(e.contains("parse_string: parse budget exhausted"), "{e}");
+}
+
+#[tokio::test]
+async fn an_action_may_call_parse_string() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
+        mixed *inner(mixed *t) { return parse_string("w = /[a-z]+/ S: w", t[0]); }
+        mixed *create() { return parse_string("w = /[a-z]+/ S: w ? inner", "nested"); }
+    "# },
+    )
+    .await;
+    assert_eq!(r, vec![s("nested")]);
+}

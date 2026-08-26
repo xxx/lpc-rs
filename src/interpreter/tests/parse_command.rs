@@ -3,50 +3,8 @@
 
 use indoc::indoc;
 
-use crate::{
-    interpreter::{lpc_ref::LpcRef, lpc_string::LpcString, vm::Vm},
-    test_support::test_config,
-};
-
-fn s(text: &str) -> LpcRef {
-    LpcString::from(text).into()
-}
-
-/// Loads `master` as the master and each of `objects` at its path, then
-/// `/main.c` from `main`, whose `create()` returns an array; the array's
-/// members.
-async fn run(master: &str, objects: &[(&str, &str)], main: &str) -> Vec<LpcRef> {
-    let vm = Vm::new(test_config());
-    vm.initialize_process_from_code("/secure/master.c", master)
-        .await
-        .unwrap();
-    for (path, code) in objects {
-        vm.initialize_process_from_code(path, code).await.unwrap();
-    }
-    let proc = vm
-        .initialize_process_from_code("/main.c", main)
-        .await
-        .unwrap_or_else(|e| panic!("{}", e.diagnostic_string()));
-    let result = proc.result().expect("create() returns an array");
-    result
-        .with_array(proc.context.txn(), |a| a.iter().cloned().collect())
-        .unwrap()
-}
-
-/// The runtime error `/main.c`'s `create()` raises.
-async fn fails(master: &str, objects: &[(&str, &str)], main: &str) -> String {
-    let vm = Vm::new(test_config());
-    vm.initialize_process_from_code("/secure/master.c", master)
-        .await
-        .unwrap();
-    for (path, code) in objects {
-        vm.initialize_process_from_code(path, code).await.unwrap();
-    }
-    vm.initialize_process_from_code("/main.c", main)
-        .await
-        .unwrap_err()
-        .to_string()
-}
+use super::{fails, run, s};
+use crate::interpreter::lpc_ref::LpcRef;
 
 const SWORD: (&str, &str) = (
     "/sword.c",
