@@ -100,7 +100,7 @@ All raised as runtime errors prefixed `parse_string: `:
 | a fault in rule N | `Rule N: regular expression expected`, `Rule N: malformed regular expression`, `Rule N: malformed string constant`, `Rule N: function name expected`, `Rule N: extra nomatch rule`, `Rule N: unexpected token`, `Rule N: bad token` |
 | a name used both ways | `Rule N previously defined as token rule`, `Rule N previously defined as production rule` |
 | no token rule / no production rule | `No tokens` / `No starting rule` |
-| a reachable symbol defined nowhere | `nonterminal `name` has no production` |
+| a reachable symbol defined nowhere | ``nonterminal `name` has no production`` |
 | a regexp the engine cannot compile | the engine's message |
 | the parse ran past its budget | `parse budget exhausted` |
 
