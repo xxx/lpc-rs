@@ -82,7 +82,10 @@ fn player<const N: usize>(context: &EfunContext<'_, N>) -> Result<Arc<Process>> 
 
 /// Whether the rule's handler is this object's function named `name`.
 fn handles(rule: &Rule, name: &str) -> bool {
-    matches!(&rule.handler.address, FunctionAddress::Local(_, f) if f.prototype.name.as_ref() == name)
+    let Some(pointer) = rule.handler.pointer() else {
+        return false;
+    };
+    matches!(&pointer.address, FunctionAddress::Local(_, f) if f.prototype.name.as_ref() == name)
 }
 
 #[cfg(test)]

@@ -302,6 +302,9 @@ pub trait CommittedReader {
 
     /// The committed rule list of `process`, empty when absent.
     fn committed_rules(&self, process: &Process) -> RuleList;
+
+    /// The committed verb-attached rule list, empty when absent.
+    fn committed_verb_rules(&self) -> RuleList;
 }
 
 impl CommittedReader for Arc<GlobalState> {
@@ -370,6 +373,12 @@ impl CommittedReader for Arc<GlobalState> {
 
     fn committed_rules(&self, process: &Process) -> RuleList {
         self.committed_value(process.rules.id)
+            .and_then(WorldValue::into_rules)
+            .unwrap_or_else(|| Arc::from(Vec::new()))
+    }
+
+    fn committed_verb_rules(&self) -> RuleList {
+        self.committed_value(self.object_space.verb_rules.id)
             .and_then(WorldValue::into_rules)
             .unwrap_or_else(|| Arc::from(Vec::new()))
     }

@@ -9,7 +9,7 @@ use std::sync::{
 use ustr::Ustr;
 
 use crate::{
-    command::grammar::Grammar,
+    command::{frontend::native::Compiled, grammar::Grammar},
     interpreter::{function_type::function_ptr::FunctionPtr, process::Process, stm::TxnHandle},
 };
 
@@ -85,6 +85,82 @@ pub enum Frontend {
     AddAction,
     /// Registered by the `add_rule()` efun.
     Native,
+    /// Registered by the parser package's `parse_add_rule()`.
+    Parser,
+}
+
+/// How a rule runs once its grammar matches the line.
+#[derive(Clone, Debug)]
+pub enum Handler {
+    /// One function, called with the captures as arguments.
+    Pointer(Arc<FunctionPtr>),
+    /// The parser package's `can_`/`direct_`/`indirect_`/`do_` protocol.
+    Protocol(Arc<ParserRule>),
+}
+
+impl Handler {
+    /// The function pointer, for a `Pointer` handler.
+    pub fn pointer(&self) -> Option<&Arc<FunctionPtr>> {
+        match self {
+            Handler::Pointer(pointer) => Some(pointer),
+            Handler::Protocol(_) => None,
+        }
+    }
+
+    /// The parser rule, for a `Protocol` handler.
+    pub fn protocol(&self) -> Option<&Arc<ParserRule>> {
+        match self {
+            Handler::Protocol(rule) => Some(rule),
+            Handler::Pointer(_) => None,
+        }
+    }
+}
+
+/// One `parse_add_rule` rule: what its handlers are named and how the
+/// line's captures map onto their arguments.
+#[derive(Clone, Debug)]
+pub struct ParserRule {
+    /// The base verb the handlers are named for; a synonym keeps it.
+    pub verb: Ustr,
+    /// The rule as written.
+    pub rule: String,
+    /// The slug for `can_`, `direct_` and `indirect_` names (`at_obj`).
+    pub can_slug: Ustr,
+    /// The slug for `do_` names (`at_obs` for a many slot).
+    pub do_slug: Ustr,
+    /// The capturing tokens, in rule order.
+    pub slots: Vec<Slot>,
+    /// The rule compiled as a verbless native pattern.
+    pub compiled: Compiled,
+}
+
+/// A capturing token of a parser rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Slot {
+    /// `OBJ`: one object.
+    Object,
+    /// `OBS`: several objects, with a numeral.
+    Objects,
+    /// `LIV`: one living.
+    Living,
+    /// `LVS`: several livings, with a numeral.
+    Livings,
+    /// `WRD`: one word.
+    Word,
+    /// `STR`: one or more words.
+    Words,
+}
+
+impl Slot {
+    /// Whether the slot names objects.
+    pub fn is_object(self) -> bool {
+        !matches!(self, Slot::Word | Slot::Words)
+    }
+
+    /// Whether the slot may name several objects.
+    pub fn is_many(self) -> bool {
+        matches!(self, Slot::Objects | Slot::Livings)
+    }
 }
 
 /// One registered command rule.
@@ -100,8 +176,8 @@ pub struct Rule {
     pub matching: VerbMatch,
     /// The grammar the rest of the line must parse against.
     pub grammar: Arc<Grammar>,
-    /// Resolved through `prepare_call` at dispatch, as a call-out's is.
-    pub handler: Arc<FunctionPtr>,
+    /// How the rule runs once its grammar matches.
+    pub handler: Handler,
     /// The surface that registered this rule.
     pub source: Frontend,
 }
@@ -113,7 +189,7 @@ impl Rule {
         verb: Ustr,
         matching: VerbMatch,
         grammar: Arc<Grammar>,
-        handler: Arc<FunctionPtr>,
+        handler: Handler,
         source: Frontend,
     ) -> Rule {
         Rule {
@@ -236,9 +312,53 @@ pub(crate) mod tests {
             verb.into(),
             VerbMatch::Exact,
             grammar,
-            handler,
+            Handler::Pointer(handler),
             Frontend::AddAction,
         )
+    }
+
+    /// A parser rule for `verb` with rule text `text`, owned by `owner`.
+    pub(crate) fn parser_rule(owner: &Arc<Process>, verb: &str, text: &str) -> Rule {
+        let mut b = GrammarBuilder::new();
+        let s = b.nonterminal("S");
+        b.production(s, [lit(verb)]);
+        let grammar = Arc::new(b.build().unwrap());
+        let parser = Arc::new(ParserRule {
+            verb: verb.into(),
+            rule: text.to_owned(),
+            can_slug: text.to_lowercase().replace(' ', "_").into(),
+            do_slug: text.to_lowercase().replace(' ', "_").into(),
+            slots: Vec::new(),
+            compiled: crate::command::frontend::native::compile_pattern("%w").unwrap(),
+        });
+        Rule::new(
+            owner,
+            verb.into(),
+            VerbMatch::Exact,
+            grammar,
+            Handler::Protocol(parser),
+            Frontend::Parser,
+        )
+    }
+
+    #[test]
+    fn a_handler_is_one_kind_or_the_other() {
+        let owner = Arc::new(Process::default());
+        let pointer = rule(&owner, "look");
+        let protocol = parser_rule(&owner, "look", "at OBJ");
+        assert!(pointer.handler.pointer().is_some());
+        assert!(pointer.handler.protocol().is_none());
+        assert!(protocol.handler.pointer().is_none());
+        assert_eq!(protocol.handler.protocol().unwrap().rule, "at OBJ");
+    }
+
+    #[test]
+    fn slots_know_their_shape() {
+        assert!(Slot::Object.is_object() && !Slot::Object.is_many());
+        assert!(Slot::Objects.is_object() && Slot::Objects.is_many());
+        assert!(Slot::Living.is_object() && !Slot::Living.is_many());
+        assert!(Slot::Livings.is_object() && Slot::Livings.is_many());
+        assert!(!Slot::Word.is_object() && !Slot::Words.is_object());
     }
 
     #[test]

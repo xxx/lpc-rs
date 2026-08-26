@@ -12,7 +12,12 @@ use lpc_rs_utils::config::Config;
 use tracing::{debug, trace};
 
 use crate::{
-    interpreter::{process::Process, program::Program, stm::VarId},
+    command::registry::RuleList,
+    interpreter::{
+        process::Process,
+        program::Program,
+        stm::{SVar, VarId},
+    },
     util::process_builder::{compile_process_from_code, compile_process_from_path},
 };
 
@@ -45,6 +50,10 @@ pub struct ObjectSpace {
 
     /// Our configuration
     config: Arc<Config>,
+
+    /// The parser package's verb-attached rules, every verb object's, in
+    /// registration order; absent means none.
+    pub verb_rules: SVar<RuleList>,
 }
 
 impl ObjectSpace {
@@ -255,6 +264,7 @@ impl Default for ObjectSpace {
             clone_count: AtomicUsize::new(0),
             config: Config::default().into(),
             master_object: ArcSwapAny::from(None),
+            verb_rules: SVar::new(),
         }
     }
 }

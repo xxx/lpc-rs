@@ -421,10 +421,11 @@ impl Committer {
                     Vec::new()
                 }
             }
-            // A registered rule keeps its handler alive.
+            // A registered rule keeps its handler's function pointer alive.
             WorldValue::Rules(rules) => rules
                 .iter()
-                .map(|rule| MarkWork::Ref(LpcRef::Function(rule.handler.clone())))
+                .filter_map(|rule| rule.handler.pointer())
+                .map(|pointer| MarkWork::Ref(LpcRef::Function(pointer.clone())))
                 .collect(),
         }
     }

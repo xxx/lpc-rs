@@ -7,7 +7,7 @@ use ustr::Ustr;
 use crate::{
     command::{
         frontend::add_action::grammar_for,
-        registry::{Frontend, Rule, VerbMatch},
+        registry::{Frontend, Handler, Rule, VerbMatch},
     },
     interpreter::{
         efun::efun_context::EfunContext,
@@ -81,7 +81,7 @@ pub async fn add_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
                 verb,
                 matching,
                 grammar_for(verb.as_str(), matching),
-                handler.clone(),
+                Handler::Pointer(handler.clone()),
                 Frontend::AddAction,
             )
         })

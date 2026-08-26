@@ -4,7 +4,7 @@ use lpc_rs_errors::Result;
 use crate::{
     command::{
         frontend::native::compile,
-        registry::{Frontend, Rule, VerbMatch},
+        registry::{Frontend, Handler, Rule, VerbMatch},
     },
     interpreter::{
         efun::{add_action::handler_from, efun_context::EfunContext},
@@ -42,7 +42,7 @@ pub async fn add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         *first_verb,
         VerbMatch::Exact,
         compiled.grammar.clone(),
-        handler,
+        Handler::Pointer(handler),
         Frontend::Native,
     );
     let id = i64::try_from(first.id.0)
@@ -195,6 +195,12 @@ mod tests {
         "# };
         let err = error_of(code).await;
         assert!(err.contains("add_rule: no function `nope`"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn the_verb_attached_cell_starts_empty() {
+        let vm = Vm::new(test_config());
+        assert!(vm.global_state.committed_verb_rules().is_empty());
     }
 
     #[tokio::test]

@@ -137,7 +137,10 @@ async fn trial(
     let members = scope.members();
     let mut resolver: Option<Resolver<LpcVocabulary<'_>>> = None;
     for rule in candidates {
-        if !rule.handler.receiver_is_live(ctx.txn()) {
+        let Some(pointer) = rule.handler.pointer() else {
+            continue;
+        };
+        if !pointer.receiver_is_live(ctx.txn()) {
             continue;
         }
         let Some((args, reported)) =
@@ -153,7 +156,7 @@ async fn trial(
 
         let handler_ctx = ctx.clone().with_process(actor.clone());
         handler_ctx.this_player.store(Some(actor.clone()));
-        let Some(resolved) = rule.handler.prepare_call(&args, &handler_ctx).await? else {
+        let Some(resolved) = pointer.prepare_call(&args, &handler_ctx).await? else {
             continue;
         };
         let timeout = ctx.config().max_execution_time;

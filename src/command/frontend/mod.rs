@@ -71,5 +71,8 @@ pub(crate) async fn arguments_and_verb<'a>(
             }
             Ok(None)
         }
+        // The trial filters a `Protocol` handler out by its own dispatch
+        // arm before it ever reaches this call.
+        Frontend::Parser => Ok(None),
     }
 }
