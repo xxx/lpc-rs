@@ -89,8 +89,7 @@ impl ScopeWalker {
     }
 
     /// The "accessed outside of its file" diagnostic for `name`'s `symbol`,
-    /// or `None` when it's public or defined in the current file. Shared by
-    /// `visit_var` and `visit_ref`.
+    /// or `None` when it's public or defined in the current file.
     fn visibility_error(
         name: Ustr,
         symbol: &Symbol,

@@ -195,8 +195,7 @@ impl TreeWalker for SemanticCheckWalker {
             return Err(lpc_error!(node.span, "invalid call chain"));
         };
 
-        // `ref` aliases a variable's cell; a receiver puts that cell in
-        // another object's address space, which the VM cannot reach into.
+        // A `ref` would alias a cell in another object's address space.
         if (receiver.is_some() || name.as_str() == CALL_OTHER)
             && let Some(arg) = node
                 .arguments
@@ -290,8 +289,7 @@ impl TreeWalker for SemanticCheckWalker {
                 errors.push(e);
             }
 
-            // `call_other`'s `ref` mismatches are already the cross-object
-            // error above; every other direct call gets R1/R2 here.
+            // `call_other`'s `ref` arguments were reported as the cross-object error above.
             if name.as_str() != CALL_OTHER {
                 for (index, arg) in node.arguments.iter().enumerate() {
                     let is_ref_arg = matches!(arg, ExpressionNode::Ref(_));

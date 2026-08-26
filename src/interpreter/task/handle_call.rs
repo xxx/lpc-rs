@@ -92,7 +92,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         );
 
         trace!("copying arguments to new frame: {num_args}");
-        // Only an error path needs the span, so look it up there rather than on every call.
+        // Looked up only on the error path; do not hoist it onto every call.
         let caller_span = || {
             self.stack
                 .current_frame()

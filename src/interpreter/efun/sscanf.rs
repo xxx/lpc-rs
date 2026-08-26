@@ -132,11 +132,9 @@ fn scan_int(input: &str, radix: u32) -> Option<Scanned> {
     })
 }
 
-/// `strtod`-style: optional sign, digits, an optional `.`-and-digits part,
-/// an optional exponent (only when at least one digit follows `e`/`E` and
-/// its optional sign — otherwise the token ends before the `e`, as
-/// `strtod` leaves it unconsumed); `str::parse` is the sole validity check
-/// on the lexed slice, so no `inf`/`nan` word can ever reach it.
+/// `strtod`-style: optional sign, digits, optional `.`digits, and an exponent
+/// only when a digit follows `e`/`E` and its sign; `inf`/`nan` words never
+/// reach `str::parse`.
 fn scan_float(input: &str) -> Option<Scanned> {
     let trimmed = input.trim_start();
     let lead = input.len() - trimmed.len();
@@ -163,7 +161,6 @@ fn scan_float(input: &str) -> Option<Scanned> {
         while j < bytes.len() && bytes[j].is_ascii_digit() {
             j += 1;
         }
-        // Only commit past the `e` when an exponent digit actually follows.
         if j > exp_digits_start {
             i = j;
         }
@@ -393,8 +390,7 @@ mod tests {
         let r = scan(r#"float f; int c = sscanf("1.5e3x", "%fx", f); return ({ c, f });"#).await;
         assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1500.0)]);
 
-        // No digit follows `e`, so it's not part of the token: `strtod("1e", &end)`
-        // returns 1.0 with `end` after the `1`, leaving `e` unconsumed.
+        // `strtod("1e", &end)` returns 1.0 with `end` after the `1`.
         let r = scan(r#"float f; int c = sscanf("1e", "%f", f); return ({ c, f });"#).await;
         assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1.0)]);
 

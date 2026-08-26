@@ -90,8 +90,7 @@ pub struct TaskSeed {
 impl TaskSeed {
     /// Build the entry [`CallFrame`] for one attempt; `self.args` land in
     /// registers `1..=len`. This path (`call_other`, process init) can only
-    /// ever seed plain values, so a `ref` parameter here is always a refusal
-    /// — `CallFrame::push_arg` covers the same case for a direct `Call`.
+    /// ever seed plain values, so a `ref` parameter here is always a refusal.
     pub(crate) fn build_call_frame(&self, upvalue_ptrs: Option<&[VarId]>) -> Result<CallFrame> {
         if let Some(i) = self.function.prototype.first_ref_param() {
             return Err(LpcError::runtime(format!(
@@ -680,9 +679,8 @@ mod stm_retry_tests {
         int foo() { int n; sscanf("hits 10", "hits %d", n); hits += n; return hits; }
     "##};
 
-    /// `n` is a `ref` `sscanf` writes into on every attempt; `hits` only
-    /// accumulates correctly if the rejected attempt's `+=` is discarded —
-    /// a leaked first-attempt write would double it to 20 instead of 10.
+    /// `n` is the `ref` `sscanf` writes each attempt; a leaked first-attempt
+    /// `hits += n` would read 20 instead of 10.
     #[tokio::test]
     async fn a_retried_task_writes_its_ref_arguments_once() {
         let mut task = run_prog(SCAN_CODE).await;
