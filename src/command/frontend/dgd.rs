@@ -190,18 +190,18 @@ fn emit(rules: Rules) -> Result<Compiled, DgdError> {
     })
 }
 
-/// The later of a token rule and a production rule sharing a name.
+/// The later of a token rule and a production rule sharing a name; a name
+/// repeated within one kind is legal, so each map keeps that name's first
+/// rule number, not its last.
 fn check_redefinitions(rules: &Rules) -> Result<(), DgdError> {
-    let tokens: HashMap<&str, usize> = rules
-        .token_rules
-        .iter()
-        .map(|r| (r.name.as_str(), r.number))
-        .collect();
-    let productions: HashMap<&str, usize> = rules
-        .productions
-        .iter()
-        .map(|p| (p.lhs.as_str(), p.number))
-        .collect();
+    let mut tokens: HashMap<&str, usize> = HashMap::new();
+    for r in &rules.token_rules {
+        tokens.entry(r.name.as_str()).or_insert(r.number);
+    }
+    let mut productions: HashMap<&str, usize> = HashMap::new();
+    for p in &rules.productions {
+        productions.entry(p.lhs.as_str()).or_insert(p.number);
+    }
     let mut clashes: Vec<(usize, &'static str)> = tokens
         .iter()
         .filter_map(|(name, &token_number)| {
@@ -973,6 +973,22 @@ mod tests {
         );
         assert_eq!(
             compile("S: w w = /a/ S = /b/").unwrap_err().to_string(),
+            "Rule 3 previously defined as production rule"
+        );
+    }
+
+    /// A name defined more than once as one kind still reports the earliest
+    /// clash, at the later of the two *first* definitions — not the last.
+    #[test]
+    fn a_repeated_definition_does_not_shift_the_reported_rule() {
+        assert_eq!(
+            compile("w = /a/ w: x w = /b/").unwrap_err().to_string(),
+            "Rule 2 previously defined as token rule"
+        );
+        assert_eq!(
+            compile("S: w S: x S = /a/ w = /b/")
+                .unwrap_err()
+                .to_string(),
             "Rule 3 previously defined as production rule"
         );
     }
