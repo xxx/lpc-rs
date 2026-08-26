@@ -474,7 +474,11 @@ mod tests {
 
             let compiled = compiler.compile_string("/slice.c", code).await;
 
-            assert!(compiled.is_ok(), "{}", compiled.unwrap_err().diagnostic_string());
+            assert!(
+                compiled.is_ok(),
+                "{}",
+                compiled.unwrap_err().diagnostic_string()
+            );
         }
 
         #[tokio::test]

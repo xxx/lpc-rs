@@ -1,5 +1,5 @@
 //! Whether a phrase names a candidate: `adjective* noun`, the noun from the
-//! id lists and every word before it an adjective (CD's `match_object`).
+//! id lists and every word before it an adjective.
 
 use super::vocabulary::Defaults;
 
@@ -22,35 +22,40 @@ pub struct Match {
 }
 
 /// Whether `words` names a candidate with `own` lists: some suffix equals an
-/// id — the master's singulars, the candidate's singulars, the master's
-/// plurals, the candidate's plurals, in that order, only the plural lists
-/// when `plural_expected` — and the words before it are adjectives.
+/// id — a singular unless `plural_expected`, else a plural; the candidate's
+/// own list and the master's shared one both count — and the words before it
+/// are adjectives. Singulars are tried first, so the reported `plural` is
+/// false whenever a singular fits.
 pub fn match_phrase(
     words: &[&str],
     own: &Lists,
     defaults: &Defaults,
     plural_expected: bool,
 ) -> Option<Match> {
-    let lists: [(&[String], bool); 4] = [
-        (&defaults.ids, false),
-        (&own.ids, false),
-        (&defaults.plurals, true),
-        (&own.plurals, true),
-    ];
-    let first = if plural_expected { 2 } else { 0 };
-    for (list, plural) in &lists[first..] {
-        for entry in list.iter() {
-            let noun: Vec<&str> = entry.split_whitespace().collect();
-            if noun.is_empty() || noun.len() > words.len() {
-                continue;
-            }
-            let split = words.len() - noun.len();
-            if words[split..] == noun[..] && adjectives_cover(&words[..split], own, defaults) {
-                return Some(Match { plural: *plural });
-            }
-        }
+    let singulars = [&own.ids, &defaults.ids];
+    let plurals = [&own.plurals, &defaults.plurals];
+    let nouns = |lists: &[&Vec<String>; 2], plural: bool| {
+        lists
+            .iter()
+            .flat_map(|list| list.iter())
+            .any(|entry| ends_with_noun(words, entry, own, defaults))
+            .then_some(Match { plural })
+    };
+    (!plural_expected)
+        .then(|| nouns(&singulars, false))
+        .flatten()
+        .or_else(|| nouns(&plurals, true))
+}
+
+/// Whether `words` ends with the (possibly multi-word) noun `entry` and the
+/// words before it are adjectives.
+fn ends_with_noun(words: &[&str], entry: &str, own: &Lists, defaults: &Defaults) -> bool {
+    let noun: Vec<&str> = entry.split_whitespace().collect();
+    if noun.is_empty() || noun.len() > words.len() {
+        return false;
     }
-    None
+    let split = words.len() - noun.len();
+    words[split..] == noun[..] && adjectives_cover(&words[..split], own, defaults)
 }
 
 /// Whether `words` is a sequence of adjectives: from the left, the longest

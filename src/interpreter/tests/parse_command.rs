@@ -129,9 +129,9 @@ const ENGLISH_MASTER: &str = indoc! { r#"
 
     string pluralize_word(string word)
     {
-        mapping irregular = ([ "ox": "oxen", "tooth": "teeth", "foot": "feet",
-            "man": "men", "woman": "women", "child": "children", "goose": "geese",
-            "mouse": "mice", "deer": "deer", "moose": "moose", "sheep": "sheep" ]);
+        mapping irregular = ([ "child": "children", "fish": "fish", "foot": "feet",
+            "goose": "geese", "louse": "lice", "man": "men", "mouse": "mice", "ox": "oxen",
+            "person": "people", "sheep": "sheep", "tooth": "teeth", "woman": "women" ]);
         string last = word[-1..];
         string last2 = word[-2..];
         string before = word[-2..-2];
