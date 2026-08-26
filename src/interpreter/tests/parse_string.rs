@@ -207,7 +207,7 @@ async fn an_exhausted_budget_is_a_prefixed_error() {
         mixed *create() {
             string input = "a";
             int i;
-            for (i = 0; i < 1049; i++) input += " a";
+            for (i = 0; i < 69; i++) input += " a";
             return parse_string("whitespace = /[ ]+/ w = /a/ E: E E E: w", input);
         }
     "# },
