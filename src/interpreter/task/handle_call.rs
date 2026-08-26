@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use if_chain::if_chain;
 use lpc_rs_core::{RegisterSize, lpc_type::LpcType};
-use lpc_rs_errors::span::Span;
+use lpc_rs_errors::{LpcError, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::{instrument, trace, warn};
 use ustr::Ustr;
@@ -67,6 +67,21 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         func: Arc<ProgramFunction>,
     ) -> lpc_rs_errors::Result<CallFrame> {
         let num_args = RegisterSize::try_from(self.args.len())?;
+        // A simul_efun's prototype can change after a cached caller was compiled against it.
+        if_chain! {
+            if self.args.len() < func.arity().num_args as usize;
+            if let Some(i) = func.prototype.first_ref_param();
+            if i >= self.args.len();
+            then {
+                let caller_span = self.stack.current_frame().ok().and_then(CallFrame::current_debug_span);
+                return Err(LpcError::runtime(format!(
+                    "argument {} of `{}` must be passed by reference",
+                    i + 1,
+                    func.name()
+                ))
+                .or_span(caller_span));
+            }
+        }
         let mut new_frame = CallFrame::with_minimum_arg_capacity(
             process,
             func.clone(),
@@ -77,20 +92,26 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         );
 
         trace!("copying arguments to new frame: {num_args}");
-        let caller_span = self.stack.current_frame()?.current_debug_span();
+        // Only an error path needs the span, so look it up there rather than on every call.
+        let caller_span = || {
+            self.stack
+                .current_frame()
+                .ok()
+                .and_then(CallFrame::current_debug_span)
+        };
         for (i, arg) in self.args.iter().enumerate() {
             match *arg {
                 Arg::Value(loc) => {
                     let lpc_ref = get_location(&self.stack, &self.context.txn, loc)?.into_owned();
                     new_frame
                         .push_arg(&self.context.txn, i, lpc_ref)
-                        .map_err(|e| e.or_span(caller_span))?;
+                        .map_err(|e| e.or_span(caller_span()))?;
                 }
                 Arg::Ref(loc) => {
                     let cell = self.stack.current_frame()?.ref_cell(loc)?;
                     new_frame
                         .push_ref(&self.context.txn, i, cell)
-                        .map_err(|e| e.or_span(caller_span))?;
+                        .map_err(|e| e.or_span(caller_span()))?;
                 }
             }
         }

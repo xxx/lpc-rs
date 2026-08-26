@@ -240,7 +240,12 @@ impl CallFrame {
         }
         if self.function.prototype.is_efun() {
             let value = txn.with(|t| t.read(cell).unwrap_or(NULL));
-            self.ref_cells.push((RegisterSize::try_from(i)?, cell));
+            let Ok(index) = RegisterSize::try_from(i) else {
+                return Err(
+                    self.runtime_bug(format!("ref argument index {i} does not fit a register"))
+                );
+            };
+            self.ref_cells.push((index, cell));
             return self.store_arg(txn, i, value);
         }
         let Some(RegisterVariant::Upvalue(reg)) = self.function.arg_locations.get(i).copied()

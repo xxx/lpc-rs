@@ -92,6 +92,16 @@ async fn a_closure_capturing_a_ref_parameter_aliases_the_caller_after_return() {
 }
 
 #[tokio::test]
+async fn a_capture_and_a_ref_parameter_coexist_in_one_frame() {
+    let n = create_returns(indoc! { r#"
+        function keep(int a, int ref x) { x += a; return (: a :); }
+        int create() { int y = 1; function g = keep(5, ref y); return y * 100 + g(); }
+    "# })
+    .await;
+    assert_eq!(n, 605);
+}
+
+#[tokio::test]
 async fn a_ref_passes_on_by_ref() {
     let n = create_returns(indoc! { r#"
         void inc(int ref x) { x++; }
@@ -180,7 +190,31 @@ async fn a_pointer_to_a_ref_function_refuses_to_fire() {
 }
 
 #[tokio::test]
-async fn a_child_override_that_drops_ref_is_a_runtime_error() {
+async fn call_other_with_too_few_args_into_a_ref_function_is_a_runtime_error() {
+    // Same `vm` for both: `find_object` resolves `"/target"` from the
+    // object space, and a second `Vm` would never see it there.
+    let vm = Vm::new(test_config());
+    vm.initialize_process_from_code("/target.c", "void inc(int ref x) { x++; }")
+        .await
+        .unwrap();
+    let err = vm
+        .initialize_process_from_code(
+            "/master.c",
+            indoc! { r#"
+                int create() { return "/target"->inc(); }
+            "# },
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("argument 1 of `inc` must be passed by reference"),
+        "{err}"
+    );
+}
+
+#[tokio::test]
+async fn a_child_override_does_not_intercept_the_bases_ref_call() {
     // `inherit` always compiles its target from disk (never from the object
     // space), so `/base` here is `tests/fixtures/code/base.c`.
     let vm = Vm::new(test_config());
