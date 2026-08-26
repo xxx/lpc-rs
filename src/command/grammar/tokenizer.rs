@@ -427,4 +427,24 @@ mod tests {
             vec![token(0, 0..2), token(2, 2..2 + "€".len()), token(0, 5..7)]
         );
     }
+
+    #[test]
+    fn the_last_nomatch_rule_wins() {
+        let mut rules = rules(&[("word", "[a-z]+", false)]);
+        rules.push(TokenRule {
+            name: "first".to_owned(),
+            pattern: Pattern::Nomatch,
+            skip: true,
+        });
+        rules.push(TokenRule {
+            name: "later".to_owned(),
+            pattern: Pattern::Nomatch,
+            skip: false,
+        });
+        let set = TokenSet::build(&rules, false).unwrap();
+        assert_eq!(
+            set.tokenize("ab!?cd").unwrap(),
+            vec![token(0, 0..2), token(2, 2..4), token(0, 4..6)]
+        );
+    }
 }
