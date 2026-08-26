@@ -45,9 +45,10 @@ impl Budget {
         self.used.fetch_add(1, Ordering::Relaxed) < self.limit
     }
 
-    /// Whether the budget has been spent.
+    /// Whether the budget has been spent: a step was refused, not merely
+    /// that every allotted step has been used.
     pub(crate) fn exhausted(&self) -> bool {
-        self.used.load(Ordering::Relaxed) >= self.limit
+        self.used.load(Ordering::Relaxed) > self.limit
     }
 
     /// Steps spent so far; test-only introspection.
@@ -125,10 +126,14 @@ impl Chart {
     }
 
     fn add(&mut self, grammar: &Grammar, budget: &Budget, i: usize, item: Item) {
-        if self.seen[i].contains(&item) || !budget.step() {
+        // Dedup first, one hash; on refusal, undo it so `seen` still means "added".
+        if !self.seen[i].insert(item) {
             return;
         }
-        self.seen[i].insert(item);
+        if !budget.step() {
+            self.seen[i].remove(&item);
+            return;
+        }
         self.sets[i].push(item);
         let prod = grammar.production(item.prod);
         if item.dot == prod.rhs.len() {
