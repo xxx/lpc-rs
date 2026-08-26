@@ -397,6 +397,9 @@ mod tests {
         let r = scan(r#"float f; int c = sscanf("1ex", "%fex", f); return ({ c, f });"#).await;
         assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1.0)]);
 
+        let r = scan(r#"float f; int c = sscanf("1.", "%f", f); return ({ c, f });"#).await;
+        assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1.0)]);
+
         let r = scan(r#"float f; int c = sscanf("1", "%f", f); return ({ c, f });"#).await;
         assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1.0)]);
     }
@@ -425,6 +428,15 @@ mod tests {
             r,
             vec![LpcRef::from(1), LpcRef::from("id 31"), LpcRef::from(0)]
         );
+    }
+
+    #[tokio::test]
+    async fn f_does_not_read_the_words_inf_or_nan() {
+        let r = scan(r#"float f = 2.5; int c = sscanf("inf", "%f", f); return ({ c, f });"#).await;
+        assert_eq!(r, vec![LpcRef::from(0), LpcRef::from(2.5)]);
+
+        let r = scan(r#"float f = 2.5; int c = sscanf("nan", "%f", f); return ({ c, f });"#).await;
+        assert_eq!(r, vec![LpcRef::from(0), LpcRef::from(2.5)]);
     }
 
     #[tokio::test]

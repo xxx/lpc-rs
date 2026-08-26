@@ -38,7 +38,9 @@ with no variable left.
 
 A non-string `str` or `fmt` returns 0 rather than raising an error, unlike
 FluffOS. `%f` accepts a magnitude too large for a float as infinity, where
-`%d` fails to match on the equivalent integer overflow.
+`%d` fails to match on the equivalent integer overflow. `%f` reads only a
+numeric token — sign, digits, `.`, exponent — so the words `inf` and `nan`
+do not match.
 
 Unlike other drivers, `%(regex)` is not supported.
 

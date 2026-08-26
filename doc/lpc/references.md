@@ -17,7 +17,8 @@ int create() {
 `ref` qualifies a parameter (`type ref name`); the argument is written
 `ref name`, where `name` is a variable of the calling program — a local, a
 parameter, a captured variable, or a global. Only a variable can be passed
-by reference: `ref a[i]`, `ref o->v`, and `ref f()` do not parse.
+by reference: `ref a[i]`, `ref o->v`, and `ref f()` are compile errors
+(`only a variable can be passed by reference`).
 
 Inside the callee, assignment, `++`/`--`, and compound assignment write
 through to the caller's variable, and a read sees any write the caller made
@@ -48,7 +49,7 @@ take a `ref` parameter.
 - Across objects: `o->f(ref y)` and `call_other(o, "f", ref y)` are compile
   errors.
 - In partial application: `&f(ref y)` does not parse.
-- To an element: `ref a[i]` does not parse. Arrays and mappings are already
+- To an element: `ref a[i]` is a compile error. Arrays and mappings are already
   shared by identity.
 
 A mismatch the compiler could not see — an override with different
