@@ -2,12 +2,14 @@
 //! candidates it names, through the `parse_command_*` identification
 //! protocol of CD's `parse.c`.
 
+mod lpc;
 mod numeral;
 mod phrase;
 mod vocabulary;
 
 use lpc_rs_errors::Result;
 
+pub use lpc::{LpcVocabulary, values};
 pub use phrase::{Lists, Match, match_phrase};
 pub use vocabulary::{Defaults, Lexicon, Vocabulary};
 

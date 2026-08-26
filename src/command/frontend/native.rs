@@ -425,12 +425,6 @@ pub fn plain_value(capture: &Capture) -> Option<LpcRef> {
     }
 }
 
-/// The handler's arguments, one per capture in slot order; `None` when a
-/// `%d` does not fit an int or a capture needs the resolver.
-pub fn arguments(parse: &Parse) -> Option<Vec<LpcRef>> {
-    captures(parse)?.iter().map(plain_value).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -450,7 +444,7 @@ mod tests {
     fn args(pattern: &str, line: &str) -> Option<Vec<LpcRef>> {
         let compiled = compile(pattern).unwrap();
         let parsed = parse(&compiled.grammar, line).next()?;
-        arguments(&parsed)
+        captures(&parsed)?.iter().map(plain_value).collect()
     }
 
     fn verbs(pattern: &str) -> Vec<String> {
@@ -648,9 +642,8 @@ mod tests {
             ),
             (1, CaptureKind::Object, "old bag")
         );
-        assert_eq!(
-            arguments(&parsed),
-            None,
+        assert!(
+            captures.iter().any(|c| plain_value(c).is_none()),
             "noun captures have no plain value"
         );
     }

@@ -9,8 +9,8 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use crate::{
     command::{
         frontend::{add_action::verb_matches, arguments_and_verb},
-        grammar::parse,
         registry::{Rule, scope_of},
+        resolve::{LpcVocabulary, Resolver},
     },
     compile_time_config::MAX_COMMAND_DEPTH,
     interpreter::{
@@ -134,14 +134,15 @@ async fn trial(
         .collect();
     candidates.sort_by_key(|rule| std::cmp::Reverse(rule.id));
 
+    let members = scope.members();
+    let mut resolver: Option<Resolver<LpcVocabulary<'_>>> = None;
     for rule in candidates {
-        let Some(parsed) = parse(&rule.grammar, line).next() else {
-            continue;
-        };
         if !rule.handler.receiver_is_live(ctx.txn()) {
             continue;
         }
-        let Some((args, reported)) = arguments_and_verb(rule, &parsed, line) else {
+        let Some((args, reported)) =
+            arguments_and_verb(ctx, &members, &mut resolver, rule, line).await?
+        else {
             continue;
         };
         ctx.with_command(|state| {
@@ -865,6 +866,284 @@ mod tests {
         assert_eq!(
             globals(code, 3).await,
             vec![LpcRef::from(1), LpcRef::from(1), LpcRef::from(1)]
+        );
+    }
+
+    /// Initializes `master` as the master, each of `objects` at its path in
+    /// order, then `/player.c` from `player`; returns the player's first
+    /// `count` committed globals.
+    async fn scenario(
+        master: &str,
+        objects: &[(&str, &str)],
+        player: &str,
+        count: u16,
+    ) -> Vec<LpcRef> {
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code("/secure/master.c", master)
+            .await
+            .unwrap();
+        for (path, code) in objects {
+            vm.initialize_process_from_code(path, code).await.unwrap();
+        }
+        let proc = vm
+            .initialize_process_from_code("/player.c", player)
+            .await
+            .unwrap()
+            .context
+            .process;
+        (0..count)
+            .map(|slot| vm.global_state.committed_global(&proc, slot))
+            .collect()
+    }
+
+    const SWORD: (&str, &str) = (
+        "/sword.c",
+        indoc! { r#"
+        string *parse_command_id_list() { return ({ "sword" }); }
+        string *parse_command_plural_id_list() { return ({ "swords" }); }
+        string *parse_command_adjectiv_id_list() { return ({ "red" }); }
+        void go(object dest) { move_object(dest); }
+    "# },
+    );
+
+    const BAG: (&str, &str) = (
+        "/bag.c",
+        indoc! { r#"
+        string *parse_command_id_list() { return ({ "bag" }); }
+        string *parse_command_adjectiv_id_list() { return ({ "old" }); }
+        void go(object dest) { move_object(dest); }
+    "# },
+    );
+
+    #[tokio::test]
+    async fn an_items_capture_hands_the_handler_a_numeral_and_the_objects() {
+        let player = indoc! { r#"
+            int r; int n; mixed numeral; int got;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                "/sword"->go(this_object());
+                add_rule("'get' %i", "do_get");
+                r = command("get red sword");
+            }
+            int do_get(mixed *items) { n = sizeof(items); numeral = items[0]; got = items[1] == find_object("/sword"); return 1; }
+        "# };
+        assert_eq!(
+            scenario("", &[SWORD], player, 4).await,
+            vec![
+                LpcRef::from(1),
+                LpcRef::from(2),
+                LpcRef::from(1),
+                LpcRef::from(1)
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn an_unresolved_phrase_falls_through_to_the_next_rule() {
+        let player = indoc! { r#"
+            int r; string any; int items_tried;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                "/sword"->go(this_object());
+                add_rule("'get' %s", "do_any");
+                add_rule("'get' %i", "do_get");
+                r = command("get xyzzy");
+            }
+            int do_get(mixed *items) { items_tried = 1; return 1; }
+            int do_any(string s) { any = s; return 1; }
+        "# };
+        assert_eq!(
+            scenario("", &[SWORD], player, 3).await,
+            vec![LpcRef::from(1), s("xyzzy"), LpcRef::from(0)]
+        );
+    }
+
+    #[tokio::test]
+    async fn numerals_and_the_all_word_come_from_the_master() {
+        let master = indoc! { r#"
+            int parse_command_numeral(string w) { if (w == "two") return 2; if (w == "second") return -2; return 0; }
+            string parse_command_all_word() { return "alles"; }
+        "# };
+        let player = indoc! { r#"
+            mixed two; mixed second; mixed alles; int alles_count;
+            mixed last; int last_count;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                "/sword"->go(this_object());
+                add_rule("'get' %i", "do_get");
+                command("get two swords"); two = last;
+                command("get second sword"); second = last;
+                command("get alles"); alles = last; alles_count = last_count;
+            }
+            int do_get(mixed *items) { last = items[0]; last_count = sizeof(items) - 1; return 1; }
+        "# };
+        assert_eq!(
+            scenario(master, &[SWORD], player, 4).await,
+            vec![
+                LpcRef::from(2),
+                LpcRef::from(-2),
+                LpcRef::from(0),
+                LpcRef::from(2)
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn plurals_come_from_the_object_else_the_master_else_nowhere() {
+        let master = indoc! { r#"
+            string *parse_command_pluralize(string *s) { string *out = ({}); int i; for (i = 0; i < sizeof(s); i++) out += ({ s[i] + "s" }); return out; }
+        "# };
+        let bagless = (
+            "/bag.c",
+            indoc! { r#"
+            string *parse_command_id_list() { return ({ "bag" }); }
+            void go(object dest) { move_object(dest); }
+        "# },
+        );
+        let player = indoc! { r#"
+            mixed swords; mixed bags;
+            mixed last;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                "/sword"->go(this_object());
+                "/bag"->go(this_object());
+                add_rule("'get' %i", "do_get");
+                command("get swords"); swords = last;
+                last = 7;
+                command("get bags"); bags = last;
+            }
+            int do_get(mixed *items) { last = items[0]; return 1; }
+        "# };
+        assert_eq!(
+            scenario(master, &[SWORD, bagless], player, 2).await,
+            vec![LpcRef::from(0), LpcRef::from(0)]
+        );
+        assert_eq!(
+            scenario("", &[SWORD, bagless], player, 2).await,
+            vec![LpcRef::from(0), LpcRef::from(7)],
+            "no pluralize apply: `bags` is unmatched, so `last` keeps its sentinel"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_object_capture_is_the_first_match_and_living_takes_only_livings() {
+        let player = indoc! { r#"
+            int got; int poked_me; int poked_sword;
+            string *parse_command_id_list() { return ({ "me" }); }
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                "/sword"->go(this_object());
+                add_rule("'look' %o", "do_look");
+                add_rule("'poke' %l", "do_poke");
+                command("look sword");
+                poked_me = command("poke me");
+                poked_sword = command("poke sword");
+            }
+            int do_look(object ob) { got = ob == find_object("/sword"); return 1; }
+            int do_poke(mixed *who) { return who[1] == this_object(); }
+        "# };
+        assert_eq!(
+            scenario("", &[SWORD], player, 3).await,
+            vec![LpcRef::from(1), LpcRef::from(1), LpcRef::from(0)]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_preposition_capture_is_the_matched_entry_of_the_masters_list() {
+        let master = indoc! { r#"
+            string *parse_command_prepos_list() { return ({ "in", "in front of" }); }
+        "# };
+        let player = indoc! { r#"
+            string prep; string what; int r;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                add_rule("'look' %p %w", "do_look");
+                r = command("look in front of box");
+            }
+            int do_look(string p, string w) { prep = p; what = w; return 1; }
+        "# };
+        assert_eq!(
+            scenario(master, &[], player, 3).await,
+            vec![s("in front of"), s("box"), LpcRef::from(1)]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_next_parse_is_tried_when_a_phrase_fails_to_resolve() {
+        let player = indoc! { r#"
+            int first; string word; int second;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                "/sword"->go(this_object());
+                "/bag"->go(this_object());
+                add_rule("'put' %i %w %i", "do_put");
+                command("put red sword in old bag");
+            }
+            int do_put(mixed *a, string w, mixed *b) { first = a[1] == find_object("/sword"); word = w; second = b[1] == find_object("/bag"); return 1; }
+        "# };
+        assert_eq!(
+            scenario("", &[SWORD, BAG], player, 3).await,
+            vec![LpcRef::from(1), s("in"), LpcRef::from(1)]
+        );
+    }
+
+    #[tokio::test]
+    async fn an_object_without_lists_is_asked_id() {
+        let rock = (
+            "/rock.c",
+            indoc! { r#"
+            int id(string s) { return s == "rock"; }
+            void go(object dest) { move_object(dest); }
+        "# },
+        );
+        let player = indoc! { r#"
+            int plain; int adorned;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                "/rock"->go(this_object());
+                add_rule("'get' %i", "do_get");
+                plain = command("get rock");
+                adorned = command("get big rock");
+            }
+            int do_get(mixed *items) { return items[1] == find_object("/rock"); }
+        "# };
+        assert_eq!(
+            scenario("", &[rock], player, 2).await,
+            vec![LpcRef::from(1), LpcRef::from(0)]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_list_apply_that_returns_no_array_contributes_nothing() {
+        let mute = (
+            "/mute.c",
+            indoc! { r#"
+            mixed parse_command_id_list() { return "thing"; }
+            void go(object dest) { move_object(dest); }
+        "# },
+        );
+        let player = indoc! { r#"
+            int r;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                "/mute"->go(this_object());
+                add_rule("'get' %i", "do_get");
+                r = command("get thing");
+            }
+            int do_get(mixed *items) { return 1; }
+        "# };
+        assert_eq!(
+            scenario("", &[mute], player, 1).await,
+            vec![LpcRef::from(0)]
         );
     }
 }

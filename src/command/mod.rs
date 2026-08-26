@@ -8,12 +8,4 @@ pub mod frontend;
 pub mod grammar;
 pub mod presence;
 pub mod registry;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        unused_imports,
-        reason = "not yet wired to add_rule dispatch or a parse_command efun"
-    )
-)]
 pub(crate) mod resolve;

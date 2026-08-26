@@ -174,6 +174,11 @@ impl Scope {
     pub fn contains_weak(&self, owner: &Weak<Process>) -> bool {
         self.0.iter().any(|w| Weak::ptr_eq(w, owner))
     }
+
+    /// The members still alive, in scope order.
+    pub fn members(&self) -> Vec<Arc<Process>> {
+        self.0.iter().filter_map(Weak::upgrade).collect()
+    }
 }
 
 impl PartialEq for Scope {
