@@ -133,8 +133,10 @@ fn scan_int(input: &str, radix: u32) -> Option<Scanned> {
 }
 
 /// `strtod`-style: optional sign, digits, an optional `.`-and-digits part,
-/// an optional exponent; `str::parse` is the sole validity check on the
-/// lexed slice, so no `inf`/`nan` word can ever reach it.
+/// an optional exponent (only when at least one digit follows `e`/`E` and
+/// its optional sign — otherwise the token ends before the `e`, as
+/// `strtod` leaves it unconsumed); `str::parse` is the sole validity check
+/// on the lexed slice, so no `inf`/`nan` word can ever reach it.
 fn scan_float(input: &str) -> Option<Scanned> {
     let trimmed = input.trim_start();
     let lead = input.len() - trimmed.len();
@@ -153,12 +155,17 @@ fn scan_float(input: &str) -> Option<Scanned> {
         }
     }
     if i < bytes.len() && matches!(bytes[i], b'e' | b'E') {
-        i += 1;
-        if i < bytes.len() && matches!(bytes[i], b'-' | b'+') {
-            i += 1;
+        let mut j = i + 1;
+        if j < bytes.len() && matches!(bytes[j], b'-' | b'+') {
+            j += 1;
         }
-        while i < bytes.len() && bytes[i].is_ascii_digit() {
-            i += 1;
+        let exp_digits_start = j;
+        while j < bytes.len() && bytes[j].is_ascii_digit() {
+            j += 1;
+        }
+        // Only commit past the `e` when an exponent digit actually follows.
+        if j > exp_digits_start {
+            i = j;
         }
     }
     let f: f64 = trimmed[..i].parse().ok()?;
@@ -386,8 +393,13 @@ mod tests {
         let r = scan(r#"float f; int c = sscanf("1.5e3x", "%fx", f); return ({ c, f });"#).await;
         assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1500.0)]);
 
-        let r = scan(r#"float f; int c = sscanf("1e", "%f", f); return ({ c });"#).await;
-        assert_eq!(r, vec![LpcRef::from(0)]);
+        // No digit follows `e`, so it's not part of the token: `strtod("1e", &end)`
+        // returns 1.0 with `end` after the `1`, leaving `e` unconsumed.
+        let r = scan(r#"float f; int c = sscanf("1e", "%f", f); return ({ c, f });"#).await;
+        assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1.0)]);
+
+        let r = scan(r#"float f; int c = sscanf("1ex", "%fex", f); return ({ c, f });"#).await;
+        assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1.0)]);
 
         let r = scan(r#"float f; int c = sscanf("1", "%f", f); return ({ c, f });"#).await;
         assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1.0)]);
