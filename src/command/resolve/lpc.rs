@@ -20,12 +20,30 @@ use crate::{
 pub struct LpcVocabulary<'a> {
     ctx: &'a TaskContext,
     scope: Vec<Arc<Process>>,
+    /// Extra ids per candidate (the parser package's nicknames).
+    extras: Vec<Vec<String>>,
 }
 
 impl<'a> LpcVocabulary<'a> {
     /// Over `scope`, in the order `%o` prefers.
     pub fn new(ctx: &'a TaskContext, scope: Vec<Arc<Process>>) -> Self {
-        LpcVocabulary { ctx, scope }
+        let extras = vec![Vec::new(); scope.len()];
+        LpcVocabulary { ctx, scope, extras }
+    }
+
+    /// Over `scope`, each candidate answering to `extras[i]` as well as its
+    /// own ids; `extras` must be `scope.len()` long.
+    #[expect(
+        dead_code,
+        reason = "wired to the parser package's dispatch in a later task"
+    )]
+    pub fn with_extras(
+        ctx: &'a TaskContext,
+        scope: Vec<Arc<Process>>,
+        extras: Vec<Vec<String>>,
+    ) -> Self {
+        debug_assert_eq!(extras.len(), scope.len());
+        LpcVocabulary { ctx, scope, extras }
     }
 
     /// The candidates behind the resolver's indices.
@@ -133,7 +151,8 @@ impl Vocabulary for LpcVocabulary<'_> {
         let Some(ids) = self.apply(&object, PARSE_COMMAND_ID_LIST, &[]).await? else {
             return Ok(Lexicon::IdFunction);
         };
-        let ids = self.strings(Some(ids))?;
+        let mut ids = self.strings(Some(ids))?;
+        ids.extend(self.extras[candidate].iter().cloned());
         let plurals = match self
             .apply(&object, PARSE_COMMAND_PLURAL_ID_LIST, &[])
             .await?
@@ -160,6 +179,9 @@ impl Vocabulary for LpcVocabulary<'_> {
     }
 
     async fn id(&mut self, candidate: usize, phrase: &str) -> Result<bool> {
+        if self.extras[candidate].iter().any(|extra| extra == phrase) {
+            return Ok(true);
+        }
         let object = self.scope[candidate].clone();
         let answer = self.apply(&object, ID, &[LpcRef::from(phrase)]).await?;
         Ok(matches!(answer, Some(value) if value.is_truthy(self.ctx.txn())))

@@ -35,6 +35,8 @@ pub enum CaptureKind {
     Items = 5,
     /// `%p`: one or more words that are a preposition.
     Preposition = 6,
+    /// `%L`: one or more words naming one living.
+    Liv = 7,
 }
 
 /// The low bits of a label hold the kind; the slot sits above them.
@@ -57,6 +59,7 @@ impl CaptureKind {
             4 => CaptureKind::Living,
             5 => CaptureKind::Items,
             6 => CaptureKind::Preposition,
+            7 => CaptureKind::Liv,
             _ => return None,
         };
         Some((label.0 >> KIND_BITS, kind))
@@ -69,6 +72,7 @@ impl CaptureKind {
             CaptureKind::Living => Some(Kind::Living),
             CaptureKind::Items => Some(Kind::Items),
             CaptureKind::Preposition => Some(Kind::Preposition),
+            CaptureKind::Liv => Some(Kind::Liv),
             CaptureKind::Word | CaptureKind::Words | CaptureKind::Number => None,
         }
     }
@@ -113,11 +117,13 @@ impl fmt::Display for PatternError {
             PatternError::UnterminatedBracket => write!(f, "a `[` is not closed"),
             PatternError::EmptyWord => write!(f, "quotes and brackets must hold a word"),
             PatternError::NotOneWord(text) => write!(f, "`{text}` must be one word"),
-            PatternError::BareCapture => write!(f, "`%` must be followed by w, s, d, o, l, i or p"),
+            PatternError::BareCapture => {
+                write!(f, "`%` must be followed by w, s, d, o, l, L, i or p")
+            }
             PatternError::UnknownCapture(c) => {
                 write!(
                     f,
-                    "`%{c}` is not a capture; use %w, %s, %d, %o, %l, %i or %p"
+                    "`%{c}` is not a capture; use %w, %s, %d, %o, %l, %L, %i or %p"
                 )
             }
             PatternError::BadAlternative => write!(f, "`/` must sit between quoted words"),
@@ -258,6 +264,7 @@ fn capture_kind(letter: char) -> Result<CaptureKind, PatternError> {
         'l' => Ok(CaptureKind::Living),
         'i' => Ok(CaptureKind::Items),
         'p' => Ok(CaptureKind::Preposition),
+        'L' => Ok(CaptureKind::Liv),
         other => Err(PatternError::UnknownCapture(other)),
     }
 }
@@ -311,7 +318,8 @@ fn group(pieces: Vec<Piece>, verb: Verb) -> Result<Vec<Group>, PatternError> {
         return Err(PatternError::BadAlternative);
     }
     match groups.first() {
-        None => Err(PatternError::Empty),
+        None if verb == Verb::Required => Err(PatternError::Empty),
+        None => Ok(groups),
         Some(Group::Words(_)) => Ok(groups),
         Some(_) if verb == Verb::Required => Err(PatternError::NoVerb),
         Some(_) => Ok(groups),
@@ -361,7 +369,8 @@ fn build(groups: &[Group], verb: Verb) -> Result<Compiled, PatternError> {
                     CaptureKind::Object
                     | CaptureKind::Living
                     | CaptureKind::Items
-                    | CaptureKind::Preposition => nt(b.words_plus(&words)),
+                    | CaptureKind::Preposition
+                    | CaptureKind::Liv => nt(b.words_plus(&words)),
                 };
                 let labeled = element.labeled(kind.label(slot));
                 kinds.push(*kind);
@@ -421,7 +430,8 @@ pub fn plain_value(capture: &Capture) -> Option<LpcRef> {
         CaptureKind::Object
         | CaptureKind::Living
         | CaptureKind::Items
-        | CaptureKind::Preposition => None,
+        | CaptureKind::Preposition
+        | CaptureKind::Liv => None,
     }
 }
 
@@ -681,7 +691,6 @@ mod tests {
         assert!(parse(&with_verb.grammar, "sword").next().is_none());
 
         assert_eq!(compile("%i").unwrap_err(), PatternError::NoVerb);
-        assert_eq!(compile_pattern("").unwrap_err(), PatternError::Empty);
         assert_eq!(
             compile_pattern("look").unwrap_err(),
             PatternError::UnquotedWord("look".into())
@@ -709,21 +718,36 @@ mod tests {
             (1, CaptureKind::Living),
             (9, CaptureKind::Items),
             (4, CaptureKind::Preposition),
+            (5, CaptureKind::Liv),
         ] {
             assert_eq!(CaptureKind::unpack(kind.label(slot)), Some((slot, kind)));
         }
-        assert_eq!(CaptureKind::unpack(Label(7)), None);
     }
 
     #[test]
     fn capture_error_texts_list_every_letter() {
         assert_eq!(
             PatternError::BareCapture.to_string(),
-            "`%` must be followed by w, s, d, o, l, i or p"
+            "`%` must be followed by w, s, d, o, l, L, i or p"
         );
         assert_eq!(
             PatternError::UnknownCapture('x').to_string(),
-            "`%x` is not a capture; use %w, %s, %d, %o, %l, %i or %p"
+            "`%x` is not a capture; use %w, %s, %d, %o, %l, %L, %i or %p"
         );
+    }
+
+    #[test]
+    fn percent_capital_l_is_one_living() {
+        let c = compile_pattern("'kick' %L").unwrap();
+        assert_eq!(c.kinds, vec![CaptureKind::Liv]);
+        assert_eq!(CaptureKind::Liv.resolver_kind(), Some(Kind::Liv));
+    }
+
+    #[test]
+    fn an_empty_pattern_is_the_bare_verb_for_compile_pattern_only() {
+        let c = compile_pattern("").unwrap();
+        assert!(parse(&c.grammar, "").next().is_some());
+        assert!(parse(&c.grammar, "x").next().is_none());
+        assert_eq!(compile("").unwrap_err(), PatternError::Empty);
     }
 }

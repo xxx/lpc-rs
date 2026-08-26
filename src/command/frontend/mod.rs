@@ -5,6 +5,7 @@
 pub mod add_action;
 pub mod dgd;
 pub mod native;
+pub mod parser;
 
 use std::sync::Arc;
 

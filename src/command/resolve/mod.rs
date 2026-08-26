@@ -24,6 +24,8 @@ pub enum Kind {
     Items,
     /// `%p`: one entry of the preposition list in force.
     Preposition,
+    /// `%L`: the first living candidate that matches.
+    Liv,
 }
 
 /// A resolved capture; a candidate is an index into the scope.
@@ -86,6 +88,7 @@ impl<V: Vocabulary> Resolver<V> {
             Kind::Object => self.object(&words).await,
             Kind::Items => self.items(&words, false).await,
             Kind::Living => self.items(&words, true).await,
+            Kind::Liv => self.object_living(&words).await,
         }
     }
 
@@ -99,6 +102,17 @@ impl<V: Vocabulary> Resolver<V> {
     async fn object(&mut self, words: &[&str]) -> Result<Option<Resolved>> {
         for candidate in 0..self.lexicons.len() {
             if self.matches(candidate, words, false).await?.is_some() {
+                return Ok(Some(Resolved::Object(candidate)));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn object_living(&mut self, words: &[&str]) -> Result<Option<Resolved>> {
+        for candidate in 0..self.lexicons.len() {
+            if self.vocabulary.is_living(candidate)
+                && self.matches(candidate, words, false).await?.is_some()
+            {
                 return Ok(Some(Resolved::Object(candidate)));
             }
         }
@@ -456,6 +470,18 @@ mod tests {
             None
         );
         assert_eq!(resolver.prepositions(), &strings(&["on", "under"])[..]);
+    }
+
+    #[tokio::test]
+    async fn liv_takes_the_first_living_match() {
+        let mut fake = Fake::new(vec![lists(&["bob"], &[], &[]), lists(&["bob"], &[], &[])]);
+        fake.living = vec![false, true];
+        let mut r = Resolver::new(fake, None).await.unwrap();
+        assert_eq!(
+            r.resolve(Kind::Liv, "bob").await.unwrap(),
+            Some(Resolved::Object(1))
+        );
+        assert_eq!(r.resolve(Kind::Liv, "nobody").await.unwrap(), None);
     }
 
     #[tokio::test]
