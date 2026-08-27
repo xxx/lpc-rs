@@ -3,13 +3,14 @@
 //! the chart admits.
 
 use std::{
-    collections::{HashMap, HashSet},
     iter,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
 };
+
+use ahash::{AHashMap, AHashSet};
 
 use super::{
     model::{Grammar, NtId, ProdId, Symbol},
@@ -63,9 +64,12 @@ impl Budget {
 #[derive(Debug)]
 pub(crate) struct Chart {
     sets: Vec<Vec<Item>>,
-    seen: Vec<HashSet<Item>>,
-    /// `completed[end][(nt, origin)]`: productions of `nt` spanning `origin..end`.
-    completed: Vec<HashMap<(NtId, usize), Vec<ProdId>>>,
+    /// Every `(set, item)` added, for dedup.
+    seen: AHashSet<(usize, Item)>,
+    /// `(set, nt)`: items of that set whose dot is before `nt`.
+    waiting: AHashMap<(usize, NtId), Vec<Item>>,
+    /// `(end, nt, origin)`: productions of `nt` completed over `origin..end`.
+    completed: AHashMap<(usize, NtId, usize), Vec<ProdId>>,
 }
 
 impl Chart {
@@ -75,8 +79,9 @@ impl Chart {
         let n = scan.tokens().len();
         let mut chart = Chart {
             sets: vec![Vec::new(); n + 1],
-            seen: vec![HashSet::new(); n + 1],
-            completed: vec![HashMap::new(); n + 1],
+            seen: AHashSet::new(),
+            waiting: AHashMap::new(),
+            completed: AHashMap::new(),
         };
 
         for &prod in grammar.productions_of(grammar.start()) {
@@ -127,20 +132,25 @@ impl Chart {
 
     fn add(&mut self, grammar: &Grammar, budget: &Budget, i: usize, item: Item) {
         // Dedup first, one hash; on refusal, undo it so `seen` still means "added".
-        if !self.seen[i].insert(item) {
+        if !self.seen.insert((i, item)) {
             return;
         }
         if !budget.step() {
-            self.seen[i].remove(&item);
+            self.seen.remove(&(i, item));
             return;
         }
         self.sets[i].push(item);
         let prod = grammar.production(item.prod);
-        if item.dot == prod.rhs.len() {
-            self.completed[i]
-                .entry((prod.lhs, item.origin))
+        match prod.rhs.get(item.dot).map(|e| &e.symbol) {
+            None => self
+                .completed
+                .entry((i, prod.lhs, item.origin))
                 .or_default()
-                .push(item.prod);
+                .push(item.prod),
+            Some(Symbol::NonTerminal(nt)) => {
+                self.waiting.entry((i, *nt)).or_default().push(item);
+            }
+            Some(_) => {}
         }
     }
 
@@ -173,16 +183,13 @@ impl Chart {
 
     fn complete(&mut self, grammar: &Grammar, budget: &Budget, i: usize, item: Item) {
         let lhs = grammar.production(item.prod).lhs;
-        let waiting: Vec<Item> = self.sets[item.origin]
-            .iter()
-            .copied()
-            .filter(|w| {
-                matches!(
-                    grammar.production(w.prod).rhs.get(w.dot),
-                    Some(e) if e.symbol == Symbol::NonTerminal(lhs)
-                )
-            })
-            .collect();
+        // A snapshot: `add` may grow the same entry when `origin == i`.
+        let waiting: Vec<Item> = self
+            .waiting
+            .get(&(item.origin, lhs))
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .to_vec();
         for w in waiting {
             self.add(
                 grammar,
@@ -198,7 +205,7 @@ impl Chart {
 
     /// Productions of `nt` spanning `origin..end`, if any completed there.
     pub(crate) fn completed(&self, end: usize, nt: NtId, origin: usize) -> Option<&[ProdId]> {
-        self.completed[end].get(&(nt, origin)).map(Vec::as_slice)
+        self.completed.get(&(end, nt, origin)).map(Vec::as_slice)
     }
 }
 
