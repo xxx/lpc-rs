@@ -99,35 +99,6 @@ pub enum Family {
     Parser(Arc<ParserRule>),
 }
 
-/// A capturing token of a parser rule.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Slot {
-    /// `OBJ`: one object.
-    Object,
-    /// `OBS`: several objects, with a numeral.
-    Objects,
-    /// `LIV`: one living.
-    Living,
-    /// `LVS`: several livings, with a numeral.
-    Livings,
-    /// `WRD`: one word.
-    Word,
-    /// `STR`: one or more words.
-    Words,
-}
-
-impl Slot {
-    /// Whether the slot names objects.
-    pub fn is_object(self) -> bool {
-        !matches!(self, Slot::Word | Slot::Words)
-    }
-
-    /// Whether the slot may name several objects.
-    pub fn is_many(self) -> bool {
-        matches!(self, Slot::Objects | Slot::Livings)
-    }
-}
-
 /// One registered command rule.
 #[derive(Clone, Debug)]
 pub struct Rule {
@@ -297,7 +268,6 @@ pub(crate) mod tests {
             rule: text.to_owned(),
             can_slug: text.to_lowercase().replace(' ', "_").into(),
             do_slug: text.to_lowercase().replace(' ', "_").into(),
-            slots: Vec::new(),
             compiled: crate::command::frontend::native::compile_pattern("%w").unwrap(),
         });
         Rule::new(owner, verb.into(), Family::Parser(parser))
@@ -330,15 +300,6 @@ pub(crate) mod tests {
             parser_rule(&owner, "look", "at OBJ").matching(),
             VerbMatch::Exact
         );
-    }
-
-    #[test]
-    fn slots_know_their_shape() {
-        assert!(Slot::Object.is_object() && !Slot::Object.is_many());
-        assert!(Slot::Objects.is_object() && Slot::Objects.is_many());
-        assert!(Slot::Living.is_object() && !Slot::Living.is_many());
-        assert!(Slot::Livings.is_object() && Slot::Livings.is_many());
-        assert!(!Slot::Word.is_object() && !Slot::Words.is_object());
     }
 
     #[test]

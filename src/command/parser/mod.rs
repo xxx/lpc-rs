@@ -12,10 +12,8 @@ use lpc_rs_errors::Result;
 use crate::{
     command::{
         dispatch::apply_on,
-        frontend::native::{Capture, captures},
+        frontend::native::{Capture, CaptureKind},
         frontend::parser::ParserRule,
-        grammar::parse,
-        registry::Slot,
         resolve::{Kind as ResolveKind, LpcVocabulary, Resolved, Resolver},
     },
     interpreter::{
@@ -77,9 +75,10 @@ pub(crate) async fn run(
     };
     let remote_from = candidates.len();
     let needs_livings = rule
-        .slots
+        .compiled
+        .kinds
         .iter()
-        .any(|s| matches!(s, Slot::Living | Slot::Livings));
+        .any(|k| matches!(k, CaptureKind::Liv | CaptureKind::Living));
     let mut all = candidates;
     if needs_livings {
         for user in scope::users(ctx, actor).await? {
@@ -107,14 +106,10 @@ pub(crate) async fn run(
 
     let mut failures: Vec<Failure> = Vec::new();
     let mut any_parse = false;
-    for parsed in parse(&rule.compiled.grammar, rest) {
-        let Some(caps) = captures(&parsed) else {
-            continue;
-        };
+    for caps in rule.compiled.captures_of(rest) {
         if caps
             .iter()
-            .zip(&rule.slots)
-            .any(|(c, s)| *s == Slot::Words && c.text.is_empty())
+            .any(|c| c.kind == CaptureKind::Words && c.text.is_empty())
         {
             continue; // STR is one or more words
         }
@@ -134,11 +129,10 @@ pub(crate) async fn run(
 }
 
 /// The words of each object slot as typed, in slot order.
-fn typed_words(caps: &[Capture], slots: &[Slot]) -> Vec<LpcRef> {
+fn typed_words(caps: &[Capture]) -> Vec<LpcRef> {
     caps.iter()
-        .zip(slots)
-        .filter(|(_, s)| s.is_object())
-        .map(|(c, _)| LpcRef::from(c.text.as_str()))
+        .filter(|c| c.kind.is_object())
+        .map(|c| LpcRef::from(c.text.as_str()))
         .collect()
 }
 
@@ -202,13 +196,12 @@ async fn attempt(
     candidates: &[Candidate],
     resolver: &mut Resolver<LpcVocabulary<'_>>,
 ) -> Result<std::result::Result<(), Failure>> {
-    let words = typed_words(caps, &rule.slots);
+    let words = typed_words(caps);
     // Slot values: strings for WRD/STR, 0 until an object slot is chosen.
     let mut values: Vec<LpcRef> = caps
         .iter()
-        .zip(&rule.slots)
-        .map(|(c, s)| {
-            if s.is_object() {
+        .map(|c| {
+            if c.kind.is_object() {
                 LpcRef::from(0)
             } else {
                 LpcRef::from(c.text.as_str())
@@ -241,8 +234,8 @@ async fn attempt(
 
     let mut chosen: Vec<ChosenSlot> = Vec::new();
     let mut object_slot = 0usize;
-    for (index, (cap, slot)) in caps.iter().zip(&rule.slots).enumerate() {
-        if !slot.is_object() {
+    for (index, cap) in caps.iter().enumerate() {
+        if !cap.kind.is_object() {
             continue;
         }
         let family = if object_slot == 0 {
@@ -250,8 +243,8 @@ async fn attempt(
         } else {
             Family::Indirect
         };
-        let kind = match slot {
-            Slot::Living | Slot::Livings => ResolveKind::Living,
+        let kind = match cap.kind {
+            CaptureKind::Liv | CaptureKind::Living => ResolveKind::Living,
             _ => ResolveKind::Items,
         };
         let progress = object_slot;
@@ -260,7 +253,7 @@ async fn attempt(
             candidates: matched,
         }) = resolver.resolve(kind, &cap.text).await?
         else {
-            let living_slot = matches!(slot, Slot::Living | Slot::Livings);
+            let living_slot = matches!(cap.kind, CaptureKind::Liv | CaptureKind::Living);
             // This second resolve re-applies `parse_command_numeral`; only whether
             // the phrase names any non-living object matters here.
             let kind = if living_slot
@@ -273,7 +266,7 @@ async fn attempt(
             } else {
                 Kind::ThereIsNo
             };
-            let plural = matches!(slot, Slot::Objects | Slot::Livings);
+            let plural = cap.kind.is_many();
             return Ok(Err(unresolved(
                 kind,
                 None,
@@ -327,19 +320,19 @@ async fn attempt(
                     Kind::NotAccessible,
                     None,
                     Arg::Text(cap.text.clone()),
-                    slot.is_many(),
+                    cap.kind.is_many(),
                     progress,
                 ),
                 None => unresolved(
                     Kind::ThereIsNo,
                     None,
                     Arg::Text(cap.text.clone()),
-                    slot.is_many(),
+                    cap.kind.is_many(),
                     progress,
                 ),
             }));
         }
-        let picked: Vec<Arc<Process>> = if slot.is_many() {
+        let picked: Vec<Arc<Process>> = if cap.kind.is_many() {
             match numeral {
                 n if n > 0 => qualified.iter().take(n as usize).cloned().collect(),
                 n if n < 0 => match qualified.get(n.unsigned_abs() as usize - 1) {
@@ -400,7 +393,7 @@ async fn attempt(
                 _ => qualified.clone(),
             }
         };
-        values[index] = if slot.is_many() {
+        values[index] = if cap.kind.is_many() {
             mint_objects(ctx, &picked)
         } else {
             LpcRef::from(Arc::downgrade(&picked[0]))
@@ -458,7 +451,7 @@ async fn attempt(
     // Only `do_` sees a many slot as the mixed array of objects and reasons.
     let mut do_values = values.clone();
     for (index, picked, reasons) in &chosen {
-        if rule.slots[*index].is_many() {
+        if rule.compiled.kinds[*index].is_many() {
             do_values[*index] = mint_mixed(ctx, picked, reasons);
         }
     }

@@ -12,7 +12,9 @@ use ustr::Ustr;
 
 use crate::{
     command::{
-        grammar::{Element, Grammar, GrammarBuilder, GrammarError, Label, Parse, lit, nt, tok},
+        grammar::{
+            Element, Grammar, GrammarBuilder, GrammarError, Label, Parse, lit, nt, parse, tok,
+        },
         resolve::Kind,
     },
     interpreter::{lpc_ref::LpcRef, lpc_string::LpcString},
@@ -39,30 +41,19 @@ pub enum CaptureKind {
     Liv = 7,
 }
 
-/// The low bits of a label hold the kind; the slot sits above them.
-const KIND_BITS: u32 = 3;
-
 impl CaptureKind {
-    /// The label for this capture in slot `slot`.
-    fn label(self, slot: u32) -> Label {
-        Label((slot << KIND_BITS) | self as u32)
+    /// Whether the capture names objects (livings included); a preposition
+    /// does not.
+    pub fn is_object(self) -> bool {
+        matches!(
+            self,
+            CaptureKind::Object | CaptureKind::Living | CaptureKind::Items | CaptureKind::Liv
+        )
     }
 
-    /// The slot and kind a label packs, or `None` for a label whose kind
-    /// bits name no capture kind.
-    fn unpack(label: Label) -> Option<(u32, CaptureKind)> {
-        let kind = match label.0 & ((1 << KIND_BITS) - 1) {
-            0 => CaptureKind::Word,
-            1 => CaptureKind::Words,
-            2 => CaptureKind::Number,
-            3 => CaptureKind::Object,
-            4 => CaptureKind::Living,
-            5 => CaptureKind::Items,
-            6 => CaptureKind::Preposition,
-            7 => CaptureKind::Liv,
-            _ => return None,
-        };
-        Some((label.0 >> KIND_BITS, kind))
+    /// Whether the capture may name several objects.
+    pub fn is_many(self) -> bool {
+        matches!(self, CaptureKind::Items | CaptureKind::Living)
     }
 
     /// The resolver kind behind this capture, or `None` for a plain one.
@@ -157,30 +148,30 @@ enum Verb {
 }
 
 // The same text is a different grammar under each dialect.
-static RULES: LazyLock<DashMap<String, Compiled>> = LazyLock::new(DashMap::new);
-static PATTERNS: LazyLock<DashMap<String, Compiled>> = LazyLock::new(DashMap::new);
+static RULES: LazyLock<DashMap<String, Arc<Compiled>>> = LazyLock::new(DashMap::new);
+static PATTERNS: LazyLock<DashMap<String, Arc<Compiled>>> = LazyLock::new(DashMap::new);
 
 /// Compile an `add_rule` pattern, once per text; only successes are cached,
 /// so a malformed pattern reports its fault on every call.
-pub fn compile(pattern: &str) -> Result<Compiled, PatternError> {
+pub fn compile(pattern: &str) -> Result<Arc<Compiled>, PatternError> {
     compile_in(&RULES, pattern, Verb::Required)
 }
 
 /// Compile a `parse_command` pattern, which needs no leading verb; cached
 /// like [`compile`].
-pub fn compile_pattern(pattern: &str) -> Result<Compiled, PatternError> {
+pub fn compile_pattern(pattern: &str) -> Result<Arc<Compiled>, PatternError> {
     compile_in(&PATTERNS, pattern, Verb::Optional)
 }
 
 fn compile_in(
-    cache: &DashMap<String, Compiled>,
+    cache: &DashMap<String, Arc<Compiled>>,
     pattern: &str,
     verb: Verb,
-) -> Result<Compiled, PatternError> {
+) -> Result<Arc<Compiled>, PatternError> {
     if let Some(hit) = cache.get(pattern) {
         return Ok(hit.clone());
     }
-    let compiled = build(&group(scan(pattern)?, verb)?, verb)?;
+    let compiled = Arc::new(build(&group(scan(pattern)?, verb)?, verb)?);
     Ok(cache
         .entry(pattern.to_owned())
         .or_insert_with(|| compiled)
@@ -372,7 +363,7 @@ fn build(groups: &[Group], verb: Verb) -> Result<Compiled, PatternError> {
                     | CaptureKind::Preposition
                     | CaptureKind::Liv => nt(b.words_plus(&words)),
                 };
-                let labeled = element.labeled(kind.label(slot));
+                let labeled = element.labeled(Label(slot));
                 kinds.push(*kind);
                 slot += 1;
                 labeled
@@ -400,23 +391,30 @@ pub struct Capture {
     pub text: String,
 }
 
-/// The parse's captures in slot order; `None` when a `%d` does not fit an
-/// int, which makes the parse no match.
-pub fn captures(parse: &Parse) -> Option<Vec<Capture>> {
-    let mut out: Vec<Capture> = Vec::new();
-    for (label, text) in parse.captures() {
-        let (slot, kind) = CaptureKind::unpack(label)?;
-        if kind == CaptureKind::Number {
-            text.parse::<i64>().ok()?;
-        }
-        out.push(Capture {
-            slot,
-            kind,
-            text: text.to_owned(),
-        });
+impl Compiled {
+    /// The captures of each parse of `line`, greedy splits first, each set
+    /// in slot order; a parse whose `%d` does not fit an int is skipped.
+    pub fn captures_of<'a>(&'a self, line: &str) -> impl Iterator<Item = Vec<Capture>> + 'a {
+        parse(&self.grammar, line).filter_map(|parsed| self.captures(&parsed))
     }
-    out.sort_by_key(|capture| capture.slot);
-    Some(out)
+
+    fn captures(&self, parsed: &Parse) -> Option<Vec<Capture>> {
+        let mut out = Vec::with_capacity(self.kinds.len());
+        for (label, text) in parsed.captures() {
+            let slot = label.0;
+            let kind = *self.kinds.get(slot as usize)?;
+            if kind == CaptureKind::Number {
+                text.parse::<i64>().ok()?;
+            }
+            out.push(Capture {
+                slot,
+                kind,
+                text: text.to_owned(),
+            });
+        }
+        out.sort_by_key(|capture| capture.slot);
+        Some(out)
+    }
 }
 
 /// The value of a capture that needs no resolver: a string for `%w`/`%s`,
@@ -453,8 +451,12 @@ mod tests {
     /// `None` when the line does not parse.
     fn args(pattern: &str, line: &str) -> Option<Vec<LpcRef>> {
         let compiled = compile(pattern).unwrap();
-        let parsed = parse(&compiled.grammar, line).next()?;
-        captures(&parsed)?.iter().map(plain_value).collect()
+        compiled
+            .captures_of(line)
+            .next()?
+            .iter()
+            .map(plain_value)
+            .collect()
     }
 
     fn verbs(pattern: &str) -> Vec<String> {
@@ -631,10 +633,10 @@ mod tests {
             compiled.kinds,
             vec![CaptureKind::Items, CaptureKind::Object]
         );
-        let parsed = parse(&compiled.grammar, "get red sword from old bag")
+        let captures = compiled
+            .captures_of("get red sword from old bag")
             .next()
             .unwrap();
-        let captures = captures(&parsed).unwrap();
         assert_eq!(captures.len(), 2);
         assert_eq!(
             (
@@ -682,8 +684,10 @@ mod tests {
         let compiled = compile_pattern("[the] %i").unwrap();
         assert!(compiled.verbs.is_empty());
         assert_eq!(compiled.kinds, vec![CaptureKind::Items]);
-        let parsed = parse(&compiled.grammar, "the red sword").next().unwrap();
-        assert_eq!(captures(&parsed).unwrap()[0].text, "red sword");
+        assert_eq!(
+            compiled.captures_of("the red sword").next().unwrap()[0].text,
+            "red sword"
+        );
         assert!(parse(&compiled.grammar, "sword").next().is_some());
 
         let with_verb = compile_pattern(" 'get' / 'take' %i ").unwrap();
@@ -710,19 +714,46 @@ mod tests {
     }
 
     #[test]
-    fn a_label_round_trips_its_slot_and_kind() {
-        for (slot, kind) in [
-            (0, CaptureKind::Word),
-            (7, CaptureKind::Words),
-            (2, CaptureKind::Number),
-            (3, CaptureKind::Object),
-            (1, CaptureKind::Living),
-            (9, CaptureKind::Items),
-            (4, CaptureKind::Preposition),
-            (5, CaptureKind::Liv),
-        ] {
-            assert_eq!(CaptureKind::unpack(kind.label(slot)), Some((slot, kind)));
-        }
+    fn captures_of_reads_kinds_from_the_table_in_slot_order() {
+        let c = compile_pattern("'give' %w 'to' %o %d").unwrap();
+        let sets: Vec<Vec<Capture>> = c.captures_of("give sword to bob 3").collect();
+        assert_eq!(sets.len(), 1);
+        let kinds: Vec<CaptureKind> = sets[0].iter().map(|c| c.kind).collect();
+        let texts: Vec<&str> = sets[0].iter().map(|c| c.text.as_str()).collect();
+        let slots: Vec<u32> = sets[0].iter().map(|c| c.slot).collect();
+        assert_eq!(
+            kinds,
+            vec![CaptureKind::Word, CaptureKind::Object, CaptureKind::Number]
+        );
+        assert_eq!(texts, vec!["sword", "bob", "3"]);
+        assert_eq!(slots, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn a_number_that_does_not_fit_an_int_makes_the_parse_no_match() {
+        let c = compile_pattern("'n' %d").unwrap();
+        assert_eq!(c.captures_of("n 99999999999999999999").count(), 0);
+        assert_eq!(c.captures_of("n 7").count(), 1);
+    }
+
+    #[test]
+    fn captures_of_yields_greedy_splits_first() {
+        let c = compile_pattern("'x' %s %s").unwrap();
+        let firsts: Vec<String> = c
+            .captures_of("x a b c")
+            .map(|caps| caps[0].text.clone())
+            .collect();
+        assert_eq!(firsts, vec!["a b c", "a b", "a", ""]);
+    }
+
+    #[test]
+    fn kinds_know_their_shape() {
+        assert!(CaptureKind::Object.is_object() && !CaptureKind::Object.is_many());
+        assert!(CaptureKind::Items.is_object() && CaptureKind::Items.is_many());
+        assert!(CaptureKind::Liv.is_object() && !CaptureKind::Liv.is_many());
+        assert!(CaptureKind::Living.is_object() && CaptureKind::Living.is_many());
+        assert!(!CaptureKind::Word.is_object() && !CaptureKind::Words.is_object());
+        assert!(!CaptureKind::Number.is_object() && !CaptureKind::Preposition.is_object());
     }
 
     #[test]

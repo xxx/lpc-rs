@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
@@ -28,9 +26,8 @@ pub async fn add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     let LpcRef::String(pattern) = context.resolve_local_register(1 as RegisterSize).clone() else {
         return Err(context.runtime_error("add_rule: the pattern must be a string"));
     };
-    let compiled = Arc::new(
-        compile(pattern.to_str()).map_err(|e| context.runtime_error(format!("add_rule: {e}")))?,
-    );
+    let compiled =
+        compile(pattern.to_str()).map_err(|e| context.runtime_error(format!("add_rule: {e}")))?;
     let handler = handler_from(
         context,
         context.resolve_local_register(2 as RegisterSize).clone(),

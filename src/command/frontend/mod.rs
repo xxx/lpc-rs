@@ -48,10 +48,7 @@ pub(crate) async fn arguments_and_verb<'a>(
             )))
         }
         Family::Native { compiled, .. } => {
-            for parsed in parse(&compiled.grammar, line) {
-                let Some(captures) = native::captures(&parsed) else {
-                    continue;
-                };
+            for captures in compiled.captures_of(line) {
                 if captures
                     .iter()
                     .all(|capture| capture.kind.resolver_kind().is_none())

@@ -2,14 +2,11 @@
 //! into the native dialect, with the handler slugs and slots the protocol
 //! needs.
 
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 use ustr::Ustr;
 
-use crate::command::{
-    frontend::native::{self, Compiled, PatternError},
-    registry::Slot,
-};
+use crate::command::frontend::native::{self, CaptureKind, Compiled, PatternError};
 
 /// Why a rule does not compile; the text reaches the LPC caller.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -55,30 +52,28 @@ pub struct ParserRule {
     pub can_slug: Ustr,
     /// The slug for `do_` names (`at_obs` for a many slot).
     pub do_slug: Ustr,
-    /// The capturing tokens, in rule order.
-    pub slots: Vec<Slot>,
     /// The rule compiled as a verbless native pattern.
-    pub compiled: Compiled,
+    pub compiled: Arc<Compiled>,
 }
 
-const TOKENS: [(&str, Slot); 6] = [
-    ("OBJ", Slot::Object),
-    ("OBS", Slot::Objects),
-    ("LIV", Slot::Living),
-    ("LVS", Slot::Livings),
-    ("WRD", Slot::Word),
-    ("STR", Slot::Words),
+const TOKENS: [(&str, CaptureKind); 6] = [
+    ("OBJ", CaptureKind::Object),
+    ("OBS", CaptureKind::Items),
+    ("LIV", CaptureKind::Liv),
+    ("LVS", CaptureKind::Living),
+    ("WRD", CaptureKind::Word),
+    ("STR", CaptureKind::Words),
 ];
 
 /// One word of a rule: a capturing token or a literal.
 enum Token {
-    Slot(Slot),
+    Capture(CaptureKind),
     Literal(String),
 }
 
 fn token(word: &str, rule: &str) -> Result<Token, ParserRuleError> {
-    if let Some((_, slot)) = TOKENS.iter().find(|(name, _)| *name == word) {
-        return Ok(Token::Slot(*slot));
+    if let Some((_, kind)) = TOKENS.iter().find(|(name, _)| *name == word) {
+        return Ok(Token::Capture(*kind));
     }
     if TOKENS.iter().any(|(name, _)| word.starts_with(name)) {
         return Err(ParserRuleError::TokenInWord(rule.to_owned()));
@@ -92,12 +87,14 @@ fn token(word: &str, rule: &str) -> Result<Token, ParserRuleError> {
 /// The native-dialect element for a token.
 fn pattern_element(token: &Token) -> String {
     match token {
-        Token::Slot(Slot::Object) => "%o".to_owned(),
-        Token::Slot(Slot::Objects) => "%i".to_owned(),
-        Token::Slot(Slot::Living) => "%L".to_owned(),
-        Token::Slot(Slot::Livings) => "%l".to_owned(),
-        Token::Slot(Slot::Word) => "%w".to_owned(),
-        Token::Slot(Slot::Words) => "%s".to_owned(),
+        Token::Capture(CaptureKind::Object) => "%o".to_owned(),
+        Token::Capture(CaptureKind::Items) => "%i".to_owned(),
+        Token::Capture(CaptureKind::Liv) => "%L".to_owned(),
+        Token::Capture(CaptureKind::Living) => "%l".to_owned(),
+        Token::Capture(CaptureKind::Word) => "%w".to_owned(),
+        Token::Capture(CaptureKind::Words) => "%s".to_owned(),
+        Token::Capture(CaptureKind::Number) => "%d".to_owned(),
+        Token::Capture(CaptureKind::Preposition) => "%p".to_owned(),
         Token::Literal(word) => format!("'{word}'"),
     }
 }
@@ -106,36 +103,38 @@ fn pattern_element(token: &Token) -> String {
 /// family, `obs`/`lvs` in the `do_` family.
 fn slug_word(token: &Token, do_family: bool) -> String {
     match token {
-        Token::Slot(Slot::Objects) if !do_family => "obj".to_owned(),
-        Token::Slot(Slot::Livings) if !do_family => "liv".to_owned(),
-        Token::Slot(Slot::Object) => "obj".to_owned(),
-        Token::Slot(Slot::Objects) => "obs".to_owned(),
-        Token::Slot(Slot::Living) => "liv".to_owned(),
-        Token::Slot(Slot::Livings) => "lvs".to_owned(),
-        Token::Slot(Slot::Word) => "wrd".to_owned(),
-        Token::Slot(Slot::Words) => "str".to_owned(),
+        Token::Capture(CaptureKind::Items) if !do_family => "obj".to_owned(),
+        Token::Capture(CaptureKind::Living) if !do_family => "liv".to_owned(),
+        Token::Capture(CaptureKind::Object) => "obj".to_owned(),
+        Token::Capture(CaptureKind::Items) => "obs".to_owned(),
+        Token::Capture(CaptureKind::Liv) => "liv".to_owned(),
+        Token::Capture(CaptureKind::Living) => "lvs".to_owned(),
+        Token::Capture(CaptureKind::Word) => "wrd".to_owned(),
+        Token::Capture(CaptureKind::Words) => "str".to_owned(),
+        Token::Capture(CaptureKind::Number) => "num".to_owned(),
+        Token::Capture(CaptureKind::Preposition) => "prp".to_owned(),
         Token::Literal(word) => word.to_lowercase(),
     }
 }
 
 /// Compile `rule` for `verb`: the tokens' pattern through the native
-/// compiler, the slots in rule order, and both slugs.
+/// compiler and both slugs; the captures' kinds are `compiled.kinds`.
 pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
     let tokens = rule
         .split_whitespace()
         .map(|word| token(word, rule))
         .collect::<Result<Vec<_>, _>>()?;
-    let slots: Vec<Slot> = tokens
+    let kinds: Vec<CaptureKind> = tokens
         .iter()
         .filter_map(|t| match t {
-            Token::Slot(slot) => Some(*slot),
+            Token::Capture(kind) => Some(*kind),
             Token::Literal(_) => None,
         })
         .collect();
-    if slots.iter().filter(|s| **s == Slot::Words).count() > 1 {
+    if kinds.iter().filter(|k| **k == CaptureKind::Words).count() > 1 {
         return Err(ParserRuleError::TwoStrs(rule.to_owned()));
     }
-    if slots.iter().filter(|s| s.is_object()).count() > 2 {
+    if kinds.iter().filter(|k| k.is_object()).count() > 2 {
         return Err(ParserRuleError::TooManyObjects(rule.to_owned()));
     }
     let pattern = tokens
@@ -157,7 +156,6 @@ pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
         rule: rule.to_owned(),
         can_slug: slug(false),
         do_slug: slug(true),
-        slots,
         compiled,
     })
 }
@@ -165,14 +163,12 @@ pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::frontend::native::CaptureKind;
 
     #[test]
-    fn tokens_map_to_pattern_captures_and_slots() {
+    fn tokens_map_to_pattern_captures() {
         let r = compile("give", "OBJ to LIV").unwrap();
         assert_eq!(r.verb, "give");
         assert_eq!(r.rule, "OBJ to LIV");
-        assert_eq!(r.slots, vec![Slot::Object, Slot::Living]);
         assert_eq!(
             r.compiled.kinds,
             vec![CaptureKind::Object, CaptureKind::Liv]
@@ -189,7 +185,10 @@ mod tests {
             compile("say", "WRD").unwrap().compiled.kinds,
             vec![CaptureKind::Word]
         );
-        assert_eq!(compile("kill", "LVS").unwrap().slots, vec![Slot::Livings]);
+        assert_eq!(
+            compile("kill", "LVS").unwrap().compiled.kinds,
+            vec![CaptureKind::Living]
+        );
     }
 
     #[test]
@@ -202,7 +201,7 @@ mod tests {
         assert_eq!(r.do_slug, "lvs");
         let bare = compile("look", "").unwrap();
         assert_eq!(bare.can_slug, "");
-        assert!(bare.slots.is_empty());
+        assert!(bare.compiled.kinds.is_empty());
         assert_eq!(compile("look", "at OBJ").unwrap().can_slug, "at_obj");
     }
 

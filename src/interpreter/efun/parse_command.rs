@@ -9,8 +9,7 @@ use lpc_rs_errors::Result;
 
 use crate::{
     command::{
-        frontend::native::{self, CaptureKind},
-        grammar::{Grammar, parse},
+        frontend::native::{self, CaptureKind, Compiled},
         resolve::{LpcVocabulary, Resolver, values},
     },
     interpreter::{
@@ -74,13 +73,13 @@ pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> 
         Box::pin(resolve_nouns(
             context.task_context(),
             scope,
-            &compiled.grammar,
+            &compiled,
             cmd,
             callers_list,
         ))
         .await?
     } else {
-        plain_matches(&compiled.grammar, cmd).map(|values| (values, Vec::new()))
+        plain_matches(&compiled, cmd).map(|values| (values, Vec::new()))
     };
     let Some((found, in_force)) = matched else {
         context.return_efun_result(LpcRef::from(0));
@@ -109,16 +108,13 @@ pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> 
 async fn resolve_nouns(
     ctx: &TaskContext,
     scope: Vec<Arc<Process>>,
-    grammar: &Grammar,
+    compiled: &Compiled,
     cmd: &str,
     callers_prepositions: Option<Vec<String>>,
 ) -> Result<Option<(Vec<LpcRef>, Vec<String>)>> {
     let vocabulary = LpcVocabulary::new(ctx, scope);
     let mut resolver = Resolver::new(vocabulary, callers_prepositions).await?;
-    for parsed in parse(grammar, cmd) {
-        let Some(captures) = native::captures(&parsed) else {
-            continue;
-        };
+    for captures in compiled.captures_of(cmd) {
         if let Some(found) = values(&captures, &mut resolver).await? {
             return Ok(Some((found, resolver.prepositions().to_vec())));
         }
@@ -126,16 +122,13 @@ async fn resolve_nouns(
     Ok(None)
 }
 
-/// Every parse of `cmd` under `grammar`, tried in turn, each capture valued
+/// Every parse of `cmd` under `compiled`, tried in turn, each capture valued
 /// by [`native::plain_value`]; for a pattern with no noun capture, so no
 /// master apply runs.
-fn plain_matches(grammar: &Grammar, cmd: &str) -> Option<Vec<LpcRef>> {
-    parse(grammar, cmd).find_map(|parsed| {
-        native::captures(&parsed)?
-            .iter()
-            .map(native::plain_value)
-            .collect()
-    })
+fn plain_matches(compiled: &Compiled, cmd: &str) -> Option<Vec<LpcRef>> {
+    compiled
+        .captures_of(cmd)
+        .find_map(|captures| captures.iter().map(native::plain_value).collect())
 }
 
 /// The candidates `arg` names: an object with its deep inventory, or an
