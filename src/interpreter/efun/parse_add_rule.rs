@@ -12,7 +12,10 @@ use crate::{
 };
 
 /// `parse_add_rule(verb, rule)`: appends a verb-attached rule owned by
-/// `this_object()`, which must have called `parse_init()`.
+/// `this_object()`, which must have called `parse_init()`. A pure append —
+/// no read of `verb_rules` — so verb objects registering in parallel
+/// commute; a dead owner's rules are purged by `parse_remove` and by
+/// destruct, not here.
 pub async fn parse_add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let this = context.frame().process.clone();
     if this.parser_ready.get().is_none() {
@@ -36,11 +39,8 @@ pub async fn parse_add_rule<const N: usize>(context: &mut EfunContext<'_, N>) ->
         Frontend::Parser,
     );
     let cell = context.object_space().verb_rules.id;
-    context.txn().with(|t| {
-        for dead in t.read_rules(cell).iter().filter(|r| r.owner().is_none()) {
-            t.merge(cell, MergeOp::RulesRemove(dead.id));
-        }
-        t.merge(cell, MergeOp::RulesAppend(rule));
-    });
+    context
+        .txn()
+        .with(|t| t.merge(cell, MergeOp::RulesAppend(rule)));
     Ok(())
 }
