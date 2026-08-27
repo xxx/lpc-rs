@@ -200,6 +200,8 @@ const VERBS: (&str, &str) = (
         parse_add_rule("say", "STR");
         parse_add_rule("fail", "OBJ");
         parse_add_synonym("get", "take");
+        parse_add_synonym("g", "give");
+        parse_add_synonym("gv", "g");
     }
     mixed can_take_obj(object o, string w) { return 1; }
     void do_take_obj(object o, string w) { log = "took " + w + " " + file_name(o); typed_verb = query_verb(); }
@@ -449,6 +451,129 @@ async fn liv_resolves_through_parse_command_users() {
     assert_eq!(r, vec![LpcRef::from(1), s("gave sword to bob give")]);
 }
 
+const LOG_SWORD: (&str, &str) = (
+    "/log_sword.c",
+    indoc! { r#"
+    string *parse_command_id_list() { return ({ "sword" }); }
+    string *log = ({});
+    string describe(mixed v) {
+        if (v == 0) return "0";
+        if (v == this_object()) return "self";
+        return "other";
+    }
+    mixed direct_give_obj_to_liv(mixed a, mixed b, string x, string y) {
+        log += ({ describe(a) + " " + describe(b) + " " + x + " " + y });
+        return 1;
+    }
+    string *query_log() { return log; }
+    void go(object d) { move_object(d); }
+"# },
+);
+const LOG_BOB: (&str, &str) = (
+    "/log_bob.c",
+    indoc! { r#"
+    void create() { enable_commands(); }
+    string *parse_command_id_list() { return ({ "bob" }); }
+    string *log = ({});
+    string describe(mixed v) {
+        if (v == 0) return "0";
+        if (v == this_object()) return "self";
+        return "other";
+    }
+    mixed indirect_give_obj_to_liv(mixed a, mixed b, string x, string y) {
+        log += ({ describe(a) + " " + describe(b) + " " + x + " " + y });
+        return 1;
+    }
+    string *query_log() { return log; }
+    void go(object d) { move_object(d); }
+"# },
+);
+
+#[tokio::test]
+async fn a_candidates_own_slot_holds_itself_while_filtered_and_reverts_to_zero() {
+    // Q7's sequence for `give OBJ to LIV`: filtering the direct slot puts
+    // the sword candidate in its own (still-empty) slot; filtering the
+    // indirect slot puts bob in its, with the direct slot already chosen;
+    // the all-filled re-ask hands both handlers every object.
+    let body = r#"
+        object room = find_object("/room");
+        move_object(room);
+        "/log_sword"->go(room);
+        "/log_bob"->go(room);
+        int r = command("give sword to bob");
+        // A call_other's static type is always the scalar `mixed` wildcard.
+        mixed sword_log = "/log_sword"->query_log();
+        mixed bob_log = "/log_bob"->query_log();
+        return ({
+            r,
+            sword_log[0], sword_log[1],
+            bob_log[0], bob_log[1],
+            "/verbs"->query_log()
+        });
+    "#;
+    let r = run(
+        MASTER,
+        &[LOG_SWORD, LOG_BOB, VERBS, ROOM],
+        &custom_main(body),
+    )
+    .await;
+    assert_eq!(
+        r,
+        vec![
+            LpcRef::from(1),
+            s("self 0 sword bob"),
+            s("self other sword bob"),
+            s("other self sword bob"),
+            s("other self sword bob"),
+            s("gave sword to bob give"),
+        ]
+    );
+}
+
+const OBS_FILTER_CRATE: (&str, &str) = (
+    "/obs_filter_crate.c",
+    indoc! { r#"
+    string *parse_command_id_list() { return ({ "crate" }); }
+    int seen_object; int recorded;
+    mixed direct_stash_obj(mixed a, string w) {
+        // Only the filter-time call (before the all-filled re-ask, which
+        // hands a many slot the object array) is of interest here.
+        if (!recorded) {
+            seen_object = objectp(a);
+            recorded = 1;
+        }
+        return 1;
+    }
+    int query_seen_object() { return seen_object; }
+    void go(object d) { move_object(d); }
+"# },
+);
+const STASH_VERB: (&str, &str) = (
+    "/stash_verb.c",
+    indoc! { r#"
+    void create() { parse_init(); parse_add_rule("stash", "OBS"); }
+    void do_stash_obs(mixed *obs) { }
+"# },
+);
+
+#[tokio::test]
+async fn a_many_slot_filter_call_gets_a_bare_object_not_an_array() {
+    let body = r#"
+        object room = find_object("/room");
+        move_object(room);
+        "/obs_filter_crate"->go(room);
+        int r = command("stash crate");
+        return ({ r, "/obs_filter_crate"->query_seen_object() });
+    "#;
+    let r = run(
+        "",
+        &[OBS_FILTER_CRATE, STASH_VERB, ROOM],
+        &custom_main(body),
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1)]);
+}
+
 #[tokio::test]
 async fn a_synonym_reports_the_typed_verb() {
     let r = run(
@@ -463,6 +588,26 @@ async fn a_synonym_reports_the_typed_verb() {
     )
     .await;
     assert_eq!(r, vec![LpcRef::from(1), s("get")]);
+}
+
+#[tokio::test]
+async fn a_synonym_of_a_synonym_matches_the_typed_verb_not_the_base() {
+    // `VERBS` registers `"g"` as a synonym of `"give"`, then `"gv"` as a
+    // synonym of `"g"`; the second `parse_add_synonym` call must match `"g"`
+    // against the sibling `Rule`'s own verb, not `give`'s `ParserRule.verb`.
+    let r = run(
+        MASTER,
+        &[SWORD, KNIFE, BOB, VERBS, ROOM],
+        &main_c(
+            r#"
+            int r = command("gv sword to bob");
+            return ({ r, "/verbs"->query_log() });
+        "#,
+        ),
+    )
+    .await;
+    // `do_give_obj_to_liv` logs `query_verb()`; it reports "gv", not "give".
+    assert_eq!(r, vec![LpcRef::from(1), s("gave sword to bob gv")]);
 }
 
 const BOX: (&str, &str) = (
@@ -745,5 +890,169 @@ async fn a_many_slot_shows_objects_only_before_do_and_the_reason_only_inside_do(
             LpcRef::from(1),
             LpcRef::from(1)
         ]
+    );
+}
+
+// Q8's unpinned behaviours: ordering against the actor's own rules, a
+// destructed verb object's rules disappearing from both dispatch and
+// `parse_dump`, the all-filled re-ask refusing after filtering qualified,
+// and the generic fallback handlers' `verb, rule` prefix.
+
+#[tokio::test]
+async fn the_actors_own_rule_beats_a_parser_rule_for_the_same_verb() {
+    let main = indoc! { r#"
+        mixed *create() {
+            enable_commands();
+            set_this_player(this_object());
+            object room = find_object("/room");
+            move_object(room);
+            "/sword"->go(room);
+            add_action("do_take", "take");
+            int r = command("take sword");
+            return ({ r, "/verbs"->query_log() });
+        }
+        int do_take(string arg) { return 1; }
+    "# };
+    let r = run(MASTER, &[SWORD, VERBS, ROOM], main).await;
+    // The actor's own `do_take` handled it; the parser rule's `do_take_obj`
+    // never ran, so `/verbs`' log stays at its unset default.
+    assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(0)]);
+}
+
+#[tokio::test]
+async fn a_zero_from_the_actors_own_rule_falls_through_to_the_parser_rule() {
+    let main = indoc! { r#"
+        mixed *create() {
+            enable_commands();
+            set_this_player(this_object());
+            object room = find_object("/room");
+            move_object(room);
+            "/sword"->go(room);
+            add_action("do_take", "take");
+            int r = command("take sword");
+            return ({ r, "/verbs"->query_log() });
+        }
+        int do_take(string arg) { return 0; }
+    "# };
+    let r = run(MASTER, &[SWORD, VERBS, ROOM], main).await;
+    assert_eq!(r, vec![LpcRef::from(1), s("took sword /sword")]);
+}
+
+#[tokio::test]
+async fn a_destructed_verb_objects_rules_vanish_from_dispatch_and_the_dump() {
+    let body = r#"
+        object room = find_object("/room");
+        move_object(room);
+        "/sword"->go(room);
+        destruct(find_object("/verbs"));
+        int commanded = command("take sword");
+        int sentenced = parse_sentence("take sword");
+        string dump = parse_dump();
+        return ({ commanded, sentenced, dump });
+    "#;
+    let r = run(MASTER, &[SWORD, VERBS, ROOM], &custom_main(body)).await;
+    assert_eq!(r, vec![LpcRef::from(0), LpcRef::from(0), s("")]);
+}
+
+#[tokio::test]
+async fn the_all_filled_reask_can_still_refuse_after_filtering_qualified() {
+    let refuses = (
+        "/reask_refuses.c",
+        indoc! { r#"
+        string *parse_command_id_list() { return ({ "sword" }); }
+        mixed direct_give_obj_to_liv(mixed a, mixed b, string x, string y) {
+            return b == 0 ? 1 : 0;
+        }
+        void go(object d) { move_object(d); }
+    "# },
+    );
+    let body = r#"
+        object room = find_object("/room");
+        move_object(room);
+        "/reask_refuses"->go(room);
+        "/bob"->go(room);
+        int r = parse_sentence("give sword to bob");
+        return ({ r });
+    "#;
+    let r = run(MASTER, &[refuses, BOB, VERBS, ROOM], &custom_main(body)).await;
+    assert_eq!(r, vec![LpcRef::from(-2)]);
+}
+
+#[tokio::test]
+async fn the_all_filled_reask_can_still_be_a_reason_after_filtering_qualified() {
+    let reasons = (
+        "/reask_reasons.c",
+        indoc! { r#"
+        string *parse_command_id_list() { return ({ "sword" }); }
+        mixed direct_give_obj_to_liv(mixed a, mixed b, string x, string y) {
+            if (b == 0) return 1;
+            return "not now";
+        }
+        void go(object d) { move_object(d); }
+    "# },
+    );
+    let body = r#"
+        object room = find_object("/room");
+        move_object(room);
+        "/reask_reasons"->go(room);
+        "/bob"->go(room);
+        int r = parse_sentence("give sword to bob");
+        return ({ r });
+    "#;
+    let r = run(MASTER, &[reasons, BOB, VERBS, ROOM], &custom_main(body)).await;
+    assert_eq!(r, vec![s("reason not now")]);
+}
+
+const GENERIC_VERB: (&str, &str) = (
+    "/generic_verb.c",
+    indoc! { r#"
+    string seen_verb; string seen_rule;
+    void create() { parse_init(); parse_add_rule("poke", "OBJ"); }
+    mixed can_verb_rule(string verb, string rule, mixed o, string w) {
+        seen_verb = verb; seen_rule = rule;
+        return 1;
+    }
+    void do_verb_rule(string verb, string rule, mixed o, string w) { }
+    string query_seen_verb() { return seen_verb; }
+    string query_seen_rule() { return seen_rule; }
+"# },
+);
+const GENERIC_TARGET: (&str, &str) = (
+    "/generic_target.c",
+    indoc! { r#"
+    string *parse_command_id_list() { return ({ "thing" }); }
+    string seen_verb; string seen_rule;
+    mixed direct_verb_rule(string verb, string rule, mixed o, string w) {
+        seen_verb = verb; seen_rule = rule;
+        return 1;
+    }
+    string query_seen_verb() { return seen_verb; }
+    string query_seen_rule() { return seen_rule; }
+    void go(object d) { move_object(d); }
+"# },
+);
+
+#[tokio::test]
+async fn generic_fallback_handlers_receive_the_verb_and_rule_prefix() {
+    let body = r#"
+        object room = find_object("/room");
+        move_object(room);
+        "/generic_target"->go(room);
+        int r = command("poke thing");
+        return ({
+            r,
+            "/generic_verb"->query_seen_verb(), "/generic_verb"->query_seen_rule(),
+            "/generic_target"->query_seen_verb(), "/generic_target"->query_seen_rule()
+        });
+    "#;
+    let r = run(
+        "",
+        &[GENERIC_VERB, GENERIC_TARGET, ROOM],
+        &custom_main(body),
+    )
+    .await;
+    assert_eq!(
+        r,
+        vec![LpcRef::from(1), s("poke"), s("OBJ"), s("poke"), s("OBJ"),]
     );
 }
