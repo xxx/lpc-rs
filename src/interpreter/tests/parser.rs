@@ -516,6 +516,85 @@ async fn nicknames_name_objects_in_scope() {
     assert_eq!(r, vec![LpcRef::from(1)]);
 }
 
+const APPLE: (&str, &str) = (
+    "/apple.c",
+    indoc! { r#"
+    string *parse_command_id_list() { return ({ "apple" }); }
+    mixed direct_take_obj(object ob, string w) { return 1; }
+"# },
+);
+const PEAR: (&str, &str) = (
+    "/pear.c",
+    indoc! { r#"
+    string *parse_command_id_list() { return ({ "pear" }); }
+    mixed direct_take_obj(object ob, string w) { return 1; }
+"# },
+);
+
+#[tokio::test]
+async fn a_nested_scope_array_flattens_and_skips_non_objects() {
+    let dead = ("/dead_thing.c", "");
+    let r = run(
+        "",
+        &[APPLE, PEAR, VERBS, dead],
+        r#"mixed *create() {
+            enable_commands();
+            set_this_player(this_object());
+            object apple = find_object("/apple");
+            object pear = find_object("/pear");
+            object gone = clone_object("/dead_thing");
+            destruct(gone);
+            mixed *scope = ({ apple, ({ pear, gone, "not an object" }) });
+            int top = parse_sentence("take apple", 0, scope);
+            int nested = parse_sentence("take pear", 0, scope);
+            return ({ top, nested });
+        }"#,
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1)]);
+}
+
+#[tokio::test]
+async fn a_non_array_scope_is_an_error() {
+    let err = fails(
+        "",
+        &[],
+        r#"mixed *create() {
+            enable_commands();
+            set_this_player(this_object());
+            mixed bad = "not an array";
+            parse_sentence("take it", 0, bad);
+            return ({});
+        }"#,
+    )
+    .await;
+    assert!(
+        err.contains("parse_sentence: the scope must be an array of objects"),
+        "{err}"
+    );
+}
+
+#[tokio::test]
+async fn a_self_referential_scope_is_bounded() {
+    let err = fails(
+        "",
+        &[],
+        r#"mixed *create() {
+            enable_commands();
+            set_this_player(this_object());
+            mixed *a = ({ 0 });
+            a[0] = a;
+            parse_sentence("take it", 0, a);
+            return ({});
+        }"#,
+    )
+    .await;
+    assert!(
+        err.contains("parse_sentence: the scope nests deeper than 20"),
+        "{err}"
+    );
+}
+
 #[tokio::test]
 async fn parse_sentence_codes() {
     let r = run(

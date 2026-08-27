@@ -116,6 +116,29 @@ async fn pre_hook(ctx: &TaskContext, actor: &Arc<Process>, line: &str) -> Result
     })
 }
 
+/// The verb-attached rules for `first_word`: exact verb match, owner live,
+/// cloned out of the shared `RuleList` (cheap — `Arc`s and a `Ustr`).
+fn verb_candidates(ctx: &TaskContext, first_word: &str) -> Vec<Rule> {
+    let verb_rules = ctx
+        .txn()
+        .with(|t| t.read_rules(ctx.object_space().verb_rules.id));
+    verb_rules
+        .iter()
+        .filter(|rule| rule.verb.as_str() == first_word)
+        .filter(|rule| rule.owner().is_some_and(|owner| owner.is_live(ctx.txn())))
+        .cloned()
+        .collect()
+}
+
+/// `line` after its first word, spacing trimmed. `first_word` came from
+/// `split_whitespace`, so it starts exactly where the trimmed line does —
+/// slicing by its byte length off the untrimmed `line` would misplace the
+/// cut (or land mid-character) whenever `line` has leading whitespace.
+fn rest_of<'a>(line: &'a str, first_word: &str) -> &'a str {
+    let trimmed = line.trim_start();
+    trimmed[first_word.len()..].trim_start()
+}
+
 /// Rules in precedence order — the actor's own, then the verb-attached
 /// parser rules for `first_word` — each tried until one handles the line.
 async fn trial(
@@ -136,17 +159,7 @@ async fn trial(
         .cloned()
         .collect();
     candidates.sort_by_key(|rule| std::cmp::Reverse(rule.id));
-
-    let verb_rules = ctx
-        .txn()
-        .with(|t| t.read_rules(ctx.object_space().verb_rules.id));
-    candidates.extend(
-        verb_rules
-            .iter()
-            .filter(|rule| rule.verb.as_str() == first_word)
-            .filter(|rule| rule.owner().is_some_and(|owner| owner.is_live(ctx.txn())))
-            .cloned(),
-    );
+    candidates.extend(verb_candidates(ctx, first_word));
 
     let members = scope.members();
     let mut resolver: Option<Resolver<LpcVocabulary<'_>>> = None;
@@ -192,7 +205,7 @@ async fn trial(
             }
             Handler::Protocol(parser) => {
                 let Some(owner) = rule.owner() else { continue };
-                let rest = line[first_word.len()..].trim_start();
+                let rest = rest_of(line, first_word);
                 ctx.with_command(|state| {
                     if let Some(state) = state {
                         state.verb_reported = rule.verb.to_string();
@@ -269,22 +282,11 @@ async fn sentence_trial(
     scope: Option<Vec<Arc<Process>>>,
     nicknames: &[Nickname],
 ) -> Result<Sentence> {
-    let verb_rules = ctx
-        .txn()
-        .with(|t| t.read_rules(ctx.object_space().verb_rules.id));
-    let candidates: Vec<Rule> = verb_rules
-        .iter()
-        .filter(|rule| rule.verb.as_str() == first_word)
-        .filter(|rule| rule.owner().is_some_and(|owner| owner.is_live(ctx.txn())))
-        .cloned()
-        .collect();
+    let candidates = verb_candidates(ctx, first_word);
     if candidates.is_empty() {
         return Ok(Sentence::NoVerb);
     }
-    // `first_word` came from `split_whitespace`, so it starts exactly where
-    // the trimmed line does, regardless of leading whitespace in `line`.
-    let trimmed = line.trim_start();
-    let rest = trimmed[first_word.len()..].trim_start();
+    let rest = rest_of(line, first_word);
 
     let mut worst: Option<Sentence> = None;
     for rule in &candidates {
@@ -1289,6 +1291,64 @@ mod tests {
         "# };
         assert_eq!(
             scenario("", &[mute], player, 1).await,
+            vec![LpcRef::from(0)]
+        );
+    }
+
+    const TAKE_VERB: (&str, &str) = (
+        "/take_verb.c",
+        indoc! { r#"
+        void create() { parse_init(); parse_add_rule("take", "OBJ"); }
+        void do_take_obj(object o, string w) { }
+    "# },
+    );
+    const SWORD_ITEM: (&str, &str) = (
+        "/sword_item.c",
+        indoc! { r#"
+        string *parse_command_id_list() { return ({ "sword" }); }
+        mixed direct_take_obj(object ob, string w) { return 1; }
+        void go(object dest) { move_object(dest); }
+    "# },
+    );
+
+    #[tokio::test]
+    async fn leading_whitespace_before_the_verb_still_dispatches() {
+        let player = indoc! { r#"
+            int r;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                "/sword_item"->go(this_object());
+                r = command("  take sword");
+            }
+        "# };
+        assert_eq!(
+            scenario("", &[TAKE_VERB, SWORD_ITEM], player, 1).await,
+            vec![LpcRef::from(1)]
+        );
+    }
+
+    const GROESSE_VERB: (&str, &str) = (
+        "/groesse_verb.c",
+        indoc! { r#"
+        void create() { parse_init(); parse_add_rule("größe", "OBJ"); }
+    "# },
+    );
+
+    /// Before the fix, slicing the untrimmed line by the verb's byte length
+    /// landed inside `ß`'s two-byte encoding and panicked.
+    #[tokio::test]
+    async fn a_multibyte_verb_does_not_panic_on_leading_whitespace() {
+        let player = indoc! { r#"
+            int r;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                r = command("  größe sword");
+            }
+        "# };
+        assert_eq!(
+            scenario("", &[GROESSE_VERB], player, 1).await,
             vec![LpcRef::from(0)]
         );
     }

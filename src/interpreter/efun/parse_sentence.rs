@@ -11,9 +11,7 @@ use crate::{
         dispatch::{self, Sentence},
         parser::Nickname,
     },
-    interpreter::{
-        efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process, stm::TxnHandle,
-    },
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process},
 };
 
 /// `parse_sentence(line, ignored, scope, nicknames)`: `1`/`0`/`-1`/`-2`/`-3`,
@@ -54,6 +52,10 @@ pub async fn parse_sentence<const N: usize>(context: &mut EfunContext<'_, N>) ->
     Ok(())
 }
 
+/// Nested-array depth cap for the scope argument, as `dump`'s
+/// `MAX_RECURSION`; a self-referential array is otherwise unbounded.
+const MAX_SCOPE_DEPTH: usize = 20;
+
 /// Register 3: `None` when absent or `NULL`; an array's live objects, with
 /// nested arrays flattened; anything else is an error.
 fn scope_arg<const N: usize>(context: &EfunContext<'_, N>) -> Result<Option<Vec<Arc<Process>>>> {
@@ -64,18 +66,29 @@ fn scope_arg<const N: usize>(context: &EfunContext<'_, N>) -> Result<Option<Vec<
         return Ok(None);
     };
     match value {
-        LpcRef::Array(_) => flatten_objects(context.txn(), value).map(Some),
+        LpcRef::Array(_) => flatten_objects(context, value, 0).map(Some),
         _ => Err(context.runtime_error("parse_sentence: the scope must be an array of objects")),
     }
 }
 
-/// The live objects of `value`'s array, recursing into nested arrays.
-fn flatten_objects(txn: &TxnHandle, value: &LpcRef) -> Result<Vec<Arc<Process>>> {
+/// The live objects of `value`'s array, recursing into nested arrays;
+/// `depth` is this array's nesting below the scope argument itself.
+fn flatten_objects<const N: usize>(
+    context: &EfunContext<'_, N>,
+    value: &LpcRef,
+    depth: usize,
+) -> Result<Vec<Arc<Process>>> {
+    if depth > MAX_SCOPE_DEPTH {
+        return Err(context.runtime_error(format!(
+            "parse_sentence: the scope nests deeper than {MAX_SCOPE_DEPTH}"
+        )));
+    }
+    let txn = context.txn();
     let items: Vec<LpcRef> = value.with_array(txn, |a| a.iter().cloned().collect())?;
     let mut out = Vec::new();
     for item in items {
         match item {
-            LpcRef::Array(_) => out.extend(flatten_objects(txn, &item)?),
+            LpcRef::Array(_) => out.extend(flatten_objects(context, &item, depth + 1)?),
             other => {
                 if let Some(object) = other.live_object(txn) {
                     out.push(object);
