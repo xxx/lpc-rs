@@ -618,6 +618,180 @@ mod tests {
         );
     }
 
+    const VERB_OWNER_SOURCE: &str = r#"
+        void register() {
+            parse_init();
+            parse_add_rule("give", "OBJ");
+        }
+        string dump() { return parse_dump(); }
+    "#;
+
+    /// `parse_add_rule` is a pure append onto the shared `verb_rules` cell
+    /// (B1/B2's conflict point): distinct verb objects registering
+    /// concurrently must commute, the way `COUNTER_ATOMIC`'s `++` does.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn verb_registration_from_distinct_owners_commits_without_conflicts() {
+        const WORKERS: usize = 4;
+        const PER_WORKER: usize = 64;
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code")
+            .max_execution_time(30_000_u64)
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        let template = TaskTemplate::from(vm.global_state.clone());
+        let timeout = vm.global_state.config.max_execution_time;
+
+        let mut owners = Vec::with_capacity(WORKERS);
+        for i in 0..WORKERS {
+            let path = format!("/bench_verb_owner_{i}.c");
+            let task = vm
+                .initialize_process_from_code(&path, VERB_OWNER_SOURCE)
+                .await
+                .expect("the verb owner failed to initialize");
+            owners.push(task.context.process.clone());
+        }
+
+        let before = vm.global_state.attempt_telemetry.snapshot();
+        let mut set = JoinSet::new();
+        for owner in &owners {
+            let owner = owner.clone();
+            let template = template.clone();
+            set.spawn(async move {
+                for _ in 0..PER_WORKER {
+                    apply_function_by_name(
+                        "register",
+                        &[],
+                        owner.clone(),
+                        template.clone(),
+                        Some(timeout),
+                    )
+                    .await
+                    .expect("the register apply failed")
+                    .expect("the register apply returned an error");
+                }
+            });
+        }
+        while let Some(joined) = set.join_next().await {
+            joined.expect("a worker panicked");
+        }
+        let after = vm.global_state.attempt_telemetry.snapshot();
+
+        assert_eq!(
+            after.conflicts - before.conflicts,
+            0,
+            "parse_add_rule is a pure append; appends from different owners commute"
+        );
+
+        let dump = apply_function_by_name("dump", &[], owners[0].clone(), template, Some(timeout))
+            .await
+            .expect("the dump apply failed")
+            .expect("the dump apply returned an error");
+        let lines = match dump {
+            crate::interpreter::lpc_ref::LpcRef::String(s) => s.to_string().lines().count(),
+            other => panic!("parse_dump() did not return a string: {other:?}"),
+        };
+        assert_eq!(lines, WORKERS * PER_WORKER, "no appended rule is lost");
+    }
+
+    const READER_SOURCE: &str = r#"
+        void create() { enable_commands(); }
+        int poke() {
+            set_this_player(this_object());
+            return parse_sentence("xyzzy nothing");
+        }
+    "#;
+
+    const DESTROYER_SOURCE: &str = r#"
+        void kill() {
+            object v = clone_object("/bench_victim");
+            destruct(v);
+        }
+    "#;
+
+    /// B1's gate: a process that never called `parse_init()` cannot own a
+    /// parser rule, so destructing one must not touch `verb_rules` — a
+    /// concurrent `parse_sentence` for a verb nothing registered keeps
+    /// reading that cell without a conflict.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn destructing_a_non_verb_object_does_not_conflict_with_unhandled_commands() {
+        const READERS: usize = 3;
+        const PER_READER: usize = 128;
+        const DESTROYS: usize = 128;
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code")
+            .max_execution_time(30_000_u64)
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        vm.initialize_process_from_code("/bench_victim.c", "void create() {}")
+            .await
+            .expect("the victim prototype failed to initialize");
+        let reader = vm
+            .initialize_process_from_code("/bench_command_reader.c", READER_SOURCE)
+            .await
+            .expect("the reader object failed to initialize")
+            .context
+            .process;
+        let destroyer = vm
+            .initialize_process_from_code("/bench_destroyer.c", DESTROYER_SOURCE)
+            .await
+            .expect("the destroyer object failed to initialize")
+            .context
+            .process;
+        let template = TaskTemplate::from(vm.global_state.clone());
+        let timeout = vm.global_state.config.max_execution_time;
+
+        let before = vm.global_state.attempt_telemetry.snapshot();
+        let mut set = JoinSet::new();
+        for _ in 0..READERS {
+            let reader = reader.clone();
+            let template = template.clone();
+            set.spawn(async move {
+                for _ in 0..PER_READER {
+                    apply_function_by_name(
+                        "poke",
+                        &[],
+                        reader.clone(),
+                        template.clone(),
+                        Some(timeout),
+                    )
+                    .await
+                    .expect("the poke apply failed")
+                    .expect("the poke apply returned an error");
+                }
+            });
+        }
+        {
+            let destroyer = destroyer.clone();
+            let template = template.clone();
+            set.spawn(async move {
+                for _ in 0..DESTROYS {
+                    apply_function_by_name(
+                        "kill",
+                        &[],
+                        destroyer.clone(),
+                        template.clone(),
+                        Some(timeout),
+                    )
+                    .await
+                    .expect("the kill apply failed")
+                    .expect("the kill apply returned an error");
+                }
+            });
+        }
+        while let Some(joined) = set.join_next().await {
+            joined.expect("a worker panicked");
+        }
+        let after = vm.global_state.attempt_telemetry.snapshot();
+
+        assert_eq!(
+            after.conflicts - before.conflicts,
+            0,
+            "a non-verb object's destruct must not touch verb_rules (B1's gate)"
+        );
+    }
+
     #[tokio::test]
     async fn every_workload_sets_up_and_applies_once() {
         for workload in WORKLOADS {
