@@ -141,6 +141,10 @@ fn rest_of<'a>(line: &'a str, first_word: &str) -> &'a str {
 
 /// Rules in precedence order — the actor's own, then the verb-attached
 /// parser rules for `first_word` — each tried until one handles the line.
+/// The verb-attached cell is read only when the actor's own rules did not
+/// handle the line: most lines are handled (or fall through) without ever
+/// touching it, which keeps `verb_rules` out of most transactions' read
+/// sets.
 async fn trial(
     ctx: &TaskContext,
     actor: &Arc<Process>,
@@ -159,24 +163,60 @@ async fn trial(
         .cloned()
         .collect();
     candidates.sort_by_key(|rule| std::cmp::Reverse(rule.id));
-    candidates.extend(verb_candidates(ctx, first_word));
 
     let members = scope.members();
     let mut resolver: Option<Resolver<LpcVocabulary<'_>>> = None;
+    // Boxed to stay out of `call_efun`'s unboxed future union, which every
+    // efun call pays for — `command` calls `dispatch` unboxed.
+    if Box::pin(try_rules(
+        ctx,
+        actor,
+        line,
+        first_word,
+        &members,
+        &mut resolver,
+        candidates,
+    ))
+    .await?
+    {
+        return Ok(Outcome::Handled);
+    }
+    let verb_rules = verb_candidates(ctx, first_word);
+    if Box::pin(try_rules(
+        ctx,
+        actor,
+        line,
+        first_word,
+        &members,
+        &mut resolver,
+        verb_rules,
+    ))
+    .await?
+    {
+        return Ok(Outcome::Handled);
+    }
+    Ok(Outcome::Unhandled)
+}
+
+/// Try `candidates` in turn against `line`; `true` as soon as one handles
+/// it (delivering a `Protocol` rule's message first).
+async fn try_rules<'a>(
+    ctx: &'a TaskContext,
+    actor: &Arc<Process>,
+    line: &str,
+    first_word: &str,
+    members: &[Arc<Process>],
+    resolver: &mut Option<Resolver<LpcVocabulary<'a>>>,
+    candidates: Vec<Rule>,
+) -> Result<bool> {
     for rule in candidates {
         match &rule.handler {
             Handler::Pointer(pointer) => {
                 if !pointer.receiver_is_live(ctx.txn()) {
                     continue;
                 }
-                let Some((args, reported)) = Box::pin(arguments_and_verb(
-                    ctx,
-                    &members,
-                    &mut resolver,
-                    &rule,
-                    line,
-                ))
-                .await?
+                let Some((args, reported)) =
+                    Box::pin(arguments_and_verb(ctx, members, resolver, &rule, line)).await?
                 else {
                     continue;
                 };
@@ -200,7 +240,7 @@ async fn trial(
                 )
                 .await?;
                 if !matches!(result, LpcRef::Int(LpcInt(0))) {
-                    return Ok(Outcome::Handled);
+                    return Ok(true);
                 }
             }
             Handler::Protocol(parser) => {
@@ -212,17 +252,17 @@ async fn trial(
                     }
                 });
                 match Box::pin(parser::run(ctx, actor, &owner, parser, rest, None, &[])).await? {
-                    Verdict::Handled => return Ok(Outcome::Handled),
+                    Verdict::Handled => return Ok(true),
                     Verdict::Message(message) => {
                         deliver(ctx, actor, &message).await?;
-                        return Ok(Outcome::Handled);
+                        return Ok(true);
                     }
                     Verdict::NoParse | Verdict::Refused | Verdict::Unresolved => continue,
                 }
             }
         }
     }
-    Ok(Outcome::Unhandled)
+    Ok(false)
 }
 
 /// `parse_sentence`'s outcome.
