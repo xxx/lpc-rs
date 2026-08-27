@@ -18,6 +18,8 @@ pub enum ParserRuleError {
     TwoStrs(String),
     /// A token glued to other letters (`OBJect`).
     TokenInWord(String),
+    /// A word holding `'`, which the native dialect quotes words with.
+    QuoteInWord(String),
     /// More than two object slots.
     TooManyObjects(String),
     /// The rewritten pattern did not compile.
@@ -30,6 +32,7 @@ impl fmt::Display for ParserRuleError {
         match self {
             ParserRuleError::TwoStrs(rule) => write!(f, "two STR tokens in '{rule}'"),
             ParserRuleError::TokenInWord(rule) => write!(f, "a token inside a word in '{rule}'"),
+            ParserRuleError::QuoteInWord(rule) => write!(f, "a quote inside a word in '{rule}'"),
             ParserRuleError::TooManyObjects(rule) => {
                 write!(f, "more than two object slots in '{rule}'")
             }
@@ -61,6 +64,9 @@ fn token(word: &str, rule: &str) -> Result<Token, ParserRuleError> {
     }
     if TOKENS.iter().any(|(name, _)| word.starts_with(name)) {
         return Err(ParserRuleError::TokenInWord(rule.to_owned()));
+    }
+    if word.contains('\'') {
+        return Err(ParserRuleError::QuoteInWord(rule.to_owned()));
     }
     Ok(Token::Literal(word.to_owned()))
 }
@@ -211,6 +217,10 @@ mod tests {
         assert_eq!(
             compile("x", "OBJ OBJ OBJ").unwrap_err().to_string(),
             "more than two object slots in 'OBJ OBJ OBJ'"
+        );
+        assert_eq!(
+            compile("look", "at bob's OBJ").unwrap_err().to_string(),
+            "a quote inside a word in 'at bob's OBJ'"
         );
     }
 }

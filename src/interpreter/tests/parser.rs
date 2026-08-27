@@ -76,6 +76,59 @@ async fn parse_remove_drops_a_verb_and_its_synonyms() {
     assert_eq!(r, Vec::<LpcRef>::new());
 }
 
+/// `give` with a synonym, a synonym of that synonym, and a second synonym
+/// of the base registered after the first.
+const CHAIN: (&str, &str) = (
+    "/verbs/give.c",
+    indoc! { r#"
+        void create() {
+            parse_init();
+            parse_add_rule("give", "OBJ to LIV");
+            parse_add_synonym("g", "give");
+            parse_add_synonym("gv", "g");
+            parse_add_synonym("x", "give");
+        }
+        void drop() { parse_remove("give"); }
+        string *rules() { return parse_my_rules(); }
+    "# },
+);
+
+#[tokio::test]
+async fn a_synonym_is_minted_once_per_base_rule_not_once_per_sibling() {
+    // `x` is a synonym of `give` registered when `g` and `gv` already
+    // exist; matching on a rule's own verb mints one `x` rule, not three.
+    let r = run(
+        "",
+        &[CHAIN],
+        indoc! { r#"
+        mixed create() { return "/verbs/give"->rules(); }
+    "# },
+    )
+    .await;
+    assert_eq!(
+        r,
+        vec![
+            s("give OBJ to LIV"),
+            s("g OBJ to LIV"),
+            s("gv OBJ to LIV"),
+            s("x OBJ to LIV")
+        ]
+    );
+}
+
+#[tokio::test]
+async fn parse_remove_of_the_base_drops_a_synonym_of_a_synonym() {
+    let r = run(
+        "",
+        &[CHAIN],
+        indoc! { r#"
+        mixed create() { "/verbs/give"->drop(); return "/verbs/give"->rules(); }
+    "# },
+    )
+    .await;
+    assert_eq!(r, Vec::<LpcRef>::new());
+}
+
 #[tokio::test]
 async fn add_rule_without_init_and_bad_rules_are_errors() {
     assert!(
@@ -95,6 +148,15 @@ async fn add_rule_without_init_and_bad_rules_are_errors() {
         )
         .await
         .contains("parse_add_rule: two STR tokens in 'STR STR'")
+    );
+    assert!(
+        fails(
+            "",
+            &[],
+            r#"mixed *create() { parse_init(); parse_add_rule("look", "at bob's OBJ"); return ({}); }"#
+        )
+        .await
+        .contains("parse_add_rule: a quote inside a word in 'at bob's OBJ'")
     );
     assert!(
         fails(

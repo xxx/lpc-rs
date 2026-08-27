@@ -7,7 +7,10 @@ owns — `this_object()` must have called `parse_init()` first. Several rules
 may share a verb; when a typed line reaches the parser package (after the
 dispatcher tries the actor's own `add_action`/`add_rule` rules first — see
 `parse_sentence`), every registered rule for that verb, on every live verb
-object, is tried in registration order until one runs its `do_`.
+object, is tried in registration order until one runs its `do_`. The
+dispatcher reads the registry only at that point, after the actor's own
+rules have declined, so a rule one of those handlers registers or removes
+for the same verb is already seen on that very line.
 
 `parse_add_rule` is a pure append: it never reads the registry first, so
 registering the same verb and rule text twice from the same object creates
@@ -107,7 +110,7 @@ Raised as runtime errors, all prefixed `parse_add_rule: `:
 | two `STR` tokens | `two STR tokens in 'rule'` |
 | a token glued to other letters (`OBJect`) | `a token inside a word in 'rule'` |
 | an all-caps word sharing a token's prefix (`LIVING`) | `a token inside a word in 'rule'` |
-| a word containing `'` | rejected by the pattern compiler |
+| a word containing `'` (`bob's`) | `a quote inside a word in 'rule'` |
 | more than two object slots | `more than two object slots in 'rule'` |
 
 ### Departures
