@@ -9,12 +9,9 @@ use crate::{
 };
 
 /// `parse_add_synonym(new_verb, old_verb, rule)`: copies every rule
-/// `this_object()` registered for `old_verb` (or only the one matching
-/// `rule`, if given) under `new_verb`, with a fresh id so `parse_remove`
-/// can drop the synonym independently. `old_verb` is matched against the
-/// rule's own (typed) verb, not its `ParserRule`'s base verb, so a synonym
-/// of a synonym works: `parse_add_synonym("gv", "g")` finds the `"g"`
-/// synonym after `parse_add_synonym("g", "give")` registered it.
+/// `this_object()` registered under `old_verb` (or only the one whose text
+/// is `rule`) as a fresh rule for `new_verb` sharing its handlers; `old_verb`
+/// is the typed verb, so a synonym of a synonym works.
 pub async fn parse_add_synonym<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let (LpcRef::String(new_verb), LpcRef::String(old_verb)) = (
         context.resolve_local_register(1 as RegisterSize).clone(),

@@ -142,9 +142,7 @@ fn rest_of<'a>(line: &'a str, first_word: &str) -> &'a str {
 /// Rules in precedence order — the actor's own, then the verb-attached
 /// parser rules for `first_word` — each tried until one handles the line.
 /// The verb-attached cell is read only when the actor's own rules did not
-/// handle the line: most lines are handled (or fall through) without ever
-/// touching it, which keeps `verb_rules` out of most transactions' read
-/// sets.
+/// handle the line — it stays out of most transactions' read sets.
 async fn trial(
     ctx: &TaskContext,
     actor: &Arc<Process>,
@@ -311,9 +309,8 @@ pub(crate) async fn sentence(
 
 /// The verb-attached rules for `first_word`, tried in registration order:
 /// none registered is `NoVerb`; the first `Handled` wins; a `Message`
-/// returns at once; otherwise the outcomes fold, furthest first —
-/// `Unresolved` outranks `Refused` outranks `NoParse` — since each rule
-/// already picked its own furthest failure inside `run`.
+/// returns at once; otherwise the outcomes fold by severity, `Unresolved`
+/// over `Refused` over `NoParse`.
 async fn sentence_trial(
     ctx: &TaskContext,
     actor: &Arc<Process>,

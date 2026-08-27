@@ -12,10 +12,9 @@ use crate::{
 };
 
 /// `parse_add_rule(verb, rule)`: appends a verb-attached rule owned by
-/// `this_object()`, which must have called `parse_init()`. A pure append —
-/// no read of `verb_rules` — so verb objects registering in parallel
-/// commute; a dead owner's rules are purged by `parse_remove` and by
-/// destruct, not here.
+/// `this_object()`, which must have called `parse_init()`. Do not read
+/// `verb_rules` here — it would make parallel registrations conflict; dead
+/// owners are purged by `parse_remove` and destruct.
 pub async fn parse_add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let this = context.frame().process.clone();
     if this.parser_ready.get().is_none() {

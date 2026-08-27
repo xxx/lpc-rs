@@ -260,9 +260,8 @@ async fn attempt(
         }) = resolver.resolve(kind, &cap.text).await?
         else {
             let living_slot = matches!(slot, Slot::Living | Slot::Livings);
-            // This second resolve re-applies `parse_command_numeral` on
-            // `cap.text`; the numeral it returns is discarded here, only
-            // whether the phrase names any (non-living) object matters.
+            // This second resolve re-applies `parse_command_numeral`; only whether
+            // the phrase names any non-living object matters here.
             let kind = if living_slot
                 && resolver
                     .resolve(ResolveKind::Items, &cap.text)
@@ -287,8 +286,7 @@ async fn attempt(
         let mut unreachable = false;
         for &candidate in &matched {
             let object = &candidates[candidate];
-            // A neighbour a previous slot's handler destructed is skipped,
-            // not just unreachable — it is not `ThereIsNo` either.
+            // A neighbour an earlier handler destructed is skipped silently.
             if !object.object.is_live(ctx.txn()) {
                 continue;
             }
@@ -296,10 +294,8 @@ async fn attempt(
                 unreachable = true;
                 continue;
             }
-            // The candidate sits in its own slot for the duration of this
-            // call — a bare object even for a many slot — then reverts to
-            // `0`; the chosen-so-far objects (`values`) are otherwise
-            // unrelated to it.
+            // The candidate sits in its own slot for this call — a bare object
+            // even for a many slot — then reverts to `0`.
             values[index] = LpcRef::from(Arc::downgrade(&object.object));
             let reply = call(
                 ctx,

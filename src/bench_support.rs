@@ -626,9 +626,8 @@ mod tests {
         string dump() { return parse_dump(); }
     "#;
 
-    /// `parse_add_rule` is a pure append onto the shared `verb_rules` cell
-    /// (B1/B2's conflict point): distinct verb objects registering
-    /// concurrently must commute, the way `COUNTER_ATOMIC`'s `++` does.
+    /// `parse_add_rule` is a pure append onto the shared `verb_rules` cell:
+    /// distinct verb objects registering concurrently commute.
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn verb_registration_from_distinct_owners_commits_without_conflicts() {
         const WORKERS: usize = 4;
@@ -709,10 +708,8 @@ mod tests {
         }
     "#;
 
-    /// B1's gate: a process that never called `parse_init()` cannot own a
-    /// parser rule, so destructing one must not touch `verb_rules` — a
-    /// concurrent `parse_sentence` for a verb nothing registered keeps
-    /// reading that cell without a conflict.
+    /// Destructing an object that never called `parse_init()` must not write
+    /// `verb_rules`, or every concurrent `parse_sentence` would conflict.
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn destructing_a_non_verb_object_does_not_conflict_with_unhandled_commands() {
         const READERS: usize = 3;
