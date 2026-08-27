@@ -33,6 +33,14 @@ const BAG: (&str, &str) = (
 "# },
 );
 
+const BOB: (&str, &str) = (
+    "/bob.c",
+    indoc! { r#"
+    void create() { enable_commands(); }
+    string *parse_command_id_list() { return ({ "bob" }); }
+"# },
+);
+
 /// `doc/efun/parse_command.md`'s example master, verbatim.
 const ENGLISH_MASTER: &str = indoc! { r#"
     string parse_command_all_word() { return "all"; }
@@ -209,6 +217,23 @@ async fn object_writes_the_first_match_and_living_only_livings() {
             LpcRef::from(0)
         ]
     );
+}
+
+#[tokio::test]
+async fn a_single_living_capture_writes_the_matched_object() {
+    let r = run(
+        "",
+        &[BOB],
+        indoc! { r#"
+        mixed *create() {
+            object ob;
+            int r = parse_command("bob", ({ find_object("/bob") }), "%L", ob);
+            return ({ r, ob == find_object("/bob") });
+        }
+    "# },
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1)]);
 }
 
 #[tokio::test]

@@ -34,6 +34,7 @@ pub(crate) mod parse_init;
 pub(crate) mod parse_my_rules;
 pub(crate) mod parse_refresh;
 pub(crate) mod parse_remove;
+pub(crate) mod parse_sentence;
 pub(crate) mod parse_string;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
@@ -386,6 +387,16 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false)],
     },
+    parse_sentence => {
+        returns: LpcType::Mixed(false),
+        arity: (4, 3),
+        args: [
+            LpcType::String(false),
+            LpcType::Int(false),
+            LpcType::Object(true),
+            LpcType::Mapping(false),
+        ],
+    },
     parse_string => {
         returns: LpcType::Mixed(true),
         arity: (3, 1),
@@ -594,6 +605,7 @@ mod tests {
                 "parse_my_rules",
                 "parse_refresh",
                 "parse_remove",
+                "parse_sentence",
                 "parse_string",
                 "query_call_out",
                 "query_call_outs",

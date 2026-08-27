@@ -9,7 +9,8 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use crate::{
     command::{
         frontend::{add_action::verb_matches, arguments_and_verb},
-        registry::{Rule, scope_of},
+        parser::{self, Nickname, Verdict},
+        registry::{Handler, Rule, scope_of},
         resolve::{LpcVocabulary, Resolver},
     },
     compile_time_config::MAX_COMMAND_DEPTH,
@@ -115,7 +116,8 @@ async fn pre_hook(ctx: &TaskContext, actor: &Arc<Process>, line: &str) -> Result
     })
 }
 
-/// Rules in precedence order, each tried until one handles the line.
+/// Rules in precedence order — the actor's own, then the verb-attached
+/// parser rules for `first_word` — each tried until one handles the line.
 async fn trial(
     ctx: &TaskContext,
     actor: &Arc<Process>,
@@ -124,54 +126,195 @@ async fn trial(
 ) -> Result<Outcome> {
     let rules = actor.rules_of(ctx.txn());
     let scope = scope_of(ctx.txn(), actor);
-    let mut candidates: Vec<&Rule> = rules
+    let mut candidates: Vec<Rule> = rules
         .iter()
         .filter(|rule| {
             rule.owner()
                 .is_some_and(|owner| owner.is_live(ctx.txn()) && scope.contains(&owner))
         })
         .filter(|rule| verb_matches(rule.verb.as_str(), rule.matching, first_word))
+        .cloned()
         .collect();
     candidates.sort_by_key(|rule| std::cmp::Reverse(rule.id));
+
+    let verb_rules = ctx
+        .txn()
+        .with(|t| t.read_rules(ctx.object_space().verb_rules.id));
+    candidates.extend(
+        verb_rules
+            .iter()
+            .filter(|rule| rule.verb.as_str() == first_word)
+            .filter(|rule| rule.owner().is_some_and(|owner| owner.is_live(ctx.txn())))
+            .cloned(),
+    );
 
     let members = scope.members();
     let mut resolver: Option<Resolver<LpcVocabulary<'_>>> = None;
     for rule in candidates {
-        let Some(pointer) = rule.handler.pointer() else {
-            continue;
-        };
-        if !pointer.receiver_is_live(ctx.txn()) {
-            continue;
-        }
-        let Some((args, reported)) =
-            Box::pin(arguments_and_verb(ctx, &members, &mut resolver, rule, line)).await?
-        else {
-            continue;
-        };
-        ctx.with_command(|state| {
-            if let Some(state) = state {
-                state.verb_reported = reported;
-            }
-        });
+        match &rule.handler {
+            Handler::Pointer(pointer) => {
+                if !pointer.receiver_is_live(ctx.txn()) {
+                    continue;
+                }
+                let Some((args, reported)) = Box::pin(arguments_and_verb(
+                    ctx,
+                    &members,
+                    &mut resolver,
+                    &rule,
+                    line,
+                ))
+                .await?
+                else {
+                    continue;
+                };
+                ctx.with_command(|state| {
+                    if let Some(state) = state {
+                        state.verb_reported = reported;
+                    }
+                });
 
-        let handler_ctx = ctx.clone().with_process(actor.clone());
-        handler_ctx.this_player.store(Some(actor.clone()));
-        let Some(resolved) = pointer.prepare_call(&args, &handler_ctx).await? else {
-            continue;
-        };
-        let timeout = ctx.config().max_execution_time;
-        let result = apply_function(
-            resolved.function,
-            &resolved.args,
-            handler_ctx.with_process(resolved.process),
-            Some(timeout),
-        )
-        .await?;
-        if !matches!(result, LpcRef::Int(LpcInt(0))) {
-            return Ok(Outcome::Handled);
+                let handler_ctx = ctx.clone().with_process(actor.clone());
+                handler_ctx.this_player.store(Some(actor.clone()));
+                let Some(resolved) = pointer.prepare_call(&args, &handler_ctx).await? else {
+                    continue;
+                };
+                let timeout = ctx.config().max_execution_time;
+                let result = apply_function(
+                    resolved.function,
+                    &resolved.args,
+                    handler_ctx.with_process(resolved.process),
+                    Some(timeout),
+                )
+                .await?;
+                if !matches!(result, LpcRef::Int(LpcInt(0))) {
+                    return Ok(Outcome::Handled);
+                }
+            }
+            Handler::Protocol(parser) => {
+                let Some(owner) = rule.owner() else { continue };
+                let rest = line[first_word.len()..].trim_start();
+                ctx.with_command(|state| {
+                    if let Some(state) = state {
+                        state.verb_reported = rule.verb.to_string();
+                    }
+                });
+                match Box::pin(parser::run(ctx, actor, &owner, parser, rest, None, &[])).await? {
+                    Verdict::Handled => return Ok(Outcome::Handled),
+                    Verdict::Message(message) => {
+                        deliver(ctx, actor, &message).await?;
+                        return Ok(Outcome::Handled);
+                    }
+                    Verdict::NoParse | Verdict::Refused | Verdict::Unresolved => continue,
+                }
+            }
         }
     }
     Ok(Outcome::Unhandled)
+}
+
+/// `parse_sentence`'s outcome.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Sentence {
+    /// A verb-attached rule's `do_` ran.
+    Handled,
+    /// No verb-attached rule is registered for the line's first word.
+    NoVerb,
+    /// No verb-attached rule's grammar parsed the rest of the line.
+    NoParse,
+    /// A handler refused and the master gave no message.
+    Refused,
+    /// An object phrase did not resolve and the master gave no message.
+    Unresolved,
+    /// The master's message for the failure.
+    Message(String),
+}
+
+/// Run `line` for `actor` over the parser rules only, as `parse_sentence`
+/// does: the same transaction, depth limit and command state as
+/// `dispatch`, but no pre-hook, no fallback, nothing delivered.
+pub(crate) async fn sentence(
+    ctx: &TaskContext,
+    actor: &Arc<Process>,
+    line: &str,
+    scope: Option<Vec<Arc<Process>>>,
+    nicknames: &[Nickname],
+) -> Result<Sentence> {
+    if ctx.command.lock().len() >= MAX_COMMAND_DEPTH {
+        return Err(lpc_error!(
+            "parse_sentence: nesting deeper than {MAX_COMMAND_DEPTH}"
+        ));
+    }
+    let first_word = line.split_whitespace().next().unwrap_or("").to_owned();
+    ctx.command.lock().push(CommandState {
+        line: line.to_owned(),
+        verb_typed: first_word.clone(),
+        verb_reported: first_word.clone(),
+        notify_fail: None,
+    });
+    let result = sentence_trial(ctx, actor, line, &first_word, scope, nicknames).await;
+    ctx.command.lock().pop();
+    result
+}
+
+/// The verb-attached rules for `first_word`, tried in registration order:
+/// none registered is `NoVerb`; the first `Handled` wins; a `Message`
+/// returns at once; otherwise the outcomes fold, furthest first —
+/// `Unresolved` outranks `Refused` outranks `NoParse` — since each rule
+/// already picked its own furthest failure inside `run`.
+async fn sentence_trial(
+    ctx: &TaskContext,
+    actor: &Arc<Process>,
+    line: &str,
+    first_word: &str,
+    scope: Option<Vec<Arc<Process>>>,
+    nicknames: &[Nickname],
+) -> Result<Sentence> {
+    let verb_rules = ctx
+        .txn()
+        .with(|t| t.read_rules(ctx.object_space().verb_rules.id));
+    let candidates: Vec<Rule> = verb_rules
+        .iter()
+        .filter(|rule| rule.verb.as_str() == first_word)
+        .filter(|rule| rule.owner().is_some_and(|owner| owner.is_live(ctx.txn())))
+        .cloned()
+        .collect();
+    if candidates.is_empty() {
+        return Ok(Sentence::NoVerb);
+    }
+    // `first_word` came from `split_whitespace`, so it starts exactly where
+    // the trimmed line does, regardless of leading whitespace in `line`.
+    let trimmed = line.trim_start();
+    let rest = trimmed[first_word.len()..].trim_start();
+
+    let mut worst: Option<Sentence> = None;
+    for rule in &candidates {
+        let Some(owner) = rule.owner() else { continue };
+        let Some(parser) = rule.handler.protocol() else {
+            continue;
+        };
+        let verdict = Box::pin(parser::run(
+            ctx,
+            actor,
+            &owner,
+            parser,
+            rest,
+            scope.clone(),
+            nicknames,
+        ))
+        .await?;
+        match verdict {
+            Verdict::Handled => return Ok(Sentence::Handled),
+            Verdict::Message(message) => return Ok(Sentence::Message(message)),
+            Verdict::Unresolved => worst = Some(Sentence::Unresolved),
+            Verdict::Refused if worst != Some(Sentence::Unresolved) => {
+                worst = Some(Sentence::Refused);
+            }
+            Verdict::Refused => {}
+            Verdict::NoParse if worst.is_none() => worst = Some(Sentence::NoParse),
+            Verdict::NoParse => {}
+        }
+    }
+    Ok(worst.unwrap_or(Sentence::NoParse))
 }
 
 /// Apply `function` on `target` with `this_player` set, joining `ctx`'s
