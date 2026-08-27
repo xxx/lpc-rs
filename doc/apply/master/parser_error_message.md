@@ -53,6 +53,9 @@ string parser_error_message(int kind, object ob, mixed arg, int flag) {
 }
 ```
 
+Departures from MudOS are listed in
+[`parse_sentence`](../../efun/parse_sentence.md)'s departures table.
+
 ### See also
 
 [`parse_add_rule`](../../efun/parse_add_rule.md),

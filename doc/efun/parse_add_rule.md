@@ -69,18 +69,24 @@ void create() {
 
 Typing `give sword to bob` calls, in order (`OBJ(sword)` below stands for the
 object resolved from the word `sword`; an object slot not yet chosen is
-always `0`, including while its *own* candidates are being asked):
+`0`):
 
 - `can_give_obj_to_liv(0, 0, "sword", "bob")`
-- `direct_give_obj_to_liv(0, 0, "sword", "bob")` — on each object named
-  `sword`, to pick the one meant; the direct slot is not yet chosen, so its
-  own argument is still `0` here too
-- `indirect_give_obj_to_liv(OBJ(sword), 0, "sword", "bob")` — on each living
-  named `bob`, once the sword is chosen
+- `direct_give_obj_to_liv(OBJ(sword), 0, "sword", "bob")` — on each object
+  named `sword`, to pick the one meant; for the duration of this call the
+  candidate itself sits in its own (direct) slot, and the indirect slot is
+  still unfilled
+- `indirect_give_obj_to_liv(OBJ(sword), OBJ(bob), "sword", "bob")` — on each
+  living named `bob`, once the sword is chosen; the candidate now sits in
+  its own (indirect) slot alongside the already-chosen direct object
 - `direct_give_obj_to_liv(OBJ(sword), OBJ(bob), "sword", "bob")` and
   `indirect_give_obj_to_liv(OBJ(sword), OBJ(bob), "sword", "bob")` — the
   all-filled re-ask, once both slots are chosen
 - `do_give_obj_to_liv(OBJ(sword), OBJ(bob), "sword", "bob")`
+
+A many slot's (`OBS`/`LVS`) filtering candidate sits in its own slot the same
+way — as a bare object, never as a one-element array; the array shape is
+only for a slot already *chosen* (the all-filled re-ask and `do_`).
 
 ### Scope
 
@@ -100,6 +106,8 @@ Raised as runtime errors, all prefixed `parse_add_rule: `:
 | `this_object()` has not called `parse_init()` | `parse_init() has not been called` |
 | two `STR` tokens | `two STR tokens in 'rule'` |
 | a token glued to other letters (`OBJect`) | `a token inside a word in 'rule'` |
+| an all-caps word sharing a token's prefix (`LIVING`) | `a token inside a word in 'rule'` |
+| a word containing `'` | rejected by the pattern compiler |
 | more than two object slots | `more than two object slots in 'rule'` |
 
 ### Departures

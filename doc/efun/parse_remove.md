@@ -5,8 +5,11 @@
 Removes `this_object()`'s rules for `verb`. `verb` is matched against a
 rule's *base* verb — the one `parse_add_rule` registered it under, not the
 one a `parse_add_synonym` renamed it to — so removing a base verb removes
-every synonym built from it in the same call; removing a synonym's own verb
-name matches nothing. Removing a verb `this_object()` has no rules for is
+every synonym built from it in the same call, including a synonym of a
+synonym (`parse_add_synonym("gv", "g")` after `parse_add_synonym("g",
+"give")`: `parse_remove("give")` drops `give`, `g` and `gv` together, since
+all three share `give`'s base); removing a synonym's own verb name (`"g"` or
+`"gv"`) matches nothing. Removing a verb `this_object()` has no rules for is
 silent.
 
 As a side effect, `parse_remove` also purges every rule left in the registry

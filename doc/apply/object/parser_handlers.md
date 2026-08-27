@@ -33,10 +33,14 @@ One argument per token, in rule order:
 
 - `WRD`/`STR` — the matched text, as a string.
 - `OBJ`/`LIV` — the object chosen for that slot, or `0` while it is
-  unchosen — including while its *own* candidates are being asked (a slot is
-  never "chosen" until every candidate has had its say).
+  unchosen. The one exception: for the duration of a candidate's own
+  `direct_`/`indirect_` filtering call for that same slot, the argument is
+  that candidate itself, not `0` — the slot reverts to `0` once the call
+  returns, before the next candidate is asked.
 - `OBS`/`LVS` — an array of the objects chosen for that slot, or `0` while
-  unchosen.
+  unchosen. The same exception holds during filtering, but the candidate
+  sits in its own slot as a bare object, never as a one-element array — the
+  array shape is only for a slot already *chosen*.
 
 Then, one more argument per object slot (`OBJ`/`OBS`/`LIV`/`LVS`, in rule
 order), holding the words that slot's phrase was typed as — present in
@@ -46,11 +50,12 @@ every call, resolved or not.
 yet). `direct_`/`indirect_` are each called once per reachable candidate the
 resolver found for their slot (an unreachable match, per
 `inventory_accessible`, is never asked at all), with earlier slots' arguments
-filled and the current and later slots' still `0`; once every slot is
-chosen, `direct_` and `indirect_` are each called once more on the objects
-finally chosen, every argument filled — MudOS's guarantee that a handler
-eventually sees the whole sentence. `do_` is called once, after that
-re-ask, with every slot filled.
+filled, the current slot holding that one candidate (bare object, even for a
+many slot), and later slots still `0`; once every slot is chosen, `direct_`
+and `indirect_` are each called once more on the objects finally chosen,
+every argument filled — MudOS's guarantee that a handler eventually sees the
+whole sentence. `do_` is called once, after that re-ask, with every slot
+filled.
 
 ### Returns
 
@@ -67,10 +72,12 @@ soft one, and the earliest of whichever kind wins is what gets reported.
 
 Everywhere but `do_` — `can_`, `direct_`/`indirect_`, and the all-filled
 re-ask — an `OBS`/`LVS` slot's argument is the array of objects chosen for
-it so far, and nothing else. `do_` alone sees something wider for that same
-slot: the qualifying objects, in candidate order, followed by every *plain*
-(non-`#`) reason a candidate that did not qualify returned, as a string;
-soft reasons are dropped by this point.
+it so far, and nothing else (a candidate filtering for that very slot is the
+one exception described above: itself, as a bare object, not an array).
+`do_` alone sees something wider for that same slot: the qualifying objects,
+in candidate order, followed by every *plain* (non-`#`) reason a candidate
+that did not qualify returned, as a string; soft reasons are dropped by this
+point.
 
 Departures from MudOS are listed in [`parse_sentence`](../../efun/parse_sentence.md)'s
 departures table.
