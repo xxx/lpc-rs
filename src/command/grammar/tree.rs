@@ -9,7 +9,7 @@ use super::{
 };
 
 /// One derivation node: which production, over which token span.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Node {
     /// The production this node derives from.
     pub production: ProdId,
@@ -19,8 +19,20 @@ pub struct Node {
     pub children: Vec<Child>,
 }
 
+impl Drop for Node {
+    /// Unnest the children first — the derived glue recurses once per level.
+    fn drop(&mut self) {
+        let mut pending = std::mem::take(&mut self.children);
+        while let Some(child) = pending.pop() {
+            if let Child::Node(mut inner) = child {
+                pending.append(&mut inner.children);
+            }
+        }
+    }
+}
+
 /// One child of a derivation node: a terminal or a nested nonterminal.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Child {
     /// A terminal, by token index.
     Token(usize),
@@ -105,15 +117,23 @@ impl<'g> Parse<'g> {
     }
 }
 
-/// Walk `node` in pre-order, pushing every labelled element's span onto `out`.
-fn collect_captures(grammar: &Grammar, node: &Node, out: &mut Vec<(Label, Range<usize>)>) {
-    let rhs = &grammar.production(node.production).rhs;
-    for (element, child) in rhs.iter().zip(&node.children) {
+/// Walk `root` in pre-order, pushing every labelled element's span onto
+/// `out`; an explicit stack — the tree may be `Options::max_depth` deep.
+fn collect_captures(grammar: &Grammar, root: &Node, out: &mut Vec<(Label, Range<usize>)>) {
+    let mut stack: Vec<(&Node, usize)> = vec![(root, 0)];
+    while let Some((node, next)) = stack.last_mut() {
+        let node: &Node = node;
+        let Some(child) = node.children.get(*next) else {
+            stack.pop();
+            continue;
+        };
+        let element = &grammar.production(node.production).rhs[*next];
+        *next += 1;
         if let Some(label) = element.label {
             out.push((label, child.span()));
         }
         if let Child::Node(inner) = child {
-            collect_captures(grammar, inner, out);
+            stack.push((inner, 0));
         }
     }
 }

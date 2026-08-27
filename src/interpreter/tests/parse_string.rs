@@ -221,8 +221,8 @@ async fn a_malformed_grammar_is_a_prefixed_error() {
     );
 }
 
-/// The loop bound (69) is sized against `dgd::MAX_STEPS` under `cfg(test)`
-/// (4096), not the production budget of 2²⁰.
+/// `E: E E` over n words attempts about n³/6 chart adds; 200 words pass
+/// `dgd::MAX_STEPS` (2²⁰) while building the chart.
 #[tokio::test]
 async fn an_exhausted_budget_is_a_prefixed_error() {
     let e = fails(
@@ -232,7 +232,7 @@ async fn an_exhausted_budget_is_a_prefixed_error() {
         mixed *create() {
             string input = "a";
             int i;
-            for (i = 0; i < 69; i++) input += " a";
+            for (i = 0; i < 200; i++) input += " a";
             return parse_string("whitespace = /[ ]+/ w = /a/ E: E E E: w", input);
         }
     "# },
@@ -280,4 +280,57 @@ async fn an_action_runs_in_the_pointers_owner_not_the_caller() {
     )
     .await;
     assert_eq!(r, vec![s("/actor")]);
+}
+
+/// A grammar whose derivation is one nonterminal level per `a`, with an
+/// action at every level, over `n` of them. Left-recursive — a
+/// right-recursive list's n²/2 chart items pass the step budget long before
+/// the depth limit.
+fn list_main(n: usize) -> String {
+    format!(
+        r#"
+        string grammar = "word = /a/ List: List word ? act List: word ? act";
+        mixed *act(mixed *t) {{ return ({{ sizeof(t) }}); }}
+        mixed *create() {{
+            string input = "a";
+            int i;
+            for (i = 1; i < {n}; i++) input += "a";
+            return parse_string(grammar, input);
+        }}
+        "#
+    )
+}
+
+/// Run `f` to completion on a current-thread runtime on a thread with half
+/// the 2 MiB stack tokio's workers get.
+fn on_a_1_mib_stack<T: Send + 'static>(
+    f: impl std::future::Future<Output = T> + Send + 'static,
+) -> T {
+    std::thread::Builder::new()
+        .stack_size(1 << 20)
+        .spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("a current-thread runtime")
+                .block_on(f)
+        })
+        .expect("a thread")
+        .join()
+        .expect("the thread finished")
+}
+
+#[test]
+fn a_list_at_the_default_depth_evaluates_within_a_1_mib_stack() {
+    let main = list_main(crate::command::grammar::DEFAULT_MAX_DEPTH);
+    let r = on_a_1_mib_stack(async move { run("", &[], &main).await });
+    // Every level above the bottom folds `({ child, "a" })` to `({ 2 })`.
+    assert_eq!(r, vec![LpcRef::from(2)]);
+}
+
+#[test]
+fn a_list_one_past_the_default_depth_is_too_deep() {
+    let main = list_main(crate::command::grammar::DEFAULT_MAX_DEPTH + 1);
+    let e = on_a_1_mib_stack(async move { fails("", &[], &main).await });
+    assert!(e.contains("parse_string: parse deeper than 4096"), "{e}");
 }

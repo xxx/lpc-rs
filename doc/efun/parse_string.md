@@ -106,15 +106,23 @@ All raised as runtime errors prefixed `parse_string: `:
 | a reachable symbol defined nowhere | ``nonterminal `name` has no production`` |
 | a regexp the engine cannot compile | the engine's message |
 | the parse ran past its budget | `parse budget exhausted` |
+| a derivation nested deeper than 4096 | `parse deeper than 4096` |
 
 An error raised inside an action is that action's error, unprefixed.
 
 ### Limits
 
 Each call pulls at most 64 derivations before giving up, and spends at most
-2²⁰ steps (chart items plus derivation nodes) on the parse itself — the tick
-limit bounds the actions, but not the parse. The 64 most recently used grammar
-texts stay compiled; a text not among them is compiled again on its next use.
+2²⁰ steps (chart operations plus derivation levels) on the parse itself — the tick
+limit bounds the actions, but not the parse. A derivation may nest at most
+4096 production levels deep — a list grammar reaches that at 4096 items —
+and a deeper one ends the parse the way an exhausted budget does. The
+shape of a list rule decides which limit a long input meets first: a
+left-recursive `List: List item` costs a few chart items per item, so the
+depth limit; a right-recursive `List: item List` costs about n²/2 chart
+items for n items, so the step budget, at about 1400 items. The 64 most
+recently used grammar texts stay compiled; a text not among them is
+compiled again on its next use.
 
 ### Departures from DGD
 
@@ -127,6 +135,7 @@ texts stay compiled; a text not among them is compiled again on its next use.
 | automata built incrementally per sentence seen | built whole, once per text |
 | `Rule N is too long`, `Grammar too large`, `regular expression too large` | no text-size limits (groups nest at most 250 deep); the parse budget bounds the work |
 | a runaway parse is bounded by ticks | the step budget |
+| a deep parse is bounded by memory | 4096 levels, `parse deeper than 4096` |
 | bytes | UTF-8 characters |
 | `< func` stored | accepted, ignored |
 | not callable from a special-purpose object | no such objects |

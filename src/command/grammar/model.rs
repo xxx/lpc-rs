@@ -91,19 +91,28 @@ pub struct Options {
     pub case_insensitive: bool,
     /// Derivations enumerated per input before the iterator ends.
     pub max_parses: usize,
-    /// Work one parse may do — chart items added plus derivation nodes
-    /// visited — before it stops; unbounded by default.
+    /// Work one parse may do — chart item adds attempted, duplicates
+    /// included, plus derivation levels opened — before it stops; unbounded
+    /// by default.
     pub max_steps: usize,
+    /// Nonterminal levels a derivation may nest; a deeper one ends the parse,
+    /// which `Parses::too_deep` reports. 4096 by default: the tree's
+    /// consumers recurse over it, and this depth fits a 2 MiB thread.
+    pub max_depth: usize,
 }
+
+/// The default `Options::max_depth`.
+pub const DEFAULT_MAX_DEPTH: usize = 4096;
 
 impl Default for Options {
     /// The default grammar settings: case-sensitive, up to 32 parses per
-    /// input, no step budget.
+    /// input, no step budget, derivations at most 4096 deep.
     fn default() -> Self {
         Options {
             case_insensitive: false,
             max_parses: 32,
             max_steps: usize::MAX,
+            max_depth: DEFAULT_MAX_DEPTH,
         }
     }
 }
@@ -314,6 +323,12 @@ impl GrammarBuilder {
     /// Set the step budget one parse may spend; see [`Options::max_steps`].
     pub fn max_steps(&mut self, n: usize) -> &mut Self {
         self.options.max_steps = n;
+        self
+    }
+
+    /// Set how deep a derivation may nest; see [`Options::max_depth`].
+    pub fn max_depth(&mut self, n: usize) -> &mut Self {
+        self.options.max_depth = n;
         self
     }
 

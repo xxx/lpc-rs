@@ -14,8 +14,8 @@ mod tree;
 pub use builtins::Words;
 pub use earley::{Parses, parse};
 pub use model::{
-    Element, Grammar, GrammarBuilder, GrammarError, Label, NtId, Options, ProdId, Production,
-    Symbol, TokenClass, lit, nt, tok,
+    DEFAULT_MAX_DEPTH, Element, Grammar, GrammarBuilder, GrammarError, Label, NtId, Options,
+    ProdId, Production, Symbol, TokenClass, lit, nt, tok,
 };
 pub use tokenizer::{Scan, Token};
 pub use tree::{Child, Node, Parse};

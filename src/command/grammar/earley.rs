@@ -6,7 +6,7 @@ use std::{
     iter,
     sync::{
         Arc,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
 
@@ -30,6 +30,7 @@ struct Item {
 pub(crate) struct Budget {
     limit: usize,
     used: AtomicUsize,
+    deep: AtomicBool,
 }
 
 impl Budget {
@@ -38,12 +39,25 @@ impl Budget {
         Budget {
             limit,
             used: AtomicUsize::new(0),
+            deep: AtomicBool::new(false),
         }
     }
 
-    /// Spend one step; `false` once the budget is exhausted.
+    /// Record that a derivation was refused for exceeding `max_depth`; every
+    /// later step is refused too.
+    pub(crate) fn refuse_depth(&self) {
+        self.deep.store(true, Ordering::Relaxed);
+    }
+
+    /// Whether a derivation was refused for exceeding `max_depth`.
+    pub(crate) fn too_deep(&self) -> bool {
+        self.deep.load(Ordering::Relaxed)
+    }
+
+    /// Spend one step; `false` once the budget is exhausted or a derivation
+    /// was refused for depth — either ends the parse.
     pub(crate) fn step(&self) -> bool {
-        self.used.fetch_add(1, Ordering::Relaxed) < self.limit
+        !self.deep.load(Ordering::Relaxed) && self.used.fetch_add(1, Ordering::Relaxed) < self.limit
     }
 
     /// Whether the budget has been spent: a step was refused, not merely
@@ -74,7 +88,8 @@ pub(crate) struct Chart {
 
 impl Chart {
     /// Build the Earley chart for `scan` under `grammar`, spending one step
-    /// of `budget` per item added; an exhausted budget stops construction.
+    /// of `budget` per item add attempted; an exhausted budget stops
+    /// construction.
     pub(crate) fn build(grammar: &Grammar, scan: &Scan, budget: &Budget) -> Chart {
         let n = scan.tokens().len();
         let mut chart = Chart {
@@ -100,6 +115,10 @@ impl Chart {
         for i in 0..=n {
             let mut idx = 0;
             while idx < chart.sets[i].len() {
+                // Nothing more can be added.
+                if budget.exhausted() {
+                    return chart;
+                }
                 let item = chart.sets[i][idx];
                 idx += 1;
                 let next = grammar
@@ -130,13 +149,10 @@ impl Chart {
         chart
     }
 
+    /// Add `item` to set `i` unless it is already there; every attempt
+    /// spends a step, duplicates included — the budget bounds work, not items.
     fn add(&mut self, grammar: &Grammar, budget: &Budget, i: usize, item: Item) {
-        // Dedup first, one hash; on refusal, undo it so `seen` still means "added".
-        if !self.seen.insert((i, item)) {
-            return;
-        }
-        if !budget.step() {
-            self.seen.remove(&(i, item));
+        if !budget.step() || !self.seen.insert((i, item)) {
             return;
         }
         self.sets[i].push(item);
@@ -183,14 +199,15 @@ impl Chart {
 
     fn complete(&mut self, grammar: &Grammar, budget: &Budget, i: usize, item: Item) {
         let lhs = grammar.production(item.prod).lhs;
-        // A snapshot: `add` may grow the same entry when `origin == i`.
-        let waiting: Vec<Item> = self
+        // Taken out, not borrowed — `add` may grow this same entry when
+        // `origin == i`.
+        let key = (item.origin, lhs);
+        let mut waiting = self
             .waiting
-            .get(&(item.origin, lhs))
-            .map(Vec::as_slice)
-            .unwrap_or_default()
-            .to_vec();
-        for w in waiting {
+            .get_mut(&key)
+            .map(std::mem::take)
+            .unwrap_or_default();
+        for &w in &waiting {
             self.add(
                 grammar,
                 budget,
@@ -200,6 +217,11 @@ impl Chart {
                     ..w
                 },
             );
+        }
+        if !waiting.is_empty() {
+            let entry = self.waiting.entry(key).or_default();
+            waiting.append(entry);
+            *entry = waiting;
         }
     }
 
@@ -232,120 +254,272 @@ pub(crate) fn recognize(grammar: &Grammar, input: &str) -> bool {
     }
 }
 
-/// What derivation enumeration walks: the grammar, its chart, the scan, and
-/// the step budget shared across the whole derivation.
-struct Ctx<'g> {
+/// One nonterminal on the derivation in hand: the productions it may use,
+/// the one being tried, and the right-hand side laid so far.
+struct Level {
+    nt: NtId,
+    start: usize,
+    end: usize,
+    /// Candidate productions, in id order.
+    prods: Vec<ProdId>,
+    prod_idx: usize,
+    laid: Vec<Slot>,
+    /// Where the nonterminal at `laid.len()` is next tried to end.
+    cursor: Cursor,
+    parent: Option<usize>,
+    /// Levels on the path from the root, this one included.
+    depth: usize,
+}
+
+/// One laid right-hand-side element.
+#[derive(Clone, Copy)]
+enum Slot {
+    Token(usize),
+    /// A nonterminal child: the index of its level and where it ends.
+    Node {
+        level: usize,
+        end: usize,
+    },
+}
+
+impl Slot {
+    fn end(self) -> usize {
+        match self {
+            Slot::Token(i) => i + 1,
+            Slot::Node { end, .. } => end,
+        }
+    }
+}
+
+/// The span ends still to try for a nonterminal element, longest first.
+#[derive(Clone, Copy)]
+enum Cursor {
+    Fresh,
+    Next(usize),
+    Done,
+}
+
+impl Cursor {
+    fn after(mid: usize) -> Cursor {
+        mid.checked_sub(1).map_or(Cursor::Done, Cursor::Next)
+    }
+}
+
+/// Lazy enumeration of every derivation the chart admits, as a depth-first
+/// search over an explicit stack: productions in id order, each nonterminal
+/// child longest first. Stack use is independent of the derivation's depth.
+struct Derivations<'g> {
     grammar: &'g Grammar,
     chart: Chart,
     scan: Arc<Scan>,
     budget: Arc<Budget>,
+    max_depth: usize,
+    /// The derivation in hand, levels in pre-order.
+    stack: Vec<Level>,
+    /// The level whose right-hand side is being laid; `None` once the root
+    /// is complete.
+    active: Option<usize>,
+    /// The root is complete and was handed out; the next call backtracks.
+    yielded: bool,
 }
 
-/// The nonterminals being derived on the current path, innermost first.
-struct PathNode {
-    nt: NtId,
-    span: (usize, usize),
-    parent: Path,
-}
-
-type Path = Option<Arc<PathNode>>;
-
-/// Whether `nt` over `span` is already being derived somewhere on `path`.
-fn on_path(path: &Path, nt: NtId, span: (usize, usize)) -> bool {
-    let mut cursor = path;
-    while let Some(node) = cursor {
-        if node.nt == nt && node.span == span {
-            return true;
-        }
-        cursor = &node.parent;
-    }
-    false
-}
-
-// Recursive lazy enumeration cannot name its own iterator type, so each level is boxed.
-type Nodes<'g> = Box<dyn Iterator<Item = Node> + Send + 'g>;
-type Children<'g> = Box<dyn Iterator<Item = Vec<Child>> + Send + 'g>;
-
-/// Derivations of `nt` over `start..end`: productions in id order, each
-/// nonterminal child longest first. A nonterminal already on the path over
-/// the same span is a cycle and is skipped.
-fn derive<'g>(ctx: Arc<Ctx<'g>>, nt: NtId, start: usize, end: usize, path: Path) -> Nodes<'g> {
-    if !ctx.budget.step() || on_path(&path, nt, (start, end)) {
-        return Box::new(iter::empty());
-    }
-    let Some(prods) = ctx.chart.completed(end, nt, start) else {
-        return Box::new(iter::empty());
-    };
-    // `completed` is in chart-discovery order, not id order.
-    let mut prods = prods.to_vec();
-    prods.sort_unstable_by_key(|p| p.0);
-    let path: Path = Some(Arc::new(PathNode {
-        nt,
-        span: (start, end),
-        parent: path,
-    }));
-    Box::new(prods.into_iter().flat_map(move |p| {
-        derive_rhs(ctx.clone(), p, 0, start, end, path.clone()).map(move |children| Node {
-            production: p,
-            span: start..end,
-            children,
-        })
-    }))
-}
-
-/// Ways to lay `rhs[k..]` of production `p` over `pos..end`.
-fn derive_rhs<'g>(
-    ctx: Arc<Ctx<'g>>,
-    p: ProdId,
-    k: usize,
-    pos: usize,
-    end: usize,
-    path: Path,
-) -> Children<'g> {
-    let grammar = ctx.grammar;
-    let rhs = &grammar.production(p).rhs;
-    if k == rhs.len() {
-        return if pos == end {
-            Box::new(iter::once(Vec::new()))
-        } else {
-            Box::new(iter::empty())
+impl<'g> Derivations<'g> {
+    fn new(grammar: &'g Grammar, chart: Chart, scan: Arc<Scan>, budget: Arc<Budget>) -> Self {
+        let n = scan.tokens().len();
+        let mut derivations = Derivations {
+            grammar,
+            chart,
+            scan,
+            budget,
+            max_depth: grammar.options().max_depth,
+            stack: Vec::new(),
+            active: None,
+            yielded: false,
         };
-    }
-    match &rhs[k].symbol {
-        Symbol::NonTerminal(nt) => {
-            let nt = *nt;
-            // A nonterminal in the last rhs position can only span pos..end,
-            // so enumerating shorter spans there is pure waste.
-            let mids: Box<dyn Iterator<Item = usize> + Send> = if k + 1 == rhs.len() {
-                Box::new(iter::once(end))
-            } else {
-                Box::new((pos..=end).rev())
-            };
-            Box::new(mids.flat_map(move |mid| {
-                let ctx_rest = ctx.clone();
-                let path_rest = path.clone();
-                derive(ctx.clone(), nt, pos, mid, path.clone()).flat_map(move |node| {
-                    derive_rhs(ctx_rest.clone(), p, k + 1, mid, end, path_rest.clone()).map(
-                        move |mut rest| {
-                            rest.insert(0, Child::Node(node.clone()));
-                            rest
-                        },
-                    )
-                })
-            }))
+        if let Some(root) = derivations.level_for(grammar.start(), 0, n, None) {
+            derivations.stack.push(root);
+            derivations.active = Some(0);
         }
-        terminal => {
-            if pos < end && terminal_matches(terminal, &ctx.scan, pos) {
-                Box::new(
-                    derive_rhs(ctx, p, k + 1, pos + 1, end, path).map(move |mut rest| {
-                        rest.insert(0, Child::Token(pos));
-                        rest
-                    }),
-                )
-            } else {
-                Box::new(iter::empty())
+        derivations
+    }
+
+    /// A level deriving `nt` over `start..end` under `parent`; `None` when
+    /// the budget refuses the step, the level would be too deep (terminal —
+    /// pruning alone leaves every other span split to try), the same
+    /// nonterminal over the same span is already being derived on the path
+    /// (a cycle), or the chart never completed it.
+    fn level_for(
+        &self,
+        nt: NtId,
+        start: usize,
+        end: usize,
+        parent: Option<usize>,
+    ) -> Option<Level> {
+        if !self.budget.step() {
+            return None;
+        }
+        let depth = parent.map_or(1, |p| self.stack[p].depth + 1);
+        if depth > self.max_depth {
+            self.budget.refuse_depth();
+            return None;
+        }
+        let mut cursor = parent;
+        while let Some(i) = cursor {
+            let level = &self.stack[i];
+            if level.nt == nt && level.start == start && level.end == end {
+                return None;
+            }
+            cursor = level.parent;
+        }
+        // `completed` is in chart-discovery order, not id order.
+        let mut prods = self.chart.completed(end, nt, start)?.to_vec();
+        prods.sort_unstable_by_key(|p| p.0);
+        Some(Level {
+            nt,
+            start,
+            end,
+            prods,
+            prod_idx: 0,
+            laid: Vec::new(),
+            cursor: Cursor::Fresh,
+            parent,
+            depth,
+        })
+    }
+
+    /// Undo the most recent choice on the derivation in hand: resume the
+    /// last child level, else move the active level to its next
+    /// production, else drop it and move its parent past that span end.
+    /// `false` once no choice is left.
+    fn backtrack(&mut self) -> bool {
+        loop {
+            let Some(a) = self.active else {
+                return false;
+            };
+            match self.stack[a].laid.pop() {
+                Some(Slot::Token(_)) => {}
+                // Everything above the child is its own subtree: the levels
+                // of later slots were dropped when those slots were retracted.
+                Some(Slot::Node { level, .. }) => self.active = Some(level),
+                None => {
+                    let level = &mut self.stack[a];
+                    level.prod_idx += 1;
+                    level.cursor = Cursor::Fresh;
+                    if level.prod_idx < level.prods.len() {
+                        return true;
+                    }
+                    let (parent, end) = (level.parent, level.end);
+                    self.stack.truncate(a);
+                    self.active = parent;
+                    let Some(p) = parent else {
+                        return false;
+                    };
+                    self.stack[p].cursor = Cursor::after(end);
+                    return true;
+                }
             }
         }
+    }
+
+    /// The tree of the complete derivation on the stack.
+    fn materialize(&self) -> Node {
+        let mut built: Vec<Node> = Vec::new();
+        for level in self.stack.iter().rev() {
+            let children = level
+                .laid
+                .iter()
+                .map(|slot| match slot {
+                    Slot::Token(i) => Child::Token(*i),
+                    Slot::Node { .. } => {
+                        Child::Node(built.pop().expect("a child level after its parent"))
+                    }
+                })
+                .collect();
+            built.push(Node {
+                production: level.prods[level.prod_idx],
+                span: level.start..level.end,
+                children,
+            });
+        }
+        built.pop().expect("the root level")
+    }
+}
+
+impl Iterator for Derivations<'_> {
+    type Item = Node;
+
+    fn next(&mut self) -> Option<Node> {
+        if self.stack.is_empty() {
+            return None;
+        }
+        if self.yielded {
+            self.yielded = false;
+            self.active = Some(0);
+            if !self.backtrack() {
+                self.stack.clear();
+                return None;
+            }
+        }
+        let grammar = self.grammar;
+        loop {
+            let Some(a) = self.active else {
+                self.yielded = true;
+                return Some(self.materialize());
+            };
+            let level = &self.stack[a];
+            let (end, parent, cursor) = (level.end, level.parent, level.cursor);
+            let rhs = &grammar.production(level.prods[level.prod_idx]).rhs;
+            let k = level.laid.len();
+            let pos = level.laid.last().map_or(level.start, |s| s.end());
+            if k == rhs.len() {
+                if pos == end {
+                    self.active = parent;
+                    if let Some(p) = parent {
+                        self.stack[p].laid.push(Slot::Node { level: a, end });
+                        self.stack[p].cursor = Cursor::Fresh;
+                    }
+                } else if !self.backtrack() {
+                    break;
+                }
+                continue;
+            }
+            match &rhs[k].symbol {
+                Symbol::NonTerminal(nt) => {
+                    // A nonterminal in the last rhs position can only span
+                    // pos..end, so enumerating shorter spans there is pure waste.
+                    let lo = if k + 1 == rhs.len() { end } else { pos };
+                    let mid = match cursor {
+                        Cursor::Fresh => Some(end),
+                        Cursor::Next(m) if m >= lo => Some(m),
+                        Cursor::Next(_) | Cursor::Done => None,
+                    };
+                    let Some(mid) = mid else {
+                        if !self.backtrack() {
+                            break;
+                        }
+                        continue;
+                    };
+                    match self.level_for(*nt, pos, mid, Some(a)) {
+                        Some(child) => {
+                            self.stack.push(child);
+                            self.active = Some(self.stack.len() - 1);
+                        }
+                        None => self.stack[a].cursor = Cursor::after(mid),
+                    }
+                }
+                terminal => {
+                    if pos < end && terminal_matches(terminal, &self.scan, pos) {
+                        let level = &mut self.stack[a];
+                        level.laid.push(Slot::Token(pos));
+                        level.cursor = Cursor::Fresh;
+                    } else if !self.backtrack() {
+                        break;
+                    }
+                }
+            }
+        }
+        self.stack.clear();
+        None
     }
 }
 
@@ -369,6 +543,12 @@ impl Parses<'_> {
     pub fn over_budget(&self) -> bool {
         self.budget.exhausted()
     }
+
+    /// Whether a derivation was refused for exceeding `Options::max_depth`,
+    /// which ended the parse — derivations may be missing.
+    pub fn too_deep(&self) -> bool {
+        self.budget.too_deep()
+    }
 }
 
 /// Parses `input` under `grammar`; untokenizable input yields no parses.
@@ -382,14 +562,8 @@ pub fn parse<'g>(grammar: &'g Grammar, input: &str) -> Parses<'g> {
     };
     let scan = Arc::new(scan);
     let chart = Chart::build(grammar, &scan, &budget);
-    let n = scan.tokens().len();
-    let ctx = Arc::new(Ctx {
-        grammar,
-        chart,
-        scan: scan.clone(),
-        budget: budget.clone(),
-    });
-    let roots = derive(ctx, grammar.start(), 0, n, None).take(grammar.options().max_parses);
+    let roots = Derivations::new(grammar, chart, scan.clone(), budget.clone())
+        .take(grammar.options().max_parses);
     Parses {
         inner: Box::new(roots.map(move |root| Parse::new(grammar, scan.clone(), root))),
         budget,
@@ -400,7 +574,8 @@ pub fn parse<'g>(grammar: &'g Grammar, input: &str) -> Parses<'g> {
 mod tests {
     use super::*;
     use crate::command::grammar::{
-        Child, GrammarBuilder, Label, Node, Options, Parse, Parses, TokenClass, lit, nt, parse, tok,
+        Child, DEFAULT_MAX_DEPTH, GrammarBuilder, Label, Node, Options, Parse, Parses, TokenClass,
+        lit, nt, parse, tok,
     };
 
     /// A builder with the plain-words rules and the classes they got.
@@ -795,6 +970,82 @@ mod tests {
         let n = parses.by_ref().count();
         assert!((1..5).contains(&n), "{n}");
         assert!(parses.over_budget());
+    }
+
+    /// `S: a S | a` (right) or `S: S a | a` (left) with the default depth.
+    fn list(right: bool) -> Grammar {
+        let (mut b, _, _) = words();
+        let s = b.nonterminal("S");
+        if right {
+            b.production(s, [lit("a"), nt(s)]);
+        } else {
+            b.production(s, [nt(s), lit("a")]);
+        }
+        b.production(s, [lit("a")]);
+        b.build().unwrap()
+    }
+
+    /// Run `f` on a thread with half the 2 MiB stack tokio's workers get.
+    fn on_a_1_mib_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+        std::thread::Builder::new()
+            .stack_size(1 << 20)
+            .spawn(f)
+            .unwrap()
+            .join()
+            .unwrap()
+    }
+
+    /// Right recursion at a sixteenth of the depth: its chart costs about
+    /// n²/2 items, and the STM soak test measures the whole process's RSS
+    /// beside this one.
+    #[test]
+    fn a_list_at_the_default_depth_derives_within_a_1_mib_stack() {
+        for right in [true, false] {
+            let n = on_a_1_mib_stack(move || {
+                let g = list(right);
+                let items = if right {
+                    DEFAULT_MAX_DEPTH / 16
+                } else {
+                    DEFAULT_MAX_DEPTH
+                };
+                let input = vec!["a"; items].join(" ");
+                let mut parses = parse(&g, &input);
+                let p = parses.next().unwrap();
+                assert!(!parses.too_deep(), "right={right}");
+                // Captures walk the tree; the drop at the end unnests it.
+                p.capture_spans().len()
+            });
+            assert_eq!(n, 0);
+        }
+    }
+
+    #[test]
+    fn a_list_one_past_the_default_depth_is_too_deep() {
+        let (found, deep, over) = on_a_1_mib_stack(move || {
+            let g = list(false);
+            let input = vec!["a"; DEFAULT_MAX_DEPTH + 1].join(" ");
+            let mut parses = parse(&g, &input);
+            let found = parses.next().is_some();
+            (found, parses.too_deep(), parses.over_budget())
+        });
+        assert!(!found && deep && !over);
+    }
+
+    #[test]
+    fn max_depth_bounds_a_derivation_and_reports_it() {
+        let (mut b, _, _) = words();
+        let s = b.nonterminal("S");
+        b.production(s, [lit("a"), nt(s)]);
+        b.production(s, [lit("a")]);
+        b.max_depth(3);
+        let g = b.build().unwrap();
+        let mut ok = parse(&g, "a a a");
+        assert!(ok.next().is_some());
+        assert!(!ok.too_deep());
+        let mut deep = parse(&g, "a a a a");
+        assert!(deep.next().is_none());
+        assert!(deep.too_deep());
+        assert!(!deep.over_budget());
     }
 
     /// `"!"` matches no rule and there is no nomatch rule, so `parse` returns

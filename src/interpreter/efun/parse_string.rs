@@ -3,10 +3,8 @@
 
 use std::{
     collections::HashMap,
-    future::Future,
     hash::{DefaultHasher, Hash, Hasher},
     ops::Range,
-    pin::Pin,
     sync::Arc,
 };
 
@@ -61,6 +59,9 @@ pub async fn parse_string<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         Outcome::OverBudget => {
             return Err(context.runtime_error("parse_string: parse budget exhausted"));
         }
+        Outcome::TooDeep(depth) => {
+            return Err(context.runtime_error(format!("parse_string: parse deeper than {depth}")));
+        }
     }
     Ok(())
 }
@@ -73,6 +74,9 @@ enum Outcome {
     Blocked,
     /// The step budget ran out before a derivation survived.
     OverBudget,
+    /// A derivation nested deeper than `Options::max_depth` (carried) before
+    /// one survived.
+    TooDeep(usize),
 }
 
 /// Derivations of `input` in the engine's order, each evaluated until one
@@ -97,6 +101,8 @@ async fn first_surviving(
     }
     Ok(if parses.over_budget() {
         Outcome::OverBudget
+    } else if parses.too_deep() {
+        Outcome::TooDeep(compiled.grammar.options().max_depth)
     } else {
         Outcome::Blocked
     })
@@ -104,6 +110,26 @@ async fn first_surviving(
 
 /// A blocked subtree is `None`; a surviving one is its values.
 type Evaluated = Option<Vec<LpcRef>>;
+
+/// One open node during evaluation: the next child to visit, the values
+/// gathered so far, and the digest of the children's keys so far.
+struct Frame<'n> {
+    node: &'n Node,
+    next: usize,
+    values: Vec<LpcRef>,
+    hasher: DefaultHasher,
+}
+
+impl<'n> Frame<'n> {
+    fn open(node: &'n Node) -> Self {
+        Frame {
+            node,
+            next: 0,
+            values: Vec::new(),
+            hasher: DefaultHasher::new(),
+        }
+    }
+}
 
 /// A derivation node's structural identity: its production and token span
 /// plus a digest of its children's keys in order (a token contributes its
@@ -127,50 +153,54 @@ struct Evaluator<'a> {
 }
 
 impl Evaluator<'_> {
-    /// `node`'s structural key paired with its values: its tokens' text,
+    /// `root`'s structural key paired with its values: its tokens' text,
     /// its children's values, and its action's array in their place — or
-    /// `None` once anything blocks.
-    fn evaluate<'s>(
-        &'s mut self,
-        parsed: &'s Parse<'_>,
-        node: &'s Node,
-    ) -> Pin<Box<dyn Future<Output = NodeResult> + Send + 's>> {
-        Box::pin(async move {
-            let mut values = Vec::new();
-            let mut hasher = DefaultHasher::new();
-            for child in &node.children {
+    /// `None` once anything blocks. An explicit stack of frames, one per
+    /// open node — the tree may be `Options::max_depth` deep.
+    async fn evaluate(&mut self, parsed: &Parse<'_>, root: &Node) -> NodeResult {
+        let mut stack = vec![Frame::open(root)];
+        loop {
+            let top = stack.last_mut().expect("the root frame closes last");
+            if let Some(child) = top.node.children.get(top.next) {
+                top.next += 1;
                 match child {
                     Child::Token(i) => {
-                        i.hash(&mut hasher);
-                        values.push(LpcRef::from(parsed.token_text(*i)));
+                        i.hash(&mut top.hasher);
+                        top.values.push(LpcRef::from(parsed.token_text(*i)));
                     }
-                    Child::Node(inner) => match self.evaluate(parsed, inner).await? {
-                        Some((child_key, inner_values)) => {
-                            child_key.hash(&mut hasher);
-                            values.extend(inner_values);
-                        }
-                        None => return Ok(None),
-                    },
+                    Child::Node(inner) => stack.push(Frame::open(inner)),
                 }
+                continue;
             }
-            let key: Key = (node.production, node.span.clone(), hasher.finish());
-            let action = self.compiled.action(node.production);
+            let frame = stack.pop().expect("the frame just inspected");
+            let key: Key = (
+                frame.node.production,
+                frame.node.span.clone(),
+                frame.hasher.finish(),
+            );
+            let action = self.compiled.action(frame.node.production);
             // Action-less nodes skip the memo — their values are just their
             // already-evaluated children's, so caching saves nothing.
-            if action.is_some()
-                && let Some(hit) = self.memo.get(&key)
-            {
-                return Ok(hit.clone().map(|v| (key, v)));
-            }
             let evaluated = match action {
-                None => Some(values),
-                Some(name) => self.apply(name, values).await?,
+                None => Some(frame.values),
+                Some(name) => match self.memo.get(&key) {
+                    Some(hit) => hit.clone(),
+                    None => {
+                        let evaluated = self.apply(name, frame.values).await?;
+                        self.memo.insert(key.clone(), evaluated.clone());
+                        evaluated
+                    }
+                },
             };
-            if action.is_some() {
-                self.memo.insert(key.clone(), evaluated.clone());
-            }
-            Ok(evaluated.map(|v| (key, v)))
-        })
+            let Some(values) = evaluated else {
+                return Ok(None);
+            };
+            let Some(parent) = stack.last_mut() else {
+                return Ok(Some((key, values)));
+            };
+            key.hash(&mut parent.hasher);
+            parent.values.extend(values);
+        }
     }
 
     /// Apply `name` on [`Self::this`] with the subtree's array; its array

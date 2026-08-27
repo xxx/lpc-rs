@@ -18,9 +18,8 @@ use crate::command::grammar::{
 
 /// Derivations pulled per `parse_string` call before it gives up.
 pub const MAX_PARSES: usize = 64;
-/// Steps one `parse_string` parse may spend (see `Options::max_steps`); 4096
-/// under `cfg(test)` so the exhaustion path is testable in milliseconds.
-pub const MAX_STEPS: usize = if cfg!(test) { 1 << 12 } else { 1 << 20 };
+/// Steps one `parse_string` parse may spend (see `Options::max_steps`).
+pub const MAX_STEPS: usize = 1 << 20;
 /// Compiled grammars kept, least recently used first out.
 pub const GRAMMAR_CACHE: usize = 64;
 
