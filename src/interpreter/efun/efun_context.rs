@@ -299,11 +299,15 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         let is_living = process.commands_enabled(self.txn());
         let environment = Process::environment_of(self.txn(), &process);
         forget_destruct(self.txn(), &process);
-        // A destructed verb object's parser rules go with it.
-        let gone = Scope::new([process.clone()]);
-        let verb_rules = self.object_space().verb_rules.id;
-        self.txn()
-            .with(|t| t.merge(verb_rules, MergeOp::RulesRemoveOwners(gone)));
+        // A destructed verb object's parser rules go with it; a process
+        // that never called `parse_init()` cannot own any, so most
+        // destructs skip this merge rather than touch `verb_rules` at all.
+        if process.parser_ready.get().is_some() {
+            let gone = Scope::new([process.clone()]);
+            let verb_rules = self.object_space().verb_rules.id;
+            self.txn()
+                .with(|t| t.merge(verb_rules, MergeOp::RulesRemoveOwners(gone)));
+        }
         self.txn().with(|t| {
             t.drop_var(var_id);
             t.drop_var(process.rules.id);

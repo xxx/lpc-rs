@@ -1,7 +1,5 @@
 //! `parse_remove`: drop `this_object()`'s rules for a verb.
 
-use std::sync::Arc;
-
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
@@ -24,7 +22,7 @@ pub async fn parse_remove<const N: usize>(context: &mut EfunContext<'_, N>) -> R
                 t.merge(cell, MergeOp::RulesRemove(rule.id));
                 continue;
             }
-            let is_owned = std::ptr::eq(rule.owner.as_ptr(), Arc::as_ptr(&this));
+            let is_owned = rule.owned_by(&this);
             let is_base_verb = rule
                 .handler
                 .protocol()

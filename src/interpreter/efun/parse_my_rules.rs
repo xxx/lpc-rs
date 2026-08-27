@@ -1,7 +1,5 @@
 //! `parse_my_rules`: `this_object()`'s registered rules, as text.
 
-use std::sync::Arc;
-
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
@@ -14,7 +12,7 @@ pub async fn parse_my_rules<const N: usize>(context: &mut EfunContext<'_, N>) ->
     let rules = context.txn().with(|t| t.read_rules(cell));
     let entries: Vec<LpcRef> = rules
         .iter()
-        .filter(|r| std::ptr::eq(r.owner.as_ptr(), Arc::as_ptr(&this)))
+        .filter(|r| r.owned_by(&this))
         .filter_map(|r| {
             r.handler
                 .protocol()

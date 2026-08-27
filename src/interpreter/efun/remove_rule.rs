@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
@@ -26,7 +24,7 @@ pub async fn remove_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     let held = player
         .rules_of(context.txn())
         .iter()
-        .any(|rule| rule.id == id && std::ptr::eq(rule.owner.as_ptr(), Arc::as_ptr(this_object)));
+        .any(|rule| rule.id == id && rule.owned_by(this_object));
     if held {
         context
             .txn()
