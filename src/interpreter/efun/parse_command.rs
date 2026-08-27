@@ -113,10 +113,10 @@ async fn resolve_nouns(
     callers_prepositions: Option<Vec<String>>,
 ) -> Result<Option<(Vec<LpcRef>, Vec<String>)>> {
     let vocabulary = LpcVocabulary::new(ctx, scope);
-    let mut resolver = Resolver::new(vocabulary, callers_prepositions).await?;
+    let mut resolver = Resolver::new(vocabulary, callers_prepositions);
     for captures in compiled.captures_of(cmd) {
         if let Some(found) = values(&captures, &mut resolver).await? {
-            return Ok(Some((found, resolver.prepositions().to_vec())));
+            return Ok(Some((found, resolver.prepositions().await?.to_vec())));
         }
     }
     Ok(None)

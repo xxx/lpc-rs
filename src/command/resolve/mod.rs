@@ -46,26 +46,28 @@ pub enum Resolved {
 }
 
 /// Resolves phrases against one scope for one efun call or one dispatch;
-/// each candidate is asked its lists at most once.
+/// each candidate is asked its lists at most once, and the master its
+/// defaults only once the first phrase arrives.
 pub struct Resolver<V: Vocabulary> {
     vocabulary: V,
     defaults: Defaults,
+    fetched: bool,
     lexicons: Vec<Option<Lexicon>>,
     prepositions: Option<Vec<String>>,
 }
 
 impl<V: Vocabulary> Resolver<V> {
-    /// Fetch the master's defaults; `prepositions` is the caller's `%p`
-    /// list, when it gave one.
-    pub async fn new(mut vocabulary: V, prepositions: Option<Vec<String>>) -> Result<Self> {
-        let defaults = vocabulary.defaults().await?;
+    /// Over `vocabulary`; `prepositions` is the caller's `%p` list, when it
+    /// gave one. Nothing is asked of anyone yet.
+    pub fn new(vocabulary: V, prepositions: Option<Vec<String>>) -> Self {
         let lexicons = (0..vocabulary.candidates()).map(|_| None).collect();
-        Ok(Resolver {
+        Resolver {
             vocabulary,
-            defaults,
+            defaults: Defaults::default(),
+            fetched: false,
             lexicons,
             prepositions,
-        })
+        }
     }
 
     /// The vocabulary, for the scope behind the candidate indices.
@@ -73,15 +75,30 @@ impl<V: Vocabulary> Resolver<V> {
         &self.vocabulary
     }
 
-    /// The preposition list `%p` matches against: the caller's, else the master's.
-    pub fn prepositions(&self) -> &[String] {
+    /// The preposition list `%p` matches against: the caller's, else the
+    /// master's.
+    pub async fn prepositions(&mut self) -> Result<&[String]> {
+        self.fetch_defaults().await?;
+        Ok(self.in_force())
+    }
+
+    fn in_force(&self) -> &[String] {
         self.prepositions
             .as_deref()
             .unwrap_or(&self.defaults.prepositions)
     }
 
+    async fn fetch_defaults(&mut self) -> Result<()> {
+        if !self.fetched {
+            self.defaults = self.vocabulary.defaults().await?;
+            self.fetched = true;
+        }
+        Ok(())
+    }
+
     /// What `phrase` names as a `kind`, or `None` when it names nothing.
     pub async fn resolve(&mut self, kind: Kind, phrase: &str) -> Result<Option<Resolved>> {
+        self.fetch_defaults().await?;
         let words: Vec<&str> = phrase.split_whitespace().collect();
         match kind {
             Kind::Preposition => Ok(self.preposition(&words)),
@@ -93,7 +110,7 @@ impl<V: Vocabulary> Resolver<V> {
     }
 
     fn preposition(&self, words: &[&str]) -> Option<Resolved> {
-        self.prepositions()
+        self.in_force()
             .iter()
             .position(|entry| entry.split_whitespace().eq(words.iter().copied()))
             .map(Resolved::Preposition)
@@ -220,6 +237,7 @@ mod tests {
         numerals: HashMap<&'static str, i64>,
         id_true: Vec<&'static str>,
         asked: Vec<String>,
+        defaults_asked: usize,
     }
 
     impl Fake {
@@ -234,6 +252,7 @@ mod tests {
                 numerals: HashMap::new(),
                 id_true: vec![],
                 asked: vec![],
+                defaults_asked: 0,
             }
         }
     }
@@ -252,6 +271,7 @@ mod tests {
             self.remote[candidate]
         }
         async fn defaults(&mut self) -> Result<Defaults> {
+            self.defaults_asked += 1;
             Ok(self.defaults.clone())
         }
         async fn numeral(&mut self, word: &str) -> Result<i64> {
@@ -291,8 +311,6 @@ mod tests {
 
     async fn resolve(fake: Fake, kind: Kind, phrase: &str) -> Option<Resolved> {
         Resolver::new(fake, None)
-            .await
-            .unwrap()
             .resolve(kind, phrase)
             .await
             .unwrap()
@@ -374,7 +392,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_master_is_asked_only_for_words_that_are_neither_digits_nor_the_all_word() {
-        let mut resolver = Resolver::new(scene(), None).await.unwrap();
+        let mut resolver = Resolver::new(scene(), None);
         resolver.resolve(Kind::Items, "3 swords").await.unwrap();
         resolver.resolve(Kind::Items, "all").await.unwrap();
         resolver.resolve(Kind::Items, "0 swords").await.unwrap();
@@ -491,9 +509,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_callers_preposition_list_replaces_the_masters() {
-        let mut resolver = Resolver::new(scene(), Some(strings(&["on", "under"])))
-            .await
-            .unwrap();
+        let mut resolver = Resolver::new(scene(), Some(strings(&["on", "under"])));
         assert_eq!(
             resolver.resolve(Kind::Preposition, "under").await.unwrap(),
             Some(Resolved::Preposition(1))
@@ -502,14 +518,17 @@ mod tests {
             resolver.resolve(Kind::Preposition, "in").await.unwrap(),
             None
         );
-        assert_eq!(resolver.prepositions(), &strings(&["on", "under"])[..]);
+        assert_eq!(
+            resolver.prepositions().await.unwrap(),
+            &strings(&["on", "under"])[..]
+        );
     }
 
     #[tokio::test]
     async fn liv_takes_the_first_living_match() {
         let mut fake = Fake::new(vec![lists(&["bob"], &[], &[]), lists(&["bob"], &[], &[])]);
         fake.living = vec![false, true];
-        let mut r = Resolver::new(fake, None).await.unwrap();
+        let mut r = Resolver::new(fake, None);
         assert_eq!(
             r.resolve(Kind::Liv, "bob").await.unwrap(),
             Some(Resolved::Object(1))
@@ -544,12 +563,29 @@ mod tests {
                 self.0.id(c, p).await
             }
         }
-        let mut resolver = Resolver::new(Counting(scene(), std::cell::Cell::new(0)), None)
-            .await
-            .unwrap();
+        let mut resolver = Resolver::new(Counting(scene(), std::cell::Cell::new(0)), None);
         resolver.resolve(Kind::Items, "sword").await.unwrap();
         resolver.resolve(Kind::Items, "bag").await.unwrap();
         resolver.resolve(Kind::Object, "guard").await.unwrap();
         assert_eq!(resolver.vocabulary().1.get(), 4);
+    }
+
+    #[tokio::test]
+    async fn nothing_is_asked_of_the_master_until_the_first_phrase() {
+        let mut r = Resolver::new(scene(), None);
+        assert_eq!(r.vocabulary().defaults_asked, 0);
+        r.resolve(Kind::Object, "sword").await.unwrap();
+        assert_eq!(r.vocabulary().defaults_asked, 1);
+        r.resolve(Kind::Items, "all").await.unwrap();
+        assert_eq!(r.vocabulary().defaults_asked, 1);
+    }
+
+    #[tokio::test]
+    async fn prepositions_force_the_masters_defaults_once() {
+        let mut r = Resolver::new(scene(), None);
+        assert_eq!(r.prepositions().await.unwrap(), &["in", "in front of"]);
+        assert_eq!(r.vocabulary().defaults_asked, 1);
+        r.prepositions().await.unwrap();
+        assert_eq!(r.vocabulary().defaults_asked, 1);
     }
 }

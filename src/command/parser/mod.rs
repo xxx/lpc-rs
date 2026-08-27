@@ -102,7 +102,7 @@ pub(crate) async fn run(
         })
         .collect();
     let vocabulary = LpcVocabulary::with_extras(ctx, objects, extras, remote_from);
-    let mut resolver = Resolver::new(vocabulary, None).await?;
+    let mut resolver = Resolver::new(vocabulary, None);
 
     let mut failures: Vec<Failure> = Vec::new();
     let mut any_parse = false;

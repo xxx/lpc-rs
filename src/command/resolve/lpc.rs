@@ -221,6 +221,7 @@ pub async fn values(
             },
         }
     }
+    let prepositions: Vec<String> = resolver.prepositions().await?.to_vec();
     let scope = resolver.vocabulary().scope();
     let txn = resolver.vocabulary().ctx().txn();
     let object = |candidate: usize| LpcRef::from(Arc::downgrade(&scope[candidate]));
@@ -241,9 +242,10 @@ pub async fn values(
                     .collect::<LpcArray>();
                 LpcRef::Array(txn.with(|t| t.mint_array(items)))
             }
-            Some(Resolved::Preposition(index)) => {
-                LpcRef::from(resolver.prepositions()[index].as_str())
-            }
+            Some(Resolved::Preposition(index)) => match prepositions.get(index) {
+                Some(entry) => LpcRef::from(entry.as_str()),
+                None => return Ok(None),
+            },
         };
         out.push(value);
     }

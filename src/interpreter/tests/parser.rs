@@ -879,6 +879,38 @@ async fn str_needs_at_least_one_word() {
     assert_eq!(r, vec![LpcRef::from(-1)]);
 }
 
+#[tokio::test]
+async fn a_noun_less_parser_rule_asks_the_master_no_vocabulary() {
+    let master = indoc! { r#"
+        int calls;
+        string *parse_command_id_list() { calls++; return ({}); }
+        int query_calls() { return calls; }
+        string parser_error_message(int kind, object ob, mixed arg, int flag) { return 0; }
+    "# };
+    let verb = (
+        "/say.c",
+        indoc! { r#"
+        string log;
+        void create() { parse_init(); parse_add_rule("say", "STR"); }
+        mixed can_say_str(string s) { return 1; }
+        void do_say_str(string s) { log = s; }
+        string query_log() { return log; }
+    "# },
+    );
+    let r = run(
+        master,
+        &[verb],
+        &custom_main(
+            r#"
+            int r = command("say hello there");
+            return ({ r, "/say"->query_log(), "/secure/master"->query_calls() });
+        "#,
+        ),
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(1), s("hello there"), LpcRef::from(0)]);
+}
+
 const CANDLE: (&str, &str) = (
     "/candle.c",
     indoc! { r#"

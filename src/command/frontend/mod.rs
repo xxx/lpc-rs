@@ -61,7 +61,7 @@ pub(crate) async fn arguments_and_verb<'a>(
                     Some(resolver) => resolver,
                     None => {
                         let vocabulary = LpcVocabulary::new(ctx, scope.to_vec());
-                        resolver.insert(Resolver::new(vocabulary, None).await?)
+                        resolver.insert(Resolver::new(vocabulary, None))
                     }
                 };
                 if let Some(args) = values(&captures, resolver).await? {
