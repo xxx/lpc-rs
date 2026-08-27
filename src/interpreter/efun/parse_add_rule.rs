@@ -6,7 +6,7 @@ use lpc_rs_errors::Result;
 use crate::{
     command::{
         frontend::parser::compile,
-        registry::{Frontend, Handler, Rule, VerbMatch},
+        registry::{Family, Rule},
     },
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, stm::MergeOp},
 };
@@ -28,14 +28,10 @@ pub async fn parse_add_rule<const N: usize>(context: &mut EfunContext<'_, N>) ->
     };
     let parser = compile(verb.to_str(), rule.to_str())
         .map_err(|e| context.runtime_error(format!("parse_add_rule: {e}")))?;
-    let grammar = parser.compiled.grammar.clone();
     let rule = Rule::new(
         &this,
         verb.to_str().into(),
-        VerbMatch::Exact,
-        grammar,
-        Handler::Protocol(std::sync::Arc::new(parser)),
-        Frontend::Parser,
+        Family::Parser(std::sync::Arc::new(parser)),
     );
     let cell = context.object_space().verb_rules.id;
     context

@@ -4,7 +4,7 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
-    command::registry::{Frontend, Rule, VerbMatch},
+    command::registry::Rule,
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, stm::MergeOp},
 };
 
@@ -39,10 +39,7 @@ pub async fn parse_add_synonym<const N: usize>(context: &mut EfunContext<'_, N>)
         .filter(|r| r.verb.as_str() == old_verb)
         .filter(|r| match rule_filter {
             None => true,
-            Some(wanted) => r
-                .handler
-                .protocol()
-                .is_some_and(|p| p.rule.as_str() == wanted),
+            Some(wanted) => r.protocol().is_some_and(|p| p.rule.as_str() == wanted),
         })
         .cloned()
         .collect();
@@ -54,14 +51,7 @@ pub async fn parse_add_synonym<const N: usize>(context: &mut EfunContext<'_, N>)
 
     context.txn().with(|t| {
         for rule in &found {
-            let synonym = Rule::new(
-                &this,
-                new_verb.to_str().into(),
-                VerbMatch::Exact,
-                rule.grammar.clone(),
-                rule.handler.clone(),
-                Frontend::Parser,
-            );
+            let synonym = Rule::new(&this, new_verb.to_str().into(), rule.family.clone());
             t.merge(cell, MergeOp::RulesAppend(synonym));
         }
     });

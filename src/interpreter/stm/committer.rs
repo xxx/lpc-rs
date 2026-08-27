@@ -424,7 +424,7 @@ impl Committer {
             // A registered rule keeps its handler's function pointer alive.
             WorldValue::Rules(rules) => rules
                 .iter()
-                .filter_map(|rule| rule.handler.pointer())
+                .filter_map(|rule| rule.pointer())
                 .map(|pointer| MarkWork::Ref(LpcRef::Function(pointer.clone())))
                 .collect(),
         }

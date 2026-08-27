@@ -14,7 +14,7 @@ use lpc_rs_errors::Result;
 use crate::{
     command::{
         grammar::parse,
-        registry::{Frontend, Rule},
+        registry::{Family, Rule},
         resolve::{LpcVocabulary, Resolver, values},
     },
     interpreter::{
@@ -34,20 +34,21 @@ pub(crate) async fn arguments_and_verb<'a>(
     rule: &Rule,
     line: &str,
 ) -> Result<Option<(Vec<LpcRef>, String)>> {
-    match rule.source {
-        Frontend::AddAction => {
-            let Some(parsed) = parse(&rule.grammar, line).next() else {
+    match &rule.family {
+        Family::AddAction { matching, .. } => {
+            let grammar = add_action::grammar_for(rule.verb.as_str(), *matching);
+            let Some(parsed) = parse(&grammar, line).next() else {
                 return Ok(None);
             };
             let verb = rule.verb.as_str();
-            let argument = add_action::argument(verb, rule.matching, &parsed, line);
+            let argument = add_action::argument(verb, *matching, &parsed, line);
             Ok(Some((
                 vec![LpcString::from(argument.as_str()).into()],
-                add_action::reported_verb(verb, rule.matching, &parsed, line),
+                add_action::reported_verb(verb, *matching, &parsed, line),
             )))
         }
-        Frontend::Native => {
-            for parsed in parse(&rule.grammar, line) {
+        Family::Native { compiled, .. } => {
+            for parsed in parse(&compiled.grammar, line) {
                 let Some(captures) = native::captures(&parsed) else {
                     continue;
                 };
@@ -72,8 +73,8 @@ pub(crate) async fn arguments_and_verb<'a>(
             }
             Ok(None)
         }
-        // The trial filters a `Protocol` handler out by its own dispatch
-        // arm before it ever reaches this call.
-        Frontend::Parser => Ok(None),
+        // The trial's own `Parser` arm runs a protocol rule; it never
+        // reaches this call.
+        Family::Parser(_) => Ok(None),
     }
 }

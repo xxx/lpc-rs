@@ -7,7 +7,7 @@ use lpc_rs_errors::Result;
 
 use super::Verdict;
 use crate::{
-    command::{dispatch::apply_on, registry::ParserRule},
+    command::{dispatch::apply_on, frontend::parser::ParserRule},
     interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef, process::Process, task_context::TaskContext},
 };
 

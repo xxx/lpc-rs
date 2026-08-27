@@ -6,8 +6,8 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, stm::MergeOp};
 
 /// `parse_remove(verb)`: drops every rule `this_object()` registered whose
-/// base verb (`handler.protocol().verb`) is `verb`, synonyms included, and
-/// purges any rule left behind by a destructed owner.
+/// base verb (`protocol().verb`) is `verb`, synonyms included, and purges
+/// any rule left behind by a destructed owner.
 pub async fn parse_remove<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let LpcRef::String(verb) = context.resolve_local_register(1 as RegisterSize).clone() else {
         return Err(context.runtime_error("parse_remove: the verb must be a string"));
@@ -23,10 +23,7 @@ pub async fn parse_remove<const N: usize>(context: &mut EfunContext<'_, N>) -> R
                 continue;
             }
             let is_owned = rule.owned_by(&this);
-            let is_base_verb = rule
-                .handler
-                .protocol()
-                .is_some_and(|p| p.verb.as_str() == verb);
+            let is_base_verb = rule.protocol().is_some_and(|p| p.verb.as_str() == verb);
             if is_owned && is_base_verb {
                 t.merge(cell, MergeOp::RulesRemove(rule.id));
             }

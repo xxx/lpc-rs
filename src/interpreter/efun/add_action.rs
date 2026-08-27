@@ -5,10 +5,7 @@ use lpc_rs_errors::Result;
 use ustr::Ustr;
 
 use crate::{
-    command::{
-        frontend::add_action::grammar_for,
-        registry::{Frontend, Handler, Rule, VerbMatch},
-    },
+    command::registry::{Family, Rule, VerbMatch},
     interpreter::{
         efun::efun_context::EfunContext,
         function_type::{
@@ -79,10 +76,10 @@ pub async fn add_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
             Rule::new(
                 owner,
                 verb,
-                matching,
-                grammar_for(verb.as_str(), matching),
-                Handler::Pointer(handler.clone()),
-                Frontend::AddAction,
+                Family::AddAction {
+                    matching,
+                    pointer: handler.clone(),
+                },
             )
         })
         .collect();
@@ -170,16 +167,16 @@ mod tests {
         let rules = vm.global_state.committed_rules(&proc);
         let verbs: Vec<&str> = rules.iter().map(|r| r.verb.as_str()).collect();
         assert_eq!(verbs, vec!["look", "'", "get", "take", "whisper"]);
-        assert_eq!(rules[0].matching, VerbMatch::Exact);
+        assert_eq!(rules[0].matching(), VerbMatch::Exact);
         assert_eq!(
-            rules[1].matching,
+            rules[1].matching(),
             VerbMatch::Prefix {
                 reports: Reported::Full,
                 args: ArgSpan::RestOfLine
             }
         );
         assert_eq!(
-            rules[4].matching,
+            rules[4].matching(),
             VerbMatch::Prefix {
                 reports: Reported::Registered,
                 args: ArgSpan::RestOfWord

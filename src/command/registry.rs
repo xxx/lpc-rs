@@ -9,7 +9,7 @@ use std::sync::{
 use ustr::Ustr;
 
 use crate::{
-    command::{frontend::native::Compiled, grammar::Grammar},
+    command::frontend::{native::Compiled, parser::ParserRule},
     interpreter::{function_type::function_ptr::FunctionPtr, process::Process, stm::TxnHandle},
 };
 
@@ -77,61 +77,26 @@ impl VerbMatch {
     }
 }
 
-/// Which surface registered a rule; it decides how the handler's arguments
-/// are built.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Frontend {
-    /// Registered by the `add_action()` efun.
-    AddAction,
-    /// Registered by the `add_rule()` efun.
-    Native,
-    /// Registered by the parser package's `parse_add_rule()`.
-    Parser,
-}
-
-/// How a rule runs once its grammar matches the line.
+/// Which surface registered a rule: the one thing that owns both how a
+/// line is matched and how the rule runs once it matches.
 #[derive(Clone, Debug)]
-pub enum Handler {
-    /// One function, called with the captures as arguments.
-    Pointer(Arc<FunctionPtr>),
-    /// The parser package's `can_`/`direct_`/`indirect_`/`do_` protocol.
-    Protocol(Arc<ParserRule>),
-}
-
-impl Handler {
-    /// The function pointer, for a `Pointer` handler.
-    pub fn pointer(&self) -> Option<&Arc<FunctionPtr>> {
-        match self {
-            Handler::Pointer(pointer) => Some(pointer),
-            Handler::Protocol(_) => None,
-        }
-    }
-
-    /// The parser rule, for a `Protocol` handler.
-    pub fn protocol(&self) -> Option<&Arc<ParserRule>> {
-        match self {
-            Handler::Protocol(rule) => Some(rule),
-            Handler::Pointer(_) => None,
-        }
-    }
-}
-
-/// One `parse_add_rule` rule: what its handlers are named and how the
-/// line's captures map onto their arguments.
-#[derive(Clone, Debug)]
-pub struct ParserRule {
-    /// The base verb the handlers are named for; a synonym keeps it.
-    pub verb: Ustr,
-    /// The rule as written.
-    pub rule: String,
-    /// The slug for `can_`, `direct_` and `indirect_` names (`at_obj`).
-    pub can_slug: Ustr,
-    /// The slug for `do_` names (`at_obs` for a many slot).
-    pub do_slug: Ustr,
-    /// The capturing tokens, in rule order.
-    pub slots: Vec<Slot>,
-    /// The rule compiled as a verbless native pattern.
-    pub compiled: Compiled,
+pub enum Family {
+    /// `add_action()`: the verb, then the rest of the line as one string.
+    AddAction {
+        /// How the verb matches the first word.
+        matching: VerbMatch,
+        /// The handler.
+        pointer: Arc<FunctionPtr>,
+    },
+    /// `add_rule()`: a native pattern, one argument per capture.
+    Native {
+        /// The pattern, shared by every verb it was registered under.
+        compiled: Arc<Compiled>,
+        /// The handler.
+        pointer: Arc<FunctionPtr>,
+    },
+    /// `parse_add_rule()`: the `can_`/`direct_`/`indirect_`/`do_` protocol.
+    Parser(Arc<ParserRule>),
 }
 
 /// A capturing token of a parser rule.
@@ -172,34 +137,43 @@ pub struct Rule {
     pub owner: Weak<Process>,
     /// The registered verb: the dispatch pre-filter and `query_verb()`.
     pub verb: Ustr,
-    /// How the verb matches the first word of a line.
-    pub matching: VerbMatch,
-    /// The grammar the rest of the line must parse against.
-    pub grammar: Arc<Grammar>,
-    /// How the rule runs once its grammar matches.
-    pub handler: Handler,
-    /// The surface that registered this rule.
-    pub source: Frontend,
+    /// How the rule matches a line and runs.
+    pub family: Family,
 }
 
 impl Rule {
     /// A rule with a fresh id, owned by `owner`.
-    pub fn new(
-        owner: &Arc<Process>,
-        verb: Ustr,
-        matching: VerbMatch,
-        grammar: Arc<Grammar>,
-        handler: Handler,
-        source: Frontend,
-    ) -> Rule {
+    pub fn new(owner: &Arc<Process>, verb: Ustr, family: Family) -> Rule {
         Rule {
             id: RuleId::next(),
             owner: Arc::downgrade(owner),
             verb,
-            matching,
-            grammar,
-            handler,
-            source,
+            family,
+        }
+    }
+
+    /// How the verb matches the first word of a line; only `add_action`
+    /// rules match by prefix.
+    pub fn matching(&self) -> VerbMatch {
+        match &self.family {
+            Family::AddAction { matching, .. } => *matching,
+            Family::Native { .. } | Family::Parser(_) => VerbMatch::Exact,
+        }
+    }
+
+    /// The handler, for a rule that calls one function.
+    pub fn pointer(&self) -> Option<&Arc<FunctionPtr>> {
+        match &self.family {
+            Family::AddAction { pointer, .. } | Family::Native { pointer, .. } => Some(pointer),
+            Family::Parser(_) => None,
+        }
+    }
+
+    /// The parser rule, for a `parse_add_rule` rule.
+    pub fn protocol(&self) -> Option<&Arc<ParserRule>> {
+        match &self.family {
+            Family::Parser(rule) => Some(rule),
+            Family::AddAction { .. } | Family::Native { .. } => None,
         }
     }
 
@@ -291,22 +265,15 @@ pub(crate) mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::{
-        command::grammar::{GrammarBuilder, lit},
-        interpreter::{
-            function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
-            process::Process,
-        },
+    use crate::interpreter::{
+        function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
+        process::Process,
     };
 
-    /// A rule for `verb` owned by `owner`, with a throwaway grammar and a
-    /// dynamic (receiver-less) handler; enough for identity and scope tests.
+    /// A rule for `verb` owned by `owner`, with a dynamic (receiver-less)
+    /// handler; enough for identity and scope tests.
     pub(crate) fn rule(owner: &Arc<Process>, verb: &str) -> Rule {
-        let mut b = GrammarBuilder::new();
-        let s = b.nonterminal("S");
-        b.production(s, [lit(verb)]);
-        let grammar = Arc::new(b.build().unwrap());
-        let handler = Arc::new(
+        let pointer = Arc::new(
             FunctionPtrBuilder::default()
                 .owner(Arc::downgrade(owner))
                 .address(FunctionAddress::Dynamic(verb.into()))
@@ -316,19 +283,15 @@ pub(crate) mod tests {
         Rule::new(
             owner,
             verb.into(),
-            VerbMatch::Exact,
-            grammar,
-            Handler::Pointer(handler),
-            Frontend::AddAction,
+            Family::AddAction {
+                matching: VerbMatch::Exact,
+                pointer,
+            },
         )
     }
 
     /// A parser rule for `verb` with rule text `text`, owned by `owner`.
     pub(crate) fn parser_rule(owner: &Arc<Process>, verb: &str, text: &str) -> Rule {
-        let mut b = GrammarBuilder::new();
-        let s = b.nonterminal("S");
-        b.production(s, [lit(verb)]);
-        let grammar = Arc::new(b.build().unwrap());
         let parser = Arc::new(ParserRule {
             verb: verb.into(),
             rule: text.to_owned(),
@@ -337,25 +300,36 @@ pub(crate) mod tests {
             slots: Vec::new(),
             compiled: crate::command::frontend::native::compile_pattern("%w").unwrap(),
         });
-        Rule::new(
-            owner,
-            verb.into(),
-            VerbMatch::Exact,
-            grammar,
-            Handler::Protocol(parser),
-            Frontend::Parser,
-        )
+        Rule::new(owner, verb.into(), Family::Parser(parser))
     }
 
     #[test]
-    fn a_handler_is_one_kind_or_the_other() {
+    fn a_family_answers_for_its_pointer_and_protocol() {
         let owner = Arc::new(Process::default());
         let pointer = rule(&owner, "look");
         let protocol = parser_rule(&owner, "look", "at OBJ");
-        assert!(pointer.handler.pointer().is_some());
-        assert!(pointer.handler.protocol().is_none());
-        assert!(protocol.handler.pointer().is_none());
-        assert_eq!(protocol.handler.protocol().unwrap().rule, "at OBJ");
+        assert!(pointer.pointer().is_some());
+        assert!(pointer.protocol().is_none());
+        assert!(protocol.pointer().is_none());
+        assert_eq!(protocol.protocol().unwrap().rule, "at OBJ");
+    }
+
+    #[test]
+    fn only_add_action_carries_its_own_matching() {
+        let owner = Arc::new(Process::default());
+        let prefix = VerbMatch::Prefix {
+            reports: Reported::Full,
+            args: ArgSpan::RestOfLine,
+        };
+        let mut short = rule(&owner, "'");
+        if let Family::AddAction { matching, .. } = &mut short.family {
+            *matching = prefix;
+        }
+        assert_eq!(short.matching(), prefix);
+        assert_eq!(
+            parser_rule(&owner, "look", "at OBJ").matching(),
+            VerbMatch::Exact
+        );
     }
 
     #[test]

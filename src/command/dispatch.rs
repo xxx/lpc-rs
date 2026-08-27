@@ -10,7 +10,7 @@ use crate::{
     command::{
         frontend::{add_action::verb_matches, arguments_and_verb},
         parser::{self, Nickname, Verdict},
-        registry::{Handler, Rule, scope_of},
+        registry::{Family, Rule, scope_of},
         resolve::{LpcVocabulary, Resolver},
     },
     compile_time_config::MAX_COMMAND_DEPTH,
@@ -157,7 +157,7 @@ async fn trial(
             rule.owner()
                 .is_some_and(|owner| owner.is_live(ctx.txn()) && scope.contains(&owner))
         })
-        .filter(|rule| verb_matches(rule.verb.as_str(), rule.matching, first_word))
+        .filter(|rule| verb_matches(rule.verb.as_str(), rule.matching(), first_word))
         .cloned()
         .collect();
     candidates.sort_by_key(|rule| std::cmp::Reverse(rule.id));
@@ -208,8 +208,8 @@ async fn try_rules<'a>(
     candidates: Vec<Rule>,
 ) -> Result<bool> {
     for rule in candidates {
-        match &rule.handler {
-            Handler::Pointer(pointer) => {
+        match &rule.family {
+            Family::AddAction { pointer, .. } | Family::Native { pointer, .. } => {
                 if !pointer.receiver_is_live(ctx.txn()) {
                     continue;
                 }
@@ -241,7 +241,7 @@ async fn try_rules<'a>(
                     return Ok(true);
                 }
             }
-            Handler::Protocol(parser) => {
+            Family::Parser(parser) => {
                 let Some(owner) = rule.owner() else { continue };
                 let rest = rest_of(line, first_word);
                 ctx.with_command(|state| {
@@ -328,7 +328,7 @@ async fn sentence_trial(
     let mut worst: Option<Sentence> = None;
     for rule in &candidates {
         let Some(owner) = rule.owner() else { continue };
-        let Some(parser) = rule.handler.protocol() else {
+        let Some(parser) = rule.protocol() else {
             continue;
         };
         let verdict = Box::pin(parser::run(

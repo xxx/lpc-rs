@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
     command::{
         frontend::native::compile,
-        registry::{Frontend, Handler, Rule, VerbMatch},
+        registry::{Family, Rule},
     },
     interpreter::{
         efun::{add_action::handler_from, efun_context::EfunContext},
@@ -26,8 +28,9 @@ pub async fn add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     let LpcRef::String(pattern) = context.resolve_local_register(1 as RegisterSize).clone() else {
         return Err(context.runtime_error("add_rule: the pattern must be a string"));
     };
-    let compiled =
-        compile(pattern.to_str()).map_err(|e| context.runtime_error(format!("add_rule: {e}")))?;
+    let compiled = Arc::new(
+        compile(pattern.to_str()).map_err(|e| context.runtime_error(format!("add_rule: {e}")))?,
+    );
     let handler = handler_from(
         context,
         context.resolve_local_register(2 as RegisterSize).clone(),
@@ -40,10 +43,10 @@ pub async fn add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     let first = Rule::new(
         &context.frame().process,
         *first_verb,
-        VerbMatch::Exact,
-        compiled.grammar.clone(),
-        Handler::Pointer(handler),
-        Frontend::Native,
+        Family::Native {
+            compiled: compiled.clone(),
+            pointer: handler,
+        },
     );
     let id = i64::try_from(first.id.0)
         .map_err(|_| context.runtime_bug("add_rule: rule ids exceeded the int range"))?;
@@ -68,7 +71,7 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        command::registry::{Frontend, RuleId, VerbMatch},
+        command::registry::{Family, Rule, RuleId, VerbMatch},
         interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
         test_support::test_config,
     };
@@ -99,9 +102,20 @@ mod tests {
         };
         let id = RuleId(u64::try_from(id.0).unwrap());
         assert!(rules.iter().all(|r| r.id == id));
-        assert!(rules.iter().all(|r| r.source == Frontend::Native));
-        assert!(rules.iter().all(|r| r.matching == VerbMatch::Exact));
-        assert!(Arc::ptr_eq(&rules[0].grammar, &rules[1].grammar));
+        assert!(
+            rules
+                .iter()
+                .all(|r| matches!(r.family, Family::Native { .. }))
+        );
+        assert!(rules.iter().all(|r| r.matching() == VerbMatch::Exact));
+        let compiled_of = |r: &Rule| match &r.family {
+            Family::Native { compiled, .. } => compiled.clone(),
+            _ => panic!("a native rule"),
+        };
+        assert!(Arc::ptr_eq(
+            &compiled_of(&rules[0]),
+            &compiled_of(&rules[1])
+        ));
         assert!(
             rules
                 .iter()

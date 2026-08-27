@@ -14,7 +14,7 @@ pub async fn parse_dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
         .iter()
         .filter_map(|rule| {
             let owner = rule.owner()?;
-            let protocol = rule.handler.protocol()?;
+            let protocol = rule.protocol()?;
             let path = LpcPath::new_server(&*owner.filename())
                 .as_in_game(&*context.config().lib_dir)
                 .to_string_lossy()

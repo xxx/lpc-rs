@@ -13,8 +13,9 @@ use crate::{
     command::{
         dispatch::apply_on,
         frontend::native::{Capture, captures},
+        frontend::parser::ParserRule,
         grammar::parse,
-        registry::{ParserRule, Slot},
+        registry::Slot,
         resolve::{Kind as ResolveKind, LpcVocabulary, Resolved, Resolver},
     },
     interpreter::{

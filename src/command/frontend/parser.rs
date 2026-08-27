@@ -7,8 +7,8 @@ use std::fmt;
 use ustr::Ustr;
 
 use crate::command::{
-    frontend::native::{self, PatternError},
-    registry::{ParserRule, Slot},
+    frontend::native::{self, Compiled, PatternError},
+    registry::Slot,
 };
 
 /// Why a rule does not compile; the text reaches the LPC caller.
@@ -42,6 +42,24 @@ impl fmt::Display for ParserRuleError {
 }
 
 impl std::error::Error for ParserRuleError {}
+
+/// One `parse_add_rule` rule: what its handlers are named and how the
+/// line's captures map onto their arguments.
+#[derive(Clone, Debug)]
+pub struct ParserRule {
+    /// The base verb the handlers are named for; a synonym keeps it.
+    pub verb: Ustr,
+    /// The rule as written.
+    pub rule: String,
+    /// The slug for `can_`, `direct_` and `indirect_` names (`at_obj`).
+    pub can_slug: Ustr,
+    /// The slug for `do_` names (`at_obs` for a many slot).
+    pub do_slug: Ustr,
+    /// The capturing tokens, in rule order.
+    pub slots: Vec<Slot>,
+    /// The rule compiled as a verbless native pattern.
+    pub compiled: Compiled,
+}
 
 const TOKENS: [(&str, Slot); 6] = [
     ("OBJ", Slot::Object),

@@ -14,8 +14,7 @@ pub async fn parse_my_rules<const N: usize>(context: &mut EfunContext<'_, N>) ->
         .iter()
         .filter(|r| r.owned_by(&this))
         .filter_map(|r| {
-            r.handler
-                .protocol()
+            r.protocol()
                 .map(|p| LpcRef::from(format!("{} {}", r.verb, p.rule)))
         })
         .collect();
