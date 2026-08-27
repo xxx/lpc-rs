@@ -294,8 +294,52 @@ pub static PARSE_STRING: Workload = Workload {
     },
 };
 
+/// Workers typing a line at one verb object whose applies only read: `can_`,
+/// `direct_` and `do_` all just return, so the block commits without a
+/// conflict.
+pub static PARSER_VERB: Workload = Workload {
+    name: "parser_verb",
+    task_label: "parser_verb",
+    entry: "poke",
+    total: 512,
+    indexed: false,
+    kind: Kind::Set {
+        objects: &[
+            ("/bench_parser_verb.c", PARSER_VERB_SOURCE),
+            ("/bench_parser_target.c", PARSER_TARGET_SOURCE),
+            ("/bench_parser_actor.c", PARSER_ACTOR_SOURCE),
+        ],
+    },
+};
+
+const PARSER_VERB_SOURCE: &str = r#"
+    void create() {
+        parse_init();
+        parse_add_rule("poke", "OBJ");
+    }
+    mixed can_poke_obj(object o, string w) { return 1; }
+    void do_poke_obj(object o, string w) {}
+"#;
+
+const PARSER_TARGET_SOURCE: &str = r#"
+    string *parse_command_id_list() { return ({ "thing" }); }
+    mixed direct_poke_obj(object o, string w) { return 1; }
+    void go(object d) { move_object(d); }
+"#;
+
+const PARSER_ACTOR_SOURCE: &str = r#"
+    void create() {
+        enable_commands();
+        "/bench_parser_target"->go(this_object());
+    }
+    int poke() {
+        set_this_player(this_object());
+        return parse_sentence("poke thing");
+    }
+"#;
+
 /// Every workload, in report order.
-pub static WORKLOADS: [&Workload; 9] = [
+pub static WORKLOADS: [&Workload; 10] = [
     &FIB,
     &COUNTER,
     &COUNTER_ATOMIC,
@@ -305,6 +349,7 @@ pub static WORKLOADS: [&Workload; 9] = [
     &MOVE_CHURN,
     &RESOLVE_SELF,
     &PARSE_STRING,
+    &PARSER_VERB,
 ];
 
 /// Initialize `workload`'s object(s) on `vm` and hand back the apply target.
@@ -546,6 +591,30 @@ mod tests {
             after.conflicts - before.conflicts,
             0,
             "the actions only compute"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn parse_sentence_over_read_only_handlers_commits_without_conflicts() {
+        const WORKERS: usize = 4;
+        const PER_WORKER: usize = 128;
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code")
+            .max_execution_time(30_000_u64)
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        let (proc, template, timeout) = setup_on(&vm, &PARSER_VERB).await;
+        let before = vm.global_state.attempt_telemetry.snapshot();
+        fan_out_applies(
+            &template, &proc, "poke", WORKERS, PER_WORKER, timeout, false,
+        )
+        .await;
+        let after = vm.global_state.attempt_telemetry.snapshot();
+        assert_eq!(
+            after.conflicts - before.conflicts,
+            0,
+            "can_/direct_/do_ all just read and return"
         );
     }
 

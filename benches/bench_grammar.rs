@@ -71,6 +71,10 @@ fn dgd_expr() -> Arc<Grammar> {
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {
+    c.bench_function("grammar/build/parser_rule", |b| {
+        b.iter(|| lpc_rs::command::frontend::parser::compile("give", "OBJ to LIV").unwrap())
+    });
+
     c.bench_function("grammar/build/give_rule", |b| b.iter(give_rule));
 
     let g = give_rule();

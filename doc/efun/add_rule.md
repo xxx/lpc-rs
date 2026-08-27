@@ -30,10 +30,12 @@ must be a quoted verb; the rest describe the words after it.
 | `%o` | words naming one object | object |
 | `%i` | words naming objects, with a numeral | `({ numeral, ob... })` |
 | `%l` | as `%i`, over the livings in scope | `({ numeral, ob... })` |
+| `%L` | words naming one living | object |
 | `%p` | a preposition | the matched preposition from the master's list, as a string |
 
 `%d` matches digits only: `-5` and spelled-out numbers do not, unlike
-`parse_command` in other drivers.
+`parse_command` in other drivers. `%L` takes the first living that
+matches, like `%o` restricted to livings — no numeral, and never several.
 
 Matching is by whole words and case-sensitive — unlike `parse_command` in
 other drivers, and like `add_action` here. A quoted word cannot contain `'`.

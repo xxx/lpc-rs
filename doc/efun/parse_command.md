@@ -28,6 +28,7 @@ spaces, any of
 | `%o` | words naming one object | object: the first in scope order |
 | `%i` | words naming objects, with a numeral | `({ numeral, ob... })` |
 | `%l` | as `%i`, over the livings in scope | `({ numeral, ob... })` |
+| `%L` | words naming one living | object: the first living that matches |
 | `%p` | a preposition | string; see below |
 
 Matching is case-sensitive. `%s` is greedy: when several splits of the line
