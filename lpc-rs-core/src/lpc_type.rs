@@ -35,7 +35,7 @@ impl LpcType {
             // "mixed *" only matches arrays (but the elements can be any type)
             // "mixed" is a literal wildcard.
             if array {
-                other.is_array()
+                other.is_array() || other == LpcType::Mixed(false)
             } else {
                 !matches!(other, LpcType::Void)
             }
@@ -266,6 +266,7 @@ mod tests {
         assert!(LpcType::Mapping(true).matches_type(LpcType::Mixed(false)));
 
         // array mixed against non-arrays
+        assert!(LpcType::Mixed(true).matches_type(LpcType::Mixed(false)));
         assert!(!LpcType::Mixed(true).matches_type(LpcType::Int(false)));
         assert!(!LpcType::Mixed(true).matches_type(LpcType::String(false)));
         assert!(!LpcType::Mixed(true).matches_type(LpcType::Float(false)));

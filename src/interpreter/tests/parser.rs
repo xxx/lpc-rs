@@ -23,13 +23,11 @@ const VERB: (&str, &str) = (
 
 #[tokio::test]
 async fn my_rules_lists_verb_and_rule_in_registration_order() {
-    // `mixed`, not `mixed *`: a call_other's static type is always the
-    // scalar `mixed` wildcard, which `mixed *` never matches.
     let r = run(
         "",
         &[VERB],
         indoc! { r#"
-        mixed create() { return "/verbs/look"->rules(); }
+        mixed *create() { return "/verbs/look"->rules(); }
     "# },
     )
     .await;
@@ -64,12 +62,11 @@ async fn parse_dump_lists_every_rule_with_its_owner() {
 
 #[tokio::test]
 async fn parse_remove_drops_a_verb_and_its_synonyms() {
-    // `mixed`, not `mixed *`: see the previous test.
     let r = run(
         "",
         &[VERB],
         indoc! { r#"
-        mixed create() { "/verbs/look"->drop(); return "/verbs/look"->rules(); }
+        mixed *create() { "/verbs/look"->drop(); return "/verbs/look"->rules(); }
     "# },
     )
     .await;
@@ -101,7 +98,7 @@ async fn a_synonym_is_minted_once_per_base_rule_not_once_per_sibling() {
         "",
         &[CHAIN],
         indoc! { r#"
-        mixed create() { return "/verbs/give"->rules(); }
+        mixed *create() { return "/verbs/give"->rules(); }
     "# },
     )
     .await;
@@ -122,7 +119,7 @@ async fn parse_remove_of_the_base_drops_a_synonym_of_a_synonym() {
         "",
         &[CHAIN],
         indoc! { r#"
-        mixed create() { "/verbs/give"->drop(); return "/verbs/give"->rules(); }
+        mixed *create() { "/verbs/give"->drop(); return "/verbs/give"->rules(); }
     "# },
     )
     .await;
@@ -563,9 +560,8 @@ async fn a_candidates_own_slot_holds_itself_while_filtered_and_reverts_to_zero()
         "/log_sword"->go(room);
         "/log_bob"->go(room);
         int r = command("give sword to bob");
-        // A call_other's static type is always the scalar `mixed` wildcard.
-        mixed sword_log = "/log_sword"->query_log();
-        mixed bob_log = "/log_bob"->query_log();
+        mixed *sword_log = "/log_sword"->query_log();
+        mixed *bob_log = "/log_bob"->query_log();
         return ({
             r,
             sword_log[0], sword_log[1],

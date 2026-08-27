@@ -1124,6 +1124,16 @@ impl TreeWalker for CodegenWalker {
             _ => Vec::new(),
         };
 
+        // Visited before `ClearArgs`: a receiver that is itself a call clears
+        // and refills the argument list with its own.
+        let receiver_result = match receiver {
+            Some(rcvr) => {
+                rcvr.visit(self).await?;
+                Some(self.current_result)
+            }
+            None => None,
+        };
+
         let mut arg_results: Vec<ArgOperand> = Vec::with_capacity(argument_len);
         for (index, argument) in node.arguments.iter_mut().enumerate() {
             let by_ref = match argument {
@@ -1178,10 +1188,7 @@ impl TreeWalker for CodegenWalker {
                 );
             }
 
-            if let Some(rcvr) = receiver {
-                rcvr.visit(self).await?;
-                let receiver_result = self.current_result;
-
+            if let Some(receiver_result) = receiver_result {
                 let name_register = self.register_counter.next().unwrap().as_local();
 
                 push_instruction!(self, Instruction::SConst(name_register, *name), node.span);
@@ -3335,13 +3342,13 @@ mod tests {
             };
 
             let expected = vec![
-                IConst(RegisterVariant::Local(Register(1)), -1),
+                SConst(RegisterVariant::Local(Register(1)), ustr("foo")),
+                IConst(RegisterVariant::Local(Register(2)), -1),
                 ClearArgs,
-                PushArg(RegisterVariant::Local(Register(1))),
-                SConst(RegisterVariant::Local(Register(2)), ustr("foo")),
+                PushArg(RegisterVariant::Local(Register(2))),
                 SConst(RegisterVariant::Local(Register(3)), ustr("print")),
                 CallOther(
-                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(3)),
                 ),
                 Ret,

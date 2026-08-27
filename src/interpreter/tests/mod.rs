@@ -1,5 +1,6 @@
 //! End-to-end tests that load LPC into a VM and read `create()`'s result.
 
+mod call_other;
 mod entry_args;
 mod parse_command;
 mod parse_string;
