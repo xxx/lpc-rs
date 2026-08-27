@@ -2,6 +2,8 @@
 //! to an engine grammar, and the handler's arguments taken from the parse's
 //! captures.
 
+mod matcher;
+
 use std::{
     fmt,
     sync::{Arc, LazyLock},
@@ -10,15 +12,12 @@ use std::{
 use dashmap::DashMap;
 use ustr::Ustr;
 
-use crate::{
-    command::{
-        grammar::{
-            Element, Grammar, GrammarBuilder, GrammarError, Label, Parse, lit, nt, parse, tok,
-        },
-        resolve::Kind,
-    },
-    interpreter::{lpc_ref::LpcRef, lpc_string::LpcString},
+use crate::command::{
+    grammar::{Element, Grammar, GrammarBuilder, GrammarError, Label, Parse, lit, nt, parse, tok},
+    resolve::Kind,
 };
+
+pub(crate) use matcher::arguments;
 
 /// What a `%` capture yields to the handler.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -417,22 +416,6 @@ impl Compiled {
     }
 }
 
-/// The value of a capture that needs no resolver: a string for `%w`/`%s`,
-/// an int for `%d`; `None` for a noun capture.
-pub fn plain_value(capture: &Capture) -> Option<LpcRef> {
-    match capture.kind {
-        CaptureKind::Word | CaptureKind::Words => {
-            Some(LpcString::from(capture.text.as_str()).into())
-        }
-        CaptureKind::Number => capture.text.parse::<i64>().ok().map(LpcRef::from),
-        CaptureKind::Object
-        | CaptureKind::Living
-        | CaptureKind::Items
-        | CaptureKind::Preposition
-        | CaptureKind::Liv => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -445,6 +428,22 @@ mod tests {
 
     fn s(text: &str) -> LpcRef {
         LpcString::from(text).into()
+    }
+
+    /// A capture that needs no resolver: a string for `%w`/`%s`, an int for
+    /// `%d`; `None` for a noun capture.
+    fn plain_value(capture: &Capture) -> Option<LpcRef> {
+        match capture.kind {
+            CaptureKind::Word | CaptureKind::Words => {
+                Some(LpcString::from(capture.text.as_str()).into())
+            }
+            CaptureKind::Number => capture.text.parse::<i64>().ok().map(LpcRef::from),
+            CaptureKind::Object
+            | CaptureKind::Living
+            | CaptureKind::Items
+            | CaptureKind::Preposition
+            | CaptureKind::Liv => None,
+        }
     }
 
     /// The arguments the first parse of `line` under `pattern` yields, or

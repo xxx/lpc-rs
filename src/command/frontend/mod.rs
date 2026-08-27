@@ -1,77 +1,7 @@
-//! Compilers from each family's surface syntax into the engine's grammars
-//! and the registry's rules, and each family's handler arguments back out
-//! of a parse.
+//! Each family's adapter: its surface syntax compiled into the engine's
+//! grammars, and a line matched into its handler's arguments.
 
 pub mod add_action;
 pub mod dgd;
 pub mod native;
 pub mod parser;
-
-use std::sync::Arc;
-
-use lpc_rs_errors::Result;
-
-use crate::{
-    command::{
-        grammar::parse,
-        registry::{Family, Rule},
-        resolve::{LpcVocabulary, Resolver, values},
-    },
-    interpreter::{
-        lpc_ref::LpcRef, lpc_string::LpcString, process::Process, task_context::TaskContext,
-    },
-};
-
-/// The handler's arguments and the verb `query_verb()` reports for the
-/// first parse of `line` that yields usable arguments — for a native rule,
-/// one whose noun captures resolve against `scope`; `None` when no parse
-/// does, which makes the rule no match. The resolver is built on first
-/// need and shared across the trial.
-pub(crate) async fn arguments_and_verb<'a>(
-    ctx: &'a TaskContext,
-    scope: &[Arc<Process>],
-    resolver: &mut Option<Resolver<LpcVocabulary<'a>>>,
-    rule: &Rule,
-    line: &str,
-) -> Result<Option<(Vec<LpcRef>, String)>> {
-    match &rule.family {
-        Family::AddAction { matching, .. } => {
-            let grammar = add_action::grammar_for(rule.verb.as_str(), *matching);
-            let Some(parsed) = parse(&grammar, line).next() else {
-                return Ok(None);
-            };
-            let verb = rule.verb.as_str();
-            let argument = add_action::argument(verb, *matching, &parsed, line);
-            Ok(Some((
-                vec![LpcString::from(argument.as_str()).into()],
-                add_action::reported_verb(verb, *matching, &parsed, line),
-            )))
-        }
-        Family::Native { compiled, .. } => {
-            for captures in compiled.captures_of(line) {
-                if captures
-                    .iter()
-                    .all(|capture| capture.kind.resolver_kind().is_none())
-                {
-                    let plain: Option<Vec<LpcRef>> =
-                        captures.iter().map(native::plain_value).collect();
-                    return Ok(plain.map(|args| (args, rule.verb.to_string())));
-                }
-                let resolver = match resolver {
-                    Some(resolver) => resolver,
-                    None => {
-                        let vocabulary = LpcVocabulary::new(ctx, scope.to_vec());
-                        resolver.insert(Resolver::new(vocabulary, None))
-                    }
-                };
-                if let Some(args) = values(&captures, resolver).await? {
-                    return Ok(Some((args, rule.verb.to_string())));
-                }
-            }
-            Ok(None)
-        }
-        // The trial's own `Parser` arm runs a protocol rule; it never
-        // reaches this call.
-        Family::Parser(_) => Ok(None),
-    }
-}

@@ -1,19 +1,16 @@
-//! The vocabulary behind real objects — `parse_command_*` and `id` applies
-//! nested in the caller's transaction — and captures to LPC values.
+//! The vocabulary behind real objects: `parse_command_*` and `id` applies
+//! nested in the caller's transaction.
 
 use std::sync::Arc;
 
 use lpc_rs_errors::Result;
 
-use super::{Defaults, Lexicon, Lists, Resolved, Resolver, Vocabulary};
-use crate::{
-    command::frontend::native::{Capture, plain_value},
-    interpreter::{
-        ID, PARSE_COMMAND_ADJECTIV_ID_LIST, PARSE_COMMAND_ALL_WORD, PARSE_COMMAND_ID_LIST,
-        PARSE_COMMAND_NUMERAL, PARSE_COMMAND_PLURAL_ID_LIST, PARSE_COMMAND_PLURALIZE,
-        PARSE_COMMAND_PREPOS_LIST, lpc_array::LpcArray, lpc_int::LpcInt, lpc_ref::LpcRef,
-        process::Process, task::apply_function::apply_function, task_context::TaskContext,
-    },
+use super::{Defaults, Lexicon, Lists, Vocabulary};
+use crate::interpreter::{
+    ID, PARSE_COMMAND_ADJECTIV_ID_LIST, PARSE_COMMAND_ALL_WORD, PARSE_COMMAND_ID_LIST,
+    PARSE_COMMAND_NUMERAL, PARSE_COMMAND_PLURAL_ID_LIST, PARSE_COMMAND_PLURALIZE,
+    PARSE_COMMAND_PREPOS_LIST, lpc_array::LpcArray, lpc_int::LpcInt, lpc_ref::LpcRef,
+    process::Process, task::apply_function::apply_function, task_context::TaskContext,
 };
 
 /// A scope of objects asked through applies in `ctx`'s transaction.
@@ -202,52 +199,4 @@ impl Vocabulary for LpcVocabulary<'_> {
         let answer = self.apply(&object, ID, &[LpcRef::from(phrase)]).await?;
         Ok(matches!(answer, Some(value) if value.is_truthy(self.ctx.txn())))
     }
-}
-
-/// The LPC values of `captures` in slot order — `%o` an object, `%i`/`%l`
-/// `({ numeral, ob... })`, `%p` the matched entry as a string, the rest by
-/// [`plain_value`] — or `None` at the first phrase that names nothing.
-pub async fn values(
-    captures: &[Capture],
-    resolver: &mut Resolver<LpcVocabulary<'_>>,
-) -> Result<Option<Vec<LpcRef>>> {
-    let mut resolved: Vec<Option<Resolved>> = Vec::with_capacity(captures.len());
-    for capture in captures {
-        match capture.kind.resolver_kind() {
-            None => resolved.push(None),
-            Some(kind) => match resolver.resolve(kind, &capture.text).await? {
-                Some(found) => resolved.push(Some(found)),
-                None => return Ok(None),
-            },
-        }
-    }
-    let prepositions: Vec<String> = resolver.prepositions().await?.to_vec();
-    let scope = resolver.vocabulary().scope();
-    let txn = resolver.vocabulary().ctx().txn();
-    let object = |candidate: usize| LpcRef::from(Arc::downgrade(&scope[candidate]));
-    let mut out = Vec::with_capacity(captures.len());
-    for (capture, found) in captures.iter().zip(resolved) {
-        let value = match found {
-            None => match plain_value(capture) {
-                Some(value) => value,
-                None => return Ok(None),
-            },
-            Some(Resolved::Object(candidate)) => object(candidate),
-            Some(Resolved::Items {
-                numeral,
-                candidates,
-            }) => {
-                let items = std::iter::once(LpcRef::from(numeral))
-                    .chain(candidates.iter().map(|&candidate| object(candidate)))
-                    .collect::<LpcArray>();
-                LpcRef::Array(txn.with(|t| t.mint_array(items)))
-            }
-            Some(Resolved::Preposition(index)) => match prepositions.get(index) {
-                Some(entry) => LpcRef::from(entry.as_str()),
-                None => return Ok(None),
-            },
-        };
-        out.push(value);
-    }
-    Ok(Some(out))
 }

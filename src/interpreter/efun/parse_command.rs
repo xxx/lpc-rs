@@ -9,12 +9,11 @@ use lpc_rs_errors::Result;
 
 use crate::{
     command::{
-        frontend::native::{self, CaptureKind, Compiled},
-        resolve::{LpcVocabulary, Resolver, values},
+        frontend::native::{self, CaptureKind},
+        resolve::{LpcVocabulary, Resolver},
     },
     interpreter::{
         efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process, stm::TxnHandle,
-        task_context::TaskContext,
     },
 };
 
@@ -61,27 +60,23 @@ pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> 
         .collect::<Result<Vec<_>>>()?;
     let callers_list = array_lists.iter().flatten().next().cloned();
 
-    // A pattern with no noun capture skips the resolver, so no master apply
-    // runs for it.
-    let has_noun = compiled
-        .kinds
-        .iter()
-        .any(|kind| kind.resolver_kind().is_some());
-    let matched = if has_noun {
+    let has_preposition_slot = array_lists.iter().any(Option::is_some);
+    // The resolver borrows the task context; it must be gone before the
+    // registers are written through `context` below.
+    let (found, in_force) = {
+        let vocabulary = LpcVocabulary::new(context.task_context(), scope);
+        let mut resolver = Resolver::new(vocabulary, callers_list);
         // Boxed to stay out of `call_efun`'s unboxed future union, which every
         // efun call pays for.
-        Box::pin(resolve_nouns(
-            context.task_context(),
-            scope,
-            &compiled,
-            cmd,
-            callers_list,
-        ))
-        .await?
-    } else {
-        plain_matches(&compiled, cmd).map(|values| (values, Vec::new()))
+        let found = Box::pin(native::arguments(&compiled, cmd, &mut resolver)).await?;
+        let in_force: Vec<String> = if found.is_some() && has_preposition_slot {
+            resolver.prepositions().await?.to_vec()
+        } else {
+            Vec::new()
+        };
+        (found, in_force)
     };
-    let Some((found, in_force)) = matched else {
+    let Some(found) = found else {
         context.return_efun_result(LpcRef::from(0));
         return Ok(());
     };
@@ -100,35 +95,6 @@ pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> 
     }
     context.return_efun_result(LpcRef::from(1));
     Ok(())
-}
-
-/// Every parse of `cmd` under `grammar`, tried in turn until one's captures
-/// all resolve against `scope`'s vocabulary; the resolved values and the
-/// preposition list that was in force, or `None` when nothing resolves.
-async fn resolve_nouns(
-    ctx: &TaskContext,
-    scope: Vec<Arc<Process>>,
-    compiled: &Compiled,
-    cmd: &str,
-    callers_prepositions: Option<Vec<String>>,
-) -> Result<Option<(Vec<LpcRef>, Vec<String>)>> {
-    let vocabulary = LpcVocabulary::new(ctx, scope);
-    let mut resolver = Resolver::new(vocabulary, callers_prepositions);
-    for captures in compiled.captures_of(cmd) {
-        if let Some(found) = values(&captures, &mut resolver).await? {
-            return Ok(Some((found, resolver.prepositions().await?.to_vec())));
-        }
-    }
-    Ok(None)
-}
-
-/// Every parse of `cmd` under `compiled`, tried in turn, each capture valued
-/// by [`native::plain_value`]; for a pattern with no noun capture, so no
-/// master apply runs.
-fn plain_matches(compiled: &Compiled, cmd: &str) -> Option<Vec<LpcRef>> {
-    compiled
-        .captures_of(cmd)
-        .find_map(|captures| captures.iter().map(native::plain_value).collect())
 }
 
 /// The candidates `arg` names: an object with its deep inventory, or an

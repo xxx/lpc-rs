@@ -8,7 +8,10 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::{
     command::{
-        frontend::{add_action::verb_matches, arguments_and_verb},
+        frontend::{
+            add_action::{self, verb_matches},
+            native,
+        },
         parser::{self, Nickname, Verdict},
         registry::{Family, Rule, scope_of},
         resolve::{LpcVocabulary, Resolver},
@@ -162,8 +165,7 @@ async fn trial(
         .collect();
     candidates.sort_by_key(|rule| std::cmp::Reverse(rule.id));
 
-    let members = scope.members();
-    let mut resolver: Option<Resolver<LpcVocabulary<'_>>> = None;
+    let mut resolver = Resolver::new(LpcVocabulary::new(ctx, scope.members()), None);
     // Boxed to stay out of `call_efun`'s unboxed future union, which every
     // efun call pays for — `command` calls `dispatch` unboxed.
     if Box::pin(try_rules(
@@ -171,7 +173,6 @@ async fn trial(
         actor,
         line,
         first_word,
-        &members,
         &mut resolver,
         candidates,
     ))
@@ -185,7 +186,6 @@ async fn trial(
         actor,
         line,
         first_word,
-        &members,
         &mut resolver,
         verb_rules,
     ))
@@ -198,48 +198,36 @@ async fn trial(
 
 /// Try `candidates` in turn against `line`; `true` as soon as one handles
 /// it (delivering a `Protocol` rule's message first).
-async fn try_rules<'a>(
-    ctx: &'a TaskContext,
+async fn try_rules(
+    ctx: &TaskContext,
     actor: &Arc<Process>,
     line: &str,
     first_word: &str,
-    members: &[Arc<Process>],
-    resolver: &mut Option<Resolver<LpcVocabulary<'a>>>,
+    resolver: &mut Resolver<LpcVocabulary<'_>>,
     candidates: Vec<Rule>,
 ) -> Result<bool> {
     for rule in candidates {
-        match &rule.family {
-            Family::AddAction { pointer, .. } | Family::Native { pointer, .. } => {
-                if !pointer.receiver_is_live(ctx.txn()) {
-                    continue;
-                }
+        if rule
+            .pointer()
+            .is_some_and(|pointer| !pointer.receiver_is_live(ctx.txn()))
+        {
+            continue;
+        }
+        let (pointer, args, reported) = match &rule.family {
+            Family::AddAction { matching, pointer } => {
                 let Some((args, reported)) =
-                    Box::pin(arguments_and_verb(ctx, members, resolver, &rule, line)).await?
+                    add_action::arguments_and_verb(rule.verb.as_str(), *matching, line)
                 else {
                     continue;
                 };
-                ctx.with_command(|state| {
-                    if let Some(state) = state {
-                        state.verb_reported = reported;
-                    }
-                });
-
-                let handler_ctx = ctx.clone().with_process(actor.clone());
-                handler_ctx.this_player.store(Some(actor.clone()));
-                let Some(resolved) = pointer.prepare_call(&args, &handler_ctx).await? else {
+                (pointer, args, reported)
+            }
+            Family::Native { compiled, pointer } => {
+                let Some(args) = Box::pin(native::arguments(compiled, line, resolver)).await?
+                else {
                     continue;
                 };
-                let timeout = ctx.config().max_execution_time;
-                let result = apply_function(
-                    resolved.function,
-                    &resolved.args,
-                    handler_ctx.with_process(resolved.process),
-                    Some(timeout),
-                )
-                .await?;
-                if !matches!(result, LpcRef::Int(LpcInt(0))) {
-                    return Ok(true);
-                }
+                (pointer, args, rule.verb.to_string())
             }
             Family::Parser(parser) => {
                 let Some(owner) = rule.owner() else { continue };
@@ -258,6 +246,28 @@ async fn try_rules<'a>(
                     Verdict::NoParse | Verdict::Refused | Verdict::Unresolved => continue,
                 }
             }
+        };
+        ctx.with_command(|state| {
+            if let Some(state) = state {
+                state.verb_reported = reported;
+            }
+        });
+
+        let handler_ctx = ctx.clone().with_process(actor.clone());
+        handler_ctx.this_player.store(Some(actor.clone()));
+        let Some(resolved) = pointer.prepare_call(&args, &handler_ctx).await? else {
+            continue;
+        };
+        let timeout = ctx.config().max_execution_time;
+        let result = apply_function(
+            resolved.function,
+            &resolved.args,
+            handler_ctx.with_process(resolved.process),
+            Some(timeout),
+        )
+        .await?;
+        if !matches!(result, LpcRef::Int(LpcInt(0))) {
+            return Ok(true);
         }
     }
     Ok(false)

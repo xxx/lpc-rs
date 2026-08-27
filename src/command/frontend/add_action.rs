@@ -5,9 +5,12 @@ use std::sync::{Arc, LazyLock};
 
 use dashmap::DashMap;
 
-use crate::command::{
-    grammar::{Grammar, GrammarBuilder, Label, Parse, lit, nt},
-    registry::{ArgSpan, Reported, VerbMatch},
+use crate::{
+    command::{
+        grammar::{Grammar, GrammarBuilder, Label, Parse, lit, nt, parse},
+        registry::{ArgSpan, Reported, VerbMatch},
+    },
+    interpreter::{lpc_ref::LpcRef, lpc_string::LpcString},
 };
 
 /// The cache key: every prefix rule shares one grammar, an exact verb gets
@@ -100,13 +103,26 @@ pub fn reported_verb(verb: &str, matching: VerbMatch, parse: &Parse, line: &str)
     }
 }
 
+/// The handler's one argument and the verb `query_verb()` reports, for a
+/// line whose first word [`verb_matches`]; `None` when the grammar does
+/// not parse it.
+pub fn arguments_and_verb(
+    verb: &str,
+    matching: VerbMatch,
+    line: &str,
+) -> Option<(Vec<LpcRef>, String)> {
+    let grammar = grammar_for(verb, matching);
+    let parsed = parse(&grammar, line).next()?;
+    Some((
+        vec![LpcString::from(argument(verb, matching, &parsed, line).as_str()).into()],
+        reported_verb(verb, matching, &parsed, line),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::{
-        grammar::parse,
-        registry::{ArgSpan, Reported},
-    };
+    use crate::command::registry::{ArgSpan, Reported};
 
     const SHORT: VerbMatch = VerbMatch::Prefix {
         reports: Reported::Full,
