@@ -26,7 +26,14 @@ pub(crate) mod living;
 pub(crate) mod move_object;
 pub(crate) mod notify_fail;
 pub(crate) mod papplyv;
+pub(crate) mod parse_add_rule;
+pub(crate) mod parse_add_synonym;
 pub(crate) mod parse_command;
+pub(crate) mod parse_dump;
+pub(crate) mod parse_init;
+pub(crate) mod parse_my_rules;
+pub(crate) mod parse_refresh;
+pub(crate) mod parse_remove;
 pub(crate) mod parse_string;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
@@ -338,6 +345,20 @@ efuns! {
         arity: (2, 0),
         args: [LpcType::Function(false), LpcType::Mixed(true)],
     },
+    parse_add_rule => {
+        returns: LpcType::Void,
+        arity: 2,
+        args: [LpcType::String(false), LpcType::String(false)],
+    },
+    parse_add_synonym => {
+        returns: LpcType::Void,
+        arity: (3, 1),
+        args: [
+            LpcType::String(false),
+            LpcType::String(false),
+            LpcType::String(false),
+        ],
+    },
     parse_command => {
         returns: LpcType::Int(false),
         arity: (3, 0, ellipsis),
@@ -347,6 +368,23 @@ efuns! {
             LpcType::String(false),
         ],
         refs: from 3,
+    },
+    parse_dump => {
+        returns: LpcType::String(false),
+    },
+    parse_init => {
+        returns: LpcType::Void,
+    },
+    parse_my_rules => {
+        returns: LpcType::String(true),
+    },
+    parse_refresh => {
+        returns: LpcType::Void,
+    },
+    parse_remove => {
+        returns: LpcType::Void,
+        arity: 1,
+        args: [LpcType::String(false)],
     },
     parse_string => {
         returns: LpcType::Mixed(true),
@@ -548,7 +586,14 @@ mod tests {
                 "notify_fail",
                 "objectp",
                 "papplyv",
+                "parse_add_rule",
+                "parse_add_synonym",
                 "parse_command",
+                "parse_dump",
+                "parse_init",
+                "parse_my_rules",
+                "parse_refresh",
+                "parse_remove",
                 "parse_string",
                 "query_call_out",
                 "query_call_outs",

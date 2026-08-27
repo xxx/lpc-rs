@@ -3,6 +3,7 @@
 mod entry_args;
 mod parse_command;
 mod parse_string;
+mod parser;
 mod references;
 
 use crate::{

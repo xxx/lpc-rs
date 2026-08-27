@@ -85,6 +85,10 @@ pub struct Process {
     /// The cell holding what this object can command; absent means no rules.
     pub rules: SVar<RuleList>,
 
+    /// Set by `parse_init()`; `parse_add_rule` requires it. Not
+    /// transactional: setting it twice is harmless.
+    pub parser_ready: OnceLock<()>,
+
     /// The object-space cell this process lives under, known once it is
     /// inserted or destructed transactionally.
     pub cell: OnceLock<VarId>,
@@ -105,6 +109,7 @@ impl Default for Process {
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
             rules: SVar::new(),
+            parser_ready: OnceLock::new(),
             cell: OnceLock::new(),
             position: Default::default(),
         }
@@ -131,6 +136,7 @@ impl Process {
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
             rules: SVar::new(),
+            parser_ready: OnceLock::new(),
             cell: OnceLock::new(),
             position: Default::default(),
         }
@@ -152,6 +158,7 @@ impl Process {
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
             rules: SVar::new(),
+            parser_ready: OnceLock::new(),
             cell: OnceLock::new(),
             position: Default::default(),
         }
