@@ -14,9 +14,14 @@ use crate::{
 /// Which handler is being called.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Family {
+    /// `can_<verb>_<slug>`: on the verb object, before any object slot is
+    /// filled.
     Can,
+    /// `direct_<verb>_<slug>`: on a direct-object candidate.
     Direct,
+    /// `indirect_<verb>_<slug>`: on an indirect-object candidate.
     Indirect,
+    /// `do_<verb>_<slug>`: on the verb object, once every slot is chosen.
     Do,
 }
 
@@ -125,12 +130,19 @@ pub(crate) fn best_reason(reasons: &[(usize, Reply)]) -> Option<(usize, String)>
 /// MudOS's numbers; `Refused` is not a kind — it carries no message.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Kind {
+    /// A living slot's phrase matched only non-livings.
     NotLiving = 2,
+    /// A match exists but nothing on its path is `inventory_accessible()`.
     NotAccessible = 3,
+    /// Several qualifiers survived filtering with no ordinal to choose one.
     Ambig = 4,
+    /// An ordinal named a position past the number of qualifiers.
     Ordinal = 5,
+    /// A handler's own string reason, `#` stripped.
     Allocated = 6,
+    /// No candidate's vocabulary named the phrase at all.
     ThereIsNo = 7,
+    /// `all` or a plural on a single-object slot.
     BadMultiple = 8,
     /// A handler said `0`; reported as `-2`, never to the master.
     Refused = 0,
@@ -139,9 +151,13 @@ pub(crate) enum Kind {
 /// The `arg` of a failure.
 #[derive(Clone, Debug)]
 pub(crate) enum Arg {
+    /// No argument (`Kind::Refused`, `Kind::BadMultiple`).
     None,
+    /// A phrase or a handler's reason text.
     Text(String),
+    /// The qualifier count an ordinal reached past.
     Count(i64),
+    /// The qualifying objects of an ambiguous slot.
     Objects(Vec<Arc<Process>>),
 }
 

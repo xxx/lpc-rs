@@ -260,6 +260,9 @@ async fn attempt(
         }) = resolver.resolve(kind, &cap.text).await?
         else {
             let living_slot = matches!(slot, Slot::Living | Slot::Livings);
+            // This second resolve re-applies `parse_command_numeral` on
+            // `cap.text`; the numeral it returns is discarded here, only
+            // whether the phrase names any (non-living) object matters.
             let kind = if living_slot
                 && resolver
                     .resolve(ResolveKind::Items, &cap.text)
@@ -284,11 +287,21 @@ async fn attempt(
         let mut unreachable = false;
         for &candidate in &matched {
             let object = &candidates[candidate];
+            // A neighbour a previous slot's handler destructed is skipped,
+            // not just unreachable — it is not `ThereIsNo` either.
+            if !object.object.is_live(ctx.txn()) {
+                continue;
+            }
             if !object.reachable {
                 unreachable = true;
                 continue;
             }
-            match call(
+            // The candidate sits in its own slot for the duration of this
+            // call — a bare object even for a many slot — then reverts to
+            // `0`; the chosen-so-far objects (`values`) are otherwise
+            // unrelated to it.
+            values[index] = LpcRef::from(Arc::downgrade(&object.object));
+            let reply = call(
                 ctx,
                 actor,
                 &object.object,
@@ -296,8 +309,9 @@ async fn attempt(
                 rule,
                 &with_words(&values, &words),
             )
-            .await?
-            {
+            .await?;
+            values[index] = LpcRef::from(0);
+            match reply {
                 Reply::Yes => qualified.push(object.object.clone()),
                 Reply::No | Reply::Absent => {}
                 reason @ Reply::Reason { .. } => reasons.push((candidate, reason)),
@@ -331,7 +345,7 @@ async fn attempt(
         let picked: Vec<Arc<Process>> = if slot.is_many() {
             match numeral {
                 n if n > 0 => qualified.iter().take(n as usize).cloned().collect(),
-                n if n < 0 => match qualified.get((-n - 1) as usize) {
+                n if n < 0 => match qualified.get(n.unsigned_abs() as usize - 1) {
                     Some(one) => vec![one.clone()],
                     None => {
                         return Ok(Err(unresolved(
@@ -365,7 +379,7 @@ async fn attempt(
                         progress,
                     )));
                 }
-                n if n < 0 => match qualified.get((-n - 1) as usize) {
+                n if n < 0 => match qualified.get(n.unsigned_abs() as usize - 1) {
                     Some(one) => vec![one.clone()],
                     None => {
                         return Ok(Err(unresolved(
@@ -406,6 +420,11 @@ async fn attempt(
             Family::Indirect
         };
         for object in picked {
+            // A handler run earlier in this parse may have destructed a
+            // neighbour; it no longer gets a say.
+            if !object.is_live(ctx.txn()) {
+                continue;
+            }
             match call(
                 ctx,
                 actor,

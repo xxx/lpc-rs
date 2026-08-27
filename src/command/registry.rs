@@ -208,6 +208,12 @@ impl Rule {
         self.owner.upgrade()
     }
 
+    /// Whether `owner` registered this rule, by pointer identity; `true`
+    /// even if `owner` has since been destructed elsewhere.
+    pub fn owned_by(&self, owner: &Arc<Process>) -> bool {
+        std::ptr::eq(self.owner.as_ptr(), Arc::as_ptr(owner))
+    }
+
     /// The same registration under another verb: it shares this rule's id,
     /// so a removal by id drops them all.
     pub fn sibling(&self, verb: Ustr) -> Rule {

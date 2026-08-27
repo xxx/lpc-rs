@@ -27,11 +27,12 @@ pub(crate) struct Candidate {
 /// answers `inventory_accessible()`.
 pub(crate) async fn walk(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec<Candidate>> {
     let txn = ctx.txn();
+    let environment = Process::environment_of(txn, actor);
     let mut out: Vec<Candidate> = vec![Candidate {
         object: actor.clone(),
         reachable: true,
     }];
-    if let Some(room) = Process::environment_of(txn, actor) {
+    if let Some(room) = &environment {
         out.push(Candidate {
             object: room.clone(),
             reachable: true,
@@ -42,7 +43,7 @@ pub(crate) async fn walk(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec<
                 reachable: true,
             });
         }
-        for item in Process::inventory_of(txn, &room) {
+        for item in Process::inventory_of(txn, room) {
             if !Arc::ptr_eq(&item, actor) {
                 out.push(Candidate {
                     object: item,
@@ -60,11 +61,7 @@ pub(crate) async fn walk(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec<
     }
     // Containers are asked as they are reached; a container's contents are
     // reachable only if the container and its path are.
-    let mut next = if Process::environment_of(txn, actor).is_some() {
-        2
-    } else {
-        1
-    };
+    let mut next = if environment.is_some() { 2 } else { 1 };
     while next < out.len() {
         let holder = out[next].clone();
         next += 1;
