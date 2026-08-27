@@ -25,9 +25,15 @@ tries and in delivering nothing itself.
 | `-3` | a rule's grammar matched, but an object phrase did not resolve and the master gave no message |
 | a string | `master->parser_error_message()`'s result for the failure |
 
-When several of the verb's rules fail, the one reported is whichever got
-furthest — most object slots chosen, ties to the one registered first (see
-`parser_handlers`).
+Rules are tried in registration order; the first one to reach `1` or a
+message ends the search right there. Short of that, results fold across
+rules by severity, worst wins: `-3` beats `-2` beats `-1` — once any rule
+scores `-3`, a later rule's `-2` or `-1` cannot pull the result back down,
+and likewise `-2` over `-1`. That fold is *across* rules. *Within* one
+rule's own attempt at the line — which may parse it several ways (a greedy
+`STR` capture, an ambiguous split) — the failure that single rule reports is
+whichever of its own parses got furthest: most object slots chosen, ties to
+the earliest (see `parser_handlers`).
 
 ### scope
 

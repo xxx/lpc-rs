@@ -15,6 +15,9 @@ wherever the verb object itself sits in the game.
 `parse_init: this_object() is not live` — `this_object()` has been
 destructed.
 
+Departures from MudOS are listed in [`parse_sentence`](parse_sentence.md)'s
+departures table.
+
 ### See also
 
 `parse_add_rule`, `parse_add_synonym`, `parse_remove`, `parse_refresh`,

@@ -14,6 +14,9 @@ its path, answered `inventory_accessible()` falsy — still counts as
 *existing*: it is reported to `parser_error_message` as kind 3 (not kind 7,
 "no such thing"), and is never offered `direct_`/`indirect_`.
 
+Departures from MudOS are listed in [`parse_sentence`](../../efun/parse_sentence.md)'s
+departures table.
+
 ### See also
 
 [`inventory_visible`](inventory_visible.md),

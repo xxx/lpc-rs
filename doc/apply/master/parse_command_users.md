@@ -10,6 +10,9 @@ reachable; it is never offered to an `OBJ`/`OBS` phrase in the same rule.
 Anything else in the result is dropped; undefined, or a result that is not
 an array, adds nobody.
 
+Departures from MudOS are listed in [`parse_sentence`](../../efun/parse_sentence.md)'s
+departures table.
+
 ### See also
 
 [`parse_add_rule`](../../efun/parse_add_rule.md),

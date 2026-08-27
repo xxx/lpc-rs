@@ -25,6 +25,9 @@ registered in `/verbs/look.c`, `parse_dump()` returns:
     look at OBJ  (/verbs/look)
     examine at OBJ  (/verbs/look)
 
+Departures from MudOS are listed in [`parse_sentence`](parse_sentence.md)'s
+departures table.
+
 ### See also
 
 `parse_my_rules`, `parse_add_rule`, `parse_add_synonym`

@@ -9,6 +9,13 @@ dispatcher tries the actor's own `add_action`/`add_rule` rules first — see
 `parse_sentence`), every registered rule for that verb, on every live verb
 object, is tried in registration order until one runs its `do_`.
 
+`parse_add_rule` is a pure append: it never reads the registry first, so
+registering the same verb and rule text twice from the same object creates
+two separate rules, not one. Both are tried in registration order, both
+appear in `parse_my_rules`/`parse_dump`, and nothing merges or replaces the
+earlier one. To replace a rule, `parse_remove` its verb first, then
+register again.
+
 ### The rule
 
 Tokens separated by spaces; `""` registers the bare verb alone.

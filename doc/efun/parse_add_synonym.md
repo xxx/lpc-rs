@@ -16,6 +16,9 @@ its base verb, not on its own (see `parse_remove`).
 error when `old_verb` (or `old_verb` with that `rule`) names none of
 `this_object()`'s registrations.
 
+Departures from MudOS are listed in [`parse_sentence`](parse_sentence.md)'s
+departures table.
+
 ### See also
 
 `parse_add_rule`, `parse_remove`, `parse_my_rules`, `query_verb`

@@ -72,6 +72,9 @@ slot: the qualifying objects, in candidate order, followed by every *plain*
 (non-`#`) reason a candidate that did not qualify returned, as a string;
 soft reasons are dropped by this point.
 
+Departures from MudOS are listed in [`parse_sentence`](../../efun/parse_sentence.md)'s
+departures table.
+
 ### See also
 
 [`parse_add_rule`](../../efun/parse_add_rule.md),

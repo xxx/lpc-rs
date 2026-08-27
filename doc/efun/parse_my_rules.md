@@ -7,6 +7,9 @@
 registered under, not the base verb its handlers are named for. A bare-verb
 rule (`rule` `""`) leaves a trailing space: `"look "`.
 
+Departures from MudOS are listed in [`parse_sentence`](parse_sentence.md)'s
+departures table.
+
 ### See also
 
 `parse_add_rule`, `parse_add_synonym`, `parse_remove`, `parse_dump`
