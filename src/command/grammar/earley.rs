@@ -29,8 +29,8 @@ struct Item {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Ending {
-    /// The enumeration ran to its end within its limits — the parse cap
-    /// included, which is the caller's own number.
+    /// The enumeration ran to its end within its limits, the parse cap
+    /// included.
     Done = 0,
     /// The step budget refused a step; derivations may be missing.
     Exhausted = 1,
@@ -48,7 +48,7 @@ const TOO_DEEP: u8 = Ending::TooDeep as u8;
 pub(crate) struct Budget {
     limit: usize,
     used: AtomicUsize,
-    /// An `Ending` discriminant; the first ending recorded is final.
+    /// An `Ending` discriminant.
     ending: AtomicU8,
 }
 
@@ -577,8 +577,7 @@ impl<'g> Iterator for Parses<'g> {
 }
 
 impl Parses<'_> {
-    /// How the parse ended; `Done` while derivations remain or once every
-    /// derivation within the limits was yielded.
+    /// How the parse ended; `Done` until a step or depth limit ends it.
     pub fn ending(&self) -> Ending {
         self.budget.ending()
     }
