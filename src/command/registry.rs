@@ -1,5 +1,6 @@
-//! The rule registry: what a living can command, held as a transactional
-//! cell on its `Process` and changed only through merge ops.
+//! The rule registry: `Rule` and its list, held in transactional cells — one
+//! on each living's `Process` for what it can command, one on `ObjectSpace`
+//! for the verb-attached rules — and changed only through merge ops.
 
 use std::sync::{
     Arc, Weak,
@@ -9,8 +10,16 @@ use std::sync::{
 use ustr::Ustr;
 
 use crate::{
-    command::frontend::{native::Compiled, parser::ParserRule},
-    interpreter::{function_type::function_ptr::FunctionPtr, process::Process},
+    command::{
+        frontend::{native::Compiled, parser::ParserRule},
+        scope::Scope,
+    },
+    interpreter::{
+        function_type::function_ptr::FunctionPtr,
+        process::Process,
+        stm::{MergeOp, TxnHandle, VarId},
+        task_context::TaskContext,
+    },
 };
 
 /// A rule's identity; ids increase with registration order, which is the
@@ -179,6 +188,67 @@ impl Eq for Rule {}
 
 /// A living's rule list; copy-on-write like an array payload.
 pub type RuleList = Arc<[Rule]>;
+
+/// The verb-attached rules — every verb object's, driver-wide — read and
+/// changed through one transaction.
+pub(crate) struct VerbRules<'a> {
+    txn: &'a TxnHandle,
+    cell: VarId,
+}
+
+impl<'a> VerbRules<'a> {
+    /// The verb-attached rules as `ctx`'s transaction sees them.
+    pub(crate) fn new(ctx: &'a TaskContext) -> Self {
+        VerbRules {
+            txn: ctx.txn(),
+            cell: ctx.object_space().verb_rules.id,
+        }
+    }
+
+    /// Every rule in registration order; a tracked read.
+    pub(crate) fn all(&self) -> RuleList {
+        self.txn.with(|t| t.read_rules(self.cell))
+    }
+
+    /// The rules for `verb` (exact) whose owner is live.
+    pub(crate) fn for_verb(&self, verb: &str) -> Vec<Rule> {
+        self.all()
+            .iter()
+            .filter(|rule| rule.verb.as_str() == verb)
+            .filter(|rule| rule.owner().is_some_and(|owner| owner.is_live(self.txn)))
+            .cloned()
+            .collect()
+    }
+
+    /// The rules `owner` registered, in registration order.
+    pub(crate) fn owned_by(&self, owner: &Arc<Process>) -> Vec<Rule> {
+        self.all()
+            .iter()
+            .filter(|rule| rule.owned_by(owner))
+            .cloned()
+            .collect()
+    }
+
+    /// Append `rule` without reading the cell — a blind merge, so parallel
+    /// registrations commute.
+    pub(crate) fn append(&self, rule: Rule) {
+        self.txn
+            .with(|t| t.merge(self.cell, MergeOp::RulesAppend(rule)));
+    }
+
+    /// Remove the rule with `id`.
+    pub(crate) fn remove(&self, id: RuleId) {
+        self.txn
+            .with(|t| t.merge(self.cell, MergeOp::RulesRemove(id)));
+    }
+
+    /// Remove every rule `owner` registered.
+    pub(crate) fn remove_owner(&self, owner: &Arc<Process>) {
+        let gone = Scope::new([owner.clone()]);
+        self.txn
+            .with(|t| t.merge(self.cell, MergeOp::RulesRemoveOwners(gone)));
+    }
+}
 
 #[cfg(test)]
 pub(crate) mod tests {

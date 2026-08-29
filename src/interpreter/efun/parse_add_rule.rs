@@ -6,9 +6,9 @@ use lpc_rs_errors::Result;
 use crate::{
     command::{
         frontend::parser::compile,
-        registry::{Family, Rule},
+        registry::{Family, Rule, VerbRules},
     },
-    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, stm::MergeOp},
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},
 };
 
 /// `parse_add_rule(verb, rule)`: appends a verb-attached rule owned by
@@ -33,9 +33,6 @@ pub async fn parse_add_rule<const N: usize>(context: &mut EfunContext<'_, N>) ->
         verb.to_str().into(),
         Family::Parser(std::sync::Arc::new(parser)),
     );
-    let cell = context.object_space().verb_rules.id;
-    context
-        .txn()
-        .with(|t| t.merge(cell, MergeOp::RulesAppend(rule)));
+    VerbRules::new(context.task_context()).append(rule);
     Ok(())
 }

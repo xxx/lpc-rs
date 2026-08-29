@@ -12,7 +12,7 @@ use crate::{
             native,
         },
         parser::{self, Nickname, Verdict},
-        registry::{Family, Rule},
+        registry::{Family, Rule, VerbRules},
         resolve::{LpcVocabulary, Resolver},
         scope::neighbourhood,
     },
@@ -64,20 +64,6 @@ impl Drop for Frame<'_> {
     }
 }
 
-/// The verb-attached rules for `first_word`: exact verb match, owner live,
-/// cloned out of the shared `RuleList` (cheap — `Arc`s and a `Ustr`).
-fn verb_candidates(ctx: &TaskContext, first_word: &str) -> Vec<Rule> {
-    let verb_rules = ctx
-        .txn()
-        .with(|t| t.read_rules(ctx.object_space().verb_rules.id));
-    verb_rules
-        .iter()
-        .filter(|rule| rule.verb.as_str() == first_word)
-        .filter(|rule| rule.owner().is_some_and(|owner| owner.is_live(ctx.txn())))
-        .cloned()
-        .collect()
-}
-
 /// `line` after its first word, spacing trimmed. `first_word` came from
 /// `split_whitespace`, so it starts exactly where the trimmed line does —
 /// slicing by its byte length off the untrimmed `line` would misplace the
@@ -126,7 +112,7 @@ pub(crate) async fn run(
     {
         return Ok(true);
     }
-    let verb_rules = verb_candidates(ctx, first_word);
+    let verb_rules = VerbRules::new(ctx).for_verb(first_word);
     if Box::pin(try_rules(
         ctx,
         actor,
@@ -271,7 +257,7 @@ async fn sentence_trial(
     scope: Option<Vec<Arc<Process>>>,
     nicknames: &[Nickname],
 ) -> Result<Sentence> {
-    let candidates = verb_candidates(ctx, first_word);
+    let candidates = VerbRules::new(ctx).for_verb(first_word);
     if candidates.is_empty() {
         return Ok(Sentence::NoVerb);
     }

@@ -6,7 +6,7 @@ use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_utils::config::Config;
 
-use crate::command::{presence::forget_destruct, scope::Scope};
+use crate::command::{presence::forget_destruct, registry::VerbRules};
 use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,
@@ -15,7 +15,7 @@ use crate::interpreter::{
     object_space::ObjectSpace,
     process::Process,
     program::Program,
-    stm::{Effect, MergeOp, TxnHandle},
+    stm::{Effect, TxnHandle},
     task::Task,
     task_context::{ObjectLookup, TaskContext},
 };
@@ -302,10 +302,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         // A destructed verb object's parser rules go with it; without the
         // `parse_init()` gate every destruct would write `verb_rules`.
         if process.parser_ready.get().is_some() {
-            let gone = Scope::new([process.clone()]);
-            let verb_rules = self.object_space().verb_rules.id;
-            self.txn()
-                .with(|t| t.merge(verb_rules, MergeOp::RulesRemoveOwners(gone)));
+            VerbRules::new(self.task_context()).remove_owner(&process);
         }
         self.txn().with(|t| {
             t.drop_var(var_id);

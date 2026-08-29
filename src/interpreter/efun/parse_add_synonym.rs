@@ -4,8 +4,8 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
-    command::registry::Rule,
-    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, stm::MergeOp},
+    command::registry::{Rule, VerbRules},
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},
 };
 
 /// `parse_add_synonym(new_verb, old_verb, rule)`: copies every rule
@@ -30,30 +30,27 @@ pub async fn parse_add_synonym<const N: usize>(context: &mut EfunContext<'_, N>)
 
     let this = context.frame().process.clone();
     let old_verb = old_verb.to_str();
-    let cell = context.object_space().verb_rules.id;
-    let found: Vec<Rule> = context
-        .txn()
-        .with(|t| t.read_rules(cell))
-        .iter()
-        .filter(|r| r.owned_by(&this))
+    let verb_rules = VerbRules::new(context.task_context());
+    let found: Vec<Rule> = verb_rules
+        .owned_by(&this)
+        .into_iter()
         .filter(|r| r.verb.as_str() == old_verb)
         .filter(|r| match rule_filter {
             None => true,
             Some(wanted) => r.protocol().is_some_and(|p| p.rule.as_str() == wanted),
         })
-        .cloned()
         .collect();
     if found.is_empty() {
         return Err(context.runtime_error(format!(
             "parse_add_synonym: this_object() has no rules for '{old_verb}'"
         )));
     }
-
-    context.txn().with(|t| {
-        for rule in &found {
-            let synonym = Rule::new(&this, new_verb.to_str().into(), rule.family.clone());
-            t.merge(cell, MergeOp::RulesAppend(synonym));
-        }
-    });
+    for rule in &found {
+        verb_rules.append(Rule::new(
+            &this,
+            new_verb.to_str().into(),
+            rule.family.clone(),
+        ));
+    }
     Ok(())
 }

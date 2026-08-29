@@ -3,13 +3,15 @@
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
+use crate::{
+    command::registry::VerbRules,
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},
+};
 
 /// `parse_dump()`: every rule in the driver, one line each,
 /// `"{verb} {rule}  ({owner})"`; a rule whose owner is dead is skipped.
 pub async fn parse_dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let cell = context.object_space().verb_rules.id;
-    let rules = context.txn().with(|t| t.read_rules(cell));
+    let rules = VerbRules::new(context.task_context()).all();
     let out: String = rules
         .iter()
         .filter_map(|rule| {

@@ -2,17 +2,18 @@
 
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
+use crate::{
+    command::registry::VerbRules,
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},
+};
 
 /// `parse_my_rules()`: `this_object()`'s rules, in registration order, each
 /// as `"{verb} {rule}"`.
 pub async fn parse_my_rules<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let this = context.frame().process.clone();
-    let cell = context.object_space().verb_rules.id;
-    let rules = context.txn().with(|t| t.read_rules(cell));
-    let entries: Vec<LpcRef> = rules
+    let entries: Vec<LpcRef> = VerbRules::new(context.task_context())
+        .owned_by(&this)
         .iter()
-        .filter(|r| r.owned_by(&this))
         .filter_map(|r| {
             r.protocol()
                 .map(|p| LpcRef::from(format!("{} {}", r.verb, p.rule)))
