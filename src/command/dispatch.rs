@@ -3,20 +3,10 @@
 
 use std::sync::Arc;
 
-use lpc_rs_errors::{Result, lpc_error};
+use lpc_rs_errors::Result;
 
 use crate::{
-    command::{
-        frontend::{
-            add_action::{self, verb_matches},
-            native,
-        },
-        parser::{self, Nickname, Verdict},
-        registry::{Family, Rule},
-        resolve::{LpcVocabulary, Resolver},
-        scope::neighbourhood,
-    },
-    compile_time_config::MAX_COMMAND_DEPTH,
+    command::trial,
     interpreter::{
         COMMAND_NOT_FOUND, PROCESS_INPUT,
         apply::{apply_hook, apply_pointer, deliver},
@@ -25,7 +15,7 @@ use crate::{
         lpc_ref::LpcRef,
         lpc_string::LpcString,
         process::Process,
-        task_context::{CommandState, TaskContext},
+        task_context::TaskContext,
     },
 };
 
@@ -43,38 +33,23 @@ pub async fn dispatch(ctx: &TaskContext, actor: Arc<Process>, line: &str) -> Res
     if !actor.is_live(ctx.txn()) || !actor.commands_enabled(ctx.txn()) {
         return Ok(Outcome::Unhandled);
     }
-    if ctx.command.lock().len() >= MAX_COMMAND_DEPTH {
-        return Err(lpc_error!(
-            "command: nesting deeper than {MAX_COMMAND_DEPTH}"
-        ));
-    }
+    trial::depth_guard(ctx, "command")?;
     let Some(line) = pre_hook(ctx, &actor, line).await? else {
         return Ok(Outcome::Handled);
     };
     let first_word = line.split_whitespace().next().unwrap_or("").to_owned();
-    ctx.command.lock().push(CommandState {
-        line: line.clone(),
-        verb_typed: first_word.clone(),
-        verb_reported: first_word.clone(),
-        notify_fail: None,
-    });
-    let outcome = trial(ctx, &actor, &line, &first_word).await;
-    let outcome = match outcome {
-        Ok(Outcome::Unhandled) => {
-            // The trial left the last candidate's verb behind.
-            ctx.with_command(|state| {
-                if let Some(state) = state {
-                    state.verb_reported = state.verb_typed.clone();
-                }
-            });
-            fallback(ctx, &actor, &line)
-                .await
-                .map(|()| Outcome::Unhandled)
+    let _frame = trial::Frame::push(ctx, &line, &first_word);
+    if trial::run(ctx, &actor, &line, &first_word).await? {
+        return Ok(Outcome::Handled);
+    }
+    // The trial left the last candidate's verb behind.
+    ctx.with_command(|state| {
+        if let Some(state) = state {
+            state.verb_reported = state.verb_typed.clone();
         }
-        other => other,
-    };
-    ctx.command.lock().pop();
-    outcome
+    });
+    fallback(ctx, &actor, &line).await?;
+    Ok(Outcome::Unhandled)
 }
 
 /// Run `line` as `actor` for a connection: a body that never called
@@ -117,243 +92,6 @@ async fn pre_hook(ctx: &TaskContext, actor: &Arc<Process>, line: &str) -> Result
             Some(_) => None,
         },
     )
-}
-
-/// The verb-attached rules for `first_word`: exact verb match, owner live,
-/// cloned out of the shared `RuleList` (cheap — `Arc`s and a `Ustr`).
-fn verb_candidates(ctx: &TaskContext, first_word: &str) -> Vec<Rule> {
-    let verb_rules = ctx
-        .txn()
-        .with(|t| t.read_rules(ctx.object_space().verb_rules.id));
-    verb_rules
-        .iter()
-        .filter(|rule| rule.verb.as_str() == first_word)
-        .filter(|rule| rule.owner().is_some_and(|owner| owner.is_live(ctx.txn())))
-        .cloned()
-        .collect()
-}
-
-/// `line` after its first word, spacing trimmed. `first_word` came from
-/// `split_whitespace`, so it starts exactly where the trimmed line does —
-/// slicing by its byte length off the untrimmed `line` would misplace the
-/// cut (or land mid-character) whenever `line` has leading whitespace.
-fn rest_of<'a>(line: &'a str, first_word: &str) -> &'a str {
-    let trimmed = line.trim_start();
-    trimmed[first_word.len()..].trim_start()
-}
-
-/// Rules in precedence order — the actor's own, then the verb-attached
-/// parser rules for `first_word` — each tried until one handles the line.
-/// The verb-attached cell is read only when the actor's own rules did not
-/// handle the line — it stays out of most transactions' read sets.
-async fn trial(
-    ctx: &TaskContext,
-    actor: &Arc<Process>,
-    line: &str,
-    first_word: &str,
-) -> Result<Outcome> {
-    let rules = actor.rules_of(ctx.txn());
-    let scope = neighbourhood(ctx.txn(), actor);
-    let mut candidates: Vec<Rule> = rules
-        .iter()
-        .filter(|rule| {
-            rule.owner()
-                .is_some_and(|owner| owner.is_live(ctx.txn()) && scope.contains(&owner))
-        })
-        .filter(|rule| verb_matches(rule.verb.as_str(), rule.matching(), first_word))
-        .cloned()
-        .collect();
-    candidates.sort_by_key(|rule| std::cmp::Reverse(rule.id));
-
-    let mut resolver = Resolver::new(LpcVocabulary::new(ctx, scope.members()), None);
-    // Boxed to stay out of `call_efun`'s unboxed future union, which every
-    // efun call pays for — `command` calls `dispatch` unboxed.
-    if Box::pin(try_rules(
-        ctx,
-        actor,
-        line,
-        first_word,
-        &mut resolver,
-        candidates,
-    ))
-    .await?
-    {
-        return Ok(Outcome::Handled);
-    }
-    let verb_rules = verb_candidates(ctx, first_word);
-    if Box::pin(try_rules(
-        ctx,
-        actor,
-        line,
-        first_word,
-        &mut resolver,
-        verb_rules,
-    ))
-    .await?
-    {
-        return Ok(Outcome::Handled);
-    }
-    Ok(Outcome::Unhandled)
-}
-
-/// Try `candidates` in turn against `line`; `true` as soon as one handles
-/// it (delivering a `Protocol` rule's message first).
-async fn try_rules(
-    ctx: &TaskContext,
-    actor: &Arc<Process>,
-    line: &str,
-    first_word: &str,
-    resolver: &mut Resolver<LpcVocabulary<'_>>,
-    candidates: Vec<Rule>,
-) -> Result<bool> {
-    for rule in candidates {
-        if rule
-            .pointer()
-            .is_some_and(|pointer| !pointer.receiver_is_live(ctx.txn()))
-        {
-            continue;
-        }
-        let (pointer, args, reported) = match &rule.family {
-            Family::AddAction { matching, pointer } => {
-                let Some((args, reported)) =
-                    add_action::arguments_and_verb(rule.verb.as_str(), *matching, line)
-                else {
-                    continue;
-                };
-                (pointer, args, reported)
-            }
-            Family::Native { compiled, pointer } => {
-                let Some(args) = Box::pin(native::arguments(compiled, line, resolver)).await?
-                else {
-                    continue;
-                };
-                (pointer, args, rule.verb.to_string())
-            }
-            Family::Parser(parser) => {
-                let Some(owner) = rule.owner() else { continue };
-                let rest = rest_of(line, first_word);
-                ctx.with_command(|state| {
-                    if let Some(state) = state {
-                        state.verb_reported = rule.verb.to_string();
-                    }
-                });
-                match Box::pin(parser::run(ctx, actor, &owner, parser, rest, None, &[])).await? {
-                    Verdict::Handled => return Ok(true),
-                    Verdict::Message(message) => {
-                        deliver(ctx, actor, &message).await?;
-                        return Ok(true);
-                    }
-                    Verdict::NoParse | Verdict::Refused | Verdict::Unresolved => continue,
-                }
-            }
-        };
-        ctx.with_command(|state| {
-            if let Some(state) = state {
-                state.verb_reported = reported;
-            }
-        });
-
-        let Some(result) = apply_pointer(ctx, actor, pointer, &args).await? else {
-            continue;
-        };
-        if !matches!(result, LpcRef::Int(LpcInt(0))) {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-/// `parse_sentence`'s outcome.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Sentence {
-    /// A verb-attached rule's `do_` ran.
-    Handled,
-    /// No verb-attached rule is registered for the line's first word.
-    NoVerb,
-    /// No verb-attached rule's grammar parsed the rest of the line.
-    NoParse,
-    /// A handler refused and the master gave no message.
-    Refused,
-    /// An object phrase did not resolve and the master gave no message.
-    Unresolved,
-    /// The master's message for the failure.
-    Message(String),
-}
-
-/// Run `line` for `actor` over the parser rules only, as `parse_sentence`
-/// does: the same transaction, depth limit and command state as
-/// `dispatch`, but no pre-hook, no fallback, nothing delivered.
-pub(crate) async fn sentence(
-    ctx: &TaskContext,
-    actor: &Arc<Process>,
-    line: &str,
-    scope: Option<Vec<Arc<Process>>>,
-    nicknames: &[Nickname],
-) -> Result<Sentence> {
-    if ctx.command.lock().len() >= MAX_COMMAND_DEPTH {
-        return Err(lpc_error!(
-            "parse_sentence: nesting deeper than {MAX_COMMAND_DEPTH}"
-        ));
-    }
-    let first_word = line.split_whitespace().next().unwrap_or("").to_owned();
-    ctx.command.lock().push(CommandState {
-        line: line.to_owned(),
-        verb_typed: first_word.clone(),
-        verb_reported: first_word.clone(),
-        notify_fail: None,
-    });
-    let result = sentence_trial(ctx, actor, line, &first_word, scope, nicknames).await;
-    ctx.command.lock().pop();
-    result
-}
-
-/// The verb-attached rules for `first_word`, tried in registration order:
-/// none registered is `NoVerb`; the first `Handled` wins; a `Message`
-/// returns at once; otherwise the outcomes fold by severity, `Unresolved`
-/// over `Refused` over `NoParse`.
-async fn sentence_trial(
-    ctx: &TaskContext,
-    actor: &Arc<Process>,
-    line: &str,
-    first_word: &str,
-    scope: Option<Vec<Arc<Process>>>,
-    nicknames: &[Nickname],
-) -> Result<Sentence> {
-    let candidates = verb_candidates(ctx, first_word);
-    if candidates.is_empty() {
-        return Ok(Sentence::NoVerb);
-    }
-    let rest = rest_of(line, first_word);
-
-    let mut worst: Option<Sentence> = None;
-    for rule in &candidates {
-        let Some(owner) = rule.owner() else { continue };
-        let Some(parser) = rule.protocol() else {
-            continue;
-        };
-        let verdict = Box::pin(parser::run(
-            ctx,
-            actor,
-            &owner,
-            parser,
-            rest,
-            scope.clone(),
-            nicknames,
-        ))
-        .await?;
-        match verdict {
-            Verdict::Handled => return Ok(Sentence::Handled),
-            Verdict::Message(message) => return Ok(Sentence::Message(message)),
-            Verdict::Unresolved => worst = Some(Sentence::Unresolved),
-            Verdict::Refused if worst != Some(Sentence::Unresolved) => {
-                worst = Some(Sentence::Refused);
-            }
-            Verdict::Refused => {}
-            Verdict::NoParse if worst.is_none() => worst = Some(Sentence::NoParse),
-            Verdict::NoParse => {}
-        }
-    }
-    Ok(worst.unwrap_or(Sentence::NoParse))
 }
 
 /// The message for a line nothing handled: the pending `notify_fail`, else
@@ -847,38 +585,6 @@ mod tests {
             vm.global_state.committed_global(&player_proc, 1u16),
             LpcRef::from(1)
         );
-    }
-
-    /// The 16MiB thread gives the cap room to fire before a debug-build stack runs out.
-    #[test]
-    fn nesting_deeper_than_the_cap_is_an_error() {
-        let code = indoc! { r#"
-            void create() {
-                set_this_player(this_object());
-                enable_commands();
-                add_action("do_again", "again");
-                command("again");
-            }
-            int do_again(string a) { command("again"); return 1; }
-        "# };
-        let runner = std::thread::Builder::new()
-            .stack_size(16 * 1024 * 1024)
-            .spawn(move || {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .expect("a current-thread runtime")
-                    .block_on(async {
-                        let vm = Vm::new(test_config());
-                        vm.initialize_process_from_code("/player.c", code)
-                            .await
-                            .expect_err("the handler recurses forever")
-                            .to_string()
-                    })
-            })
-            .expect("a thread with room for the recursion");
-        let err = runner.join().expect("the runner panicked");
-        assert!(err.contains("nesting deeper than 16"), "{err}");
     }
 
     #[tokio::test]

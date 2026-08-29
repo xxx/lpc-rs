@@ -8,8 +8,8 @@ use lpc_rs_errors::Result;
 
 use crate::{
     command::{
-        dispatch::{self, Sentence},
         parser::Nickname,
+        trial::{self, Sentence},
     },
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process},
 };
@@ -33,7 +33,7 @@ pub async fn parse_sentence<const N: usize>(context: &mut EfunContext<'_, N>) ->
 
     // Boxed to stay out of `call_efun`'s unboxed future union, which every
     // efun call pays for.
-    let outcome = Box::pin(dispatch::sentence(
+    let outcome = Box::pin(trial::sentence(
         context.task_context(),
         &actor,
         line.to_str(),

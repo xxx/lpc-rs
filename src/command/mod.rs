@@ -12,3 +12,4 @@ pub mod presence;
 pub mod registry;
 pub(crate) mod resolve;
 pub mod scope;
+pub(crate) mod trial;
