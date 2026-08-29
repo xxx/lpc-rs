@@ -240,32 +240,25 @@ async fn attempt(
             _ => ResolveKind::Items,
         };
         let progress = object_slot;
-        let Some(Resolved::Items {
-            numeral,
-            candidates: matched,
-        }) = resolver.resolve(kind, &cap.text).await?
-        else {
-            let living_slot = matches!(cap.kind, CaptureKind::Liv | CaptureKind::Living);
-            // This second resolve re-applies `parse_command_numeral`; only whether
-            // the phrase names any non-living object matters here.
-            let kind = if living_slot
-                && resolver
-                    .resolve(ResolveKind::Items, &cap.text)
-                    .await?
-                    .is_some()
-            {
-                Kind::NotLiving
-            } else {
-                Kind::ThereIsNo
-            };
-            let plural = cap.kind.is_many();
-            return Ok(Err(unresolved(
-                kind,
-                None,
-                Arg::Text(cap.text.clone()),
-                plural,
-                progress,
-            )));
+        let (numeral, matched) = match resolver.resolve(kind, &cap.text).await? {
+            Some(Resolved::Items {
+                numeral,
+                candidates,
+            }) if !candidates.is_empty() => (numeral, candidates),
+            found => {
+                let kind = if found.is_some() {
+                    Kind::NotLiving
+                } else {
+                    Kind::ThereIsNo
+                };
+                return Ok(Err(unresolved(
+                    kind,
+                    None,
+                    Arg::Text(cap.text.clone()),
+                    cap.kind.is_many(),
+                    progress,
+                )));
+            }
         };
         let mut qualified: Vec<Arc<Process>> = Vec::new();
         let mut reasons: Vec<(usize, Reply)> = Vec::new();

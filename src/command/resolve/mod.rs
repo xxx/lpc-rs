@@ -167,18 +167,20 @@ impl<V: Vocabulary> Resolver<V> {
             if !living_only && self.vocabulary.is_remote(candidate) {
                 continue;
             }
-            if rest.is_empty() {
-                if match_all && self.vocabulary.is_live(candidate) {
-                    candidates.push(candidate);
-                }
-                continue;
-            }
-            if let Some(found) = self.matches(candidate, rest, plural_expected).await? {
-                any_plural |= found.plural;
+            if let Some(plural) = self
+                .named(candidate, rest, plural_expected, match_all)
+                .await?
+            {
+                any_plural |= plural;
                 candidates.push(candidate);
             }
         }
-        if candidates.is_empty() {
+        if candidates.is_empty()
+            && (!living_only
+                || !self
+                    .names_a_non_living(rest, plural_expected, match_all)
+                    .await?)
+        {
             return Ok(None);
         }
         let numeral = numeral.unwrap_or(if any_plural { 0 } else { 1 });
@@ -186,6 +188,48 @@ impl<V: Vocabulary> Resolver<V> {
             numeral,
             candidates,
         }))
+    }
+
+    /// Whether `candidate` is named: `Some(plural)` when it is. `rest`
+    /// empty means the phrase was only a numeral, which names every live
+    /// candidate under `match_all` and nothing otherwise.
+    async fn named(
+        &mut self,
+        candidate: usize,
+        rest: &[&str],
+        plural_expected: bool,
+        match_all: bool,
+    ) -> Result<Option<bool>> {
+        if rest.is_empty() {
+            return Ok((match_all && self.vocabulary.is_live(candidate)).then_some(false));
+        }
+        Ok(self
+            .matches(candidate, rest, plural_expected)
+            .await?
+            .map(|found| found.plural))
+    }
+
+    /// Whether a non-living, non-remote candidate is named; asked only once
+    /// no living was, so a living phrase costs nothing extra when it resolves.
+    async fn names_a_non_living(
+        &mut self,
+        rest: &[&str],
+        plural_expected: bool,
+        match_all: bool,
+    ) -> Result<bool> {
+        for candidate in 0..self.lexicons.len() {
+            if self.vocabulary.is_living(candidate) || self.vocabulary.is_remote(candidate) {
+                continue;
+            }
+            if self
+                .named(candidate, rest, plural_expected, match_all)
+                .await?
+                .is_some()
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Whether `candidate` is named by `words`, fetching its lexicon on
@@ -359,8 +403,19 @@ mod tests {
             resolve(scene(), Kind::Living, "guard").await,
             items(1, &[3])
         );
-        assert_eq!(resolve(scene(), Kind::Living, "sword").await, None);
+        assert_eq!(
+            resolve(scene(), Kind::Living, "sword").await,
+            Some(Resolved::Items {
+                numeral: 1,
+                candidates: vec![]
+            })
+        );
         assert_eq!(resolve(scene(), Kind::Living, "all").await, items(0, &[3]));
+    }
+
+    #[tokio::test]
+    async fn a_living_phrase_naming_nothing_is_none() {
+        assert_eq!(resolve(scene(), Kind::Living, "unicorn").await, None);
     }
 
     /// The guard (3), marked remote — a `parse_command_users()` living.

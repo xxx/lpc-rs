@@ -39,6 +39,9 @@ async fn first_resolved<V: Vocabulary>(
                 },
                 None => Value::Text(capture.text),
                 Some(kind) => match resolver.resolve(kind, &capture.text).await? {
+                    Some(Resolved::Items { candidates, .. }) if candidates.is_empty() => {
+                        continue 'parses;
+                    }
                     Some(found) => Value::Resolved(found),
                     None => continue 'parses,
                 },
@@ -163,6 +166,18 @@ mod tests {
         let mut r = Resolver::new(by_id(&[]), None);
         assert_eq!(
             first_resolved(c.captures_of("x nothing"), &mut r)
+                .await
+                .unwrap(),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn a_living_capture_naming_only_things_is_no_match() {
+        let c = compile_pattern("'x' %l").unwrap();
+        let mut r = Resolver::new(scene(), None);
+        assert_eq!(
+            first_resolved(c.captures_of("x sword"), &mut r)
                 .await
                 .unwrap(),
             None
