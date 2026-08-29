@@ -143,7 +143,10 @@ mod tests {
             .await
             .unwrap_err()
             .to_string();
-        assert!(err.contains("move_object: /box would contain itself"), "{err}");
+        assert!(
+            err.contains("move_object: /box would contain itself"),
+            "{err}"
+        );
     }
 
     #[tokio::test]
@@ -168,10 +171,14 @@ mod tests {
             .await
             .unwrap_err()
             .to_string();
-        assert!(err.contains("move_object: /box would contain itself"), "{err}");
+        assert!(
+            err.contains("move_object: /box would contain itself"),
+            "{err}"
+        );
         assert_eq!(vm.global_state.committed_environment(&box_proc), None);
         assert_eq!(
-            vm.global_state.committed_environment(&bag_proc.context.process),
+            vm.global_state
+                .committed_environment(&bag_proc.context.process),
             Some(box_proc.clone())
         );
     }
@@ -211,7 +218,9 @@ mod tests {
         vm.initialize_process_from_code("/traveller.c", traveller)
             .await
             .unwrap();
-        vm.initialize_process_from_code("/bag.c", bag).await.unwrap();
+        vm.initialize_process_from_code("/bag.c", bag)
+            .await
+            .unwrap();
         vm.initialize_process_from_code("/master.c", master)
             .await
             .unwrap_or_else(|e| panic!("{}", e.diagnostic_string()));
