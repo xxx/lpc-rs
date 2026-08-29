@@ -857,4 +857,45 @@ mod tests {
         expected.extend([IAC, SE]);
         assert_eq!(out(&mut s), expected);
     }
+
+    /// Not a fuzzer — card D is — but the property the wire demands, checked
+    /// on every run: no input sequence panics, and nothing sticks in the queues.
+    #[test]
+    fn random_bytes_never_panic_and_always_drain() {
+        let mut seed = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        let mut s = Session::new();
+        let mut buf = BytesMut::new();
+        let mut fed = 0usize;
+        while fed < 1 << 20 {
+            let len = (next() % 64 + 1) as usize;
+            let chunk: Vec<u8> = (0..len)
+                .map(|_| match next() % 5 {
+                    0 => IAC,
+                    1 => 239 + (next() % 17) as u8,
+                    _ => (next() & 0xFF) as u8,
+                })
+                .collect();
+            s.feed(&chunk);
+            fed += len;
+            if next() % 8 == 0 {
+                s.send(Op::Text("random\n"));
+                s.send(Op::EchoOff);
+                s.send(Op::Prompt("> "));
+                s.send(Op::Mxp("<b>x</b>"));
+                s.send(Op::EchoOn);
+            }
+            while s.next_event().is_some() {}
+            s.drain_output(&mut buf);
+            buf.clear();
+        }
+        s.drain_output(&mut buf);
+        assert!(buf.is_empty());
+        assert_eq!(s.next_event(), None);
+    }
 }
