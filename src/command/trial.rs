@@ -46,7 +46,8 @@ pub(crate) struct Frame<'a> {
 }
 
 impl<'a> Frame<'a> {
-    /// Push the frame for `line`, whose verb is `first_word`.
+    /// Push the frame for `line`, whose verb is `first_word` — after
+    /// `depth_guard` and the pre-hook.
     pub(crate) fn push(ctx: &'a TaskContext, line: &str, first_word: &str) -> Self {
         ctx.command.lock().push(CommandState {
             line: line.to_owned(),

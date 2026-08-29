@@ -693,6 +693,66 @@ async fn a_many_slot_hands_the_re_ask_the_same_array() {
     assert_eq!(r, vec![LpcRef::from(2), LpcRef::from(1)]);
 }
 
+/// A verb whose `OBS` slot's array is refused by the crates the first time
+/// they see it, so the line's second parse mints another.
+const SPLIT_VERB: (&str, &str) = (
+    "/split_verb.c",
+    indoc! { r#"
+    mixed *first; int distinct; int handled;
+    void create() { parse_init(); parse_add_rule("stack", "STR OBS"); }
+    int note(mixed *obs) {
+        if (!first) first = obs;
+        if (obs == first) return 0;
+        distinct = 1;
+        return 1;
+    }
+    void do_stack_str_obs(string s, mixed *obs, string w) { handled = 1; }
+    int query_handled() { return handled; }
+    int query_distinct() { return distinct; }
+"# },
+);
+const SPLIT_CRATE_A: (&str, &str) = (
+    "/split_crate_a.c",
+    indoc! { r#"
+    string *parse_command_id_list() { return ({ "crate" }); }
+    mixed direct_stack_str_obj(string s, mixed a, string w) {
+        if (!objectp(a)) return "/split_verb"->note(a);
+        return 1;
+    }
+    void go(object d) { move_object(d); }
+"# },
+);
+const SPLIT_CRATE_B: (&str, &str) = (
+    "/split_crate_b.c",
+    indoc! { r#"
+    string *parse_command_id_list() { return ({ "crate" }); }
+    mixed direct_stack_str_obj(string s, mixed a, string w) {
+        if (!objectp(a)) return "/split_verb"->note(a);
+        return 1;
+    }
+    void go(object d) { move_object(d); }
+"# },
+);
+
+#[tokio::test]
+async fn each_parse_of_a_line_mints_its_own_many_slot_array() {
+    let body = r#"
+        object room = find_object("/room");
+        move_object(room);
+        "/split_crate_a"->go(room);
+        "/split_crate_b"->go(room);
+        command("stack x all crates");
+        return ({ "/split_verb"->query_handled(), "/split_verb"->query_distinct() });
+    "#;
+    let r = run(
+        MASTER,
+        &[SPLIT_VERB, SPLIT_CRATE_A, SPLIT_CRATE_B, ROOM],
+        &custom_main(body),
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1)]);
+}
+
 const STASH_VERB: (&str, &str) = (
     "/stash_verb.c",
     indoc! { r#"
