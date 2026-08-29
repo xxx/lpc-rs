@@ -10,5 +10,6 @@
 mod opt;
 mod parser;
 mod table;
+mod wire;
 
 pub use opt::Opt;
