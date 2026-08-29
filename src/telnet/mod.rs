@@ -660,8 +660,8 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, [IAC, WILL, ECHO]);
-            // A real client acks WILL ECHO with DO ECHO; without it the
-            // session's RFC 1143 table never settles, and EchoOn stays silent.
+            // A real client acks WILL ECHO with DO ECHO; without it EchoOn
+            // queues its WONT and sends nothing.
             w.client.write_all(&[IAC, DO, ECHO]).await.unwrap();
 
             w.client.write_all(b"hello\r\n").await.unwrap();
