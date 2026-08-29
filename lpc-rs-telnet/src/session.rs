@@ -636,4 +636,225 @@ mod tests {
         assert!(out(&mut s).is_empty());
         assert_eq!(s.next_event(), None);
     }
+
+    #[test]
+    fn naws_is_stored_and_reported() {
+        let mut s = connected();
+        s.feed(&[IAC, WILL, NAWS, IAC, SB, NAWS, 0, 80, 0, 24, IAC, SE]);
+        assert_eq!(events(&mut s), [Event::Naws { cols: 80, rows: 24 }]);
+        assert_eq!(s.naws(), Some((80, 24)));
+    }
+
+    #[test]
+    fn naws_with_a_doubled_iac_inside() {
+        let mut s = connected();
+        s.feed(&[IAC, SB, NAWS, 0, IAC, IAC, 0, 24, IAC, SE]);
+        assert_eq!(
+            events(&mut s),
+            [Event::Naws {
+                cols: 255,
+                rows: 24
+            }]
+        );
+    }
+
+    #[test]
+    fn a_naws_of_the_wrong_length_is_ignored() {
+        let mut s = connected();
+        s.feed(&[IAC, SB, NAWS, 0, 80, IAC, SE]);
+        assert!(events(&mut s).is_empty());
+        assert_eq!(s.naws(), None);
+    }
+
+    #[test]
+    fn charset_do_sends_our_request() {
+        let mut s = connected();
+        s.feed(&[IAC, DO, CHARSET]);
+        let mut expected = vec![IAC, SB, CHARSET, 1, b' '];
+        expected.extend(b"UTF-8");
+        expected.extend([IAC, SE]);
+        assert_eq!(out(&mut s), expected);
+    }
+
+    #[test]
+    fn charset_accepted_is_recorded() {
+        let mut s = connected();
+        s.feed(&[IAC, DO, CHARSET]);
+        let mut bytes = vec![IAC, SB, CHARSET, 2];
+        bytes.extend(b"UTF-8");
+        bytes.extend([IAC, SE]);
+        s.feed(&bytes);
+        assert_eq!(events(&mut s), [Event::Charset("UTF-8".into())]);
+        assert_eq!(s.charset(), Some("UTF-8"));
+    }
+
+    #[test]
+    fn a_client_request_listing_utf8_is_accepted() {
+        let mut s = connected();
+        s.feed(&[IAC, WILL, CHARSET]);
+        assert_eq!(out(&mut s), [IAC, DO, CHARSET]);
+        let mut bytes = vec![IAC, SB, CHARSET, 1, b';'];
+        bytes.extend(b"ISO-8859-1;utf-8");
+        bytes.extend([IAC, SE]);
+        s.feed(&bytes);
+        let mut expected = vec![IAC, SB, CHARSET, 2];
+        expected.extend(b"UTF-8");
+        expected.extend([IAC, SE]);
+        assert_eq!(out(&mut s), expected);
+        assert_eq!(events(&mut s), [Event::Charset("UTF-8".into())]);
+    }
+
+    #[test]
+    fn a_client_request_with_a_ttable_prefix_is_still_read() {
+        let mut s = connected();
+        let mut bytes = vec![IAC, SB, CHARSET, 1];
+        bytes.extend(b"[TTABLE\x01] UTF-8");
+        bytes.extend([IAC, SE]);
+        s.feed(&bytes);
+        assert_eq!(events(&mut s), [Event::Charset("UTF-8".into())]);
+    }
+
+    #[test]
+    fn a_client_request_without_utf8_is_rejected() {
+        let mut s = connected();
+        let mut bytes = vec![IAC, SB, CHARSET, 1, b' '];
+        bytes.extend(b"ISO-8859-1 CP437");
+        bytes.extend([IAC, SE]);
+        s.feed(&bytes);
+        assert_eq!(out(&mut s), [IAC, SB, CHARSET, 3, IAC, SE]);
+        assert_eq!(s.charset(), None);
+    }
+
+    #[test]
+    fn charset_rejected_leaves_utf8_in_use() {
+        let mut s = connected();
+        s.feed(&[IAC, DO, CHARSET, IAC, SB, CHARSET, 3, IAC, SE]);
+        out(&mut s);
+        assert!(events(&mut s).is_empty());
+        s.send(Op::Text("é"));
+        assert_eq!(out(&mut s), "é".as_bytes());
+    }
+
+    #[test]
+    fn a_ttable_is_is_rejected() {
+        let mut s = connected();
+        s.feed(&[IAC, SB, CHARSET, 4, 1, IAC, SE]);
+        assert_eq!(out(&mut s), [IAC, SB, CHARSET, 6, IAC, SE]);
+    }
+
+    #[test]
+    fn gmcp_in_splits_package_from_payload() {
+        let mut s = connected();
+        s.feed(&[IAC, DO, GMCP]);
+        let mut bytes = vec![IAC, SB, GMCP];
+        bytes.extend(br#"Core.Hello {"client":"x"}"#);
+        bytes.extend([IAC, SE, IAC, SB, GMCP]);
+        bytes.extend(b"Core.Ping");
+        bytes.extend([IAC, SE]);
+        s.feed(&bytes);
+        assert_eq!(
+            events(&mut s),
+            [
+                Event::Gmcp {
+                    package: "Core.Hello".into(),
+                    payload: r#"{"client":"x"}"#.into()
+                },
+                Event::Gmcp {
+                    package: "Core.Ping".into(),
+                    payload: String::new()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn gmcp_out_is_framed_when_on_and_dropped_when_off() {
+        let mut s = connected();
+        let op = Op::Gmcp {
+            package: "Char.Vitals",
+            payload: r#"{"hp":1}"#,
+        };
+        s.send(op);
+        assert!(out(&mut s).is_empty());
+        assert_eq!(s.stats().dropped, 1);
+        s.feed(&[IAC, DO, GMCP]);
+        s.send(op);
+        let mut expected = vec![IAC, SB, GMCP];
+        expected.extend(br#"Char.Vitals {"hp":1}"#);
+        expected.extend([IAC, SE]);
+        assert_eq!(out(&mut s), expected);
+        s.send(Op::Gmcp {
+            package: "Core.Ping",
+            payload: "",
+        });
+        let mut expected = vec![IAC, SB, GMCP];
+        expected.extend(b"Core.Ping");
+        expected.extend([IAC, SE]);
+        assert_eq!(out(&mut s), expected);
+    }
+
+    #[test]
+    fn mxp_text_is_escaped_only_when_on() {
+        let mut s = connected();
+        s.send(Op::Text("a<b>&c"));
+        assert_eq!(out(&mut s), b"a<b>&c");
+        s.send(Op::Mxp("<send>x</send>"));
+        assert!(out(&mut s).is_empty());
+        assert_eq!(s.stats().dropped, 1);
+        s.feed(&[IAC, DO, MXP]);
+        s.send(Op::Text("a<b>&c"));
+        assert_eq!(out(&mut s), b"a&lt;b&gt;&amp;c");
+        s.send(Op::Mxp("<send>x</send>"));
+        assert_eq!(out(&mut s), b"<send>x</send>");
+    }
+
+    #[test]
+    fn prompt_ends_with_ga_then_nothing_then_eor() {
+        let mut s = connected();
+        s.send(Op::Prompt("> "));
+        assert_eq!(out(&mut s), [b'>', b' ', IAC, 249]);
+        s.feed(&[IAC, DO, SGA]);
+        out(&mut s);
+        s.send(Op::Prompt("> "));
+        assert_eq!(out(&mut s), b"> ");
+        s.feed(&[IAC, DO, EOR]);
+        s.send(Op::Prompt("> "));
+        assert_eq!(out(&mut s), [b'>', b' ', IAC, 239]);
+    }
+
+    #[test]
+    fn mssp_is_refused_in_v1() {
+        let mut s = connected();
+        s.feed(&[IAC, DO, MSSP]);
+        assert_eq!(out(&mut s), [IAC, WONT, MSSP]);
+        s.send(Op::Mssp(&[("NAME", &["lpc-rs"])]));
+        assert!(out(&mut s).is_empty());
+        assert_eq!(s.stats().dropped, 1);
+    }
+
+    #[test]
+    fn mssp_when_accepted_is_requested_and_framed() {
+        fn accepting(opt: Opt) -> (Local, Remote) {
+            match opt {
+                Opt::Mssp => (Local::Accept, Remote::Refuse),
+                other => v1(other),
+            }
+        }
+        let mut s = Session::with_policy(accepting);
+        out(&mut s);
+        s.feed(&[IAC, DO, MSSP]);
+        assert_eq!(out(&mut s), [IAC, WILL, MSSP]);
+        assert_eq!(events(&mut s), [Event::MsspRequested]);
+        s.send(Op::Mssp(&[("NAME", &["lpc-rs"]), ("PLAYERS", &["0"])]));
+        let mut expected = vec![IAC, SB, MSSP, 1];
+        expected.extend(b"NAME");
+        expected.push(2);
+        expected.extend(b"lpc-rs");
+        expected.push(1);
+        expected.extend(b"PLAYERS");
+        expected.push(2);
+        expected.extend(b"0");
+        expected.extend([IAC, SE]);
+        assert_eq!(out(&mut s), expected);
+    }
 }
