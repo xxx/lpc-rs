@@ -1,6 +1,6 @@
-//! The engine's contract in its own vocabulary: the differential test against
-//! a naive matcher, the `nomatch` class, builtin memoisation. Frontend shapes
-//! are tested where they are built.
+//! The engine's contract: the differential test against a naive matcher, the
+//! `nomatch` class, builtin memoisation. Frontend shapes are tested where they
+//! are built.
 
 use super::{GrammarBuilder, Label, Limits, Parse, lit, nt, parse, tok};
 

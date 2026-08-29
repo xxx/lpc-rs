@@ -7,9 +7,7 @@ use super::model::{Element, GrammarBuilder, NtId, TokenClass, nt, tok};
 /// to `number`.
 #[derive(Clone, Copy, Debug)]
 pub struct Words {
-    /// A run of digits.
     number: TokenClass,
-    /// A run of non-whitespace.
     word: TokenClass,
 }
 
@@ -26,8 +24,7 @@ impl Words {
 }
 
 impl GrammarBuilder {
-    /// Register the `whitespace`/`number`/`word` token rules a plain-words
-    /// grammar needs; whitespace is skipped from the token stream.
+    /// Register the `whitespace`/`number`/`word` token rules a plain-words grammar needs.
     pub fn words_tokens(&mut self) -> Words {
         self.skip_token("whitespace", r"\s+");
         Words {
