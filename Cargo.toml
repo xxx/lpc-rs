@@ -128,6 +128,7 @@ members = [
     "lpc-rs-telnet",
     "lpc-rs-utils",
 ]
+exclude = ["lpc-rs-telnet/fuzz"]
 
 [profile.release]
 lto = "thin"
