@@ -31,6 +31,9 @@ pub fn grammar_for(verb: &str, matching: VerbMatch) -> Arc<Grammar> {
         VerbMatch::Exact => Key::Exact(verb.to_owned()),
         VerbMatch::Prefix { .. } => Key::Prefix(matching),
     };
+    if let Some(hit) = GRAMMARS.get(&key) {
+        return Arc::clone(&hit);
+    }
     GRAMMARS
         .entry(key)
         .or_insert_with(|| Arc::new(build(verb, matching)))

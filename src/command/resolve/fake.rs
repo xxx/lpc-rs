@@ -7,19 +7,27 @@ use lpc_rs_errors::Result;
 
 use super::{Defaults, Lexicon, Lists, Vocabulary};
 
-/// An in-memory vocabulary: `numerals` is the master's table, `id_true`
-/// the phrases `IdFunction` candidates answer yes to, `asked` every word
-/// the master was asked as a numeral, `remote` the candidates outside
-/// the scope proper (`parse_command_users()`).
+/// An in-memory vocabulary standing in for the master and a scope of
+/// candidates.
 pub(crate) struct Fake {
+    /// The master's shared lists and all word.
     pub(crate) defaults: Defaults,
+    /// Each candidate's source of words; its length is the scope's size.
     pub(crate) lexicons: Vec<Lexicon>,
+    /// Which candidates have commands enabled.
     pub(crate) living: Vec<bool>,
+    /// Which candidates are undestructed.
     pub(crate) live: Vec<bool>,
+    /// Which candidates sit outside the scope proper
+    /// (`parse_command_users()`).
     pub(crate) remote: Vec<bool>,
+    /// The master's numeral table.
     pub(crate) numerals: HashMap<&'static str, i64>,
+    /// The phrases `IdFunction` candidates answer yes to.
     pub(crate) id_true: Vec<&'static str>,
+    /// Every word the master was asked as a numeral.
     pub(crate) asked: Vec<String>,
+    /// How many times the master's defaults were fetched.
     pub(crate) defaults_asked: usize,
 }
 

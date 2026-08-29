@@ -451,7 +451,7 @@ async fn attempt(
     // Only `do_` sees a many slot as the mixed array of objects and reasons.
     let mut do_values = values.clone();
     for (index, picked, reasons) in &chosen {
-        if rule.compiled.kinds[*index].is_many() {
+        if caps[*index].kind.is_many() {
             do_values[*index] = mint_mixed(ctx, picked, reasons);
         }
     }

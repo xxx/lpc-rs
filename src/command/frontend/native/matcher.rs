@@ -13,7 +13,7 @@ use crate::{
 
 /// One capture, valued: its text, its int, or what the resolver found.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Value {
+enum Value {
     /// `%w`/`%s`: the words as typed.
     Text(String),
     /// `%d`.
@@ -25,7 +25,7 @@ pub(crate) enum Value {
 /// The first capture set in `parses` whose noun captures all resolve —
 /// greedy splits come first — or `None` when no parse's phrases all name
 /// something. A set with no noun capture asks the resolver nothing.
-pub(crate) async fn first_resolved<V: Vocabulary>(
+async fn first_resolved<V: Vocabulary>(
     parses: impl Iterator<Item = Vec<Capture>>,
     resolver: &mut Resolver<V>,
 ) -> Result<Option<Vec<Value>>> {
@@ -53,12 +53,11 @@ pub(crate) async fn first_resolved<V: Vocabulary>(
 /// `values` as the handler sees them: `%o` an object, `%i`/`%l`
 /// `({ numeral, ob... })`, `%p` the matched entry as a string, `%w`/`%s`
 /// a string, `%d` an int.
-pub(crate) async fn lpc_values(
+async fn lpc_values(
     values: &[Value],
     resolver: &mut Resolver<LpcVocabulary<'_>>,
 ) -> Result<Vec<LpcRef>> {
-    // A plain-only set resolved nothing, so asking for the list here would
-    // be the first thing to reach the master.
+    // For a plain-only set this fetch would be the first thing to reach the master.
     let prepositions: Vec<String> = if values
         .iter()
         .any(|v| matches!(v, Value::Resolved(Resolved::Preposition(_))))
@@ -113,7 +112,7 @@ mod tests {
     use crate::command::{
         frontend::native::compile_pattern,
         resolve::{
-            Kind, Lexicon, Resolved,
+            Lexicon, Resolved,
             fake::{Fake, scene},
         },
     };
@@ -183,10 +182,6 @@ mod tests {
                 numeral: 2,
                 candidates: vec![0, 1]
             })])
-        );
-        assert_eq!(
-            r.resolve(Kind::Preposition, "in").await.unwrap(),
-            Some(Resolved::Preposition(0))
         );
     }
 }

@@ -23,21 +23,21 @@ pub(crate) use matcher::arguments;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CaptureKind {
     /// `%w`: one word, as a string.
-    Word = 0,
+    Word,
     /// `%s`: zero or more words, as one string with its spacing intact.
-    Words = 1,
+    Words,
     /// `%d`: a run of digits, as an int.
-    Number = 2,
+    Number,
     /// `%o`: one or more words naming an object.
-    Object = 3,
+    Object,
     /// `%l`: one or more words naming livings.
-    Living = 4,
+    Living,
     /// `%i`: one or more words naming objects, with a numeral.
-    Items = 5,
+    Items,
     /// `%p`: one or more words that are a preposition.
-    Preposition = 6,
+    Preposition,
     /// `%L`: one or more words naming one living.
-    Liv = 7,
+    Liv,
 }
 
 impl CaptureKind {
@@ -654,8 +654,8 @@ mod tests {
             (1, CaptureKind::Object, "old bag")
         );
         assert!(
-            captures.iter().any(|c| plain_value(c).is_none()),
-            "noun captures have no plain value"
+            captures.iter().any(|c| c.kind.resolver_kind().is_some()),
+            "a noun capture goes to the resolver"
         );
     }
 
