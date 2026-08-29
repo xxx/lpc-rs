@@ -109,6 +109,10 @@ impl Parser {
                 }
             },
             Mode::SubIac { opt, mut payload } => match byte {
+                IAC if payload.len() >= self.max_sub => {
+                    self.malformed += 1;
+                    Mode::SubSkip
+                }
                 IAC => {
                     payload.push(IAC);
                     Mode::Sub { opt, payload }
@@ -230,5 +234,17 @@ mod tests {
         parser.feed(&[b'b', IAC], &mut frames);
         parser.feed(&[SE], &mut frames);
         assert_eq!(frames, [Frame::Sub(201, b"ab".to_vec())]);
+    }
+
+    #[test]
+    fn a_doubled_iac_run_is_capped_like_any_other_payload() {
+        let mut bytes = vec![IAC, SB, 201];
+        for _ in 0..20 {
+            bytes.extend([IAC, IAC]);
+        }
+        bytes.extend([IAC, SE, b'x']);
+        let (frames, malformed) = parse(&bytes);
+        assert_eq!(frames, [Frame::Byte(b'x')]);
+        assert_eq!(malformed, 1);
     }
 }

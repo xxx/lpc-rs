@@ -622,6 +622,20 @@ mod tests {
     }
 
     #[test]
+    fn a_doubled_iac_run_cannot_grow_a_subnegotiation_past_the_cap() {
+        let mut s = connected();
+        let mut bytes = vec![IAC, SB, GMCP];
+        for _ in 0..(MAX_LINE + 100) {
+            bytes.extend([IAC, IAC]);
+        }
+        bytes.extend([IAC, SE]);
+        bytes.extend(b"ok\r\n");
+        s.feed(&bytes);
+        assert_eq!(events(&mut s), [Event::Line("ok".into())]);
+        assert_eq!(s.stats().malformed, 1);
+    }
+
+    #[test]
     fn text_gets_cr_lf() {
         let mut s = connected();
         s.send(Op::Text("hi\n"));
