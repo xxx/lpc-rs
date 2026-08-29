@@ -2,7 +2,6 @@
 
 use std::{net::ToSocketAddrs, sync::Arc};
 
-use arc_swap::ArcSwapAny;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
@@ -84,17 +83,16 @@ pub struct Connected {
 pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
     let (tx, rx) = tokio::sync::mpsc::channel(4);
     let (broker_tx, broker_rx) = flume::unbounded();
-    let connection = Arc::new(Connection {
-        address: "127.0.0.1:23123"
+    let connection = Arc::new(Connection::new(
+        "127.0.0.1:23123"
             .to_socket_addrs()
             .expect("a literal address")
             .next()
             .expect("one address"),
-        process: ArcSwapAny::from(Some(process.clone())),
         tx,
         broker_tx,
-        input_to: Default::default(),
-    });
+    ));
+    connection.process.store(Some(process.clone()));
     vm.global_state
         .takeover(connection.clone(), process.clone())
         .await;

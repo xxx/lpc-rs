@@ -105,7 +105,6 @@ impl AttemptBody for TakeoverBody {
 mod tests {
     use std::net::ToSocketAddrs;
 
-    use arc_swap::ArcSwapAny;
     use lpc_rs_core::lpc_path::LpcPath;
 
     use super::*;
@@ -121,13 +120,11 @@ mod tests {
     fn make_connection() -> Arc<Connection> {
         let (tx, _rx) = tokio::sync::mpsc::channel(1);
         let (broker_tx, _broker_rx) = flume::unbounded();
-        Arc::new(Connection {
-            address: "127.0.0.1:23123".to_socket_addrs().unwrap().next().unwrap(),
-            process: ArcSwapAny::from(None),
+        Arc::new(Connection::new(
+            "127.0.0.1:23123".to_socket_addrs().unwrap().next().unwrap(),
             tx,
             broker_tx,
-            input_to: Default::default(),
-        })
+        ))
     }
 
     /// A rejected takeover attempt re-runs: the second attempt commits the

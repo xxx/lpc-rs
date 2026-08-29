@@ -73,7 +73,6 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
 mod tests {
     use std::{net::ToSocketAddrs, sync::Arc};
 
-    use arc_swap::ArcSwapAny;
     use indoc::indoc;
 
     use crate::{
@@ -118,13 +117,11 @@ mod tests {
     fn make_connection() -> Arc<Connection> {
         let (tx, _rx) = tokio::sync::mpsc::channel(1);
         let (broker_tx, _broker_rx) = flume::unbounded();
-        Arc::new(Connection {
-            address: "127.0.0.1:23123".to_socket_addrs().unwrap().next().unwrap(),
-            process: ArcSwapAny::from(None),
+        Arc::new(Connection::new(
+            "127.0.0.1:23123".to_socket_addrs().unwrap().next().unwrap(),
             tx,
             broker_tx,
-            input_to: Default::default(),
-        })
+        ))
     }
 
     /// The core D9b Piece 2 guarantee: an in-transaction `exec` is visible

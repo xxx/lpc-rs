@@ -189,6 +189,7 @@ impl Telnet {
                         }
                         Ok(n) => {
                             session.feed(&buf[..n]);
+                            connection.refresh(&session);
                             while let Some(event) = session.next_event() {
                                 Self::handle_event(event, &mut session, &connection, &template, shutting_down).await;
                             }
@@ -541,9 +542,14 @@ mod tests {
         use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 
         use super::*;
-        use crate::interpreter::{
-            function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
-            vm::Vm,
+        use crate::{
+            interpreter::{
+                function_type::{
+                    function_address::FunctionAddress, function_ptr::FunctionPtrBuilder,
+                },
+                vm::Vm,
+            },
+            telnet::connection::Snapshot,
         };
 
         const ADDR: &str = "10.0.0.1:4000";
@@ -611,10 +617,36 @@ mod tests {
                 .expect("the loop answers within two seconds")
         }
 
+        /// Poll `probe` until it holds, within the timeout.
+        async fn eventually<F: Fn() -> bool>(probe: F) {
+            within(async {
+                while !probe() {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            })
+            .await
+        }
+
         #[tokio::test]
         async fn a_new_connection_reaches_the_broker() {
             let w = wire().await;
             assert_eq!(w.connection.address, ADDR.parse::<SocketAddr>().unwrap());
+        }
+
+        #[tokio::test]
+        async fn the_snapshot_follows_the_wire() {
+            let mut w = wire().await;
+            assert_eq!(*w.connection.snapshot(), Snapshot::default());
+            w.client
+                .write_all(&[IAC, DO, GMCP, IAC, 250, NAWS, 0, 100, 0, 40, IAC, 240])
+                .await
+                .unwrap();
+            eventually(|| w.connection.snapshot().cols == 100).await;
+            let snapshot = w.connection.snapshot();
+            assert_eq!(
+                (snapshot.rows, snapshot.gmcp, snapshot.mxp),
+                (40, true, false)
+            );
         }
 
         #[tokio::test]
