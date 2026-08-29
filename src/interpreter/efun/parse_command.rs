@@ -67,7 +67,7 @@ pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> 
         // efun call pays for.
         let found = Box::pin(native::arguments(&compiled, cmd, &mut resolver)).await?;
         let in_force: Vec<String> = if found.is_some() && has_preposition_slot {
-            resolver.prepositions().await?.to_vec()
+            resolver.prepositions().await?
         } else {
             Vec::new()
         };

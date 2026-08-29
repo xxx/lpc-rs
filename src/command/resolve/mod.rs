@@ -9,6 +9,8 @@ mod numeral;
 mod phrase;
 mod vocabulary;
 
+use std::sync::Arc;
+
 use lpc_rs_errors::Result;
 
 pub use lpc::LpcVocabulary;
@@ -50,11 +52,10 @@ pub enum Resolved {
 
 /// Resolves phrases against one scope for one efun call or one dispatch;
 /// each candidate is asked its lists at most once, and the master its
-/// defaults only once the first phrase arrives.
+/// defaults only once a phrase needs them.
 pub struct Resolver<V: Vocabulary> {
     vocabulary: V,
-    defaults: Defaults,
-    fetched: bool,
+    defaults: Option<Arc<Defaults>>,
     lexicons: Vec<Option<Lexicon>>,
     prepositions: Option<Vec<String>>,
 }
@@ -66,8 +67,7 @@ impl<V: Vocabulary> Resolver<V> {
         let lexicons = (0..vocabulary.candidates()).map(|_| None).collect();
         Resolver {
             vocabulary,
-            defaults: Defaults::default(),
-            fetched: false,
+            defaults: None,
             lexicons,
             prepositions,
         }
@@ -80,33 +80,32 @@ impl<V: Vocabulary> Resolver<V> {
 
     /// The preposition list `%p` matches against: the caller's, else the
     /// master's.
-    pub async fn prepositions(&mut self) -> Result<&[String]> {
-        self.fetch_defaults().await?;
-        Ok(self.in_force())
+    pub async fn prepositions(&mut self) -> Result<Vec<String>> {
+        Ok(match &self.prepositions {
+            Some(list) => list.clone(),
+            None => self.defaults().await?.prepositions.clone(),
+        })
     }
 
-    fn in_force(&self) -> &[String] {
-        self.prepositions
-            .as_deref()
-            .unwrap_or(&self.defaults.prepositions)
-    }
-
-    async fn fetch_defaults(&mut self) -> Result<()> {
-        if !self.fetched {
-            self.defaults = self.vocabulary.defaults().await?;
-            self.fetched = true;
-        }
-        Ok(())
+    /// The master's defaults, fetched on first need.
+    async fn defaults(&mut self) -> Result<Arc<Defaults>> {
+        Ok(match &self.defaults {
+            Some(defaults) => defaults.clone(),
+            None => {
+                let defaults = Arc::new(self.vocabulary.defaults().await?);
+                self.defaults = Some(defaults.clone());
+                defaults
+            }
+        })
     }
 
     /// What `phrase` names as a `kind`, or `None` when it names nothing; a
     /// `Kind::Living` phrase naming only non-livings gives `Some(Items)` with
     /// no candidates.
     pub async fn resolve(&mut self, kind: Kind, phrase: &str) -> Result<Option<Resolved>> {
-        self.fetch_defaults().await?;
         let words: Vec<&str> = phrase.split_whitespace().collect();
         match kind {
-            Kind::Preposition => Ok(self.preposition(&words)),
+            Kind::Preposition => self.preposition(&words).await,
             Kind::Object => self.object(&words).await,
             Kind::Items => self.items(&words, false).await,
             Kind::Living => self.items(&words, true).await,
@@ -114,19 +113,29 @@ impl<V: Vocabulary> Resolver<V> {
         }
     }
 
-    fn preposition(&self, words: &[&str]) -> Option<Resolved> {
-        self.in_force()
-            .iter()
-            .position(|entry| entry.split_whitespace().eq(words.iter().copied()))
-            .map(Resolved::Preposition)
+    async fn preposition(&mut self, words: &[&str]) -> Result<Option<Resolved>> {
+        let position = |list: &[String]| {
+            list.iter()
+                .position(|entry| entry.split_whitespace().eq(words.iter().copied()))
+                .map(Resolved::Preposition)
+        };
+        Ok(match &self.prepositions {
+            Some(list) => position(list),
+            None => position(&self.defaults().await?.prepositions),
+        })
     }
 
     async fn object(&mut self, words: &[&str]) -> Result<Option<Resolved>> {
+        let defaults = self.defaults().await?;
         for candidate in 0..self.lexicons.len() {
             if self.vocabulary.is_remote(candidate) {
                 continue;
             }
-            if self.matches(candidate, words, false).await?.is_some() {
+            if self
+                .matches(candidate, words, false, &defaults)
+                .await?
+                .is_some()
+            {
                 return Ok(Some(Resolved::Object(candidate)));
             }
         }
@@ -134,9 +143,13 @@ impl<V: Vocabulary> Resolver<V> {
     }
 
     async fn object_living(&mut self, words: &[&str]) -> Result<Option<Resolved>> {
+        let defaults = self.defaults().await?;
         for candidate in 0..self.lexicons.len() {
             if self.vocabulary.is_living(candidate)
-                && self.matches(candidate, words, false).await?.is_some()
+                && self
+                    .matches(candidate, words, false, &defaults)
+                    .await?
+                    .is_some()
             {
                 return Ok(Some(Resolved::Object(candidate)));
             }
@@ -148,12 +161,9 @@ impl<V: Vocabulary> Resolver<V> {
         let Some(&first) = words.first() else {
             return Ok(None);
         };
-        let numeral = numeral::numeral(
-            first,
-            self.defaults.all_word.as_deref(),
-            &mut self.vocabulary,
-        )
-        .await?;
+        let defaults = self.defaults().await?;
+        let numeral =
+            numeral::numeral(first, defaults.all_word.as_deref(), &mut self.vocabulary).await?;
         let rest = if numeral.is_some() {
             &words[1..]
         } else {
@@ -171,7 +181,7 @@ impl<V: Vocabulary> Resolver<V> {
                 continue;
             }
             if let Some(plural) = self
-                .named(candidate, rest, plural_expected, match_all)
+                .named(candidate, rest, plural_expected, match_all, &defaults)
                 .await?
             {
                 any_plural |= plural;
@@ -181,7 +191,7 @@ impl<V: Vocabulary> Resolver<V> {
         if candidates.is_empty()
             && (!living_only
                 || !self
-                    .names_a_non_living(rest, plural_expected, match_all)
+                    .names_a_non_living(rest, plural_expected, match_all, &defaults)
                     .await?)
         {
             return Ok(None);
@@ -202,12 +212,13 @@ impl<V: Vocabulary> Resolver<V> {
         rest: &[&str],
         plural_expected: bool,
         match_all: bool,
+        defaults: &Defaults,
     ) -> Result<Option<bool>> {
         if rest.is_empty() {
             return Ok((match_all && self.vocabulary.is_live(candidate)).then_some(false));
         }
         Ok(self
-            .matches(candidate, rest, plural_expected)
+            .matches(candidate, rest, plural_expected, defaults)
             .await?
             .map(|found| found.plural))
     }
@@ -219,13 +230,14 @@ impl<V: Vocabulary> Resolver<V> {
         rest: &[&str],
         plural_expected: bool,
         match_all: bool,
+        defaults: &Defaults,
     ) -> Result<bool> {
         for candidate in 0..self.lexicons.len() {
             if self.vocabulary.is_living(candidate) || self.vocabulary.is_remote(candidate) {
                 continue;
             }
             if self
-                .named(candidate, rest, plural_expected, match_all)
+                .named(candidate, rest, plural_expected, match_all, defaults)
                 .await?
                 .is_some()
             {
@@ -242,6 +254,7 @@ impl<V: Vocabulary> Resolver<V> {
         candidate: usize,
         words: &[&str],
         plural_expected: bool,
+        defaults: &Defaults,
     ) -> Result<Option<Match>> {
         if words.is_empty() || !self.vocabulary.is_live(candidate) {
             return Ok(None);
@@ -252,9 +265,7 @@ impl<V: Vocabulary> Resolver<V> {
         };
         let lexicon = self.lexicons[candidate].insert(lexicon);
         match lexicon {
-            Lexicon::Lists(lists) => {
-                Ok(match_phrase(words, lists, &self.defaults, plural_expected))
-            }
+            Lexicon::Lists(lists) => Ok(match_phrase(words, lists, defaults, plural_expected)),
             Lexicon::IdFunction => {
                 let named = self.vocabulary.id(candidate, &words.join(" ")).await?;
                 Ok(named.then_some(Match { plural: false }))
@@ -552,6 +563,17 @@ mod tests {
         assert_eq!(r.vocabulary().defaults_asked, 1);
         r.resolve(Kind::Items, "all").await.unwrap();
         assert_eq!(r.vocabulary().defaults_asked, 1);
+    }
+
+    #[tokio::test]
+    async fn a_callers_list_never_asks_the_master() {
+        let mut r = Resolver::new(scene(), Some(strings(&["on", "under"])));
+        assert_eq!(r.prepositions().await.unwrap(), &["on", "under"]);
+        assert_eq!(
+            r.resolve(Kind::Preposition, "under").await.unwrap(),
+            Some(Resolved::Preposition(1))
+        );
+        assert_eq!(r.vocabulary().defaults_asked, 0);
     }
 
     #[tokio::test]

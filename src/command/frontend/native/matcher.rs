@@ -65,7 +65,7 @@ async fn lpc_values(
         .iter()
         .any(|v| matches!(v, Value::Resolved(Resolved::Preposition(_))))
     {
-        resolver.prepositions().await?.to_vec()
+        resolver.prepositions().await?
     } else {
         Vec::new()
     };
