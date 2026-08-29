@@ -37,7 +37,7 @@ pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> 
         context.return_efun_result(LpcRef::from(0));
         return Ok(());
     }
-    let scope = scope_of(context, &scope_arg)?;
+    let scope = candidates_of(context, &scope_arg)?;
     let compiled = native::compile_pattern(pattern)
         .map_err(|e| context.runtime_error(format!("parse_command: {e}")))?;
     let destinations = usize::from(context.frame().called_with_num_args).saturating_sub(3);
@@ -97,7 +97,7 @@ pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> 
 
 /// The candidates `arg` names: an object with its deep inventory, or an
 /// array's live object members. A destructed object is an empty scope.
-fn scope_of<const N: usize>(
+fn candidates_of<const N: usize>(
     context: &EfunContext<'_, N>,
     arg: &LpcRef,
 ) -> Result<Vec<Arc<Process>>> {

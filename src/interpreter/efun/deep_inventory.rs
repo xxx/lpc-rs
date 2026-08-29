@@ -6,7 +6,8 @@ use crate::{
 };
 
 /// `deep_inventory`, an efun for recursively returning the inventories of
-/// all objects contained by an object, depth-first in arrival order.
+/// all objects contained by an object, depth-first in arrival order, each
+/// object once and never `ob` itself.
 pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     efun::return_objects_of(context, |txn, object| {
         scope::deep(txn, &object).into_iter().skip(1)
@@ -106,9 +107,8 @@ mod tests {
             .sorted()
             .collect_vec();
 
-        // The loop moves /deep_inv_ob into /deep_inv_foo, so /deep_inv_ob is
-        // its own indirect member; `deep` seeds the root as already seen, so
-        // the cycle back to it is dropped rather than re-added.
+        // `deep` seeds its root as seen, so the cycle back to /deep_inv_ob is
+        // dropped.
         assert_eq!(
             globals,
             &["/deep_inv_bar", "/deep_inv_baz", "/deep_inv_foo"]

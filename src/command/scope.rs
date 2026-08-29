@@ -50,41 +50,39 @@ impl PartialEq for Scope {
     }
 }
 
-/// `living`, its environment, its own contents, then the environment's
-/// other contents — the one order every enumeration of a command's
-/// surroundings uses.
-fn near(txn: &TxnHandle, living: &Arc<Process>) -> Vec<Arc<Process>> {
-    let environment = Process::environment_of(txn, living);
+/// `living`, `environment` when there is one, `living`'s own contents,
+/// then `environment`'s other contents — the one order every enumeration
+/// of a command's surroundings uses — with the count of leading entries
+/// that are never asked about their contents (the living and the room).
+fn around(
+    txn: &TxnHandle,
+    living: &Arc<Process>,
+    environment: Option<&Arc<Process>>,
+) -> (Vec<Arc<Process>>, usize) {
     let mut out = vec![living.clone()];
-    out.extend(environment.clone());
+    out.extend(environment.cloned());
     out.extend(Process::inventory_of(txn, living));
-    if let Some(environment) = &environment {
+    if let Some(environment) = environment {
         out.extend(
             Process::inventory_of(txn, environment)
                 .into_iter()
                 .filter(|item| !Arc::ptr_eq(item, living)),
         );
     }
-    out
+    (out, 1 + usize::from(environment.is_some()))
 }
 
 /// The objects whose rules `living` may use and whose ids its native
-/// captures resolve over, in `near` order.
+/// captures resolve over, in `around` order.
 pub(crate) fn neighbourhood(txn: &TxnHandle, living: &Arc<Process>) -> Scope {
-    Scope::new(near(txn, living))
+    let environment = Process::environment_of(txn, living);
+    Scope::new(around(txn, living, environment.as_ref()).0)
 }
 
 /// The neighbourhood `mover` will have once it stands in `new_env`, from
 /// the inventories as they are before the move.
 pub(crate) fn after_move(txn: &TxnHandle, mover: &Arc<Process>, new_env: &Arc<Process>) -> Scope {
-    let mut members = vec![mover.clone(), new_env.clone()];
-    members.extend(Process::inventory_of(txn, mover));
-    members.extend(
-        Process::inventory_of(txn, new_env)
-            .into_iter()
-            .filter(|item| !Arc::ptr_eq(item, mover)),
-    );
-    Scope::new(members)
+    Scope::new(around(txn, mover, Some(new_env)).0)
 }
 
 /// One candidate and whether the actor can reach it.
@@ -99,16 +97,15 @@ pub(crate) struct Candidate {
 /// every container on the path answers `inventory_accessible()`.
 pub(crate) async fn walk(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec<Candidate>> {
     let txn = ctx.txn();
-    let mut out: Vec<Candidate> = near(txn, actor)
+    let environment = Process::environment_of(txn, actor);
+    let (members, mut next) = around(txn, actor, environment.as_ref());
+    let mut out: Vec<Candidate> = members
         .into_iter()
         .map(|object| Candidate {
             object,
             reachable: true,
         })
         .collect();
-    // The actor and its environment are never asked; their contents are
-    // already in.
-    let mut next = 1 + usize::from(Process::environment_of(txn, actor).is_some());
     while next < out.len() {
         let holder = out[next].clone();
         next += 1;
@@ -177,6 +174,8 @@ pub(crate) fn deep(txn: &TxnHandle, root: &Arc<Process>) -> Vec<Arc<Process>> {
     out
 }
 
+/// Append `container`'s contents to `out` depth-first, skipping anything
+/// already in it.
 fn descend(txn: &TxnHandle, container: &Arc<Process>, out: &mut Vec<Arc<Process>>) {
     for item in Process::inventory_of(txn, container) {
         if out.iter().any(|seen| Arc::ptr_eq(seen, &item)) {

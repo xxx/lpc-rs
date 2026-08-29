@@ -1260,27 +1260,48 @@ mod tests {
         );
     }
 
+    const OWN_THINGS_BEFORE_ROOMS_PLAYER: &str = indoc! { r#"
+        int mine; string order;
+        void create() {
+            set_this_player(this_object());
+            enable_commands();
+            move_object("/room");
+            "/sword2"->go(find_object("/room"));
+            "/sword"->go(this_object());
+            add_rule("'look' %o", "do_look");
+            add_rule("'get' %i", "do_get");
+            command("look sword");
+            command("get swords");
+        }
+        int do_look(object ob) { mine = ob == find_object("/sword"); return 1; }
+        int do_get(mixed *obs) { order = file_name(obs[1]) + " " + file_name(obs[2]); return 1; }
+    "# };
+
     #[tokio::test]
-    async fn native_captures_find_the_actors_own_things_before_the_rooms() {
-        let player = indoc! { r#"
-            int mine; string order;
-            void create() {
-                set_this_player(this_object());
-                enable_commands();
-                move_object("/room");
-                "/sword2"->go(find_object("/room"));
-                "/sword"->go(this_object());
-                add_rule("'look' %o", "do_look");
-                add_rule("'get' %i", "do_get");
-                command("look sword");
-                command("get swords");
-            }
-            int do_look(object ob) { mine = ob == find_object("/sword"); return 1; }
-            int do_get(mixed *obs) { order = file_name(obs[1]) + " " + file_name(obs[2]); return 1; }
-        "# };
+    async fn an_object_capture_finds_the_actors_own_things_before_the_rooms() {
         assert_eq!(
-            scenario("", &[SWORD, SWORD2, ROOM], player, 2).await,
-            vec![LpcRef::from(1), s("/sword /sword2")]
+            scenario(
+                "",
+                &[SWORD, SWORD2, ROOM],
+                OWN_THINGS_BEFORE_ROOMS_PLAYER,
+                1
+            )
+            .await,
+            vec![LpcRef::from(1)]
+        );
+    }
+
+    #[tokio::test]
+    async fn an_items_capture_lists_the_actors_own_things_before_the_rooms() {
+        assert_eq!(
+            scenario(
+                "",
+                &[SWORD, SWORD2, ROOM],
+                OWN_THINGS_BEFORE_ROOMS_PLAYER,
+                2
+            )
+            .await[1],
+            s("/sword /sword2")
         );
     }
 

@@ -38,11 +38,12 @@ the earliest (see `parser_handlers`).
 ### scope
 
 Without `scope`, candidates are the actor's ordinary walk: the actor, its
-environment, both inventories, and — breadth-first — the contents of
-anything reachable that answers `inventory_visible()` truthily (see
-`inventory_visible`, `inventory_accessible`). Passing `scope` replaces that
-walk entirely: every object it names is a candidate, and every one of them
-is reachable, `inventory_accessible()` unconsulted. A nested array inside
+environment, its own inventory, the environment's other contents, and —
+breadth-first — the contents of any candidate answering
+`inventory_visible()` truthily, reachable only while every container on its
+path answers `inventory_accessible()` truthily. Passing `scope` replaces
+that walk entirely: every object it names is a candidate, and every one of
+them is reachable, `inventory_accessible()` unconsulted. A nested array inside
 `scope` contributes its own objects (to a nesting depth of 20 — deeper is a
 runtime error); a destructed member, or one that is not an object, is
 skipped. `LIV`/`LVS` phrases also resolve over the master's
