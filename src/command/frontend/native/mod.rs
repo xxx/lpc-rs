@@ -155,8 +155,8 @@ const PATTERN_CACHE: usize = 1024;
 static RULES: LazyLock<Memo<String, Arc<Compiled>>> = LazyLock::new(|| Memo::new(PATTERN_CACHE));
 static PATTERNS: LazyLock<Memo<String, Arc<Compiled>>> = LazyLock::new(|| Memo::new(PATTERN_CACHE));
 
-/// Compile an `add_rule` pattern, once per text; only successes are cached,
-/// so a malformed pattern reports its fault on every call.
+/// Compile an `add_rule` pattern, memoised by text; only successes are
+/// cached, so a malformed pattern reports its fault on every call.
 pub fn compile(pattern: &str) -> Result<Arc<Compiled>, PatternError> {
     compile_in(&RULES, pattern, Verb::Required)
 }

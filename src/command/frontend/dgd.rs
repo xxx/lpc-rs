@@ -15,9 +15,6 @@ use crate::command::{
     memo::Memo,
 };
 
-/// Compiled grammars kept, least recently used first out.
-pub const GRAMMAR_CACHE: usize = 64;
-
 /// A grammar text compiled for the engine.
 #[derive(Debug)]
 pub struct CompiledGrammar {
@@ -44,6 +41,9 @@ pub fn compile(text: &str) -> Result<CompiledGrammar, DgdError> {
 pub fn compile_cached(text: &str) -> Result<Arc<CompiledGrammar>, DgdError> {
     GRAMMARS.get_or_try_build(text, || compile(text).map(Arc::new))
 }
+
+/// Compiled grammars kept, least recently used first out.
+const GRAMMAR_CACHE: usize = 64;
 
 static GRAMMARS: LazyLock<Memo<String, Arc<CompiledGrammar>>> =
     LazyLock::new(|| Memo::new(GRAMMAR_CACHE));

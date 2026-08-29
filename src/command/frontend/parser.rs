@@ -117,7 +117,8 @@ const PATTERN_CACHE: usize = 1024;
 /// Compiled patterns by rule text, one per dialect like the native caches.
 static COMPILED: LazyLock<Memo<String, Arc<Compiled>>> = LazyLock::new(|| Memo::new(PATTERN_CACHE));
 
-/// The compiled pattern for `rule`, built from `tokens` once per rule text.
+/// The compiled pattern for `rule`, built from `tokens`, memoised by rule
+/// text.
 fn compiled_for(rule: &str, tokens: &[Token]) -> Result<Arc<Compiled>, ParserRuleError> {
     COMPILED.get_or_try_build(rule, || {
         let groups: Vec<Group> = tokens.iter().map(group_of).collect();
@@ -126,8 +127,8 @@ fn compiled_for(rule: &str, tokens: &[Token]) -> Result<Arc<Compiled>, ParserRul
 }
 
 /// Compile `rule` for `verb`: the tokens as pattern groups through the
-/// native builder, once per rule text, and both slugs; the captures' kinds
-/// are `compiled.kinds`.
+/// native builder, memoised by rule text, and both slugs; the captures'
+/// kinds are `compiled.kinds`.
 pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
     let tokens = rule
         .split_whitespace()

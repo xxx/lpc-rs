@@ -27,7 +27,7 @@ const GRAMMAR_CACHE: usize = 1024;
 
 static GRAMMARS: LazyLock<Memo<Key, Arc<Grammar>>> = LazyLock::new(|| Memo::new(GRAMMAR_CACHE));
 
-/// The grammar for `verb` under `matching`, built once per key.
+/// The grammar for `verb` under `matching`, memoised by key.
 pub fn grammar_for(verb: &str, matching: VerbMatch) -> Arc<Grammar> {
     let key = match matching {
         VerbMatch::Exact => Key::Exact(verb.to_owned()),

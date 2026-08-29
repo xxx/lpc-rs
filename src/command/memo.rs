@@ -1,15 +1,10 @@
 //! Bounded memos of compiled forms, keyed by source text: pure caches outside
 //! STM — an eviction costs one recompile.
 
-use std::{
-    borrow::Borrow,
-    convert::Infallible,
-    hash::Hash,
-    num::NonZeroUsize,
-    sync::{Mutex, MutexGuard, PoisonError},
-};
+use std::{borrow::Borrow, convert::Infallible, hash::Hash, num::NonZeroUsize};
 
 use lru::LruCache;
+use parking_lot::Mutex;
 
 /// An exact LRU of built values; a hit is a clone.
 pub(crate) struct Memo<K, V> {
@@ -17,16 +12,18 @@ pub(crate) struct Memo<K, V> {
 }
 
 impl<K: Hash + Eq, V: Clone> Memo<K, V> {
-    /// Holding `capacity` entries; a zero capacity holds one.
+    /// Holding up to `capacity` entries, allocated as they come; a zero
+    /// capacity holds one.
     pub(crate) fn new(capacity: usize) -> Self {
         let capacity = NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::MIN);
         Memo {
-            entries: Mutex::new(LruCache::new(capacity)),
+            entries: Mutex::new(LruCache::sparse(capacity)),
         }
     }
 
     /// The value for `key`, built by `build` on a miss — outside the lock,
-    /// and remembered only on success.
+    /// and remembered only on success. Two builders racing on one key both
+    /// get the value that landed first, so a key never has two values.
     pub(crate) fn get_or_try_build<Q, E>(
         &self,
         key: &Q,
@@ -36,11 +33,18 @@ impl<K: Hash + Eq, V: Clone> Memo<K, V> {
         K: Borrow<Q>,
         Q: Hash + Eq + ToOwned<Owned = K> + ?Sized,
     {
-        if let Some(hit) = self.lock().get(key) {
+        if let Some(hit) = self.entries.lock().get(key) {
             return Ok(hit.clone());
         }
         let built = build()?;
-        self.lock().push(key.to_owned(), built.clone());
+        let owned = key.to_owned();
+        let mut entries = self.entries.lock();
+        if let Some(landed) = entries.get(key) {
+            return Ok(landed.clone());
+        }
+        let evicted = entries.push(owned, built.clone());
+        drop(entries);
+        drop(evicted);
         Ok(built)
     }
 
@@ -52,11 +56,6 @@ impl<K: Hash + Eq, V: Clone> Memo<K, V> {
     {
         self.get_or_try_build(key, || Ok::<V, Infallible>(build()))
             .unwrap_or_else(|never| match never {})
-    }
-
-    /// A poisoned lock holds a consistent map, so it is reused.
-    fn lock(&self) -> MutexGuard<'_, LruCache<K, V>> {
-        self.entries.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 
@@ -109,6 +108,21 @@ mod tests {
         assert_eq!(failed, Err("no"));
         assert_eq!(fetch(&memo, &builds, "x"), 1);
         assert_eq!(builds.get(), 2);
+    }
+
+    /// A build that reaches the memo again for its own key stands in for a
+    /// racing builder: it can only get in because no lock is held, and the
+    /// value it lands is the one both callers end up with.
+    #[test]
+    fn a_build_runs_unlocked_and_the_first_value_to_land_wins() {
+        let memo: Memo<String, usize> = Memo::new(2);
+        let outer = memo.get_or_build("k", || {
+            assert!(memo.entries.try_lock().is_some(), "the lock is held");
+            memo.get_or_build("k", || 2);
+            1
+        });
+        assert_eq!(outer, 2);
+        assert_eq!(memo.get_or_build("k", || 3), 2);
     }
 
     #[test]
