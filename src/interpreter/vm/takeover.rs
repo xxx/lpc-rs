@@ -4,8 +4,8 @@ use lpc_rs_errors::Result;
 use tracing::error;
 
 use crate::{
-    interpreter::efun::exec::DISPLACED,
     interpreter::{
+        efun::exec::DISPLACED,
         process::Process,
         stm::{
             AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, commit_changeset,
@@ -18,8 +18,8 @@ use crate::{
 
 impl GlobalState {
     /// Bind a [`Connection`] to a [`Process`] in its own transaction. The
-    /// socket-level handover (back-reference, disconnect of the displaced
-    /// holder) is a deferred `Effect::Exec`, flushed after the commit lands.
+    /// back-reference is a deferred `Effect::Exec`, a displaced holder's
+    /// close an `Effect::Disconnect`, both flushed after the commit lands.
     pub async fn takeover(self: &Arc<Self>, connection: Arc<Connection>, process: Arc<Process>) {
         let mut body = TakeoverBody {
             global_state: self.clone(),

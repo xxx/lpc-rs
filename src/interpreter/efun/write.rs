@@ -168,6 +168,7 @@ mod tests {
             vm.global_state.committed_global(&main, 0u16),
             LpcRef::from(0)
         );
+        assert_eq!(connected.rx.try_recv(), Ok(ConnectionOp::Close));
         assert!(connected.rx.try_recv().is_err());
     }
 }

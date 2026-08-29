@@ -23,10 +23,7 @@ use crate::{
     interpreter::{
         call_outs::CallOuts, lpc_ref::LpcRef, object_space::ObjectSpace, process::Process,
     },
-    telnet::{
-        connection::Connection,
-        ops::{BrokerOp, ConnectionOp},
-    },
+    telnet::{connection::Connection, ops::ConnectionOp},
 };
 
 /// A fully materialized, not-yet-scheduled call out. Everything the physical
@@ -107,8 +104,10 @@ pub(crate) enum Effect {
     },
 
     /// A connection's end — its holder destructed, or displaced by `exec`:
-    /// the back-reference is cleared and the broker disconnects it, after
-    /// `message` when there is one.
+    /// the back-reference is cleared and the connection is told to close
+    /// behind everything queued to it, `message` included. The close rides
+    /// the connection's own channel so its task finishes the flush it may be
+    /// running before it exits.
     Disconnect {
         connection: Arc<Connection>,
         message: Option<String>,
@@ -157,10 +156,7 @@ impl Effect {
                 if let Some(message) = message {
                     let _ = connection.tx.send(ConnectionOp::SendMessage(message)).await;
                 }
-                let _ = connection
-                    .broker_tx
-                    .send_async(BrokerOp::Disconnect(connection.address))
-                    .await;
+                let _ = connection.tx.send(ConnectionOp::Close).await;
             }
         }
     }

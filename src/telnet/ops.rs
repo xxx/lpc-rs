@@ -44,4 +44,7 @@ pub enum ConnectionOp {
 
     /// Signal to the connection that the server is shutting down.
     Shutdown,
+
+    /// Close the connection once everything queued before this has been sent.
+    Close,
 }

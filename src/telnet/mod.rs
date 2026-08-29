@@ -176,6 +176,11 @@ impl Telnet {
                             trace!("Shutting down connection for {}", &remote_ip);
                             // sink.send(TelnetEvent::Message("The server is shutting down. Please try again shortly.".to_string())).await;
                         }
+                        Some(ConnectionOp::Close) => {
+                            info!("Closing connection for {}.", &remote_ip);
+                            let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
+                            break;
+                        }
                         None => {
                             info!("Broker closed the channel for {}. Closing connection.", &remote_ip);
                             let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;

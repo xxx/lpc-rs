@@ -28,7 +28,7 @@ mod tests {
 
     use crate::{
         interpreter::vm::Vm,
-        telnet::ops::{BrokerOp, ConnectionOp},
+        telnet::ops::ConnectionOp,
         test_support::{connect, run_prog, test_config},
     };
 
@@ -79,10 +79,7 @@ mod tests {
             connected.rx.try_recv(),
             Ok(ConnectionOp::SendMessage("bye".into()))
         );
-        assert!(matches!(
-            connected.broker_rx.try_recv(),
-            Ok(BrokerOp::Disconnect(address)) if address == connected.connection.address
-        ));
+        assert_eq!(connected.rx.try_recv(), Ok(ConnectionOp::Close));
         assert!(connected.connection.process.load().is_none());
     }
 
@@ -90,7 +87,7 @@ mod tests {
     async fn exec_then_destruct_of_the_old_body_keeps_the_connection() {
         let vm = Vm::new(test_config());
         let player = vm.create_process_from_code("/player.c", "").await.unwrap();
-        let connected = connect(&vm, &player).await;
+        let mut connected = connect(&vm, &player).await;
         vm.create_process_from_code("/body.c", "").await.unwrap();
         let main = indoc! { r#"
             void create() {
@@ -102,7 +99,7 @@ mod tests {
         vm.initialize_process_from_code("/main.c", main)
             .await
             .unwrap();
-        assert!(connected.broker_rx.try_recv().is_err());
+        assert!(connected.rx.try_recv().is_err());
         assert_eq!(
             connected
                 .connection

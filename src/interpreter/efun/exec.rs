@@ -8,19 +8,19 @@ use crate::interpreter::{
     stm::Effect,
 };
 
+/// What a connection hears when another takes over its body.
+pub(crate) const DISPLACED: &str =
+    "You are being disconnected because someone else logged in as you.";
+
 /// `exec`, an efun for moving a connection into an object.
 ///
 /// The binding is transactional: the connection cells of both bodies are
 /// written into this transaction, so the rest of the task (and efuns it
 /// calls in the same attempt, e.g. `interactive()`) sees the handover before
 /// commit. The socket-level handover — the connection's back-reference to
-/// the new body and the disconnect of the body it displaced — is a deferred
-/// effect, flushed after this task commits, so a rejected attempt never
-/// touches the physical connection.
-/// What a connection hears when another takes over its body.
-pub(crate) const DISPLACED: &str =
-    "You are being disconnected because someone else logged in as you.";
-
+/// the new body (`Effect::Exec`) and the close of the connection it
+/// displaced (`Effect::Disconnect`) — is deferred to after this task
+/// commits, so a rejected attempt never touches the physical connection.
 pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     if_chain! {
         let new_ref = context.resolve_local_register(1 as RegisterSize);
@@ -80,9 +80,39 @@ mod tests {
         interpreter::{
             lpc_int::LpcInt, lpc_ref::LpcRef, task::Task, task::task_template::TaskTemplate, vm::Vm,
         },
-        telnet::connection::Connection,
-        test_support::test_config,
+        telnet::{connection::Connection, ops::ConnectionOp},
+        test_support::{connect, test_config},
     };
+
+    #[tokio::test]
+    async fn the_displaced_holder_hears_why_and_is_closed() {
+        let vm = Vm::new(test_config());
+        let a = vm.create_process_from_code("/a.c", "").await.unwrap();
+        let b = vm.create_process_from_code("/b.c", "").await.unwrap();
+        let mut on_a = connect(&vm, &a).await;
+        let mut on_b = connect(&vm, &b).await;
+        let main = indoc! { r#"
+            void create() { exec(find_object("/b"), find_object("/a")); }
+        "# };
+        vm.initialize_process_from_code("/main.c", main)
+            .await
+            .unwrap();
+        assert_eq!(
+            on_b.rx.try_recv(),
+            Ok(ConnectionOp::SendMessage(super::DISPLACED.into()))
+        );
+        assert_eq!(on_b.rx.try_recv(), Ok(ConnectionOp::Close));
+        assert!(on_b.connection.process.load().is_none());
+        assert!(on_a.rx.try_recv().is_err());
+        assert_eq!(
+            on_a.connection
+                .process
+                .load()
+                .as_ref()
+                .map(|p| p.to_string()),
+            Some("/b".to_owned())
+        );
+    }
 
     /// Build a [`Connection`] whose own channels are dropped after the test.
     fn make_connection() -> Arc<Connection> {
