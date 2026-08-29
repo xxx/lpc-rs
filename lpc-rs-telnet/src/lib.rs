@@ -9,7 +9,9 @@
 
 mod opt;
 mod parser;
+mod session;
 mod table;
 mod wire;
 
 pub use opt::Opt;
+pub use session::{Event, MAX_LINE, Op, Session, Stats};

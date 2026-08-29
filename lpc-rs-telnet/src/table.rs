@@ -1,9 +1,6 @@
 //! RFC 1143 negotiation, the Q method: a state per option per side and a
 //! queued opposite request, so two sides asking at once never loop.
 
-// Until session.rs lands (B5); it removes this.
-#![cfg_attr(not(test), expect(dead_code))]
-
 use crate::opt::{DO, DONT, WILL, WONT};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -156,13 +153,6 @@ impl Table {
         answer.map(|a| Self::his(a, opt))
     }
 
-    /// Ask the client to disable the option (we DONT).
-    pub(crate) fn ask_dont(&mut self, opt: u8) -> Option<Reply> {
-        let (next, answer) = ask_disable(self.him[usize::from(opt)]);
-        self.him[usize::from(opt)] = next;
-        answer.map(|a| Self::his(a, opt))
-    }
-
     fn ours(answer: Answer, opt: u8) -> Reply {
         match answer {
             Answer::Enable => Reply(WILL, opt),
@@ -268,7 +258,6 @@ mod tests {
         assert_eq!(t.recv_wont(NAWS), Some(Reply(DONT, NAWS)));
         assert!(!t.him_on(NAWS));
         assert_eq!(t.recv_will(NAWS, true), Some(Reply(DO, NAWS)));
-        assert_eq!(t.ask_dont(NAWS), Some(Reply(DONT, NAWS)));
     }
 
     #[test]

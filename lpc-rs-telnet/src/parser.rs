@@ -1,9 +1,6 @@
 //! The IAC state machine: bytes in, frames out. Holds no policy and never
 //! errors — what it cannot make sense of it counts and steps past.
 
-// Until session.rs lands (B5); it removes this.
-#![cfg_attr(not(test), expect(dead_code))]
-
 use crate::opt::{DO, DONT, IAC, SB, SE, WILL, WONT};
 
 /// One decoded unit of the wire.

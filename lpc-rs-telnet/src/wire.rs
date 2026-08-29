@@ -1,9 +1,6 @@
 //! Outbound framing. `&str` payloads cannot contain 0xFF, so only
 //! subnegotiation payloads need IAC doubling.
 
-// Until session.rs lands (B5); it removes this.
-#![cfg_attr(not(test), expect(dead_code))]
-
 use bytes::{BufMut, BytesMut};
 
 use crate::opt::{IAC, SB, SE};
