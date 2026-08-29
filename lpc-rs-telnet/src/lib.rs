@@ -8,6 +8,7 @@
 #![warn(missing_docs)]
 
 mod opt;
+mod parser;
 mod table;
 
 pub use opt::Opt;
