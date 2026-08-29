@@ -1,0 +1,14 @@
+[package]
+name = "lpc-rs-telnet"
+description = "lpc-rs LPC compiler and gamedriver suite: the telnet session (RFC 854 negotiation, MUD extensions), sans-io."
+version = "0.1.0"
+authors = ["mpd <mpd@jesters-court.net>"]
+edition = "2024"
+readme = "README.md"
+repository = "https://github.com/xxx/lpc-rs"
+license = "MIT"
+keywords = ["lpc", "mud", "driver", "telnet"]
+categories = ["network-programming", "game-engines"]
+
+[dependencies]
+bytes = "1.4.0"
