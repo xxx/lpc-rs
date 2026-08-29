@@ -25,7 +25,8 @@ pub(crate) fn record_output_effect<const N: usize>(context: &EfunContext<'_, N>,
     context.record_effect(Effect::DebugLog(msg));
 }
 
-/// A convenience helper to apply catch_tell to the this_player in a context.
+/// `catch_tell` on `this_player` with `msg`, else the debug log; the efun
+/// result is 1 when delivered.
 pub async fn apply_catch_tell<const N: usize>(
     msg: String,
     context: &mut EfunContext<'_, N>,
