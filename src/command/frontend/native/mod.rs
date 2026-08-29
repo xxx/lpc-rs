@@ -375,7 +375,7 @@ fn assemble(groups: &[Group], verbs: &[&str]) -> Result<Compiled, GrammarError> 
                 let element = match kind {
                     CaptureKind::Word => nt(b.word_like(&words)),
                     CaptureKind::Words => nt(b.words_star(&words)),
-                    CaptureKind::Number => tok(words.number),
+                    CaptureKind::Number => tok(words.number()),
                     CaptureKind::Object
                     | CaptureKind::Living
                     | CaptureKind::Items

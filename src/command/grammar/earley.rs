@@ -978,7 +978,7 @@ mod tests {
         let w = b.words_tokens();
         let e = b.nonterminal("E");
         b.production(e, [nt(e), nt(e)]);
-        b.production(e, [tok(w.word)]);
+        b.production(e, [tok(w.word())]);
         b.build(e).unwrap()
     }
 
