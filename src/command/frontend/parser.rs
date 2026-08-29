@@ -55,7 +55,7 @@ pub struct ParserRule {
     pub can_slug: Ustr,
     /// The slug for `do_` names (`at_obs` for a many slot).
     pub do_slug: Ustr,
-    /// The rule compiled as a verbless native pattern.
+    /// The rule's tokens compiled as pattern groups.
     pub compiled: Arc<Compiled>,
 }
 
@@ -258,6 +258,15 @@ mod tests {
             r.compiled.captures_of("hi there").next().unwrap()[0].text,
             "hi there"
         );
+    }
+
+    #[test]
+    fn a_str_beside_an_object_slot_still_splits_greedily() {
+        let r = compile("say", "STR to OBJ").unwrap();
+        let parses: Vec<Vec<_>> = r.compiled.captures_of("a b to c d").collect();
+        let firsts: Vec<&str> = parses.iter().map(|caps| caps[0].text.as_str()).collect();
+        assert_eq!(firsts, vec!["a b"]);
+        assert_eq!(parses[0][1].text, "c d");
     }
 
     #[test]

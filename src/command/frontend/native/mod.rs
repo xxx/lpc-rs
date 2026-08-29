@@ -1,6 +1,6 @@
 //! The native rule shape: an `add_rule` or `parse_command` pattern compiled
-//! to an engine grammar, and the handler's arguments taken from the parse's
-//! captures.
+//! to an engine grammar — the group builder the parser package shares — and
+//! the handler's arguments taken from the parse's captures.
 
 mod matcher;
 
@@ -129,7 +129,7 @@ impl std::error::Error for PatternError {}
 #[derive(Clone, Debug)]
 pub struct Compiled {
     /// The leading verb alternatives, in pattern order; empty for a
-    /// `compile_pattern` pattern.
+    /// `compile_pattern` pattern or a `compile_groups` build.
     pub verbs: Arc<[Ustr]>,
     /// `S → elements…`, shared by every rule registered from this pattern.
     pub grammar: Arc<Grammar>,
@@ -265,17 +265,18 @@ fn capture_kind(letter: char) -> Result<CaptureKind, PatternError> {
     }
 }
 
-/// One element of the pattern once its dialect is gone: what every dialect
-/// reduces to and [`compile_groups`] builds from.
+/// One element of a pattern once its dialect is gone: what native pattern
+/// text and parser rule tokens both reduce to and [`compile_groups`] builds
+/// from.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Group {
     /// Quoted words, one of which must appear.
     Words(Vec<String>),
-    /// A `%` capture of this kind; `Words` admits no words at all.
+    /// A capture of this kind; `Words` may match no words at all.
     Capture(CaptureKind),
     /// One or more words as one string (`STR`), unlike `Capture(Words)`.
     Text,
-    /// `[word]`.
+    /// An optional word.
     Optional(String),
 }
 
@@ -328,11 +329,11 @@ fn group(pieces: Vec<Piece>, verb: Verb) -> Result<Vec<Group>, PatternError> {
 }
 
 /// `words` with later repeats of an already-seen word dropped, order kept.
-fn dedup_words(words: &[String]) -> Vec<&String> {
-    let mut out: Vec<&String> = Vec::with_capacity(words.len());
+fn dedup_words(words: &[String]) -> Vec<&str> {
+    let mut out: Vec<&str> = Vec::with_capacity(words.len());
     for word in words {
-        if !out.contains(&word) {
-            out.push(word);
+        if !out.contains(&word.as_str()) {
+            out.push(word.as_str());
         }
     }
     out
@@ -340,7 +341,7 @@ fn dedup_words(words: &[String]) -> Vec<&String> {
 
 /// The verb pre-filter for `groups` under `verb`, then [`assemble`].
 fn build(groups: &[Group], verb: Verb) -> Result<Compiled, PatternError> {
-    let verbs: Vec<&String> = match (verb, groups.first()) {
+    let verbs: Vec<&str> = match (verb, groups.first()) {
         (Verb::Required, Some(Group::Words(words))) => dedup_words(words),
         (Verb::Required, _) => return Err(PatternError::NoVerb),
         (Verb::Optional, _) => Vec::new(),
@@ -350,7 +351,7 @@ fn build(groups: &[Group], verb: Verb) -> Result<Compiled, PatternError> {
 
 /// `S → group…` over plain words, one production; captures are labelled
 /// with their slot and kind.
-fn assemble(groups: &[Group], verbs: &[&String]) -> Result<Compiled, GrammarError> {
+fn assemble(groups: &[Group], verbs: &[&str]) -> Result<Compiled, GrammarError> {
     let mut b = GrammarBuilder::new();
     let s = b.nonterminal("S");
     let words = b.words_tokens();
@@ -362,8 +363,8 @@ fn assemble(groups: &[Group], verbs: &[&String]) -> Result<Compiled, GrammarErro
             Group::Words(alternatives) => {
                 let alternatives = dedup_words(alternatives);
                 let element = match alternatives.as_slice() {
-                    [word] => lit(word.as_str()),
-                    many => nt(b.alternatives(many.iter().map(|w| lit(w.as_str())))),
+                    [word] => lit(word),
+                    many => nt(b.alternatives(many.iter().map(|w| lit(w)))),
                 };
                 (element, None)
             }
@@ -397,7 +398,7 @@ fn assemble(groups: &[Group], verbs: &[&String]) -> Result<Compiled, GrammarErro
     b.start(s);
     let grammar = b.build()?;
     Ok(Compiled {
-        verbs: verbs.iter().map(|v| Ustr::from(v.as_str())).collect(),
+        verbs: verbs.iter().map(|v| Ustr::from(v)).collect(),
         grammar: Arc::new(grammar),
         kinds,
     })
