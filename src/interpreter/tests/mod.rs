@@ -7,6 +7,8 @@ mod parse_string;
 mod parser;
 mod references;
 
+use lpc_rs_utils::config::Config;
+
 use crate::{
     interpreter::{lpc_ref::LpcRef, lpc_string::LpcString, vm::Vm},
     test_support::test_config,
@@ -20,7 +22,17 @@ pub(crate) fn s(text: &str) -> LpcRef {
 /// `/main.c` from `main`, whose `create()` returns an array; the array's
 /// members.
 pub(crate) async fn run(master: &str, objects: &[(&str, &str)], main: &str) -> Vec<LpcRef> {
-    let vm = Vm::new(test_config());
+    run_with(test_config(), master, objects, main).await
+}
+
+/// [`run`] under `config`.
+pub(crate) async fn run_with(
+    config: Config,
+    master: &str,
+    objects: &[(&str, &str)],
+    main: &str,
+) -> Vec<LpcRef> {
+    let vm = Vm::new(config);
     vm.initialize_process_from_code("/secure/master.c", master)
         .await
         .unwrap();
@@ -39,7 +51,17 @@ pub(crate) async fn run(master: &str, objects: &[(&str, &str)], main: &str) -> V
 
 /// The runtime error `/main.c`'s `create()` raises.
 pub(crate) async fn fails(master: &str, objects: &[(&str, &str)], main: &str) -> String {
-    let vm = Vm::new(test_config());
+    fails_with(test_config(), master, objects, main).await
+}
+
+/// [`fails`] under `config`.
+pub(crate) async fn fails_with(
+    config: Config,
+    master: &str,
+    objects: &[(&str, &str)],
+    main: &str,
+) -> String {
+    let vm = Vm::new(config);
     vm.initialize_process_from_code("/secure/master.c", master)
         .await
         .unwrap();

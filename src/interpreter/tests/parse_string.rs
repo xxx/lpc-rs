@@ -3,8 +3,9 @@
 
 use indoc::indoc;
 
-use super::{fails, run, s};
+use super::{fails, fails_with, run, run_with, s};
 use crate::interpreter::lpc_ref::LpcRef;
+use lpc_rs_utils::config::{Config, ConfigBuilder};
 
 /// `doc/efun/parse_string.md`'s example, verbatim.
 const EXPRESSION: &str = indoc! { r#"
@@ -320,10 +321,19 @@ fn on_a_1_mib_stack<T: Send + 'static>(
         .expect("the thread finished")
 }
 
+/// The depth pins run 4096 action applies, which pass the default 300 ms
+/// evaluation limit under load.
+fn deep_config() -> Config {
+    crate::test_config_builder!()
+        .max_execution_time(10_000_u64)
+        .build()
+        .unwrap()
+}
+
 #[test]
 fn a_list_at_the_default_depth_evaluates_within_a_1_mib_stack() {
     let main = list_main(crate::command::grammar::DEFAULT_MAX_DEPTH);
-    let r = on_a_1_mib_stack(async move { run("", &[], &main).await });
+    let r = on_a_1_mib_stack(async move { run_with(deep_config(), "", &[], &main).await });
     // Every level above the bottom folds `({ child, "a" })` to `({ 2 })`.
     assert_eq!(r, vec![LpcRef::from(2)]);
 }
@@ -331,6 +341,6 @@ fn a_list_at_the_default_depth_evaluates_within_a_1_mib_stack() {
 #[test]
 fn a_list_one_past_the_default_depth_is_too_deep() {
     let main = list_main(crate::command::grammar::DEFAULT_MAX_DEPTH + 1);
-    let e = on_a_1_mib_stack(async move { fails("", &[], &main).await });
+    let e = on_a_1_mib_stack(async move { fails_with(deep_config(), "", &[], &main).await });
     assert!(e.contains("parse_string: parse deeper than 4096"), "{e}");
 }
