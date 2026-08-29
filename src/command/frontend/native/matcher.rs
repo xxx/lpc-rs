@@ -60,7 +60,7 @@ async fn lpc_values(
     values: &[Value],
     resolver: &mut Resolver<LpcVocabulary<'_>>,
 ) -> Result<Vec<LpcRef>> {
-    // For a plain-only set this fetch would be the first thing to reach the master.
+    // Without a caller's list, this fetch is the first thing to reach the master.
     let prepositions: Vec<String> = if values
         .iter()
         .any(|v| matches!(v, Value::Resolved(Resolved::Preposition(_))))

@@ -503,10 +503,7 @@ mod tests {
             resolver.resolve(Kind::Preposition, "in").await.unwrap(),
             None
         );
-        assert_eq!(
-            resolver.prepositions().await.unwrap(),
-            &strings(&["on", "under"])[..]
-        );
+        assert_eq!(resolver.prepositions().await.unwrap(), &["on", "under"]);
     }
 
     #[tokio::test]
