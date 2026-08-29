@@ -1,7 +1,6 @@
 //! What a living's command can see: the neighbourhood (whose rules it may
-//! use and what its native captures name), the candidate walk (the parser
-//! package's descent through visible containers), and an object's deep
-//! contents (`parse_command`'s object scope).
+//! use and what its native captures name) and the candidate walk (the parser
+//! package's descent through visible containers).
 
 use std::sync::{Arc, Weak};
 
@@ -154,26 +153,6 @@ async fn truthy(
         return Ok(true);
     };
     Ok(value.is_truthy(ctx.txn()))
-}
-
-/// `root`, then its contents depth-first — a container's contents right
-/// behind it — each object once, so a containment cycle ends.
-pub(crate) fn deep(txn: &TxnHandle, root: &Arc<Process>) -> Vec<Arc<Process>> {
-    let mut out = vec![root.clone()];
-    descend(txn, root, &mut out);
-    out
-}
-
-/// Append `container`'s contents to `out` depth-first, skipping anything
-/// already in it.
-fn descend(txn: &TxnHandle, container: &Arc<Process>, out: &mut Vec<Arc<Process>>) {
-    for item in Process::inventory_of(txn, container) {
-        if out.iter().any(|seen| Arc::ptr_eq(seen, &item)) {
-            continue;
-        }
-        out.push(item.clone());
-        descend(txn, &item, out);
-    }
 }
 
 #[cfg(test)]

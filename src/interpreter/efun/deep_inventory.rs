@@ -1,16 +1,13 @@
 use lpc_rs_errors::Result;
 
-use crate::{
-    command::scope,
-    interpreter::{efun, efun::efun_context::EfunContext},
-};
+use crate::interpreter::{efun, efun::efun_context::EfunContext, process::Process};
 
 /// `deep_inventory`, an efun for recursively returning the inventories of
 /// all objects contained by an object, depth-first in arrival order, each
 /// object once and never `ob` itself.
 pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     efun::return_objects_of(context, |txn, object| {
-        scope::deep(txn, &object).into_iter().skip(1)
+        Process::deep_inventory_of(txn, &object).into_iter().skip(1)
     })
     .await
 }
@@ -33,11 +30,6 @@ mod tests {
             void update_inv() {
                 dump("updating");
                 inv = deep_inventory();
-            }
-
-            void move_to_foo() {
-                move_object("/deep_inv_foo");
-                update_inv();
             }
         "# };
 
@@ -64,7 +56,7 @@ mod tests {
 
         let move_ob = indoc! { r#"
             void create() {
-                "/deep_inv_ob"->move_to_foo(); // create a loop to ensure we handle them
+                "/deep_inv_ob"->update_inv();
             }
         "# };
 
@@ -107,8 +99,6 @@ mod tests {
             .sorted()
             .collect_vec();
 
-        // `deep` seeds its root as seen, so the cycle back to /deep_inv_ob is
-        // dropped.
         assert_eq!(
             globals,
             &["/deep_inv_bar", "/deep_inv_baz", "/deep_inv_foo"]

@@ -241,8 +241,13 @@ impl Process {
     /// two moves of one object conflict and the loser re-runs; the room
     /// inventories change through merge writes, so moves of distinct
     /// objects through one room commute. A living mover also updates the
-    /// rooms' living-member cells.
-    pub(crate) fn move_to(txn: &TxnHandle, object: &Arc<Process>, new_environment: &Arc<Process>) {
+    /// rooms' living-member cells. Refuses a destination that is `object`
+    /// or inside it, before any write.
+    pub(crate) fn move_to(
+        txn: &TxnHandle,
+        object: &Arc<Process>,
+        new_environment: &Arc<Process>,
+    ) -> Result<(), WouldContainItself> {
         let object_cell = object.position.environment.id;
         let new_cell = new_environment.position.inventory.id;
         let new_env_ref = LpcRef::Object(Arc::downgrade(new_environment));
@@ -250,6 +255,7 @@ impl Process {
         let mover_is_living = object.commands_enabled(txn);
 
         txn.with(|t| {
+            Self::refuse_containment(t, object, new_environment)?;
             let current_env = Self::environment_of_inner(t, object);
 
             // Moving to the current environment is a no-op; without the check
@@ -258,7 +264,7 @@ impl Process {
                 .as_ref()
                 .is_some_and(|env| std::ptr::eq(env.as_ref(), new_environment.as_ref()))
             {
-                return;
+                return Ok(());
             }
 
             // Remove from the current environment's inventory, if it has one.
@@ -278,7 +284,54 @@ impl Process {
                 Self::mark_living(t, object, new_environment);
             }
             t.write(object_cell, new_env_ref);
-        });
+            Ok(())
+        })
+    }
+
+    /// Whether `move_to(object, new_environment)` would be refused — for a
+    /// caller with hooks to fire before the write.
+    pub(crate) fn check_move(
+        txn: &TxnHandle,
+        object: &Arc<Process>,
+        new_environment: &Arc<Process>,
+    ) -> Result<(), WouldContainItself> {
+        txn.with(|t| Self::refuse_containment(t, object, new_environment))
+    }
+
+    /// Refuse a destination that is `object` or inside it. The walk
+    /// terminates because this refusal is what keeps the graph acyclic.
+    fn refuse_containment(
+        t: &mut Transaction,
+        object: &Arc<Process>,
+        new_environment: &Arc<Process>,
+    ) -> Result<(), WouldContainItself> {
+        let mut ancestor = Some(new_environment.clone());
+        while let Some(env) = ancestor {
+            if Arc::ptr_eq(&env, object) {
+                return Err(WouldContainItself);
+            }
+            ancestor = Self::environment_of_inner(t, &env);
+        }
+        Ok(())
+    }
+
+    /// `root`, then its contents depth-first — a container's contents right
+    /// behind it — each object once.
+    pub(crate) fn deep_inventory_of(txn: &TxnHandle, root: &Arc<Process>) -> Vec<Arc<Process>> {
+        let mut out = vec![root.clone()];
+        let mut stack = vec![Self::inventory_of(txn, root).into_iter()];
+        while let Some(top) = stack.last_mut() {
+            let Some(item) = top.next() else {
+                stack.pop();
+                continue;
+            };
+            if out.iter().any(|seen| Arc::ptr_eq(seen, &item)) {
+                continue;
+            }
+            out.push(item.clone());
+            stack.push(Self::inventory_of(txn, &item).into_iter());
+        }
+        out
     }
 
     /// The environment of `process` as seen inside `t` (an in-flight
@@ -387,6 +440,18 @@ impl PartialEq for Process {
 }
 
 impl Eq for Process {}
+
+/// `move_to` refused: the destination is the object or inside it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct WouldContainItself;
+
+impl Display for WouldContainItself {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("would contain itself")
+    }
+}
+
+impl std::error::Error for WouldContainItself {}
 
 impl Hash for Process {
     #[inline]

@@ -53,8 +53,12 @@ pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         return Ok(());
     }
 
+    if let Err(e) = Process::check_move(ctx.txn(), &this_object, &destination) {
+        return Err(context.runtime_error(format!("move_object: {this_object} {e}")));
+    }
     before_move(ctx.txn(), &this_object, &destination);
-    Process::move_to(ctx.txn(), &this_object, &destination);
+    Process::move_to(ctx.txn(), &this_object, &destination)
+        .map_err(|e| context.runtime_error(format!("move_object: {this_object} {e}")))?;
     after_move(ctx, &this_object, &destination).await?;
 
     Ok(())
@@ -125,6 +129,50 @@ mod tests {
                 .committed_inventory(&baz_proc)
                 .iter()
                 .any(|item| item.as_ref() == foo_clone.as_ref())
+        );
+    }
+
+    #[tokio::test]
+    async fn moving_into_itself_is_refused() {
+        let box_ = indoc! { r#"
+            void create() { move_object(this_object()); }
+        "# };
+        let vm = Vm::new(test_config());
+        let err = vm
+            .initialize_process_from_code("/box.c", box_)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("move_object: /box would contain itself"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn moving_into_own_contents_is_refused_before_any_write() {
+        let bag = indoc! { r#"
+            void create() { move_object("/box"); }
+        "# };
+        let box_ = indoc! { r#"
+            void try_it() { move_object(find_object("/bag")); }
+        "# };
+        let master = indoc! { r#"
+            void create() { "/box"->try_it(); }
+        "# };
+        let vm = Vm::new(test_config());
+        let box_proc = vm.create_process_from_code("/box.c", box_).await.unwrap();
+        let bag_proc = vm
+            .initialize_process_from_code("/bag.c", bag)
+            .await
+            .unwrap();
+        let err = vm
+            .initialize_process_from_code("/master.c", master)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("move_object: /box would contain itself"), "{err}");
+        assert_eq!(vm.global_state.committed_environment(&box_proc), None);
+        assert_eq!(
+            vm.global_state.committed_environment(&bag_proc.context.process),
+            Some(box_proc.clone())
         );
     }
 }

@@ -11,7 +11,6 @@ use crate::{
     command::{
         frontend::native::{self, CaptureKind},
         resolve::{LpcVocabulary, Resolver},
-        scope,
     },
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process},
 };
@@ -105,7 +104,7 @@ fn candidates_of<const N: usize>(
     match arg {
         LpcRef::Object(_) => Ok(arg
             .live_object(txn)
-            .map(|root| scope::deep(txn, &root))
+            .map(|root| Process::deep_inventory_of(txn, &root))
             .unwrap_or_default()),
         LpcRef::Array(_) => arg.with_array(txn, |a| {
             a.iter().filter_map(|item| item.live_object(txn)).collect()

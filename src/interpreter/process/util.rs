@@ -10,8 +10,7 @@ pub struct AllEnvironment {
     /// The current environment. Calling `next` will return the environment of this `Process`.
     current: Option<Arc<Process>>,
 
-    /// The set of environments that have already been returned. This is used to prevent
-    /// infinite loops in the case of circular environments.
+    /// Already returned; the second line behind `move_to`'s refusal.
     seen: HashSet<Arc<Process>>,
 
     /// The transaction whose view this chain is followed through.
