@@ -166,6 +166,7 @@ pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::command::grammar::{Limits, parse};
 
     #[test]
     fn tokens_map_to_pattern_captures() {
@@ -212,24 +213,8 @@ mod tests {
     fn literal_words_are_matched_as_typed_and_case_kept() {
         let r = compile("look", "at OBJ");
         let g = &r.unwrap().compiled.grammar;
-        assert!(
-            crate::command::grammar::parse(
-                g,
-                "at sword",
-                crate::command::grammar::Limits::default()
-            )
-            .next()
-            .is_some()
-        );
-        assert!(
-            crate::command::grammar::parse(
-                g,
-                "AT sword",
-                crate::command::grammar::Limits::default()
-            )
-            .next()
-            .is_none()
-        );
+        assert!(parse(g, "at sword", Limits::default()).next().is_some());
+        assert!(parse(g, "AT sword", Limits::default()).next().is_none());
     }
 
     #[test]

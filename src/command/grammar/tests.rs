@@ -342,6 +342,10 @@ fn naive(
 #[test]
 fn earley_agrees_with_the_naive_matcher() {
     let mut rng = Lcg(0x5eed);
+    let limits = Limits {
+        max_parses: 100_000,
+        ..Limits::default()
+    };
     for _ in 0..500 {
         let elems = random_elems(&mut rng);
         let toks = random_tokens(&mut rng);
@@ -352,10 +356,6 @@ fn earley_agrees_with_the_naive_matcher() {
         naive(&elems, 0, &toks, &mut Vec::new(), &mut expected);
         expected.sort();
 
-        let limits = Limits {
-            max_parses: 100_000,
-            ..Limits::default()
-        };
         let mut got: Vec<Vec<(usize, usize)>> = parse(&g, &input, limits)
             .map(|p| {
                 p.capture_spans()

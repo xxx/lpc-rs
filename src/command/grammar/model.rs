@@ -97,7 +97,8 @@ pub struct Limits {
     pub max_depth: usize,
 }
 
-/// The default `Limits::max_depth`.
+/// The default `Limits::max_depth`: the deepest parse the engine's tests
+/// derive end to end within a 1 MiB thread.
 pub const DEFAULT_MAX_DEPTH: usize = 4096;
 
 impl Default for Limits {

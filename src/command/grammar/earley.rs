@@ -39,6 +39,7 @@ pub enum Ending {
     TooDeep = 2,
 }
 
+// Match patterns — an `as u8` cast is not one.
 const EXHAUSTED: u8 = Ending::Exhausted as u8;
 const TOO_DEEP: u8 = Ending::TooDeep as u8;
 
