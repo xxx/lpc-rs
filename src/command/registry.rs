@@ -229,8 +229,8 @@ impl<'a> VerbRules<'a> {
             .collect()
     }
 
-    /// Append `rule` without reading the cell — a blind merge, so parallel
-    /// registrations commute.
+    /// Append `rule` without reading the cell, so parallel registrations
+    /// commute.
     pub(crate) fn append(&self, rule: Rule) {
         self.txn
             .with(|t| t.merge(self.cell, MergeOp::RulesAppend(rule)));
