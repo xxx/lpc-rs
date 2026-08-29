@@ -205,7 +205,8 @@ impl Telnet {
                             warn!("User input error: {:?}", e);
                         }
                         None => {
-                            info!("Connection closed.");
+                            info!("Connection closed by {}.", &remote_ip);
+                            let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
                             break;
                         }
                     }
@@ -770,9 +771,23 @@ mod tests {
             w.connection.tx.send(ConnectionOp::Close).await.unwrap();
             assert_eq!(read_n(&mut w.client, 4).await, b"bye\n");
             let mut rest = [0u8; 8];
-            assert_eq!(within(w.client.read(&mut rest)).await.unwrap(), 0, "EOF after Close");
+            assert_eq!(
+                within(w.client.read(&mut rest)).await.unwrap(),
+                0,
+                "EOF after Close"
+            );
             let BrokerOp::Disconnect(addr) = within(w.broker_rx.recv_async()).await.unwrap() else {
                 panic!("Close reports a disconnect");
+            };
+            assert_eq!(addr, ADDR.parse::<SocketAddr>().unwrap());
+        }
+
+        #[tokio::test]
+        async fn a_client_that_hangs_up_is_reported() {
+            let w = wire().await;
+            drop(w.client);
+            let BrokerOp::Disconnect(addr) = within(w.broker_rx.recv_async()).await.unwrap() else {
+                panic!("a hang-up reports a disconnect");
             };
             assert_eq!(addr, ADDR.parse::<SocketAddr>().unwrap());
         }
