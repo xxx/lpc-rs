@@ -707,5 +707,74 @@ mod tests {
             let w = wire().await;
             assert_eq!(w.connection.address, ADDR.parse::<SocketAddr>().unwrap());
         }
+
+        #[tokio::test]
+        async fn a_send_message_reaches_the_client() {
+            let mut w = wire().await;
+            w.connection
+                .tx
+                .send(ConnectionOp::SendMessage("hi\n".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, b"hi\n");
+        }
+
+        #[tokio::test]
+        async fn input_to_turns_echo_off_and_on_around_the_line() {
+            let mut w = wire().await;
+            let code = "int i = 123;\nvoid foo() { i += 42; }";
+            let r = w.vm.initialize_process_from_code("/foo/bar.c", code).await;
+            let proc = r.unwrap().context.process;
+            let func = proc.program.lookup_function("foo").unwrap().clone();
+            let ptr = FunctionPtrBuilder::default()
+                .address(FunctionAddress::Local(Arc::downgrade(&proc), func))
+                .build()
+                .unwrap();
+            w.connection.process.store(Some(proc.clone()));
+
+            w.connection
+                .tx
+                .send(ConnectionOp::InputTo(InputTo {
+                    ptr: Arc::new(ptr),
+                    no_echo: true,
+                }))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, [IAC, WILL, ECHO]);
+
+            w.client.write_all(b"hello\r\n").await.unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, ECHO]);
+
+            // The loop handles one op at a time, so this message arrives only
+            // after the pointer has fired and committed.
+            w.connection
+                .tx
+                .send(ConnectionOp::SendMessage("done\n".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 5).await, b"done\n");
+            assert_eq!(
+                w.vm.global_state.committed_global(&proc, 0u16),
+                LpcRef::from(165)
+            );
+        }
+
+        #[tokio::test]
+        async fn close_sends_what_was_queued_first() {
+            let mut w = wire().await;
+            w.connection
+                .tx
+                .send(ConnectionOp::SendMessage("bye\n".into()))
+                .await
+                .unwrap();
+            w.connection.tx.send(ConnectionOp::Close).await.unwrap();
+            assert_eq!(read_n(&mut w.client, 4).await, b"bye\n");
+            let mut rest = [0u8; 8];
+            assert_eq!(within(w.client.read(&mut rest)).await.unwrap(), 0, "EOF after Close");
+            let BrokerOp::Disconnect(addr) = within(w.broker_rx.recv_async()).await.unwrap() else {
+                panic!("Close reports a disconnect");
+            };
+            assert_eq!(addr, ADDR.parse::<SocketAddr>().unwrap());
+        }
     }
 }
