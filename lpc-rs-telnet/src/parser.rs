@@ -1,11 +1,13 @@
 //! The IAC state machine: bytes in, frames out. Holds no policy and never
 //! errors — what it cannot make sense of it counts and steps past.
 
+// Until session.rs lands (B5); it removes this.
+#![allow(dead_code)]
+
 use crate::opt::{DO, DONT, IAC, SB, SE, WILL, WONT};
 
 /// One decoded unit of the wire.
 #[derive(Debug, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) enum Frame {
     /// A data byte, `IAC IAC` already collapsed.
     Byte(u8),
@@ -18,7 +20,6 @@ pub(crate) enum Frame {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 enum Mode {
     Data,
     Iac,
@@ -38,7 +39,6 @@ enum Mode {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub(crate) struct Parser {
     mode: Mode,
     max_sub: usize,
@@ -48,7 +48,6 @@ pub(crate) struct Parser {
 
 impl Parser {
     /// A parser whose subnegotiation payloads hold at most `max_sub` bytes.
-    #[allow(dead_code)]
     pub(crate) fn new(max_sub: usize) -> Self {
         Self {
             mode: Mode::Data,
@@ -57,14 +56,12 @@ impl Parser {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn feed(&mut self, bytes: &[u8], frames: &mut Vec<Frame>) {
         for &byte in bytes {
             self.push(byte, frames);
         }
     }
 
-    #[allow(dead_code)]
     fn push(&mut self, byte: u8, frames: &mut Vec<Frame>) {
         let mode = std::mem::replace(&mut self.mode, Mode::Data);
         let next = match mode {

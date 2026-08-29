@@ -1516,6 +1516,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "lpc-rs-telnet"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+]
+
+[[package]]
 name = "lpc-rs-utils"
 version = "0.1.0"
 dependencies = [

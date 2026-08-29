@@ -1,5 +1,6 @@
 //! Option numbers and command bytes.
 
+// Until session.rs lands (B5); it removes this.
 #![allow(dead_code)]
 
 /// End of subnegotiation.

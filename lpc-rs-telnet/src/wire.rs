@@ -1,24 +1,24 @@
 //! Outbound framing. `&str` payloads cannot contain 0xFF, so only
 //! subnegotiation payloads need IAC doubling.
 
+// Until session.rs lands (B5); it removes this.
+#![allow(dead_code)]
+
 use bytes::{BufMut, BytesMut};
 
 use crate::opt::{IAC, SB, SE};
 
 /// `IAC <command> <opt>`.
-#[allow(dead_code)]
 pub(crate) fn negotiate(out: &mut BytesMut, command: u8, opt: u8) {
     out.put_slice(&[IAC, command, opt]);
 }
 
 /// `IAC <command>`.
-#[allow(dead_code)]
 pub(crate) fn command(out: &mut BytesMut, command: u8) {
     out.put_slice(&[IAC, command]);
 }
 
 /// `IAC SB <opt> <payload, IAC doubled> IAC SE`.
-#[allow(dead_code)]
 pub(crate) fn subnegotiation(out: &mut BytesMut, opt: u8, payload: &[u8]) {
     out.reserve(payload.len() + 5);
     out.put_slice(&[IAC, SB, opt]);
@@ -33,7 +33,6 @@ pub(crate) fn subnegotiation(out: &mut BytesMut, opt: u8, payload: &[u8]) {
 
 /// Text for the client: LF becomes CR LF (an existing CR LF is kept), and
 /// with `mxp_literal` the three MXP markup characters become entities.
-#[allow(dead_code)]
 pub(crate) fn text(out: &mut BytesMut, s: &str, mxp_literal: bool) {
     out.reserve(s.len() + s.len() / 8);
     let mut previous = 0u8;
