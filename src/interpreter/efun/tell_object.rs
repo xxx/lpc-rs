@@ -3,9 +3,9 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     CATCH_TELL,
+    apply::apply_nested,
     efun::{efun_context::EfunContext, write::record_output_effect},
     lpc_ref::LpcRef,
-    task::apply_function::apply_function,
 };
 
 pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -22,13 +22,11 @@ pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         Some(proc) if proc.commands_enabled(context.txn()) => {
             match proc.program.unmangled_functions.get(CATCH_TELL).cloned() {
                 Some(catch_tell) => {
-                    let ctx = context.task_context().clone().with_process(proc);
-                    let max_execution_time = context.config().max_execution_time;
-                    apply_function(
+                    apply_nested(
+                        context.task_context(),
+                        &proc,
                         catch_tell,
                         std::slice::from_ref(&string_ref),
-                        ctx,
-                        Some(max_execution_time),
                     )
                     .await?;
                     true

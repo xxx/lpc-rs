@@ -17,8 +17,8 @@ use crate::{
         grammar::{Child, DEFAULT_MAX_DEPTH, Ending, Limits, Node, Parse, ProdId, parse},
     },
     interpreter::{
-        efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef, process::Process,
-        task::apply_function::apply_function, task_context::TaskContext,
+        apply::apply_nested, efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef,
+        process::Process, task_context::TaskContext,
     },
 };
 
@@ -215,9 +215,7 @@ impl Evaluator<'_> {
                 .txn()
                 .with(|t| t.mint_array(values.into_iter().collect())),
         );
-        let nested = self.ctx.clone().with_process(self.this.clone());
-        let timeout = self.ctx.config().max_execution_time;
-        let result = apply_function(function, &[tree], nested, Some(timeout)).await?;
+        let result = apply_nested(self.ctx, &self.this, function, &[tree]).await?;
         match &result {
             LpcRef::Array(_) => result
                 .with_array(self.ctx.txn(), |a| a.iter().cloned().collect())

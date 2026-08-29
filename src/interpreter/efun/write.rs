@@ -1,9 +1,9 @@
 use lpc_rs_core::RegisterSize;
-use lpc_rs_errors::{Result, lpc_error};
+use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    CATCH_TELL, efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_string::LpcString,
-    stm::Effect, task::apply_function::apply_function,
+    CATCH_TELL, apply::apply_nested, efun::efun_context::EfunContext, lpc_ref::LpcRef,
+    lpc_string::LpcString, stm::Effect,
 };
 
 /// `write`, an efun for writing to this_player().
@@ -41,30 +41,15 @@ pub async fn apply_catch_tell<const N: usize>(
         return Ok(());
     };
 
-    let ctx = context
-        .task_context()
-        .clone()
-        .with_process(this_player.clone());
-
-    let max_execution_time = context.config().max_execution_time;
-    let result = apply_function(
+    apply_nested(
+        context.task_context(),
+        this_player,
         catch_tell.clone(),
         &[LpcString::from(&msg).into()],
-        ctx,
-        Some(max_execution_time),
     )
-    .await;
-
-    match result {
-        Ok(_) => {
-            context.return_efun_result(LpcRef::from(1));
-            Ok(())
-        }
-        Err(e) => Err(lpc_error!(
-            "write: failed to write to this_player(): {:?}",
-            e
-        )),
-    }
+    .await?;
+    context.return_efun_result(LpcRef::from(1));
+    Ok(())
 }
 
 #[cfg(test)]
