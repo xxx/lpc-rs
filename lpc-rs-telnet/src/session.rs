@@ -277,7 +277,9 @@ impl Session {
         self.out.clear();
     }
 
-    /// Whether the option is in effect: the client's side for NAWS, ours otherwise.
+    /// Whether the option is in effect: the client's side for NAWS, ours
+    /// otherwise. In particular `is_on(Sga)` means *we* suppress go-ahead
+    /// (RFC 858 is about our own transmissions), not that the client does.
     pub fn is_on(&self, opt: Opt) -> bool {
         let raw = u8::from(opt);
         match opt {
@@ -434,6 +436,8 @@ impl Session {
                     &[CHARSET_TTABLE_REJECTED],
                 );
             }
+            // Nothing to record: output stays UTF-8 either way (D10).
+            CHARSET_REJECTED => {}
             _ => {}
         }
     }
