@@ -405,6 +405,7 @@ impl Session {
             CHARSET_REQUEST => {
                 let rest = strip_ttable(rest);
                 let Some((&separator, names)) = rest.split_first() else {
+                    wire::subnegotiation(&mut self.out, Opt::Charset.into(), &[CHARSET_REJECTED]);
                     return;
                 };
                 let utf8 = names.split(|&b| b == separator).any(|name| {
@@ -440,13 +441,14 @@ impl Session {
     }
 }
 
-/// RFC 2066 lets a REQUEST open with `[TTABLE <version>]`; we don't do
-/// translation tables, so skip it.
+/// RFC 2066 lets a REQUEST open with `[TTABLE ]<version>`, the version octet
+/// following the closing bracket; we don't do translation tables, so skip
+/// both.
 fn strip_ttable(rest: &[u8]) -> &[u8] {
     if rest.starts_with(b"[TTABLE")
         && let Some(end) = rest.iter().position(|&b| b == b']')
     {
-        return &rest[end + 1..];
+        return rest.get(end + 2..).unwrap_or(&[]);
     }
     rest
 }
@@ -723,10 +725,18 @@ mod tests {
     fn a_client_request_with_a_ttable_prefix_is_still_read() {
         let mut s = connected();
         let mut bytes = vec![IAC, SB, CHARSET, 1];
-        bytes.extend(b"[TTABLE\x01] UTF-8");
+        bytes.extend(b"[TTABLE ]\x01 UTF-8");
         bytes.extend([IAC, SE]);
         s.feed(&bytes);
         assert_eq!(events(&mut s), [Event::Charset("UTF-8".into())]);
+    }
+
+    #[test]
+    fn a_request_with_no_separator_is_rejected() {
+        let mut s = connected();
+        s.feed(&[IAC, SB, CHARSET, 1, IAC, SE]);
+        assert_eq!(out(&mut s), [IAC, SB, CHARSET, 3, IAC, SE]);
+        assert_eq!(s.charset(), None);
     }
 
     #[test]
