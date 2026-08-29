@@ -13,7 +13,8 @@ use nectar::{
 };
 use once_cell::sync::OnceCell;
 use tokio::{
-    net::{TcpListener, TcpStream, ToSocketAddrs},
+    io::{AsyncRead, AsyncWrite},
+    net::{TcpListener, ToSocketAddrs},
     sync::mpsc,
     task::JoinHandle,
 };
@@ -116,12 +117,14 @@ impl Telnet {
 
     /// Start the main loop for a single user's connection. Handles sends and receives.
     #[instrument(skip(stream, broker_tx, template))]
-    async fn connection_loop(
-        stream: TcpStream,
+    async fn connection_loop<S>(
+        stream: S,
         remote_ip: SocketAddr,
         broker_tx: FlumeSender<BrokerOp>,
         template: TaskTemplate,
-    ) {
+    ) where
+        S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    {
         let codec = TelnetCodec::new(8192);
         let mut framed = codec.framed(stream);
 
@@ -212,11 +215,13 @@ impl Telnet {
     }
 
     /// Handle the Telnet negotiations when a user first connects.
-    async fn negotiations(
-        framed: &mut Framed<TcpStream, TelnetCodec>,
+    async fn negotiations<S>(
+        framed: &mut Framed<S, TelnetCodec>,
         _remote_ip: SocketAddr,
         _broker_tx: &FlumeSender<BrokerOp>,
-    ) {
+    ) where
+        S: AsyncRead + AsyncWrite + Unpin,
+    {
         // CHARSET negotiation
         let _ = framed.send(TelnetEvent::Will(TelnetOption::Charset)).await;
         loop {
@@ -271,12 +276,14 @@ impl Telnet {
         // println!("GMCP negotiation result: {:?}", result);
     }
 
-    async fn handle_input_event(
+    async fn handle_input_event<S>(
         msg: TelnetEvent,
-        sink: &mut SplitSink<Framed<TcpStream, TelnetCodec>, TelnetEvent>,
+        sink: &mut SplitSink<Framed<S, TelnetCodec>, TelnetEvent>,
         connection: &Connection,
         template: &TaskTemplate,
-    ) {
+    ) where
+        S: AsyncRead + AsyncWrite + Unpin,
+    {
         match msg {
             TelnetEvent::Character(char) => {
                 trace!("Received character: {}", char);
@@ -632,6 +639,73 @@ mod tests {
                 void create() { int j = 5; g = (: j :); f = &foo(); }
             "##;
             assert_eq!(fire_the_stored_pointer(code).await, LpcRef::from(5));
+        }
+    }
+
+    mod over_a_duplex {
+        use std::time::Duration;
+
+        use nectar::constants::{CHARSET, DONT, ECHO, IAC, WILL, WONT};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
+
+        use super::*;
+        use crate::interpreter::{
+            function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
+            vm::Vm,
+        };
+
+        const ADDR: &str = "10.0.0.1:4000";
+
+        /// The loop running on one end of a duplex; the test holds the other.
+        struct Wired {
+            client: DuplexStream,
+            broker_rx: flume::Receiver<BrokerOp>,
+            connection: Arc<Connection>,
+            vm: Vm,
+        }
+
+        /// Spawn the loop, answer its CHARSET offer, and return once it has announced itself.
+        async fn wire() -> Wired {
+            let vm = Vm::new(test_config());
+            let (mut client, server) = tokio::io::duplex(4096);
+            let (broker_tx, broker_rx) = flume::unbounded();
+            let addr: SocketAddr = ADDR.parse().expect("a literal address");
+            tokio::spawn(Telnet::connection_loop(
+                server,
+                addr,
+                broker_tx,
+                TaskTemplate::from(vm.global_state.clone()),
+            ));
+            assert_eq!(read_n(&mut client, 3).await, [IAC, WILL, CHARSET]);
+            client.write_all(&[IAC, DONT, CHARSET]).await.unwrap();
+            let BrokerOp::NewConnection(connection) = within(broker_rx.recv_async()).await.unwrap()
+            else {
+                panic!("the loop announces itself first");
+            };
+            Wired {
+                client,
+                broker_rx,
+                connection,
+                vm,
+            }
+        }
+
+        async fn read_n(client: &mut DuplexStream, n: usize) -> Vec<u8> {
+            let mut buf = vec![0; n];
+            within(client.read_exact(&mut buf)).await.unwrap();
+            buf
+        }
+
+        async fn within<F: std::future::Future>(f: F) -> F::Output {
+            tokio::time::timeout(Duration::from_secs(2), f)
+                .await
+                .expect("the loop answers within two seconds")
+        }
+
+        #[tokio::test]
+        async fn a_new_connection_reaches_the_broker() {
+            let w = wire().await;
+            assert_eq!(w.connection.address, ADDR.parse::<SocketAddr>().unwrap());
         }
     }
 }
