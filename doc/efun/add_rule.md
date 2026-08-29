@@ -45,10 +45,11 @@ does not match. A bare unquoted word, an unclosed quote or bracket, a quoted
 phrase of several words, or a `/` not between two quoted words is a runtime
 error naming the fault.
 
-Noun captures resolve against the player's scope — the player, its
-environment, and both inventories — through the identification protocol
-described in `parse_command`; a line whose noun captures name nothing under
-any parse passes to the next rule.
+Noun captures resolve against the player's neighbourhood — the player, its
+environment, its own inventory, then the environment's other contents, in
+that order — through the identification protocol described in
+`parse_command`; a line whose noun captures name nothing under any parse
+passes to the next rule.
 
 `query_verb()` inside the handler reports the verb alternative the player
 typed. Rules registered from `init()` last until the player leaves the

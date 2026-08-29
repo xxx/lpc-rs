@@ -94,11 +94,12 @@ only for a slot already *chosen* (the all-filled re-ask and `do_`).
 ### Scope
 
 An object slot resolves against the actor's scope: the actor, its
-environment, both inventories, and — breadth-first — the contents of any
-candidate answering `inventory_visible()` truthily, reachable only while
-every container on its path answers `inventory_accessible()` truthily. A
-container defining **neither** apply is transparent by default: visible and
-reachable, the same as a plain object with nothing to hide.
+environment, its own inventory, the environment's other contents, and —
+breadth-first — the contents of any candidate answering
+`inventory_visible()` truthily, reachable only while every container on its
+path answers `inventory_accessible()` truthily. A container defining
+**neither** apply is transparent by default: visible and reachable, the
+same as a plain object with nothing to hide.
 
 ### Errors
 

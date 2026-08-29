@@ -1,34 +1,17 @@
-use std::{collections::HashSet, sync::Arc};
-
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun, efun::efun_context::EfunContext, process::Process, stm::TxnHandle};
+use crate::{
+    command::scope,
+    interpreter::{efun, efun::efun_context::EfunContext},
+};
 
-/// `deep_inventory`, an efun for recursively returning the inventories of all objects contained by an object.
+/// `deep_inventory`, an efun for recursively returning the inventories of
+/// all objects contained by an object, depth-first in arrival order.
 pub async fn deep_inventory<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     efun::return_objects_of(context, |txn, object| {
-        // [`Process`]' hashes are based solely on their filename, which never changes after creation.
-        #[allow(clippy::mutable_key_type)]
-        let mut collection = HashSet::with_capacity(10);
-        recurse_deep_inventory(txn, &object, &mut collection);
-        collection
+        scope::deep(txn, &object).into_iter().skip(1)
     })
     .await
-}
-
-/// Read the passed transaction's view of `env`'s inventory and recurse into it,
-/// collecting each object into `collection` exactly once.
-#[allow(clippy::mutable_key_type)]
-fn recurse_deep_inventory(
-    txn: &TxnHandle,
-    env: &Arc<Process>,
-    collection: &mut HashSet<Arc<Process>>,
-) {
-    for item in Process::inventory_of(txn, env) {
-        if collection.insert(item.clone()) {
-            recurse_deep_inventory(txn, &item, collection);
-        }
-    }
 }
 
 #[cfg(test)]
@@ -123,14 +106,12 @@ mod tests {
             .sorted()
             .collect_vec();
 
+        // The loop moves /deep_inv_ob into /deep_inv_foo, so /deep_inv_ob is
+        // its own indirect member; `deep` seeds the root as already seen, so
+        // the cycle back to it is dropped rather than re-added.
         assert_eq!(
             globals,
-            &[
-                "/deep_inv_bar",
-                "/deep_inv_baz",
-                "/deep_inv_foo",
-                "/deep_inv_ob"
-            ]
+            &["/deep_inv_bar", "/deep_inv_baz", "/deep_inv_foo"]
         );
     }
 }

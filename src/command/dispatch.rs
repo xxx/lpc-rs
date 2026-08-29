@@ -1111,6 +1111,17 @@ mod tests {
     "# },
     );
 
+    const SWORD2: (&str, &str) = (
+        "/sword2.c",
+        indoc! { r#"
+        string *parse_command_id_list() { return ({ "sword" }); }
+        string *parse_command_plural_id_list() { return ({ "swords" }); }
+        void go(object dest) { move_object(dest); }
+    "# },
+    );
+
+    const ROOM: (&str, &str) = ("/room.c", "");
+
     #[tokio::test]
     async fn an_items_capture_hands_the_handler_a_numeral_and_the_objects() {
         let player = indoc! { r#"
@@ -1246,6 +1257,30 @@ mod tests {
         assert_eq!(
             scenario("", &[SWORD], player, 3).await,
             vec![LpcRef::from(1), LpcRef::from(1), LpcRef::from(0)]
+        );
+    }
+
+    #[tokio::test]
+    async fn native_captures_find_the_actors_own_things_before_the_rooms() {
+        let player = indoc! { r#"
+            int mine; string order;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                move_object("/room");
+                "/sword2"->go(find_object("/room"));
+                "/sword"->go(this_object());
+                add_rule("'look' %o", "do_look");
+                add_rule("'get' %i", "do_get");
+                command("look sword");
+                command("get swords");
+            }
+            int do_look(object ob) { mine = ob == find_object("/sword"); return 1; }
+            int do_get(mixed *obs) { order = file_name(obs[1]) + " " + file_name(obs[2]); return 1; }
+        "# };
+        assert_eq!(
+            scenario("", &[SWORD, SWORD2, ROOM], player, 2).await,
+            vec![LpcRef::from(1), s("/sword /sword2")]
         );
     }
 

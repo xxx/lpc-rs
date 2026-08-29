@@ -33,6 +33,14 @@ const BAG: (&str, &str) = (
 "# },
 );
 
+const SWORD2: (&str, &str) = (
+    "/sword2.c",
+    indoc! { r#"
+    string *parse_command_id_list() { return ({ "sword" }); }
+    void go(object dest) { move_object(dest); }
+"# },
+);
+
 const BOB: (&str, &str) = (
     "/bob.c",
     indoc! { r#"
@@ -319,6 +327,40 @@ async fn an_object_scope_is_the_object_and_its_deep_inventory() {
     )
     .await;
     assert_eq!(r, vec![LpcRef::from(1), LpcRef::from(1)]);
+}
+
+#[tokio::test]
+async fn an_object_scope_descends_into_a_container_before_moving_on() {
+    // The bag arrives first, so depth-first finds its sword before the
+    // sword carried directly; `deep_inventory` lists the same order.
+    let r = run(
+        "",
+        &[SWORD, SWORD2, BAG],
+        indoc! { r#"
+        mixed *create() {
+            object ob;
+            "/bag"->go(this_object());
+            "/sword"->go(find_object("/bag"));
+            "/sword2"->go(this_object());
+            int r = parse_command("sword", this_object(), "%o", ob);
+            object *deep = deep_inventory(this_object());
+            return ({ r, ob == find_object("/sword"), sizeof(deep),
+                      deep[0] == find_object("/bag"), deep[1] == find_object("/sword"), deep[2] == find_object("/sword2") });
+        }
+    "# },
+    )
+    .await;
+    assert_eq!(
+        r,
+        vec![
+            LpcRef::from(1),
+            LpcRef::from(1),
+            LpcRef::from(3),
+            LpcRef::from(1),
+            LpcRef::from(1),
+            LpcRef::from(1)
+        ]
+    );
 }
 
 #[tokio::test]

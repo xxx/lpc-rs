@@ -9,8 +9,9 @@ destination is written. Every argument after `pattern` is passed by reference
 implicitly, as `sscanf`'s are.
 
 `scope` is either an object, whose candidates are itself and its deep
-inventory, or an array of objects taken in order (non-objects and destructed
-members are skipped). `cmd` or `pattern` empty or not a string returns 0.
+inventory (depth-first, a container's contents right behind it), or an
+array of objects taken in order (non-objects and destructed members are
+skipped). `cmd` or `pattern` empty or not a string returns 0.
 
 ### The pattern
 

@@ -374,6 +374,31 @@ async fn an_ordinal_picks_and_past_the_end_reports_the_count() {
     );
 }
 
+#[tokio::test]
+async fn ordinals_count_the_actors_own_things_before_the_rooms() {
+    let body = r#"
+        object room = find_object("/room");
+        move_object(room);
+        "/sword2"->go(room);
+        "/sword"->go(this_object());
+        int r1 = command("take first sword");
+        string first = "/verbs"->query_log();
+        int r2 = command("take second sword");
+        string second = "/verbs"->query_log();
+        return ({ r1, first, r2, second });
+    "#;
+    let r = run(MASTER, &[SWORD, SWORD2, VERBS, ROOM], &custom_main(body)).await;
+    assert_eq!(
+        r,
+        vec![
+            LpcRef::from(1),
+            s("took first sword /sword"),
+            LpcRef::from(1),
+            s("took second sword /sword2")
+        ]
+    );
+}
+
 const CRATE_A: (&str, &str) = (
     "/crate_a.c",
     indoc! { r#"
