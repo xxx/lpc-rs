@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use lpc_rs_errors::Result;
 
-use super::Verdict;
+use super::{Verdict, attempt::Target};
 use crate::{
     command::frontend::parser::ParserRule,
     interpreter::{
@@ -152,7 +152,7 @@ pub(crate) enum Kind {
 }
 
 /// The `arg` of a failure.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Arg {
     /// No argument (`Kind::Refused`, `Kind::BadMultiple`).
     None,
@@ -160,31 +160,15 @@ pub(crate) enum Arg {
     Text(String),
     /// The qualifier count an ordinal reached past.
     Count(i64),
-    /// The qualifying objects of an ambiguous slot.
-    Objects(Vec<Arc<Process>>),
-}
-
-impl PartialEq for Arg {
-    /// `Objects` compares element-wise by pointer identity; `Process` has
-    /// no `PartialEq` of its own.
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Arg::None, Arg::None) => true,
-            (Arg::Text(a), Arg::Text(b)) => a == b,
-            (Arg::Count(a), Arg::Count(b)) => a == b,
-            (Arg::Objects(a), Arg::Objects(b)) => {
-                a.len() == b.len() && a.iter().zip(b).all(|(x, y)| Arc::ptr_eq(x, y))
-            }
-            _ => false,
-        }
-    }
+    /// The qualifying candidates of an ambiguous slot.
+    Objects(Vec<usize>),
 }
 
 /// One parse's failure, with how far it got.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Failure {
     pub(crate) kind: Kind,
-    pub(crate) object: Option<Arc<Process>>,
+    pub(crate) object: Option<Target>,
     pub(crate) arg: Arg,
     pub(crate) flag: bool,
     /// Object slots chosen before failing.

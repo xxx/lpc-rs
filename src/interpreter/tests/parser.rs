@@ -526,6 +526,19 @@ async fn liv_resolves_through_parse_command_users() {
     assert_eq!(r, vec![LpcRef::from(1), s("gave sword to bob give")]);
 }
 
+#[tokio::test]
+async fn a_living_slot_given_a_thing_is_not_alive() {
+    let body = r#"
+        object room = find_object("/room");
+        move_object(room);
+        "/sword"->go(room);
+        "/bob"->go(room);
+        return ({ parse_sentence("give sword to sword") });
+    "#;
+    let r = run(MASTER, &[SWORD, BOB, VERBS, ROOM], &custom_main(body)).await;
+    assert_eq!(r, vec![s("not alive sword")]);
+}
+
 const LOG_SWORD: (&str, &str) = (
     "/log_sword.c",
     indoc! { r#"
