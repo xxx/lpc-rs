@@ -2,7 +2,7 @@
 //! errors — what it cannot make sense of it counts and steps past.
 
 // Until session.rs lands (B5); it removes this.
-#![allow(dead_code)]
+#![cfg_attr(not(test), expect(dead_code))]
 
 use crate::opt::{DO, DONT, IAC, SB, SE, WILL, WONT};
 

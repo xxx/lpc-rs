@@ -2,7 +2,7 @@
 //! subnegotiation payloads need IAC doubling.
 
 // Until session.rs lands (B5); it removes this.
-#![allow(dead_code)]
+#![cfg_attr(not(test), expect(dead_code))]
 
 use bytes::{BufMut, BytesMut};
 

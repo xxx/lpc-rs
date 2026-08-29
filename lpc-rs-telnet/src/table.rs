@@ -2,7 +2,7 @@
 //! queued opposite request, so two sides asking at once never loop.
 
 // Until session.rs lands (B5); it removes this.
-#![allow(dead_code)]
+#![cfg_attr(not(test), expect(dead_code))]
 
 use crate::opt::{DO, DONT, WILL, WONT};
 
