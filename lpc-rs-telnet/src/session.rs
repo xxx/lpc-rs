@@ -198,8 +198,7 @@ impl Session {
                 Frame::Sub(opt, payload) => self.subnegotiation(Opt::from(opt), &payload),
             }
         }
-        // A full read's worth of frames is never needed again; don't let an
-        // idle connection hold onto a large read's high-water capacity.
+        // An idle connection shouldn't keep a large read's high-water capacity.
         frames.shrink_to(256);
         self.frames = frames;
     }
@@ -278,8 +277,8 @@ impl Session {
     }
 
     /// Whether the option is in effect: the client's side for NAWS, ours
-    /// otherwise. In particular `is_on(Sga)` means *we* suppress go-ahead
-    /// (RFC 858 is about our own transmissions), not that the client does.
+    /// otherwise — `is_on(Sga)` means we suppress go-ahead, since RFC 858 is
+    /// about our own transmissions.
     pub fn is_on(&self, opt: Opt) -> bool {
         let raw = u8::from(opt);
         match opt {
@@ -448,9 +447,8 @@ impl Session {
     }
 }
 
-/// RFC 2066 lets a REQUEST open with `[TTABLE ]<version>`, the version octet
-/// following the closing bracket; we don't do translation tables, so skip
-/// both.
+/// RFC 2066 lets a REQUEST open with `[TTABLE ]<version>`; we don't do
+/// translation tables, so skip both.
 fn strip_ttable(rest: &[u8]) -> &[u8] {
     if rest.starts_with(b"[TTABLE")
         && let Some(end) = rest.iter().position(|&b| b == b']')
