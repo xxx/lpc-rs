@@ -13,7 +13,7 @@ use lpc_rs_errors::Result;
 
 use crate::{
     command::{
-        frontend::dgd::{self, Compiled},
+        frontend::dgd::{self, CompiledGrammar},
         grammar::{Child, DEFAULT_MAX_DEPTH, Ending, Limits, Node, Parse, ProdId, parse},
     },
     interpreter::{
@@ -90,7 +90,7 @@ enum Outcome {
 async fn first_surviving(
     ctx: &TaskContext,
     this: &Arc<Process>,
-    compiled: &Compiled,
+    compiled: &CompiledGrammar,
     input: &str,
 ) -> Result<Outcome> {
     let mut parses = parse(&compiled.grammar, input, LIMITS);
@@ -148,7 +148,7 @@ struct Evaluator<'a> {
     /// The object actions apply in: the frame's own object at the time
     /// `parse_string` was called, not [`TaskContext::process`].
     this: Arc<Process>,
-    compiled: &'a Compiled,
+    compiled: &'a CompiledGrammar,
     memo: HashMap<Key, Evaluated>,
 }
 

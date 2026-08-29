@@ -21,7 +21,7 @@ pub const GRAMMAR_CACHE: usize = 64;
 
 /// A grammar text compiled for the engine.
 #[derive(Debug)]
-pub struct Compiled {
+pub struct CompiledGrammar {
     /// The built grammar.
     pub grammar: Arc<Grammar>,
     /// The `? func` action of each production, by `ProdId`; productions the
@@ -29,7 +29,7 @@ pub struct Compiled {
     pub actions: Vec<Option<String>>,
 }
 
-impl Compiled {
+impl CompiledGrammar {
     /// The action attached to `prod`, if any.
     pub fn action(&self, prod: ProdId) -> Option<&str> {
         self.actions.get(prod.0 as usize).and_then(Option::as_deref)
@@ -37,12 +37,12 @@ impl Compiled {
 }
 
 /// Compile a grammar text, uncached.
-pub fn compile(text: &str) -> Result<Compiled, DgdError> {
+pub fn compile(text: &str) -> Result<CompiledGrammar, DgdError> {
     emit(parse_rules(text)?)
 }
 
 /// Compile a grammar text through the cache; only successes are cached.
-pub fn compile_cached(text: &str) -> Result<Arc<Compiled>, DgdError> {
+pub fn compile_cached(text: &str) -> Result<Arc<CompiledGrammar>, DgdError> {
     if let Some(hit) = lock().get(text) {
         return Ok(hit);
     }
@@ -62,7 +62,7 @@ fn lock() -> std::sync::MutexGuard<'static, Lru> {
 #[derive(Debug)]
 struct Lru {
     capacity: usize,
-    entries: IndexMap<String, Arc<Compiled>>,
+    entries: IndexMap<String, Arc<CompiledGrammar>>,
 }
 
 impl Lru {
@@ -74,14 +74,14 @@ impl Lru {
     }
 
     /// The entry for `text`, moved to most recent.
-    fn get(&mut self, text: &str) -> Option<Arc<Compiled>> {
+    fn get(&mut self, text: &str) -> Option<Arc<CompiledGrammar>> {
         let (_, key, hit) = self.entries.shift_remove_full(text)?;
         self.entries.insert(key, hit.clone());
         Some(hit)
     }
 
     /// Insert as most recent, dropping the least recent at capacity.
-    fn insert(&mut self, text: &str, compiled: Arc<Compiled>) {
+    fn insert(&mut self, text: &str, compiled: Arc<CompiledGrammar>) {
         if self.entries.shift_remove(text).is_none() && self.entries.len() >= self.capacity {
             self.entries.shift_remove_index(0);
         }
@@ -90,7 +90,7 @@ impl Lru {
 }
 
 /// Build the engine's grammar from parsed rules.
-fn emit(rules: Rules) -> Result<Compiled, DgdError> {
+fn emit(rules: Rules) -> Result<CompiledGrammar, DgdError> {
     if rules.token_rules.is_empty() {
         return Err(DgdError::NoTokens);
     }
@@ -179,7 +179,7 @@ fn emit(rules: Rules) -> Result<Compiled, DgdError> {
         }
         actions[slot] = production.action.clone();
     }
-    Ok(Compiled {
+    Ok(CompiledGrammar {
         grammar: Arc::new(b.build(start_nt)?),
         actions,
     })
@@ -867,7 +867,7 @@ mod tests {
         assert_eq!(hit("5x{2}"), None);
     }
 
-    fn compiled(text: &str) -> Compiled {
+    fn compiled(text: &str) -> CompiledGrammar {
         compile(text).unwrap_or_else(|e| panic!("{e}"))
     }
 
