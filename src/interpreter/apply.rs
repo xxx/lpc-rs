@@ -81,31 +81,36 @@ pub(crate) async fn apply_pointer(
     .map(Some)
 }
 
-/// Deliver `message` to `actor` through `catch_tell`, else straight to its
-/// connection, else the debug log, as effects.
-pub(crate) async fn deliver(ctx: &TaskContext, actor: &Arc<Process>, message: &str) -> Result<()> {
-    if apply_hook(
-        ctx,
-        actor,
-        actor,
-        CATCH_TELL,
-        &[LpcString::from(message).into()],
-    )
-    .await?
-    .is_some()
-    {
-        return Ok(());
+/// `message` to `target`: through `catch_tell` — applied with `this_player`
+/// set when one is given — else its connection, else the debug log, as
+/// effects. Whether it was received; the log is not.
+pub(crate) async fn deliver(
+    ctx: &TaskContext,
+    target: &Arc<Process>,
+    this_player: Option<&Arc<Process>>,
+    message: &str,
+) -> Result<bool> {
+    if let Some(function) = target.program.unmangled_functions.get(CATCH_TELL).cloned() {
+        let args = [LpcString::from(message).into()];
+        match this_player {
+            Some(player) => apply_on(ctx, target, player, function, &args).await?,
+            None => apply_nested(ctx, target, function, &args).await?,
+        };
+        return Ok(true);
     }
-    let connection = ctx.txn().with(|t| t.read_connection(actor.connection.id));
-    let effect = match connection {
-        Some(connection) => Effect::Socket {
-            op: ConnectionOp::SendMessage(message.to_owned()),
-            tx: connection.tx.clone(),
-        },
-        None => Effect::DebugLog(message.to_owned()),
+    let connection = ctx.txn().with(|t| t.read_connection(target.connection.id));
+    let (effect, received) = match connection {
+        Some(connection) => (
+            Effect::Socket {
+                op: ConnectionOp::SendMessage(message.to_owned()),
+                tx: connection.tx.clone(),
+            },
+            true,
+        ),
+        None => (Effect::DebugLog(message.to_owned()), false),
     };
     ctx.txn().with(|t| t.record_effect(effect));
-    Ok(())
+    Ok(received)
 }
 
 /// Run `function` in `nested` under `ctx`'s configured execution time.

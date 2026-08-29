@@ -69,7 +69,7 @@ pub(crate) async fn dispatch_from_connection(
         return Ok(Outcome::Handled);
     }
     let message = default_message(ctx, &actor);
-    deliver(ctx, &actor, &message).await?;
+    deliver(ctx, &actor, Some(&actor), &message).await?;
     Ok(Outcome::Unhandled)
 }
 
@@ -105,7 +105,7 @@ async fn fallback(ctx: &TaskContext, actor: &Arc<Process>, line: &str) -> Result
         None => master_message(ctx, actor, line).await?,
     };
     if let Some(message) = message {
-        deliver(ctx, actor, &message).await?;
+        deliver(ctx, actor, Some(actor), &message).await?;
     }
     Ok(())
 }

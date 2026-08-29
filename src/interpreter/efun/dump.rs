@@ -3,7 +3,7 @@ use std::fmt::Write;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    efun::{efun_context::EfunContext, write::apply_catch_tell},
+    efun::{efun_context::EfunContext, write::tell_this_player},
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
     stm::TxnHandle,
@@ -130,8 +130,8 @@ pub async fn dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
         .collect::<Result<Vec<_>>>()?
         .join(" ");
 
-    apply_catch_tell(s, context).await?;
-
+    let received = tell_this_player(context, &s).await?;
+    context.return_efun_result(LpcRef::from(received));
     Ok(())
 }
 

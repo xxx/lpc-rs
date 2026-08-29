@@ -2,11 +2,7 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
-    interpreter::{
-        efun::{efun_context::EfunContext, write::record_output_effect},
-        lpc_ref::LpcRef,
-        stm::Effect,
-    },
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, stm::Effect},
     telnet::ops::ConnectionOp,
 };
 
@@ -38,8 +34,7 @@ pub async fn write_socket<const N: usize>(context: &mut EfunContext<'_, N>) -> R
             context.return_efun_result(LpcRef::from(1));
         }
         None => {
-            // No connection to receive the message, so dump it to the debug log.
-            record_output_effect(context, result);
+            context.record_effect(Effect::DebugLog(result));
 
             // 0 is already returned by default
         }

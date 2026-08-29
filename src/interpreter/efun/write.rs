@@ -2,63 +2,46 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    CATCH_TELL, apply::apply_nested, efun::efun_context::EfunContext, lpc_ref::LpcRef,
-    lpc_string::LpcString, stm::Effect,
+    apply::deliver, efun::efun_context::EfunContext, lpc_ref::LpcRef, stm::Effect,
 };
 
 /// `write`, an efun for writing to this_player().
 pub async fn write<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let arg_ref = context.resolve_local_register(1 as RegisterSize);
-
-    let msg = arg_ref.to_string();
-
-    apply_catch_tell(msg, context).await?;
-
+    let msg = context
+        .resolve_local_register(1 as RegisterSize)
+        .to_string();
+    let received = tell_this_player(context, &msg).await?;
+    context.return_efun_result(LpcRef::from(received));
     Ok(())
 }
 
-/// Record a physical write for delivery after this task's transaction
-/// commits, instead of sending it now. Delivery (or its cancellation on a
-/// rejected attempt) is handled by the retry loop; the message is already
-/// materialized, so the effect never observes end-of-transaction state.
-pub(crate) fn record_output_effect<const N: usize>(context: &EfunContext<'_, N>, msg: String) {
-    context.record_effect(Effect::DebugLog(msg));
-}
-
-/// `catch_tell` on `this_player` with `msg`, else the debug log; the efun
-/// result is 1 when delivered.
-pub(crate) async fn apply_catch_tell<const N: usize>(
-    msg: String,
-    context: &mut EfunContext<'_, N>,
-) -> Result<()> {
-    let player_guard = context.this_player().load();
-    let Some(this_player) = &*player_guard else {
-        record_output_effect(context, msg);
-        return Ok(());
-    };
-
-    let Some(catch_tell) = this_player.program.unmangled_functions.get(CATCH_TELL) else {
-        record_output_effect(context, msg);
-        return Ok(());
-    };
-
-    apply_nested(
-        context.task_context(),
-        this_player,
-        catch_tell.clone(),
-        &[LpcString::from(&msg).into()],
-    )
-    .await?;
-    context.return_efun_result(LpcRef::from(1));
-    Ok(())
+/// `msg` to `this_player` through [`deliver`]; the debug log, not received,
+/// when there is none.
+pub(crate) async fn tell_this_player<const N: usize>(
+    context: &EfunContext<'_, N>,
+    msg: &str,
+) -> Result<bool> {
+    match context.this_player().load_full() {
+        Some(player) => deliver(context.task_context(), &player, None, msg).await,
+        None => {
+            context.record_effect(Effect::DebugLog(msg.to_owned()));
+            Ok(false)
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use lpc_rs_core::register::RegisterVariant;
 
+    use std::{net::ToSocketAddrs, sync::Arc};
+
+    use arc_swap::ArcSwapAny;
+    use indoc::indoc;
+
     use crate::{
-        interpreter::{CommittedReader, vm::Vm},
+        interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
+        telnet::{connection::Connection, ops::ConnectionOp},
         test_support::test_config,
     };
 
@@ -96,5 +79,39 @@ mod tests {
                 .to_string(),
             "my name is foobar"
         );
+    }
+
+    #[tokio::test]
+    async fn a_player_without_catch_tell_is_written_to_on_its_connection() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+        let (broker_tx, _broker_rx) = flume::unbounded();
+        let vm = Vm::new(test_config());
+        let player = vm.create_process_from_code("/player.c", "").await.unwrap();
+        let connection = Connection {
+            address: "127.0.0.1:23123".to_socket_addrs().unwrap().next().unwrap(),
+            process: ArcSwapAny::from(Some(player.clone())),
+            tx,
+            broker_tx,
+            input_to: Default::default(),
+        };
+        vm.global_state
+            .takeover(Arc::new(connection), player.clone())
+            .await;
+
+        let main = indoc! { r#"
+            int r;
+            void create() { set_this_player(find_object("/player")); r = write("hi"); }
+        "# };
+        let main = vm
+            .initialize_process_from_code("/main.c", main)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&main, 0u16),
+            LpcRef::from(1)
+        );
+        assert_eq!(rx.try_recv(), Ok(ConnectionOp::SendMessage("hi".into())));
     }
 }

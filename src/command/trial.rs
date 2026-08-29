@@ -173,7 +173,7 @@ async fn try_rules(
                 match Box::pin(parser::run(ctx, actor, &owner, parser, rest, None, &[])).await? {
                     Verdict::Handled => return Ok(true),
                     Verdict::Message(message) => {
-                        deliver(ctx, actor, &message).await?;
+                        deliver(ctx, actor, Some(actor), &message).await?;
                         return Ok(true);
                     }
                     Verdict::NoParse | Verdict::Refused | Verdict::Unresolved => continue,

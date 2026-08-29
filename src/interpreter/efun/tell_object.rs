@@ -2,14 +2,13 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    CATCH_TELL,
-    apply::apply_nested,
-    efun::{efun_context::EfunContext, write::record_output_effect},
-    lpc_ref::LpcRef,
+    apply::deliver, efun::efun_context::EfunContext, lpc_ref::LpcRef, stm::Effect,
 };
 
 pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let string_ref = context.resolve_local_register(2 as RegisterSize).clone();
+    let msg = context
+        .resolve_local_register(2 as RegisterSize)
+        .with_string(|s| s.to_string())?;
     let ob_ref = context.resolve_local_register(1 as RegisterSize);
     let proc = if let Some(path) = ob_ref.as_str() {
         let path = context.in_game_path(path);
@@ -18,42 +17,29 @@ pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         ob_ref.live_object(context.txn())
     };
 
-    let delivered = match proc {
-        Some(proc) if proc.commands_enabled(context.txn()) => {
-            match proc.program.unmangled_functions.get(CATCH_TELL).cloned() {
-                Some(catch_tell) => {
-                    apply_nested(
-                        context.task_context(),
-                        &proc,
-                        catch_tell,
-                        std::slice::from_ref(&string_ref),
-                    )
-                    .await?;
-                    true
-                }
-                None => false,
-            }
+    let received = match proc {
+        Some(proc) => deliver(context.task_context(), &proc, None, &msg).await?,
+        None => {
+            context.record_effect(Effect::DebugLog(msg));
+            false
         }
-        _ => false,
     };
-
-    if delivered {
-        context.return_efun_result(LpcRef::from(1));
-    } else {
-        let msg = string_ref.with_string(|s| s.to_string())?;
-        record_output_effect(context, msg);
-    }
+    context.return_efun_result(LpcRef::from(received));
 
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{net::ToSocketAddrs, sync::Arc};
+
+    use arc_swap::ArcSwapAny;
     use indoc::indoc;
     use itertools::Itertools;
 
     use crate::{
-        interpreter::{CommittedReader, vm::Vm},
+        interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
+        telnet::{connection::Connection, ops::ConnectionOp},
         test_support::test_config,
     };
 
@@ -164,6 +150,43 @@ mod tests {
             .global_state
             .committed_array(cell.id)
             .expect("array payload committed");
-        assert!(arr.is_empty());
+        assert_eq!(
+            &arr.iter().map(|s| s.to_string()).collect_vec(),
+            &["i don't herd"]
+        );
+    }
+
+    #[tokio::test]
+    async fn an_object_without_catch_tell_is_told_on_its_connection() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+        let (broker_tx, _broker_rx) = flume::unbounded();
+        let vm = Vm::new(test_config());
+        let player = vm.create_process_from_code("/player.c", "").await.unwrap();
+        let connection = Connection {
+            address: "127.0.0.1:23123".to_socket_addrs().unwrap().next().unwrap(),
+            process: ArcSwapAny::from(Some(player.clone())),
+            tx,
+            broker_tx,
+            input_to: Default::default(),
+        };
+        vm.global_state
+            .takeover(Arc::new(connection), player.clone())
+            .await;
+
+        let main = indoc! { r#"
+            int r;
+            void create() { r = tell_object(find_object("/player"), "hi"); }
+        "# };
+        let main = vm
+            .initialize_process_from_code("/main.c", main)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&main, 0u16),
+            LpcRef::from(1)
+        );
+        assert_eq!(rx.try_recv(), Ok(ConnectionOp::SendMessage("hi".into())));
     }
 }
