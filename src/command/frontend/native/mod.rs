@@ -162,6 +162,13 @@ pub fn compile_pattern(pattern: &str) -> Result<Arc<Compiled>, PatternError> {
     compile_in(&PATTERNS, pattern, Verb::Optional)
 }
 
+/// Compile `groups` in the verbless dialect, uncached: the parser package
+/// builds these and keeps its own cache.
+#[allow(dead_code)]
+pub(crate) fn compile_groups(groups: &[Group]) -> Result<Arc<Compiled>, GrammarError> {
+    assemble(groups, &[]).map(Arc::new)
+}
+
 fn compile_in(
     cache: &DashMap<String, Arc<Compiled>>,
     pattern: &str,
@@ -259,12 +266,18 @@ fn capture_kind(letter: char) -> Result<CaptureKind, PatternError> {
     }
 }
 
-/// One element of the pattern after `/` has joined its neighbours.
+/// One element of the pattern once its dialect is gone: what every dialect
+/// reduces to and [`compile_groups`] builds from.
 #[derive(Debug, PartialEq, Eq)]
-enum Group {
+#[allow(dead_code)]
+pub(crate) enum Group {
     /// Quoted words, one of which must appear.
     Words(Vec<String>),
+    /// A `%` capture of this kind; `Words` admits no words at all.
     Capture(CaptureKind),
+    /// One or more words as one string (`STR`), unlike `Capture(Words)`.
+    Text,
+    /// `[word]`.
     Optional(String),
 }
 
@@ -327,14 +340,19 @@ fn dedup_words(words: &[String]) -> Vec<&String> {
     out
 }
 
-/// `S → group…` over plain words, one production; captures are labelled
-/// with their slot and kind.
+/// The verb pre-filter for `groups` under `verb`, then [`assemble`].
 fn build(groups: &[Group], verb: Verb) -> Result<Compiled, PatternError> {
     let verbs: Vec<&String> = match (verb, groups.first()) {
         (Verb::Required, Some(Group::Words(words))) => dedup_words(words),
         (Verb::Required, _) => return Err(PatternError::NoVerb),
         (Verb::Optional, _) => Vec::new(),
     };
+    assemble(groups, &verbs).map_err(PatternError::Grammar)
+}
+
+/// `S → group…` over plain words, one production; captures are labelled
+/// with their slot and kind.
+fn assemble(groups: &[Group], verbs: &[&String]) -> Result<Compiled, GrammarError> {
     let mut b = GrammarBuilder::new();
     let s = b.nonterminal("S");
     let words = b.words_tokens();
@@ -342,15 +360,16 @@ fn build(groups: &[Group], verb: Verb) -> Result<Compiled, PatternError> {
     let mut slot: u32 = 0;
     let mut rhs: Vec<Element> = Vec::with_capacity(groups.len());
     for group in groups {
-        rhs.push(match group {
+        let (element, kind) = match group {
             Group::Words(alternatives) => {
                 let alternatives = dedup_words(alternatives);
-                match alternatives.as_slice() {
+                let element = match alternatives.as_slice() {
                     [word] => lit(word.as_str()),
                     many => nt(b.alternatives(many.iter().map(|w| lit(w.as_str())))),
-                }
+                };
+                (element, None)
             }
-            Group::Optional(word) => nt(b.optional(lit(word))),
+            Group::Optional(word) => (nt(b.optional(lit(word))), None),
             Group::Capture(kind) => {
                 let element = match kind {
                     CaptureKind::Word => nt(b.word_like(&words)),
@@ -362,16 +381,23 @@ fn build(groups: &[Group], verb: Verb) -> Result<Compiled, PatternError> {
                     | CaptureKind::Preposition
                     | CaptureKind::Liv => nt(b.words_plus(&words)),
                 };
+                (element, Some(*kind))
+            }
+            Group::Text => (nt(b.words_plus(&words)), Some(CaptureKind::Words)),
+        };
+        rhs.push(match kind {
+            Some(kind) => {
                 let labeled = element.labeled(Label(slot));
-                kinds.push(*kind);
+                kinds.push(kind);
                 slot += 1;
                 labeled
             }
+            None => element,
         });
     }
     b.production(s, rhs);
     b.start(s);
-    let grammar = b.build().map_err(PatternError::Grammar)?;
+    let grammar = b.build()?;
     Ok(Compiled {
         verbs: verbs.iter().map(|v| Ustr::from(v.as_str())).collect(),
         grammar: Arc::new(grammar),
@@ -780,5 +806,44 @@ mod tests {
         assert!(parse(&c.grammar, "").next().is_some());
         assert!(parse(&c.grammar, "x").next().is_none());
         assert_eq!(compile("").unwrap_err(), PatternError::Empty);
+    }
+
+    #[test]
+    fn a_text_group_needs_a_word_where_a_words_capture_does_not() {
+        let text = compile_groups(&[Group::Words(vec!["say".into()]), Group::Text]).unwrap();
+        assert!(text.captures_of("say").next().is_none());
+        let caps = text.captures_of("say hi there").next().unwrap();
+        assert_eq!(
+            (caps[0].kind, caps[0].text.as_str()),
+            (CaptureKind::Words, "hi there")
+        );
+        let star = compile_groups(&[
+            Group::Words(vec!["say".into()]),
+            Group::Capture(CaptureKind::Words),
+        ])
+        .unwrap();
+        assert_eq!(star.captures_of("say").next().unwrap()[0].text, "");
+    }
+
+    #[test]
+    fn a_literal_group_matches_its_text_quotes_included() {
+        let c = compile_groups(&[
+            Group::Words(vec!["bob's".into()]),
+            Group::Capture(CaptureKind::Object),
+        ])
+        .unwrap();
+        assert_eq!(
+            c.captures_of("bob's sword").next().unwrap()[0].text,
+            "sword"
+        );
+        assert!(c.captures_of("bobs sword").next().is_none());
+    }
+
+    #[test]
+    fn compiled_groups_carry_no_verb_and_no_groups_is_the_bare_line() {
+        let c = compile_groups(&[]).unwrap();
+        assert!(c.verbs.is_empty());
+        assert!(parse(&c.grammar, "").next().is_some());
+        assert!(parse(&c.grammar, "x").next().is_none());
     }
 }
