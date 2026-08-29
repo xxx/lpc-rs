@@ -147,7 +147,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn moving_into_own_contents_is_refused_before_any_write() {
+    async fn moving_into_own_contents_is_refused() {
         let bag = indoc! { r#"
             void create() { move_object("/box"); }
         "# };
@@ -174,5 +174,54 @@ mod tests {
             vm.global_state.committed_environment(&bag_proc.context.process),
             Some(box_proc.clone())
         );
+    }
+
+    /// A caught refusal commits its task, so a hook fired before the check
+    /// would show: the living left behind would have forgotten the mover's
+    /// verb.
+    #[tokio::test]
+    async fn a_refused_move_fires_no_hook() {
+        let room = "void create() {}";
+        let stationary = indoc! { r#"
+            void create() { enable_commands(); move_object("/room"); }
+        "# };
+        let traveller = indoc! { r#"
+            void create() { enable_commands(); move_object("/room"); }
+            void init() { add_action("do_wave", "wave"); }
+            int do_wave(string arg) { return 1; }
+            void try_it() {
+                if (!catch(move_object(find_object("/bag")))) {
+                    throw("not refused");
+                }
+            }
+        "# };
+        let bag = indoc! { r#"
+            void create() { move_object("/traveller"); }
+        "# };
+        let master = indoc! { r#"
+            void create() { "/traveller"->try_it(); }
+        "# };
+        let vm = Vm::new(test_config());
+        vm.create_process_from_code("/room.c", room).await.unwrap();
+        let stationary_proc = vm
+            .initialize_process_from_code("/stationary.c", stationary)
+            .await
+            .unwrap()
+            .context
+            .process;
+        vm.initialize_process_from_code("/traveller.c", traveller)
+            .await
+            .unwrap();
+        vm.initialize_process_from_code("/bag.c", bag).await.unwrap();
+        vm.initialize_process_from_code("/master.c", master)
+            .await
+            .unwrap_or_else(|e| panic!("{}", e.diagnostic_string()));
+        let verbs: Vec<String> = vm
+            .global_state
+            .committed_rules(&stationary_proc)
+            .iter()
+            .map(|r| r.verb.to_string())
+            .collect();
+        assert_eq!(verbs, vec!["wave"]);
     }
 }

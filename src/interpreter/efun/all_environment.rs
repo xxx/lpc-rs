@@ -46,7 +46,7 @@ mod tests {
 
         let vm = Vm::new(test_config());
 
-        let _foo_proc = vm.create_process_from_code("/foo.c", foo).await.unwrap();
+        vm.create_process_from_code("/foo.c", foo).await.unwrap();
         let outer_proc = vm
             .initialize_process_from_code("/outer.c", outer)
             .await

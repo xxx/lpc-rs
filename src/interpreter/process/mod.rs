@@ -187,6 +187,25 @@ impl Process {
         Self::objects_in(txn, process.position.inventory.id)
     }
 
+    /// `root`, then its contents depth-first — a container's contents right
+    /// behind it — each object once.
+    pub(crate) fn deep_inventory_of(txn: &TxnHandle, root: &Arc<Process>) -> Vec<Arc<Process>> {
+        let mut out = vec![root.clone()];
+        let mut stack = vec![Self::inventory_of(txn, root).into_iter()];
+        while let Some(top) = stack.last_mut() {
+            let Some(item) = top.next() else {
+                stack.pop();
+                continue;
+            };
+            if out.iter().any(|seen| Arc::ptr_eq(seen, &item)) {
+                continue;
+            }
+            out.push(item.clone());
+            stack.push(Self::inventory_of(txn, &item).into_iter());
+        }
+        out
+    }
+
     /// The committed living members of `process`'s contents as seen through
     /// `txn`, dropped members filtered out.
     pub(crate) fn livings_of(txn: &TxnHandle, process: &Arc<Process>) -> Vec<Arc<Process>> {
@@ -315,25 +334,6 @@ impl Process {
         Ok(())
     }
 
-    /// `root`, then its contents depth-first — a container's contents right
-    /// behind it — each object once.
-    pub(crate) fn deep_inventory_of(txn: &TxnHandle, root: &Arc<Process>) -> Vec<Arc<Process>> {
-        let mut out = vec![root.clone()];
-        let mut stack = vec![Self::inventory_of(txn, root).into_iter()];
-        while let Some(top) = stack.last_mut() {
-            let Some(item) = top.next() else {
-                stack.pop();
-                continue;
-            };
-            if out.iter().any(|seen| Arc::ptr_eq(seen, &item)) {
-                continue;
-            }
-            out.push(item.clone());
-            stack.push(Self::inventory_of(txn, &item).into_iter());
-        }
-        out
-    }
-
     /// The environment of `process` as seen inside `t` (an in-flight
     /// transaction), if any.
     fn environment_of_inner(t: &mut Transaction, process: &Arc<Process>) -> Option<Arc<Process>> {
@@ -441,6 +441,22 @@ impl PartialEq for Process {
 
 impl Eq for Process {}
 
+impl Hash for Process {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Nothing with interior mutability: `AllEnvironment` keeps processes
+        // in a set.
+        self.filename().as_ref().hash(state)
+    }
+}
+
+impl Display for Process {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.filename())
+    }
+}
+
 /// `move_to` refused: the destination is the object or inside it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct WouldContainItself;
@@ -452,22 +468,6 @@ impl Display for WouldContainItself {
 }
 
 impl std::error::Error for WouldContainItself {}
-
-impl Hash for Process {
-    #[inline]
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        // NOTE: this should not be based on any field with interior mutability. It's used
-        // to prevent infinite looping in numerous places.
-        self.filename().as_ref().hash(state)
-    }
-}
-
-impl Display for Process {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.filename())
-    }
-}
 
 #[cfg(test)]
 mod tests {
