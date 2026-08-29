@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use lpc_rs::command::frontend::dgd;
-use lpc_rs::command::grammar::{Grammar, GrammarBuilder, Label, lit, nt, parse};
+use lpc_rs::command::grammar::{Grammar, GrammarBuilder, Label, Limits, lit, nt, parse};
 
 #[path = "support/profiler.rs"]
 mod profiler;
@@ -78,27 +78,42 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let g = give_rule();
     c.bench_function("grammar/parse_hit/give_rule", |b| {
         b.iter(|| {
-            parse(&g, black_box("give the red sword to bob"))
-                .next()
-                .unwrap()
-                .captures()
-                .len()
+            parse(
+                &g,
+                black_box("give the red sword to bob"),
+                Limits::default(),
+            )
+            .next()
+            .unwrap()
+            .captures()
+            .len()
         })
     });
     c.bench_function("grammar/parse_miss/give_rule", |b| {
-        b.iter(|| parse(&g, black_box("look at the sword")).next().is_none())
+        b.iter(|| {
+            parse(&g, black_box("look at the sword"), Limits::default())
+                .next()
+                .is_none()
+        })
     });
 
     let p = items_pattern();
     c.bench_function("grammar/parse_all/items_pattern", |b| {
-        b.iter(|| parse(&p, black_box("the red sword from the old bag")).count())
+        b.iter(|| {
+            parse(
+                &p,
+                black_box("the red sword from the old bag"),
+                Limits::default(),
+            )
+            .count()
+        })
     });
 
     c.bench_function("grammar/build/dgd_expr", |b| b.iter(dgd_expr));
 
     let e = dgd_expr();
     c.bench_function("grammar/parse_all/dgd_expr", |b| {
-        b.iter(|| parse(&e, black_box("2 + 3 * (4 - 1)")).count())
+        b.iter(|| parse(&e, black_box("2 + 3 * (4 - 1)"), Limits::default()).count())
     });
 }
 

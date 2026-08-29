@@ -82,13 +82,10 @@ pub struct Production {
     pub rhs: Vec<Element>,
 }
 
-/// Settings that configure the grammar's parser behavior.
+/// What one parse may spend; passed to [`parse`](super::parse), never
+/// built into a grammar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Options {
-    /// Fold literals and input to lowercase before matching; token rules are
-    /// also compiled case-insensitively, which changes token classification,
-    /// not only literal comparison.
-    pub case_insensitive: bool,
+pub struct Limits {
     /// Derivations enumerated per input before the iterator ends.
     pub max_parses: usize,
     /// Work one parse may do — chart item adds attempted, duplicates
@@ -96,20 +93,18 @@ pub struct Options {
     /// by default.
     pub max_steps: usize,
     /// Nonterminal levels a derivation may nest; a deeper one ends the parse,
-    /// which `Parses::too_deep` reports. 4096 by default: the tree's
-    /// consumers recurse over it, and this depth fits a 2 MiB thread.
+    /// which `Parses::ending` reports as `TooDeep`. 4096 by default.
     pub max_depth: usize,
 }
 
-/// The default `Options::max_depth`.
+/// The default `Limits::max_depth`.
 pub const DEFAULT_MAX_DEPTH: usize = 4096;
 
-impl Default for Options {
-    /// The default grammar settings: case-sensitive, up to 32 parses per
-    /// input, no step budget, derivations at most 4096 deep.
+impl Default for Limits {
+    /// Up to 32 parses per input, no step budget, derivations at most 4096
+    /// deep.
     fn default() -> Self {
-        Options {
-            case_insensitive: false,
+        Limits {
             max_parses: 32,
             max_steps: usize::MAX,
             max_depth: DEFAULT_MAX_DEPTH,
@@ -177,13 +172,13 @@ pub struct Grammar {
     by_lhs: Vec<Vec<ProdId>>,
     nullable: Vec<bool>,
     start: NtId,
-    options: Options,
+    case_insensitive: bool,
 }
 
 impl Grammar {
-    /// The parser options for this grammar.
-    pub fn options(&self) -> &Options {
-        &self.options
+    /// Whether literals and input are folded to lowercase before matching.
+    pub fn case_insensitive(&self) -> bool {
+        self.case_insensitive
     }
 
     /// The start symbol of this grammar.
@@ -224,7 +219,7 @@ impl Grammar {
     /// Tokenizes `input` under this grammar's rules, `None` where no rule matches.
     pub fn tokenize(&self, input: &str) -> Option<Scan> {
         let tokens = self.tokens.tokenize(input)?;
-        Some(Scan::new(input, tokens, self.options.case_insensitive))
+        Some(Scan::new(input, tokens, self.case_insensitive))
     }
 }
 
@@ -236,7 +231,7 @@ pub struct GrammarBuilder {
     nonterminals: Vec<String>,
     by_name: HashMap<String, NtId>,
     productions: Vec<Production>,
-    options: Options,
+    case_insensitive: bool,
 }
 
 impl GrammarBuilder {
@@ -295,27 +290,11 @@ impl GrammarBuilder {
         ProdId(self.productions.len() as u32 - 1)
     }
 
-    /// Toggle case-insensitive matching.
+    /// Fold literals and input to lowercase before matching; token rules are
+    /// also compiled case-insensitively, which changes token classification,
+    /// not only literal comparison.
     pub fn case_insensitive(&mut self, yes: bool) -> &mut Self {
-        self.options.case_insensitive = yes;
-        self
-    }
-
-    /// Set the maximum number of parses per input.
-    pub fn max_parses(&mut self, n: usize) -> &mut Self {
-        self.options.max_parses = n;
-        self
-    }
-
-    /// Set the step budget one parse may spend; see [`Options::max_steps`].
-    pub fn max_steps(&mut self, n: usize) -> &mut Self {
-        self.options.max_steps = n;
-        self
-    }
-
-    /// Set how deep a derivation may nest; see [`Options::max_depth`].
-    pub fn max_depth(&mut self, n: usize) -> &mut Self {
-        self.options.max_depth = n;
+        self.case_insensitive = yes;
         self
     }
 
@@ -337,7 +316,7 @@ impl GrammarBuilder {
             token_rules,
             nonterminals,
             mut productions,
-            options,
+            case_insensitive,
             ..
         } = self;
 
@@ -370,7 +349,7 @@ impl GrammarBuilder {
             }
         }
 
-        if options.case_insensitive {
+        if case_insensitive {
             for e in productions.iter_mut().flat_map(|p| p.rhs.iter_mut()) {
                 if let Symbol::Literal(w) = &mut e.symbol {
                     *w = w.to_lowercase();
@@ -378,7 +357,7 @@ impl GrammarBuilder {
             }
         }
 
-        let tokens = TokenSet::build(&token_rules, options.case_insensitive)?;
+        let tokens = TokenSet::build(&token_rules, case_insensitive)?;
         let nullable = compute_nullable(&productions, nonterminals.len());
 
         Ok(Grammar {
@@ -389,7 +368,7 @@ impl GrammarBuilder {
             by_lhs,
             nullable,
             start,
-            options,
+            case_insensitive,
         })
     }
 }
@@ -468,7 +447,7 @@ mod tests {
             g.production(p).rhs[0].symbol,
             Symbol::Literal("look".into())
         );
-        assert!(g.options().case_insensitive);
+        assert!(g.case_insensitive());
     }
 
     #[test]

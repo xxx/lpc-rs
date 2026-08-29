@@ -7,7 +7,7 @@ use dashmap::DashMap;
 
 use crate::{
     command::{
-        grammar::{Grammar, GrammarBuilder, Label, Parse, lit, nt, parse},
+        grammar::{Grammar, GrammarBuilder, Label, Limits, Parse, lit, nt, parse},
         registry::{ArgSpan, Reported, VerbMatch},
     },
     interpreter::{lpc_ref::LpcRef, lpc_string::LpcString},
@@ -114,7 +114,7 @@ pub fn arguments_and_verb(
     line: &str,
 ) -> Option<(Vec<LpcRef>, String)> {
     let grammar = grammar_for(verb, matching);
-    let parsed = parse(&grammar, line).next()?;
+    let parsed = parse(&grammar, line, Limits::default()).next()?;
     Some((
         vec![LpcString::from(argument(verb, matching, &parsed, line).as_str()).into()],
         reported_verb(verb, matching, &parsed, line),
@@ -146,7 +146,7 @@ mod tests {
             return None;
         }
         let g = grammar_for(verb, matching);
-        let p = parse(&g, line).next()?;
+        let p = parse(&g, line, Limits::default()).next()?;
         Some((
             argument(verb, matching, &p, line),
             reported_verb(verb, matching, &p, line),

@@ -13,7 +13,9 @@ use dashmap::DashMap;
 use ustr::Ustr;
 
 use crate::command::{
-    grammar::{Element, Grammar, GrammarBuilder, GrammarError, Label, Parse, lit, nt, parse, tok},
+    grammar::{
+        Element, Grammar, GrammarBuilder, GrammarError, Label, Limits, Parse, lit, nt, parse, tok,
+    },
     resolve::Kind,
 };
 
@@ -418,7 +420,7 @@ impl Compiled {
     /// The captures of each parse of `line`, greedy splits first, each set
     /// in slot order; a parse whose `%d` does not fit an int is skipped.
     pub fn captures_of<'a>(&'a self, line: &str) -> impl Iterator<Item = Vec<Capture>> + 'a {
-        parse(&self.grammar, line).filter_map(|parsed| self.captures(&parsed))
+        parse(&self.grammar, line, Limits::default()).filter_map(|parsed| self.captures(&parsed))
     }
 
     fn captures(&self, parsed: &Parse) -> Option<Vec<Capture>> {
@@ -711,12 +713,24 @@ mod tests {
             compiled.captures_of("the red sword").next().unwrap()[0].text,
             "red sword"
         );
-        assert!(parse(&compiled.grammar, "sword").next().is_some());
+        assert!(
+            parse(&compiled.grammar, "sword", Limits::default())
+                .next()
+                .is_some()
+        );
 
         let with_verb = compile_pattern(" 'get' / 'take' %i ").unwrap();
         assert!(with_verb.verbs.is_empty());
-        assert!(parse(&with_verb.grammar, "take sword").next().is_some());
-        assert!(parse(&with_verb.grammar, "sword").next().is_none());
+        assert!(
+            parse(&with_verb.grammar, "take sword", Limits::default())
+                .next()
+                .is_some()
+        );
+        assert!(
+            parse(&with_verb.grammar, "sword", Limits::default())
+                .next()
+                .is_none()
+        );
 
         assert_eq!(compile("%i").unwrap_err(), PatternError::NoVerb);
         assert_eq!(
@@ -801,8 +815,8 @@ mod tests {
     #[test]
     fn an_empty_pattern_is_the_bare_verb_for_compile_pattern_only() {
         let c = compile_pattern("").unwrap();
-        assert!(parse(&c.grammar, "").next().is_some());
-        assert!(parse(&c.grammar, "x").next().is_none());
+        assert!(parse(&c.grammar, "", Limits::default()).next().is_some());
+        assert!(parse(&c.grammar, "x", Limits::default()).next().is_none());
         assert_eq!(compile("").unwrap_err(), PatternError::Empty);
     }
 
@@ -841,7 +855,7 @@ mod tests {
     fn compiled_groups_carry_no_verb_and_no_groups_is_the_bare_line() {
         let c = compile_groups(&[]).unwrap();
         assert!(c.verbs.is_empty());
-        assert!(parse(&c.grammar, "").next().is_some());
-        assert!(parse(&c.grammar, "x").next().is_none());
+        assert!(parse(&c.grammar, "", Limits::default()).next().is_some());
+        assert!(parse(&c.grammar, "x", Limits::default()).next().is_none());
     }
 }

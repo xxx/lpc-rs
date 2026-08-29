@@ -118,7 +118,7 @@ impl<'g> Parse<'g> {
 }
 
 /// Walk `root` in pre-order, pushing every labelled element's span onto
-/// `out`; an explicit stack — the tree may be `Options::max_depth` deep.
+/// `out`; an explicit stack — the tree may be `Limits::max_depth` deep.
 fn collect_captures(grammar: &Grammar, root: &Node, out: &mut Vec<(Label, Range<usize>)>) {
     let mut stack: Vec<(&Node, usize)> = vec![(root, 0)];
     while let Some((node, next)) = stack.last_mut() {

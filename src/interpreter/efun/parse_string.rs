@@ -14,12 +14,20 @@ use lpc_rs_errors::Result;
 use crate::{
     command::{
         frontend::dgd::{self, Compiled},
-        grammar::{Child, Node, Parse, ProdId, parse},
+        grammar::{Child, DEFAULT_MAX_DEPTH, Ending, Limits, Node, Parse, ProdId, parse},
     },
     interpreter::{
         efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef, process::Process,
         task::apply_function::apply_function, task_context::TaskContext,
     },
+};
+
+/// What one `parse_string` call may spend: 64 derivations pulled before it
+/// gives up, 2²⁰ steps, the engine's default depth.
+pub(crate) const LIMITS: Limits = Limits {
+    max_parses: 64,
+    max_steps: 1 << 20,
+    max_depth: DEFAULT_MAX_DEPTH,
 };
 
 /// `parse_string(grammar, str, alternatives)`: the flat array of the first
@@ -55,12 +63,15 @@ pub async fn parse_string<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     .await?;
     match outcome {
         Outcome::Values(values) => context.return_array(values),
-        Outcome::Blocked => context.return_efun_result(LpcRef::from(0)),
-        Outcome::OverBudget => {
+        Outcome::Ended(Ending::Done) => context.return_efun_result(LpcRef::from(0)),
+        Outcome::Ended(Ending::Exhausted) => {
             return Err(context.runtime_error("parse_string: parse budget exhausted"));
         }
-        Outcome::TooDeep(depth) => {
-            return Err(context.runtime_error(format!("parse_string: parse deeper than {depth}")));
+        Outcome::Ended(Ending::TooDeep) => {
+            return Err(context.runtime_error(format!(
+                "parse_string: parse deeper than {}",
+                LIMITS.max_depth
+            )));
         }
     }
     Ok(())
@@ -70,13 +81,8 @@ pub async fn parse_string<const N: usize>(context: &mut EfunContext<'_, N>) -> R
 enum Outcome {
     /// A derivation survived; its flat values.
     Values(Vec<LpcRef>),
-    /// Every derivation was blocked, or there was none.
-    Blocked,
-    /// The step budget ran out before a derivation survived.
-    OverBudget,
-    /// A derivation nested deeper than `Options::max_depth` (carried) before
-    /// one survived.
-    TooDeep(usize),
+    /// No derivation survived; how the enumeration stopped.
+    Ended(Ending),
 }
 
 /// Derivations of `input` in the engine's order, each evaluated until one
@@ -87,7 +93,7 @@ async fn first_surviving(
     compiled: &Compiled,
     input: &str,
 ) -> Result<Outcome> {
-    let mut parses = parse(&compiled.grammar, input);
+    let mut parses = parse(&compiled.grammar, input, LIMITS);
     let mut evaluator = Evaluator {
         ctx,
         this: this.clone(),
@@ -99,13 +105,7 @@ async fn first_surviving(
             return Ok(Outcome::Values(values));
         }
     }
-    Ok(if parses.over_budget() {
-        Outcome::OverBudget
-    } else if parses.too_deep() {
-        Outcome::TooDeep(compiled.grammar.options().max_depth)
-    } else {
-        Outcome::Blocked
-    })
+    Ok(Outcome::Ended(parses.ending()))
 }
 
 /// A blocked subtree is `None`; a surviving one is its values.
@@ -156,7 +156,7 @@ impl Evaluator<'_> {
     /// `root`'s structural key paired with its values: its tokens' text,
     /// its children's values, and its action's array in their place — or
     /// `None` once anything blocks. An explicit stack of frames, one per
-    /// open node — the tree may be `Options::max_depth` deep.
+    /// open node — the tree may be `Limits::max_depth` deep.
     async fn evaluate(&mut self, parsed: &Parse<'_>, root: &Node) -> NodeResult {
         let mut stack = vec![Frame::open(root)];
         loop {

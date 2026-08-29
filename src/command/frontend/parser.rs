@@ -213,14 +213,22 @@ mod tests {
         let r = compile("look", "at OBJ");
         let g = &r.unwrap().compiled.grammar;
         assert!(
-            crate::command::grammar::parse(g, "at sword")
-                .next()
-                .is_some()
+            crate::command::grammar::parse(
+                g,
+                "at sword",
+                crate::command::grammar::Limits::default()
+            )
+            .next()
+            .is_some()
         );
         assert!(
-            crate::command::grammar::parse(g, "AT sword")
-                .next()
-                .is_none()
+            crate::command::grammar::parse(
+                g,
+                "AT sword",
+                crate::command::grammar::Limits::default()
+            )
+            .next()
+            .is_none()
         );
     }
 

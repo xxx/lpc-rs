@@ -16,10 +16,6 @@ use crate::command::grammar::{
     Element, Grammar, GrammarBuilder, GrammarError, ProdId, TokenClass, nt, tok,
 };
 
-/// Derivations pulled per `parse_string` call before it gives up.
-pub const MAX_PARSES: usize = 64;
-/// Steps one `parse_string` parse may spend (see `Options::max_steps`).
-pub const MAX_STEPS: usize = 1 << 20;
 /// Compiled grammars kept, least recently used first out.
 pub const GRAMMAR_CACHE: usize = 64;
 
@@ -183,8 +179,6 @@ fn emit(rules: Rules) -> Result<Compiled, DgdError> {
         }
         actions[slot] = production.action.clone();
     }
-    b.max_parses(MAX_PARSES);
-    b.max_steps(MAX_STEPS);
     Ok(Compiled {
         grammar: Arc::new(b.build(start_nt)?),
         actions,
@@ -715,7 +709,7 @@ fn push_set_member(out: &mut String, c: char) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::grammar::parse;
+    use crate::command::grammar::{Limits, parse};
 
     fn rules(text: &str) -> Rules {
         parse_rules(text).unwrap()
@@ -880,7 +874,7 @@ mod tests {
     /// The token texts of the first parse, with the action name of the root.
     fn first_parse(text: &str, input: &str) -> Option<(Vec<String>, Option<String>)> {
         let c = compiled(text);
-        let p = parse(&c.grammar, input).next()?;
+        let p = parse(&c.grammar, input, Limits::default()).next()?;
         let tokens = (0..p.tokens().len())
             .map(|i| p.token_text(i).to_owned())
             .collect();
@@ -1025,11 +1019,9 @@ mod tests {
     }
 
     #[test]
-    fn the_options_are_the_constants() {
+    fn the_grammar_is_case_sensitive() {
         let c = compiled("w = /a/ S: w");
-        assert_eq!(c.grammar.options().max_parses, MAX_PARSES);
-        assert_eq!(c.grammar.options().max_steps, MAX_STEPS);
-        assert!(!c.grammar.options().case_insensitive);
+        assert!(!c.grammar.case_insensitive());
     }
 
     #[test]

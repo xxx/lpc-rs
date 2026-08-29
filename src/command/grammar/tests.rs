@@ -1,10 +1,10 @@
 //! The frontend-compilation table: each family's surface syntax built the way
 //! its frontend will build it, parsed against the engine.
 
-use super::{GrammarBuilder, Label, Parse, Words, lit, nt, parse, tok};
+use super::{GrammarBuilder, Label, Limits, Parse, Words, lit, nt, parse, tok};
 
 fn first<'g>(g: &'g super::Grammar, input: &str) -> Option<Parse<'g>> {
-    parse(g, input).next()
+    parse(g, input, Limits::default()).next()
 }
 
 fn captured(p: &Parse<'_>) -> Vec<(u32, String)> {
@@ -190,7 +190,7 @@ fn dgd_grammar_builds_a_tree() {
     let p_num = b.production(expr, [tok(num)]);
     let g = b.build(expr).unwrap();
 
-    let parses: Vec<Parse> = parse(&g, "1 + 2 + 3").collect();
+    let parses: Vec<Parse> = parse(&g, "1 + 2 + 3", Limits::default()).collect();
     assert_eq!(parses.len(), 1);
     let root = parses[0].root();
     assert_eq!(root.production, p_sum);
@@ -219,8 +219,8 @@ fn dgd_ambiguous_grammar_enumerates_alternatives() {
     b.production(expr, [tok(num)]);
     let g = b.build(expr).unwrap();
 
-    assert_eq!(parse(&g, "1 + 2 + 3").count(), 2);
-    assert_eq!(parse(&g, "1 + 2 + 3 + 4").count(), 5);
+    assert_eq!(parse(&g, "1 + 2 + 3", Limits::default()).count(), 2);
+    assert_eq!(parse(&g, "1 + 2 + 3 + 4", Limits::default()).count(), 5);
 }
 
 #[test]
@@ -236,7 +236,7 @@ fn builtins_are_memoized_per_builder() {
     let plus = b.words_plus(&w);
     b.production(s, [nt(plus)]);
     let g = b.build(s).unwrap();
-    assert_eq!(parse(&g, "a b c").count(), 1);
+    assert_eq!(parse(&g, "a b c", Limits::default()).count(), 1);
 }
 
 /// A pattern-frontend element, the shape the differential test generates.
@@ -284,7 +284,6 @@ fn random_tokens(rng: &mut Lcg) -> Vec<&'static str> {
 
 fn build(elems: &[Elem]) -> super::Grammar {
     let mut b = GrammarBuilder::new();
-    b.max_parses(100_000);
     let w = b.words_tokens();
     let mut rhs = Vec::new();
     for (i, e) in elems.iter().enumerate() {
@@ -353,7 +352,11 @@ fn earley_agrees_with_the_naive_matcher() {
         naive(&elems, 0, &toks, &mut Vec::new(), &mut expected);
         expected.sort();
 
-        let mut got: Vec<Vec<(usize, usize)>> = parse(&g, &input)
+        let limits = Limits {
+            max_parses: 100_000,
+            ..Limits::default()
+        };
+        let mut got: Vec<Vec<(usize, usize)>> = parse(&g, &input, limits)
             .map(|p| {
                 p.capture_spans()
                     .into_iter()

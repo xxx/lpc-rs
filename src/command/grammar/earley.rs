@@ -6,14 +6,14 @@ use std::{
     iter,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicU8, AtomicUsize, Ordering},
     },
 };
 
 use ahash::{AHashMap, AHashSet};
 
 use super::{
-    model::{Grammar, NtId, ProdId, Symbol},
+    model::{Grammar, Limits, NtId, ProdId, Symbol},
     tokenizer::Scan,
     tree::{Child, Node, Parse},
 };
@@ -25,12 +25,30 @@ struct Item {
     origin: usize,
 }
 
-/// The work one parse may do before it stops.
+/// How a parse stopped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Ending {
+    /// The enumeration ran to its end within its limits — the parse cap
+    /// included, which is the caller's own number.
+    Done = 0,
+    /// The step budget refused a step; derivations may be missing.
+    Exhausted = 1,
+    /// A derivation nested deeper than `Limits::max_depth`; derivations may
+    /// be missing.
+    TooDeep = 2,
+}
+
+const EXHAUSTED: u8 = Ending::Exhausted as u8;
+const TOO_DEEP: u8 = Ending::TooDeep as u8;
+
+/// The step budget of one parse and how the parse ended.
 #[derive(Debug)]
 pub(crate) struct Budget {
     limit: usize,
     used: AtomicUsize,
-    deep: AtomicBool,
+    /// An `Ending` discriminant; the first ending recorded is final.
+    ending: AtomicU8,
 }
 
 impl Budget {
@@ -39,31 +57,45 @@ impl Budget {
         Budget {
             limit,
             used: AtomicUsize::new(0),
-            deep: AtomicBool::new(false),
+            ending: AtomicU8::new(Ending::Done as u8),
         }
     }
 
     /// Record that a derivation was refused for exceeding `max_depth`; every
     /// later step is refused too.
     pub(crate) fn refuse_depth(&self) {
-        self.deep.store(true, Ordering::Relaxed);
+        self.end(Ending::TooDeep);
     }
 
-    /// Whether a derivation was refused for exceeding `max_depth`.
-    pub(crate) fn too_deep(&self) -> bool {
-        self.deep.load(Ordering::Relaxed)
-    }
-
-    /// Spend one step; `false` once the budget is exhausted or a derivation
-    /// was refused for depth — either ends the parse.
+    /// Spend one step; `false` once the parse has ended.
     pub(crate) fn step(&self) -> bool {
-        !self.deep.load(Ordering::Relaxed) && self.used.fetch_add(1, Ordering::Relaxed) < self.limit
+        if self.ending() != Ending::Done {
+            return false;
+        }
+        if self.used.fetch_add(1, Ordering::Relaxed) < self.limit {
+            return true;
+        }
+        self.end(Ending::Exhausted);
+        false
     }
 
-    /// Whether the budget has been spent: a step was refused, not merely
-    /// that every allotted step has been used.
-    pub(crate) fn exhausted(&self) -> bool {
-        self.used.load(Ordering::Relaxed) > self.limit
+    /// How the parse ended; `Done` while it is still within its limits.
+    pub(crate) fn ending(&self) -> Ending {
+        match self.ending.load(Ordering::Relaxed) {
+            EXHAUSTED => Ending::Exhausted,
+            TOO_DEEP => Ending::TooDeep,
+            _ => Ending::Done,
+        }
+    }
+
+    /// A later ending never replaces the first.
+    fn end(&self, ending: Ending) {
+        let _ = self.ending.compare_exchange(
+            Ending::Done as u8,
+            ending as u8,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        );
     }
 
     /// Steps spent so far; test-only introspection.
@@ -116,7 +148,7 @@ impl Chart {
             let mut idx = 0;
             while idx < chart.sets[i].len() {
                 // Nothing more can be added.
-                if budget.exhausted() {
+                if budget.ending() != Ending::Done {
                     return chart;
                 }
                 let item = chart.sets[i][idx];
@@ -324,14 +356,20 @@ struct Derivations<'g> {
 }
 
 impl<'g> Derivations<'g> {
-    fn new(grammar: &'g Grammar, chart: Chart, scan: Arc<Scan>, budget: Arc<Budget>) -> Self {
+    fn new(
+        grammar: &'g Grammar,
+        chart: Chart,
+        scan: Arc<Scan>,
+        budget: Arc<Budget>,
+        max_depth: usize,
+    ) -> Self {
         let n = scan.tokens().len();
         let mut derivations = Derivations {
             grammar,
             chart,
             scan,
             budget,
-            max_depth: grammar.options().max_depth,
+            max_depth,
             stack: Vec::new(),
             active: None,
             yielded: false,
@@ -523,8 +561,7 @@ impl Iterator for Derivations<'_> {
     }
 }
 
-/// The derivations of one input, lazily, at most `Options::max_parses` of
-/// them and within `Options::max_steps`.
+/// The derivations of one input, lazily, within `limits`.
 pub struct Parses<'g> {
     inner: Box<dyn Iterator<Item = Parse<'g>> + Send + 'g>,
     budget: Arc<Budget>,
@@ -539,21 +576,17 @@ impl<'g> Iterator for Parses<'g> {
 }
 
 impl Parses<'_> {
-    /// Whether the step budget ran out — derivations may be missing.
-    pub fn over_budget(&self) -> bool {
-        self.budget.exhausted()
-    }
-
-    /// Whether a derivation was refused for exceeding `Options::max_depth`,
-    /// which ended the parse — derivations may be missing.
-    pub fn too_deep(&self) -> bool {
-        self.budget.too_deep()
+    /// How the parse ended; `Done` while derivations remain or once every
+    /// derivation within the limits was yielded.
+    pub fn ending(&self) -> Ending {
+        self.budget.ending()
     }
 }
 
-/// Parses `input` under `grammar`; untokenizable input yields no parses.
-pub fn parse<'g>(grammar: &'g Grammar, input: &str) -> Parses<'g> {
-    let budget = Arc::new(Budget::new(grammar.options().max_steps));
+/// Parses `input` under `grammar` within `limits`; untokenizable input
+/// yields no parses.
+pub fn parse<'g>(grammar: &'g Grammar, input: &str, limits: Limits) -> Parses<'g> {
+    let budget = Arc::new(Budget::new(limits.max_steps));
     let Some(scan) = grammar.tokenize(input) else {
         return Parses {
             inner: Box::new(iter::empty()),
@@ -562,8 +595,14 @@ pub fn parse<'g>(grammar: &'g Grammar, input: &str) -> Parses<'g> {
     };
     let scan = Arc::new(scan);
     let chart = Chart::build(grammar, &scan, &budget);
-    let roots = Derivations::new(grammar, chart, scan.clone(), budget.clone())
-        .take(grammar.options().max_parses);
+    let roots = Derivations::new(
+        grammar,
+        chart,
+        scan.clone(),
+        budget.clone(),
+        limits.max_depth,
+    )
+    .take(limits.max_parses);
     Parses {
         inner: Box::new(roots.map(move |root| Parse::new(grammar, scan.clone(), root))),
         budget,
@@ -574,8 +613,8 @@ pub fn parse<'g>(grammar: &'g Grammar, input: &str) -> Parses<'g> {
 mod tests {
     use super::*;
     use crate::command::grammar::{
-        Child, DEFAULT_MAX_DEPTH, GrammarBuilder, Label, Node, Options, Parse, Parses, TokenClass,
-        lit, nt, parse, tok,
+        Child, DEFAULT_MAX_DEPTH, Ending, GrammarBuilder, Label, Limits, Node, Parse, Parses,
+        TokenClass, lit, nt, parse, tok,
     };
 
     /// A builder with the plain-words rules and the classes they got.
@@ -731,7 +770,7 @@ mod tests {
         let p_b = b.production(bee, [lit("b")]);
         let g = b.build(s).unwrap();
 
-        let parses: Vec<Parse> = parse(&g, "a b").collect();
+        let parses: Vec<Parse> = parse(&g, "a b", Limits::default()).collect();
         assert_eq!(parses.len(), 1);
         assert_eq!(
             *parses[0].root(),
@@ -764,7 +803,7 @@ mod tests {
         b.production(a, [lit("a")]);
         let g = b.build(s).unwrap();
 
-        let parses: Vec<Parse> = parse(&g, "a").collect();
+        let parses: Vec<Parse> = parse(&g, "a", Limits::default()).collect();
         assert_eq!(parses[0].root().production, p0);
         assert_eq!(parses[1].root().production, p1);
     }
@@ -779,7 +818,9 @@ mod tests {
         b.production(rest, [nt(rest), tok(word)]);
         let g = b.build(s).unwrap();
 
-        let p = parse(&g, "say hello   there").next().unwrap();
+        let p = parse(&g, "say hello   there", Limits::default())
+            .next()
+            .unwrap();
         assert_eq!(p.captures(), vec![(Label(0), "hello   there")]);
         assert_eq!(p.capture_spans(), vec![(Label(0), 1..3)]);
     }
@@ -794,15 +835,14 @@ mod tests {
         b.production(star, [nt(star), tok(word)]);
         let g = b.build(s).unwrap();
 
-        let p = parse(&g, "wait").next().unwrap();
+        let p = parse(&g, "wait", Limits::default()).next().unwrap();
         assert_eq!(p.captures(), vec![(Label(9), "")]);
         assert_eq!(p.capture_spans(), vec![(Label(9), 1..1)]);
     }
 
     /// `E → E '+' E | 'n'`, the textbook ambiguous grammar.
-    fn sums(max_parses: usize) -> crate::command::grammar::Grammar {
+    fn sums() -> crate::command::grammar::Grammar {
         let (mut b, _, _) = words();
-        b.max_parses(max_parses);
         let e = b.nonterminal("E");
         b.production(e, [nt(e), lit("+"), nt(e)]);
         b.production(e, [lit("n")]);
@@ -811,8 +851,8 @@ mod tests {
 
     #[test]
     fn ambiguity_enumerates_every_derivation_longest_first() {
-        let g = sums(32);
-        let parses: Vec<Parse> = parse(&g, "n + n + n").collect();
+        let g = sums();
+        let parses: Vec<Parse> = parse(&g, "n + n + n", Limits::default()).collect();
         assert_eq!(parses.len(), 2);
         let left_spans: Vec<_> = parses.iter().map(|p| p.root().children[0].span()).collect();
         assert_eq!(left_spans, vec![0..3, 0..1]);
@@ -820,10 +860,17 @@ mod tests {
 
     #[test]
     fn max_parses_caps_enumeration() {
-        let g = sums(2);
-        assert_eq!(parse(&g, "n + n + n + n").count(), 2);
-        let g = sums(100);
-        assert_eq!(parse(&g, "n + n + n + n").count(), 5);
+        let g = sums();
+        let limits = Limits {
+            max_parses: 2,
+            ..Limits::default()
+        };
+        assert_eq!(parse(&g, "n + n + n + n", limits).count(), 2);
+        let limits = Limits {
+            max_parses: 100,
+            ..Limits::default()
+        };
+        assert_eq!(parse(&g, "n + n + n + n", limits).count(), 5);
     }
 
     #[test]
@@ -833,34 +880,43 @@ mod tests {
         let s = b.nonterminal("S");
         b.production(s, [nt(s), nt(s)]);
         b.production(s, [lit("a")]);
-        b.max_parses(usize::MAX);
         let g = b.build(s).unwrap();
         let input = ["a"; 20].join(" ");
-        assert_eq!(parse(&g, &input).take(2).count(), 2);
+        let limits = Limits {
+            max_parses: usize::MAX,
+            ..Limits::default()
+        };
+        assert_eq!(parse(&g, &input, limits).take(2).count(), 2);
     }
 
     #[test]
     fn a_unit_cycle_yields_only_cycle_free_derivations() {
         let (mut b, _, _) = words();
-        b.max_parses(1000);
         let s = b.nonterminal("S");
         b.production(s, [nt(s)]);
         b.production(s, [lit("a")]);
         let g = b.build(s).unwrap();
-        assert_eq!(parse(&g, "a").count(), 1);
+        let limits = Limits {
+            max_parses: 1000,
+            ..Limits::default()
+        };
+        assert_eq!(parse(&g, "a", limits).count(), 1);
     }
 
     #[test]
     fn a_nullable_cycle_terminates() {
         let (mut b, _, _) = words();
-        b.max_parses(1000);
         let s = b.nonterminal("S");
         let t = b.nonterminal("T");
         b.production(s, [nt(t)]);
         b.production(s, []);
         b.production(t, [nt(s)]);
         let g = b.build(s).unwrap();
-        let count = parse(&g, "").count();
+        let limits = Limits {
+            max_parses: 1000,
+            ..Limits::default()
+        };
+        let count = parse(&g, "", limits).count();
         assert_eq!(count, 1);
     }
 
@@ -870,7 +926,7 @@ mod tests {
         let s = b.nonterminal("S");
         b.production(s, []);
         let g = b.build(s).unwrap();
-        let p = parse(&g, "").next().unwrap();
+        let p = parse(&g, "", Limits::default()).next().unwrap();
         assert_eq!(p.root().span, 0..0);
         assert!(p.captures().is_empty());
     }
@@ -882,8 +938,8 @@ mod tests {
         let s = b.nonterminal("S");
         b.production(s, [tok(word)]);
         let g = b.build(s).unwrap();
-        assert_eq!(parse(&g, "a!").count(), 0);
-        assert_eq!(parse(&g, "a b").count(), 0);
+        assert_eq!(parse(&g, "a!", Limits::default()).count(), 0);
+        assert_eq!(parse(&g, "a b", Limits::default()).count(), 0);
     }
 
     #[test]
@@ -912,18 +968,17 @@ mod tests {
         b.production(rest, [nt(rest), tok(word)]);
         let g = b.build(s).unwrap();
 
-        let p = parse(&g, "say a b c").next().unwrap();
+        let p = parse(&g, "say a b c", Limits::default()).next().unwrap();
         assert_eq!(p.captures(), vec![(Label(0), "a b"), (Label(1), "c")]);
     }
 
     /// `E → E E | word`, whose derivation count grows with the input.
-    fn ambiguous(max_steps: usize) -> Grammar {
+    fn ambiguous() -> Grammar {
         let mut b = GrammarBuilder::new();
         let w = b.words_tokens();
         let e = b.nonterminal("E");
         b.production(e, [nt(e), nt(e)]);
         b.production(e, [tok(w.word)]);
-        b.max_steps(max_steps);
         b.build(e).unwrap()
     }
 
@@ -932,26 +987,30 @@ mod tests {
         let budget = Budget::new(2);
         assert!(budget.step());
         assert!(budget.step());
-        assert!(!budget.exhausted());
+        assert_eq!(budget.ending(), Ending::Done);
         assert!(!budget.step());
-        assert!(budget.exhausted());
+        assert_eq!(budget.ending(), Ending::Exhausted);
     }
 
     #[test]
     fn the_default_budget_is_unbounded() {
-        assert_eq!(Options::default().max_steps, usize::MAX);
-        let g = ambiguous(usize::MAX);
-        let mut parses = parse(&g, "a b c d");
+        assert_eq!(Limits::default().max_steps, usize::MAX);
+        let g = ambiguous();
+        let mut parses = parse(&g, "a b c d", Limits::default());
         assert_eq!(parses.by_ref().count(), 5);
-        assert!(!parses.over_budget());
+        assert_eq!(parses.ending(), Ending::Done);
     }
 
     #[test]
     fn an_exhausted_budget_stops_chart_construction() {
-        let g = ambiguous(3);
-        let mut parses = parse(&g, "a b c d");
+        let g = ambiguous();
+        let limits = Limits {
+            max_steps: 3,
+            ..Limits::default()
+        };
+        let mut parses = parse(&g, "a b c d", limits);
         assert_eq!(parses.by_ref().count(), 0);
-        assert!(parses.over_budget());
+        assert_eq!(parses.ending(), Ending::Exhausted);
     }
 
     /// A budget sized to exactly the steps the first derivation costs
@@ -959,16 +1018,20 @@ mod tests {
     /// not merely empty — enumeration.
     #[test]
     fn an_exhausted_budget_stops_enumeration() {
-        let unbounded = ambiguous(usize::MAX);
-        let mut parses = parse(&unbounded, "a b c d");
+        let unbounded = ambiguous();
+        let mut parses = parse(&unbounded, "a b c d", Limits::default());
         parses.next().unwrap();
         let steps_to_first = parses.budget.used();
 
-        let g = ambiguous(steps_to_first);
-        let mut parses = parse(&g, "a b c d");
+        let g = ambiguous();
+        let limits = Limits {
+            max_steps: steps_to_first,
+            ..Limits::default()
+        };
+        let mut parses = parse(&g, "a b c d", limits);
         let n = parses.by_ref().count();
         assert!((1..5).contains(&n), "{n}");
-        assert!(parses.over_budget());
+        assert_eq!(parses.ending(), Ending::Exhausted);
     }
 
     /// `S: a S | a` (right) or `S: S a | a` (left) with the default depth.
@@ -1008,9 +1071,9 @@ mod tests {
                     DEFAULT_MAX_DEPTH
                 };
                 let input = vec!["a"; items].join(" ");
-                let mut parses = parse(&g, &input);
+                let mut parses = parse(&g, &input, Limits::default());
                 let p = parses.next().unwrap();
-                assert!(!parses.too_deep(), "right={right}");
+                assert_eq!(parses.ending(), Ending::Done, "right={right}");
                 // Captures walk the tree; the drop at the end unnests it.
                 p.capture_spans().len()
             });
@@ -1020,14 +1083,14 @@ mod tests {
 
     #[test]
     fn a_list_one_past_the_default_depth_is_too_deep() {
-        let (found, deep, over) = on_a_1_mib_stack(move || {
+        let (found, ending) = on_a_1_mib_stack(move || {
             let g = list(false);
             let input = vec!["a"; DEFAULT_MAX_DEPTH + 1].join(" ");
-            let mut parses = parse(&g, &input);
+            let mut parses = parse(&g, &input, Limits::default());
             let found = parses.next().is_some();
-            (found, parses.too_deep(), parses.over_budget())
+            (found, parses.ending())
         });
-        assert!(!found && deep && !over);
+        assert!(!found && ending == Ending::TooDeep);
     }
 
     #[test]
@@ -1036,29 +1099,49 @@ mod tests {
         let s = b.nonterminal("S");
         b.production(s, [lit("a"), nt(s)]);
         b.production(s, [lit("a")]);
-        b.max_depth(3);
         let g = b.build(s).unwrap();
-        let mut ok = parse(&g, "a a a");
+        let limits = Limits {
+            max_depth: 3,
+            ..Limits::default()
+        };
+        let mut ok = parse(&g, "a a a", limits);
         assert!(ok.next().is_some());
-        assert!(!ok.too_deep());
-        let mut deep = parse(&g, "a a a a");
+        assert_eq!(ok.ending(), Ending::Done);
+        let mut deep = parse(&g, "a a a a", limits);
         assert!(deep.next().is_none());
-        assert!(deep.too_deep());
-        assert!(!deep.over_budget());
+        assert_eq!(deep.ending(), Ending::TooDeep);
     }
 
     /// `"!"` matches no rule and there is no nomatch rule, so `parse` returns
     /// before the chart is built and no step is spent.
     #[test]
-    fn untokenizable_input_is_not_over_budget() {
+    fn untokenizable_input_ends_done() {
         let mut b = GrammarBuilder::new();
         let word = b.token("word", "[a-z]+");
         let s = b.nonterminal("S");
         b.production(s, [tok(word)]);
-        b.max_steps(1);
         let g = b.build(s).unwrap();
-        let mut parses = parse(&g, "!");
+        let limits = Limits {
+            max_steps: 1,
+            ..Limits::default()
+        };
+        let mut parses = parse(&g, "!", limits);
         assert_eq!(parses.by_ref().count(), 0);
-        assert!(!parses.over_budget());
+        assert_eq!(parses.ending(), Ending::Done);
+    }
+
+    #[test]
+    fn the_first_ending_is_final() {
+        let budget = Budget::new(1);
+        assert!(budget.step());
+        assert!(!budget.step());
+        budget.refuse_depth();
+        assert_eq!(budget.ending(), Ending::Exhausted);
+
+        let budget = Budget::new(1);
+        budget.refuse_depth();
+        assert!(!budget.step());
+        assert_eq!(budget.ending(), Ending::TooDeep);
+        assert_eq!(budget.used(), 0);
     }
 }

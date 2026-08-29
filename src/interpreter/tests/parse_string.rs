@@ -222,7 +222,7 @@ async fn a_malformed_grammar_is_a_prefixed_error() {
 }
 
 /// `E: E E` over n words attempts about n³/6 chart adds; 200 words pass
-/// `dgd::MAX_STEPS` (2²⁰) while building the chart.
+/// `parse_string::LIMITS.max_steps` (2²⁰) while building the chart.
 #[tokio::test]
 async fn an_exhausted_budget_is_a_prefixed_error() {
     let e = fails(
