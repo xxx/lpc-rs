@@ -164,7 +164,7 @@ pub fn compile_pattern(pattern: &str) -> Result<Arc<Compiled>, PatternError> {
 
 /// Compile `groups` in the verbless dialect, uncached: the parser package
 /// builds these and keeps its own cache.
-#[allow(dead_code)]
+#[cfg_attr(not(test), expect(dead_code, reason = "constructed by the parser package in the next task"))]
 pub(crate) fn compile_groups(groups: &[Group]) -> Result<Arc<Compiled>, GrammarError> {
     assemble(groups, &[]).map(Arc::new)
 }
@@ -269,13 +269,13 @@ fn capture_kind(letter: char) -> Result<CaptureKind, PatternError> {
 /// One element of the pattern once its dialect is gone: what every dialect
 /// reduces to and [`compile_groups`] builds from.
 #[derive(Debug, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) enum Group {
     /// Quoted words, one of which must appear.
     Words(Vec<String>),
     /// A `%` capture of this kind; `Words` admits no words at all.
     Capture(CaptureKind),
     /// One or more words as one string (`STR`), unlike `Capture(Words)`.
+    #[cfg_attr(not(test), expect(dead_code, reason = "constructed by the parser package in the next task"))]
     Text,
     /// `[word]`.
     Optional(String),
