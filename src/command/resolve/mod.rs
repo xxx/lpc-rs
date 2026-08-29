@@ -40,7 +40,8 @@ pub enum Resolved {
     Items {
         /// The count, ordinal, or 0.
         numeral: i64,
-        /// Every matching candidate, in scope order.
+        /// Every matching candidate, in scope order; empty only from
+        /// `Kind::Living`, where the phrase named only non-livings.
         candidates: Vec<usize>,
     },
     /// The index of the matched entry in the preposition list in force.
@@ -98,7 +99,9 @@ impl<V: Vocabulary> Resolver<V> {
         Ok(())
     }
 
-    /// What `phrase` names as a `kind`, or `None` when it names nothing.
+    /// What `phrase` names as a `kind`, or `None` when it names nothing; a
+    /// `Kind::Living` phrase naming only non-livings gives `Some(Items)` with
+    /// no candidates.
     pub async fn resolve(&mut self, kind: Kind, phrase: &str) -> Result<Option<Resolved>> {
         self.fetch_defaults().await?;
         let words: Vec<&str> = phrase.split_whitespace().collect();

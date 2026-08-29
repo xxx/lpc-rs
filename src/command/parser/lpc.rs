@@ -52,11 +52,6 @@ impl<'a> Lpc<'a> {
         }
     }
 
-    /// Forget the memoized slot arrays; the next parse mints its own.
-    pub(crate) fn reset(&mut self) {
-        self.arrays.clear();
-    }
-
     /// `candidate` as an LPC object reference.
     fn object(&self, candidate: usize) -> LpcRef {
         LpcRef::from(Arc::downgrade(&self.candidates[candidate].object))
@@ -108,6 +103,10 @@ impl<'a> Lpc<'a> {
 }
 
 impl Ask for Lpc<'_> {
+    fn begin_parse(&mut self) {
+        self.arrays.clear();
+    }
+
     async fn call(&mut self, family: Family, target: Target, args: &[Slot]) -> Result<Reply> {
         let mut values: Vec<LpcRef> = Vec::with_capacity(args.len());
         for slot in args {

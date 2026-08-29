@@ -27,7 +27,9 @@ use crate::{
 };
 
 /// Fail when another frame would exceed `MAX_COMMAND_DEPTH`; `entry` names
-/// the caller in the message (`command`, `parse_sentence`).
+/// the caller in the message (`command`, `parse_sentence`). Call before the
+/// pre-hook; push the `Frame` after it, so `process_input` sees the outer
+/// frame.
 pub(crate) fn depth_guard(ctx: &TaskContext, entry: &str) -> Result<()> {
     if ctx.command.lock().len() >= MAX_COMMAND_DEPTH {
         return Err(lpc_error!(
@@ -86,9 +88,10 @@ fn rest_of<'a>(line: &'a str, first_word: &str) -> &'a str {
 }
 
 /// Rules in precedence order — the actor's own, then the verb-attached
-/// parser rules for `first_word` — each tried until one handles the line.
-/// The verb-attached cell is read only when the actor's own rules did not
-/// handle the line — it stays out of most transactions' read sets.
+/// parser rules for `first_word` — each tried until one handles the line;
+/// `true` when one did. The verb-attached cell is read only when the actor's
+/// own rules did not handle the line — it stays out of most transactions'
+/// read sets.
 pub(crate) async fn run(
     ctx: &TaskContext,
     actor: &Arc<Process>,

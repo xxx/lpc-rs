@@ -106,7 +106,6 @@ pub(crate) async fn run(
     let mut any_parse = false;
     for caps in rule.compiled.captures_of(rest) {
         any_parse = true;
-        ask.reset();
         match attempt(&mut ask, &caps).await? {
             Ok(()) => return Ok(Verdict::Handled),
             Err(failure) => failures.push(failure),

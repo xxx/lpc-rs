@@ -39,8 +39,12 @@ pub(crate) enum Slot {
     Mixed(Vec<usize>, Vec<String>),
 }
 
-/// What one parse needs from the world.
+/// What one parse needs from the world. A `candidate` is an index into the
+/// adapter's own scope, as `resolve` reports it in `Resolved::Items`.
 pub(crate) trait Ask {
+    /// Called first in [`attempt`]: anything the adapter holds for one parse
+    /// — `Lpc`'s minted many-slot arrays — is dropped here.
+    fn begin_parse(&mut self) {}
     /// `family`'s handler on `target` with `args`.
     async fn call(&mut self, family: Family, target: Target, args: &[Slot]) -> Result<Reply>;
     /// The candidates `phrase` names for a slot of `kind`.
@@ -151,12 +155,12 @@ pub(crate) async fn attempt<A: Ask>(
     ask: &mut A,
     caps: &[Capture],
 ) -> Result<std::result::Result<(), Failure>> {
+    ask.begin_parse();
     let words: Vec<Slot> = caps
         .iter()
         .filter(|c| c.kind.is_object())
         .map(|c| Slot::Text(c.text.clone()))
         .collect();
-    // Slot values: strings for WRD/STR, 0 until an object slot is chosen.
     let mut values: Vec<Slot> = caps
         .iter()
         .map(|c| {
@@ -233,8 +237,7 @@ pub(crate) async fn attempt<A: Ask>(
                 unreachable = true;
                 continue;
             }
-            // The candidate sits in its own slot for this call — a bare object
-            // even for a many slot — then reverts to `0`.
+            // The slot reverts after the ask: no other candidate sees this one.
             values[index] = Slot::Object(candidate);
             let reply = ask
                 .call(
@@ -346,7 +349,6 @@ pub(crate) async fn attempt<A: Ask>(
         }
     }
 
-    // Only `do_` sees a many slot as the mixed array of objects and reasons.
     let mut do_values = values.clone();
     for (index, picked, reasons) in &chosen {
         if caps[*index].kind.is_many() {
@@ -714,6 +716,13 @@ mod tests {
         assert_eq!(failed.kind, Kind::Refused);
         assert_eq!(failed.progress, 1);
         assert_eq!(failed.silent, Verdict::Refused);
+        let done = ask
+            .calls
+            .iter()
+            .find(|(family, _, _)| *family == Family::Do)
+            .unwrap();
+        assert_eq!(done.1, Target::Owner);
+        assert_eq!(done.2, vec![Slot::Object(0), text("sword")]);
     }
 
     #[tokio::test]

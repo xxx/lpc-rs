@@ -1,5 +1,5 @@
-//! One command line through a living's rules: the pre-hook, the trial in
-//! precedence order, and (for a line nothing handled) the fallback.
+//! One command line's pipeline: the pre-hook, the command frame, the trial
+//! in `trial`, and (for a line nothing handled) the fallback.
 
 use std::sync::Arc;
 

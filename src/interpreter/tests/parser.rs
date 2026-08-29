@@ -635,6 +635,64 @@ const OBS_FILTER_CRATE: (&str, &str) = (
     void go(object d) { move_object(d); }
 "# },
 );
+/// A verb whose `OBS` slot's chosen array is reported to it by each
+/// candidate the re-ask asks.
+const ARRAY_VERB: (&str, &str) = (
+    "/array_verb.c",
+    indoc! { r#"
+    mixed *seen; int notes; int same;
+    void create() { parse_init(); parse_add_rule("stack", "OBS"); }
+    void note(mixed *obs) {
+        notes = notes + 1;
+        if (notes == 1) seen = obs; else same = (obs == seen);
+    }
+    void do_stack_obs(mixed *obs, string w) { }
+    int query_notes() { return notes; }
+    int query_same() { return same; }
+"# },
+);
+const ARRAY_CRATE_A: (&str, &str) = (
+    "/array_crate_a.c",
+    indoc! { r#"
+    string *parse_command_id_list() { return ({ "crate" }); }
+    mixed direct_stack_obj(mixed a, string w) {
+        if (!objectp(a)) "/array_verb"->note(a);
+        return 1;
+    }
+    void go(object d) { move_object(d); }
+"# },
+);
+const ARRAY_CRATE_B: (&str, &str) = (
+    "/array_crate_b.c",
+    indoc! { r#"
+    string *parse_command_id_list() { return ({ "crate" }); }
+    mixed direct_stack_obj(mixed a, string w) {
+        if (!objectp(a)) "/array_verb"->note(a);
+        return 1;
+    }
+    void go(object d) { move_object(d); }
+"# },
+);
+
+#[tokio::test]
+async fn a_many_slot_hands_the_re_ask_the_same_array() {
+    let body = r#"
+        object room = find_object("/room");
+        move_object(room);
+        "/array_crate_a"->go(room);
+        "/array_crate_b"->go(room);
+        command("stack all crates");
+        return ({ "/array_verb"->query_notes(), "/array_verb"->query_same() });
+    "#;
+    let r = run(
+        MASTER,
+        &[ARRAY_VERB, ARRAY_CRATE_A, ARRAY_CRATE_B, ROOM],
+        &custom_main(body),
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(2), LpcRef::from(1)]);
+}
+
 const STASH_VERB: (&str, &str) = (
     "/stash_verb.c",
     indoc! { r#"
