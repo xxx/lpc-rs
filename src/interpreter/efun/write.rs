@@ -32,17 +32,13 @@ pub(crate) async fn tell_this_player<const N: usize>(
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_core::register::RegisterVariant;
-
-    use std::{net::ToSocketAddrs, sync::Arc};
-
-    use arc_swap::ArcSwapAny;
     use indoc::indoc;
+    use lpc_rs_core::register::RegisterVariant;
 
     use crate::{
         interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
-        telnet::{connection::Connection, ops::ConnectionOp},
-        test_support::test_config,
+        telnet::ops::ConnectionOp,
+        test_support::{connect, test_config},
     };
 
     #[tokio::test]
@@ -83,20 +79,9 @@ mod tests {
 
     #[tokio::test]
     async fn a_player_without_catch_tell_is_written_to_on_its_connection() {
-        let (tx, mut rx) = tokio::sync::mpsc::channel(4);
-        let (broker_tx, _broker_rx) = flume::unbounded();
         let vm = Vm::new(test_config());
         let player = vm.create_process_from_code("/player.c", "").await.unwrap();
-        let connection = Connection {
-            address: "127.0.0.1:23123".to_socket_addrs().unwrap().next().unwrap(),
-            process: ArcSwapAny::from(Some(player.clone())),
-            tx,
-            broker_tx,
-            input_to: Default::default(),
-        };
-        vm.global_state
-            .takeover(Arc::new(connection), player.clone())
-            .await;
+        let mut connected = connect(&vm, &player).await;
 
         let main = indoc! { r#"
             int r;
@@ -112,6 +97,43 @@ mod tests {
             vm.global_state.committed_global(&main, 0u16),
             LpcRef::from(1)
         );
-        assert_eq!(rx.try_recv(), Ok(ConnectionOp::SendMessage("hi".into())));
+        assert_eq!(
+            connected.rx.try_recv(),
+            Ok(ConnectionOp::SendMessage("hi".into()))
+        );
+    }
+
+    #[tokio::test]
+    async fn catch_tell_takes_precedence_over_the_connection() {
+        let player = indoc! { r#"
+            string got;
+            void catch_tell(string s) { got = s; }
+        "# };
+        let vm = Vm::new(test_config());
+        let player = vm
+            .create_process_from_code("/player.c", player)
+            .await
+            .unwrap();
+        let mut connected = connect(&vm, &player).await;
+
+        let main = indoc! { r#"
+            int r;
+            void create() { set_this_player(find_object("/player")); r = write("hi"); }
+        "# };
+        let main = vm
+            .initialize_process_from_code("/main.c", main)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&main, 0u16),
+            LpcRef::from(1)
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&player, 0u16),
+            LpcRef::from("hi")
+        );
+        assert!(connected.rx.try_recv().is_err());
     }
 }

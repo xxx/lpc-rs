@@ -1,7 +1,8 @@
 //! Module for various test utilities that are shared among unit tests.
 
-use std::sync::Arc;
+use std::{net::ToSocketAddrs, sync::Arc};
 
+use arc_swap::ArcSwapAny;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
@@ -30,7 +31,11 @@ use crate::{
         process::Process,
         program::Program,
         task::{Task, task_template::TaskTemplate},
-        vm::{global_state::GlobalState, vm_op::VmOp},
+        vm::{Vm, global_state::GlobalState, vm_op::VmOp},
+    },
+    telnet::{
+        connection::Connection,
+        ops::{BrokerOp, ConnectionOp},
     },
     util::process_builder::process_insert_and_initialize_program,
 };
@@ -62,6 +67,35 @@ macro_rules! test_config_builder {
             .lib_dir("./tests/fixtures/code")
             .simul_efun_file("/secure/simul_efuns")
     };
+}
+
+/// A connection bound to a process by [`connect`]; what the process is sent
+/// arrives on `rx` after each commit.
+pub struct Connected {
+    /// The connection's outgoing operations.
+    pub rx: Receiver<ConnectionOp>,
+    _broker_rx: flume::Receiver<BrokerOp>,
+}
+
+/// Bind a fresh connection to `process` through the takeover path.
+pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
+    let (tx, rx) = tokio::sync::mpsc::channel(4);
+    let (broker_tx, _broker_rx) = flume::unbounded();
+    let connection = Connection {
+        address: "127.0.0.1:23123"
+            .to_socket_addrs()
+            .expect("a literal address")
+            .next()
+            .expect("one address"),
+        process: ArcSwapAny::from(Some(process.clone())),
+        tx,
+        broker_tx,
+        input_to: Default::default(),
+    };
+    vm.global_state
+        .takeover(Arc::new(connection), process.clone())
+        .await;
+    Connected { rx, _broker_rx }
 }
 
 pub fn test_config() -> Config {

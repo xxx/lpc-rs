@@ -130,8 +130,7 @@ pub async fn dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
         .collect::<Result<Vec<_>>>()?
         .join(" ");
 
-    let received = tell_this_player(context, &s).await?;
-    context.return_efun_result(LpcRef::from(received));
+    tell_this_player(context, &s).await?;
     Ok(())
 }
 
