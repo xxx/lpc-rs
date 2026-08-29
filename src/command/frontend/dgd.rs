@@ -7,13 +7,12 @@ use std::{
     fmt,
     iter::Peekable,
     str::{CharIndices, Chars},
-    sync::{Arc, LazyLock, Mutex, PoisonError},
+    sync::{Arc, LazyLock},
 };
 
-use indexmap::IndexMap;
-
-use crate::command::grammar::{
-    Element, Grammar, GrammarBuilder, GrammarError, ProdId, TokenClass, nt, tok,
+use crate::command::{
+    grammar::{Element, Grammar, GrammarBuilder, GrammarError, ProdId, TokenClass, nt, tok},
+    memo::Memo,
 };
 
 /// Compiled grammars kept, least recently used first out.
@@ -43,51 +42,11 @@ pub fn compile(text: &str) -> Result<CompiledGrammar, DgdError> {
 
 /// Compile a grammar text through the cache; only successes are cached.
 pub fn compile_cached(text: &str) -> Result<Arc<CompiledGrammar>, DgdError> {
-    if let Some(hit) = lock().get(text) {
-        return Ok(hit);
-    }
-    let compiled = Arc::new(compile(text)?);
-    lock().insert(text, compiled.clone());
-    Ok(compiled)
+    GRAMMARS.get_or_try_build(text, || compile(text).map(Arc::new))
 }
 
-static GRAMMARS: LazyLock<Mutex<Lru>> = LazyLock::new(|| Mutex::new(Lru::new(GRAMMAR_CACHE)));
-
-/// The cache; a poisoned lock holds a consistent map, so it is reused.
-fn lock() -> std::sync::MutexGuard<'static, Lru> {
-    GRAMMARS.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
-/// Compiled grammars by text, most recently used last.
-#[derive(Debug)]
-struct Lru {
-    capacity: usize,
-    entries: IndexMap<String, Arc<CompiledGrammar>>,
-}
-
-impl Lru {
-    fn new(capacity: usize) -> Self {
-        Lru {
-            capacity,
-            entries: IndexMap::new(),
-        }
-    }
-
-    /// The entry for `text`, moved to most recent.
-    fn get(&mut self, text: &str) -> Option<Arc<CompiledGrammar>> {
-        let (_, key, hit) = self.entries.shift_remove_full(text)?;
-        self.entries.insert(key, hit.clone());
-        Some(hit)
-    }
-
-    /// Insert as most recent, dropping the least recent at capacity.
-    fn insert(&mut self, text: &str, compiled: Arc<CompiledGrammar>) {
-        if self.entries.shift_remove(text).is_none() && self.entries.len() >= self.capacity {
-            self.entries.shift_remove_index(0);
-        }
-        self.entries.insert(text.to_owned(), compiled);
-    }
-}
+static GRAMMARS: LazyLock<Memo<String, Arc<CompiledGrammar>>> =
+    LazyLock::new(|| Memo::new(GRAMMAR_CACHE));
 
 /// Build the engine's grammar from parsed rules.
 fn emit(rules: Rules) -> Result<CompiledGrammar, DgdError> {
@@ -1035,20 +994,5 @@ mod tests {
     fn a_malformed_grammar_is_not_cached() {
         assert!(compile_cached("w = ").is_err());
         assert!(compile_cached("w = ").is_err());
-    }
-
-    #[test]
-    fn the_lru_evicts_the_least_recently_used_text() {
-        let mut lru = Lru::new(2);
-        let one = Arc::new(compiled("w = /a/ S: w"));
-        let two = Arc::new(compiled("w = /b/ S: w"));
-        let three = Arc::new(compiled("w = /c/ S: w"));
-        lru.insert("one", one.clone());
-        lru.insert("two", two.clone());
-        assert!(lru.get("one").is_some());
-        lru.insert("three", three);
-        assert!(lru.get("two").is_none());
-        assert!(lru.get("one").is_some());
-        assert!(lru.get("three").is_some());
     }
 }

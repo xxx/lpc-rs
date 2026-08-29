@@ -9,13 +9,13 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use dashmap::DashMap;
 use ustr::Ustr;
 
 use crate::command::{
     grammar::{
         Element, Grammar, GrammarBuilder, GrammarError, Label, Limits, Parse, lit, nt, parse, tok,
     },
+    memo::Memo,
     resolve::Kind,
 };
 
@@ -148,9 +148,12 @@ enum Verb {
     Optional,
 }
 
+/// Compiled patterns kept per dialect, least recently used first out.
+const PATTERN_CACHE: usize = 1024;
+
 // The same text is a different grammar under each dialect.
-static RULES: LazyLock<DashMap<String, Arc<Compiled>>> = LazyLock::new(DashMap::new);
-static PATTERNS: LazyLock<DashMap<String, Arc<Compiled>>> = LazyLock::new(DashMap::new);
+static RULES: LazyLock<Memo<String, Arc<Compiled>>> = LazyLock::new(|| Memo::new(PATTERN_CACHE));
+static PATTERNS: LazyLock<Memo<String, Arc<Compiled>>> = LazyLock::new(|| Memo::new(PATTERN_CACHE));
 
 /// Compile an `add_rule` pattern, once per text; only successes are cached,
 /// so a malformed pattern reports its fault on every call.
@@ -171,18 +174,13 @@ pub(crate) fn compile_groups(groups: &[Group]) -> Result<Arc<Compiled>, GrammarE
 }
 
 fn compile_in(
-    cache: &DashMap<String, Arc<Compiled>>,
+    cache: &Memo<String, Arc<Compiled>>,
     pattern: &str,
     verb: Verb,
 ) -> Result<Arc<Compiled>, PatternError> {
-    if let Some(hit) = cache.get(pattern) {
-        return Ok(hit.clone());
-    }
-    let compiled = Arc::new(build(&group(scan(pattern)?, verb)?, verb)?);
-    Ok(cache
-        .entry(pattern.to_owned())
-        .or_insert_with(|| compiled)
-        .clone())
+    cache.get_or_try_build(pattern, || {
+        build(&group(scan(pattern)?, verb)?, verb).map(Arc::new)
+    })
 }
 
 /// One lexical piece of a pattern.

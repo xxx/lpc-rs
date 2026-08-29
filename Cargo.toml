@@ -62,6 +62,7 @@ tokio = { version = "1", features = ["io-std", "sync", "fs", "tracing", "rt-mult
 tokio-util = { version = "0.7.7", features = ["codec"] }
 tracing = "~0.1"
 ustr = "1.1.0"
+lru = "0.18.3"
 
 [dev-dependencies]
 claims = "0.8.0"

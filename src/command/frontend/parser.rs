@@ -6,12 +6,12 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use dashmap::DashMap;
 use ustr::Ustr;
 
 use crate::command::{
     frontend::native::{self, CaptureKind, Compiled, Group},
     grammar::GrammarError,
+    memo::Memo,
 };
 
 /// Why a rule does not compile; the text reaches the LPC caller.
@@ -111,17 +111,18 @@ fn slug_word(token: &Token, do_family: bool) -> String {
     }
 }
 
+/// Compiled patterns kept, least recently used first out.
+const PATTERN_CACHE: usize = 1024;
+
 /// Compiled patterns by rule text, one per dialect like the native caches.
-static COMPILED: LazyLock<DashMap<String, Arc<Compiled>>> = LazyLock::new(DashMap::new);
+static COMPILED: LazyLock<Memo<String, Arc<Compiled>>> = LazyLock::new(|| Memo::new(PATTERN_CACHE));
 
 /// The compiled pattern for `rule`, built from `tokens` once per rule text.
 fn compiled_for(rule: &str, tokens: &[Token]) -> Result<Arc<Compiled>, ParserRuleError> {
-    if let Some(hit) = COMPILED.get(rule) {
-        return Ok(Arc::clone(&hit));
-    }
-    let groups: Vec<Group> = tokens.iter().map(group_of).collect();
-    let compiled = native::compile_groups(&groups).map_err(ParserRuleError::Grammar)?;
-    Ok(COMPILED.entry(rule.to_owned()).or_insert(compiled).clone())
+    COMPILED.get_or_try_build(rule, || {
+        let groups: Vec<Group> = tokens.iter().map(group_of).collect();
+        native::compile_groups(&groups).map_err(ParserRuleError::Grammar)
+    })
 }
 
 /// Compile `rule` for `verb`: the tokens as pattern groups through the

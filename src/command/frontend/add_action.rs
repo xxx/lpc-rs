@@ -3,11 +3,10 @@
 
 use std::sync::{Arc, LazyLock};
 
-use dashmap::DashMap;
-
 use crate::{
     command::{
         grammar::{Grammar, GrammarBuilder, Label, Limits, Parse, lit, nt, parse},
+        memo::Memo,
         registry::{ArgSpan, Reported, VerbMatch},
     },
     interpreter::{lpc_ref::LpcRef, lpc_string::LpcString},
@@ -23,7 +22,10 @@ enum Key {
     Prefix(VerbMatch),
 }
 
-static GRAMMARS: LazyLock<DashMap<Key, Arc<Grammar>>> = LazyLock::new(DashMap::new);
+/// Verb grammars kept, least recently used first out.
+const GRAMMAR_CACHE: usize = 1024;
+
+static GRAMMARS: LazyLock<Memo<Key, Arc<Grammar>>> = LazyLock::new(|| Memo::new(GRAMMAR_CACHE));
 
 /// The grammar for `verb` under `matching`, built once per key.
 pub fn grammar_for(verb: &str, matching: VerbMatch) -> Arc<Grammar> {
@@ -31,13 +33,7 @@ pub fn grammar_for(verb: &str, matching: VerbMatch) -> Arc<Grammar> {
         VerbMatch::Exact => Key::Exact(verb.to_owned()),
         VerbMatch::Prefix { .. } => Key::Prefix(matching),
     };
-    if let Some(hit) = GRAMMARS.get(&key) {
-        return Arc::clone(&hit);
-    }
-    GRAMMARS
-        .entry(key)
-        .or_insert_with(|| Arc::new(build(verb, matching)))
-        .clone()
+    GRAMMARS.get_or_build(&key, || Arc::new(build(verb, matching)))
 }
 
 /// `S → 'verb' words_star⟨0⟩`, or `S → word_like words_star⟨0⟩` for a prefix
