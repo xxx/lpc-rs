@@ -37,6 +37,23 @@ async fn the_doc_example_evaluates_an_expression() {
 }
 
 #[tokio::test]
+async fn an_action_sees_the_callers_this_player() {
+    let r = run(
+        "",
+        &[("/giver.c", "")],
+        indoc! { r#"
+        mixed *who(mixed *t) { return ({ this_player() == find_object("/giver") }); }
+        mixed *create() {
+            set_this_player(find_object("/giver"));
+            return parse_string("w = /a/ S: w ? who", "a");
+        }
+    "# },
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(1)]);
+}
+
+#[tokio::test]
 async fn without_actions_the_result_is_the_flat_token_list() {
     let r = run("", &[], indoc! { r#"
         mixed *create() { return parse_string("whitespace = /[ ]+/ w = /[a-z]+/ S: w T T: w w", "a b c"); }

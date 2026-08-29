@@ -1,4 +1,4 @@
-# write
+# tell_object
 
 `int tell_object(object | string ob, string message)`
 
