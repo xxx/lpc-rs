@@ -19,6 +19,7 @@ lpc-rs-asm = { version = "0.1", path = "./lpc-rs-asm"}
 lpc-rs-core = { version = "0.1", path = "./lpc-rs-core"}
 lpc-rs-errors = { version = "0.1", path = "./lpc-rs-errors"}
 lpc-rs-function-support = { version = "0.1", path = "./lpc-rs-function-support"}
+lpc-rs-telnet = { version = "0.1", path = "./lpc-rs-telnet"}
 lpc-rs-utils = { version = "0.1", path = "./lpc-rs-utils"}
 
 arc-swap = { version = "1.6.0", features = ["weak"] }

@@ -1419,6 +1419,7 @@ dependencies = [
  "lpc-rs-core",
  "lpc-rs-errors",
  "lpc-rs-function-support",
+ "lpc-rs-telnet",
  "lpc-rs-utils",
  "lru",
  "nectar",

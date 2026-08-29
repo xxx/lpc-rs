@@ -4,21 +4,17 @@ pub mod ops;
 
 use std::{net::SocketAddr, sync::Arc};
 
-use bytes::Bytes;
+use bytes::BytesMut;
 use flume::Sender as FlumeSender;
-use futures::{SinkExt, StreamExt, stream::SplitSink};
 use lpc_rs_errors::lpc_error;
-use nectar::{
-    TelnetCodec, event::TelnetEvent, option::TelnetOption, subnegotiation::SubnegotiationType,
-};
+use lpc_rs_telnet::{Event, MAX_LINE, Op, Session};
 use once_cell::sync::OnceCell;
 use tokio::{
-    io::{AsyncRead, AsyncWrite},
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, ToSocketAddrs},
     sync::mpsc,
     task::JoinHandle,
 };
-use tokio_util::codec::{Decoder, Framed};
 use tracing::{error, info, instrument, trace, warn};
 
 use crate::{
@@ -118,69 +114,62 @@ impl Telnet {
     /// Start the main loop for a single user's connection. Handles sends and receives.
     #[instrument(skip(stream, broker_tx, template))]
     async fn connection_loop<S>(
-        stream: S,
+        mut stream: S,
         remote_ip: SocketAddr,
         broker_tx: FlumeSender<BrokerOp>,
         template: TaskTemplate,
     ) where
         S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     {
-        let codec = TelnetCodec::new(8192);
-        let mut framed = codec.framed(stream);
-
-        Self::negotiations(&mut framed, remote_ip, &broker_tx).await;
-
-        let (mut sink, mut input) = framed.split();
-
+        let mut session = Session::new();
+        let mut out = BytesMut::with_capacity(4096);
         let (connection_tx, mut connection_rx) = mpsc::channel::<ConnectionOp>(128);
+        let connection = Arc::new(Connection::new(remote_ip, connection_tx, broker_tx.clone()));
 
-        let connection = Arc::new(Connection::new(
-            remote_ip,
-            connection_tx.clone(),
-            broker_tx.clone(),
-        ));
-
-        let Ok(_) = broker_tx
+        if broker_tx
             .send_async(BrokerOp::NewConnection(connection.clone()))
             .await
-        else {
+            .is_err()
+        {
             error!("Failed to send BrokerOp::NewConnection. Dropping connection.");
-            let msg = TelnetEvent::Message("The server is currently unable to accept new connections. Please try again shortly.".to_string());
-            let _ = sink.send(msg).await;
+            session.send(Op::Text(
+                "The server is currently unable to accept new connections. Please try again shortly.\n",
+            ));
+            let _ = flush(&mut session, &mut out, &mut stream).await;
             let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
             return;
-        };
+        }
+
+        // The offers go out before anything else; a client that never
+        // answers them still gets its login.
+        if let Err(e) = flush(&mut session, &mut out, &mut stream).await {
+            warn!("Failed to send to {}: {}", &remote_ip, e);
+            let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
+            return;
+        }
 
         let mut shutting_down = false;
+        let mut buf = [0u8; 4096];
 
         loop {
             tokio::select! {
-                send_to_user = connection_rx.recv() => {
-                    trace!("Received message from VM: {:?}", send_to_user);
-
-                    match send_to_user {
-                        Some(ConnectionOp::SendMessage(msg)) => {
-                            if let Err(e) = sink.send(TelnetEvent::RawMessage(msg)).await {
-                                error!("Failed to send message to user: {}", e);
-                            }
-                        },
+                op = connection_rx.recv() => {
+                    trace!("Received message from VM: {:?}", op);
+                    match op {
+                        Some(ConnectionOp::SendMessage(msg)) => session.send(Op::Text(&msg)),
                         Some(ConnectionOp::InputTo(input_to)) => {
                             if input_to.no_echo {
-                                // It may seem counterintuitive that we're saying we WILL echo here,
-                                // but it's really telling their client to stop its own echoing.
-                                // We're lying to the client - we're not going to echo, either.
-
-                                sink.send(TelnetEvent::Will(TelnetOption::Echo)).await.unwrap();
+                                session.send(Op::EchoOff);
                             }
                             connection.input_to.store(Some(Arc::new(input_to)));
                         }
                         Some(ConnectionOp::Shutdown) => {
                             shutting_down = true;
                             trace!("Shutting down connection for {}", &remote_ip);
-                            // sink.send(TelnetEvent::Message("The server is shutting down. Please try again shortly.".to_string())).await;
                         }
                         Some(ConnectionOp::Close) => {
                             info!("Closing connection for {}.", &remote_ip);
+                            let _ = flush(&mut session, &mut out, &mut stream).await;
                             let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
                             break;
                         }
@@ -191,163 +180,87 @@ impl Telnet {
                         }
                     }
                 }
-                received_from_user = input.next() => {
-                    match received_from_user {
-                        Some(Ok(msg)) => {
-                            if shutting_down {
-                                // TODO: apply something in the player here?
-                                // let _ = sink.send(TelnetEvent::Message("The server is shutting down. Please try again shortly.".to_string())).await;
-                            } else {
-                                Self::handle_input_event(msg, &mut sink, &connection, &template).await;
-                            }
-                        }
-                        Some(Err(e)) => {
-                            warn!("User input error: {:?}", e);
-                        }
-                        None => {
+                read = stream.read(&mut buf) => {
+                    match read {
+                        Ok(0) => {
                             info!("Connection closed by {}.", &remote_ip);
                             let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
                             break;
                         }
+                        Ok(n) => {
+                            session.feed(&buf[..n]);
+                            while let Some(event) = session.next_event() {
+                                Self::handle_event(event, &mut session, &connection, &template, shutting_down).await;
+                            }
+                        }
+                        Err(e) => {
+                            warn!("User input error for {}: {:?}", &remote_ip, e);
+                            let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
+                            break;
+                        }
                     }
-                },
+                }
+            }
+
+            if let Err(e) = flush(&mut session, &mut out, &mut stream).await {
+                warn!("Failed to send to {}: {}", &remote_ip, e);
+                let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
+                break;
             }
         }
     }
 
-    /// Handle the Telnet negotiations when a user first connects.
-    async fn negotiations<S>(
-        framed: &mut Framed<S, TelnetCodec>,
-        _remote_ip: SocketAddr,
-        _broker_tx: &FlumeSender<BrokerOp>,
-    ) where
-        S: AsyncRead + AsyncWrite + Unpin,
-    {
-        // CHARSET negotiation
-        let _ = framed.send(TelnetEvent::Will(TelnetOption::Charset)).await;
-        loop {
-            match framed.next().await {
-                // *We* send the requests, so we reject their charset suggestion.
-                // This is technically not to spec (we should only do this after we send the
-                // request ourselves, and they respond with a charset request).
-                Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetRequest(data)))) => {
-                    trace!("Charset request: {:?}", data);
-                    let _ = framed
-                        .send(TelnetEvent::Subnegotiate(
-                            SubnegotiationType::CharsetRejected,
-                        ))
-                        .await;
-                }
-                Some(Ok(TelnetEvent::Do(TelnetOption::Charset))) => {
-                    trace!(
-                        "matching CHARSET negotiation result: {:?}",
-                        TelnetEvent::Do(TelnetOption::Charset)
-                    );
-
-                    let _ = framed
-                        .send(TelnetEvent::Subnegotiate(
-                            SubnegotiationType::CharsetRequest(vec![Bytes::from("UTF-8")]),
-                        ))
-                        .await;
-                    // let _ = broker_tx.send_async(BrokerOp::SetCharset(remote_ip, data)).await;
-                }
-                Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetAccepted(data)))) => {
-                    trace!("Charset accepted: {:?}", data);
-                    break;
-                    // let _ = broker_tx.send_async(BrokerOp::SetCharset(remote_ip, data)).await;
-                }
-                Some(Ok(TelnetEvent::Subnegotiate(SubnegotiationType::CharsetRejected))) => {
-                    trace!("CHARSET rejected");
-                    break;
-                    // let _ = broker_tx.send_async(BrokerOp::SetCharset(remote_ip, data)).await;
-                }
-                x => {
-                    trace!("Unknown CHARSET negotiation result: {:?}", x);
-                    break;
-                }
-            }
-        }
-
-        // let _ = framed.send(TelnetEvent::Will(TelnetOption::MSSP)).await;
-        // let result = framed.next().await;
-        // println!("MSSP negotiation result: {:?}", result);
-        //
-        // let _ = framed.send(TelnetEvent::Will(GMCP)).await;
-        // let result = framed.next().await;
-        // println!("GMCP negotiation result: {:?}", result);
-    }
-
-    async fn handle_input_event<S>(
-        msg: TelnetEvent,
-        sink: &mut SplitSink<Framed<S, TelnetCodec>, TelnetEvent>,
+    /// One thing the client did.
+    async fn handle_event(
+        event: Event,
+        session: &mut Session,
         connection: &Connection,
         template: &TaskTemplate,
-    ) where
-        S: AsyncRead + AsyncWrite + Unpin,
-    {
-        match msg {
-            TelnetEvent::Character(char) => {
-                trace!("Received character: {}", char);
-            }
-            TelnetEvent::Message(msg) => {
-                if connection.input_to.load().is_some()
-                    && let Some(input_to) = connection.input_to.swap(None)
-                {
-                    Self::resolve_input_to(&input_to, &msg, sink, connection, template).await;
-
+        shutting_down: bool,
+    ) {
+        match event {
+            Event::Line(line) => {
+                if shutting_down {
                     return;
                 }
-
+                if let Some(input_to) = connection.input_to.swap(None) {
+                    Self::resolve_input_to(&input_to, &line, session, connection, template).await;
+                    return;
+                }
                 let Some(proc) = connection.process.load_full() else {
-                    warn!("No process for connection. Closing.");
+                    warn!("No process for connection. Ignoring input.");
                     return;
                 };
-
                 let template = template.clone();
                 template.set_this_player(Some(proc.clone()));
-                if let Err(e) = run_command_line(&template, proc.clone(), msg).await {
+                if let Err(e) = run_command_line(&template, proc, line).await {
                     apply_runtime_error(&e, connection.process.load_full(), template.clone()).await;
                 }
             }
-            TelnetEvent::RawMessage(msg) => {
-                trace!("Received raw message: {}", msg);
+            Event::LineTruncated => warn!(
+                "Input from {} exceeded {} bytes; the rest was dropped",
+                connection.address, MAX_LINE
+            ),
+            Event::Naws { cols, rows } => {
+                trace!("{} window is {}x{}", connection.address, cols, rows)
             }
-            TelnetEvent::Do(option) => {
-                trace!("Received DO: {:?}", option);
+            Event::Charset(name) => trace!("{} charset is {}", connection.address, name),
+            Event::Gmcp { package, payload } => {
+                trace!("{} GMCP {} {}", connection.address, package, payload);
             }
-            TelnetEvent::Dont(option) => {
-                trace!("Received DONT: {:?}", option);
-            }
-            TelnetEvent::Will(option) => {
-                trace!("Received WILL: {:?}", option);
-            }
-            TelnetEvent::Wont(option) => {
-                trace!("Received WONT: {:?}", option);
-            }
-            TelnetEvent::Subnegotiate(subneg) => {
-                trace!("Received subnegotiation: {:?}", subneg);
-            }
-            TelnetEvent::GoAhead => {
-                trace!("Received GA");
-            }
-            TelnetEvent::Nop => {
-                trace!("Received NOP");
-            }
+            Event::MsspRequested => trace!("{} asked for MSSP; not offered", connection.address),
         }
     }
 
-    async fn resolve_input_to<S>(
+    async fn resolve_input_to(
         input_to: &InputTo,
-        msg: &String,
-        sink: &mut S,
+        msg: &str,
+        session: &mut Session,
         connection: &Connection,
         template: &TaskTemplate,
-    ) where
-        S: SinkExt<TelnetEvent> + Unpin,
-    {
+    ) {
         if input_to.no_echo {
-            // Tell the client to start echoing again (by saying that we won't be).
-            let _ = sink.send(TelnetEvent::Wont(TelnetOption::Echo)).await;
+            session.send(Op::EchoOn);
         }
 
         let input: LpcRef = LpcString::from(msg).into();
@@ -367,9 +280,7 @@ impl Telnet {
             Ok(Some(prepared)) => prepared,
             Ok(None) => return,
             Err(_) => {
-                let _ = sink
-                    .send(TelnetEvent::Message("Canceled.".to_string()))
-                    .await;
+                session.send(Op::Text("Canceled.\n"));
                 return;
             }
         };
@@ -400,13 +311,24 @@ impl Telnet {
     }
 }
 
+/// Write whatever the session has queued.
+async fn flush<S: AsyncWrite + Unpin>(
+    session: &mut Session,
+    out: &mut BytesMut,
+    stream: &mut S,
+) -> std::io::Result<()> {
+    session.drain_output(out);
+    if out.is_empty() {
+        return Ok(());
+    }
+    let written = stream.write_all(&out[..]).await;
+    out.clear();
+    written
+}
+
 #[cfg(test)]
 mod tests {
-    use std::{
-        net::ToSocketAddrs,
-        pin::Pin,
-        task::{Context, Poll},
-    };
+    use std::net::ToSocketAddrs;
 
     use indoc::indoc;
     use thin_vec::thin_vec;
@@ -421,36 +343,6 @@ mod tests {
         },
         test_support::test_config,
     };
-
-    struct FakeSink;
-    impl futures::Sink<TelnetEvent> for FakeSink {
-        type Error = ();
-
-        fn poll_ready(
-            self: Pin<&mut Self>,
-            _cx: &mut Context<'_>,
-        ) -> Poll<Result<(), Self::Error>> {
-            Poll::Ready(Ok(()))
-        }
-
-        fn start_send(self: Pin<&mut Self>, _item: TelnetEvent) -> Result<(), Self::Error> {
-            Ok(())
-        }
-
-        fn poll_flush(
-            self: Pin<&mut Self>,
-            _cx: &mut Context<'_>,
-        ) -> Poll<Result<(), Self::Error>> {
-            Poll::Ready(Ok(()))
-        }
-
-        fn poll_close(
-            self: Pin<&mut Self>,
-            _cx: &mut Context<'_>,
-        ) -> Poll<Result<(), Self::Error>> {
-            Poll::Ready(Ok(()))
-        }
-    }
 
     #[tokio::test]
     async fn test_resolve_input_to() {
@@ -476,7 +368,7 @@ mod tests {
         let (broker_tx, _broker_rx) = flume::unbounded();
         let (connection_tx, _connection_rx) = mpsc::channel(1);
 
-        let mut sink = FakeSink;
+        let mut session = Session::new();
 
         let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
         let connection = Connection::new(addr, connection_tx, broker_tx.clone());
@@ -487,8 +379,8 @@ mod tests {
 
         Telnet::resolve_input_to(
             &input_to,
-            &"hello".to_string(),
-            &mut sink,
+            "hello",
+            &mut session,
             &connection,
             &TaskTemplate::from(vm.global_state.clone()),
         )
@@ -515,7 +407,7 @@ mod tests {
             let (broker_tx, _broker_rx) = flume::unbounded();
             let (connection_tx, _connection_rx) = mpsc::channel(1);
 
-            let mut sink = FakeSink;
+            let mut session = Session::new();
 
             let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
             let connection = Connection::new(addr, connection_tx, broker_tx.clone());
@@ -526,8 +418,8 @@ mod tests {
 
             Telnet::resolve_input_to(
                 &input_to,
-                &"hello".to_string(),
-                &mut sink,
+                "hello",
+                &mut session,
                 &connection,
                 &TaskTemplate::from(vm.global_state.clone()),
             )
@@ -591,7 +483,7 @@ mod tests {
             };
             let (broker_tx, _broker_rx) = flume::unbounded();
             let (connection_tx, _connection_rx) = mpsc::channel(1);
-            let mut sink = FakeSink;
+            let mut session = Session::new();
             let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
             let connection = Connection::new(addr, connection_tx, broker_tx.clone());
             let input_to = InputTo {
@@ -600,8 +492,8 @@ mod tests {
             };
             Telnet::resolve_input_to(
                 &input_to,
-                &"hello".to_string(),
-                &mut sink,
+                "hello",
+                &mut session,
                 &connection,
                 &TaskTemplate::from(vm.global_state.clone()),
             )
@@ -646,7 +538,6 @@ mod tests {
     mod over_a_duplex {
         use std::time::Duration;
 
-        use nectar::constants::{CHARSET, DONT, ECHO, IAC, WILL, WONT};
         use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 
         use super::*;
@@ -657,6 +548,17 @@ mod tests {
 
         const ADDR: &str = "10.0.0.1:4000";
 
+        const IAC: u8 = 255;
+        const WILL: u8 = 251;
+        const WONT: u8 = 252;
+        const DO: u8 = 253;
+        const ECHO: u8 = 1;
+        const EOR: u8 = 25;
+        const NAWS: u8 = 31;
+        const CHARSET: u8 = 42;
+        const MXP: u8 = 91;
+        const GMCP: u8 = 201;
+
         /// The loop running on one end of a duplex; the test holds the other.
         struct Wired {
             client: DuplexStream,
@@ -665,7 +567,8 @@ mod tests {
             vm: Vm,
         }
 
-        /// Spawn the loop, answer its CHARSET offer, and return once it has announced itself.
+        /// Spawn the loop and return once it has announced itself. The client
+        /// says nothing: login is not gated on it.
         async fn wire() -> Wired {
             let vm = Vm::new(test_config());
             let (mut client, server) = tokio::io::duplex(4096);
@@ -677,12 +580,17 @@ mod tests {
                 broker_tx,
                 TaskTemplate::from(vm.global_state.clone()),
             ));
-            assert_eq!(read_n(&mut client, 3).await, [IAC, WILL, CHARSET]);
-            client.write_all(&[IAC, DONT, CHARSET]).await.unwrap();
             let BrokerOp::NewConnection(connection) = within(broker_rx.recv_async()).await.unwrap()
             else {
                 panic!("the loop announces itself first");
             };
+            assert_eq!(
+                read_n(&mut client, 15).await,
+                [
+                    IAC, DO, NAWS, IAC, WILL, CHARSET, IAC, WILL, GMCP, IAC, WILL, MXP, IAC, WILL,
+                    EOR
+                ]
+            );
             Wired {
                 client,
                 broker_rx,
@@ -717,7 +625,17 @@ mod tests {
                 .send(ConnectionOp::SendMessage("hi\n".into()))
                 .await
                 .unwrap();
-            assert_eq!(read_n(&mut w.client, 3).await, b"hi\n");
+            assert_eq!(read_n(&mut w.client, 4).await, b"hi\r\n");
+        }
+
+        #[tokio::test]
+        async fn a_charset_do_is_answered_with_our_request() {
+            let mut w = wire().await;
+            w.client.write_all(&[IAC, DO, CHARSET]).await.unwrap();
+            let mut expected = vec![IAC, 250, CHARSET, 1, b' '];
+            expected.extend(b"UTF-8");
+            expected.extend([IAC, 240]);
+            assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
         }
 
         #[tokio::test]
@@ -742,6 +660,9 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, [IAC, WILL, ECHO]);
+            // A real client acks WILL ECHO with DO ECHO; without it the
+            // session's RFC 1143 table never settles, and EchoOn stays silent.
+            w.client.write_all(&[IAC, DO, ECHO]).await.unwrap();
 
             w.client.write_all(b"hello\r\n").await.unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, ECHO]);
@@ -753,7 +674,7 @@ mod tests {
                 .send(ConnectionOp::SendMessage("done\n".into()))
                 .await
                 .unwrap();
-            assert_eq!(read_n(&mut w.client, 5).await, b"done\n");
+            assert_eq!(read_n(&mut w.client, 6).await, b"done\r\n");
             assert_eq!(
                 w.vm.global_state.committed_global(&proc, 0u16),
                 LpcRef::from(165)
@@ -769,7 +690,7 @@ mod tests {
                 .await
                 .unwrap();
             w.connection.tx.send(ConnectionOp::Close).await.unwrap();
-            assert_eq!(read_n(&mut w.client, 4).await, b"bye\n");
+            assert_eq!(read_n(&mut w.client, 5).await, b"bye\r\n");
             let mut rest = [0u8; 8];
             assert_eq!(
                 within(w.client.read(&mut rest)).await.unwrap(),
