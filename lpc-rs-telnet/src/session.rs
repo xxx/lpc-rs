@@ -198,6 +198,9 @@ impl Session {
                 Frame::Sub(opt, payload) => self.subnegotiation(Opt::from(opt), &payload),
             }
         }
+        // A full read's worth of frames is never needed again; don't let an
+        // idle connection hold onto a large read's high-water capacity.
+        frames.shrink_to(256);
         self.frames = frames;
     }
 
