@@ -522,6 +522,7 @@ mod tests {
             Some(vec![s("sword"), s("bob   the guard")])
         );
         assert_eq!(args("'give' %w 'to' %s", "give long sword to bob"), None);
+        assert_eq!(args("'take' %w", "take 5"), Some(vec![s("5")]));
     }
 
     #[test]
