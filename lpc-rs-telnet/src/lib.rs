@@ -8,5 +8,6 @@
 #![warn(missing_docs)]
 
 mod opt;
+mod table;
 
 pub use opt::Opt;
