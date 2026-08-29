@@ -28,6 +28,7 @@ pub(crate) struct Lpc<'a> {
     rule: &'a ParserRule,
     candidates: &'a [Candidate],
     resolver: Resolver<LpcVocabulary<'a>>,
+    arrays: Vec<(usize, LpcRef)>,
 }
 
 impl<'a> Lpc<'a> {
@@ -47,7 +48,13 @@ impl<'a> Lpc<'a> {
             rule,
             candidates,
             resolver,
+            arrays: Vec::new(),
         }
+    }
+
+    /// Forget the memoized slot arrays; the next parse mints its own.
+    pub(crate) fn reset(&mut self) {
+        self.arrays.clear();
     }
 
     /// `candidate` as an LPC object reference.
@@ -61,13 +68,25 @@ impl<'a> Lpc<'a> {
         LpcRef::Array(self.ctx.txn().with(|t| t.mint_array(array)))
     }
 
+    /// The array of the slot at capture index `slot`: minted once per parse,
+    /// so every call over that slot receives the same one. Keying by the
+    /// candidates instead would alias two slots that picked the same ones.
+    fn slot_array(&mut self, slot: usize, candidates: &[usize]) -> LpcRef {
+        if let Some((_, array)) = self.arrays.iter().find(|(index, _)| *index == slot) {
+            return array.clone();
+        }
+        let array = self.objects(candidates);
+        self.arrays.push((slot, array.clone()));
+        array
+    }
+
     /// A slot as the handler receives it.
-    fn value(&self, slot: &Slot) -> LpcRef {
+    fn value(&mut self, slot: &Slot) -> LpcRef {
         match slot {
             Slot::Text(text) => LpcRef::from(text.as_str()),
             Slot::Empty => LpcRef::from(0),
             Slot::Object(c) => self.object(*c),
-            Slot::Objects(cs) => self.objects(cs),
+            Slot::Objects(index, cs) => self.slot_array(*index, cs),
             Slot::Mixed(cs, reasons) => {
                 let array: LpcArray = cs
                     .iter()
@@ -90,7 +109,10 @@ impl<'a> Lpc<'a> {
 
 impl Ask for Lpc<'_> {
     async fn call(&mut self, family: Family, target: Target, args: &[Slot]) -> Result<Reply> {
-        let values: Vec<LpcRef> = args.iter().map(|s| self.value(s)).collect();
+        let mut values: Vec<LpcRef> = Vec::with_capacity(args.len());
+        for slot in args {
+            values.push(self.value(slot));
+        }
         handlers::call(
             self.ctx,
             self.actor,

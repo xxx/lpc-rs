@@ -167,9 +167,14 @@ pub(crate) enum Arg {
 /// One parse's failure, with how far it got.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Failure {
+    /// What went wrong, as the master's `parser_error_message` numbers it.
     pub(crate) kind: Kind,
+    /// The target whose reply caused the failure, when one did.
     pub(crate) object: Option<Target>,
+    /// The message's third argument: a phrase, a reason, a count, or the
+    /// qualifying candidates.
     pub(crate) arg: Arg,
+    /// The message's fourth argument: whether the phrase named a many slot.
     pub(crate) flag: bool,
     /// Object slots chosen before failing.
     pub(crate) progress: usize,

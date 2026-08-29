@@ -32,8 +32,9 @@ pub(crate) enum Slot {
     /// One object: a single slot's choice, or the candidate being asked
     /// about the slot it is in — even a many slot.
     Object(usize),
-    /// A many slot's choices.
-    Objects(Vec<usize>),
+    /// A many slot's choices, and the capture index of the slot they fill:
+    /// one array per slot per parse, so the re-ask sees the same one.
+    Objects(usize, Vec<usize>),
     /// A many slot as `do_` sees it: the choices, then the plain reasons.
     Mixed(Vec<usize>, Vec<String>),
 }
@@ -293,7 +294,7 @@ pub(crate) async fn attempt<A: Ask>(
             }
         };
         values[index] = if cap.kind.is_many() {
-            Slot::Objects(picked.clone())
+            Slot::Objects(index, picked.clone())
         } else {
             Slot::Object(picked[0])
         };
@@ -567,11 +568,22 @@ mod tests {
             })
             .map(|(_, _, args)| args)
             .collect();
+        assert_eq!(on_zero.len(), 2, "{on_zero:?}");
         assert_eq!(
             on_zero[1],
-            &vec![Slot::Objects(vec![0]), text("swords")],
+            &vec![Slot::Objects(0, vec![0]), text("swords")],
             "{on_zero:?}"
         );
+        let filled: Vec<usize> = ask
+            .calls
+            .iter()
+            .flat_map(|(_, _, args)| args)
+            .filter_map(|slot| match slot {
+                Slot::Objects(index, _) => Some(*index),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(filled, vec![0], "{:?}", ask.calls);
     }
 
     #[tokio::test]
