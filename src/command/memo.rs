@@ -22,8 +22,8 @@ impl<K: Hash + Eq, V: Clone> Memo<K, V> {
     }
 
     /// The value for `key`, built by `build` on a miss — outside the lock,
-    /// and remembered only on success. Two builders racing on one key both
-    /// get the value that landed first, so a key never has two values.
+    /// and remembered only on success; builders racing on one key both get
+    /// the value that landed first.
     pub(crate) fn get_or_try_build<Q, E>(
         &self,
         key: &Q,
@@ -111,8 +111,7 @@ mod tests {
     }
 
     /// A build that reaches the memo again for its own key stands in for a
-    /// racing builder: it can only get in because no lock is held, and the
-    /// value it lands is the one both callers end up with.
+    /// racing builder.
     #[test]
     fn a_build_runs_unlocked_and_the_first_value_to_land_wins() {
         let memo: Memo<String, usize> = Memo::new(2);
