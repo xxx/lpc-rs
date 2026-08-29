@@ -18,7 +18,7 @@ pub(crate) const EOR_CMD: u8 = 239;
 /// A telnet option, by number.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Opt {
-    /// RFC 857. We echo — or rather, we tell the client to stop — only around a no-echo `input_to`.
+    /// RFC 857. We tell the client to stop echoing, only around a no-echo `input_to`.
     Echo,
     /// RFC 858: suppress go-ahead.
     Sga,

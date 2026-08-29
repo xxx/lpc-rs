@@ -858,8 +858,8 @@ mod tests {
         assert_eq!(out(&mut s), expected);
     }
 
-    /// Not a fuzzer — card D is — but the property the wire demands, checked
-    /// on every run: no input sequence panics, and nothing sticks in the queues.
+    /// The property the wire demands, checked on every run: no input sequence
+    /// panics, and nothing sticks in the queues.
     #[test]
     fn random_bytes_never_panic_and_always_drain() {
         let mut seed = 0x9E37_79B9_7F4A_7C15u64;
