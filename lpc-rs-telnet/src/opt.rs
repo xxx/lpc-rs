@@ -3,10 +3,10 @@
 /// End of subnegotiation.
 pub(crate) const SE: u8 = 240;
 /// No operation.
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) const NOP: u8 = 241;
 /// Go ahead: the prompt mark when EOR is not negotiated.
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) const GA: u8 = 249;
 /// Start of subnegotiation.
 pub(crate) const SB: u8 = 250;
@@ -17,7 +17,7 @@ pub(crate) const DONT: u8 = 254;
 /// Interpret as command.
 pub(crate) const IAC: u8 = 255;
 /// The end-of-record command (RFC 885), distinct from the EOR option.
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) const EOR_CMD: u8 = 239;
 
 /// A telnet option, by number.
