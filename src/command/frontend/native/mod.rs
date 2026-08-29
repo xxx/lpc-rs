@@ -395,8 +395,7 @@ fn assemble(groups: &[Group], verbs: &[&str]) -> Result<Compiled, GrammarError> 
         });
     }
     b.production(s, rhs);
-    b.start(s);
-    let grammar = b.build()?;
+    let grammar = b.build(s)?;
     Ok(Compiled {
         verbs: verbs.iter().map(|v| Ustr::from(v)).collect(),
         grammar: Arc::new(grammar),

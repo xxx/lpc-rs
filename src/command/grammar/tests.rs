@@ -22,8 +22,7 @@ fn add_action_exact_verb() {
     let star = b.words_star(&w);
     let s = b.nonterminal("S");
     b.production(s, [lit("look"), nt(star).labeled(Label(0))]);
-    b.start(s);
-    let g = b.build().unwrap();
+    let g = b.build(s).unwrap();
 
     assert_eq!(
         captured(&first(&g, "look at me").unwrap()),
@@ -49,8 +48,7 @@ fn add_action_prefix_verb() {
     let star = b.words_star(&w);
     let s = b.nonterminal("S");
     b.production(s, [tok(verb).labeled(Label(0)), nt(star).labeled(Label(1))]);
-    b.start(s);
-    let g = b.build().unwrap();
+    let g = b.build(s).unwrap();
 
     let p = first(&g, "'hello there").unwrap();
     assert_eq!(
@@ -87,8 +85,7 @@ fn parse_command_pattern() {
             nt(items).labeled(Label(1)),
         ],
     );
-    b.start(s);
-    let g = b.build().unwrap();
+    let g = b.build(s).unwrap();
 
     assert_eq!(
         captured(&first(&g, "take the red sword from bob").unwrap()),
@@ -121,8 +118,7 @@ fn parse_command_word_number_and_string() {
             nt(star).labeled(Label(2)),
         ],
     );
-    b.start(s);
-    let g = b.build().unwrap();
+    let g = b.build(s).unwrap();
 
     assert_eq!(
         captured(&first(&g, "give 3 coins to bob the tall").unwrap()),
@@ -157,8 +153,7 @@ fn parser_package_rule() {
             nt(obj).labeled(Label(1)),
         ],
     );
-    b.start(s);
-    let g = b.build().unwrap();
+    let g = b.build(s).unwrap();
 
     assert_eq!(
         captured(&first(&g, "hurl the ball at bob").unwrap()),
@@ -175,8 +170,7 @@ fn parser_package_bare_verb() {
     let verb = b.alternatives([lit("inventory"), lit("i")]);
     let s = b.nonterminal("S");
     b.production(s, [nt(verb)]);
-    b.start(s);
-    let g = b.build().unwrap();
+    let g = b.build(s).unwrap();
 
     assert!(first(&g, "i").unwrap().captures().is_empty());
     assert!(first(&g, "inventory").is_some());
@@ -194,7 +188,7 @@ fn dgd_grammar_builds_a_tree() {
     let expr = b.nonterminal("expr");
     let p_sum = b.production(expr, [nt(expr), lit("+"), tok(num)]);
     let p_num = b.production(expr, [tok(num)]);
-    let g = b.build().unwrap();
+    let g = b.build(expr).unwrap();
 
     let parses: Vec<Parse> = parse(&g, "1 + 2 + 3").collect();
     assert_eq!(parses.len(), 1);
@@ -223,7 +217,7 @@ fn dgd_ambiguous_grammar_enumerates_alternatives() {
     let expr = b.nonterminal("expr");
     b.production(expr, [nt(expr), lit("+"), nt(expr)]);
     b.production(expr, [tok(num)]);
-    let g = b.build().unwrap();
+    let g = b.build(expr).unwrap();
 
     assert_eq!(parse(&g, "1 + 2 + 3").count(), 2);
     assert_eq!(parse(&g, "1 + 2 + 3 + 4").count(), 5);
@@ -241,20 +235,8 @@ fn builtins_are_memoized_per_builder() {
     let s = b.nonterminal("S");
     let plus = b.words_plus(&w);
     b.production(s, [nt(plus)]);
-    b.start(s);
-    let g = b.build().unwrap();
+    let g = b.build(s).unwrap();
     assert_eq!(parse(&g, "a b c").count(), 1);
-}
-
-#[test]
-fn builtins_without_an_explicit_start_parse_the_first_builtin() {
-    let mut b = GrammarBuilder::new();
-    let w = b.words_tokens();
-    b.word_like(&w);
-    let s = b.nonterminal("S");
-    b.production(s, [lit("a")]);
-    let g = b.build().unwrap();
-    assert_eq!(g.nonterminal_name(g.start()), "%word_like");
 }
 
 /// A pattern-frontend element, the shape the differential test generates.
@@ -318,8 +300,7 @@ fn build(elems: &[Elem]) -> super::Grammar {
     }
     let s = b.nonterminal("S");
     b.production(s, rhs);
-    b.start(s);
-    b.build().unwrap()
+    b.build(s).unwrap()
 }
 
 /// Every way `elems` can cover `toks[pos..]`, as the span of each element.
@@ -394,8 +375,7 @@ fn a_nomatch_class_is_a_production_symbol() {
     let other = b.nomatch("other");
     let s = b.nonterminal("S");
     b.production(s, [tok(word), tok(other).labeled(Label(0))]);
-    b.start(s);
-    let g = b.build().unwrap();
+    let g = b.build(s).unwrap();
 
     assert_eq!(
         captured(&first(&g, "ab !?").unwrap()),

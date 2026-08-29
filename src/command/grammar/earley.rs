@@ -592,7 +592,7 @@ mod tests {
         let (mut b, _, _) = words();
         let s = b.nonterminal("S");
         b.production(s, [lit("a"), lit("b")]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert!(recognize(&g, "a b"));
         assert!(!recognize(&g, "a"));
         assert!(!recognize(&g, "a b c"));
@@ -605,7 +605,7 @@ mod tests {
         let s = b.nonterminal("S");
         b.production(s, [lit("a")]);
         b.production(s, [lit("b")]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert!(recognize(&g, "a"));
         assert!(recognize(&g, "b"));
         assert!(!recognize(&g, "c"));
@@ -619,7 +619,7 @@ mod tests {
         b.production(s, [nt(opt), lit("b")]);
         b.production(opt, [lit("a")]);
         b.production(opt, []);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert!(recognize(&g, "b"));
         assert!(recognize(&g, "a b"));
         assert!(!recognize(&g, "a"));
@@ -633,7 +633,7 @@ mod tests {
         b.production(s, [lit("a"), nt(opt), lit("b")]);
         b.production(opt, [lit("x")]);
         b.production(opt, []);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert!(recognize(&g, "a b"));
         assert!(recognize(&g, "a x b"));
         assert!(!recognize(&g, "a x x b"));
@@ -648,7 +648,7 @@ mod tests {
         b.production(s, [nt(a), nt(c)]);
         b.production(a, []);
         b.production(c, []);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert!(recognize(&g, ""));
         assert!(recognize(&g, "   "));
         assert!(!recognize(&g, "a"));
@@ -656,7 +656,7 @@ mod tests {
         let (mut b, _, _) = words();
         let s = b.nonterminal("S");
         b.production(s, [lit("a")]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert!(!recognize(&g, ""));
     }
 
@@ -666,7 +666,7 @@ mod tests {
         let s = b.nonterminal("S");
         b.production(s, [nt(s), lit("a")]);
         b.production(s, [lit("a")]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert!(recognize(&g, "a"));
         assert!(recognize(&g, "a a a"));
         assert!(!recognize(&g, "a b"));
@@ -678,7 +678,7 @@ mod tests {
         let s = b.nonterminal("S");
         b.production(s, [lit("a"), nt(s)]);
         b.production(s, [lit("a")]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert!(recognize(&g, "a a a"));
         assert!(!recognize(&g, ""));
     }
@@ -688,7 +688,7 @@ mod tests {
         let (mut b, number, word) = words();
         let s = b.nonterminal("S");
         b.production(s, [tok(number), tok(word)]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert!(recognize(&g, "3 apples"));
         assert!(recognize(&g, "3 four"));
         assert!(!recognize(&g, "three apples"));
@@ -701,14 +701,14 @@ mod tests {
         b.case_insensitive(true);
         let s = b.nonterminal("S");
         b.production(s, [lit("Look")]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert!(recognize(&g, "LOOK"));
         assert!(recognize(&g, "look"));
 
         let (mut b, _, _) = words();
         let s = b.nonterminal("S");
         b.production(s, [lit("look")]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert!(!recognize(&g, "LOOK"));
     }
 
@@ -718,7 +718,7 @@ mod tests {
         let word = b.token("word", "[a-z]+");
         let s = b.nonterminal("S");
         b.production(s, [tok(word)]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert!(!recognize(&g, "a!"));
     }
 
@@ -729,7 +729,7 @@ mod tests {
         let bee = b.nonterminal("B");
         let p_s = b.production(s, [lit("a"), nt(bee)]);
         let p_b = b.production(bee, [lit("b")]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
 
         let parses: Vec<Parse> = parse(&g, "a b").collect();
         assert_eq!(parses.len(), 1);
@@ -762,7 +762,7 @@ mod tests {
         let p0 = b.production(s, [nt(a)]);
         let p1 = b.production(s, [lit("a")]);
         b.production(a, [lit("a")]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
 
         let parses: Vec<Parse> = parse(&g, "a").collect();
         assert_eq!(parses[0].root().production, p0);
@@ -777,7 +777,7 @@ mod tests {
         b.production(s, [lit("say"), nt(rest).labeled(Label(0))]);
         b.production(rest, [tok(word)]);
         b.production(rest, [nt(rest), tok(word)]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
 
         let p = parse(&g, "say hello   there").next().unwrap();
         assert_eq!(p.captures(), vec![(Label(0), "hello   there")]);
@@ -792,7 +792,7 @@ mod tests {
         b.production(s, [lit("wait"), nt(star).labeled(Label(9))]);
         b.production(star, []);
         b.production(star, [nt(star), tok(word)]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
 
         let p = parse(&g, "wait").next().unwrap();
         assert_eq!(p.captures(), vec![(Label(9), "")]);
@@ -806,7 +806,7 @@ mod tests {
         let e = b.nonterminal("E");
         b.production(e, [nt(e), lit("+"), nt(e)]);
         b.production(e, [lit("n")]);
-        b.build().unwrap()
+        b.build(e).unwrap()
     }
 
     #[test]
@@ -834,7 +834,7 @@ mod tests {
         b.production(s, [nt(s), nt(s)]);
         b.production(s, [lit("a")]);
         b.max_parses(usize::MAX);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         let input = ["a"; 20].join(" ");
         assert_eq!(parse(&g, &input).take(2).count(), 2);
     }
@@ -846,7 +846,7 @@ mod tests {
         let s = b.nonterminal("S");
         b.production(s, [nt(s)]);
         b.production(s, [lit("a")]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert_eq!(parse(&g, "a").count(), 1);
     }
 
@@ -859,7 +859,7 @@ mod tests {
         b.production(s, [nt(t)]);
         b.production(s, []);
         b.production(t, [nt(s)]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         let count = parse(&g, "").count();
         assert_eq!(count, 1);
     }
@@ -869,7 +869,7 @@ mod tests {
         let (mut b, _, _) = words();
         let s = b.nonterminal("S");
         b.production(s, []);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         let p = parse(&g, "").next().unwrap();
         assert_eq!(p.root().span, 0..0);
         assert!(p.captures().is_empty());
@@ -881,7 +881,7 @@ mod tests {
         let word = b.token("word", "[a-z]+");
         let s = b.nonterminal("S");
         b.production(s, [tok(word)]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert_eq!(parse(&g, "a!").count(), 0);
         assert_eq!(parse(&g, "a b").count(), 0);
     }
@@ -910,7 +910,7 @@ mod tests {
         );
         b.production(rest, [tok(word)]);
         b.production(rest, [nt(rest), tok(word)]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
 
         let p = parse(&g, "say a b c").next().unwrap();
         assert_eq!(p.captures(), vec![(Label(0), "a b"), (Label(1), "c")]);
@@ -923,9 +923,8 @@ mod tests {
         let e = b.nonterminal("E");
         b.production(e, [nt(e), nt(e)]);
         b.production(e, [tok(w.word)]);
-        b.start(e);
         b.max_steps(max_steps);
-        b.build().unwrap()
+        b.build(e).unwrap()
     }
 
     #[test]
@@ -982,7 +981,7 @@ mod tests {
             b.production(s, [nt(s), lit("a")]);
         }
         b.production(s, [lit("a")]);
-        b.build().unwrap()
+        b.build(s).unwrap()
     }
 
     /// Run `f` on a thread with half the 2 MiB stack tokio's workers get.
@@ -1038,7 +1037,7 @@ mod tests {
         b.production(s, [lit("a"), nt(s)]);
         b.production(s, [lit("a")]);
         b.max_depth(3);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         let mut ok = parse(&g, "a a a");
         assert!(ok.next().is_some());
         assert!(!ok.too_deep());
@@ -1057,7 +1056,7 @@ mod tests {
         let s = b.nonterminal("S");
         b.production(s, [tok(word)]);
         b.max_steps(1);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         let mut parses = parse(&g, "!");
         assert_eq!(parses.by_ref().count(), 0);
         assert!(!parses.over_budget());

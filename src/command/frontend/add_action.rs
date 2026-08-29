@@ -56,8 +56,7 @@ fn build(verb: &str, matching: VerbMatch) -> Grammar {
             b.production(s, [nt(word_like), nt(star).labeled(Label(0))]);
         }
     }
-    b.start(s);
-    b.build()
+    b.build(s)
         .unwrap_or_else(|e| unreachable!("a verb grammar is built from fixed rules: {e}"))
 }
 

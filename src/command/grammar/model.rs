@@ -141,8 +141,6 @@ pub(crate) struct TokenRule {
 /// Errors that may occur during grammar construction and validation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GrammarError {
-    /// The builder has no productions.
-    EmptyGrammar,
     /// A nonterminal used on a right-hand side or as the start has no production.
     UnknownNonTerminal { name: String },
     /// A token rule pattern is not a valid regex.
@@ -156,7 +154,6 @@ impl fmt::Display for GrammarError {
     /// Display the error.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            GrammarError::EmptyGrammar => write!(f, "the grammar has no productions"),
             GrammarError::UnknownNonTerminal { name } => {
                 write!(f, "nonterminal `{name}` has no production")
             }
@@ -239,7 +236,6 @@ pub struct GrammarBuilder {
     nonterminals: Vec<String>,
     by_name: HashMap<String, NtId>,
     productions: Vec<Production>,
-    start: Option<NtId>,
     options: Options,
 }
 
@@ -299,15 +295,6 @@ impl GrammarBuilder {
         ProdId(self.productions.len() as u32 - 1)
     }
 
-    /// Set the start symbol; the first production's left-hand side when unset.
-    /// A grammar using the builtins (`word_like`, `words_plus`, `words_star`,
-    /// `optional`, `alternatives`) must call this explicitly, since their
-    /// injected productions come first.
-    pub fn start(&mut self, nt: NtId) -> &mut Self {
-        self.start = Some(nt);
-        self
-    }
-
     /// Toggle case-insensitive matching.
     pub fn case_insensitive(&mut self, yes: bool) -> &mut Self {
         self.options.case_insensitive = yes;
@@ -343,21 +330,16 @@ impl GrammarBuilder {
         self.nonterminal(&name)
     }
 
-    /// Validate and build the grammar; fails with `GrammarError` if invalid.
-    pub fn build(self) -> Result<Grammar, GrammarError> {
+    /// Validate and build the grammar with `start` as its start symbol; fails
+    /// with `GrammarError` if invalid.
+    pub fn build(self, start: NtId) -> Result<Grammar, GrammarError> {
         let Self {
             token_rules,
             nonterminals,
             mut productions,
-            start,
             options,
             ..
         } = self;
-
-        let Some(first) = productions.first() else {
-            return Err(GrammarError::EmptyGrammar);
-        };
-        let start = start.unwrap_or(first.lhs);
 
         let mut by_lhs = vec![Vec::new(); nonterminals.len()];
         for (i, p) in productions.iter().enumerate() {
@@ -451,21 +433,13 @@ mod tests {
     }
 
     #[test]
-    fn empty_grammar_is_an_error() {
-        assert_eq!(
-            GrammarBuilder::new().build().unwrap_err(),
-            GrammarError::EmptyGrammar
-        );
-    }
-
-    #[test]
     fn undefined_nonterminal_is_an_error() {
         let mut b = GrammarBuilder::new();
         let s = b.nonterminal("S");
         let ghost = b.nonterminal("Ghost");
         b.production(s, [nt(ghost)]);
         assert_eq!(
-            b.build().unwrap_err(),
+            b.build(s).unwrap_err(),
             GrammarError::UnknownNonTerminal {
                 name: "Ghost".into()
             }
@@ -478,32 +452,9 @@ mod tests {
         let s = b.nonterminal("S");
         b.production(s, [nt(NtId(99))]);
         assert_eq!(
-            b.build().unwrap_err(),
+            b.build(s).unwrap_err(),
             GrammarError::UnknownNonTerminal { name: "#99".into() }
         );
-    }
-
-    #[test]
-    fn start_defaults_to_the_first_production() {
-        let mut b = GrammarBuilder::new();
-        let t = b.nonterminal("T");
-        let s = b.nonterminal("S");
-        b.production(t, [lit("t")]);
-        b.production(s, [nt(t)]);
-        let g = b.build().unwrap();
-        assert_eq!(g.start(), t);
-        assert_eq!(g.nonterminal_name(g.start()), "T");
-    }
-
-    #[test]
-    fn explicit_start_wins() {
-        let mut b = GrammarBuilder::new();
-        let t = b.nonterminal("T");
-        let s = b.nonterminal("S");
-        b.production(t, [lit("t")]);
-        b.production(s, [nt(t)]);
-        b.start(s);
-        assert_eq!(b.build().unwrap().start(), s);
     }
 
     #[test]
@@ -512,7 +463,7 @@ mod tests {
         b.case_insensitive(true);
         let s = b.nonterminal("S");
         let p = b.production(s, [lit("LOOK")]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert_eq!(
             g.production(p).rhs[0].symbol,
             Symbol::Literal("look".into())
@@ -534,7 +485,7 @@ mod tests {
         b.production(d, []);
         b.production(e, [lit("x")]);
         b.production(s, [nt(e)]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         assert!(g.is_nullable(s));
         assert!(g.is_nullable(a));
         assert!(g.is_nullable(c));
@@ -559,7 +510,7 @@ mod tests {
         let word = b.token("word", r"\S+");
         let s = b.nonterminal("S");
         b.production(s, [tok(word)]);
-        let g = b.build().unwrap();
+        let g = b.build(s).unwrap();
         let scan = g.tokenize("hi there").unwrap();
         assert_eq!(scan.tokens().len(), 2);
         assert_eq!(scan.token_text(1), "there");

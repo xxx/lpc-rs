@@ -28,8 +28,7 @@ fn give_rule() -> Grammar {
             nt(items).labeled(Label(1)),
         ],
     );
-    b.start(s);
-    b.build().unwrap()
+    b.build(s).unwrap()
 }
 
 /// `[the] %i 'from' %o`, a `parse_command` pattern: two word runs whose
@@ -49,8 +48,7 @@ fn items_pattern() -> Grammar {
             nt(items).labeled(Label(1)),
         ],
     );
-    b.start(s);
-    b.build().unwrap()
+    b.build(s).unwrap()
 }
 
 /// `doc/efun/parse_string.md`'s expression grammar, through the DGD frontend.

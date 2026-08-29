@@ -183,11 +183,10 @@ fn emit(rules: Rules) -> Result<Compiled, DgdError> {
         }
         actions[slot] = production.action.clone();
     }
-    b.start(start_nt);
     b.max_parses(MAX_PARSES);
     b.max_steps(MAX_STEPS);
     Ok(Compiled {
-        grammar: Arc::new(b.build()?),
+        grammar: Arc::new(b.build(start_nt)?),
         actions,
     })
 }
