@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use lpc_rs_errors::{Result, lpc_error};
-use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::{
     command::{
@@ -19,17 +18,15 @@ use crate::{
     },
     compile_time_config::MAX_COMMAND_DEPTH,
     interpreter::{
-        CATCH_TELL, COMMAND_NOT_FOUND, PROCESS_INPUT,
+        COMMAND_NOT_FOUND, PROCESS_INPUT,
+        apply::{apply_hook, apply_pointer, deliver},
         function_type::function_ptr::FunctionPtr,
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
         process::Process,
-        stm::Effect,
-        task::apply_function::apply_function,
         task_context::{CommandState, TaskContext},
     },
-    telnet::ops::ConnectionOp,
 };
 
 /// Whether a line was handled by a rule or the pre-hook.
@@ -104,20 +101,22 @@ pub(crate) async fn dispatch_from_connection(
 /// `process_input`: a string replaces the line, `0` or no hook passes it
 /// through, anything else consumes it (`None`).
 async fn pre_hook(ctx: &TaskContext, actor: &Arc<Process>, line: &str) -> Result<Option<String>> {
-    let Some(hook) = actor
-        .program
-        .unmangled_functions
-        .get(PROCESS_INPUT)
-        .cloned()
-    else {
-        return Ok(Some(line.to_owned()));
-    };
-    let result = apply_on(ctx, actor, actor, hook, &[LpcString::from(line).into()]).await?;
-    Ok(match result {
-        LpcRef::String(replacement) => Some(replacement.to_string()),
-        LpcRef::Int(LpcInt(0)) => Some(line.to_owned()),
-        _ => None,
-    })
+    Ok(
+        match apply_hook(
+            ctx,
+            actor,
+            actor,
+            PROCESS_INPUT,
+            &[LpcString::from(line).into()],
+        )
+        .await?
+        {
+            None => Some(line.to_owned()),
+            Some(LpcRef::String(replacement)) => Some(replacement.to_string()),
+            Some(LpcRef::Int(LpcInt(0))) => Some(line.to_owned()),
+            Some(_) => None,
+        },
+    )
 }
 
 /// The verb-attached rules for `first_word`: exact verb match, owner live,
@@ -254,19 +253,9 @@ async fn try_rules(
             }
         });
 
-        let handler_ctx = ctx.clone().with_process(actor.clone());
-        handler_ctx.this_player.store(Some(actor.clone()));
-        let Some(resolved) = pointer.prepare_call(&args, &handler_ctx).await? else {
+        let Some(result) = apply_pointer(ctx, actor, pointer, &args).await? else {
             continue;
         };
-        let timeout = ctx.config().max_execution_time;
-        let result = apply_function(
-            resolved.function,
-            &resolved.args,
-            handler_ctx.with_process(resolved.process),
-            Some(timeout),
-        )
-        .await?;
         if !matches!(result, LpcRef::Int(LpcInt(0))) {
             return Ok(true);
         }
@@ -367,21 +356,6 @@ async fn sentence_trial(
     Ok(worst.unwrap_or(Sentence::NoParse))
 }
 
-/// Apply `function` on `target` with `this_player` set, joining `ctx`'s
-/// transaction.
-pub(crate) async fn apply_on(
-    ctx: &TaskContext,
-    target: &Arc<Process>,
-    this_player: &Arc<Process>,
-    function: Arc<ProgramFunction>,
-    args: &[LpcRef],
-) -> Result<LpcRef> {
-    let nested = ctx.clone().with_process(target.clone());
-    nested.this_player.store(Some(this_player.clone()));
-    let timeout = ctx.config().max_execution_time;
-    apply_function(function, args, nested, Some(timeout)).await
-}
-
 /// The message for a line nothing handled: the pending `notify_fail`, else
 /// the master's `command_not_found`, else the driver default.
 async fn fallback(ctx: &TaskContext, actor: &Arc<Process>, line: &str) -> Result<()> {
@@ -408,21 +382,8 @@ async fn notify_closure(
     if !closure.receiver_is_live(ctx.txn()) {
         return Ok(None);
     }
-    let handler_ctx = ctx.clone().with_process(actor.clone());
-    handler_ctx.this_player.store(Some(actor.clone()));
-    let Some(resolved) = closure.prepare_call(&[], &handler_ctx).await? else {
-        return Ok(None);
-    };
-    let timeout = ctx.config().max_execution_time;
-    let result = apply_function(
-        resolved.function,
-        &resolved.args,
-        handler_ctx.with_process(resolved.process),
-        Some(timeout),
-    )
-    .await?;
-    Ok(match result {
-        LpcRef::String(message) => Some(message.to_string()),
+    Ok(match apply_pointer(ctx, actor, closure, &[]).await? {
+        Some(LpcRef::String(message)) => Some(message.to_string()),
         _ => None,
     })
 }
@@ -434,25 +395,20 @@ async fn master_message(
     actor: &Arc<Process>,
     line: &str,
 ) -> Result<Option<String>> {
-    let master = ctx.object_space().master_object();
-    let hook = master.as_ref().and_then(|master| {
-        master
-            .program
-            .unmangled_functions
-            .get(COMMAND_NOT_FOUND)
-            .cloned()
-    });
-    let (Some(master), Some(hook)) = (master, hook) else {
+    let Some(master) = ctx.object_space().master_object() else {
         return Ok(Some(default_message(ctx, actor)));
     };
     let args = [
         LpcRef::Object(Arc::downgrade(actor)),
         LpcString::from(line).into(),
     ];
-    Ok(match apply_on(ctx, &master, actor, hook, &args).await? {
-        LpcRef::String(message) => Some(message.to_string()),
-        _ => None,
-    })
+    Ok(
+        match apply_hook(ctx, &master, actor, COMMAND_NOT_FOUND, &args).await? {
+            None => Some(default_message(ctx, actor)),
+            Some(LpcRef::String(message)) => Some(message.to_string()),
+            Some(_) => None,
+        },
+    )
 }
 
 const NOT_IMPLEMENTED_HINT: &str = concat!(
@@ -475,32 +431,6 @@ fn default_message(ctx: &TaskContext, actor: &Arc<Process>) -> String {
     } else {
         "What?\n".to_owned()
     }
-}
-
-/// Deliver `message` to `actor` through `catch_tell`, else straight to its
-/// connection, else the debug log, as effects.
-pub(crate) async fn deliver(ctx: &TaskContext, actor: &Arc<Process>, message: &str) -> Result<()> {
-    if let Some(catch_tell) = actor.program.unmangled_functions.get(CATCH_TELL).cloned() {
-        apply_on(
-            ctx,
-            actor,
-            actor,
-            catch_tell,
-            &[LpcString::from(message).into()],
-        )
-        .await?;
-        return Ok(());
-    }
-    let connection = ctx.txn().with(|t| t.read_connection(actor.connection.id));
-    let effect = match connection {
-        Some(connection) => Effect::Socket {
-            op: ConnectionOp::SendMessage(message.to_owned()),
-            tx: connection.tx.clone(),
-        },
-        None => Effect::DebugLog(message.to_owned()),
-    };
-    ctx.txn().with(|t| t.record_effect(effect));
-    Ok(())
 }
 
 #[cfg(test)]

@@ -9,8 +9,8 @@ use super::{Defaults, Lexicon, Lists, Vocabulary};
 use crate::interpreter::{
     ID, PARSE_COMMAND_ADJECTIV_ID_LIST, PARSE_COMMAND_ALL_WORD, PARSE_COMMAND_ID_LIST,
     PARSE_COMMAND_NUMERAL, PARSE_COMMAND_PLURAL_ID_LIST, PARSE_COMMAND_PLURALIZE,
-    PARSE_COMMAND_PREPOS_LIST, lpc_array::LpcArray, lpc_int::LpcInt, lpc_ref::LpcRef,
-    process::Process, task::apply_function::apply_function, task_context::TaskContext,
+    PARSE_COMMAND_PREPOS_LIST, apply::apply_nested, lpc_array::LpcArray, lpc_int::LpcInt,
+    lpc_ref::LpcRef, process::Process, task_context::TaskContext,
 };
 
 /// A scope of objects asked through applies in `ctx`'s transaction.
@@ -76,9 +76,7 @@ impl<'a> LpcVocabulary<'a> {
         let Some(function) = target.program.unmangled_functions.get(name).cloned() else {
             return Ok(None);
         };
-        let nested = self.ctx.clone().with_process(target.clone());
-        let timeout = self.ctx.config().max_execution_time;
-        apply_function(function, args, nested, Some(timeout))
+        apply_nested(self.ctx, target, function, args)
             .await
             .map(Some)
     }

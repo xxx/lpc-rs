@@ -6,12 +6,10 @@ use std::sync::Arc;
 use lpc_rs_errors::Result;
 
 use crate::{
-    command::{
-        dispatch::apply_on,
-        scope::{self, Scope},
-    },
+    command::scope::{self, Scope},
     interpreter::{
         INIT,
+        apply::apply_hook,
         process::Process,
         stm::{MergeOp, TxnHandle},
         task_context::TaskContext,
@@ -124,10 +122,7 @@ pub(crate) async fn fire_init(
     target: &Arc<Process>,
     this_player: &Arc<Process>,
 ) -> Result<()> {
-    let Some(init) = target.program.unmangled_functions.get(INIT).cloned() else {
-        return Ok(());
-    };
-    apply_on(ctx, target, this_player, init, &[])
+    apply_hook(ctx, target, this_player, INIT, &[])
         .await
         .map(|_| ())
 }

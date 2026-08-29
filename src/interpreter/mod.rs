@@ -1,3 +1,4 @@
+pub(crate) mod apply;
 pub mod bank;
 pub mod call_frame;
 pub mod call_outs;

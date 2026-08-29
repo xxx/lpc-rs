@@ -10,15 +10,14 @@ use lpc_rs_errors::Result;
 
 use crate::{
     command::{
-        dispatch::apply_on,
         frontend::native::{Capture, CaptureKind},
         frontend::parser::ParserRule,
         resolve::{Kind as ResolveKind, LpcVocabulary, Resolved, Resolver},
         scope::{self, Candidate},
     },
     interpreter::{
-        PARSER_ERROR_MESSAGE, lpc_array::LpcArray, lpc_ref::LpcRef, process::Process,
-        task_context::TaskContext,
+        PARSER_ERROR_MESSAGE, apply::apply_hook, lpc_array::LpcArray, lpc_ref::LpcRef,
+        process::Process, task_context::TaskContext,
     },
 };
 
@@ -505,14 +504,6 @@ async fn report(ctx: &TaskContext, actor: &Arc<Process>, failure: Failure) -> Re
     let Some(master) = ctx.object_space().master_object() else {
         return Ok(silent);
     };
-    let Some(function) = master
-        .program
-        .unmangled_functions
-        .get(PARSER_ERROR_MESSAGE)
-        .cloned()
-    else {
-        return Ok(silent);
-    };
     let arg = match failure.arg {
         Arg::None => LpcRef::from(0),
         Arg::Text(text) => LpcRef::from(text.as_str()),
@@ -528,8 +519,8 @@ async fn report(ctx: &TaskContext, actor: &Arc<Process>, failure: Failure) -> Re
         arg,
         LpcRef::from(i64::from(failure.flag)),
     ];
-    match apply_on(ctx, &master, actor, function, &args).await? {
-        LpcRef::String(message) => Ok(Verdict::Message(message.to_string())),
+    match apply_hook(ctx, &master, actor, PARSER_ERROR_MESSAGE, &args).await? {
+        Some(LpcRef::String(message)) => Ok(Verdict::Message(message.to_string())),
         _ => Ok(silent),
     }
 }

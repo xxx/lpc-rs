@@ -7,12 +7,9 @@ use std::sync::{Arc, Weak};
 
 use lpc_rs_errors::Result;
 
-use crate::{
-    command::dispatch::apply_on,
-    interpreter::{
-        INVENTORY_ACCESSIBLE, INVENTORY_VISIBLE, PARSE_COMMAND_USERS, lpc_ref::LpcRef,
-        process::Process, stm::TxnHandle, task_context::TaskContext,
-    },
+use crate::interpreter::{
+    INVENTORY_ACCESSIBLE, INVENTORY_VISIBLE, PARSE_COMMAND_USERS, apply::apply_hook,
+    lpc_ref::LpcRef, process::Process, stm::TxnHandle, task_context::TaskContext,
 };
 
 /// The objects whose rules a living may use, as weak references.
@@ -131,15 +128,9 @@ pub(crate) async fn users(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec
     let Some(master) = ctx.object_space().master_object() else {
         return Ok(Vec::new());
     };
-    let Some(function) = master
-        .program
-        .unmangled_functions
-        .get(PARSE_COMMAND_USERS)
-        .cloned()
-    else {
+    let Some(value) = apply_hook(ctx, &master, actor, PARSE_COMMAND_USERS, &[]).await? else {
         return Ok(Vec::new());
     };
-    let value = apply_on(ctx, &master, actor, function, &[]).await?;
     match &value {
         LpcRef::Array(_) => value.with_array(ctx.txn(), |a| {
             a.iter()
@@ -159,10 +150,9 @@ async fn truthy(
     target: &Arc<Process>,
     name: &str,
 ) -> Result<bool> {
-    let Some(function) = target.program.unmangled_functions.get(name).cloned() else {
+    let Some(value) = apply_hook(ctx, target, actor, name, &[]).await? else {
         return Ok(true);
     };
-    let value = apply_on(ctx, target, actor, function, &[]).await?;
     Ok(value.is_truthy(ctx.txn()))
 }
 
