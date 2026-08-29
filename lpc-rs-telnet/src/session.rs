@@ -367,6 +367,7 @@ impl Session {
                 wire::subnegotiation(&mut self.out, opt.into(), &payload);
             }
             Opt::Mssp => self.events.push_back(Event::MsspRequested),
+            Opt::Mxp => wire::subnegotiation(&mut self.out, opt.into(), &[]),
             _ => {}
         }
     }
@@ -816,10 +817,19 @@ mod tests {
         assert!(out(&mut s).is_empty());
         assert_eq!(s.stats().dropped, 1);
         s.feed(&[IAC, DO, MXP]);
+        assert_eq!(out(&mut s), [IAC, SB, MXP, IAC, SE]);
         s.send(Op::Text("a<b>&c"));
         assert_eq!(out(&mut s), b"a&lt;b&gt;&amp;c");
         s.send(Op::Mxp("<send>x</send>"));
         assert_eq!(out(&mut s), b"<send>x</send>");
+    }
+
+    #[test]
+    fn mxp_agreed_sends_the_mode_start() {
+        let mut s = connected();
+        s.feed(&[IAC, DO, MXP]);
+        assert_eq!(out(&mut s), [IAC, SB, MXP, IAC, SE]);
+        assert!(s.is_on(Opt::Mxp));
     }
 
     #[test]
