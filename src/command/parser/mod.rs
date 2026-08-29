@@ -107,12 +107,6 @@ pub(crate) async fn run(
     let mut failures: Vec<Failure> = Vec::new();
     let mut any_parse = false;
     for caps in rule.compiled.captures_of(rest) {
-        if caps
-            .iter()
-            .any(|c| c.kind == CaptureKind::Words && c.text.is_empty())
-        {
-            continue; // STR is one or more words
-        }
         any_parse = true;
         match attempt(ctx, actor, owner, rule, &caps, &all, &mut resolver).await? {
             Ok(()) => return Ok(Verdict::Handled),

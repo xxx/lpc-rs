@@ -150,15 +150,6 @@ async fn add_rule_without_init_and_bad_rules_are_errors() {
         fails(
             "",
             &[],
-            r#"mixed *create() { parse_init(); parse_add_rule("look", "at bob's OBJ"); return ({}); }"#
-        )
-        .await
-        .contains("parse_add_rule: a quote inside a word in 'at bob's OBJ'")
-    );
-    assert!(
-        fails(
-            "",
-            &[],
             r#"mixed *create() { parse_init(); parse_add_synonym("y", "x"); return ({}); }"#
         )
         .await
@@ -1145,4 +1136,28 @@ async fn generic_fallback_handlers_receive_the_verb_and_rule_prefix() {
         r,
         vec![LpcRef::from(1), s("poke"), s("OBJ"), s("poke"), s("OBJ"),]
     );
+}
+
+const QUOTED_VERB: (&str, &str) = (
+    "/quoted_verb.c",
+    indoc! { r#"
+    string seen_rule;
+    void create() { parse_init(); parse_add_rule("look", "at bob's OBJ"); }
+    mixed can_verb_rule(string verb, string rule, mixed o, string w) { return 1; }
+    void do_verb_rule(string verb, string rule, mixed o, string w) { seen_rule = rule + " " + file_name(o); }
+    string query_seen_rule() { return seen_rule; }
+"# },
+);
+
+#[tokio::test]
+async fn a_literal_with_a_quote_reaches_the_generic_handlers() {
+    let body = r#"
+        object room = find_object("/room");
+        move_object(room);
+        "/generic_target"->go(room);
+        int r = command("look at bob's thing");
+        return ({ r, "/quoted_verb"->query_seen_rule() });
+    "#;
+    let r = run("", &[QUOTED_VERB, GENERIC_TARGET, ROOM], &custom_main(body)).await;
+    assert_eq!(r, vec![LpcRef::from(1), s("at bob's OBJ /generic_target")]);
 }

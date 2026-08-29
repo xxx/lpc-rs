@@ -1,12 +1,18 @@
-//! The parser package's rule shape: `parse_add_rule`'s tokens rewritten
-//! into the native dialect, with the handler slugs and slots the protocol
-//! needs.
+//! The parser package's rule shape: `parse_add_rule`'s tokens as pattern
+//! groups, with the handler slugs the protocol needs.
 
-use std::{fmt, sync::Arc};
+use std::{
+    fmt,
+    sync::{Arc, LazyLock},
+};
 
+use dashmap::DashMap;
 use ustr::Ustr;
 
-use crate::command::frontend::native::{self, CaptureKind, Compiled, PatternError};
+use crate::command::{
+    frontend::native::{self, CaptureKind, Compiled, Group},
+    grammar::GrammarError,
+};
 
 /// Why a rule does not compile; the text reaches the LPC caller.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -15,12 +21,10 @@ pub enum ParserRuleError {
     TwoStrs(String),
     /// A token glued to other letters (`OBJect`).
     TokenInWord(String),
-    /// A word holding `'`, which the native dialect quotes words with.
-    QuoteInWord(String),
     /// More than two object slots.
     TooManyObjects(String),
-    /// The rewritten pattern did not compile.
-    Pattern(PatternError),
+    /// The engine rejected the built grammar.
+    Grammar(GrammarError),
 }
 
 impl fmt::Display for ParserRuleError {
@@ -29,11 +33,10 @@ impl fmt::Display for ParserRuleError {
         match self {
             ParserRuleError::TwoStrs(rule) => write!(f, "two STR tokens in '{rule}'"),
             ParserRuleError::TokenInWord(rule) => write!(f, "a token inside a word in '{rule}'"),
-            ParserRuleError::QuoteInWord(rule) => write!(f, "a quote inside a word in '{rule}'"),
             ParserRuleError::TooManyObjects(rule) => {
                 write!(f, "more than two object slots in '{rule}'")
             }
-            ParserRuleError::Pattern(e) => write!(f, "{e}"),
+            ParserRuleError::Grammar(e) => write!(f, "{e}"),
         }
     }
 }
@@ -78,24 +81,15 @@ fn token(word: &str, rule: &str) -> Result<Token, ParserRuleError> {
     if TOKENS.iter().any(|(name, _)| word.starts_with(name)) {
         return Err(ParserRuleError::TokenInWord(rule.to_owned()));
     }
-    if word.contains('\'') {
-        return Err(ParserRuleError::QuoteInWord(rule.to_owned()));
-    }
     Ok(Token::Literal(word.to_owned()))
 }
 
-/// The native-dialect element for a token.
-fn pattern_element(token: &Token) -> String {
+/// The pattern group for a token.
+fn group_of(token: &Token) -> Group {
     match token {
-        Token::Capture(CaptureKind::Object) => "%o".to_owned(),
-        Token::Capture(CaptureKind::Items) => "%i".to_owned(),
-        Token::Capture(CaptureKind::Liv) => "%L".to_owned(),
-        Token::Capture(CaptureKind::Living) => "%l".to_owned(),
-        Token::Capture(CaptureKind::Word) => "%w".to_owned(),
-        Token::Capture(CaptureKind::Words) => "%s".to_owned(),
-        Token::Capture(CaptureKind::Number) => "%d".to_owned(),
-        Token::Capture(CaptureKind::Preposition) => "%p".to_owned(),
-        Token::Literal(word) => format!("'{word}'"),
+        Token::Capture(CaptureKind::Words) => Group::Text,
+        Token::Capture(kind) => Group::Capture(*kind),
+        Token::Literal(word) => Group::Words(vec![word.clone()]),
     }
 }
 
@@ -117,8 +111,22 @@ fn slug_word(token: &Token, do_family: bool) -> String {
     }
 }
 
-/// Compile `rule` for `verb`: the tokens' pattern through the native
-/// compiler and both slugs; the captures' kinds are `compiled.kinds`.
+/// Compiled patterns by rule text, one per dialect like the native caches.
+static COMPILED: LazyLock<DashMap<String, Arc<Compiled>>> = LazyLock::new(DashMap::new);
+
+/// The compiled pattern for `rule`, built from `tokens` once per rule text.
+fn compiled_for(rule: &str, tokens: &[Token]) -> Result<Arc<Compiled>, ParserRuleError> {
+    if let Some(hit) = COMPILED.get(rule) {
+        return Ok(Arc::clone(&hit));
+    }
+    let groups: Vec<Group> = tokens.iter().map(group_of).collect();
+    let compiled = native::compile_groups(&groups).map_err(ParserRuleError::Grammar)?;
+    Ok(COMPILED.entry(rule.to_owned()).or_insert(compiled).clone())
+}
+
+/// Compile `rule` for `verb`: the tokens as pattern groups through the
+/// native builder, once per rule text, and both slugs; the captures' kinds
+/// are `compiled.kinds`.
 pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
     let tokens = rule
         .split_whitespace()
@@ -137,12 +145,7 @@ pub fn compile(verb: &str, rule: &str) -> Result<ParserRule, ParserRuleError> {
     if kinds.iter().filter(|k| k.is_object()).count() > 2 {
         return Err(ParserRuleError::TooManyObjects(rule.to_owned()));
     }
-    let pattern = tokens
-        .iter()
-        .map(pattern_element)
-        .collect::<Vec<_>>()
-        .join(" ");
-    let compiled = native::compile_pattern(&pattern).map_err(ParserRuleError::Pattern)?;
+    let compiled = compiled_for(rule, &tokens)?;
     let slug = |do_family: bool| -> Ustr {
         tokens
             .iter()
@@ -235,9 +238,32 @@ mod tests {
             compile("x", "OBJ OBJ OBJ").unwrap_err().to_string(),
             "more than two object slots in 'OBJ OBJ OBJ'"
         );
+    }
+
+    #[test]
+    fn a_literal_with_a_quote_is_a_word_like_any_other() {
+        let r = compile("look", "at bob's OBJ").unwrap();
+        assert_eq!(r.can_slug, "at_bob's_obj");
         assert_eq!(
-            compile("look", "at bob's OBJ").unwrap_err().to_string(),
-            "a quote inside a word in 'at bob's OBJ'"
+            r.compiled.captures_of("at bob's sword").next().unwrap()[0].text,
+            "sword"
         );
+    }
+
+    #[test]
+    fn str_is_one_or_more_words() {
+        let r = compile("say", "STR").unwrap();
+        assert!(r.compiled.captures_of("").next().is_none());
+        assert_eq!(
+            r.compiled.captures_of("hi there").next().unwrap()[0].text,
+            "hi there"
+        );
+    }
+
+    #[test]
+    fn a_rule_text_compiles_once_whatever_its_verb() {
+        let a = compile("look", "at OBJ").unwrap();
+        let b = compile("peer", "at OBJ").unwrap();
+        assert!(Arc::ptr_eq(&a.compiled, &b.compiled));
     }
 }
