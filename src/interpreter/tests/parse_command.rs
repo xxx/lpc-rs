@@ -332,7 +332,7 @@ async fn an_object_scope_is_the_object_and_its_deep_inventory() {
 #[tokio::test]
 async fn an_object_scope_descends_into_a_container_before_moving_on() {
     // The bag arrives first, so depth-first finds its sword before the
-    // sword carried directly; `deep_inventory` lists the same order.
+    // sword carried directly.
     let r = run(
         "",
         &[SWORD, SWORD2, BAG],
