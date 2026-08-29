@@ -299,6 +299,17 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         let is_living = process.commands_enabled(self.txn());
         let environment = Process::environment_of(self.txn(), &process);
         forget_destruct(self.txn(), &process);
+        let connection = self
+            .txn()
+            .with(|t| t.read_connection(process.connection.id));
+        if let Some(connection) = connection {
+            self.txn()
+                .with(|t| t.write_connection(process.connection.id, None));
+            self.record_effect(Effect::Disconnect {
+                connection,
+                message: None,
+            });
+        }
         // A destructed verb object's parser rules go with it; without the
         // `parse_init()` gate every destruct would write `verb_rules`.
         if process.parser_ready.get().is_some() {

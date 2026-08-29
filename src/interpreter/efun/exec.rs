@@ -17,6 +17,10 @@ use crate::interpreter::{
 /// the new body and the disconnect of the body it displaced — is a deferred
 /// effect, flushed after this task commits, so a rejected attempt never
 /// touches the physical connection.
+/// What a connection hears when another takes over its body.
+pub(crate) const DISPLACED: &str =
+    "You are being disconnected because someone else logged in as you.";
+
 pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     if_chain! {
         let new_ref = context.resolve_local_register(1 as RegisterSize);
@@ -43,14 +47,16 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
                 txn.with(|t| t.write_connection(new_ob.connection.id, Some(connection.clone())));
                 txn.with(|t| t.write_connection(old_ob.connection.id, None));
 
-                // Record the physical handover. Flushed only if this
-                // attempt commits: point the connection's back-reference
-                // at the new body, and disconnect the displaced one.
                 context.record_effect(Effect::Exec {
                     new_process: new_ob.clone(),
                     connection,
-                    previous,
                 });
+                if let Some(previous) = previous {
+                    context.record_effect(Effect::Disconnect {
+                        connection: previous,
+                        message: Some(DISPLACED.to_owned()),
+                    });
+                }
             }
 
             context.return_efun_result(LpcRef::from(1));

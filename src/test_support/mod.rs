@@ -74,14 +74,17 @@ macro_rules! test_config_builder {
 pub struct Connected {
     /// The connection's outgoing operations.
     pub rx: Receiver<ConnectionOp>,
-    _broker_rx: flume::Receiver<BrokerOp>,
+    /// What the connection asks of the broker.
+    pub broker_rx: flume::Receiver<BrokerOp>,
+    /// The connection itself.
+    pub connection: Arc<Connection>,
 }
 
 /// Bind a fresh connection to `process` through the takeover path.
 pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
     let (tx, rx) = tokio::sync::mpsc::channel(4);
-    let (broker_tx, _broker_rx) = flume::unbounded();
-    let connection = Connection {
+    let (broker_tx, broker_rx) = flume::unbounded();
+    let connection = Arc::new(Connection {
         address: "127.0.0.1:23123"
             .to_socket_addrs()
             .expect("a literal address")
@@ -91,11 +94,15 @@ pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
         tx,
         broker_tx,
         input_to: Default::default(),
-    };
+    });
     vm.global_state
-        .takeover(Arc::new(connection), process.clone())
+        .takeover(connection.clone(), process.clone())
         .await;
-    Connected { rx, _broker_rx }
+    Connected {
+        rx,
+        broker_rx,
+        connection,
+    }
 }
 
 pub fn test_config() -> Config {

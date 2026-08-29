@@ -98,19 +98,20 @@ pub(crate) enum Effect {
     /// is already gone (e.g. it already fired and removed itself).
     CancelCallOut { id: u64 },
 
-    /// A deferred socket-level `exec` handover. The transactional part (the
-    /// connection cell on `new_process`) is committed as part of the owning
-    /// task; this effect is the physical part that must not run until that
-    /// commit lands. `connection` is the connection the cell now holds; the
-    /// flush points its back-reference at `new_process`. `previous` is the
-    /// connection that was bound before the handover (if any): the telnet
-    /// input it belongs to now goes to `new_process` instead, so it is
-    /// disconnected. All fields are captured at record time, so the flush
-    /// never re-resolves a cell.
+    /// The physical half of a handover: the connection cell on `new_process`
+    /// committed with the owning task; the flush points `connection`'s
+    /// back-reference at `new_process`.
     Exec {
         new_process: Arc<Process>,
         connection: Arc<Connection>,
-        previous: Option<Arc<Connection>>,
+    },
+
+    /// A connection's end — its holder destructed, or displaced by `exec`:
+    /// the back-reference is cleared and the broker disconnects it, after
+    /// `message` when there is one.
+    Disconnect {
+        connection: Arc<Connection>,
+        message: Option<String>,
     },
 }
 
@@ -145,27 +146,21 @@ impl Effect {
             Self::Exec {
                 new_process,
                 connection,
-                previous,
             } => {
-                // The cell write already committed with the owning task, so
-                // the back-reference is the only physical handover left.
                 connection.process.store(Some(new_process.clone()));
-
-                // The connection moved to `new_process`; its old holder is
-                // disconnected, mirroring the previous `takeover_process`.
-                if let Some(prev_conn) = &previous {
-                    let _ = prev_conn
-                        .tx
-                        .send(ConnectionOp::SendMessage(
-                            "You are being disconnected because someone else logged in as you."
-                                .to_string(),
-                        ))
-                        .await;
-                    let _ = prev_conn
-                        .broker_tx
-                        .send_async(BrokerOp::Disconnect(prev_conn.address))
-                        .await;
+            }
+            Self::Disconnect {
+                connection,
+                message,
+            } => {
+                connection.process.store(None);
+                if let Some(message) = message {
+                    let _ = connection.tx.send(ConnectionOp::SendMessage(message)).await;
                 }
+                let _ = connection
+                    .broker_tx
+                    .send_async(BrokerOp::Disconnect(connection.address))
+                    .await;
             }
         }
     }
@@ -197,6 +192,7 @@ impl std::fmt::Debug for Effect {
             }
             Self::CancelCallOut { id } => f.debug_tuple("CancelCallOut").field(id).finish(),
             Self::Exec { .. } => f.debug_tuple("Exec").finish(),
+            Self::Disconnect { message, .. } => f.debug_tuple("Disconnect").field(message).finish(),
         }
     }
 }

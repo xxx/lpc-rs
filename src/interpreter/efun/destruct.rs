@@ -24,8 +24,13 @@ pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
 
-    use crate::test_support::run_prog;
+    use crate::{
+        interpreter::vm::Vm,
+        telnet::ops::{BrokerOp, ConnectionOp},
+        test_support::{connect, run_prog, test_config},
+    };
 
     #[tokio::test]
     async fn test_destruct() {
@@ -52,5 +57,60 @@ mod tests {
         // This file, the clone's prototype and the simul-efun object
         // `run_prog` inserts.
         assert_eq!(result.context.object_space().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn destructing_a_connected_object_closes_its_connection_after_its_output() {
+        let vm = Vm::new(test_config());
+        let player = vm.create_process_from_code("/player.c", "").await.unwrap();
+        let mut connected = connect(&vm, &player).await;
+        let main = indoc! { r#"
+            void create() {
+                object p = find_object("/player");
+                set_this_player(p);
+                write("bye");
+                destruct(p);
+            }
+        "# };
+        vm.initialize_process_from_code("/main.c", main)
+            .await
+            .unwrap();
+        assert_eq!(
+            connected.rx.try_recv(),
+            Ok(ConnectionOp::SendMessage("bye".into()))
+        );
+        assert!(matches!(
+            connected.broker_rx.try_recv(),
+            Ok(BrokerOp::Disconnect(address)) if address == connected.connection.address
+        ));
+        assert!(connected.connection.process.load().is_none());
+    }
+
+    #[tokio::test]
+    async fn exec_then_destruct_of_the_old_body_keeps_the_connection() {
+        let vm = Vm::new(test_config());
+        let player = vm.create_process_from_code("/player.c", "").await.unwrap();
+        let connected = connect(&vm, &player).await;
+        vm.create_process_from_code("/body.c", "").await.unwrap();
+        let main = indoc! { r#"
+            void create() {
+                object p = find_object("/player");
+                exec(find_object("/body"), p);
+                destruct(p);
+            }
+        "# };
+        vm.initialize_process_from_code("/main.c", main)
+            .await
+            .unwrap();
+        assert!(connected.broker_rx.try_recv().is_err());
+        assert_eq!(
+            connected
+                .connection
+                .process
+                .load()
+                .as_ref()
+                .map(|body| body.to_string()),
+            Some("/body".to_owned())
+        );
     }
 }

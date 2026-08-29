@@ -4,6 +4,7 @@ use lpc_rs_errors::Result;
 use tracing::error;
 
 use crate::{
+    interpreter::efun::exec::DISPLACED,
     interpreter::{
         process::Process,
         stm::{
@@ -65,8 +66,13 @@ impl AttemptBody for TakeoverBody {
         txn.record_effect(Effect::Exec {
             new_process: self.process.clone(),
             connection: self.connection.clone(),
-            previous,
         });
+        if let Some(previous) = previous {
+            txn.record_effect(Effect::Disconnect {
+                connection: previous,
+                message: Some(DISPLACED.to_owned()),
+            });
+        }
 
         self.attempt = Some(txn);
         Ok(Some(live))

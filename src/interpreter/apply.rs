@@ -83,13 +83,19 @@ pub(crate) async fn apply_pointer(
 
 /// `message` to `target`: through `catch_tell` — applied with `this_player`
 /// set when one is given — else its connection, else the debug log, as
-/// effects. Whether it was received; the log is not.
+/// effects; a destructed target is the log. Whether it was received; the
+/// log is not.
 pub(crate) async fn deliver(
     ctx: &TaskContext,
     target: &Arc<Process>,
     this_player: Option<&Arc<Process>>,
     message: &str,
 ) -> Result<bool> {
+    if !target.is_live(ctx.txn()) {
+        ctx.txn()
+            .with(|t| t.record_effect(Effect::DebugLog(message.to_owned())));
+        return Ok(false);
+    }
     if let Some(function) = target.program.unmangled_functions.get(CATCH_TELL).cloned() {
         let args = [LpcString::from(message).into()];
         match this_player {

@@ -136,4 +136,38 @@ mod tests {
         );
         assert!(connected.rx.try_recv().is_err());
     }
+
+    #[tokio::test]
+    async fn write_after_destructing_this_player_is_logged_and_returns_0() {
+        let player = indoc! { r#"
+            string got;
+            void catch_tell(string s) { got = s; }
+        "# };
+        let vm = Vm::new(test_config());
+        let player = vm
+            .create_process_from_code("/player.c", player)
+            .await
+            .unwrap();
+        let mut connected = connect(&vm, &player).await;
+        let main = indoc! { r#"
+            int r;
+            void create() {
+                object p = find_object("/player");
+                set_this_player(p);
+                destruct(p);
+                r = write("hi");
+            }
+        "# };
+        let main = vm
+            .initialize_process_from_code("/main.c", main)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&main, 0u16),
+            LpcRef::from(0)
+        );
+        assert!(connected.rx.try_recv().is_err());
+    }
 }
