@@ -177,8 +177,7 @@ mod tests {
     }
 
     /// A caught refusal commits its task, so a hook fired before the check
-    /// would show: the living left behind would have forgotten the mover's
-    /// verb.
+    /// would cost the stationary living the mover's verb.
     #[tokio::test]
     async fn a_refused_move_fires_no_hook() {
         let room = "void create() {}";
