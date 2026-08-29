@@ -213,7 +213,7 @@ impl<V: Vocabulary> Resolver<V> {
     }
 
     /// Whether a non-living, non-remote candidate is named; asked only once
-    /// no living was, so a living phrase costs nothing extra when it resolves.
+    /// no living was.
     async fn names_a_non_living(
         &mut self,
         rest: &[&str],
