@@ -6,7 +6,7 @@ use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_utils::config::Config;
 
-use crate::command::{presence::forget_destruct, registry::Scope};
+use crate::command::{presence::forget_destruct, scope::Scope};
 use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,

@@ -8,7 +8,10 @@ use std::sync::Arc;
 use lpc_rs_core::LpcIntInner;
 
 use crate::{
-    command::registry::{Rule, RuleId, Scope},
+    command::{
+        registry::{Rule, RuleId},
+        scope::Scope,
+    },
     interpreter::{
         lpc_array::LpcArray, lpc_int::LpcInt, lpc_mapping::LpcMapping, lpc_ref::LpcRef,
         stm::WorldValue,
@@ -144,7 +147,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        command::registry::{Scope, tests::rule},
+        command::{registry::tests::rule, scope::Scope},
         interpreter::process::Process,
     };
 

@@ -11,10 +11,9 @@ use crate::{
     command::{
         frontend::native::{self, CaptureKind},
         resolve::{LpcVocabulary, Resolver},
+        scope,
     },
-    interpreter::{
-        efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process, stm::TxnHandle,
-    },
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process},
 };
 
 /// The register holding the destination for capture slot `slot`: registers
@@ -106,7 +105,7 @@ fn scope_of<const N: usize>(
     match arg {
         LpcRef::Object(_) => Ok(arg
             .live_object(txn)
-            .map(|root| deep_scope(txn, &root))
+            .map(|root| scope::deep(txn, &root))
             .unwrap_or_default()),
         LpcRef::Array(_) => arg.with_array(txn, |a| {
             a.iter().filter_map(|item| item.live_object(txn)).collect()
@@ -114,22 +113,6 @@ fn scope_of<const N: usize>(
         _ => Err(context
             .runtime_error("parse_command: the scope must be an object or an array of objects")),
     }
-}
-
-/// `root`, then its inventory breadth-first, each object once.
-fn deep_scope(txn: &TxnHandle, root: &Arc<Process>) -> Vec<Arc<Process>> {
-    let mut out = vec![root.clone()];
-    let mut next = 0;
-    while next < out.len() {
-        let container = out[next].clone();
-        for item in Process::inventory_of(txn, &container) {
-            if !out.iter().any(|seen| Arc::ptr_eq(seen, &item)) {
-                out.push(item);
-            }
-        }
-        next += 1;
-    }
-    out
 }
 
 /// The string members of the array in `slot`'s destination, or `None` when

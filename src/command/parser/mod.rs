@@ -3,7 +3,6 @@
 //! and the failure the master is asked to describe.
 
 mod handlers;
-mod scope;
 
 use std::sync::Arc;
 
@@ -15,6 +14,7 @@ use crate::{
         frontend::native::{Capture, CaptureKind},
         frontend::parser::ParserRule,
         resolve::{Kind as ResolveKind, LpcVocabulary, Resolved, Resolver},
+        scope::{self, Candidate},
     },
     interpreter::{
         PARSER_ERROR_MESSAGE, lpc_array::LpcArray, lpc_ref::LpcRef, process::Process,
@@ -23,7 +23,6 @@ use crate::{
 };
 
 use handlers::{Arg, Failure, Family, Kind, Reply, best_reason, call, furthest};
-use scope::Candidate;
 
 /// How one parser rule fared against a line.
 #[derive(Clone, Debug, PartialEq, Eq)]

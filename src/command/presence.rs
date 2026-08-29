@@ -6,7 +6,10 @@ use std::sync::Arc;
 use lpc_rs_errors::Result;
 
 use crate::{
-    command::{dispatch::apply_on, registry::Scope},
+    command::{
+        dispatch::apply_on,
+        scope::{self, Scope},
+    },
     interpreter::{
         INIT,
         process::Process,
@@ -15,18 +18,6 @@ use crate::{
     },
 };
 
-/// The scope `mover` will have once it stands in `new_env`.
-pub(crate) fn scope_after_move(
-    txn: &TxnHandle,
-    mover: &Arc<Process>,
-    new_env: &Arc<Process>,
-) -> Scope {
-    let mut members = vec![mover.clone(), new_env.clone()];
-    members.extend(Process::inventory_of(txn, new_env));
-    members.extend(Process::inventory_of(txn, mover));
-    Scope::new(members)
-}
-
 /// Before a move: the livings left behind forget the mover's rules, and a
 /// living mover keeps only rules whose owners stay in its post-move scope.
 /// Without the first half, a living that leaves and returns would register
@@ -34,7 +25,7 @@ pub(crate) fn scope_after_move(
 pub(crate) fn before_move(txn: &TxnHandle, mover: &Arc<Process>, new_env: &Arc<Process>) {
     forget_departure(txn, mover);
     if mover.commands_enabled(txn) {
-        let keep = scope_after_move(txn, mover, new_env);
+        let keep = scope::after_move(txn, mover, new_env);
         txn.with(|t| t.merge(mover.rules.id, MergeOp::RulesRetainOwners(keep)));
     }
 }

@@ -1,8 +1,9 @@
-//! Which objects a parser rule may name: the actor's surroundings, walked
-//! through `inventory_visible`, reach through `inventory_accessible`, and
-//! the livings the master lists.
+//! What a living's command can see: the neighbourhood (whose rules it may
+//! use and what its native captures name), the candidate walk (the parser
+//! package's descent through visible containers), and an object's deep
+//! contents (`parse_command`'s object scope).
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use lpc_rs_errors::Result;
 
@@ -10,9 +11,68 @@ use crate::{
     command::dispatch::apply_on,
     interpreter::{
         INVENTORY_ACCESSIBLE, INVENTORY_VISIBLE, PARSE_COMMAND_USERS, lpc_ref::LpcRef,
-        process::Process, task_context::TaskContext,
+        process::Process, stm::TxnHandle, task_context::TaskContext,
     },
 };
+
+/// The objects whose rules a living may use, as weak references.
+#[derive(Clone, Debug, Default)]
+pub struct Scope(Vec<Weak<Process>>);
+
+impl Scope {
+    /// A scope over `members`, held weakly.
+    pub fn new(members: impl IntoIterator<Item = Arc<Process>>) -> Scope {
+        Scope(members.into_iter().map(|p| Arc::downgrade(&p)).collect())
+    }
+
+    /// Whether `process` is a member, by pointer identity.
+    pub fn contains(&self, process: &Arc<Process>) -> bool {
+        self.0
+            .iter()
+            .any(|w| std::ptr::eq(w.as_ptr(), Arc::as_ptr(process)))
+    }
+
+    /// Whether `owner` is a member, by pointer identity.
+    pub fn contains_weak(&self, owner: &Weak<Process>) -> bool {
+        self.0.iter().any(|w| Weak::ptr_eq(w, owner))
+    }
+
+    /// The members not yet dropped, in scope order.
+    pub fn members(&self) -> Vec<Arc<Process>> {
+        self.0.iter().filter_map(Weak::upgrade).collect()
+    }
+}
+
+impl PartialEq for Scope {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.len() == other.0.len()
+            && self.0.iter().zip(&other.0).all(|(a, b)| Weak::ptr_eq(a, b))
+    }
+}
+
+/// The objects whose rules `living` may use: itself, its environment, that
+/// environment's contents, and its own contents.
+pub(crate) fn neighbourhood(txn: &TxnHandle, living: &Arc<Process>) -> Scope {
+    let mut members = vec![living.clone()];
+    if let Some(environment) = Process::environment_of(txn, living) {
+        members.extend(
+            Process::inventory_of(txn, &environment)
+                .into_iter()
+                .filter(|ob| !Arc::ptr_eq(ob, living)),
+        );
+        members.push(environment);
+    }
+    members.extend(Process::inventory_of(txn, living));
+    Scope::new(members)
+}
+
+/// The scope `mover` will have once it stands in `new_env`.
+pub(crate) fn after_move(txn: &TxnHandle, mover: &Arc<Process>, new_env: &Arc<Process>) -> Scope {
+    let mut members = vec![mover.clone(), new_env.clone()];
+    members.extend(Process::inventory_of(txn, new_env));
+    members.extend(Process::inventory_of(txn, mover));
+    Scope::new(members)
+}
 
 /// One candidate and whether the actor can reach it.
 #[derive(Clone, Debug)]
@@ -120,4 +180,37 @@ async fn truthy(
     };
     let value = apply_on(ctx, target, actor, function, &[]).await?;
     Ok(value.is_truthy(ctx.txn()))
+}
+
+/// `root`, then its inventory breadth-first, each object once.
+pub(crate) fn deep(txn: &TxnHandle, root: &Arc<Process>) -> Vec<Arc<Process>> {
+    let mut out = vec![root.clone()];
+    let mut next = 0;
+    while next < out.len() {
+        let container = out[next].clone();
+        for item in Process::inventory_of(txn, &container) {
+            if !out.iter().any(|seen| Arc::ptr_eq(seen, &item)) {
+                out.push(item);
+            }
+        }
+        next += 1;
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scope_membership_is_by_identity() {
+        let a = Arc::new(Process::default());
+        let b = Arc::new(Process::default());
+        let scope = Scope::new([a.clone()]);
+        assert!(scope.contains(&a));
+        assert!(!scope.contains(&b));
+        assert!(scope.contains_weak(&Arc::downgrade(&a)));
+        assert_eq!(scope, Scope::new([a.clone()]));
+        assert_ne!(scope, Scope::new([b]));
+    }
 }

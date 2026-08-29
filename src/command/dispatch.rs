@@ -13,8 +13,9 @@ use crate::{
             native,
         },
         parser::{self, Nickname, Verdict},
-        registry::{Family, Rule, scope_of},
+        registry::{Family, Rule},
         resolve::{LpcVocabulary, Resolver},
+        scope::neighbourhood,
     },
     compile_time_config::MAX_COMMAND_DEPTH,
     interpreter::{
@@ -153,7 +154,7 @@ async fn trial(
     first_word: &str,
 ) -> Result<Outcome> {
     let rules = actor.rules_of(ctx.txn());
-    let scope = scope_of(ctx.txn(), actor);
+    let scope = neighbourhood(ctx.txn(), actor);
     let mut candidates: Vec<Rule> = rules
         .iter()
         .filter(|rule| {

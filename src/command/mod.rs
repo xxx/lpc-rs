@@ -1,5 +1,5 @@
 //! The command system: one grammar engine that every parsing frontend
-//! compiles into. The registry, dispatch, presence, the add_action
+//! compiles into. The registry, dispatch, presence, scope, the add_action
 //! frontend, and the noun resolver exist and are wired together; other
 //! frontends follow.
 
@@ -11,3 +11,4 @@ pub(crate) mod parser;
 pub mod presence;
 pub mod registry;
 pub(crate) mod resolve;
+pub mod scope;
