@@ -390,6 +390,16 @@ impl Transaction {
         self.changeset.clone()
     }
 
+    /// Commit the changeset and take the effects for delivery,
+    /// consuming the transaction.
+    pub(crate) async fn commit(
+        mut self,
+        tx: &flume::Sender<CommitProtocol>,
+    ) -> Result<(std::result::Result<(), Conflict>, Vec<Effect>)> {
+        let commit = retry::commit_changeset(tx, self.take_changeset()).await?;
+        Ok((commit, self.take_effects()))
+    }
+
     /// Dismantle the transaction into its snapshot and changeset.
     #[cfg(test)]
     pub(crate) fn into_parts(self) -> (Snapshot, Changeset) {

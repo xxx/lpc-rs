@@ -13,8 +13,8 @@ use crate::{
         efun::exec::DISPLACED,
         process::Process,
         stm::{
-            AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, commit_changeset,
-            flush_effects, run_attempts, start_txn,
+            AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, flush_effects,
+            run_attempts, start_txn,
         },
         vm::global_state::GlobalState,
     },
@@ -195,12 +195,11 @@ impl AttemptBody for AttachBody {
         std::result::Result<(), crate::interpreter::stm::Conflict>,
         Vec<Effect>,
     )> {
-        let mut txn = self
-            .attempt
+        self.attempt
             .take()
-            .expect("attempt present until committed");
-        let commit = commit_changeset(tx, txn.take_changeset()).await?;
-        Ok((commit, txn.take_effects()))
+            .expect("attempt present until committed")
+            .commit(tx)
+            .await
     }
 
     async fn deliver(&mut self, effects: Vec<Effect>) -> Result<()> {
@@ -244,15 +243,19 @@ impl AttemptBody for DetachBody {
         std::result::Result<(), crate::interpreter::stm::Conflict>,
         Vec<Effect>,
     )> {
-        let mut txn = self
-            .attempt
+        self.attempt
             .take()
-            .expect("attempt present until committed");
-        let commit = commit_changeset(tx, txn.take_changeset()).await?;
-        Ok((commit, txn.take_effects()))
+            .expect("attempt present until committed")
+            .commit(tx)
+            .await
     }
 
-    async fn deliver(&mut self, _effects: Vec<Effect>) -> Result<()> {
+    async fn deliver(&mut self, effects: Vec<Effect>) -> Result<()> {
+        debug_assert!(
+            effects.is_empty(),
+            "detach delivered {} effects",
+            effects.len()
+        );
         Ok(())
     }
 }

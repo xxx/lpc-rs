@@ -7,7 +7,7 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{
     lpc_ref::LpcRef,
     stm::{
-        AttemptBody, Conflict, Effect, Transaction, VarId, Version, commit_changeset,
+        AttemptBody, Conflict, Effect, Transaction, VarId, Version,
         committer::{CommitProtocol, Committer, LiveSnapshot},
         snapshot::Snapshot,
         start_txn,
@@ -130,13 +130,11 @@ impl AttemptBody for IncBody {
         tx: &flume::Sender<CommitProtocol>,
         _live: LiveSnapshot,
     ) -> Result<(std::result::Result<(), Conflict>, Vec<Effect>)> {
-        let (_, changeset) = self
-            .attempt
+        self.attempt
             .take()
             .expect("attempt present until committed")
-            .into_parts();
-        let commit = commit_changeset(tx, changeset).await?;
-        Ok((commit, Vec::new()))
+            .commit(tx)
+            .await
     }
 
     async fn deliver(&mut self, _effects: Vec<Effect>) -> Result<()> {
