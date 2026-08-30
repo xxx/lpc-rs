@@ -20,11 +20,9 @@ pub const VM_CHANNEL_CAPACITY: usize = 1024;
 /// debug build, and 16 fit the 2MiB stack tokio gives a worker thread.
 pub const MAX_COMMAND_DEPTH: usize = 16;
 
-/// How many driver tasks may nest on one native stack — every `->`, pointer
-/// call, apply and object init is one — before the next nesting is a runtime
-/// error. Measured 2026-08-30, debug build on a 2 MiB thread: `catch_tell`
-/// levels abort at 24 and `->` levels at 50, so the budget needs
-/// `THREAD_STACK`.
+/// How many driver tasks may nest on one native stack before the next
+/// nesting is a runtime error. Measured 2026-08-30, debug build on a 2 MiB
+/// thread: `catch_tell` levels abort at 24 and `->` levels at 50.
 pub const MAX_TASK_CHAIN: u8 = 64;
 
 /// The stack of every runtime thread: `MAX_TASK_CHAIN` levels at the ~87 KB
