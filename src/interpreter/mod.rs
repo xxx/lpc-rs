@@ -77,3 +77,5 @@ pub const PROCESS_INPUT: &str = "process_input";
 pub const SHUTDOWN: &str = "shutdown";
 /// Body apply: the window size the client reported (`doc/apply/special/window_size.md`).
 pub const WINDOW_SIZE: &str = "window_size";
+/// Body apply: the prompt after a command (`doc/apply/special/write_prompt.md`).
+pub const WRITE_PROMPT: &str = "write_prompt";

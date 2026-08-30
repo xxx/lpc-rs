@@ -22,7 +22,7 @@ use tracing::{error, info, instrument, trace, warn};
 use crate::{
     command::command_task::run_command_line,
     interpreter::{
-        CommittedReader, GET_MUD_STATS, GMCP, WINDOW_SIZE,
+        CommittedReader, GET_MUD_STATS, GMCP, WINDOW_SIZE, WRITE_PROMPT,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
         task::{
@@ -192,6 +192,11 @@ impl Telnet {
                                 Self::window_size(cols, rows, &connection, &template).await;
                             }
                         }
+                        Some(ConnectionOp::PromptCycle) => {
+                            if !shutting_down {
+                                Self::prompt_cycle(&mut session, &connection, &template).await;
+                            }
+                        }
                         Some(ConnectionOp::Shutdown) => {
                             shutting_down = true;
                             trace!("Shutting down connection for {}", &remote_ip);
@@ -256,6 +261,7 @@ impl Telnet {
                 }
                 if let Some(input_to) = connection.input_to.swap(None) {
                     Self::resolve_input_to(&input_to, &line, session, connection, template).await;
+                    Self::request_prompt(connection);
                     return;
                 }
                 let Some(proc) = connection.process.load_full() else {
@@ -267,6 +273,7 @@ impl Telnet {
                 if let Err(e) = run_command_line(&template, proc, line).await {
                     apply_runtime_error(&e, connection.process.load_full(), template.clone()).await;
                 }
+                Self::request_prompt(connection);
             }
             Event::LineTruncated => warn!(
                 "Input from {} exceeded {} bytes; the rest was dropped",
@@ -435,6 +442,53 @@ impl Telnet {
             LpcRef::from(rows as LpcIntInner),
         ];
         Self::apply_on_body(WINDOW_SIZE, &args, connection, template).await;
+    }
+
+    /// Queue the prompt cycle behind everything the command just sent. The
+    /// loop is this channel's only consumer, so a full channel is not waited
+    /// on: the prompt is dropped and logged.
+    fn request_prompt(connection: &Connection) {
+        if let Err(e) = connection.tx.try_send(ConnectionOp::PromptCycle) {
+            warn!("{}: prompt cycle dropped: {e}", connection.address);
+        }
+    }
+
+    /// Spec D8: the mark alone behind a pending `input_to`; else the body's
+    /// `write_prompt`, whose text is queued so its own output goes first;
+    /// a body without the apply gets nothing.
+    async fn prompt_cycle(session: &mut Session, connection: &Connection, template: &TaskTemplate) {
+        if connection.input_to.load().is_some() {
+            session.send(Op::Prompt(""));
+            return;
+        }
+        let Some(body) = connection.process.load_full() else {
+            return;
+        };
+        if !body.program.unmangled_functions.contains_key(WRITE_PROMPT) {
+            return;
+        }
+        let template = template.clone();
+        template.set_this_player(Some(body.clone()));
+        let timeout = template.global_state.config.max_execution_time;
+        let text = match apply_function_by_name(
+            WRITE_PROMPT,
+            &[],
+            body.clone(),
+            template.clone(),
+            Some(timeout),
+        )
+        .await
+        {
+            Some(Ok(LpcRef::String(s))) => s.to_str().to_owned(),
+            Some(Ok(_)) | None => String::new(),
+            Some(Err(e)) => {
+                apply_runtime_error(&e, Some(body), template).await;
+                String::new()
+            }
+        };
+        if let Err(e) = connection.tx.try_send(ConnectionOp::Prompt(text)) {
+            warn!("{}: prompt dropped: {e}", connection.address);
+        }
     }
 
     async fn resolve_input_to(
@@ -1318,6 +1372,92 @@ mod tests {
             w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
             let vars = read_mssp(&mut w.client).await;
             assert_eq!(var(&vars, "NAME"), Some(&["lpc-rs".to_string()][..]));
+        }
+
+        const ROOM: &str = indoc! { r#"
+            void init() { add_action("do_look", "look"); add_action("do_ask", "ask"); }
+            int do_look() { write("seen\n"); return 1; }
+            int do_ask() { write("Name: "); input_to(got_name); return 1; }
+            void got_name(string s) {}
+        "# };
+
+        /// A body in `ROOM` with verbs, plus `extra` (a `write_prompt`, or not).
+        async fn commanding_body(
+            w: &Wired,
+            extra: &str,
+        ) -> Arc<crate::interpreter::process::Process> {
+            w.vm.create_process_from_code("/room.c", ROOM)
+                .await
+                .unwrap();
+            let code =
+                format!("void create() {{ enable_commands(); move_object(\"/room\"); }}\n{extra}");
+            let proc = bind(w, &code).await;
+            // `bind` only sets the loop's back-pointer; `write` reaches the
+            // wire through the committed connection cell a real login sets.
+            w.vm.global_state
+                .takeover(w.connection.clone(), proc.clone())
+                .await;
+            proc
+        }
+
+        #[tokio::test]
+        async fn a_command_ends_with_the_prompt_and_its_mark() {
+            let mut w = wire().await;
+            commanding_body(&w, "string write_prompt() { return \"> \"; }").await;
+            w.client.write_all(&[IAC, DO, EOR]).await.unwrap();
+            eventually(|| w.connection.snapshot().eor).await;
+            w.client.write_all(b"look\r\n").await.unwrap();
+            let mut expected = b"seen\r\n> ".to_vec();
+            expected.extend([IAC, EOR_CMD]);
+            assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+        }
+
+        #[tokio::test]
+        async fn without_eor_the_mark_is_ga() {
+            let mut w = wire().await;
+            commanding_body(&w, "string write_prompt() { return \"> \"; }").await;
+            w.client.write_all(b"look\r\n").await.unwrap();
+            let mut expected = b"seen\r\n> ".to_vec();
+            expected.extend([IAC, GA]);
+            assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_prompt_that_writes_and_returns_nothing_still_gets_its_mark() {
+            let mut w = wire().await;
+            commanding_body(&w, "void write_prompt() { write(\"$ \"); }").await;
+            w.client.write_all(b"look\r\n").await.unwrap();
+            let mut expected = b"seen\r\n$ ".to_vec();
+            expected.extend([IAC, GA]);
+            assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_pending_input_to_gets_the_mark_alone() {
+            let mut w = wire().await;
+            commanding_body(&w, "string write_prompt() { return \"> \"; }").await;
+            w.client.write_all(b"ask\r\n").await.unwrap();
+            let mut expected = b"Name: ".to_vec();
+            expected.extend([IAC, GA]);
+            assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+            // The callback's line: its own cycle, and now the body's prompt.
+            w.client.write_all(b"bob\r\n").await.unwrap();
+            let mut expected = b"> ".to_vec();
+            expected.extend([IAC, GA]);
+            assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_body_without_write_prompt_gets_no_cycle() {
+            let mut w = wire().await;
+            commanding_body(&w, "").await;
+            w.client.write_all(b"look\r\n").await.unwrap();
+            assert_eq!(read_n(&mut w.client, 6).await, b"seen\r\n");
+            w.connection
+                .send(ConnectionOp::SendMessage("z\n".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
         }
     }
 }

@@ -64,4 +64,8 @@ pub enum ConnectionOp {
 
     /// A body was bound to this connection — at login, and at every `exec`.
     Attached,
+
+    /// A command line or `input_to` callback finished behind everything it
+    /// queued: run the prompt cycle.
+    PromptCycle,
 }
