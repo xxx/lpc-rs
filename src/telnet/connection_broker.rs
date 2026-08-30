@@ -14,11 +14,14 @@ use crate::{
     },
 };
 
+/// The connections that finished `logon`, by client address.
+pub(crate) type Players = Arc<DashMap<SocketAddr, Arc<Connection>>>;
+
 /// Manages all the outgoing connections to users.
 #[derive(Debug)]
 pub struct ConnectionBroker {
     /// Map of remote IP address to the connection itself
-    connections: Arc<DashMap<SocketAddr, Arc<Connection>>>,
+    connections: Players,
 
     /// Map of remote IP addresses to join handles, which can be dropped to disconnect the user.
     handles: Arc<DashMap<SocketAddr, JoinHandle<()>>>,
@@ -52,7 +55,9 @@ impl ConnectionBroker {
         A: ToSocketAddrs + Send + 'static,
     {
         info!("Starting connection broker");
-        self.telnet.run(listen_address, template).await;
+        self.telnet
+            .run(listen_address, template, self.connections.clone())
+            .await;
 
         self.main_loop();
     }

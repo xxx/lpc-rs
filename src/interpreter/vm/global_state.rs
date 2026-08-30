@@ -61,6 +61,9 @@ pub struct GlobalState {
 
     /// Subscription to the committer's per-commit watermark.
     pub(crate) commit_watch: tokio::sync::watch::Receiver<stm::Version>,
+
+    /// When this state was built; MSSP's `UPTIME`.
+    pub booted_at: std::time::SystemTime,
 }
 
 impl GlobalState {
@@ -80,6 +83,7 @@ impl GlobalState {
             committer_handle: Some(committer_handle),
             attempt_telemetry: Arc::default(),
             commit_watch,
+            booted_at: std::time::SystemTime::now(),
         }
     }
 

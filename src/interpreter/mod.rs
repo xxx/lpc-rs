@@ -39,6 +39,8 @@ pub const COMMAND_NOT_FOUND: &str = "command_not_found";
 pub const CONNECT: &str = "connect";
 /// Master apply: receives each uncaught runtime error (`doc/apply/master/error_handler.md`).
 pub const ERROR_HANDLER: &str = "error_handler";
+/// Master apply: the MSSP variables a client is told (`doc/apply/master/get_mud_stats.md`).
+pub const GET_MUD_STATS: &str = "get_mud_stats";
 /// Body apply: a GMCP message from the client (`doc/apply/special/gmcp.md`).
 pub const GMCP: &str = "gmcp";
 /// Object apply: the noun-matching fallback when `parse_command_id_list` is undefined (`doc/apply/object/id.md`).

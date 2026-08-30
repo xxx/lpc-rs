@@ -6,6 +6,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use bytes::BytesMut;
 use flume::Sender as FlumeSender;
+use indexmap::IndexMap;
 use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::lpc_error;
 use lpc_rs_telnet::{Event, MAX_LINE, Op, Session};
@@ -21,17 +22,21 @@ use tracing::{error, info, instrument, trace, warn};
 use crate::{
     command::command_task::run_command_line,
     interpreter::{
-        GMCP, WINDOW_SIZE,
+        CommittedReader, GET_MUD_STATS, GMCP, WINDOW_SIZE,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
         task::{
-            apply_function::{apply_function, apply_function_by_name, apply_runtime_error},
+            apply_function::{
+                apply_function, apply_function_by_name, apply_function_in_master,
+                apply_runtime_error,
+            },
             task_template::TaskTemplate,
         },
         vm::global_state::PreparedCall,
     },
     telnet::{
         connection::{Connection, InputTo},
+        connection_broker::Players,
         ops::{BrokerOp, ConnectionOp},
     },
 };
@@ -57,7 +62,7 @@ impl Telnet {
     }
 
     /// Starts the telnet server.
-    pub async fn run<A>(&self, address: A, template: TaskTemplate)
+    pub async fn run<A>(&self, address: A, template: TaskTemplate, players: Players)
     where
         A: ToSocketAddrs + Send + 'static,
     {
@@ -90,11 +95,19 @@ impl Telnet {
                 while let Ok((stream, remote_ip)) = listener.accept().await {
                     let spawn_broker_tx = broker_tx.clone();
                     let template = template.clone();
+                    let players = players.clone();
 
                     let handle = tokio::spawn(async move {
                         info!("New connection from {}", &remote_ip);
 
-                        Self::connection_loop(stream, remote_ip, spawn_broker_tx, template).await;
+                        Self::connection_loop(
+                            stream,
+                            remote_ip,
+                            spawn_broker_tx,
+                            template,
+                            players,
+                        )
+                        .await;
                     });
 
                     let Ok(_) = broker_tx
@@ -114,12 +127,13 @@ impl Telnet {
     }
 
     /// Start the main loop for a single user's connection. Handles sends and receives.
-    #[instrument(skip(stream, broker_tx, template))]
+    #[instrument(skip(stream, broker_tx, template, players))]
     async fn connection_loop<S>(
         mut stream: S,
         remote_ip: SocketAddr,
         broker_tx: FlumeSender<BrokerOp>,
         template: TaskTemplate,
+        players: Players,
     ) where
         S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     {
@@ -206,7 +220,7 @@ impl Telnet {
                             session.feed(&buf[..n]);
                             connection.refresh(&session);
                             while let Some(event) = session.next_event() {
-                                Self::handle_event(event, &mut session, &connection, &template, shutting_down).await;
+                                Self::handle_event(event, &mut session, &connection, &template, &players, shutting_down).await;
                             }
                         }
                         Err(e) => {
@@ -232,6 +246,7 @@ impl Telnet {
         session: &mut Session,
         connection: &Connection,
         template: &TaskTemplate,
+        players: &Players,
         shutting_down: bool,
     ) {
         match event {
@@ -273,9 +288,92 @@ impl Telnet {
                 ];
                 Self::apply_on_body(GMCP, &args, connection, template).await;
             }
-            Event::MsspRequested => {
-                trace!("{} asked for MSSP; not answered yet", connection.address)
-            }
+            Event::MsspRequested => Self::mssp(session, template, players.len()).await,
+        }
+    }
+
+    /// Answer MSSP: the driver's defaults under whatever the master's
+    /// `get_mud_stats()` says (spec D9).
+    async fn mssp(session: &mut Session, template: &TaskTemplate, players: usize) {
+        let global_state = &template.global_state;
+        let uptime = global_state
+            .booted_at
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let mut vars: IndexMap<String, Vec<String>> = IndexMap::new();
+        vars.insert("NAME".into(), vec!["lpc-rs".into()]);
+        vars.insert("PLAYERS".into(), vec![players.to_string()]);
+        vars.insert("UPTIME".into(), vec![uptime.to_string()]);
+        vars.insert("PORT".into(), vec![global_state.config.port.to_string()]);
+        vars.insert(
+            "CODEBASE".into(),
+            vec![format!("lpc-rs {}", env!("CARGO_PKG_VERSION"))],
+        );
+
+        Self::mud_stats_into(&mut vars, template).await;
+
+        let borrowed: Vec<(&str, Vec<&str>)> = vars
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.iter().map(String::as_str).collect()))
+            .collect();
+        let pairs: Vec<(&str, &[&str])> =
+            borrowed.iter().map(|(k, v)| (*k, v.as_slice())).collect();
+        session.send(Op::Mssp(&pairs));
+    }
+
+    /// The master's `get_mud_stats()` mapping over `vars`: strings and ints
+    /// as one value, string arrays as many; anything else is logged and
+    /// skipped, as is a master that has no mapping to give.
+    async fn mud_stats_into(vars: &mut IndexMap<String, Vec<String>>, template: &TaskTemplate) {
+        let global_state = &template.global_state;
+        let timeout = global_state.config.max_execution_time;
+        let mapping =
+            match apply_function_in_master(GET_MUD_STATS, &[], template.clone(), Some(timeout))
+                .await
+            {
+                Some(Ok(LpcRef::Mapping(cell))) => global_state.committed_mapping(cell.id),
+                Some(Ok(other)) => {
+                    global_state
+                        .config
+                        .debug_log(format!(
+                            "get_mud_stats returned a {}; defaults only",
+                            other.type_name()
+                        ))
+                        .await;
+                    None
+                }
+                Some(Err(e)) => {
+                    global_state
+                        .config
+                        .debug_log(format!("get_mud_stats failed: {}", e.diagnostic_string()))
+                        .await;
+                    None
+                }
+                None => None,
+            };
+        let Some(mapping) = mapping else {
+            return;
+        };
+        for (key, value) in mapping.iter() {
+            let values = match value {
+                LpcRef::String(_) | LpcRef::Int(_) => vec![value.to_string()],
+                LpcRef::Array(cell) => match global_state.committed_array(cell.id) {
+                    Some(array) => array.iter().map(|v| v.to_string()).collect(),
+                    None => continue,
+                },
+                other => {
+                    global_state
+                        .config
+                        .debug_log(format!(
+                            "get_mud_stats: {key} is a {}; skipped",
+                            other.type_name()
+                        ))
+                        .await;
+                    continue;
+                }
+            };
+            vars.insert(key.to_string(), values);
         }
     }
 
@@ -596,6 +694,7 @@ mod tests {
     mod over_a_duplex {
         use std::time::Duration;
 
+        use dashmap::DashMap;
         use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 
         use super::*;
@@ -633,6 +732,7 @@ mod tests {
             broker_rx: flume::Receiver<BrokerOp>,
             connection: Arc<Connection>,
             vm: Vm,
+            players: Players,
         }
 
         /// Spawn the loop and return once it has announced itself. The client
@@ -642,11 +742,13 @@ mod tests {
             let (mut client, server) = tokio::io::duplex(4096);
             let (broker_tx, broker_rx) = flume::unbounded();
             let addr: SocketAddr = ADDR.parse().expect("a literal address");
+            let players: Players = Arc::new(DashMap::new());
             tokio::spawn(Telnet::connection_loop(
                 server,
                 addr,
                 broker_tx,
                 TaskTemplate::from(vm.global_state.clone()),
+                players.clone(),
             ));
             let BrokerOp::NewConnection(connection) = within(broker_rx.recv_async()).await.unwrap()
             else {
@@ -664,6 +766,7 @@ mod tests {
                 broker_rx,
                 connection,
                 vm,
+                players,
             }
         }
 
@@ -1053,6 +1156,98 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
+        }
+
+        /// One MSSP reply's variables, in wire order.
+        async fn read_mssp(client: &mut DuplexStream) -> Vec<(String, Vec<String>)> {
+            assert_eq!(read_n(client, 3).await, [IAC, SB, MSSP]);
+            let mut body = Vec::new();
+            loop {
+                let byte = read_n(client, 1).await[0];
+                if byte != IAC {
+                    body.push(byte);
+                    continue;
+                }
+                let next = read_n(client, 1).await[0];
+                if next == SE {
+                    break;
+                }
+                body.push(next);
+            }
+            body.split(|&b| b == 1)
+                .skip(1)
+                .map(|var| {
+                    let mut parts = var.split(|&b| b == 2);
+                    let name = String::from_utf8(parts.next().unwrap().to_vec()).unwrap();
+                    let values = parts
+                        .map(|v| String::from_utf8(v.to_vec()).unwrap())
+                        .collect();
+                    (name, values)
+                })
+                .collect()
+        }
+
+        fn var<'a>(vars: &'a [(String, Vec<String>)], name: &str) -> Option<&'a [String]> {
+            vars.iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, v)| v.as_slice())
+        }
+
+        #[tokio::test]
+        async fn mssp_merges_the_masters_stats_over_the_defaults() {
+            let mut w = wire().await;
+            let master = indoc! { r#"
+                mapping get_mud_stats() {
+                    return ([ "NAME": "Test MUD", "PORTS": ({ "4000", "4001" }), "AGE": 12, "BAD": 1.5 ]);
+                }
+            "# };
+            w.vm.initialize_process_from_code("/secure/master.c", master)
+                .await
+                .unwrap();
+            assert!(w.vm.global_state.object_space.master_object().is_some());
+            w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
+            let vars = read_mssp(&mut w.client).await;
+            assert_eq!(var(&vars, "NAME"), Some(&["Test MUD".to_string()][..]));
+            assert_eq!(
+                var(&vars, "PORTS"),
+                Some(&["4000".to_string(), "4001".to_string()][..])
+            );
+            assert_eq!(var(&vars, "AGE"), Some(&["12".to_string()][..]));
+            assert_eq!(var(&vars, "BAD"), None, "a float is skipped");
+            assert_eq!(var(&vars, "PLAYERS"), Some(&["0".to_string()][..]));
+            assert_eq!(
+                var(&vars, "PORT"),
+                Some(&[w.vm.global_state.config.port.to_string()][..])
+            );
+            let uptime: u64 = var(&vars, "UPTIME").unwrap()[0].parse().unwrap();
+            assert!(uptime > 1_700_000_000, "unix seconds");
+            assert!(var(&vars, "CODEBASE").unwrap()[0].starts_with("lpc-rs "));
+        }
+
+        #[tokio::test]
+        async fn mssp_without_a_usable_master_is_the_defaults() {
+            let mut w = wire().await;
+            w.vm.initialize_process_from_code(
+                "/secure/master.c",
+                "int get_mud_stats() { return 1; }",
+            )
+            .await
+            .unwrap();
+            w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
+            let vars = read_mssp(&mut w.client).await;
+            let names: Vec<&str> = vars.iter().map(|(n, _)| n.as_str()).collect();
+            assert_eq!(names, ["NAME", "PLAYERS", "UPTIME", "PORT", "CODEBASE"]);
+            assert_eq!(var(&vars, "NAME"), Some(&["lpc-rs".to_string()][..]));
+        }
+
+        #[tokio::test]
+        async fn mssp_counts_the_logged_in() {
+            let mut w = wire().await;
+            w.players
+                .insert("10.0.0.2:1".parse().unwrap(), w.connection.clone());
+            w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
+            let vars = read_mssp(&mut w.client).await;
+            assert_eq!(var(&vars, "PLAYERS"), Some(&["1".to_string()][..]));
         }
     }
 }
