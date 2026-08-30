@@ -912,7 +912,7 @@ mod tests {
                 },
                 vm::Vm,
             },
-            telnet::connection::Snapshot,
+            telnet::{connection::Snapshot, outbox::TRUNCATED},
         };
 
         const ADDR: &str = "10.0.0.1:4000";
@@ -1678,6 +1678,7 @@ mod tests {
             assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
         }
 
+        /// `TRUNCATED` on the wire.
         const MARKER: &[u8] = b"*** Output truncated ***\r\n";
 
         /// Eighty KiB-sized messages: past the high-water mark even with the
@@ -1695,6 +1696,11 @@ mod tests {
         /// Read until the truncation line has arrived: what came before it,
         /// and whatever followed it in the same reads.
         async fn read_past_marker(client: &mut DuplexStream) -> (Vec<u8>, Vec<u8>) {
+            assert_eq!(
+                MARKER,
+                TRUNCATED.replace('\n', "\r\n").as_bytes(),
+                "MARKER is TRUNCATED on the wire"
+            );
             let mut got = Vec::new();
             let mut buf = [0u8; 4096];
             within(async {
