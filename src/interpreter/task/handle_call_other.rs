@@ -367,8 +367,7 @@ mod tests {
         );
     }
 
-    /// `catch`'s bulk `truncate` has to unwind many `->` frames at once, not
-    /// just the one a plain call would have left.
+    /// `catch`'s bulk `truncate` unwinds many `->` frames at once.
     #[tokio::test]
     async fn catch_unwinds_a_deep_call_other_chain() {
         let vm = Vm::new(test_config());
@@ -396,8 +395,7 @@ mod tests {
         );
     }
 
-    /// Two distinct objects volleying `->` calls share the one stack too,
-    /// not just self-recursion through `this_object()`.
+    /// Two objects volleying `->` calls share the one stack.
     #[tokio::test]
     async fn mutual_recursion_through_call_other() {
         let vm = Vm::new(test_config());

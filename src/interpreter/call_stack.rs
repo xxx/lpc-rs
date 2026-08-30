@@ -5,8 +5,8 @@ use lpc_rs_errors::{LpcError, Result, lpc_error};
 
 use crate::interpreter::{call_frame::CallFrame, lpc_ref::LpcRef};
 
-/// A starting capacity well under `STACKSIZE`: most tasks never push deep
-/// enough to grow it, and `->` recursion that does grow it does so once.
+/// A starting capacity well under `STACKSIZE`; most tasks never push deep
+/// enough to grow it.
 const INITIAL_CAPACITY: usize = 8;
 
 #[derive(Debug, Clone)]

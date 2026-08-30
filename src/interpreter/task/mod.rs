@@ -92,8 +92,7 @@ impl TaskSeed {
     /// `push_arg`, never straight into registers `1..=len` — a captured
     /// parameter lives in a cell, and `argv` comes from `arg_locations`.
     /// This path (collection-receiver `->` via `resolve_result`, process
-    /// init, applies) can only ever seed plain values, so a `ref` parameter
-    /// here is always a refusal.
+    /// init, applies) seeds plain values only.
     pub(crate) fn build_call_frame(
         &self,
         txn: &TxnHandle,
