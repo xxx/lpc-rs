@@ -233,7 +233,7 @@ mod tests {
         for _ in 0..4 {
             ops.push(within(rx.recv()).await.expect("the login task is running"));
         }
-        assert_eq!(ops[0], ConnectionOp::Attached, "takeover binds the body");
+        assert_eq!(ops[0], ConnectionOp::Attached, "attach binds the body");
         // `input_to` reaches the connection as it runs; `write` is an effect,
         // so its message follows at the commit.
         assert!(matches!(ops[1], ConnectionOp::InputTo(_)));

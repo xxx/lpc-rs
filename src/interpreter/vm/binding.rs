@@ -34,9 +34,12 @@ impl Registry {
         self.live.insert(connection.address, connection);
     }
 
-    /// Remove the connection at `address`; `None` if it was not there.
-    pub(crate) fn remove(&self, address: SocketAddr) -> Option<Arc<Connection>> {
-        self.live.remove(&address).map(|(_, connection)| connection)
+    /// Remove `connection`'s own entry; a newer connection at the same
+    /// address keeps its place.
+    pub(crate) fn remove(&self, connection: &Arc<Connection>) -> bool {
+        self.live
+            .remove_if(&connection.address, |_, live| Arc::ptr_eq(live, connection))
+            .is_some()
     }
 
     /// The live connection at `address`.
@@ -412,8 +415,17 @@ mod tests {
         assert_eq!(registry.logged_in(), 1);
         assert!(registry.get(b.address).is_some());
         assert_eq!(registry.connections().len(), 2);
-        assert!(registry.remove(a.address).is_some());
-        assert!(registry.remove(a.address).is_none());
+        assert!(registry.remove(&a));
+        assert!(!registry.remove(&a));
         assert!(!registry.is_empty());
+
+        // A reconnect at `a`'s address before its old loop's `leave` runs
+        // replaces the entry; the departing loop's remove must not evict it.
+        registry.insert(a.clone());
+        let (tx2, _rx2) = tokio::sync::mpsc::unbounded_channel();
+        let a2 = Arc::new(Connection::new(a.address, tx2));
+        registry.insert(a2.clone());
+        assert!(!registry.remove(&a));
+        assert!(registry.get(a.address).is_some());
     }
 }

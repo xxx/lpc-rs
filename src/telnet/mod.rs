@@ -1,7 +1,7 @@
 pub mod connection;
 pub mod ops;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use bytes::BytesMut;
 use indexmap::IndexMap;
@@ -90,7 +90,12 @@ impl Telnet {
                             Self::connection_loop(stream, remote_ip, template).await;
                         });
                     }
-                    Err(e) => warn!("accept failed: {e}"),
+                    Err(e) => {
+                        // A sticky error (EMFILE/ENFILE) would otherwise spin
+                        // this loop and flood the log.
+                        warn!("accept failed: {e}");
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
                 }
             }
         });
@@ -225,7 +230,7 @@ impl Telnet {
             connection.address,
             body.is_some()
         );
-        global_state.registry.remove(connection.address);
+        global_state.registry.remove(connection);
     }
 
     /// One thing the client did.

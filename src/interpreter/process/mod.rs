@@ -73,7 +73,9 @@ pub struct Process {
     /// deferred socket-level handover, while the connection's own
     /// back-reference is the loop's view. `interactive()`/`this_player()`
     /// read the cell through the transaction, so they see an in-transaction
-    /// `exec`. Written only by the binding module.
+    /// `exec`. The cell is written by the attach/`exec`/destruct
+    /// transactions; the connection's back-reference only by the binding
+    /// module.
     pub connection: SVar<Connection>,
 
     /// The cell marking that the initializer has run; a rejected
