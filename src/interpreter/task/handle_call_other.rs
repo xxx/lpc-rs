@@ -123,18 +123,22 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let step = {
                 let frame = self.stack.current_frame_mut()?;
                 let r0 = frame.registers[0].clone();
-                let call = frame
-                    .pending
-                    .as_mut()
-                    .expect("advance_collection_call runs on a frame with a pending call");
+                let Some(mut call) = frame.pending.take() else {
+                    return Err(self.runtime_bug(
+                        "advance_collection_call runs on a frame with no pending call",
+                    ));
+                };
                 if call.owed {
                     call.results.push(r0);
                     call.owed = false;
                 }
-                let name = call.name.clone();
                 match call.remaining.pop() {
-                    Some(receiver) => Step::Call(receiver, name),
-                    None => Step::Done(*frame.pending.take().expect("checked just above")),
+                    Some(receiver) => {
+                        let name = call.name.clone();
+                        frame.pending = Some(call);
+                        Step::Call(receiver, name)
+                    }
+                    None => Step::Done(*call),
                 }
             };
             match step {
@@ -145,11 +149,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 .txn
                                 .with(|t| t.mint_array(LpcArray::new(call.results))),
                         ),
-                        Some(keys) => LpcRef::Mapping(self.context.txn.with(|t| {
-                            t.mint_mapping(LpcMapping::new(
-                                keys.into_iter().zip(call.results).collect(),
-                            ))
-                        })),
+                        Some(keys) => {
+                            debug_assert_eq!(keys.len(), call.results.len());
+                            LpcRef::Mapping(self.context.txn.with(|t| {
+                                t.mint_mapping(LpcMapping::new(
+                                    keys.into_iter().zip(call.results).collect(),
+                                ))
+                            }))
+                        }
                     };
                     self.stack.current_frame_mut()?.registers[0] = value;
                     return Ok(());
@@ -169,12 +176,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// The current frame's collection call.
     fn pending_call_mut(&mut self) -> Result<&mut CollectionCall> {
-        Ok(self
-            .stack
+        let bug = self.runtime_bug("a collection call is in flight");
+        self.stack
             .current_frame_mut()?
             .pending
-            .as_mut()
-            .expect("a collection call is in flight"))
+            .as_deref_mut()
+            .ok_or(bug)
     }
 
     /// The frame for one receiver of a collection call, built from the
@@ -200,6 +207,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
         debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
         let args = self.pending_call_mut()?.args.clone();
+        // A too-short call: `push_arg` only refuses a `ref` param it reaches,
+        // so a missing trailing ref argument needs its own check here.
+        if let Some(i) = function.prototype.first_ref_param()
+            && i >= args.len()
+        {
+            return Err(self.runtime_error(format!(
+                "argument {} of `{}` must be passed by reference",
+                i + 1,
+                name
+            )));
+        }
         let mut frame = CallFrame::new(
             process,
             function,
@@ -500,15 +518,15 @@ mod tests {
         assert!(err.contains("by reference"), "{err}");
     }
 
-    /// A collection `->` used to build a `Task` per element; 1000 deep on
-    /// the one stack.
+    /// A collection `->` used to build a `Task` per element; 500 deep on
+    /// the one stack (1000 peaks near `MAX_CALL_STACK_SIZE`'s 1024 frames).
     #[tokio::test]
     async fn collection_recursion_runs_on_the_one_stack() {
         let vm = Vm::new(test_config());
         let code = indoc! { r#"
             int depth;
             int f(int n) {
-                if (n < 1000) {
+                if (n < 500) {
                     int *r = ({ this_object() })->f(n + 1);
                     return r[0];
                 }
@@ -524,7 +542,7 @@ mod tests {
             .process;
         assert_eq!(
             vm.global_state.committed_global(&process, 0u16),
-            LpcRef::from(1000)
+            LpcRef::from(500)
         );
     }
 
@@ -676,6 +694,79 @@ mod tests {
         assert_eq!(
             vm.global_state.committed_global(&process, 0u16),
             LpcRef::from(4)
+        );
+    }
+
+    /// A too-short collection `->`: `push_arg` only refuses a `ref`
+    /// parameter it is given a value for, so a missing trailing `ref`
+    /// argument needs its own check (else a fresh, unbound cell runs).
+    #[tokio::test]
+    async fn a_ref_parameter_is_refused_across_a_collection_call_other() {
+        let vm = vm_with_other().await;
+
+        let with_arg = indoc! { r#"
+            void create() { int v; ({ "/other" })->take(v); }
+        "# };
+        let err = vm
+            .initialize_process_from_code("/main.c", with_arg)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("by reference"), "{err}");
+
+        let no_arg = indoc! { r#"
+            void create() { ({ "/other" })->take(); }
+        "# };
+        let err = vm
+            .initialize_process_from_code("/none.c", no_arg)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("by reference"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn this_object_inside_an_element_is_the_receiver() {
+        let vm = vm_with_other().await;
+        let code = indoc! { r#"
+            string seen;
+            void create() {
+                string *r = ({ "/other" })->who();
+                seen = r[0];
+            }
+        "# };
+        let process = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let seen = vm.global_state.committed_global(&process, 0u16);
+        assert_eq!(
+            seen.with_string(|s| s.to_string()).unwrap_or_default(),
+            "/other"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_non_object_element_is_zero_in_its_slot() {
+        let vm = vm_with_other().await;
+        let code = indoc! { r#"
+            int total;
+            void create() {
+                int *r = ({ 1, "/other" })->two();
+                total = r[0] * 10 + r[1];
+            }
+        "# };
+        let process = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&process, 0u16),
+            LpcRef::from(2)
         );
     }
 }

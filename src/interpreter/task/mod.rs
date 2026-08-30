@@ -91,8 +91,7 @@ impl TaskSeed {
     /// Build the entry [`CallFrame`] for one attempt. Args go through
     /// `push_arg`, never straight into registers `1..=len` — a captured
     /// parameter lives in a cell, and `argv` comes from `arg_locations`.
-    /// This path (collection-receiver `->` via `resolve_result`, process
-    /// init, applies) seeds plain values only.
+    /// This path (process init, applies) seeds plain values only.
     pub(crate) fn build_call_frame(
         &self,
         txn: &TxnHandle,
