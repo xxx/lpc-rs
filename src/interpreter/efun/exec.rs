@@ -149,7 +149,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn an_exec_from_a_body_that_is_not_interactive_fails() {
+    async fn an_exec_from_a_body_that_is_not_interactive_returns_zero() {
         let vm = Vm::new(test_config());
         vm.create_process_from_code("/a.c", "").await.unwrap();
         vm.create_process_from_code("/b.c", "").await.unwrap();
