@@ -1,12 +1,13 @@
 //! Applies made on a command's behalf: nested in the caller's transaction,
-//! bounded by the configured execution time.
+//! bounded by the configured execution time and `MAX_TASK_CHAIN` levels.
 
 use std::sync::Arc;
 
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::{
+    compile_time_config::MAX_TASK_CHAIN,
     interpreter::{
         CATCH_TELL, function_type::function_ptr::FunctionPtr, lpc_ref::LpcRef,
         lpc_string::LpcString, process::Process, stm::Effect, task::apply_function::apply_function,
@@ -119,13 +120,75 @@ pub(crate) async fn deliver(
     Ok(received)
 }
 
-/// Run `function` in `nested` under `ctx`'s configured execution time.
+/// Run `function` in `nested` under `ctx`'s configured execution time, one
+/// level deeper in the task chain.
 async fn timed(
     ctx: &TaskContext,
-    nested: TaskContext,
+    mut nested: TaskContext,
     function: Arc<ProgramFunction>,
     args: &[LpcRef],
 ) -> Result<LpcRef> {
+    if ctx.chain_count >= MAX_TASK_CHAIN {
+        return Err(LpcError::runtime(format!(
+            "nested apply depth of {MAX_TASK_CHAIN} exceeded"
+        )));
+    }
+    nested.chain_count = ctx.chain_count + 1;
     let timeout = ctx.config().max_execution_time;
     apply_function(function, args, nested, Some(timeout)).await
+}
+
+#[cfg(test)]
+mod tests {
+    use indoc::indoc;
+
+    use super::*;
+    use crate::{
+        interpreter::{CommittedReader, vm::Vm},
+        test_support::test_config,
+    };
+
+    /// A `catch_tell` that writes back nests until the budget refuses it.
+    #[tokio::test]
+    async fn nested_applies_stop_at_the_budget() {
+        let vm = Vm::new(test_config());
+        let code = indoc! { r#"
+            int depth;
+            int refused_at;
+            void catch_tell(string s) {
+                depth++;
+                if (catch(write("again"))) refused_at = depth;
+            }
+            void create() { set_this_player(this_object()); write("go"); }
+        "# };
+        let process = vm
+            .initialize_process_from_code("/loop.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&process, 1u16),
+            LpcRef::from(i64::from(MAX_TASK_CHAIN)),
+            "the level at the budget cannot nest again"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_refused_nesting_is_a_runtime_error() {
+        let vm = Vm::new(test_config());
+        let code = indoc! { r#"
+            void catch_tell(string s) { write("again"); }
+            void create() { set_this_player(this_object()); write("go"); }
+        "# };
+        let err = vm
+            .initialize_process_from_code("/loop.c", code)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("nested apply depth of 16 exceeded"),
+            "{err}"
+        );
+    }
 }

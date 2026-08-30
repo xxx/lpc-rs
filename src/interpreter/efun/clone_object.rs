@@ -4,7 +4,7 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
-    compile_time_config::MAX_CLONE_CHAIN,
+    compile_time_config::MAX_TASK_CHAIN,
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process},
 };
 
@@ -45,7 +45,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
 
     debug_assert!(clone_process.is_clone(), "new_clone must be a clone");
 
-    if context.chain_count() >= MAX_CLONE_CHAIN {
+    if context.chain_count() >= MAX_TASK_CHAIN {
         return Err(context.runtime_error("infinite clone recursion detected"));
     }
     context.init_process_transactional(&clone_process).await?;

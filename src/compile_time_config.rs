@@ -20,11 +20,9 @@ pub const VM_CHANNEL_CAPACITY: usize = 1024;
 /// debug build, and 16 fit the 2MiB stack tokio gives a worker thread.
 pub const MAX_COMMAND_DEPTH: usize = 16;
 
-/// How long can a chain of object clones continue, before we error out? This is
-/// specifically for chains of clones, where one object clones another object,
-/// which clones a third, etc.
-/// One object that clones 20 objects in an array, for example,
-/// will _not_ be affected by this.
-/// If this is set too high, the thread-local stack will overflow before this
-/// limit is reached.
-pub const MAX_CLONE_CHAIN: u8 = 20;
+/// How many driver tasks may nest on one native stack — a `create()` that
+/// clones, a `catch_tell` that writes back, a master hook that re-enters —
+/// before the next nesting is a runtime error. Measured 2026-08-30: a debug
+/// build on tokio's 2 MiB thread survives 20 nested `catch_tell`s and aborts
+/// at 24.
+pub const MAX_TASK_CHAIN: u8 = 16;
