@@ -47,4 +47,21 @@ pub enum ConnectionOp {
 
     /// Close the connection once everything queued before this has been sent.
     Close,
+
+    /// A GMCP message; the session drops it while GMCP is off.
+    Gmcp {
+        /// `Char.Vitals`, `Core.Ping`, …
+        package: String,
+        /// The body, usually JSON; empty sends the package alone.
+        payload: String,
+    },
+
+    /// MXP markup sent as written; the session drops it while MXP is off.
+    Mxp(String),
+
+    /// Prompt text, then the mark the client negotiated (EOR, GA, or none).
+    Prompt(String),
+
+    /// A body was bound to this connection — at login, and at every `exec`.
+    Attached,
 }

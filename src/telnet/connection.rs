@@ -3,7 +3,7 @@ use std::{net::SocketAddr, sync::Arc};
 use arc_swap::{ArcSwap, ArcSwapAny, ArcSwapOption};
 use flume::Sender as FlumeSender;
 use lpc_rs_telnet::{Opt, Session};
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Sender, error::SendError};
 
 use crate::{
     interpreter::{function_type::function_ptr::FunctionPtr, process::Process},
@@ -104,6 +104,11 @@ impl Connection {
     /// What the session knows about this client right now.
     pub fn snapshot(&self) -> Arc<Snapshot> {
         self.snapshot.load_full()
+    }
+
+    /// Queue `op` for the connection task; `Err` once that task has exited.
+    pub async fn send(&self, op: ConnectionOp) -> Result<(), SendError<ConnectionOp>> {
+        self.tx.send(op).await
     }
 
     /// Mirror `session`; a store only when something changed.

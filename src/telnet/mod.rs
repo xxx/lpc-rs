@@ -163,6 +163,13 @@ impl Telnet {
                             }
                             connection.input_to.store(Some(Arc::new(input_to)));
                         }
+                        Some(ConnectionOp::Gmcp { package, payload }) => session.send(Op::Gmcp {
+                            package: &package,
+                            payload: &payload,
+                        }),
+                        Some(ConnectionOp::Mxp(markup)) => session.send(Op::Mxp(&markup)),
+                        Some(ConnectionOp::Prompt(text)) => session.send(Op::Prompt(&text)),
+                        Some(ConnectionOp::Attached) => {}
                         Some(ConnectionOp::Shutdown) => {
                             shutting_down = true;
                             trace!("Shutting down connection for {}", &remote_ip);
@@ -564,6 +571,10 @@ mod tests {
         const CHARSET: u8 = 42;
         const MXP: u8 = 91;
         const GMCP: u8 = 201;
+        const SB: u8 = 250;
+        const SE: u8 = 240;
+        const GA: u8 = 249;
+        const EOR_CMD: u8 = 239;
 
         /// The loop running on one end of a duplex; the test holds the other.
         struct Wired {
@@ -743,6 +754,86 @@ mod tests {
                 panic!("a hang-up reports a disconnect");
             };
             assert_eq!(addr, ADDR.parse::<SocketAddr>().unwrap());
+        }
+
+        #[tokio::test]
+        async fn a_gmcp_op_goes_out_once_gmcp_is_on() {
+            let mut w = wire().await;
+            w.client.write_all(&[IAC, DO, GMCP]).await.unwrap();
+            eventually(|| w.connection.snapshot().gmcp).await;
+            w.connection
+                .send(ConnectionOp::Gmcp {
+                    package: "Char.Vitals".into(),
+                    payload: "{}".into(),
+                })
+                .await
+                .unwrap();
+            let mut expected = vec![IAC, SB, GMCP];
+            expected.extend(b"Char.Vitals {}");
+            expected.extend([IAC, SE]);
+            assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_gmcp_op_is_dropped_while_gmcp_is_off() {
+            let mut w = wire().await;
+            w.connection
+                .send(ConnectionOp::Gmcp {
+                    package: "Char.Vitals".into(),
+                    payload: "{}".into(),
+                })
+                .await
+                .unwrap();
+            w.connection
+                .send(ConnectionOp::SendMessage("z\n".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
+        }
+
+        #[tokio::test]
+        async fn mxp_markup_goes_out_raw_while_text_is_escaped() {
+            let mut w = wire().await;
+            w.client.write_all(&[IAC, DO, MXP]).await.unwrap();
+            assert_eq!(read_n(&mut w.client, 5).await, [IAC, SB, MXP, IAC, SE]);
+            w.connection
+                .send(ConnectionOp::SendMessage("<b>\n".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 11).await, b"&lt;b&gt;\r\n");
+            w.connection
+                .send(ConnectionOp::Mxp("<b>x</b>".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 8).await, b"<b>x</b>");
+        }
+
+        #[tokio::test]
+        async fn a_prompt_ends_with_the_negotiated_mark() {
+            let mut w = wire().await;
+            w.connection
+                .send(ConnectionOp::Prompt("> ".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 4).await, [b'>', b' ', IAC, GA]);
+            w.client.write_all(&[IAC, DO, EOR]).await.unwrap();
+            eventually(|| w.connection.snapshot().eor).await;
+            w.connection
+                .send(ConnectionOp::Prompt("> ".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 4).await, [b'>', b' ', IAC, EOR_CMD]);
+        }
+
+        #[tokio::test]
+        async fn attached_is_quiet_on_the_wire() {
+            let mut w = wire().await;
+            w.connection.send(ConnectionOp::Attached).await.unwrap();
+            w.connection
+                .send(ConnectionOp::SendMessage("z\n".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
         }
     }
 }
