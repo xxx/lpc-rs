@@ -36,6 +36,7 @@ use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,
     lpc_int::LpcInt,
+    lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
     lpc_string::LpcString,
     process::Process,
@@ -75,13 +76,24 @@ struct CatchPoint {
     register: RegisterVariant,
 }
 
+/// One entry argument of a [`TaskSeed`]: a value passed as-is, or a mapping
+/// minted fresh into each attempt's transaction — a cell minted before the
+/// task begins is discarded when the attempt opens its own transaction.
+#[derive(Debug, Clone)]
+pub enum SeedArg {
+    /// A value pushed as-is.
+    Value(LpcRef),
+    /// A mapping minted into the attempt's transaction at frame build.
+    FreshMapping(LpcMapping),
+}
+
 /// The inputs needed to (re)start a task's entry call, hoisted out of the
 /// `CallStack` so a rejected commit can rebuild the task from scratch.
 #[derive(Debug, Clone)]
 pub struct TaskSeed {
     pub process: Arc<Process>,
     pub function: Arc<ProgramFunction>,
-    pub args: Vec<LpcRef>,
+    pub args: Vec<SeedArg>,
     /// An initializer run: each attempt claims the marker first and is a
     /// no-op when it is already held.
     pub initializes: bool,
@@ -91,7 +103,8 @@ impl TaskSeed {
     /// Build the entry [`CallFrame`] for one attempt. Args go through
     /// `push_arg`, never straight into registers `1..=len` — a captured
     /// parameter lives in a cell, and `argv` comes from `arg_locations`.
-    /// This path (process init, applies) seeds plain values only.
+    /// A [`SeedArg::FreshMapping`] is minted into `txn` here, once per
+    /// attempt.
     pub(crate) fn build_call_frame(
         &self,
         txn: &TxnHandle,
@@ -112,7 +125,13 @@ impl TaskSeed {
             upvalue_ptrs,
         );
         for (i, arg) in self.args.iter().enumerate() {
-            frame.push_arg(txn, i, arg.clone())?;
+            let arg = match arg {
+                SeedArg::Value(value) => value.clone(),
+                SeedArg::FreshMapping(mapping) => {
+                    LpcRef::Mapping(txn.with(|t| t.mint_mapping(mapping.clone())))
+                }
+            };
+            frame.push_arg(txn, i, arg)?;
         }
         Ok(frame)
     }
@@ -321,7 +340,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let seed = TaskSeed {
             process: self.context.process().clone(),
             function: f,
-            args: args.to_vec(),
+            args: args.iter().cloned().map(SeedArg::Value).collect(),
             initializes: false,
         };
         self.timed_eval_seed(seed, timeout_ms).await
@@ -330,7 +349,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Run `seed` to completion through the committer's retry loop, or an
     /// error; a `timeout_ms` of 0 means no timeout.
     #[async_recursion]
-    async fn timed_eval_seed(&mut self, seed: TaskSeed, timeout_ms: u64) -> Result<()> {
+    pub(crate) async fn timed_eval_seed(&mut self, seed: TaskSeed, timeout_ms: u64) -> Result<()> {
         self.timeout_ms = (timeout_ms != 0).then_some(timeout_ms);
         self.seed = Some(seed);
         let tx = self.context.global_state.committer_tx.clone();

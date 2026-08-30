@@ -5,6 +5,7 @@ use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use termcolor::Buffer;
 
+use super::{SeedArg, TaskSeed};
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
@@ -42,6 +43,26 @@ pub async fn apply_function(
     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(ctx);
 
     task.timed_eval(f, args, timeout.unwrap_or(0))
+        .await
+        .map(|_| task.result().unwrap())
+}
+
+/// As [`apply_function`], with [`SeedArg`] arguments: a
+/// [`SeedArg::FreshMapping`] is minted into each attempt's transaction.
+pub async fn apply_function_seeded(
+    f: Arc<ProgramFunction>,
+    args: Vec<SeedArg>,
+    ctx: TaskContext,
+    timeout: Option<u64>,
+) -> Result<LpcRef> {
+    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(ctx);
+    let seed = TaskSeed {
+        process: task.context.process().clone(),
+        function: f,
+        args,
+        initializes: false,
+    };
+    task.timed_eval_seed(seed, timeout.unwrap_or(0))
         .await
         .map(|_| task.result().unwrap())
 }
@@ -165,11 +186,11 @@ pub async fn apply_runtime_error(
         LpcString::from(s).into(),
     );
 
-    let args = [LpcRef::Mapping(
-        ctx.txn().with(|t| t.mint_mapping(LpcMapping::new(mapping))),
-    )];
+    // Minted per attempt via the seed — a cell minted into `ctx`'s
+    // transaction here is discarded when the task opens its own.
+    let args = vec![SeedArg::FreshMapping(LpcMapping::new(mapping))];
     // TODO wire the timeout up to config
-    Some(apply_function(error_handler, &args, ctx, Some(300)).await)
+    Some(apply_function_seeded(error_handler, args, ctx, Some(300)).await)
 }
 
 #[cfg(test)]
@@ -177,7 +198,10 @@ mod tests {
     use indoc::indoc;
 
     use super::*;
-    use crate::{interpreter::vm::global_state::GlobalState, test_support::compile_prog};
+    use crate::{
+        interpreter::{CommittedReader, vm::Vm, vm::global_state::GlobalState},
+        test_support::{compile_prog, test_config},
+    };
 
     #[tokio::test]
     async fn test_apply_function() {
@@ -212,5 +236,33 @@ mod tests {
         .unwrap();
 
         assert_eq!(result, LpcRef::from(420));
+    }
+
+    #[tokio::test]
+    async fn the_error_handler_can_read_its_mapping() {
+        let vm = Vm::new(test_config());
+        let master = vm
+            .global_state
+            .initialize_process_from_code(
+                "/secure/master.c",
+                indoc! { r#"
+                    string last;
+                    void error_handler(mapping m) { last = m["error"]; }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+
+        let err = lpc_rs_errors::LpcError::runtime("boom");
+        let result =
+            apply_runtime_error(&err, None, TaskTemplate::from(vm.global_state.clone())).await;
+
+        assert!(matches!(result, Some(Ok(_))), "the handler ran: {result:?}");
+        let LpcRef::String(s) = vm.global_state.committed_global(&master, 0u16) else {
+            panic!("a string");
+        };
+        assert!(s.to_str().contains("boom"), "read the mapping: {s}");
     }
 }

@@ -96,6 +96,14 @@ fn shift_amount(y: LpcIntInner) -> u32 {
     }
 }
 
+/// The error for a collection ref whose contents are not in the reading
+/// transaction's world.
+fn gone_error(kind: &str) -> LpcError {
+    LpcError::runtime(format!(
+        "invalid access. The {kind}'s contents are not in this transaction's world"
+    ))
+}
+
 impl LpcRef {
     /// Get the type name of the underlying data of this var.
     pub fn type_name(&self) -> &str {
@@ -252,7 +260,7 @@ impl LpcRef {
             LpcRef::Array(cell) => {
                 let array = txn
                     .with(|t| t.read_array(cell.id))
-                    .ok_or_else(|| self.expected_array_error())?;
+                    .ok_or_else(|| gone_error("array"))?;
                 Ok(f(&array))
             }
             _ => Err(self.expected_array_error()),
@@ -269,7 +277,7 @@ impl LpcRef {
             LpcRef::Mapping(cell) => {
                 let mapping = txn
                     .with(|t| t.read_mapping(cell.id))
-                    .ok_or_else(|| self.expected_mapping_error())?;
+                    .ok_or_else(|| gone_error("mapping"))?;
                 Ok(f(&mapping))
             }
             _ => Err(self.expected_mapping_error()),
