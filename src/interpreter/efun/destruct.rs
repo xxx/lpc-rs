@@ -102,7 +102,11 @@ mod tests {
         assert_eq!(connected.rx.try_recv(), Ok(ConnectionOp::Attached));
         assert!(connected.rx.try_recv().is_err());
         assert_eq!(
-            connected.connection.body().as_ref().map(|body| body.to_string()),
+            connected
+                .connection
+                .body()
+                .as_ref()
+                .map(|body| body.to_string()),
             Some("/body".to_owned())
         );
     }

@@ -161,6 +161,10 @@ impl Connection {
     }
 
     /// Record that `detach` ran.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "called by the binding module from task A2")
+    )]
     pub(crate) fn mark_dead(&self) {
         self.dead.store(true, Ordering::Release);
     }
@@ -171,6 +175,10 @@ impl Connection {
     }
 
     /// Record a successful `logon()`.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "called by initiate_login from task A3")
+    )]
     pub(crate) fn set_logged_in(&self) {
         self.logged_in.store(true, Ordering::Release);
     }
@@ -253,11 +261,7 @@ mod tests {
     #[test]
     fn a_fresh_connection_is_unbound_and_flagless() {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let connection = Connection::new(
-            "127.0.0.1:1".parse().unwrap(),
-            tx,
-            flume::unbounded().0,
-        );
+        let connection = Connection::new("127.0.0.1:1".parse().unwrap(), tx, flume::unbounded().0);
         assert!(connection.body().is_none());
         assert!(!connection.awaits_input());
         assert!(!connection.is_dead());
