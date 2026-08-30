@@ -1,6 +1,12 @@
 pub mod connection;
 pub mod ops;
 
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the loop takes it in the next task")
+)]
+mod outbox;
+
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use bytes::BytesMut;

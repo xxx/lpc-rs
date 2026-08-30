@@ -91,6 +91,9 @@ pub struct Connection {
 
     /// `logon()` returned non-zero.
     logged_in: AtomicBool,
+
+    /// The outbox passed its high-water mark; the loop's write.
+    overflowed: AtomicBool,
 }
 
 impl Connection {
@@ -104,6 +107,7 @@ impl Connection {
             snapshot: ArcSwap::default(),
             dead: AtomicBool::new(false),
             logged_in: AtomicBool::new(false),
+            overflowed: AtomicBool::new(false),
         }
     }
 
@@ -166,6 +170,16 @@ impl Connection {
     /// Record a successful `logon()`.
     pub(crate) fn set_logged_in(&self) {
         self.logged_in.store(true, Ordering::Release);
+    }
+
+    /// The client is not taking its output; text to it is being dropped.
+    pub fn is_overflowed(&self) -> bool {
+        self.overflowed.load(Ordering::Acquire)
+    }
+
+    /// Mirror the outbox's state.
+    pub(crate) fn set_overflowed(&self, overflowed: bool) {
+        self.overflowed.store(overflowed, Ordering::Release);
     }
 
     /// What the session knows about this client right now.
@@ -250,12 +264,17 @@ mod tests {
         assert!(!connection.awaits_input());
         assert!(!connection.is_dead());
         assert!(!connection.is_logged_in());
+        assert!(!connection.is_overflowed());
         connection.set_body(Some(Arc::new(Process::default())));
         assert!(connection.body().is_some());
         connection.mark_dead();
         connection.set_logged_in();
         assert!(connection.is_dead());
         assert!(connection.is_logged_in());
+        connection.set_overflowed(true);
+        assert!(connection.is_overflowed());
+        connection.set_overflowed(false);
+        assert!(!connection.is_overflowed());
         assert!(connection.take_input_to().is_none());
     }
 }
