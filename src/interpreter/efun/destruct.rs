@@ -99,6 +99,7 @@ mod tests {
         vm.initialize_process_from_code("/main.c", main)
             .await
             .unwrap();
+        assert_eq!(connected.rx.try_recv(), Ok(ConnectionOp::Attached));
         assert!(connected.rx.try_recv().is_err());
         assert_eq!(
             connected

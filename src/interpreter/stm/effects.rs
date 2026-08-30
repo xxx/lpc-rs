@@ -97,7 +97,7 @@ pub(crate) enum Effect {
 
     /// The physical half of a handover: the connection cell on `new_process`
     /// committed with the owning task; the flush points `connection`'s
-    /// back-reference at `new_process`.
+    /// back-reference at `new_process` and announces `Attached` on it.
     Exec {
         new_process: Arc<Process>,
         connection: Arc<Connection>,
@@ -147,6 +147,7 @@ impl Effect {
                 connection,
             } => {
                 connection.process.store(Some(new_process.clone()));
+                let _ = connection.send(ConnectionOp::Attached).await;
             }
             Self::Disconnect {
                 connection,
@@ -229,5 +230,29 @@ mod tests {
 
         assert_eq!(rx_a.recv().await, Some(op_a));
         assert_eq!(rx_b.recv().await, Some(op_b));
+    }
+
+    /// `Exec` both points the connection at its new body and tells the
+    /// connection so, on its own channel.
+    #[tokio::test]
+    async fn exec_points_the_connection_at_the_body_then_announces_it() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(16);
+        let (broker_tx, _broker_rx) = flume::unbounded();
+        let addr = "127.0.0.1:1".parse().unwrap();
+        let connection = Arc::new(Connection::new(addr, tx, broker_tx));
+        let body = Arc::new(Process::default());
+
+        let object_space = ObjectSpace::default();
+        let (tx_d, _rx_d) = tokio::sync::mpsc::channel(16);
+        let call_outs = parking_lot::RwLock::new(CallOuts::new(tx_d));
+        Effect::Exec {
+            new_process: body.clone(),
+            connection: connection.clone(),
+        }
+        .flush(&Config::default(), &object_space, &call_outs)
+        .await;
+
+        assert!(Arc::ptr_eq(&connection.process.load_full().unwrap(), &body));
+        assert_eq!(rx.recv().await, Some(ConnectionOp::Attached));
     }
 }

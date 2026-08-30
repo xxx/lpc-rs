@@ -102,6 +102,7 @@ mod tests {
         );
         assert_eq!(on_b.rx.try_recv(), Ok(ConnectionOp::Close));
         assert!(on_b.connection.process.load().is_none());
+        assert_eq!(on_a.rx.try_recv(), Ok(ConnectionOp::Attached));
         assert!(on_a.rx.try_recv().is_err());
         assert_eq!(
             on_a.connection
