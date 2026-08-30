@@ -39,6 +39,8 @@ pub(crate) mod parse_string;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
 pub(crate) mod query_command;
+pub(crate) mod query_connection;
+pub(crate) mod query_ip_number;
 pub(crate) mod query_notify_fail;
 pub(crate) mod query_resident_memory;
 pub(crate) mod query_verb;
@@ -69,9 +71,12 @@ use lpc_rs_function_support::{
 };
 use once_cell::sync::Lazy;
 
-use crate::interpreter::{
-    efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef, process::Process,
-    stm::TxnHandle,
+use crate::{
+    interpreter::{
+        efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef, process::Process,
+        stm::TxnHandle,
+    },
+    telnet::connection::Connection,
 };
 
 /// Special forms: typechecked against an efun prototype, compiled to their
@@ -492,6 +497,16 @@ efuns! {
         arity: 1,
         args: [LpcType::Int(false) | LpcType::Float(false) | LpcType::String(false)],
     },
+    query_connection => {
+        returns: LpcType::Mapping(false),
+        arity: (1, 1),
+        args: [LpcType::Object(false)],
+    },
+    query_ip_number => {
+        returns: LpcType::String(false),
+        arity: (1, 1),
+        args: [LpcType::Object(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -519,6 +534,20 @@ async fn arg_or_this_object<const N: usize>(
             Some(context.load_object(&path).await?)
         }
         _ => arg_ref.live_object(context.txn()),
+    })
+}
+
+/// The connection of the object register 1 names — `this_player()` when the
+/// argument is absent or 0 — or `None` when there is none.
+fn connection_of<const N: usize>(context: &EfunContext<'_, N>) -> Option<Arc<Connection>> {
+    let target = match context.resolve_local_register(1 as RegisterSize) {
+        LpcRef::Int(LpcInt(0)) => context.this_player().load_full(),
+        arg => arg.live_object(context.txn()),
+    };
+    target.and_then(|proc| {
+        context
+            .txn()
+            .with(|t| t.read_connection(proc.connection.id))
     })
 }
 
@@ -626,6 +655,8 @@ mod tests {
                 "throw",
                 "write",
                 "write_socket",
+                "query_connection",
+                "query_ip_number",
             ]
         );
     }
