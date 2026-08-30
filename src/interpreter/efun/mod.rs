@@ -47,6 +47,8 @@ pub(crate) mod query_verb;
 pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
 pub(crate) mod remove_rule;
+pub(crate) mod send_gmcp;
+pub(crate) mod send_mxp;
 pub(crate) mod set_this_player;
 pub(crate) mod sscanf;
 pub(crate) mod tell_object;
@@ -70,13 +72,17 @@ use lpc_rs_function_support::{
     program_function::ProgramFunction,
 };
 use once_cell::sync::Lazy;
+use tracing::trace;
 
 use crate::{
     interpreter::{
-        efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef, process::Process,
-        stm::TxnHandle,
+        efun::efun_context::EfunContext,
+        lpc_int::LpcInt,
+        lpc_ref::LpcRef,
+        process::Process,
+        stm::{Effect, TxnHandle},
     },
-    telnet::connection::Connection,
+    telnet::{connection::Connection, ops::ConnectionOp},
 };
 
 /// Special forms: typechecked against an efun prototype, compiled to their
@@ -507,6 +513,16 @@ efuns! {
         arity: (1, 1),
         args: [LpcType::Object(false)],
     },
+    send_gmcp => {
+        returns: LpcType::Void,
+        arity: 3,
+        args: [LpcType::Object(false), LpcType::String(false), LpcType::String(false)],
+    },
+    send_mxp => {
+        returns: LpcType::Void,
+        arity: 2,
+        args: [LpcType::Object(false), LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -549,6 +565,26 @@ fn connection_of<const N: usize>(context: &EfunContext<'_, N>) -> Option<Arc<Con
             .txn()
             .with(|t| t.read_connection(proc.connection.id))
     })
+}
+
+/// Record `op` for the connection of the object register 1 names; nothing but
+/// a trace when it has none.
+fn send_to_connection<const N: usize>(context: &EfunContext<'_, N>, op: ConnectionOp) {
+    let target = context
+        .resolve_local_register(1 as RegisterSize)
+        .live_object(context.txn());
+    let connection = target.and_then(|proc| {
+        context
+            .txn()
+            .with(|t| t.read_connection(proc.connection.id))
+    });
+    match connection {
+        Some(connection) => context.record_effect(Effect::Socket {
+            op,
+            tx: connection.tx.clone(),
+        }),
+        None => trace!("{op:?} to an object without a connection"),
+    }
 }
 
 /// Return `f`'s objects for the object register 1 names (per
@@ -657,6 +693,8 @@ mod tests {
                 "write_socket",
                 "query_connection",
                 "query_ip_number",
+                "send_gmcp",
+                "send_mxp",
             ]
         );
     }
