@@ -259,7 +259,9 @@ impl Telnet {
                         "{} sent nothing for {max_idle_time} seconds; disconnecting",
                         &remote_ip
                     );
-                    outbox.send(&mut session, Op::Text(IDLE_KICKED));
+                    // Directly on the session — `outbox.send` would drop it
+                    // for an overflowed client, the paradigm idler.
+                    session.send(Op::Text(IDLE_KICKED));
                     Flow::Leave(Departure::Idle)
                 }
             };
@@ -1712,17 +1714,27 @@ mod tests {
         }
 
         /// The clock restarts at each line, and the body hears `net_dead`
-        /// as if the client had hung up.
+        /// as if the client had hung up. Most of the idle budget is spent
+        /// before the line: a fixed deadline from connection start would
+        /// kick inside the quiet window.
         #[tokio::test]
-        async fn an_idle_kick_tells_the_body_with_net_dead() {
-            let mut w = wire_with(idle_config(2)).await;
+        async fn a_line_restarts_the_clock_and_the_kick_tells_the_body() {
+            let mut w = wire_with(idle_config(3)).await;
             let proc = commanding_body(&w, "int dead;\nvoid net_dead() { dead = 1; }").await;
+            tokio::time::sleep(Duration::from_millis(2000)).await;
             w.client.write_all(b"look\r\n").await.unwrap();
             assert_eq!(read_n(&mut w.client, 6).await, b"seen\r\n");
+            let mut probe = [0u8; 1];
+            assert!(
+                tokio::time::timeout(Duration::from_millis(1200), w.client.read(&mut probe))
+                    .await
+                    .is_err(),
+                "the line pushed the deadline out"
+            );
             let mut buf = vec![0; KICKED.len()];
             tokio::time::timeout(Duration::from_secs(4), w.client.read_exact(&mut buf))
                 .await
-                .expect("the kick lands within four seconds")
+                .expect("the kick lands after the line's own three seconds")
                 .unwrap();
             assert_eq!(buf, KICKED);
             eventually(|| w.vm.global_state.committed_global(&proc, 0u16) == LpcRef::from(1)).await;
@@ -1747,6 +1759,30 @@ mod tests {
                 .expect("chatter does not defer the kick")
                 .unwrap();
             assert_eq!(buf, KICKED);
+        }
+
+        /// The kick line bypasses the outbox's overflow drop: an overflowed
+        /// client is the paradigm idler.
+        #[tokio::test]
+        async fn an_overflowed_client_still_hears_the_kick() {
+            let mut w = wire_with(idle_config(1)).await;
+            flood(&w).await;
+            // Past the kick; the client has read nothing, so the overflow
+            // cannot have cleared.
+            tokio::time::sleep(Duration::from_millis(1300)).await;
+            assert!(w.connection.is_overflowed());
+            let mut all = Vec::new();
+            let mut buf = [0u8; 4096];
+            within(async {
+                loop {
+                    match w.client.read(&mut buf).await {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => all.extend_from_slice(&buf[..n]),
+                    }
+                }
+            })
+            .await;
+            assert!(all.ends_with(KICKED), "the goodbye carries the kick line");
         }
 
         #[tokio::test]

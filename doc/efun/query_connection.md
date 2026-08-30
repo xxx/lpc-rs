@@ -12,7 +12,7 @@ set. Every key is always present; a value the client has not reported is 0.
 | `"cols"`, `"rows"` | the window size the client reported (NAWS); 0 until it does |
 | `"charset"` | the charset negotiated (CHARSET); 0 until one is |
 | `"gmcp"`, `"mxp"`, `"eor"` | 1 while that extension is on |
-| `"idle"` | seconds since the client's last line of input |
+| `"idle"` | seconds since the client's last line of input; from connecting, before one |
 
 Returns 0 when `ob` has no connection. Output to the client is always UTF-8,
 whatever `"charset"` says.

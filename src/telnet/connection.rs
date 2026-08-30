@@ -245,7 +245,8 @@ mod tests {
     fn a_line_restarts_the_idle_clock() {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let connection = Connection::new("127.0.0.1:1".parse().unwrap(), tx);
-        assert_eq!(connection.idle(), 0);
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        assert!(connection.idle() >= 1);
         connection.mark_line();
         assert_eq!(connection.idle(), 0);
     }

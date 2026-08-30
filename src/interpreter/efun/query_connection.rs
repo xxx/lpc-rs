@@ -100,10 +100,7 @@ mod tests {
         assert_eq!(get("gmcp"), LpcRef::from(1));
         assert_eq!(get("mxp"), LpcRef::from(0));
         assert_eq!(get("eor"), LpcRef::from(0));
-        assert!(
-            matches!(get("idle"), LpcRef::Int(_)),
-            "idle is whole seconds"
-        );
+        assert_eq!(get("idle"), LpcRef::from(0));
         assert_eq!(m.len(), 9, "the key set is fixed");
     }
 
