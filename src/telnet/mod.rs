@@ -166,6 +166,8 @@ impl Telnet {
 
         let mut shutting_down = false;
         let mut buf = [0u8; 4096];
+        // The master's MSSP contribution, run at most once per connection.
+        let mut mud_stats: Option<IndexMap<String, Vec<String>>> = None;
 
         loop {
             tokio::select! {
@@ -225,7 +227,7 @@ impl Telnet {
                             session.feed(&buf[..n]);
                             connection.refresh(&session);
                             while let Some(event) = session.next_event() {
-                                Self::handle_event(event, &mut session, &connection, &template, &players, shutting_down).await;
+                                Self::handle_event(event, &mut session, &connection, &template, &players, shutting_down, &mut mud_stats).await;
                             }
                         }
                         Err(e) => {
@@ -253,6 +255,7 @@ impl Telnet {
         template: &TaskTemplate,
         players: &Players,
         shutting_down: bool,
+        mud_stats: &mut Option<IndexMap<String, Vec<String>>>,
     ) {
         match event {
             Event::Line(line) => {
@@ -296,18 +299,21 @@ impl Telnet {
                 Self::apply_on_body(GMCP, &args, connection, template).await;
             }
             Event::MsspRequested => {
-                Self::mssp(session, template, players.len(), shutting_down).await
+                Self::mssp(session, template, players.len(), shutting_down, mud_stats).await
             }
         }
     }
 
     /// Answer MSSP: the driver's defaults under whatever the master's
     /// `get_mud_stats()` says, or the defaults alone while shutting down.
+    /// The master answers once per connection; `mud_stats` holds what it
+    /// said, so a client toggling the option cannot re-run the apply.
     async fn mssp(
         session: &mut Session,
         template: &TaskTemplate,
         players: usize,
         shutting_down: bool,
+        mud_stats: &mut Option<IndexMap<String, Vec<String>>>,
     ) {
         let global_state = &template.global_state;
         let uptime = global_state
@@ -325,8 +331,15 @@ impl Telnet {
             vec![format!("lpc-rs {}", env!("CARGO_PKG_VERSION"))],
         );
 
-        if !shutting_down {
-            Self::mud_stats_into(&mut vars, template).await;
+        if mud_stats.is_none() && !shutting_down {
+            let mut overrides = IndexMap::new();
+            Self::mud_stats_into(&mut overrides, template).await;
+            *mud_stats = Some(overrides);
+        }
+        if let Some(overrides) = mud_stats.as_ref() {
+            for (key, values) in overrides {
+                vars.insert(key.clone(), values.clone());
+            }
         }
 
         let borrowed: Vec<(&str, Vec<&str>)> = vars
@@ -797,6 +810,7 @@ mod tests {
         const WILL: u8 = 251;
         const WONT: u8 = 252;
         const DO: u8 = 253;
+        const DONT: u8 = 254;
         const ECHO: u8 = 1;
         const EOR: u8 = 25;
         const NAWS: u8 = 31;
@@ -1372,6 +1386,42 @@ mod tests {
             w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
             let vars = read_mssp(&mut w.client).await;
             assert_eq!(var(&vars, "NAME"), Some(&["lpc-rs".to_string()][..]));
+        }
+
+        #[tokio::test]
+        async fn mssp_runs_the_master_once_per_connection() {
+            let mut w = wire().await;
+            let master = indoc! { r#"
+                int calls;
+                mapping get_mud_stats() {
+                    calls += 1;
+                    return ([ "NAME": "Test MUD" ]);
+                }
+            "# };
+            let proc =
+                w.vm.initialize_process_from_code("/secure/master.c", master)
+                    .await
+                    .unwrap()
+                    .context
+                    .process;
+            w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
+            let vars = read_mssp(&mut w.client).await;
+            assert_eq!(var(&vars, "NAME"), Some(&["Test MUD".to_string()][..]));
+
+            // The Q method answers the toggle, and the second DO turns the
+            // option back on, which is what asks for MSSP again.
+            w.client.write_all(&[IAC, DONT, MSSP]).await.unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, MSSP]);
+            w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, [IAC, WILL, MSSP]);
+            let vars = read_mssp(&mut w.client).await;
+            assert_eq!(var(&vars, "NAME"), Some(&["Test MUD".to_string()][..]));
+
+            assert_eq!(
+                w.vm.global_state.committed_global(&proc, 0u16),
+                LpcRef::from(1),
+                "the cached answer served the second request"
+            );
         }
 
         const ROOM: &str = indoc! { r#"
