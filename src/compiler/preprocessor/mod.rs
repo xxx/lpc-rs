@@ -359,7 +359,21 @@ impl Preprocessor {
                 while let Some(Ok(replacement)) = iter.next() {
                     if let (tl, Token::Id(s), tr) = replacement {
                         if let Some(arg_tokens) = arg_map.get(&s.1) {
-                            replacements.append(&mut arg_tokens.clone());
+                            // Arguments are macro-expanded before
+                            // substitution; without it `ENV(TP)` leaves `TP`
+                            // raw in the output.
+                            let mut arg_iter = TokenVecWrapper::new(arg_tokens).peekable();
+                            while let Some(Ok(arg_spanned)) = arg_iter.next() {
+                                match arg_spanned {
+                                    (al, Token::Id(a), ar) => {
+                                        match self.expand_token(&a, &mut arg_iter)? {
+                                            Some(mut vec) => replacements.append(&mut vec),
+                                            None => replacements.push((al, Token::Id(a), ar)),
+                                        }
+                                    }
+                                    other => replacements.push(other),
+                                }
+                            }
                         } else {
                             match self.expand_token(&s, &mut iter)? {
                                 Some(mut vec) => replacements.append(&mut vec),
@@ -1971,6 +1985,17 @@ mod tests {
             "## };
 
             test_valid(prog, &["666", "+", "(", "5", "+", "7", "+", "1234", ")"]).await
+        }
+
+        #[tokio::test]
+        async fn arguments_expand_before_substitution() {
+            let prog = indoc! { r##"
+                #define TP this_player()
+                #define ENV(x) environment(x)
+                ENV(TP)
+            "## };
+
+            test_valid(prog, &["environment", "(", "this_player", "(", ")", ")"]).await
         }
 
         #[tokio::test]
