@@ -39,6 +39,8 @@ pub const COMMAND_NOT_FOUND: &str = "command_not_found";
 pub const CONNECT: &str = "connect";
 /// Master apply: receives each uncaught runtime error (`doc/apply/master/error_handler.md`).
 pub const ERROR_HANDLER: &str = "error_handler";
+/// Body apply: a GMCP message from the client (`doc/apply/special/gmcp.md`).
+pub const GMCP: &str = "gmcp";
 /// Object apply: the noun-matching fallback when `parse_command_id_list` is undefined (`doc/apply/object/id.md`).
 pub const ID: &str = "id";
 /// Object apply: called on each object that comes into a living's presence (`doc/apply/object/init.md`).
@@ -71,3 +73,5 @@ pub const PARSER_ERROR_MESSAGE: &str = "parser_error_message";
 pub const PROCESS_INPUT: &str = "process_input";
 /// Master apply: called as the driver shuts down (`doc/apply/master/shutdown.md`).
 pub const SHUTDOWN: &str = "shutdown";
+/// Body apply: the window size the client reported (`doc/apply/special/window_size.md`).
+pub const WINDOW_SIZE: &str = "window_size";

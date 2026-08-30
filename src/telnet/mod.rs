@@ -6,6 +6,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use bytes::BytesMut;
 use flume::Sender as FlumeSender;
+use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::lpc_error;
 use lpc_rs_telnet::{Event, MAX_LINE, Op, Session};
 use once_cell::sync::OnceCell;
@@ -20,10 +21,11 @@ use tracing::{error, info, instrument, trace, warn};
 use crate::{
     command::command_task::run_command_line,
     interpreter::{
+        GMCP, WINDOW_SIZE,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
         task::{
-            apply_function::{apply_function, apply_runtime_error},
+            apply_function::{apply_function, apply_function_by_name, apply_runtime_error},
             task_template::TaskTemplate,
         },
         vm::global_state::PreparedCall,
@@ -169,7 +171,13 @@ impl Telnet {
                         }),
                         Some(ConnectionOp::Mxp(markup)) => session.send(Op::Mxp(&markup)),
                         Some(ConnectionOp::Prompt(text)) => session.send(Op::Prompt(&text)),
-                        Some(ConnectionOp::Attached) => {}
+                        Some(ConnectionOp::Attached) => {
+                            if let Some((cols, rows)) = session.naws()
+                                && !shutting_down
+                            {
+                                Self::window_size(cols, rows, &connection, &template).await;
+                            }
+                        }
                         Some(ConnectionOp::Shutdown) => {
                             shutting_down = true;
                             trace!("Shutting down connection for {}", &remote_ip);
@@ -250,14 +258,54 @@ impl Telnet {
                 connection.address, MAX_LINE
             ),
             Event::Naws { cols, rows } => {
-                trace!("{} window is {}x{}", connection.address, cols, rows)
+                if !shutting_down {
+                    Self::window_size(cols, rows, connection, template).await;
+                }
             }
             Event::Charset(name) => trace!("{} charset is {}", connection.address, name),
             Event::Gmcp { package, payload } => {
-                trace!("{} GMCP {} {}", connection.address, package, payload);
+                if shutting_down {
+                    return;
+                }
+                let args = [
+                    LpcString::from(package).into(),
+                    LpcString::from(payload).into(),
+                ];
+                Self::apply_on_body(GMCP, &args, connection, template).await;
             }
             Event::MsspRequested => trace!("{} asked for MSSP; not offered", connection.address),
         }
+    }
+
+    /// Apply `name` on the bound body as `this_player`; no body or no apply
+    /// is nothing, an error goes to `error_handler`.
+    async fn apply_on_body(
+        name: &str,
+        args: &[LpcRef],
+        connection: &Connection,
+        template: &TaskTemplate,
+    ) {
+        let Some(body) = connection.process.load_full() else {
+            trace!("{} has no body for {name}", connection.address);
+            return;
+        };
+        let template = template.clone();
+        template.set_this_player(Some(body.clone()));
+        let timeout = template.global_state.config.max_execution_time;
+        if let Some(Err(e)) =
+            apply_function_by_name(name, args, body.clone(), template.clone(), Some(timeout)).await
+        {
+            apply_runtime_error(&e, Some(body), template).await;
+        }
+    }
+
+    /// `window_size(cols, rows)` on the bound body.
+    async fn window_size(cols: u16, rows: u16, connection: &Connection, template: &TaskTemplate) {
+        let args = [
+            LpcRef::from(cols as LpcIntInner),
+            LpcRef::from(rows as LpcIntInner),
+        ];
+        Self::apply_on_body(WINDOW_SIZE, &args, connection, template).await;
     }
 
     async fn resolve_input_to(
@@ -829,6 +877,174 @@ mod tests {
         async fn attached_is_quiet_on_the_wire() {
             let mut w = wire().await;
             w.connection.send(ConnectionOp::Attached).await.unwrap();
+            w.connection
+                .send(ConnectionOp::SendMessage("z\n".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
+        }
+
+        /// A body bound to the loop's connection, initialized from `code`.
+        async fn bind(w: &Wired, code: &str) -> Arc<crate::interpreter::process::Process> {
+            let proc =
+                w.vm.initialize_process_from_code("/body.c", code)
+                    .await
+                    .unwrap()
+                    .context
+                    .process;
+            w.connection.process.store(Some(proc.clone()));
+            proc
+        }
+
+        fn gmcp_frame(text: &str) -> Vec<u8> {
+            let mut frame = vec![IAC, SB, GMCP];
+            frame.extend(text.as_bytes());
+            frame.extend([IAC, SE]);
+            frame
+        }
+
+        const NAWS_100_40: [u8; 9] = [IAC, SB, NAWS, 0, 100, 0, 40, IAC, SE];
+
+        #[tokio::test]
+        async fn a_gmcp_message_is_applied_on_the_body() {
+            let mut w = wire().await;
+            let proc = bind(
+                &w,
+                "string package; string payload;\nvoid gmcp(string p, string j) { package = p; payload = j; }",
+            )
+            .await;
+            w.client.write_all(&[IAC, DO, GMCP]).await.unwrap();
+            w.client
+                .write_all(&gmcp_frame("Core.Hello {\"client\":\"t\"}"))
+                .await
+                .unwrap();
+            eventually(|| w.vm.global_state.committed_global(&proc, 0u16) != LpcRef::from(0)).await;
+            assert_eq!(
+                w.vm.global_state.committed_global(&proc, 0u16).to_string(),
+                "Core.Hello"
+            );
+            assert_eq!(
+                w.vm.global_state.committed_global(&proc, 1u16).to_string(),
+                "{\"client\":\"t\"}"
+            );
+        }
+
+        #[tokio::test]
+        async fn naws_is_applied_as_window_size() {
+            let mut w = wire().await;
+            let proc = bind(
+                &w,
+                "int c; int r;\nvoid window_size(int cols, int rows) { c = cols; r = rows; }",
+            )
+            .await;
+            w.client.write_all(&NAWS_100_40).await.unwrap();
+            eventually(|| w.vm.global_state.committed_global(&proc, 0u16) == LpcRef::from(100))
+                .await;
+            assert_eq!(
+                w.vm.global_state.committed_global(&proc, 1u16),
+                LpcRef::from(40)
+            );
+        }
+
+        #[tokio::test]
+        async fn a_size_reported_before_the_body_is_replayed_at_attach() {
+            let mut w = wire().await;
+            w.client.write_all(&NAWS_100_40).await.unwrap();
+            eventually(|| w.connection.snapshot().cols == 100).await;
+            let proc = bind(
+                &w,
+                "int calls; int c;\nvoid window_size(int cols, int rows) { calls += 1; c = cols; }",
+            )
+            .await;
+            w.connection.send(ConnectionOp::Attached).await.unwrap();
+            eventually(|| w.vm.global_state.committed_global(&proc, 0u16) == LpcRef::from(1)).await;
+            assert_eq!(
+                w.vm.global_state.committed_global(&proc, 1u16),
+                LpcRef::from(100)
+            );
+        }
+
+        #[tokio::test]
+        async fn attach_without_a_size_applies_nothing() {
+            let mut w = wire().await;
+            let proc = bind(
+                &w,
+                "int calls;\nvoid window_size(int cols, int rows) { calls += 1; }",
+            )
+            .await;
+            w.connection.send(ConnectionOp::Attached).await.unwrap();
+            w.connection
+                .send(ConnectionOp::SendMessage("z\n".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
+            assert_eq!(
+                w.vm.global_state.committed_global(&proc, 0u16),
+                LpcRef::from(0)
+            );
+        }
+
+        #[tokio::test]
+        async fn gmcp_is_delivered_behind_a_pending_input_to() {
+            let mut w = wire().await;
+            let proc = bind(
+                &w,
+                "string package;\nvoid gmcp(string p, string j) { package = p; }\nvoid line(string s) {}",
+            )
+            .await;
+            let func = proc.program.lookup_function("line").unwrap().clone();
+            let ptr = FunctionPtrBuilder::default()
+                .address(FunctionAddress::Local(Arc::downgrade(&proc), func))
+                .build()
+                .unwrap();
+            w.connection
+                .send(ConnectionOp::InputTo(InputTo {
+                    ptr: Arc::new(ptr),
+                    no_echo: false,
+                }))
+                .await
+                .unwrap();
+            w.client.write_all(&[IAC, DO, GMCP]).await.unwrap();
+            w.client.write_all(&gmcp_frame("Core.Ping")).await.unwrap();
+            eventually(|| w.vm.global_state.committed_global(&proc, 0u16) != LpcRef::from(0)).await;
+            assert!(
+                w.connection.input_to.load().is_some(),
+                "the input_to still waits"
+            );
+        }
+
+        #[tokio::test]
+        async fn nothing_is_applied_while_shutting_down() {
+            let mut w = wire().await;
+            let proc = bind(
+                &w,
+                "int calls;\nvoid gmcp(string p, string j) { calls += 1; }\nvoid window_size(int c, int r) { calls += 1; }",
+            )
+            .await;
+            w.connection.send(ConnectionOp::Shutdown).await.unwrap();
+            w.connection
+                .send(ConnectionOp::SendMessage("z\n".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
+            w.client.write_all(&[IAC, DO, GMCP]).await.unwrap();
+            w.client.write_all(&gmcp_frame("Core.Ping")).await.unwrap();
+            w.client.write_all(&NAWS_100_40).await.unwrap();
+            eventually(|| w.connection.snapshot().cols == 100).await;
+            assert_eq!(
+                w.vm.global_state.committed_global(&proc, 0u16),
+                LpcRef::from(0)
+            );
+        }
+
+        #[tokio::test]
+        async fn a_body_without_the_apply_is_left_alone() {
+            let mut w = wire().await;
+            let _proc = bind(&w, "int x;").await;
+            w.client.write_all(&[IAC, DO, GMCP]).await.unwrap();
+            w.client.write_all(&gmcp_frame("Core.Ping")).await.unwrap();
+            w.client.write_all(&NAWS_100_40).await.unwrap();
+            eventually(|| w.connection.snapshot().cols == 100).await;
             w.connection
                 .send(ConnectionOp::SendMessage("z\n".into()))
                 .await
