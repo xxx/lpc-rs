@@ -113,12 +113,20 @@ fn v1(opt: Opt) -> (Local, Remote) {
         Opt::Eor => (Local::Offer, Remote::Accept),
         Opt::Gmcp => (Local::Offer, Remote::Refuse),
         Opt::Mxp => (Local::Offer, Remote::Refuse),
-        Opt::Mssp | Opt::Ttype | Opt::Mccp2 | Opt::Other(_) => (Local::Refuse, Remote::Refuse),
+        Opt::Mssp => (Local::Offer, Remote::Refuse),
+        Opt::Ttype | Opt::Mccp2 | Opt::Other(_) => (Local::Refuse, Remote::Refuse),
     }
 }
 
 /// The offers made at connect, in wire order.
-const OFFERS: [Opt; 5] = [Opt::Naws, Opt::Charset, Opt::Gmcp, Opt::Mxp, Opt::Eor];
+const OFFERS: [Opt; 6] = [
+    Opt::Naws,
+    Opt::Charset,
+    Opt::Gmcp,
+    Opt::Mxp,
+    Opt::Eor,
+    Opt::Mssp,
+];
 
 const CHARSET_REQUEST: u8 = 1;
 const CHARSET_ACCEPTED: u8 = 2;
@@ -496,7 +504,8 @@ mod tests {
         assert_eq!(
             out(&mut session),
             [
-                IAC, DO, NAWS, IAC, WILL, CHARSET, IAC, WILL, GMCP, IAC, WILL, MXP, IAC, WILL, EOR
+                IAC, DO, NAWS, IAC, WILL, CHARSET, IAC, WILL, GMCP, IAC, WILL, MXP, IAC, WILL, EOR,
+                IAC, WILL, MSSP
             ]
         );
     }
@@ -520,11 +529,8 @@ mod tests {
     #[test]
     fn a_do_for_a_refused_option_answers_wont() {
         let mut s = connected();
-        s.feed(&[IAC, DO, MSSP, IAC, DO, MCCP2, IAC, DO, 24]);
-        assert_eq!(
-            out(&mut s),
-            [IAC, WONT, MSSP, IAC, WONT, MCCP2, IAC, WONT, 24]
-        );
+        s.feed(&[IAC, DO, MCCP2, IAC, DO, 24]);
+        assert_eq!(out(&mut s), [IAC, WONT, MCCP2, IAC, WONT, 24]);
     }
 
     #[test]
@@ -862,27 +868,19 @@ mod tests {
     }
 
     #[test]
-    fn mssp_is_refused_in_v1() {
+    fn mssp_is_offered_but_off_until_the_client_confirms() {
         let mut s = connected();
-        s.feed(&[IAC, DO, MSSP]);
-        assert_eq!(out(&mut s), [IAC, WONT, MSSP]);
         s.send(Op::Mssp(&[("NAME", &["lpc-rs"])]));
         assert!(out(&mut s).is_empty());
         assert_eq!(s.stats().dropped, 1);
+        assert!(!s.is_on(Opt::Mssp));
     }
 
     #[test]
     fn mssp_when_accepted_is_requested_and_framed() {
-        fn accepting(opt: Opt) -> (Local, Remote) {
-            match opt {
-                Opt::Mssp => (Local::Accept, Remote::Refuse),
-                other => v1(other),
-            }
-        }
-        let mut s = Session::with_policy(accepting);
-        out(&mut s);
+        let mut s = connected();
         s.feed(&[IAC, DO, MSSP]);
-        assert_eq!(out(&mut s), [IAC, WILL, MSSP]);
+        assert!(out(&mut s).is_empty());
         assert_eq!(events(&mut s), [Event::MsspRequested]);
         s.send(Op::Mssp(&[("NAME", &["lpc-rs"]), ("PLAYERS", &["0"])]));
         let mut expected = vec![IAC, SB, MSSP, 1];

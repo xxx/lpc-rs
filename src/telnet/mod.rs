@@ -273,7 +273,9 @@ impl Telnet {
                 ];
                 Self::apply_on_body(GMCP, &args, connection, template).await;
             }
-            Event::MsspRequested => trace!("{} asked for MSSP; not offered", connection.address),
+            Event::MsspRequested => {
+                trace!("{} asked for MSSP; not answered yet", connection.address)
+            }
         }
     }
 
@@ -617,6 +619,7 @@ mod tests {
         const EOR: u8 = 25;
         const NAWS: u8 = 31;
         const CHARSET: u8 = 42;
+        const MSSP: u8 = 70;
         const MXP: u8 = 91;
         const GMCP: u8 = 201;
         const SB: u8 = 250;
@@ -650,10 +653,10 @@ mod tests {
                 panic!("the loop announces itself first");
             };
             assert_eq!(
-                read_n(&mut client, 15).await,
+                read_n(&mut client, 18).await,
                 [
                     IAC, DO, NAWS, IAC, WILL, CHARSET, IAC, WILL, GMCP, IAC, WILL, MXP, IAC, WILL,
-                    EOR
+                    EOR, IAC, WILL, MSSP
                 ]
             );
             Wired {

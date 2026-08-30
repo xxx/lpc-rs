@@ -30,7 +30,7 @@ pub enum Opt {
     Naws,
     /// RFC 2066: character set.
     Charset,
-    /// MUD Server Status Protocol. Supported, not offered.
+    /// MUD Server Status Protocol. Offered in v1.
     Mssp,
     /// MUD Client Compression Protocol v2. Refused in v1.
     Mccp2,
