@@ -232,8 +232,6 @@ mod tests {
         assert_eq!(rx_b.recv().await, Some(op_b));
     }
 
-    /// `Exec` both points the connection at its new body and tells the
-    /// connection so, on its own channel.
     #[tokio::test]
     async fn exec_points_the_connection_at_the_body_then_announces_it() {
         let (tx, mut rx) = tokio::sync::mpsc::channel(16);
