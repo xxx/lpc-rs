@@ -28,6 +28,16 @@
       with the contents of both strings.
     - Two literal `string`s next to each other will be concatenated, e.g. `"hello" "world"` is
       equivalent to `"hello" + "world"`.
+    - A `string` literal decodes these escapes; any other `\x` is just `x`.
+
+      | Escape | Character       | Escape | Character       |
+      |--------|-----------------|--------|-----------------|
+      | `\n`   | newline         | `\b`   | backspace       |
+      | `\r`   | carriage return | `\a`   | bell            |
+      | `\t`   | tab             | `\"`   | `"`             |
+      | `\v`   | vertical tab    | `\\`   | `\`             |
+      | `\f`   | form feed       | `\'`   | `'`             |
+
     - `string`s can be indexed with the `[]` operator: `s[i]` is the character code (an
       `int`) at index `i`, and `s[a..b]` is the substring from `a` to `b` inclusive (a
       `string`). Indexing starts at 0; negative indices count from the end.

@@ -4,15 +4,18 @@
 
 The driver applies `write_prompt` in the object bound to a connection after
 each command line it runs, and after each `input_to` callback. Whatever it
-returns is sent as the prompt, followed by the mark the client negotiated
-(telnet EOR, else GA); it may also `write` its prompt and return nothing, and
-the mark still follows. A body that does not define `write_prompt` gets no
-prompt and no mark — except after a command or callback that left an
-`input_to` pending, where the mark alone is still sent.
+returns is sent as the prompt, followed by the mark: telnet EOR when the
+client negotiated it, else GA — unless the client asked us to suppress
+go-aheads (SGA), in which case no mark is sent at all. It may also `write` its
+prompt and return nothing, and the mark still follows. A body that does not
+define `write_prompt` gets no prompt and no mark.
 
 When the command or callback left another `input_to` pending, `write_prompt`
-is not applied: the callback wrote its own prompt (`"Password: "`), and only
-the mark is sent after it.
+is not applied and the mark alone is sent, whether or not the body defines it:
+the callback wrote its own prompt (`"Password: "`).
+
+The first prompt after `logon()` succeeds gets the same cycle, so a login
+object's `"Name: "` is marked like any other prompt.
 
 `this_player()` is the body.
 
