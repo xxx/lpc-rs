@@ -288,13 +288,21 @@ impl Telnet {
                 ];
                 Self::apply_on_body(GMCP, &args, connection, template).await;
             }
-            Event::MsspRequested => Self::mssp(session, template, players.len()).await,
+            Event::MsspRequested => {
+                Self::mssp(session, template, players.len(), shutting_down).await
+            }
         }
     }
 
     /// Answer MSSP: the driver's defaults under whatever the master's
-    /// `get_mud_stats()` says (spec D9).
-    async fn mssp(session: &mut Session, template: &TaskTemplate, players: usize) {
+    /// `get_mud_stats()` says (spec D9), or the defaults alone while
+    /// shutting down (no interpreter entry once shutdown has started).
+    async fn mssp(
+        session: &mut Session,
+        template: &TaskTemplate,
+        players: usize,
+        shutting_down: bool,
+    ) {
         let global_state = &template.global_state;
         let uptime = global_state
             .booted_at
@@ -311,7 +319,9 @@ impl Telnet {
             vec![format!("lpc-rs {}", env!("CARGO_PKG_VERSION"))],
         );
 
-        Self::mud_stats_into(&mut vars, template).await;
+        if !shutting_down {
+            Self::mud_stats_into(&mut vars, template).await;
+        }
 
         let borrowed: Vec<(&str, Vec<&str>)> = vars
             .iter()
@@ -322,9 +332,10 @@ impl Telnet {
         session.send(Op::Mssp(&pairs));
     }
 
-    /// The master's `get_mud_stats()` mapping over `vars`: strings and ints
-    /// as one value, string arrays as many; anything else is logged and
-    /// skipped, as is a master that has no mapping to give.
+    /// The master's `get_mud_stats()` mapping over `vars`. A string or int
+    /// value is one MSSP value; an array value is many, one per string/int
+    /// element. Any other value, and any other array element, is logged and
+    /// skipped; a master with no mapping to give leaves `vars` untouched.
     async fn mud_stats_into(vars: &mut IndexMap<String, Vec<String>>, template: &TaskTemplate) {
         let global_state = &template.global_state;
         let timeout = global_state.config.max_execution_time;
@@ -359,7 +370,26 @@ impl Telnet {
             let values = match value {
                 LpcRef::String(_) | LpcRef::Int(_) => vec![value.to_string()],
                 LpcRef::Array(cell) => match global_state.committed_array(cell.id) {
-                    Some(array) => array.iter().map(|v| v.to_string()).collect(),
+                    Some(array) => {
+                        let mut elements = Vec::new();
+                        for element in array.iter() {
+                            match element {
+                                LpcRef::String(_) | LpcRef::Int(_) => {
+                                    elements.push(element.to_string())
+                                }
+                                other => {
+                                    global_state
+                                        .config
+                                        .debug_log(format!(
+                                            "get_mud_stats: {key} has a {} element; skipped",
+                                            other.type_name()
+                                        ))
+                                        .await;
+                                }
+                            }
+                        }
+                        elements
+                    }
                     None => continue,
                 },
                 other => {
@@ -1198,7 +1228,13 @@ mod tests {
             let mut w = wire().await;
             let master = indoc! { r#"
                 mapping get_mud_stats() {
-                    return ([ "NAME": "Test MUD", "PORTS": ({ "4000", "4001" }), "AGE": 12, "BAD": 1.5 ]);
+                    return ([
+                        "NAME": "Test MUD",
+                        "PORTS": ({ "4000", "4001" }),
+                        "AGE": 12,
+                        "BAD": 1.5,
+                        "MIXED": ({ "a", 1.5, 2 }),
+                    ]);
                 }
             "# };
             w.vm.initialize_process_from_code("/secure/master.c", master)
@@ -1207,6 +1243,14 @@ mod tests {
             assert!(w.vm.global_state.object_space.master_object().is_some());
             w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
             let vars = read_mssp(&mut w.client).await;
+            let names: Vec<&str> = vars.iter().map(|(n, _)| n.as_str()).collect();
+            assert_eq!(
+                names,
+                [
+                    "NAME", "PLAYERS", "UPTIME", "PORT", "CODEBASE", "PORTS", "AGE", "MIXED"
+                ],
+                "an override keeps its position; new keys are appended in mapping order"
+            );
             assert_eq!(var(&vars, "NAME"), Some(&["Test MUD".to_string()][..]));
             assert_eq!(
                 var(&vars, "PORTS"),
@@ -1214,6 +1258,11 @@ mod tests {
             );
             assert_eq!(var(&vars, "AGE"), Some(&["12".to_string()][..]));
             assert_eq!(var(&vars, "BAD"), None, "a float is skipped");
+            assert_eq!(
+                var(&vars, "MIXED"),
+                Some(&["a".to_string(), "2".to_string()][..]),
+                "a float element is skipped, its neighbors kept"
+            );
             assert_eq!(var(&vars, "PLAYERS"), Some(&["0".to_string()][..]));
             assert_eq!(
                 var(&vars, "PORT"),
@@ -1248,6 +1297,28 @@ mod tests {
             w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
             let vars = read_mssp(&mut w.client).await;
             assert_eq!(var(&vars, "PLAYERS"), Some(&["1".to_string()][..]));
+        }
+
+        #[tokio::test]
+        async fn mssp_while_shutting_down_is_the_defaults() {
+            let mut w = wire().await;
+            let master = indoc! { r#"
+                mapping get_mud_stats() {
+                    return ([ "NAME": "Test MUD" ]);
+                }
+            "# };
+            w.vm.initialize_process_from_code("/secure/master.c", master)
+                .await
+                .unwrap();
+            w.connection.send(ConnectionOp::Shutdown).await.unwrap();
+            w.connection
+                .send(ConnectionOp::SendMessage("z\n".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
+            w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
+            let vars = read_mssp(&mut w.client).await;
+            assert_eq!(var(&vars, "NAME"), Some(&["lpc-rs".to_string()][..]));
         }
     }
 }
