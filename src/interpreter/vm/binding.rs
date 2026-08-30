@@ -175,7 +175,8 @@ impl AttemptBody for AttachBody {
             new_process: self.process.clone(),
             connection: self.connection.clone(),
         });
-        if let Some(previous) = previous {
+        // The connection itself is not a displaced holder.
+        if let Some(previous) = previous.filter(|held| !Arc::ptr_eq(held, &self.connection)) {
             txn.record_effect(Effect::Disconnect {
                 connection: previous,
                 message: Some(DISPLACED.to_owned()),
@@ -406,6 +407,26 @@ mod tests {
             "the cell still holds the connection that owns it"
         );
         assert!(stale.body().is_none());
+    }
+
+    #[tokio::test]
+    async fn an_attach_of_the_connection_a_body_holds_displaces_nothing() {
+        let vm = Vm::new(test_config());
+        let body = vm.create_process_from_code("/body.c", "").await.unwrap();
+        let mut on = connect(&vm, &body).await;
+
+        vm.global_state
+            .attach(on.connection.clone(), body.clone())
+            .await;
+
+        assert_eq!(on.rx.try_recv(), Ok(ConnectionOp::Attached));
+        assert!(on.rx.try_recv().is_err(), "no displacement, no close");
+        assert!(
+            vm.global_state
+                .committed_connection(&body)
+                .is_some_and(|held| Arc::ptr_eq(&held, &on.connection))
+        );
+        assert!(on.connection.body().is_some_and(|b| Arc::ptr_eq(&b, &body)));
     }
 
     /// Spec D4: a connection detached while an `exec` to it is in flight is

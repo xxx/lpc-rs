@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use if_chain::if_chain;
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
@@ -30,33 +32,41 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
         if let LpcRef::Object(old_ob) = old_ref;
         if let Some(old_ob) = old_ob.upgrade();
         then {
+            // One cell: the writes below would land `Some` then `None`
+            // and the displaced holder would be the connection itself.
+            if Arc::ptr_eq(&new_ob, &old_ob) {
+                return Err(context.runtime_error("exec: `new` and `old` are the same object"));
+            }
+
             let txn = context.txn();
 
             // The connection being moved, from the old body's cell.
             // Changeset-first, so a prior uncommitted `exec` in this same
             // task is seen.
             let connection = txn.with(|t| t.read_connection(old_ob.connection.id));
+            let Some(connection) = connection else {
+                context.return_efun_result(NULL);
+                return Ok(());
+            };
 
-            if let Some(connection) = connection {
-                // The connection the new body currently holds (if any);
-                // the handover displaces it.
-                let previous = txn.with(|t| t.read_connection(new_ob.connection.id));
+            // The connection the new body currently holds (if any);
+            // the handover displaces it.
+            let previous = txn.with(|t| t.read_connection(new_ob.connection.id));
 
-                // Bind the new body, unbind the old one. Both writes land
-                // in the changeset and commit with this task.
-                txn.with(|t| t.write_connection(new_ob.connection.id, Some(connection.clone())));
-                txn.with(|t| t.write_connection(old_ob.connection.id, None));
+            // Bind the new body, unbind the old one. Both writes land
+            // in the changeset and commit with this task.
+            txn.with(|t| t.write_connection(new_ob.connection.id, Some(connection.clone())));
+            txn.with(|t| t.write_connection(old_ob.connection.id, None));
 
-                context.record_effect(Effect::Exec {
-                    new_process: new_ob.clone(),
-                    connection,
+            context.record_effect(Effect::Exec {
+                new_process: new_ob.clone(),
+                connection,
+            });
+            if let Some(previous) = previous {
+                context.record_effect(Effect::Disconnect {
+                    connection: previous,
+                    message: Some(DISPLACED.to_owned()),
                 });
-                if let Some(previous) = previous {
-                    context.record_effect(Effect::Disconnect {
-                        connection: previous,
-                        message: Some(DISPLACED.to_owned()),
-                    });
-                }
             }
 
             context.return_efun_result(LpcRef::from(1));
@@ -77,7 +87,8 @@ mod tests {
 
     use crate::{
         interpreter::{
-            lpc_int::LpcInt, lpc_ref::LpcRef, task::Task, task::task_template::TaskTemplate, vm::Vm,
+            CommittedReader, lpc_int::LpcInt, lpc_ref::LpcRef, task::Task,
+            task::task_template::TaskTemplate, vm::Vm,
         },
         telnet::{connection::Connection, ops::ConnectionOp},
         test_support::{connect, test_config},
@@ -108,6 +119,53 @@ mod tests {
             on_a.connection.body().as_ref().map(|p| p.to_string()),
             Some("/b".to_owned())
         );
+    }
+
+    #[tokio::test]
+    async fn a_body_cannot_exec_into_itself() {
+        let vm = Vm::new(test_config());
+        let a = vm.create_process_from_code("/a.c", "").await.unwrap();
+        let mut on_a = connect(&vm, &a).await;
+        let main = indoc! { r#"
+            void create() { exec(find_object("/a"), find_object("/a")); }
+        "# };
+        let err = vm
+            .initialize_process_from_code("/main.c", main)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("exec: `new` and `old` are the same object"),
+            "{err}"
+        );
+        assert!(on_a.rx.try_recv().is_err(), "nothing reaches the player");
+        assert!(
+            vm.global_state
+                .committed_connection(&a)
+                .is_some_and(|held| Arc::ptr_eq(&held, &on_a.connection)),
+            "the cell still holds the connection"
+        );
+        assert_eq!(
+            on_a.connection.body().as_ref().map(|p| p.to_string()),
+            Some("/a".to_owned())
+        );
+    }
+
+    #[tokio::test]
+    async fn an_exec_from_a_body_that_is_not_interactive_fails() {
+        let vm = Vm::new(test_config());
+        vm.create_process_from_code("/a.c", "").await.unwrap();
+        vm.create_process_from_code("/b.c", "").await.unwrap();
+        let main = indoc! { r#"
+            void create() {
+                if (exec(find_object("/b"), find_object("/a")) != 0) {
+                    throw("a body with no connection has nothing to move");
+                }
+            }
+        "# };
+        vm.initialize_process_from_code("/main.c", main)
+            .await
+            .unwrap();
     }
 
     /// Build a [`Connection`] whose own channels are dropped after the test.
