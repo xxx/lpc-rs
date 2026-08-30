@@ -32,10 +32,7 @@ use crate::{
         task::{Task, task_template::TaskTemplate},
         vm::{Vm, global_state::GlobalState, vm_op::VmOp},
     },
-    telnet::{
-        connection::Connection,
-        ops::{BrokerOp, ConnectionOp},
-    },
+    telnet::{connection::Connection, ops::ConnectionOp},
     util::process_builder::process_insert_and_initialize_program,
 };
 
@@ -73,8 +70,6 @@ macro_rules! test_config_builder {
 pub struct Connected {
     /// The connection's outgoing operations.
     pub rx: UnboundedReceiver<ConnectionOp>,
-    /// What the connection asks of the broker.
-    pub broker_rx: flume::Receiver<BrokerOp>,
     /// The connection itself.
     pub connection: Arc<Connection>,
 }
@@ -82,7 +77,6 @@ pub struct Connected {
 /// Bind a fresh connection to `process` through the attach path.
 pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    let (broker_tx, broker_rx) = flume::unbounded();
     let connection = Arc::new(Connection::new(
         "127.0.0.1:23123"
             .to_socket_addrs()
@@ -90,7 +84,6 @@ pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
             .next()
             .expect("one address"),
         tx,
-        broker_tx,
     ));
     vm.global_state
         .attach(connection.clone(), process.clone())
@@ -100,11 +93,7 @@ pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
         Ok(ConnectionOp::Attached),
         "attach announces the body"
     );
-    Connected {
-        rx,
-        broker_rx,
-        connection,
-    }
+    Connected { rx, connection }
 }
 
 pub fn test_config() -> Config {

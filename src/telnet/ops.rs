@@ -1,37 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
-
-use lpc_rs_errors::LpcError;
-use tokio::task::JoinHandle;
-
-use crate::telnet::connection::{Connection, InputTo};
-
-/// Operations that are handled by the [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker)
-#[derive(Debug)]
-pub enum BrokerOp {
-    /// Start the login process for a connection.
-    NewConnection(Arc<Connection>),
-
-    /// We have received a new, authenticated connection from a user.
-    Connected(Arc<Connection>),
-
-    /// Keep track of the handle for a connection, so we can drop it
-    /// if necessary.
-    NewHandle(SocketAddr, JoinHandle<()>),
-
-    /// Disconnect the specified connection
-    Disconnect(SocketAddr),
-
-    /// Send a message to the specified connection
-    SendMessage(String, SocketAddr),
-
-    /// Shut down the broker, and all connections.
-    Shutdown,
-
-    /// A subsystem has run into a problem that cannot be recovered from, so we need to shut down.
-    /// This op is for sending messages up the chain to the VM only.
-    /// The VM will handle actual shutdown.
-    FatalError(LpcError),
-}
+use crate::telnet::connection::InputTo;
 
 /// Operations that can be performed on outgoing connections
 #[derive(Debug, Clone, PartialEq)]

@@ -7,13 +7,12 @@ use std::{
 };
 
 use arc_swap::{ArcSwap, ArcSwapOption};
-use flume::Sender as FlumeSender;
 use lpc_rs_telnet::{Opt, Session};
 use tokio::sync::mpsc::{UnboundedSender, error::SendError};
 
 use crate::{
     interpreter::{function_type::function_ptr::FunctionPtr, process::Process},
-    telnet::ops::{BrokerOp, ConnectionOp},
+    telnet::ops::ConnectionOp,
 };
 
 /// A struct to encapsulate the state of awaiting a line of input from the user.
@@ -80,9 +79,6 @@ pub struct Connection {
     /// The loop's channel.
     tx: UnboundedSender<ConnectionOp>,
 
-    /// The channel we use to send messages to the [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker).
-    pub broker_tx: FlumeSender<BrokerOp>,
-
     /// The function the next line goes to.
     input_to: ArcSwapOption<InputTo>,
 
@@ -98,16 +94,11 @@ pub struct Connection {
 
 impl Connection {
     /// Creates a new [`Connection`].
-    pub fn new(
-        address: SocketAddr,
-        connection_tx: UnboundedSender<ConnectionOp>,
-        broker_tx: FlumeSender<BrokerOp>,
-    ) -> Self {
+    pub fn new(address: SocketAddr, connection_tx: UnboundedSender<ConnectionOp>) -> Self {
         Self {
             address,
             process: ArcSwapOption::from(None),
             tx: connection_tx,
-            broker_tx,
             input_to: ArcSwapOption::from(None),
             snapshot: ArcSwap::default(),
             dead: AtomicBool::new(false),
@@ -171,10 +162,6 @@ impl Connection {
     }
 
     /// Record a successful `logon()`.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "called by initiate_login from task A3")
-    )]
     pub(crate) fn set_logged_in(&self) {
         self.logged_in.store(true, Ordering::Release);
     }
@@ -239,9 +226,8 @@ mod tests {
     #[test]
     fn refresh_stores_only_on_change() {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let (broker_tx, _broker_rx) = flume::unbounded();
         let addr = "127.0.0.1:1".parse().unwrap();
-        let connection = Connection::new(addr, tx, broker_tx);
+        let connection = Connection::new(addr, tx);
         let mut session = Session::new();
         let before = connection.snapshot();
         connection.refresh(&session);
@@ -257,7 +243,7 @@ mod tests {
     #[test]
     fn a_fresh_connection_is_unbound_and_flagless() {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let connection = Connection::new("127.0.0.1:1".parse().unwrap(), tx, flume::unbounded().0);
+        let connection = Connection::new("127.0.0.1:1".parse().unwrap(), tx);
         assert!(connection.body().is_none());
         assert!(!connection.awaits_input());
         assert!(!connection.is_dead());

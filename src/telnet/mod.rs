@@ -1,11 +1,9 @@
 pub mod connection;
-pub mod connection_broker;
 pub mod ops;
 
 use std::{net::SocketAddr, sync::Arc};
 
 use bytes::BytesMut;
-use flume::Sender as FlumeSender;
 use indexmap::IndexMap;
 use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::lpc_error;
@@ -32,127 +30,100 @@ use crate::{
             },
             task_template::TaskTemplate,
         },
-        vm::global_state::PreparedCall,
+        vm::{global_state::PreparedCall, vm_op::VmOp},
     },
     telnet::{
         connection::{Connection, InputTo},
-        connection_broker::Players,
-        ops::{BrokerOp, ConnectionOp},
+        ops::ConnectionOp,
     },
 };
 
-/// The incoming connection handler. Once established, individual connections are managed by [`ConnectionBroker`](connection_broker::ConnectionBroker).
-#[derive(Debug)]
+/// The listener: accepts clients and runs one loop per connection.
+#[derive(Debug, Default)]
 pub struct Telnet {
-    /// The handle to the main connection handler task. Dropping it will shut
-    /// down incoming connections, but will not disconnect existing ones.
+    /// The acceptor task; dropping it stops new connections, not existing ones.
     handle: OnceCell<JoinHandle<()>>,
+}
 
-    /// The channel to send operations to the [`ConnectionBroker`](connection_broker::ConnectionBroker).
-    broker_tx: FlumeSender<BrokerOp>,
+/// Which side ended a connection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Departure {
+    /// The driver closed it: a `Close`, or a login that could not start.
+    Server,
+    /// The client's socket ended or failed.
+    Client,
 }
 
 impl Telnet {
     /// Creates a new [`Telnet`] instance.
-    pub fn new(broker_tx: FlumeSender<BrokerOp>) -> Self {
-        Self {
-            handle: OnceCell::new(),
-            broker_tx,
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    /// Starts the telnet server.
-    pub async fn run<A>(&self, address: A, template: TaskTemplate, players: Players)
+    /// Bind `address` and start accepting; `Err` when the bind fails. A
+    /// second call is a no-op.
+    pub async fn run<A>(&self, address: A, template: TaskTemplate) -> lpc_rs_errors::Result<()>
     where
         A: ToSocketAddrs + Send + 'static,
     {
         if self.handle.get().is_some() {
-            return;
+            return Ok(());
         }
 
-        let broker_tx = self.broker_tx.clone();
+        let listener = TcpListener::bind(address)
+            .await
+            .map_err(|e| lpc_error!("telnet failed to bind its listener: {e}"))?;
+        info!(
+            "Listening for connections on {}",
+            listener
+                .local_addr()
+                .map_or_else(|e| e.to_string(), |a| a.to_string())
+        );
 
         let handle = tokio::spawn(async move {
-            let listener = match TcpListener::bind(address).await {
-                Ok(listener) => listener,
-                Err(e) => {
-                    let _ = broker_tx
-                        .send_async(BrokerOp::FatalError(lpc_error!(
-                            "telnet failed to bind its listener: {e}"
-                        )))
-                        .await;
-                    return;
-                }
-            };
-
-            info!(
-                "Listening for connections on {}",
-                listener.local_addr().unwrap()
-            );
-
-            // incoming telnet connection handling loop
             loop {
-                while let Ok((stream, remote_ip)) = listener.accept().await {
-                    let spawn_broker_tx = broker_tx.clone();
-                    let template = template.clone();
-                    let players = players.clone();
-
-                    let handle = tokio::spawn(async move {
-                        info!("New connection from {}", &remote_ip);
-
-                        Self::connection_loop(
-                            stream,
-                            remote_ip,
-                            spawn_broker_tx,
-                            template,
-                            players,
-                        )
-                        .await;
-                    });
-
-                    let Ok(_) = broker_tx
-                        .send_async(BrokerOp::NewHandle(remote_ip, handle))
-                        .await
-                    else {
-                        error!(
-                            "Failed to send BrokerOp::NewHandle. Please consider restarting the server."
-                        );
-                        continue;
-                    };
+                match listener.accept().await {
+                    Ok((stream, remote_ip)) => {
+                        let template = template.clone();
+                        tokio::spawn(async move {
+                            info!("New connection from {}", &remote_ip);
+                            Self::connection_loop(stream, remote_ip, template).await;
+                        });
+                    }
+                    Err(e) => warn!("accept failed: {e}"),
                 }
             }
         });
 
         let _ = self.handle.set(handle);
+        Ok(())
     }
 
     /// Start the main loop for a single user's connection. Handles sends and receives.
-    #[instrument(skip(stream, broker_tx, template, players))]
-    async fn connection_loop<S>(
-        mut stream: S,
-        remote_ip: SocketAddr,
-        broker_tx: FlumeSender<BrokerOp>,
-        template: TaskTemplate,
-        players: Players,
-    ) where
+    #[instrument(skip(stream, template))]
+    async fn connection_loop<S>(mut stream: S, remote_ip: SocketAddr, template: TaskTemplate)
+    where
         S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     {
         let mut session = Session::new();
         let mut out = BytesMut::with_capacity(4096);
         let (connection_tx, mut connection_rx) = mpsc::unbounded_channel::<ConnectionOp>();
-        let connection = Arc::new(Connection::new(remote_ip, connection_tx, broker_tx.clone()));
+        let connection = Arc::new(Connection::new(remote_ip, connection_tx));
+        let global_state = template.global_state.clone();
+        global_state.registry.insert(connection.clone());
 
-        if broker_tx
-            .send_async(BrokerOp::NewConnection(connection.clone()))
+        if global_state
+            .tx
+            .send(VmOp::InitiateLogin(connection.clone()))
             .await
             .is_err()
         {
-            error!("Failed to send BrokerOp::NewConnection. Dropping connection.");
+            error!("Failed to send VmOp::InitiateLogin. Dropping connection.");
             session.send(Op::Text(
                 "The server is currently unable to accept new connections. Please try again shortly.\n",
             ));
             let _ = flush(&mut session, &mut out, &mut stream).await;
-            let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
+            Self::leave(&connection, &template, Departure::Server).await;
             return;
         }
 
@@ -160,7 +131,7 @@ impl Telnet {
         // answers them still gets its login.
         if let Err(e) = flush(&mut session, &mut out, &mut stream).await {
             warn!("Failed to send to {}: {}", &remote_ip, e);
-            let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
+            Self::leave(&connection, &template, Departure::Client).await;
             return;
         }
 
@@ -169,7 +140,7 @@ impl Telnet {
         // The master's MSSP contribution, run at most once per connection.
         let mut mud_stats: Option<IndexMap<String, Vec<String>>> = None;
 
-        loop {
+        let departure = loop {
             tokio::select! {
                 op = connection_rx.recv() => {
                     trace!("Received message from VM: {:?}", op);
@@ -206,13 +177,11 @@ impl Telnet {
                         Some(ConnectionOp::Close) => {
                             info!("Closing connection for {}.", &remote_ip);
                             let _ = flush(&mut session, &mut out, &mut stream).await;
-                            let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
-                            break;
+                            break Departure::Server;
                         }
                         None => {
-                            info!("Broker closed the channel for {}. Closing connection.", &remote_ip);
-                            let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
-                            break;
+                            info!("Channel closed for {}. Closing connection.", &remote_ip);
+                            break Departure::Server;
                         }
                     }
                 }
@@ -220,20 +189,18 @@ impl Telnet {
                     match read {
                         Ok(0) => {
                             info!("Connection closed by {}.", &remote_ip);
-                            let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
-                            break;
+                            break Departure::Client;
                         }
                         Ok(n) => {
                             session.feed(&buf[..n]);
                             connection.refresh(&session);
                             while let Some(event) = session.next_event() {
-                                Self::handle_event(event, &mut session, &connection, &template, &players, shutting_down, &mut mud_stats).await;
+                                Self::handle_event(event, &mut session, &connection, &template, shutting_down, &mut mud_stats).await;
                             }
                         }
                         Err(e) => {
                             warn!("User input error for {}: {:?}", &remote_ip, e);
-                            let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
-                            break;
+                            break Departure::Client;
                         }
                     }
                 }
@@ -241,10 +208,24 @@ impl Telnet {
 
             if let Err(e) = flush(&mut session, &mut out, &mut stream).await {
                 warn!("Failed to send to {}: {}", &remote_ip, e);
-                let _ = broker_tx.send_async(BrokerOp::Disconnect(remote_ip)).await;
-                break;
+                break Departure::Client;
             }
-        }
+        };
+
+        Self::leave(&connection, &template, departure).await;
+    }
+
+    /// Every exit path: unbind whatever body the connection had, then
+    /// leave the registry.
+    async fn leave(connection: &Arc<Connection>, template: &TaskTemplate, departure: Departure) {
+        let global_state = &template.global_state;
+        let body = global_state.detach(connection, None).await;
+        trace!(
+            "{} left ({departure:?}); a body was bound: {}",
+            connection.address,
+            body.is_some()
+        );
+        global_state.registry.remove(connection.address);
     }
 
     /// One thing the client did.
@@ -253,7 +234,6 @@ impl Telnet {
         session: &mut Session,
         connection: &Connection,
         template: &TaskTemplate,
-        players: &Players,
         shutting_down: bool,
         mud_stats: &mut Option<IndexMap<String, Vec<String>>>,
     ) {
@@ -299,7 +279,14 @@ impl Telnet {
                 Self::apply_on_body(GMCP, &args, connection, template).await;
             }
             Event::MsspRequested => {
-                Self::mssp(session, template, players.len(), shutting_down, mud_stats).await
+                Self::mssp(
+                    session,
+                    template,
+                    template.global_state.registry.logged_in(),
+                    shutting_down,
+                    mud_stats,
+                )
+                .await
             }
         }
     }
@@ -611,13 +598,12 @@ mod tests {
             .build()
             .unwrap();
 
-        let (broker_tx, _broker_rx) = flume::unbounded();
         let (connection_tx, _connection_rx) = mpsc::unbounded_channel();
 
         let mut session = Session::new();
 
         let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
-        let connection = Connection::new(addr, connection_tx, broker_tx.clone());
+        let connection = Connection::new(addr, connection_tx);
         let input_to = InputTo {
             ptr: Arc::new(ptr),
             no_echo: false,
@@ -650,13 +636,12 @@ mod tests {
                 .build()
                 .unwrap();
 
-            let (broker_tx, _broker_rx) = flume::unbounded();
             let (connection_tx, _connection_rx) = mpsc::unbounded_channel();
 
             let mut session = Session::new();
 
             let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
-            let connection = Connection::new(addr, connection_tx, broker_tx.clone());
+            let connection = Connection::new(addr, connection_tx);
             let input_to = InputTo {
                 ptr: Arc::new(ptr),
                 no_echo: false,
@@ -727,11 +712,10 @@ mod tests {
             let LpcRef::Function(ptr) = vm.global_state.committed_global(&proc, 1u16) else {
                 panic!("global 1 holds the pointer");
             };
-            let (broker_tx, _broker_rx) = flume::unbounded();
             let (connection_tx, _connection_rx) = mpsc::unbounded_channel();
             let mut session = Session::new();
             let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
-            let connection = Connection::new(addr, connection_tx, broker_tx.clone());
+            let connection = Connection::new(addr, connection_tx);
             let input_to = InputTo {
                 ptr,
                 no_echo: false,
@@ -784,7 +768,6 @@ mod tests {
     mod over_a_duplex {
         use std::time::Duration;
 
-        use dashmap::DashMap;
         use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 
         use super::*;
@@ -820,31 +803,31 @@ mod tests {
         /// The loop running on one end of a duplex; the test holds the other.
         struct Wired {
             client: DuplexStream,
-            broker_rx: flume::Receiver<BrokerOp>,
             connection: Arc<Connection>,
             vm: Vm,
-            players: Players,
         }
 
-        /// Spawn the loop and return once it has announced itself. The client
-        /// says nothing: login is not gated on it.
+        /// Spawn the loop and return once it has registered itself and sent
+        /// its offers. The client says nothing: login is not gated on it.
         async fn wire() -> Wired {
             let vm = Vm::new(test_config());
             let (mut client, server) = tokio::io::duplex(4096);
-            let (broker_tx, broker_rx) = flume::unbounded();
             let addr: SocketAddr = ADDR.parse().expect("a literal address");
-            let players: Players = Arc::new(DashMap::new());
             tokio::spawn(Telnet::connection_loop(
                 server,
                 addr,
-                broker_tx,
                 TaskTemplate::from(vm.global_state.clone()),
-                players.clone(),
             ));
-            let BrokerOp::NewConnection(connection) = within(broker_rx.recv_async()).await.unwrap()
-            else {
-                panic!("the loop announces itself first");
-            };
+            let registry = &vm.global_state.registry;
+            let connection = within(async {
+                loop {
+                    if let Some(connection) = registry.get(addr) {
+                        break connection;
+                    }
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            })
+            .await;
             assert_eq!(
                 read_n(&mut client, 18).await,
                 [
@@ -854,10 +837,8 @@ mod tests {
             );
             Wired {
                 client,
-                broker_rx,
                 connection,
                 vm,
-                players,
             }
         }
 
@@ -884,9 +865,15 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn a_new_connection_reaches_the_broker() {
-            let w = wire().await;
-            assert_eq!(w.connection.address, ADDR.parse::<SocketAddr>().unwrap());
+        async fn a_new_connection_registers_and_asks_for_its_login() {
+            let mut w = wire().await;
+            let addr: SocketAddr = ADDR.parse().unwrap();
+            assert_eq!(w.connection.address, addr);
+            assert_eq!(w.vm.global_state.registry.len(), 1);
+            assert!(
+                matches!(w.vm.next_op(), Some(VmOp::InitiateLogin(c)) if c.address == addr),
+                "the loop asks the VM for its login"
+            );
         }
 
         #[tokio::test]
@@ -977,20 +964,15 @@ mod tests {
                 0,
                 "EOF after Close"
             );
-            let BrokerOp::Disconnect(addr) = within(w.broker_rx.recv_async()).await.unwrap() else {
-                panic!("Close reports a disconnect");
-            };
-            assert_eq!(addr, ADDR.parse::<SocketAddr>().unwrap());
+            eventually(|| w.vm.global_state.registry.is_empty()).await;
         }
 
         #[tokio::test]
-        async fn a_client_that_hangs_up_is_reported() {
+        async fn a_client_that_hangs_up_leaves_the_registry() {
             let w = wire().await;
             drop(w.client);
-            let BrokerOp::Disconnect(addr) = within(w.broker_rx.recv_async()).await.unwrap() else {
-                panic!("a hang-up reports a disconnect");
-            };
-            assert_eq!(addr, ADDR.parse::<SocketAddr>().unwrap());
+            eventually(|| w.vm.global_state.registry.is_empty()).await;
+            assert!(w.connection.is_dead());
         }
 
         #[tokio::test]
@@ -1336,8 +1318,7 @@ mod tests {
         #[tokio::test]
         async fn mssp_counts_the_logged_in() {
             let mut w = wire().await;
-            w.players
-                .insert("10.0.0.2:1".parse().unwrap(), w.connection.clone());
+            w.connection.set_logged_in();
             w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
             let vars = read_mssp(&mut w.client).await;
             assert_eq!(var(&vars, "PLAYERS"), Some(&["1".to_string()][..]));

@@ -16,10 +16,7 @@ use crate::{
         },
         vm::Vm,
     },
-    telnet::{
-        connection::Connection,
-        ops::{BrokerOp, ConnectionOp},
-    },
+    telnet::{connection::Connection, ops::ConnectionOp},
 };
 
 impl Vm {
@@ -28,7 +25,6 @@ impl Vm {
     #[instrument(skip_all)]
     pub async fn initiate_login(&self, connection: Arc<Connection>) {
         let global_state = self.global_state.clone();
-        let broker_tx = self.broker_tx.clone();
         let task_template = TaskTemplate::from(self.global_state.clone());
 
         let address = connection.address;
@@ -44,9 +40,8 @@ impl Vm {
             // Abort the login; no object to blame means the master object
             // itself is bad, so `runtime_error` is not applied.
             let fail = async |error: LpcError, object: Option<Arc<Process>>| {
-                let _ = connection.send(ConnectionOp::SendMessage(error.to_string()));
-                let _ = broker_tx
-                    .send_async(BrokerOp::Disconnect(connection.address))
+                global_state
+                    .detach(&connection, Some(error.to_string()))
                     .await;
 
                 if object.is_some() {
@@ -88,10 +83,7 @@ impl Vm {
                         let message = r
                             .with_string(|s| s.to_string())
                             .unwrap_or_else(|_| "No message received?".to_string());
-                        let _ = connection.send(ConnectionOp::SendMessage(message));
-                        let _ = broker_tx
-                            .send_async(BrokerOp::Disconnect(connection.address))
-                            .await;
+                        global_state.detach(&connection, Some(message)).await;
                         return;
                     }
 
@@ -138,10 +130,8 @@ impl Vm {
             {
                 Some(Ok(LpcRef::Int(i))) => {
                     if i == 0 {
-                        // We don't send an error in this case, as we assume that logon() has sent them messages.
-                        let _ = broker_tx
-                            .send_async(BrokerOp::Disconnect(connection.address))
-                            .await;
+                        // logon() sent its own messages; nothing is added.
+                        global_state.detach(&connection, None).await;
                         return;
                     }
                 }
@@ -162,8 +152,7 @@ impl Vm {
             // No command line ran, so nothing else asks for the cycle that
             // marks logon()'s first prompt.
             let _ = connection.send(ConnectionOp::PromptCycle);
-
-            let _ = broker_tx.send_async(BrokerOp::Connected(connection)).await;
+            connection.set_logged_in();
         });
     }
 }
@@ -176,12 +165,7 @@ mod tests {
     use tokio::sync::mpsc;
 
     use super::*;
-    use crate::{
-        compile_time_config::VM_CHANNEL_CAPACITY,
-        interpreter::vm::global_state::GlobalState,
-        telnet::{Telnet, connection_broker::ConnectionBroker},
-        test_support::test_config,
-    };
+    use crate::{interpreter::CommittedReader, test_support::test_config};
 
     /// A master that is also the login object its `connect()` hands back.
     const MASTER: &str = indoc! { r#"
@@ -196,54 +180,60 @@ mod tests {
         void get_name(string s) {}
     "# };
 
-    /// A [`Vm`] whose broker end the test keeps, so what `initiate_login`
-    /// sends there can be read.
-    fn vm_watching_the_broker() -> (Vm, flume::Receiver<BrokerOp>) {
-        let (tx, rx) = mpsc::channel(VM_CHANNEL_CAPACITY);
-        let (broker_tx, broker_rx) = flume::bounded(VM_CHANNEL_CAPACITY);
-        let telnet = Telnet::new(broker_tx.clone());
-        let vm = Vm {
-            global_state: Arc::new(GlobalState::new(test_config(), tx.clone())),
-            connection_broker: ConnectionBroker::new(tx, broker_rx.clone(), telnet),
-            rx,
-            broker_tx,
-        };
-        (vm, broker_rx)
-    }
-
     async fn within<F: std::future::Future>(f: F) -> F::Output {
         tokio::time::timeout(Duration::from_secs(5), f)
             .await
             .expect("the login finishes within five seconds")
     }
 
-    #[tokio::test]
-    async fn the_first_prompt_gets_its_cycle() {
-        let (vm, broker_rx) = vm_watching_the_broker();
-        vm.global_state
-            .initialize_process_from_code("/secure/master.c", MASTER)
+    /// Poll `probe` until it holds, within the timeout.
+    async fn eventually<F: Fn() -> bool>(probe: F) {
+        within(async {
+            while !probe() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+    }
+
+    /// A [`Vm`] with `master` as `/secure/master.c`, and its process.
+    async fn vm_with_master(master: &str) -> (Vm, Arc<Process>) {
+        let vm = Vm::new(test_config());
+        let process = vm
+            .global_state
+            .initialize_process_from_code("/secure/master.c", master)
             .await
-            .expect("the master compiles");
+            .expect("the master compiles")
+            .context
+            .process;
         assert!(
             vm.global_state.object_space.master_object().is_some(),
             "the master is registered"
         );
+        (vm, process)
+    }
 
-        let (tx, mut rx) = mpsc::unbounded_channel();
-        let (connection_broker_tx, _connection_broker_rx) = flume::unbounded();
+    fn fresh_connection() -> (Arc<Connection>, mpsc::UnboundedReceiver<ConnectionOp>) {
+        let (tx, rx) = mpsc::unbounded_channel();
         let address = "127.0.0.1:4000"
             .to_socket_addrs()
             .expect("a literal address")
             .next()
             .expect("one address");
-        let connection = Arc::new(Connection::new(address, tx, connection_broker_tx));
-        vm.initiate_login(connection).await;
+        (Arc::new(Connection::new(address, tx)), rx)
+    }
+
+    #[tokio::test]
+    async fn the_first_prompt_gets_its_cycle() {
+        let (vm, _master) = vm_with_master(MASTER).await;
+        let (connection, mut rx) = fresh_connection();
+        vm.initiate_login(connection.clone()).await;
 
         let mut ops = Vec::new();
         for _ in 0..4 {
             ops.push(within(rx.recv()).await.expect("the login task is running"));
         }
-        assert_eq!(ops[0], ConnectionOp::Attached, "attach binds the body");
+        assert_eq!(ops[0], ConnectionOp::Attached, "takeover binds the body");
         // `input_to` reaches the connection as it runs; `write` is an effect,
         // so its message follows at the commit.
         assert!(matches!(ops[1], ConnectionOp::InputTo(_)));
@@ -253,10 +243,45 @@ mod tests {
             ConnectionOp::PromptCycle,
             "the first prompt asks for its mark"
         );
+        eventually(|| connection.is_logged_in()).await;
+    }
 
-        let Ok(BrokerOp::Connected(connected)) = broker_rx.try_recv() else {
-            panic!("a non-zero logon reports the connection");
-        };
-        assert_eq!(connected.address, address);
+    #[tokio::test]
+    async fn a_refusing_connect_sends_its_reason_then_closes() {
+        let master = indoc! { r#"
+            mixed connect(string ip, int port) { return "Go away.\n"; }
+            int logon(string ip, int port) { return 1; }
+        "# };
+        let (vm, _master) = vm_with_master(master).await;
+        let (connection, mut rx) = fresh_connection();
+        vm.initiate_login(connection.clone()).await;
+
+        assert_eq!(
+            within(rx.recv()).await,
+            Some(ConnectionOp::SendMessage("Go away.\n".into()))
+        );
+        assert_eq!(within(rx.recv()).await, Some(ConnectionOp::Close));
+        assert!(connection.is_dead());
+        assert!(!connection.is_logged_in());
+    }
+
+    #[tokio::test]
+    async fn a_logon_returning_zero_unbinds_the_login_object() {
+        let master = indoc! { r#"
+            object connect(string ip, int port) { return this_object(); }
+            int logon(string ip, int port) { return 0; }
+        "# };
+        let (vm, master) = vm_with_master(master).await;
+        let (connection, mut rx) = fresh_connection();
+        vm.initiate_login(connection.clone()).await;
+
+        assert_eq!(within(rx.recv()).await, Some(ConnectionOp::Attached));
+        assert_eq!(within(rx.recv()).await, Some(ConnectionOp::Close));
+        assert!(
+            vm.global_state.committed_connection(&master).is_none(),
+            "the cell a failed logon used to leak"
+        );
+        assert!(connection.body().is_none());
+        assert!(!connection.is_logged_in());
     }
 }

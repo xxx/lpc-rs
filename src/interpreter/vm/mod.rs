@@ -1,6 +1,5 @@
 use std::{sync::Arc, time::Duration};
 
-use flume::Sender as FlumeSender;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
@@ -16,7 +15,7 @@ use crate::{
         task_context::TaskContext,
         vm::global_state::GlobalState,
     },
-    telnet::{Telnet, connection_broker::ConnectionBroker, ops::BrokerOp},
+    telnet::Telnet,
 };
 
 mod initiate_login;
@@ -32,14 +31,11 @@ pub mod vm_op;
 pub struct Vm {
     pub global_state: Arc<GlobalState>,
 
-    /// The connection broker, which handles all of the network connections
-    connection_broker: ConnectionBroker,
+    /// The listener; one loop per accepted connection.
+    telnet: Telnet,
 
     /// The channel used to receive [`VmOp`]s from other locations
     rx: Receiver<VmOp>,
-
-    /// The channel used to send [`BrokerOp`]s to the connection broker
-    broker_tx: FlumeSender<BrokerOp>,
 }
 
 impl Vm {
@@ -49,15 +45,18 @@ impl Vm {
         C: Into<Arc<Config>>,
     {
         let (tx, rx) = tokio::sync::mpsc::channel(VM_CHANNEL_CAPACITY);
-        let (broker_tx, broker_rx) = flume::bounded(VM_CHANNEL_CAPACITY);
-        let telnet = Telnet::new(broker_tx.clone());
 
         Self {
-            global_state: Arc::new(GlobalState::new(config, tx.clone())),
-            connection_broker: ConnectionBroker::new(tx, broker_rx, telnet),
+            global_state: Arc::new(GlobalState::new(config, tx)),
+            telnet: Telnet::new(),
             rx,
-            broker_tx,
         }
+    }
+
+    /// The next op waiting for the main loop, if any.
+    #[cfg(test)]
+    pub(crate) fn next_op(&mut self) -> Option<VmOp> {
+        self.rx.try_recv().ok()
     }
 
     /// The main initialization method for the VM.
@@ -70,9 +69,9 @@ impl Vm {
 
         let config = &self.global_state.config;
         let address = format!("{}:{}", config.bind_address, config.port);
-        self.connection_broker
+        self.telnet
             .run(address, TaskTemplate::from(self.global_state.clone()))
-            .await;
+            .await?;
         self.run().await
     }
 
@@ -132,10 +131,6 @@ impl Vm {
                         VmOp::PrioritizeCallOut(id) => {
                             self.global_state.prioritize_call_out(id).await;
                         }
-                        VmOp::FatalError(e) => {
-                            error!("fatal error, shutting down: {}", e.diagnostic_string());
-                            break;
-                        },
                     }
                 }
             }
@@ -147,10 +142,7 @@ impl Vm {
 
     /// Shut down the [`Vm`], and all subsystems.
     pub async fn shutdown(&mut self) -> Result<()> {
-        // tell the broker to break out of its main loop.
-        let _ = self.broker_tx.send_async(BrokerOp::Shutdown).await;
-
-        self.connection_broker.disable_incoming_connections();
+        self.telnet.shutdown();
         self.global_state.with_call_outs_mut(|c| c.clear());
 
         match apply_function_in_master(
@@ -176,8 +168,6 @@ impl Vm {
         // after the master's shutdown hook has run. GlobalState's Drop will also
         // close + join; this just makes the ordering explicit.
         self.global_state.close_committer();
-
-        self.connection_broker.disconnect_users();
 
         Ok(())
     }

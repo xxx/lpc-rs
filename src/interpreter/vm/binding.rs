@@ -30,19 +30,11 @@ pub struct Registry {
 
 impl Registry {
     /// Add a connection whose loop is running.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "called by the connection loop from task A3")
-    )]
     pub(crate) fn insert(&self, connection: Arc<Connection>) {
         self.live.insert(connection.address, connection);
     }
 
     /// Remove the connection at `address`; `None` if it was not there.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "called by the connection loop from task A3")
-    )]
     pub(crate) fn remove(&self, address: SocketAddr) -> Option<Arc<Connection>> {
         self.live.remove(&address).map(|(_, connection)| connection)
     }
@@ -276,11 +268,9 @@ mod tests {
     /// A `Connection` whose own channel is dropped after the test.
     fn make_connection() -> Arc<Connection> {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let (broker_tx, _broker_rx) = flume::unbounded();
         Arc::new(Connection::new(
             "127.0.0.1:23123".to_socket_addrs().unwrap().next().unwrap(),
             tx,
-            broker_tx,
         ))
     }
 
@@ -361,12 +351,7 @@ mod tests {
     async fn detach_of_an_unbound_connection_releases_only() {
         let vm = Vm::new(test_config());
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let (broker_tx, _broker_rx) = flume::unbounded();
-        let connection = Arc::new(Connection::new(
-            "127.0.0.1:23124".parse().unwrap(),
-            tx,
-            broker_tx,
-        ));
+        let connection = Arc::new(Connection::new("127.0.0.1:23124".parse().unwrap(), tx));
 
         assert!(vm.global_state.detach(&connection, None).await.is_none());
         assert!(connection.is_dead());
@@ -419,12 +404,7 @@ mod tests {
         let registry = Registry::default();
         let a = make_connection();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let (broker_tx, _broker_rx) = flume::unbounded();
-        let b = Arc::new(Connection::new(
-            "127.0.0.1:23125".parse().unwrap(),
-            tx,
-            broker_tx,
-        ));
+        let b = Arc::new(Connection::new("127.0.0.1:23125".parse().unwrap(), tx));
         registry.insert(a.clone());
         registry.insert(b.clone());
         assert_eq!((registry.len(), registry.logged_in()), (2, 0));

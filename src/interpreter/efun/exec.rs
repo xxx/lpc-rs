@@ -113,11 +113,9 @@ mod tests {
     /// Build a [`Connection`] whose own channels are dropped after the test.
     fn make_connection() -> Arc<Connection> {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let (broker_tx, _broker_rx) = flume::unbounded();
         Arc::new(Connection::new(
             "127.0.0.1:23123".to_socket_addrs().unwrap().next().unwrap(),
             tx,
-            broker_tx,
         ))
     }
 

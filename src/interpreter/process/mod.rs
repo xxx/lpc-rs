@@ -70,9 +70,10 @@ pub struct Process {
     /// The player [`Connection`] that this [`Process`] is associated with, if any.
     /// A transactional cell: an `exec` or login writes the cell in its own
     /// transaction (so the rest of that task sees the binding) and records a
-    /// deferred socket-level handover, while the [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker)
-    /// keeps the physical `Connection`. `interactive()`/`this_player()` read
-    /// the cell through the transaction, so they see an in-transaction `exec`.
+    /// deferred socket-level handover, while the connection's own
+    /// back-reference is the loop's view. `interactive()`/`this_player()`
+    /// read the cell through the transaction, so they see an in-transaction
+    /// `exec`. Written only by the binding module.
     pub connection: SVar<Connection>,
 
     /// The cell marking that the initializer has run; a rejected

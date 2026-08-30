@@ -218,9 +218,8 @@ mod tests {
     #[tokio::test]
     async fn exec_points_the_connection_at_the_body_then_announces_it() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let (broker_tx, _broker_rx) = flume::unbounded();
         let addr = "127.0.0.1:1".parse().unwrap();
-        let connection = Arc::new(Connection::new(addr, tx, broker_tx));
+        let connection = Arc::new(Connection::new(addr, tx));
         let body = Arc::new(Process::default());
 
         let (vm_tx, _vm_rx) = tokio::sync::mpsc::channel(16);
