@@ -56,7 +56,7 @@ enum Departure {
     /// The client's socket ended or failed.
     Client,
     /// The driver closed it for idling past `max_idle_time`; the body is
-    /// told with `net_dead`, as if the client had left.
+    /// told with `net_dead`.
     Idle,
 }
 
@@ -1713,10 +1713,10 @@ mod tests {
             eventually(|| w.vm.global_state.registry.is_empty()).await;
         }
 
-        /// The clock restarts at each line, and the body hears `net_dead`
-        /// as if the client had hung up. Most of the idle budget is spent
-        /// before the line: a fixed deadline from connection start would
-        /// kick inside the quiet window.
+        /// The clock restarts at each line, and the body hears `net_dead`.
+        /// Most of the idle budget is spent before the line: a fixed
+        /// deadline from connection start would kick inside the quiet
+        /// window.
         #[tokio::test]
         async fn a_line_restarts_the_clock_and_the_kick_tells_the_body() {
             let mut w = wire_with(idle_config(4)).await;
@@ -1742,8 +1742,7 @@ mod tests {
             eventually(|| w.vm.global_state.registry.is_empty()).await;
         }
 
-        /// Keys without Enter are not activity: bytes that never finish a
-        /// line do not defer the kick.
+        /// Bytes that never finish a line do not defer the kick.
         #[tokio::test]
         async fn bytes_without_a_line_do_not_defer_the_kick() {
             let w = wire_with(idle_config(1)).await;
@@ -1761,8 +1760,7 @@ mod tests {
             assert_eq!(buf, KICKED);
         }
 
-        /// The kick line bypasses the outbox's overflow drop: an overflowed
-        /// client is the paradigm idler.
+        /// The kick line bypasses the outbox's overflow drop.
         #[tokio::test]
         async fn an_overflowed_client_still_hears_the_kick() {
             let mut w = wire_with(idle_config(1)).await;
