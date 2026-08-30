@@ -444,9 +444,9 @@ impl Telnet {
         Self::apply_on_body(WINDOW_SIZE, &args, connection, template).await;
     }
 
-    /// Queue the prompt cycle behind everything the command just sent. The
-    /// loop is this channel's only consumer, so a full channel is not waited
-    /// on: the prompt is dropped and logged.
+    /// Queue the prompt cycle behind everything the command just sent; the
+    /// loop is this channel's only consumer, so a full channel drops the
+    /// prompt rather than waiting on itself.
     fn request_prompt(connection: &Connection) {
         if let Err(e) = connection.tx.try_send(ConnectionOp::PromptCycle) {
             warn!("{}: prompt cycle dropped: {e}", connection.address);
