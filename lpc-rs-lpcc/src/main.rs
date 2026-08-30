@@ -19,8 +19,11 @@ struct Args {
     config: Option<String>,
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
+    lpc_rs::runtime::run(run());
+}
+
+async fn run() {
     let args = Args::parse();
 
     let config = ConfigBuilder::default()

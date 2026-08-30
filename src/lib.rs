@@ -9,6 +9,7 @@ pub mod command;
 pub mod compile_time_config;
 pub mod compiler;
 pub mod interpreter;
+pub mod runtime;
 pub mod telnet;
 pub mod util;
 

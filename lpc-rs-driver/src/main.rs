@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use clap::Parser;
-use lpc_rs::{compile_time_config::THREAD_STACK, interpreter::vm::Vm};
+use lpc_rs::interpreter::vm::Vm;
 use lpc_rs_utils::config::ConfigBuilder;
 
 #[derive(Parser, Debug)]
@@ -13,12 +13,7 @@ struct Args {
 }
 
 fn main() {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .thread_stack_size(THREAD_STACK)
-        .build()
-        .expect("the runtime builds")
-        .block_on(run());
+    lpc_rs::runtime::run(run());
 }
 
 async fn run() {

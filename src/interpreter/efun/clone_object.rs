@@ -45,6 +45,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
 
     debug_assert!(clone_process.is_clone(), "new_clone must be a clone");
 
+    // The message only; `TaskContext::nested` refuses at the same bound.
     if context.chain_count() >= MAX_TASK_CHAIN {
         return Err(context.runtime_error("infinite clone recursion detected"));
     }
