@@ -32,8 +32,7 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
         if let LpcRef::Object(old_ob) = old_ref;
         if let Some(old_ob) = old_ob.upgrade();
         then {
-            // One cell: the writes below would land `Some` then `None`
-            // and the displaced holder would be the connection itself.
+            // One cell: the displaced holder would be the connection itself.
             if Arc::ptr_eq(&new_ob, &old_ob) {
                 return Err(context.runtime_error("exec: `new` and `old` are the same object"));
             }
@@ -49,12 +48,10 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
                 return Ok(());
             };
 
-            // The connection the new body currently holds (if any);
-            // the handover displaces it.
+            // The connection the new body holds; the handover displaces it.
             let previous = txn.with(|t| t.read_connection(new_ob.connection.id));
 
-            // Bind the new body, unbind the old one. Both writes land
-            // in the changeset and commit with this task.
+            // Both writes land in the changeset and commit with this task.
             txn.with(|t| t.write_connection(new_ob.connection.id, Some(connection.clone())));
             txn.with(|t| t.write_connection(old_ob.connection.id, None));
 
