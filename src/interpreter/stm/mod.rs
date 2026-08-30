@@ -390,8 +390,7 @@ impl Transaction {
         self.changeset.clone()
     }
 
-    /// Commit the changeset and take the effects for delivery,
-    /// consuming the transaction.
+    /// Commit the changeset and take the effects for delivery.
     pub(crate) async fn commit(
         mut self,
         tx: &flume::Sender<CommitProtocol>,
