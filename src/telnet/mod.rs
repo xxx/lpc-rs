@@ -1572,9 +1572,8 @@ mod tests {
             eventually(|| w.vm.global_state.registry.is_empty()).await;
         }
 
-        /// Spec D13: a server-initiated close unbinds the body but never
-        /// applies `net_dead` — that apply is for the client leaving, not
-        /// the driver closing it.
+        /// A server-initiated close unbinds the body but never applies
+        /// `net_dead`.
         #[tokio::test]
         async fn a_server_close_unbinds_without_net_dead() {
             let w = wire().await;
