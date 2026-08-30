@@ -186,8 +186,7 @@ mod tests {
         test_support::test_config,
     };
 
-    /// A master that is its own login object: `connect()` hands the
-    /// connection back to itself, and `logon()` asks for a name.
+    /// A master that is also the login object its `connect()` hands back.
     const MASTER: &str = indoc! { r#"
         object connect(string ip, int port) { return this_object(); }
 

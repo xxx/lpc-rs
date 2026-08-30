@@ -306,8 +306,8 @@ impl Telnet {
 
     /// Answer MSSP: the driver's defaults under whatever the master's
     /// `get_mud_stats()` says, or the defaults alone while shutting down.
-    /// The master answers once per connection; `mud_stats` holds what it
-    /// said, so a client toggling the option cannot re-run the apply.
+    /// `mud_stats` carries the master's answer across requests — it runs
+    /// once per connection, so a toggling client cannot re-run the apply.
     async fn mssp(
         session: &mut Session,
         template: &TaskTemplate,
@@ -1234,6 +1234,13 @@ mod tests {
             w.client.write_all(&gmcp_frame("Core.Ping")).await.unwrap();
             w.client.write_all(&NAWS_100_40).await.unwrap();
             eventually(|| w.connection.snapshot().cols == 100).await;
+            // The snapshot refreshes before the events drain, so only the
+            // sentinel's round trip proves they finished.
+            w.connection
+                .send(ConnectionOp::SendMessage("z\n".into()))
+                .await
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
             assert_eq!(
                 w.vm.global_state.committed_global(&proc, 0u16),
                 LpcRef::from(0)
@@ -1408,8 +1415,8 @@ mod tests {
             let vars = read_mssp(&mut w.client).await;
             assert_eq!(var(&vars, "NAME"), Some(&["Test MUD".to_string()][..]));
 
-            // The Q method answers the toggle, and the second DO turns the
-            // option back on, which is what asks for MSSP again.
+            // The Q method answers each toggle, and only turning the option
+            // back on asks for MSSP again.
             w.client.write_all(&[IAC, DONT, MSSP]).await.unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, [IAC, WONT, MSSP]);
             w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
