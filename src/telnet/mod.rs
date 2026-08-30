@@ -375,16 +375,27 @@ impl Telnet {
         Self::apply_on(body, NET_DEAD, &[], template).await;
     }
 
-    /// Apply `name` on `body` as `this_player`; no apply is nothing, an
-    /// error goes to `error_handler`.
-    async fn apply_on(body: Arc<Process>, name: &str, args: &[LpcRef], template: &TaskTemplate) {
+    /// Apply `name` on `body` as `this_player`; the value it returned, or
+    /// `None` when `body` does not define it or it errored (an error goes
+    /// to `error_handler`).
+    async fn apply_on(
+        body: Arc<Process>,
+        name: &str,
+        args: &[LpcRef],
+        template: &TaskTemplate,
+    ) -> Option<LpcRef> {
         let template = template.clone();
         template.set_this_player(Some(body.clone()));
         let timeout = template.global_state.config.max_execution_time;
-        if let Some(Err(e)) =
-            apply_function_by_name(name, args, body.clone(), template.clone(), Some(timeout)).await
+        match apply_function_by_name(name, args, body.clone(), template.clone(), Some(timeout))
+            .await
         {
-            apply_runtime_error(&e, Some(body), template).await;
+            Some(Ok(value)) => Some(value),
+            Some(Err(e)) => {
+                apply_runtime_error(&e, Some(body), template).await;
+                None
+            }
+            None => None,
         }
     }
 
@@ -616,24 +627,9 @@ impl Telnet {
         if !body.program.unmangled_functions.contains_key(WRITE_PROMPT) {
             return;
         }
-        let template = template.clone();
-        template.set_this_player(Some(body.clone()));
-        let timeout = template.global_state.config.max_execution_time;
-        let text = match apply_function_by_name(
-            WRITE_PROMPT,
-            &[],
-            body.clone(),
-            template.clone(),
-            Some(timeout),
-        )
-        .await
-        {
-            Some(Ok(LpcRef::String(s))) => s.to_str().to_owned(),
-            Some(Ok(_)) | None => String::new(),
-            Some(Err(e)) => {
-                apply_runtime_error(&e, Some(body), template).await;
-                String::new()
-            }
+        let text = match Self::apply_on(body, WRITE_PROMPT, &[], template).await {
+            Some(LpcRef::String(s)) => s.to_str().to_owned(),
+            _ => String::new(),
         };
         let _ = connection.send(ConnectionOp::Prompt(text));
     }
@@ -1643,6 +1639,16 @@ mod tests {
                 .send(ConnectionOp::SendMessage("z\n".into()))
                 .unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
+        }
+
+        #[tokio::test]
+        async fn a_write_prompt_that_errors_gets_the_mark_alone() {
+            let mut w = wire().await;
+            commanding_body(&w, "void write_prompt() { int zero; zero = 1 / zero; }").await;
+            w.client.write_all(b"look\r\n").await.unwrap();
+            let mut expected = b"seen\r\n".to_vec();
+            expected.extend([IAC, GA]);
+            assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
         }
 
         #[tokio::test]
