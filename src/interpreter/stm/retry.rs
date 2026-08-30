@@ -3,7 +3,7 @@
 //! The runner owns the committer protocol (open, commit, release-after-reply,
 //! re-base, stats); the body owns the attempt-level work and its physical
 //! output. Production runs a [`Task`](crate::interpreter::task::Task) or a
-//! `GlobalState::takeover`; tests run a bare [`Transaction`].
+//! `GlobalState::attach`; tests run a bare [`Transaction`].
 
 use std::{
     sync::{Arc, atomic::AtomicU64},
@@ -28,6 +28,7 @@ use crate::{
         },
         vm::global_state::GlobalState,
     },
+    telnet::connection::Connection,
 };
 
 /// Per-attempt statistics, owned by the attempt loop: the committer can't
@@ -293,6 +294,9 @@ pub trait CommittedReader {
     /// the cell holds a non-object.
     fn committed_object(&self, var_id: VarId) -> Option<Arc<Process>>;
 
+    /// The committed connection bound to `process`, if any.
+    fn committed_connection(&self, process: &Process) -> Option<Arc<Connection>>;
+
     /// The committed environment of `process` (`None` if it has none).
     fn committed_environment(&self, process: &Process) -> Option<Arc<Process>>;
 
@@ -339,6 +343,11 @@ impl CommittedReader for Arc<GlobalState> {
 
     fn committed_object(&self, var_id: VarId) -> Option<Arc<Process>> {
         self.committed_value(var_id)?.into_process()
+    }
+
+    fn committed_connection(&self, process: &Process) -> Option<Arc<Connection>> {
+        self.committed_value(process.connection.id)?
+            .into_connection()
     }
 
     fn committed_environment(&self, process: &Process) -> Option<Arc<Process>> {

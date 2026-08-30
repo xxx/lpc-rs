@@ -573,13 +573,7 @@ impl<const STACKSIZE: usize> AttemptBody for Task<STACKSIZE> {
 
     async fn deliver(&mut self, effects: Vec<Effect>) -> Result<()> {
         if !effects.is_empty() {
-            flush_effects(
-                self.context.config(),
-                self.context.object_space(),
-                self.context.global_state.call_outs(),
-                effects,
-            )
-            .await;
+            flush_effects(&self.context.global_state, effects).await;
         }
         Ok(())
     }

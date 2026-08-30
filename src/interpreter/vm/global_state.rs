@@ -64,6 +64,9 @@ pub struct GlobalState {
 
     /// When this state was built; MSSP's `UPTIME`.
     pub booted_at: std::time::SystemTime,
+
+    /// Every live connection; the loop registers and removes itself.
+    pub registry: crate::interpreter::vm::binding::Registry,
 }
 
 impl GlobalState {
@@ -84,6 +87,7 @@ impl GlobalState {
             attempt_telemetry: Arc::default(),
             commit_watch,
             booted_at: std::time::SystemTime::now(),
+            registry: Default::default(),
         }
     }
 
@@ -401,7 +405,7 @@ mod tests {
         drop(live);
         commit.expect("object cell commit must succeed");
         if !effects.is_empty() {
-            flush_effects(&gs.config, &gs.object_space, gs.call_outs(), effects).await;
+            flush_effects(gs, effects).await;
         }
         Ok(())
     }

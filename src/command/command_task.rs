@@ -85,13 +85,7 @@ impl AttemptBody for CommandTask {
             return Ok(());
         }
         let global_state = &self.template.global_state;
-        flush_effects(
-            &global_state.config,
-            &global_state.object_space,
-            global_state.call_outs(),
-            effects,
-        )
-        .await;
+        flush_effects(global_state, effects).await;
         Ok(())
     }
 }

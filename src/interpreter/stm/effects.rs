@@ -16,13 +16,10 @@
 
 use std::sync::Arc;
 
-use lpc_rs_utils::config::Config;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    interpreter::{
-        call_outs::CallOuts, lpc_ref::LpcRef, object_space::ObjectSpace, process::Process,
-    },
+    interpreter::{lpc_ref::LpcRef, process::Process, vm::global_state::GlobalState},
     telnet::{connection::Connection, ops::ConnectionOp},
 };
 
@@ -116,31 +113,26 @@ pub(crate) enum Effect {
 
 impl Effect {
     /// Deliver this effect physically. Object effects go to the passed
-    /// `ObjectSpace` (the committer's physical map); the others to config /
-    /// their own channel. The call-out lock is held only for the synchronous
-    /// materialize/remove, never across an await.
-    pub(crate) async fn flush(
-        self,
-        config: &Config,
-        object_space: &ObjectSpace,
-        call_outs: &parking_lot::RwLock<CallOuts>,
-    ) {
+    /// state's `ObjectSpace` (the committer's physical map); the others to
+    /// config / their own channel. The call-out lock is held only for the
+    /// synchronous materialize/remove, never across an await.
+    pub(crate) async fn flush(self, global_state: &GlobalState) {
         match self {
-            Self::DebugLog(msg) => config.debug_log(msg).await,
+            Self::DebugLog(msg) => global_state.config.debug_log(msg).await,
             Self::Socket { op, tx } => {
                 let _ = tx.send(op);
             }
             Self::InsertObject { key, process } => {
-                object_space.apply_insert(&key, process);
+                global_state.object_space.apply_insert(&key, process);
             }
             Self::RemoveObject { key, process } => {
-                object_space.apply_remove(&key, &process);
+                global_state.object_space.apply_remove(&key, &process);
             }
             Self::ScheduleCallOut(schedule) => {
-                call_outs.write().materialize(schedule);
+                global_state.call_outs().write().materialize(schedule);
             }
             Self::CancelCallOut { id } => {
-                call_outs.write().remove_by_id(id);
+                global_state.call_outs().write().remove_by_id(id);
             }
             Self::Exec {
                 new_process,
@@ -148,31 +140,25 @@ impl Effect {
             } => {
                 connection.set_body(Some(new_process));
                 let _ = connection.send(ConnectionOp::Attached);
+                // The client dropped between this exec's commit and now:
+                // unbind the body the connection just reached.
+                if connection.is_dead() {
+                    global_state.detach(&connection, None).await;
+                }
             }
             Self::Disconnect {
                 connection,
                 message,
-            } => {
-                connection.set_body(None);
-                if let Some(message) = message {
-                    let _ = connection.send(ConnectionOp::SendMessage(message));
-                }
-                let _ = connection.send(ConnectionOp::Close);
-            }
+            } => global_state.release(&connection, message),
         }
     }
 }
 
 /// Deliver a batch of effects in order. The retry loop calls this after a
 /// successful commit; a rejected attempt's batch is never delivered.
-pub(crate) async fn flush_effects(
-    config: &Config,
-    object_space: &ObjectSpace,
-    call_outs: &parking_lot::RwLock<CallOuts>,
-    effects: Vec<Effect>,
-) {
+pub(crate) async fn flush_effects(global_state: &GlobalState, effects: Vec<Effect>) {
     for effect in effects {
-        effect.flush(config, object_space, call_outs).await;
+        effect.flush(global_state).await;
     }
 }
 
@@ -196,8 +182,6 @@ impl std::fmt::Debug for Effect {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_utils::config::Config;
-
     use super::*;
     use crate::telnet::ops::ConnectionOp;
 
@@ -223,10 +207,9 @@ mod tests {
             },
         ];
 
-        let object_space = ObjectSpace::default();
-        let (tx_d, _rx_d) = tokio::sync::mpsc::channel(16);
-        let call_outs = parking_lot::RwLock::new(CallOuts::new(tx_d));
-        flush_effects(&Config::default(), &object_space, &call_outs, log).await;
+        let (vm_tx, _vm_rx) = tokio::sync::mpsc::channel(16);
+        let global_state = GlobalState::new(crate::test_support::test_config(), vm_tx);
+        flush_effects(&global_state, log).await;
 
         assert_eq!(rx_a.recv().await, Some(op_a));
         assert_eq!(rx_b.recv().await, Some(op_b));
@@ -240,14 +223,13 @@ mod tests {
         let connection = Arc::new(Connection::new(addr, tx, broker_tx));
         let body = Arc::new(Process::default());
 
-        let object_space = ObjectSpace::default();
-        let (tx_d, _rx_d) = tokio::sync::mpsc::channel(16);
-        let call_outs = parking_lot::RwLock::new(CallOuts::new(tx_d));
+        let (vm_tx, _vm_rx) = tokio::sync::mpsc::channel(16);
+        let global_state = GlobalState::new(crate::test_support::test_config(), vm_tx);
         Effect::Exec {
             new_process: body.clone(),
             connection: connection.clone(),
         }
-        .flush(&Config::default(), &object_space, &call_outs)
+        .flush(&global_state)
         .await;
 
         assert!(Arc::ptr_eq(&connection.body().unwrap(), &body));

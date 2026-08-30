@@ -1421,7 +1421,7 @@ mod tests {
             // `bind` only sets the loop's back-pointer; `write` reaches the
             // wire through the committed connection cell a real login sets.
             w.vm.global_state
-                .takeover(w.connection.clone(), proc.clone())
+                .attach(w.connection.clone(), proc.clone())
                 .await;
             proc
         }

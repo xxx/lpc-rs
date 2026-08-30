@@ -22,8 +22,8 @@ use crate::{
 mod initiate_login;
 mod object_initializers;
 mod prioritize_call_out;
-mod takeover;
 
+pub mod binding;
 pub mod global_state;
 pub mod vm_op;
 

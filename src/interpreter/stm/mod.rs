@@ -551,8 +551,7 @@ impl AttemptBody for ResolveObjectBody<'_> {
     }
 
     async fn deliver(&mut self, effects: Vec<Effect>) -> Result<()> {
-        let gs = self.gs;
-        flush_effects(&gs.config, &gs.object_space, gs.call_outs(), effects).await;
+        flush_effects(self.gs, effects).await;
         Ok(())
     }
 }

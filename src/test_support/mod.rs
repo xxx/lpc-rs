@@ -79,7 +79,7 @@ pub struct Connected {
     pub connection: Arc<Connection>,
 }
 
-/// Bind a fresh connection to `process` through the takeover path.
+/// Bind a fresh connection to `process` through the attach path.
 pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let (broker_tx, broker_rx) = flume::unbounded();
@@ -92,14 +92,13 @@ pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
         tx,
         broker_tx,
     ));
-    connection.set_body(Some(process.clone()));
     vm.global_state
-        .takeover(connection.clone(), process.clone())
+        .attach(connection.clone(), process.clone())
         .await;
     assert_eq!(
         rx.try_recv(),
         Ok(ConnectionOp::Attached),
-        "takeover announces the body"
+        "attach announces the body"
     );
     Connected {
         rx,

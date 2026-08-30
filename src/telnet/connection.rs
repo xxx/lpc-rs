@@ -161,10 +161,6 @@ impl Connection {
     }
 
     /// Record that `detach` ran.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "called by the binding module from task A2")
-    )]
     pub(crate) fn mark_dead(&self) {
         self.dead.store(true, Ordering::Release);
     }

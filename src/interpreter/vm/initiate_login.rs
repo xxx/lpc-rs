@@ -119,7 +119,7 @@ impl Vm {
 
             // This is the initial exec() of the player into a body.
             global_state
-                .takeover(connection.clone(), login_ob.clone())
+                .attach(connection.clone(), login_ob.clone())
                 .await;
 
             let template = task_template.clone();
@@ -243,7 +243,7 @@ mod tests {
         for _ in 0..4 {
             ops.push(within(rx.recv()).await.expect("the login task is running"));
         }
-        assert_eq!(ops[0], ConnectionOp::Attached, "takeover binds the body");
+        assert_eq!(ops[0], ConnectionOp::Attached, "attach binds the body");
         // `input_to` reaches the connection as it runs; `write` is an effect,
         // so its message follows at the commit.
         assert!(matches!(ops[1], ConnectionOp::InputTo(_)));

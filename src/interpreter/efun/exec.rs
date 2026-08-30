@@ -123,7 +123,7 @@ mod tests {
 
     /// The core D9b Piece 2 guarantee: an in-transaction `exec` is visible
     /// to `interactive()` within the same transaction. The old body's
-    /// `create()` starts bound (via `GlobalState::takeover`), then `exec`s the
+    /// `create()` starts bound (via `GlobalState::attach`), then `exec`s the
     /// connection into the target. The `interactive(target)` reads that
     /// follow run in the same transaction the `exec` wrote the cell into,
     /// i.e. before any commit — they must still observe the handover.
@@ -175,7 +175,7 @@ mod tests {
         // Bind the connection to the old body through the transactional
         // path (the login mechanism), so the cell is in the committed world.
         vm.global_state
-            .takeover(connection.clone(), old_proc.clone())
+            .attach(connection.clone(), old_proc.clone())
             .await;
 
         // Run the old body's `create()`: it performs the exec and makes the
