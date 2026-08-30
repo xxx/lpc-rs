@@ -168,8 +168,7 @@ impl Telnet {
         let mut mud_stats: Option<IndexMap<String, Vec<String>>> = None;
 
         let departure = loop {
-            // The offers go out on the first turn; a client that never
-            // answers them still gets its login.
+            // Every turn's drain; the first carries the session's offers.
             outbox.fill_from(&mut session);
             let turn = tokio::select! {
                 op = connection_rx.recv() => Turn::Op(op),
@@ -1777,7 +1776,7 @@ mod tests {
             let w = wire().await;
             flood(&w).await;
             w.connection.send(ConnectionOp::Close).unwrap();
-            // The goodbye gives up after GOODBYE_FLUSH; the loop leaves.
+            // The goodbye gives up after GOODBYE_FLUSH.
             eventually(|| w.vm.global_state.registry.is_empty()).await;
             assert!(w.connection.is_dead());
         }
