@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Debug, iter::Peekable, path::Path};
 use async_recursion::async_recursion;
 use define::{Define, ObjectMacro};
 use lpc_rs_core::{
-    LpcIntInner, convert_escapes,
+    LpcIntInner,
     lpc_path::LpcPath,
     pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
 };
@@ -479,7 +479,7 @@ impl Preprocessor {
             let body = &captures[3];
 
             // re-span these tokens to just be the entire #define line
-            let tokens = lex_vec(&convert_escapes(body))
+            let tokens = lex_vec(body)
                 .map_err(|e| e.with_span(Some(token.0)))?
                 .into_iter()
                 .map(|(_, t, _)| (span.l(), t.with_span(span), span.r()))
@@ -498,7 +498,7 @@ impl Preprocessor {
                 vec![(span.l(), Token::IntLiteral(IntToken(span, 0)), span.r())]
             } else {
                 // tokenize captures[2] with our full language lexer, so we can store it
-                lex_vec(&convert_escapes(&captures[2]))
+                lex_vec(&captures[2])
                     .map_err(|e| e.with_span(Some(token.0)))?
                     .into_iter()
                     .map(|(_, t, _)| (span.l(), t.with_span(span), span.r()))
@@ -1743,6 +1743,19 @@ mod tests {
             "# };
 
             test_invalid(prog, "Lex Error: Invalid Token ```").await;
+        }
+
+        #[tokio::test]
+        async fn a_macro_body_with_an_escaped_quote_is_decoded_once_by_the_lexer() {
+            let prog = indoc! { r#"
+                #define GREETING "say \"hi\"\n"
+
+                string s = GREETING;
+            "# };
+
+            let expected = vec!["string", "s", "=", "say \"hi\"\n", ";"];
+
+            test_valid(prog, &expected).await;
         }
     }
 

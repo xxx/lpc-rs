@@ -113,4 +113,14 @@ mod tests {
     fn an_unknown_escape_drops_the_backslash() {
         assert_eq!(convert_escapes(r"\q"), "q");
     }
+
+    #[test]
+    fn a_trailing_lone_backslash_is_kept() {
+        assert_eq!(convert_escapes(r"\"), "\\");
+    }
+
+    #[test]
+    fn a_multibyte_char_after_the_backslash_drops_the_backslash() {
+        assert_eq!(convert_escapes("\\é"), "é");
+    }
 }
