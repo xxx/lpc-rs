@@ -76,7 +76,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ///
     /// A [`lpc_rs_errors::Result`], with a boolean indicating whether we are at the end of input
     // Not boxed: the recursion cycle is already broken by the boxed
-    // futures on `resume` and `handle_call_other`.
+    // futures on `resolve_result`, `timed_eval_seed`, and `resume`.
     #[instrument(level = "debug", skip_all)]
     #[inline]
     async fn eval_one_instruction(&mut self) -> lpc_rs_errors::Result<bool> {

@@ -1,15 +1,18 @@
 use std::ops::{Index, IndexMut, RangeFrom};
 
-use arrayvec::ArrayVec;
 use delegate::delegate;
 use lpc_rs_errors::{LpcError, Result, lpc_error};
 
 use crate::interpreter::{call_frame::CallFrame, lpc_ref::LpcRef};
 
+/// A starting capacity well under `STACKSIZE`: most tasks never push deep
+/// enough to grow it, and `->` recursion that does grow it does so once.
+const INITIAL_CAPACITY: usize = 8;
+
 #[derive(Debug, Clone)]
 pub struct CallStack<const STACKSIZE: usize> {
-    /// The call stack
-    stack: Box<ArrayVec<CallFrame, STACKSIZE>>,
+    /// The call stack; grows on demand, `push` refuses past `STACKSIZE` frames.
+    stack: Vec<CallFrame>,
 }
 
 impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
@@ -58,10 +61,13 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     /// Push a new frame onto the stack. Will return `Err` in the
     /// case of a stack overflow.
     pub fn push(&mut self, frame: CallFrame) -> Result<()> {
-        match self.stack.try_push(frame) {
-            Ok(_) => Ok(()),
-            Err(_e) => Err(lpc_error!("stack overflow")),
+        if self.stack.len() >= STACKSIZE {
+            return Err(lpc_error!("stack overflow"));
         }
+
+        self.stack.push(frame);
+
+        Ok(())
     }
 
     /// Remove the top item from the call stack, and return a mutable reference
@@ -117,7 +123,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
 impl<const STACKSIZE: usize> Default for CallStack<STACKSIZE> {
     fn default() -> Self {
         Self {
-            stack: Box::new(ArrayVec::<_, STACKSIZE>::new()),
+            stack: Vec::with_capacity(INITIAL_CAPACITY),
         }
     }
 }

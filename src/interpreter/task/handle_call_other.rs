@@ -58,6 +58,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 if !function.public() {
                     NULL
                 } else {
+                    debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
                     // The callee returns through `pop_frame!`'s `copy_result`.
                     let frame = self.prepare_new_call_frame(receiver, function).await?;
                     self.stack.push(frame)?;
@@ -230,6 +231,7 @@ mod tests {
         string who() { return file_name(this_object()); }
         private int hidden() { return 7; }
         int two() { return 2; }
+        void take(int ref x) { x = 1; }
     "# };
 
     async fn vm_with_other() -> Vm {
@@ -363,5 +365,85 @@ mod tests {
             vm.global_state.committed_global(&process, 0u16),
             LpcRef::from(4)
         );
+    }
+
+    /// `catch`'s bulk `truncate` has to unwind many `->` frames at once, not
+    /// just the one a plain call would have left.
+    #[tokio::test]
+    async fn catch_unwinds_a_deep_call_other_chain() {
+        let vm = Vm::new(test_config());
+        let code = indoc! { r#"
+            string caught;
+            int after;
+            int f(int n) { if (n < 500) return this_object()->f(n + 1); throw("deep"); }
+            void create() {
+                caught = catch(f(0));
+                after = 1;
+            }
+        "# };
+        let process = vm
+            .initialize_process_from_code("/unwind.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let caught = vm.global_state.committed_global(&process, 0u16);
+        let text = caught.with_string(|s| s.to_string()).unwrap_or_default();
+        assert!(text.contains("deep"), "{text:?}");
+        assert_eq!(
+            vm.global_state.committed_global(&process, 1u16),
+            LpcRef::from(1)
+        );
+    }
+
+    /// Two distinct objects volleying `->` calls share the one stack too,
+    /// not just self-recursion through `this_object()`.
+    #[tokio::test]
+    async fn mutual_recursion_through_call_other() {
+        let vm = Vm::new(test_config());
+        vm.create_process_from_code(
+            "/ping.c",
+            indoc! { r#"
+                int ping(int n) { if (n <= 0) return 0; return "/pong"->pong(n - 1) + 1; }
+            "# },
+        )
+        .await
+        .unwrap();
+        vm.create_process_from_code(
+            "/pong.c",
+            indoc! { r#"
+                int pong(int n) { if (n <= 0) return 0; return "/ping"->ping(n - 1) + 1; }
+            "# },
+        )
+        .await
+        .unwrap();
+        let code = indoc! { r#"
+            int depth;
+            void create() { depth = "/ping"->ping(200); }
+        "# };
+        let process = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&process, 0u16),
+            LpcRef::from(200)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_ref_parameter_is_refused_across_call_other() {
+        let vm = vm_with_other().await;
+        let code = indoc! { r#"
+            void create() { int v; "/other"->take(v); }
+        "# };
+        let err = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("by reference"), "{err}");
     }
 }
