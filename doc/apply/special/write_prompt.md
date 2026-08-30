@@ -7,7 +7,8 @@ each command line it runs, and after each `input_to` callback. Whatever it
 returns is sent as the prompt, followed by the mark the client negotiated
 (telnet EOR, else GA); it may also `write` its prompt and return nothing, and
 the mark still follows. A body that does not define `write_prompt` gets no
-prompt and no mark.
+prompt and no mark — except after a command or callback that left an
+`input_to` pending, where the mark alone is still sent.
 
 When the command or callback left another `input_to` pending, `write_prompt`
 is not applied: the callback wrote its own prompt (`"Password: "`), and only

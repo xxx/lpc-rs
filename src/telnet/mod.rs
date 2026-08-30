@@ -453,7 +453,7 @@ impl Telnet {
         }
     }
 
-    /// Spec D8: the mark alone behind a pending `input_to`; else the body's
+    /// The mark alone behind a pending `input_to`; else the body's
     /// `write_prompt`, whose text is queued so its own output goes first;
     /// a body without the apply gets nothing.
     async fn prompt_cycle(session: &mut Session, connection: &Connection, template: &TaskTemplate) {
@@ -1448,7 +1448,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn a_body_without_write_prompt_gets_no_cycle() {
+        async fn a_body_without_write_prompt_gets_no_prompt_and_no_mark() {
             let mut w = wire().await;
             commanding_body(&w, "").await;
             w.client.write_all(b"look\r\n").await.unwrap();
