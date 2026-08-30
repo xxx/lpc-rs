@@ -17,7 +17,13 @@ where
         .thread_stack_size(THREAD_STACK)
         .build()
         .expect("the runtime builds")
-        .block_on(async { tokio::spawn(f).await.expect("the main task did not panic") })
+        .block_on(async {
+            match tokio::spawn(f).await {
+                Ok(output) => output,
+                // A task nobody aborts fails only by panicking.
+                Err(e) => std::panic::resume_unwind(e.into_panic()),
+            }
+        })
 }
 
 #[cfg(test)]
