@@ -54,21 +54,63 @@ pub type LpcFloatInner = Total<BaseFloat>;
 
 pub type ScopeId = NodeId;
 
-/// Convert various literal escapes to actual escape characters
-///
-/// # Arguments
-///
-/// `s` - Something that can be represented as a `&str` through `as_ref`.
+/// Decode an LPC string literal's backslash escapes into their real characters.
 pub fn convert_escapes<T>(s: T) -> String
 where
     T: AsRef<str>,
 {
-    s.as_ref()
-        .replace("\\n", "\n")
-        .replace("\\r", "\r")
-        .replace("\\t", "\t")
-        .replace("\\v", "\x0F")
-        .replace("\\f", "\x0C")
-        .replace("\\a", "\x07")
-        .replace("\\b", "\x08")
+    let s = s.as_ref();
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('t') => out.push('\t'),
+            Some('v') => out.push('\x0B'),
+            Some('f') => out.push('\x0C'),
+            Some('a') => out.push('\x07'),
+            Some('b') => out.push('\x08'),
+            Some('"') => out.push('"'),
+            Some('\\') => out.push('\\'),
+            Some('\'') => out.push('\''),
+            Some(other) => out.push(other),
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_decodes_an_escaped_quote() {
+        assert_eq!(convert_escapes(r#"\""#), "\"");
+    }
+
+    #[test]
+    fn it_decodes_an_escaped_backslash() {
+        assert_eq!(convert_escapes(r"\\"), "\\");
+    }
+
+    #[test]
+    fn an_escaped_backslash_before_n_is_not_a_newline() {
+        assert_eq!(convert_escapes(r"\\n"), "\\n");
+    }
+
+    #[test]
+    fn it_decodes_vertical_tab_as_0x0b() {
+        assert_eq!(convert_escapes(r"\v"), "\x0B");
+    }
+
+    #[test]
+    fn an_unknown_escape_drops_the_backslash() {
+        assert_eq!(convert_escapes(r"\q"), "q");
+    }
 }
