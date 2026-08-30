@@ -20,9 +20,10 @@ use tracing::{error, info, instrument, trace, warn};
 use crate::{
     command::command_task::run_command_line,
     interpreter::{
-        CommittedReader, GET_MUD_STATS, GMCP, WINDOW_SIZE, WRITE_PROMPT,
+        CommittedReader, GET_MUD_STATS, GMCP, NET_DEAD, WINDOW_SIZE, WRITE_PROMPT,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
+        process::Process,
         task::{
             apply_function::{
                 apply_function, apply_function_by_name, apply_function_in_master,
@@ -52,6 +53,12 @@ enum Departure {
     Server,
     /// The client's socket ended or failed.
     Client,
+}
+
+/// What an op told the loop to do next.
+enum Flow {
+    Continue,
+    Leave(Departure),
 }
 
 impl Telnet {
@@ -128,7 +135,7 @@ impl Telnet {
                 "The server is currently unable to accept new connections. Please try again shortly.\n",
             ));
             let _ = flush(&mut session, &mut out, &mut stream).await;
-            Self::leave(&connection, &template, Departure::Server).await;
+            Self::leave(&connection, &template, Departure::Server, false).await;
             return;
         }
 
@@ -136,7 +143,7 @@ impl Telnet {
         // answers them still gets its login.
         if let Err(e) = flush(&mut session, &mut out, &mut stream).await {
             warn!("Failed to send to {}: {}", &remote_ip, e);
-            Self::leave(&connection, &template, Departure::Client).await;
+            Self::leave(&connection, &template, Departure::Client, false).await;
             return;
         }
 
@@ -146,69 +153,52 @@ impl Telnet {
         let mut mud_stats: Option<IndexMap<String, Vec<String>>> = None;
 
         let departure = loop {
-            tokio::select! {
+            let flow = tokio::select! {
                 op = connection_rx.recv() => {
-                    trace!("Received message from VM: {:?}", op);
-                    match op {
-                        Some(ConnectionOp::SendMessage(msg)) => session.send(Op::Text(&msg)),
-                        Some(ConnectionOp::InputTo(input_to)) => {
-                            if input_to.no_echo {
-                                session.send(Op::EchoOff);
-                            }
-                            connection.set_input_to(Some(input_to));
-                        }
-                        Some(ConnectionOp::Gmcp { package, payload }) => session.send(Op::Gmcp {
-                            package: &package,
-                            payload: &payload,
-                        }),
-                        Some(ConnectionOp::Mxp(markup)) => session.send(Op::Mxp(&markup)),
-                        Some(ConnectionOp::Prompt(text)) => session.send(Op::Prompt(&text)),
-                        Some(ConnectionOp::Attached) => {
-                            if let Some((cols, rows)) = session.naws()
-                                && !shutting_down
-                            {
-                                Self::window_size(cols, rows, &connection, &template).await;
-                            }
-                        }
-                        Some(ConnectionOp::PromptCycle) => {
-                            if !shutting_down {
-                                Self::prompt_cycle(&mut session, &connection, &template).await;
-                            }
-                        }
-                        Some(ConnectionOp::Shutdown) => {
-                            shutting_down = true;
-                            trace!("Shutting down connection for {}", &remote_ip);
-                        }
-                        Some(ConnectionOp::Close) => {
-                            info!("Closing connection for {}.", &remote_ip);
-                            let _ = flush(&mut session, &mut out, &mut stream).await;
-                            break Departure::Server;
-                        }
-                        None => {
-                            info!("Channel closed for {}. Closing connection.", &remote_ip);
-                            break Departure::Server;
-                        }
-                    }
+                    Self::handle_op(op, &mut session, &connection, &template, &mut shutting_down).await
                 }
                 read = stream.read(&mut buf) => {
                     match read {
                         Ok(0) => {
                             info!("Connection closed by {}.", &remote_ip);
-                            break Departure::Client;
+                            Flow::Leave(Departure::Client)
                         }
                         Ok(n) => {
                             session.feed(&buf[..n]);
                             connection.refresh(&session);
+                            let mut flow = Flow::Continue;
                             while let Some(event) = session.next_event() {
                                 Self::handle_event(event, &mut session, &connection, &template, shutting_down, &mut mud_stats).await;
+                                // What the event queued lands before the next
+                                // event: a second line in the same read must
+                                // see the first line's `input_to`.
+                                while let Ok(op) = connection_rx.try_recv() {
+                                    flow = Self::handle_op(Some(op), &mut session, &connection, &template, &mut shutting_down).await;
+                                    if matches!(flow, Flow::Leave(_)) {
+                                        break;
+                                    }
+                                }
+                                if matches!(flow, Flow::Leave(_)) {
+                                    break;
+                                }
                             }
+                            flow
                         }
                         Err(e) => {
                             warn!("User input error for {}: {:?}", &remote_ip, e);
-                            break Departure::Client;
+                            Flow::Leave(Departure::Client)
                         }
                     }
                 }
+            };
+
+            if let Flow::Leave(departure) = flow {
+                // The driver's close sends what was queued first; a client
+                // that left cannot hear it.
+                if departure == Departure::Server {
+                    let _ = flush(&mut session, &mut out, &mut stream).await;
+                }
+                break departure;
             }
 
             if let Err(e) = flush(&mut session, &mut out, &mut stream).await {
@@ -217,20 +207,99 @@ impl Telnet {
             }
         };
 
-        Self::leave(&connection, &template, departure).await;
+        Self::leave(&connection, &template, departure, shutting_down).await;
     }
 
-    /// Every exit path: unbind whatever body the connection had, then
-    /// leave the registry.
-    async fn leave(connection: &Arc<Connection>, template: &TaskTemplate, departure: Departure) {
+    /// One op from the VM side; `None` is the channel closing.
+    async fn handle_op(
+        op: Option<ConnectionOp>,
+        session: &mut Session,
+        connection: &Connection,
+        template: &TaskTemplate,
+        shutting_down: &mut bool,
+    ) -> Flow {
+        trace!("Received message from VM: {:?}", op);
+        match op {
+            Some(ConnectionOp::SendMessage(msg)) => session.send(Op::Text(&msg)),
+            Some(ConnectionOp::InputTo(input_to)) => {
+                if input_to.no_echo {
+                    session.send(Op::EchoOff);
+                }
+                connection.set_input_to(Some(input_to));
+            }
+            Some(ConnectionOp::Gmcp { package, payload }) => session.send(Op::Gmcp {
+                package: &package,
+                payload: &payload,
+            }),
+            Some(ConnectionOp::Mxp(markup)) => session.send(Op::Mxp(&markup)),
+            Some(ConnectionOp::Prompt(text)) => session.send(Op::Prompt(&text)),
+            Some(ConnectionOp::Attached) => {
+                if let Some((cols, rows)) = session.naws()
+                    && !*shutting_down
+                {
+                    Self::window_size(cols, rows, connection, template).await;
+                }
+            }
+            Some(ConnectionOp::PromptCycle) => {
+                if !*shutting_down {
+                    Self::prompt_cycle(session, connection, template).await;
+                }
+            }
+            Some(ConnectionOp::Shutdown) => {
+                *shutting_down = true;
+                trace!("Shutting down connection for {}", connection.address);
+            }
+            Some(ConnectionOp::Close) => {
+                info!("Closing connection for {}.", connection.address);
+                return Flow::Leave(Departure::Server);
+            }
+            None => {
+                info!(
+                    "Channel closed for {}. Closing connection.",
+                    connection.address
+                );
+                return Flow::Leave(Departure::Server);
+            }
+        }
+        Flow::Continue
+    }
+
+    /// Every exit path: unbind whatever body the connection had, tell it
+    /// if the client left, then leave the registry.
+    async fn leave(
+        connection: &Arc<Connection>,
+        template: &TaskTemplate,
+        departure: Departure,
+        shutting_down: bool,
+    ) {
         let global_state = &template.global_state;
         let body = global_state.detach(connection, None).await;
-        trace!(
-            "{} left ({departure:?}); a body was bound: {}",
-            connection.address,
-            body.is_some()
-        );
+        if let Some(body) = body
+            && departure == Departure::Client
+            && !shutting_down
+        {
+            Self::net_dead(body, template).await;
+        }
         global_state.registry.remove(connection);
+    }
+
+    /// `net_dead()` on the body the client left; it is no longer
+    /// interactive by the time it runs.
+    async fn net_dead(body: Arc<Process>, template: &TaskTemplate) {
+        Self::apply_on(body, NET_DEAD, &[], template).await;
+    }
+
+    /// Apply `name` on `body` as `this_player`; no apply is nothing, an
+    /// error goes to `error_handler`.
+    async fn apply_on(body: Arc<Process>, name: &str, args: &[LpcRef], template: &TaskTemplate) {
+        let template = template.clone();
+        template.set_this_player(Some(body.clone()));
+        let timeout = template.global_state.config.max_execution_time;
+        if let Some(Err(e)) =
+            apply_function_by_name(name, args, body.clone(), template.clone(), Some(timeout)).await
+        {
+            apply_runtime_error(&e, Some(body), template).await;
+        }
     }
 
     /// One thing the client did.
@@ -418,8 +487,7 @@ impl Telnet {
         }
     }
 
-    /// Apply `name` on the bound body as `this_player`; no body or no apply
-    /// is nothing, an error goes to `error_handler`.
+    /// `apply_on` the bound body; no body is a trace.
     async fn apply_on_body(
         name: &str,
         args: &[LpcRef],
@@ -430,14 +498,7 @@ impl Telnet {
             trace!("{} has no body for {name}", connection.address);
             return;
         };
-        let template = template.clone();
-        template.set_this_player(Some(body.clone()));
-        let timeout = template.global_state.config.max_execution_time;
-        if let Some(Err(e)) =
-            apply_function_by_name(name, args, body.clone(), template.clone(), Some(timeout)).await
-        {
-            apply_runtime_error(&e, Some(body), template).await;
-        }
+        Self::apply_on(body, name, args, template).await;
     }
 
     /// `window_size(cols, rows)` on the bound body.
@@ -1387,10 +1448,19 @@ mod tests {
         }
 
         const ROOM: &str = indoc! { r#"
-            void init() { add_action("do_look", "look"); add_action("do_ask", "ask"); }
+            void init() {
+                add_action("do_look", "look");
+                add_action("do_ask", "ask");
+                add_action("do_spam", "spam");
+            }
             int do_look() { write("seen\n"); return 1; }
             int do_ask() { write("Name: "); input_to(got_name); return 1; }
-            void got_name(string s) {}
+            void got_name(string s) { write("got " + s + "\n"); }
+            int do_spam() {
+                int i;
+                for (i = 0; i < 300; i++) write("x\n");
+                return 1;
+            }
         "# };
 
         /// A body in `ROOM` with verbs, plus `extra` (a `write_prompt`, or not).
@@ -1454,7 +1524,7 @@ mod tests {
             assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
             // The callback's line: its own cycle, and now the body's prompt.
             w.client.write_all(b"bob\r\n").await.unwrap();
-            let mut expected = b"> ".to_vec();
+            let mut expected = b"got bob\r\n> ".to_vec();
             expected.extend([IAC, GA]);
             assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
         }
@@ -1469,6 +1539,59 @@ mod tests {
                 .send(ConnectionOp::SendMessage("z\n".into()))
                 .unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
+        }
+
+        #[tokio::test]
+        async fn a_client_that_hangs_up_unbinds_its_body_and_tells_it() {
+            let w = wire().await;
+            let proc = commanding_body(
+                &w,
+                "int dead;\nvoid net_dead() { dead = interactive() ? 2 : 1; }",
+            )
+            .await;
+            drop(w.client);
+            eventually(|| w.vm.global_state.committed_global(&proc, 0u16) == LpcRef::from(1)).await;
+            assert!(w.connection.body().is_none());
+            assert!(w.vm.global_state.committed_connection(&proc).is_none());
+            eventually(|| w.vm.global_state.registry.is_empty()).await;
+        }
+
+        #[tokio::test]
+        async fn a_hang_up_while_shutting_down_is_silent() {
+            let mut w = wire().await;
+            let proc = commanding_body(&w, "int dead;\nvoid net_dead() { dead = 1; }").await;
+            w.connection.send(ConnectionOp::Shutdown).unwrap();
+            w.connection
+                .send(ConnectionOp::SendMessage("z\n".into()))
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
+            drop(w.client);
+            eventually(|| w.vm.global_state.registry.is_empty()).await;
+            assert!(w.connection.body().is_none());
+            assert_eq!(
+                w.vm.global_state.committed_global(&proc, 0u16),
+                LpcRef::from(0)
+            );
+        }
+
+        #[tokio::test]
+        async fn a_command_may_queue_more_than_the_old_channel_held() {
+            let mut w = wire().await;
+            commanding_body(&w, "").await;
+            w.client.write_all(b"spam\r\n").await.unwrap();
+            let bytes = read_n(&mut w.client, 900).await;
+            assert!(bytes.chunks(3).all(|line| line == b"x\r\n"));
+        }
+
+        #[tokio::test]
+        async fn two_lines_in_one_read_reach_the_input_to() {
+            let mut w = wire().await;
+            commanding_body(&w, "").await;
+            w.client.write_all(b"ask\r\nbob\r\n").await.unwrap();
+            let mut expected = b"Name: ".to_vec();
+            expected.extend([IAC, GA]);
+            expected.extend(b"got bob\r\n");
+            assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
         }
     }
 }

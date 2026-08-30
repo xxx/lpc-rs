@@ -53,6 +53,8 @@ pub const INVENTORY_ACCESSIBLE: &str = "inventory_accessible";
 pub const INVENTORY_VISIBLE: &str = "inventory_visible";
 /// Object apply: called in the body `connect` returned (`doc/apply/master/connect.md`).
 pub const LOGON: &str = "logon";
+/// Body apply: the client went away without logging out (`doc/apply/special/net_dead.md`).
+pub const NET_DEAD: &str = "net_dead";
 /// Object/master apply: the adjectives a phrase may put before the object's ids (`doc/apply/object/parse_command_adjectiv_id_list.md`).
 pub const PARSE_COMMAND_ADJECTIV_ID_LIST: &str = "parse_command_adjectiv_id_list";
 /// Master apply: the word meaning every match (`doc/apply/master/parse_command_all_word.md`).
