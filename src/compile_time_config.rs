@@ -20,9 +20,7 @@ pub const VM_CHANNEL_CAPACITY: usize = 1024;
 /// debug build, and 16 fit the 2MiB stack tokio gives a worker thread.
 pub const MAX_COMMAND_DEPTH: usize = 16;
 
-/// How many driver tasks may nest on one native stack — a `create()` that
-/// clones, a `catch_tell` that writes back, a master hook that re-enters —
-/// before the next nesting is a runtime error. Measured 2026-08-30: a debug
-/// build on tokio's 2 MiB thread survives 20 nested `catch_tell`s and aborts
-/// at 24.
+/// How many driver tasks may nest on one native stack before the next
+/// nesting is a runtime error. Measured 2026-08-30: a debug build on tokio's
+/// 2 MiB thread survives 20 nested `catch_tell`s and aborts at 24.
 pub const MAX_TASK_CHAIN: u8 = 16;
