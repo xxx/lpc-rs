@@ -133,7 +133,7 @@ impl GlobalState {
 
     /// The physical half of a detach: the back-reference cleared, then
     /// `message` and `Close` queued. The registry entry is the loop's own
-    /// to remove as it exits, so shutdown's wait means what it says.
+    /// to remove as it exits.
     pub fn release(&self, connection: &Connection, message: Option<String>) {
         connection.set_body(None);
         if let Some(message) = message {
