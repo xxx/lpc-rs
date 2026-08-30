@@ -12,7 +12,7 @@ without it receives the text on its connection when it has one; otherwise the
 text goes to the debug log.
 
 A `catch_tell` that writes to another living nests one driver task per level;
-sixteen levels deep, the next `write` or `tell_object` is a runtime error.
+sixty-four levels deep, the next `write` or `tell_object` is a runtime error.
 
 ### See also
 

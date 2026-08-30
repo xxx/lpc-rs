@@ -52,7 +52,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         };
 
         if !process.is_initialized(&self.context.txn) {
-            Self::initialize_process(self.context.clone().with_process(process.clone())).await?;
+            Self::initialize_process(self.context.nested(process.clone())?).await?;
         }
 
         let prototype = &function.prototype;

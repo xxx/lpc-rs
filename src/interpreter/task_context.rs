@@ -3,11 +3,12 @@ use std::{path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapAny;
 use chrono::Duration;
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{Result, lpc_bug};
+use lpc_rs_errors::{LpcError, Result, lpc_bug};
 use lpc_rs_utils::config::Config;
 use thin_vec::ThinVec;
 use tokio::sync::mpsc::Sender;
 
+use crate::compile_time_config::MAX_TASK_CHAIN;
 use crate::{
     interpreter::{
         lpc_ref::LpcRef,
@@ -168,6 +169,22 @@ impl TaskContext {
         self.process = process.into();
 
         self
+    }
+
+    /// The context for a task nested under this one in `process`, one level
+    /// deeper in the chain; an error past `MAX_TASK_CHAIN`.
+    pub fn nested<P>(&self, process: P) -> Result<Self>
+    where
+        P: Into<Arc<Process>>,
+    {
+        if self.chain_count >= MAX_TASK_CHAIN {
+            return Err(LpcError::runtime(format!(
+                "nested task depth of {MAX_TASK_CHAIN} exceeded"
+            )));
+        }
+        let mut nested = self.clone().with_process(process);
+        nested.chain_count = self.chain_count + 1;
+        Ok(nested)
     }
 
     /// Find an object by path, transactionally: read the object's cell first

@@ -126,7 +126,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         .await?;
 
         if let Some(receiver) = resolved {
-            let new_context = task_context.clone().with_process(receiver.clone());
+            let new_context = task_context.nested(receiver.clone())?;
             let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
 
             // unwrap() is ok because resolve_call_other_receiver() checks
@@ -196,8 +196,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // initializing objects. If you've ever seen a call_other to some knowingly
         // undefined function in old lib code, this is why.
         let result = if !process.is_initialized(context.txn()) {
-            let ctx = context.clone().with_process(process);
-            Self::initialize_process(ctx).await?.context.process
+            Self::initialize_process(context.nested(process)?)
+                .await?
+                .context
+                .process
         } else {
             process
         };

@@ -265,10 +265,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// prevent infinite loops, and the sub-task's writes ride this
     /// transaction's single commit.
     pub async fn init_process_transactional(&self, process: &Arc<Process>) -> Result<()> {
-        let mut new_task_context = self.task_context.clone().with_process(process.clone());
-        new_task_context.chain_count += 1;
-
-        Task::<N>::initialize_process(new_task_context).await?;
+        Task::<N>::initialize_process(self.task_context.nested(process.clone())?).await?;
 
         Ok(())
     }

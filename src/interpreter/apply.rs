@@ -3,11 +3,10 @@
 
 use std::sync::Arc;
 
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::Result;
 use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::{
-    compile_time_config::MAX_TASK_CHAIN,
     interpreter::{
         CATCH_TELL, function_type::function_ptr::FunctionPtr, lpc_ref::LpcRef,
         lpc_string::LpcString, process::Process, stm::Effect, task::apply_function::apply_function,
@@ -24,8 +23,7 @@ pub(crate) async fn apply_nested(
     function: Arc<ProgramFunction>,
     args: &[LpcRef],
 ) -> Result<LpcRef> {
-    let nested = ctx.clone().with_process(target.clone());
-    timed(ctx, nested, function, args).await
+    timed(ctx, ctx.nested(target.clone())?, function, args).await
 }
 
 /// Apply `function` on `target` with `this_player` set, joining `ctx`'s
@@ -37,7 +35,7 @@ pub(crate) async fn apply_on(
     function: Arc<ProgramFunction>,
     args: &[LpcRef],
 ) -> Result<LpcRef> {
-    let nested = ctx.clone().with_process(target.clone());
+    let nested = ctx.nested(target.clone())?;
     nested.this_player.store(Some(this_player.clone()));
     timed(ctx, nested, function, args).await
 }
@@ -67,7 +65,7 @@ pub(crate) async fn apply_pointer(
     pointer: &FunctionPtr,
     args: &[LpcRef],
 ) -> Result<Option<LpcRef>> {
-    let handler_ctx = ctx.clone().with_process(actor.clone());
+    let handler_ctx = ctx.nested(actor.clone())?;
     handler_ctx.this_player.store(Some(actor.clone()));
     let Some(resolved) = pointer.prepare_call(args, &handler_ctx).await? else {
         return Ok(None);
@@ -120,20 +118,13 @@ pub(crate) async fn deliver(
     Ok(received)
 }
 
-/// Run `function` in `nested` under `ctx`'s configured execution time, one
-/// level deeper in the task chain.
+/// Run `function` in `nested` under `ctx`'s configured execution time.
 async fn timed(
     ctx: &TaskContext,
-    mut nested: TaskContext,
+    nested: TaskContext,
     function: Arc<ProgramFunction>,
     args: &[LpcRef],
 ) -> Result<LpcRef> {
-    if ctx.chain_count >= MAX_TASK_CHAIN {
-        return Err(LpcError::runtime(format!(
-            "nested apply depth of {MAX_TASK_CHAIN} exceeded"
-        )));
-    }
-    nested.chain_count = ctx.chain_count + 1;
     let timeout = ctx.config().max_execution_time;
     apply_function(function, args, nested, Some(timeout)).await
 }
@@ -144,6 +135,7 @@ mod tests {
 
     use super::*;
     use crate::{
+        compile_time_config::MAX_TASK_CHAIN,
         interpreter::{CommittedReader, vm::Vm},
         test_support::test_config,
     };
@@ -187,8 +179,41 @@ mod tests {
             .unwrap_err();
         assert!(
             err.to_string()
-                .contains("nested apply depth of 16 exceeded"),
+                .contains(&format!("nested task depth of {MAX_TASK_CHAIN} exceeded")),
             "{err}"
         );
+    }
+
+    /// `->` nests a task per call; the budget is the bound on its recursion.
+    #[tokio::test]
+    async fn call_other_recursion_fills_the_budget_and_no_more() {
+        let vm = Vm::new(test_config());
+        let fits = format!(
+            r#"
+            int depth;
+            int f(int n) {{ if (n < {MAX_TASK_CHAIN}) return this_object()->f(n + 1); return n; }}
+            void create() {{ depth = f(0); }}
+            "#
+        );
+        let process = vm
+            .initialize_process_from_code("/fits.c", &fits)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&process, 0u16),
+            LpcRef::from(i64::from(MAX_TASK_CHAIN))
+        );
+
+        let past = indoc! { r#"
+            int f(int n) { if (n < 1000) return this_object()->f(n + 1); return n; }
+            void create() { f(0); }
+        "# };
+        let err = vm
+            .initialize_process_from_code("/past.c", past)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("nested task depth"), "{err}");
     }
 }
