@@ -295,8 +295,7 @@ impl Telnet {
     }
 
     /// Answer MSSP: the driver's defaults under whatever the master's
-    /// `get_mud_stats()` says (spec D9), or the defaults alone while
-    /// shutting down (no interpreter entry once shutdown has started).
+    /// `get_mud_stats()` says, or the defaults alone while shutting down.
     async fn mssp(
         session: &mut Session,
         template: &TaskTemplate,
