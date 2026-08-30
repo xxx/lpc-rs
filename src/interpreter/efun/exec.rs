@@ -264,6 +264,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_error_in_valid_exec_is_the_callers() {
+        let vm = Vm::new(test_config());
+        vm.global_state
+            .initialize_process_from_code(
+                "/secure/master.c",
+                r#"int valid_exec(object c, object n, object o) { throw("not today"); }"#,
+            )
+            .await
+            .unwrap();
+        let a = vm.create_process_from_code("/a.c", "").await.unwrap();
+        vm.create_process_from_code("/b.c", "").await.unwrap();
+        let mut on_a = connect(&vm, &a).await;
+        let main = indoc! { r#"
+            void create() { exec(find_object("/b"), find_object("/a")); }
+        "# };
+        let err = vm
+            .initialize_process_from_code("/main.c", main)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("not today"), "{err}");
+        assert!(on_a.rx.try_recv().is_err(), "nothing reaches the player");
+        assert_eq!(
+            on_a.connection.body().as_ref().map(|p| p.to_string()),
+            Some("/a".to_owned())
+        );
+    }
+
+    #[tokio::test]
     async fn the_master_hears_the_caller_and_both_bodies() {
         let vm = Vm::new(test_config());
         let master = indoc! { r#"
