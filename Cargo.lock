@@ -1328,7 +1328,6 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "arc-swap",
- "arrayvec",
  "async-recursion",
  "async-trait",
  "bit-set 0.11.1",
