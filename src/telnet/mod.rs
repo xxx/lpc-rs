@@ -57,7 +57,9 @@ enum Departure {
 
 /// What an op told the loop to do next.
 enum Flow {
+    /// Keep reading.
     Continue,
+    /// Stop; who ended it.
     Leave(Departure),
 }
 
@@ -107,7 +109,9 @@ impl Telnet {
             }
         });
 
-        let _ = self.handle.set(handle);
+        if self.handle.set(handle).is_err() {
+            warn!("telnet started twice; the second acceptor keeps running");
+        }
         Ok(())
     }
 
@@ -253,6 +257,8 @@ impl Telnet {
                 info!("Closing connection for {}.", connection.address);
                 return Flow::Leave(Departure::Server);
             }
+            // Unreachable while the loop holds its own `Connection` (the
+            // last sender); kept for `recv`'s type.
             None => {
                 info!(
                     "Channel closed for {}. Closing connection.",
@@ -274,13 +280,23 @@ impl Telnet {
     ) {
         let global_state = &template.global_state;
         let body = global_state.detach(connection, None).await;
+        trace!(
+            "{} left ({departure:?}); a body was bound: {}",
+            connection.address,
+            body.is_some()
+        );
         if let Some(body) = body
             && departure == Departure::Client
             && !shutting_down
         {
             Self::net_dead(body, template).await;
         }
-        global_state.registry.remove(connection);
+        if !global_state.registry.remove(connection) {
+            trace!(
+                "{} left after a reconnect took its address",
+                connection.address
+            );
+        }
     }
 
     /// `net_dead()` on the body the client left; it is no longer
@@ -1554,6 +1570,23 @@ mod tests {
             assert!(w.connection.body().is_none());
             assert!(w.vm.global_state.committed_connection(&proc).is_none());
             eventually(|| w.vm.global_state.registry.is_empty()).await;
+        }
+
+        /// Spec D13: a server-initiated close unbinds the body but never
+        /// applies `net_dead` — that apply is for the client leaving, not
+        /// the driver closing it.
+        #[tokio::test]
+        async fn a_server_close_unbinds_without_net_dead() {
+            let w = wire().await;
+            let proc = commanding_body(&w, "int dead;\nvoid net_dead() { dead = 1; }").await;
+            w.connection.send(ConnectionOp::Close).unwrap();
+            eventually(|| w.vm.global_state.registry.is_empty()).await;
+            assert!(w.connection.body().is_none());
+            assert!(w.vm.global_state.committed_connection(&proc).is_none());
+            assert_eq!(
+                w.vm.global_state.committed_global(&proc, 0u16),
+                LpcRef::from(0)
+            );
         }
 
         #[tokio::test]

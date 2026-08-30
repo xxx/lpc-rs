@@ -43,22 +43,23 @@ impl Registry {
     }
 
     /// The live connection at `address`.
-    pub fn get(&self, address: SocketAddr) -> Option<Arc<Connection>> {
+    #[cfg(test)]
+    pub(crate) fn get(&self, address: SocketAddr) -> Option<Arc<Connection>> {
         self.live.get(&address).map(|entry| entry.clone())
     }
 
     /// How many loops are running.
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.live.len()
     }
 
     /// No loop is running.
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.live.is_empty()
     }
 
     /// How many connections finished `logon()`.
-    pub fn logged_in(&self) -> usize {
+    pub(crate) fn logged_in(&self) -> usize {
         self.live
             .iter()
             .filter(|entry| entry.is_logged_in())
@@ -66,7 +67,7 @@ impl Registry {
     }
 
     /// A copy of the live set, for a walk that must not hold the map.
-    pub fn connections(&self) -> Vec<Arc<Connection>> {
+    pub(crate) fn connections(&self) -> Vec<Arc<Connection>> {
         self.live.iter().map(|entry| entry.clone()).collect()
     }
 }
@@ -96,9 +97,10 @@ impl GlobalState {
 
     /// Unbind `connection` from the body its back-reference names — that
     /// body's cell in a transaction, when the cell still holds this
-    /// connection — then [`release`](Self::release). Returns the body it
-    /// unbound; `None` when none held it. Marks the connection dead first,
-    /// so an `Effect::Exec` flushed after this undoes itself.
+    /// connection — then `release`. Returns the body it unbound; `None` when
+    /// none held it, including when the committer failed the attempt. Marks
+    /// the connection dead first, so an `Effect::Exec` flushed after this
+    /// undoes itself.
     pub async fn detach(
         &self,
         connection: &Arc<Connection>,
@@ -120,10 +122,13 @@ impl GlobalState {
                     &mut attempt,
                 )
                 .await;
-                if let Err(e) = res {
-                    error!("detach: committer failed: {e}");
+                match res {
+                    Ok(_) => attempt.held.then_some(body),
+                    Err(e) => {
+                        error!("detach of {}: committer failed: {e}", connection.address);
+                        None
+                    }
                 }
-                attempt.held.then_some(body)
             }
             None => None,
         };
@@ -134,7 +139,7 @@ impl GlobalState {
     /// The physical half of a detach: the back-reference cleared, then
     /// `message` and `Close` queued. The registry entry is the loop's own
     /// to remove as it exits.
-    pub fn release(&self, connection: &Connection, message: Option<String>) {
+    pub(crate) fn release(&self, connection: &Connection, message: Option<String>) {
         connection.set_body(None);
         if let Some(message) = message {
             let _ = connection.send(ConnectionOp::SendMessage(message));
@@ -347,6 +352,28 @@ mod tests {
             on.rx.try_recv(),
             Ok(ConnectionOp::SendMessage("bye\n".into()))
         );
+        assert_eq!(on.rx.try_recv(), Ok(ConnectionOp::Close));
+    }
+
+    /// A closed committer fails the attempt; `detach` must report `None`,
+    /// not a stale `Some`. `release` does not touch the committer, so it
+    /// still runs.
+    #[tokio::test]
+    async fn detach_after_the_committer_closed_unbinds_nothing() {
+        let vm = Vm::new(test_config());
+        let body = vm.create_process_from_code("/body.c", "").await.unwrap();
+        let mut on = connect(&vm, &body).await;
+
+        vm.global_state.close_committer();
+        // A request queued before the committer thread exits is never answered.
+        while !vm.global_state.committer_tx.is_disconnected() {
+            tokio::task::yield_now().await;
+        }
+
+        let unbound = vm.global_state.detach(&on.connection, None).await;
+
+        assert!(unbound.is_none());
+        assert!(on.connection.is_dead());
         assert_eq!(on.rx.try_recv(), Ok(ConnectionOp::Close));
     }
 

@@ -162,7 +162,7 @@ pub(crate) async fn flush_effects(global_state: &GlobalState, effects: Vec<Effec
     }
 }
 
-// `Effect` can't derive `Debug`: `Sender<ConnectionOp>` isn't `Debug`.
+// Manual so the channel and the process payloads stay out of the output.
 impl std::fmt::Debug for Effect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

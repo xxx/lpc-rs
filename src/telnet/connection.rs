@@ -66,8 +66,8 @@ impl Snapshot {
     }
 }
 
-/// A connection from a user. The binding module writes its body, the loop
-/// its `input_to`; nothing else writes it.
+/// A connection from a user. The binding module and the `Exec` flush write
+/// its body, the loop its `input_to`; nothing else writes it.
 #[derive(Debug)]
 pub struct Connection {
     /// The address of the client.
@@ -85,7 +85,8 @@ pub struct Connection {
     /// The loop's mirror of the session, for readers that never see it.
     snapshot: ArcSwap<Snapshot>,
 
-    /// Set by `detach`; a pending `Effect::Exec` flush checks it.
+    /// Set by `detach`; a pending `Effect::Exec` flush checks it. SeqCst: the
+    /// flush's body store and this flag's store must be totally ordered.
     dead: AtomicBool,
 
     /// `logon()` returned non-zero.
@@ -111,7 +112,8 @@ impl Connection {
         self.process.load_full()
     }
 
-    /// Point the loop at `body` — the binding module's write, nobody else's.
+    /// Point the loop at `body` — the binding module's and the `Exec` flush's
+    /// write, nobody else's.
     pub(crate) fn set_body(&self, body: Option<Arc<Process>>) {
         self.process.store(body);
     }
@@ -148,12 +150,12 @@ impl Connection {
 
     /// `detach` has run on this connection.
     pub fn is_dead(&self) -> bool {
-        self.dead.load(Ordering::Acquire)
+        self.dead.load(Ordering::SeqCst)
     }
 
     /// Record that `detach` ran.
     pub(crate) fn mark_dead(&self) {
-        self.dead.store(true, Ordering::Release);
+        self.dead.store(true, Ordering::SeqCst);
     }
 
     /// `logon()` returned non-zero on this connection.

@@ -152,7 +152,10 @@ impl Vm {
             // No command line ran, so nothing else asks for the cycle that
             // marks logon()'s first prompt.
             let _ = connection.send(ConnectionOp::PromptCycle);
-            connection.set_logged_in();
+            // A client that left mid-login is not a player.
+            if !connection.is_dead() {
+                connection.set_logged_in();
+            }
         });
     }
 }
@@ -263,6 +266,30 @@ mod tests {
         assert_eq!(within(rx.recv()).await, Some(ConnectionOp::Close));
         assert!(connection.is_dead());
         assert!(!connection.is_logged_in());
+    }
+
+    #[tokio::test]
+    async fn a_connect_that_errors_is_told_why_and_handled() {
+        let master = indoc! { r#"
+            int handled;
+            mixed connect(string ip, int port) { throw("no entry"); }
+            int logon(string ip, int port) { return 1; }
+            void error_handler(mapping e) { handled = 1; }
+        "# };
+        let (vm, master) = vm_with_master(master).await;
+        let (connection, mut rx) = fresh_connection();
+        vm.initiate_login(connection.clone()).await;
+
+        let first = within(rx.recv()).await.expect("the login task is running");
+        assert!(
+            matches!(&first, ConnectionOp::SendMessage(text) if text.contains("no entry")),
+            "{first:?}"
+        );
+        assert_eq!(within(rx.recv()).await, Some(ConnectionOp::Close));
+        assert!(connection.is_dead());
+        assert!(!connection.is_logged_in());
+
+        eventually(|| vm.global_state.committed_global(&master, 0u16) == LpcRef::from(1)).await;
     }
 
     #[tokio::test]
