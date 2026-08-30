@@ -96,8 +96,7 @@ pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
     Connected { rx, connection }
 }
 
-/// A master whose `valid_exec` allows everything; `exec` refuses without
-/// one.
+/// A master whose `valid_exec` allows everything.
 pub async fn allow_exec(vm: &Vm) -> Arc<Process> {
     vm.global_state
         .initialize_process_from_code(

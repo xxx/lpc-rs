@@ -87,8 +87,7 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
     }
 }
 
-/// Ask the master; `false` without a master or the apply. `this_player` is
-/// whatever it was.
+/// The master's verdict; `false` without a master or the apply.
 async fn valid_exec<const N: usize>(
     context: &EfunContext<'_, N>,
     new: &Arc<Process>,
