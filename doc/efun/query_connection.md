@@ -13,7 +13,7 @@ set. Every key is always present; a value the client has not reported is 0.
 | `"charset"` | the charset negotiated (CHARSET); 0 until one is |
 | `"gmcp"`, `"mxp"`, `"eor"` | 1 while that extension is on |
 | `"idle"` | seconds since the client's last line of input; from connecting, before one |
-| `"overflowed"` | 1 while the client is not taking its output and text to it is being dropped |
+| `"overflowed"` | 1 while the client is not taking its output and text to it is being dropped; only with a `MAX_PENDING_OUTPUT` bound |
 
 Returns 0 when `ob` has no connection. Output to the client is always UTF-8,
 whatever `"charset"` says.

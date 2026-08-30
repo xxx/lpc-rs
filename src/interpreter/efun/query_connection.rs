@@ -132,6 +132,11 @@ mod tests {
             m.get(&LpcString::from("port").into()),
             Some(&LpcRef::from(23123))
         );
+        assert_eq!(
+            m.get(&LpcString::from("overflowed").into()),
+            Some(&LpcRef::from(0)),
+            "a fresh connection has not overflowed"
+        );
     }
 
     #[tokio::test]
