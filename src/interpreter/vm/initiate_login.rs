@@ -162,7 +162,105 @@ impl Vm {
                 }
             }
 
+            // No command line ran, so nothing else asks for the cycle that
+            // marks logon()'s first prompt.
+            let _ = connection.send(ConnectionOp::PromptCycle).await;
+
             let _ = broker_tx.send_async(BrokerOp::Connected(connection)).await;
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{net::ToSocketAddrs, time::Duration};
+
+    use indoc::indoc;
+    use tokio::sync::mpsc;
+
+    use super::*;
+    use crate::{
+        compile_time_config::VM_CHANNEL_CAPACITY,
+        interpreter::vm::global_state::GlobalState,
+        telnet::{Telnet, connection_broker::ConnectionBroker},
+        test_support::test_config,
+    };
+
+    /// A master that is its own login object: `connect()` hands the
+    /// connection back to itself, and `logon()` asks for a name.
+    const MASTER: &str = indoc! { r#"
+        object connect(string ip, int port) { return this_object(); }
+
+        int logon(string ip, int port) {
+            write("Name: ");
+            input_to(get_name);
+            return 1;
+        }
+
+        void get_name(string s) {}
+    "# };
+
+    /// A [`Vm`] whose broker end the test keeps, so what `initiate_login`
+    /// sends there can be read.
+    fn vm_watching_the_broker() -> (Vm, flume::Receiver<BrokerOp>) {
+        let (tx, rx) = mpsc::channel(VM_CHANNEL_CAPACITY);
+        let (broker_tx, broker_rx) = flume::bounded(VM_CHANNEL_CAPACITY);
+        let telnet = Telnet::new(broker_tx.clone());
+        let vm = Vm {
+            global_state: Arc::new(GlobalState::new(test_config(), tx.clone())),
+            connection_broker: ConnectionBroker::new(tx, broker_rx.clone(), telnet),
+            rx,
+            broker_tx,
+        };
+        (vm, broker_rx)
+    }
+
+    async fn within<F: std::future::Future>(f: F) -> F::Output {
+        tokio::time::timeout(Duration::from_secs(5), f)
+            .await
+            .expect("the login finishes within five seconds")
+    }
+
+    #[tokio::test]
+    async fn the_first_prompt_gets_its_cycle() {
+        let (vm, broker_rx) = vm_watching_the_broker();
+        vm.global_state
+            .initialize_process_from_code("/secure/master.c", MASTER)
+            .await
+            .expect("the master compiles");
+        assert!(
+            vm.global_state.object_space.master_object().is_some(),
+            "the master is registered"
+        );
+
+        let (tx, mut rx) = mpsc::channel(16);
+        let (connection_broker_tx, _connection_broker_rx) = flume::unbounded();
+        let address = "127.0.0.1:4000"
+            .to_socket_addrs()
+            .expect("a literal address")
+            .next()
+            .expect("one address");
+        let connection = Arc::new(Connection::new(address, tx, connection_broker_tx));
+        vm.initiate_login(connection).await;
+
+        let mut ops = Vec::new();
+        for _ in 0..4 {
+            ops.push(within(rx.recv()).await.expect("the login task is running"));
+        }
+        assert_eq!(ops[0], ConnectionOp::Attached, "takeover binds the body");
+        // `input_to` reaches the connection as it runs; `write` is an effect,
+        // so its message follows at the commit.
+        assert!(matches!(ops[1], ConnectionOp::InputTo(_)));
+        assert_eq!(ops[2], ConnectionOp::SendMessage("Name: ".into()));
+        assert_eq!(
+            ops[3],
+            ConnectionOp::PromptCycle,
+            "the first prompt asks for its mark"
+        );
+
+        let Ok(BrokerOp::Connected(connected)) = broker_rx.try_recv() else {
+            panic!("a non-zero logon reports the connection");
+        };
+        assert_eq!(connected.address, address);
     }
 }
