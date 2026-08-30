@@ -17,7 +17,7 @@
 use std::sync::Arc;
 
 use lpc_rs_utils::config::Config;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     interpreter::{
@@ -67,7 +67,7 @@ pub(crate) enum Effect {
     /// `Clone`, so this is a copy of what the efun would have sent directly.
     Socket {
         op: ConnectionOp,
-        tx: Sender<ConnectionOp>,
+        tx: UnboundedSender<ConnectionOp>,
     },
 
     /// A deferred object-space insert: the `Process` and its physical key,
@@ -128,7 +128,7 @@ impl Effect {
         match self {
             Self::DebugLog(msg) => config.debug_log(msg).await,
             Self::Socket { op, tx } => {
-                let _ = tx.send(op).await;
+                let _ = tx.send(op);
             }
             Self::InsertObject { key, process } => {
                 object_space.apply_insert(&key, process);
@@ -146,18 +146,18 @@ impl Effect {
                 new_process,
                 connection,
             } => {
-                connection.process.store(Some(new_process.clone()));
-                let _ = connection.send(ConnectionOp::Attached).await;
+                connection.set_body(Some(new_process));
+                let _ = connection.send(ConnectionOp::Attached);
             }
             Self::Disconnect {
                 connection,
                 message,
             } => {
-                connection.process.store(None);
+                connection.set_body(None);
                 if let Some(message) = message {
-                    let _ = connection.tx.send(ConnectionOp::SendMessage(message)).await;
+                    let _ = connection.send(ConnectionOp::SendMessage(message));
                 }
-                let _ = connection.tx.send(ConnectionOp::Close).await;
+                let _ = connection.send(ConnectionOp::Close);
             }
         }
     }
@@ -207,8 +207,8 @@ mod tests {
     /// recorded on, never with the flushed batch's owner.
     #[tokio::test]
     async fn flush_delivers_socket_ops_on_their_recorded_channels() {
-        let (tx_a, mut rx_a) = tokio::sync::mpsc::channel(16);
-        let (tx_b, mut rx_b) = tokio::sync::mpsc::channel(16);
+        let (tx_a, mut rx_a) = tokio::sync::mpsc::unbounded_channel();
+        let (tx_b, mut rx_b) = tokio::sync::mpsc::unbounded_channel();
         let op_a = ConnectionOp::SendMessage("a".to_string());
         let op_b = ConnectionOp::SendMessage("b".to_string());
 
@@ -234,7 +234,7 @@ mod tests {
 
     #[tokio::test]
     async fn exec_points_the_connection_at_the_body_then_announces_it() {
-        let (tx, mut rx) = tokio::sync::mpsc::channel(16);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let (broker_tx, _broker_rx) = flume::unbounded();
         let addr = "127.0.0.1:1".parse().unwrap();
         let connection = Arc::new(Connection::new(addr, tx, broker_tx));
@@ -250,7 +250,7 @@ mod tests {
         .flush(&Config::default(), &object_space, &call_outs)
         .await;
 
-        assert!(Arc::ptr_eq(&connection.process.load_full().unwrap(), &body));
+        assert!(Arc::ptr_eq(&connection.body().unwrap(), &body));
         assert_eq!(rx.recv().await, Some(ConnectionOp::Attached));
     }
 }

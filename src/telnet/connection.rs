@@ -1,9 +1,15 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::SocketAddr,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
-use arc_swap::{ArcSwap, ArcSwapAny, ArcSwapOption};
+use arc_swap::{ArcSwap, ArcSwapOption};
 use flume::Sender as FlumeSender;
 use lpc_rs_telnet::{Opt, Session};
-use tokio::sync::mpsc::{Sender, error::SendError};
+use tokio::sync::mpsc::{UnboundedSender, error::SendError};
 
 use crate::{
     interpreter::{function_type::function_ptr::FunctionPtr, process::Process},
@@ -61,54 +67,117 @@ impl Snapshot {
     }
 }
 
-/// A connection from a user
+/// A connection from a user. The binding module writes its body, the loop
+/// its `input_to`; nothing else writes it.
 #[derive(Debug)]
 pub struct Connection {
     /// The address of the client.
     pub address: SocketAddr,
 
-    /// The process that this connection is attached to.
-    /// This is basically the player's in-game body object.
-    pub process: ArcSwapAny<Option<Arc<Process>>>,
+    /// The body the loop dispatches lines to.
+    process: ArcSwapOption<Process>,
 
-    /// The channel we use to send messages to the socket connection's thread.
-    pub tx: Sender<ConnectionOp>,
+    /// The loop's channel.
+    tx: UnboundedSender<ConnectionOp>,
 
     /// The channel we use to send messages to the [`ConnectionBroker`](crate::telnet::connection_broker::ConnectionBroker).
     pub broker_tx: FlumeSender<BrokerOp>,
 
-    /// The function to call when we receive input.
-    pub input_to: ArcSwapOption<InputTo>,
+    /// The function the next line goes to.
+    input_to: ArcSwapOption<InputTo>,
 
     /// The loop's mirror of the session, for readers that never see it.
     snapshot: ArcSwap<Snapshot>,
+
+    /// Set by `detach`; a pending `Effect::Exec` flush checks it.
+    dead: AtomicBool,
+
+    /// `logon()` returned non-zero.
+    logged_in: AtomicBool,
 }
 
 impl Connection {
     /// Creates a new [`Connection`].
     pub fn new(
         address: SocketAddr,
-        connection_tx: Sender<ConnectionOp>,
+        connection_tx: UnboundedSender<ConnectionOp>,
         broker_tx: FlumeSender<BrokerOp>,
     ) -> Self {
         Self {
             address,
-            process: ArcSwapAny::from(None),
+            process: ArcSwapOption::from(None),
             tx: connection_tx,
             broker_tx,
             input_to: ArcSwapOption::from(None),
             snapshot: ArcSwap::default(),
+            dead: AtomicBool::new(false),
+            logged_in: AtomicBool::new(false),
         }
+    }
+
+    /// The body the loop dispatches to; `None` between bindings.
+    pub fn body(&self) -> Option<Arc<Process>> {
+        self.process.load_full()
+    }
+
+    /// Point the loop at `body` — the binding module's write, nobody else's.
+    pub(crate) fn set_body(&self, body: Option<Arc<Process>>) {
+        self.process.store(body);
+    }
+
+    /// Queue `op` for the connection task; `Err` once that task has exited.
+    pub fn send(&self, op: ConnectionOp) -> Result<(), SendError<ConnectionOp>> {
+        self.tx.send(op)
+    }
+
+    /// A sender for effects recorded against this connection.
+    pub(crate) fn sender(&self) -> UnboundedSender<ConnectionOp> {
+        self.tx.clone()
+    }
+
+    /// An `input_to` is waiting for the next line.
+    pub fn awaits_input(&self) -> bool {
+        self.input_to.load().is_some()
+    }
+
+    /// The waiting `input_to`, without taking it — the GC marker's peek.
+    pub(crate) fn input_to(&self) -> Option<Arc<InputTo>> {
+        self.input_to.load_full()
+    }
+
+    /// Set, or clear, the function the next line goes to.
+    pub(crate) fn set_input_to(&self, input_to: Option<InputTo>) {
+        self.input_to.store(input_to.map(Arc::new));
+    }
+
+    /// Take the waiting `input_to`, leaving none.
+    pub(crate) fn take_input_to(&self) -> Option<Arc<InputTo>> {
+        self.input_to.swap(None)
+    }
+
+    /// `detach` has run on this connection.
+    pub fn is_dead(&self) -> bool {
+        self.dead.load(Ordering::Acquire)
+    }
+
+    /// Record that `detach` ran.
+    pub(crate) fn mark_dead(&self) {
+        self.dead.store(true, Ordering::Release);
+    }
+
+    /// `logon()` returned non-zero on this connection.
+    pub fn is_logged_in(&self) -> bool {
+        self.logged_in.load(Ordering::Acquire)
+    }
+
+    /// Record a successful `logon()`.
+    pub(crate) fn set_logged_in(&self) {
+        self.logged_in.store(true, Ordering::Release);
     }
 
     /// What the session knows about this client right now.
     pub fn snapshot(&self) -> Arc<Snapshot> {
         self.snapshot.load_full()
-    }
-
-    /// Queue `op` for the connection task; `Err` once that task has exited.
-    pub async fn send(&self, op: ConnectionOp) -> Result<(), SendError<ConnectionOp>> {
-        self.tx.send(op).await
     }
 
     /// Mirror `session`; a store only when something changed.
@@ -165,7 +234,7 @@ mod tests {
 
     #[test]
     fn refresh_stores_only_on_change() {
-        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let (broker_tx, _broker_rx) = flume::unbounded();
         let addr = "127.0.0.1:1".parse().unwrap();
         let connection = Connection::new(addr, tx, broker_tx);
@@ -179,5 +248,26 @@ mod tests {
         session.feed(&[IAC, DO, GMCP]);
         connection.refresh(&session);
         assert!(connection.snapshot().gmcp);
+    }
+
+    #[test]
+    fn a_fresh_connection_is_unbound_and_flagless() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let connection = Connection::new(
+            "127.0.0.1:1".parse().unwrap(),
+            tx,
+            flume::unbounded().0,
+        );
+        assert!(connection.body().is_none());
+        assert!(!connection.awaits_input());
+        assert!(!connection.is_dead());
+        assert!(!connection.is_logged_in());
+        connection.set_body(Some(Arc::new(Process::default())));
+        assert!(connection.body().is_some());
+        connection.mark_dead();
+        connection.set_logged_in();
+        assert!(connection.is_dead());
+        assert!(connection.is_logged_in());
+        assert!(connection.take_input_to().is_none());
     }
 }

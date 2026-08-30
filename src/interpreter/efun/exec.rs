@@ -101,22 +101,18 @@ mod tests {
             Ok(ConnectionOp::SendMessage(super::DISPLACED.into()))
         );
         assert_eq!(on_b.rx.try_recv(), Ok(ConnectionOp::Close));
-        assert!(on_b.connection.process.load().is_none());
+        assert!(on_b.connection.body().is_none());
         assert_eq!(on_a.rx.try_recv(), Ok(ConnectionOp::Attached));
         assert!(on_a.rx.try_recv().is_err());
         assert_eq!(
-            on_a.connection
-                .process
-                .load()
-                .as_ref()
-                .map(|p| p.to_string()),
+            on_a.connection.body().as_ref().map(|p| p.to_string()),
             Some("/b".to_owned())
         );
     }
 
     /// Build a [`Connection`] whose own channels are dropped after the test.
     fn make_connection() -> Arc<Connection> {
-        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let (broker_tx, _broker_rx) = flume::unbounded();
         Arc::new(Connection::new(
             "127.0.0.1:23123".to_socket_addrs().unwrap().next().unwrap(),

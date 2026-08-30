@@ -109,7 +109,7 @@ pub(crate) async fn deliver(
         Some(connection) => (
             Effect::Socket {
                 op: ConnectionOp::SendMessage(message.to_owned()),
-                tx: connection.tx.clone(),
+                tx: connection.sender(),
             },
             true,
         ),

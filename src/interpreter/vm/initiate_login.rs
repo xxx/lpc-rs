@@ -44,10 +44,7 @@ impl Vm {
             // Abort the login; no object to blame means the master object
             // itself is bad, so `runtime_error` is not applied.
             let fail = async |error: LpcError, object: Option<Arc<Process>>| {
-                let _ = connection
-                    .tx
-                    .send(ConnectionOp::SendMessage(error.to_string()))
-                    .await;
+                let _ = connection.send(ConnectionOp::SendMessage(error.to_string()));
                 let _ = broker_tx
                     .send_async(BrokerOp::Disconnect(connection.address))
                     .await;
@@ -91,7 +88,7 @@ impl Vm {
                         let message = r
                             .with_string(|s| s.to_string())
                             .unwrap_or_else(|_| "No message received?".to_string());
-                        let _ = connection.tx.send(ConnectionOp::SendMessage(message)).await;
+                        let _ = connection.send(ConnectionOp::SendMessage(message));
                         let _ = broker_tx
                             .send_async(BrokerOp::Disconnect(connection.address))
                             .await;
@@ -164,7 +161,7 @@ impl Vm {
 
             // No command line ran, so nothing else asks for the cycle that
             // marks logon()'s first prompt.
-            let _ = connection.send(ConnectionOp::PromptCycle).await;
+            let _ = connection.send(ConnectionOp::PromptCycle);
 
             let _ = broker_tx.send_async(BrokerOp::Connected(connection)).await;
         });
@@ -232,7 +229,7 @@ mod tests {
             "the master is registered"
         );
 
-        let (tx, mut rx) = mpsc::channel(16);
+        let (tx, mut rx) = mpsc::unbounded_channel();
         let (connection_broker_tx, _connection_broker_rx) = flume::unbounded();
         let address = "127.0.0.1:4000"
             .to_socket_addrs()

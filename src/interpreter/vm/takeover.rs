@@ -118,7 +118,7 @@ mod tests {
 
     /// A `Connection` whose own channels are dropped after the test.
     fn make_connection() -> Arc<Connection> {
-        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let (broker_tx, _broker_rx) = flume::unbounded();
         Arc::new(Connection::new(
             "127.0.0.1:23123".to_socket_addrs().unwrap().next().unwrap(),
@@ -164,8 +164,7 @@ mod tests {
         assert_eq!(stats.conflicts, 1);
         assert!(
             connection
-                .process
-                .load()
+                .body()
                 .as_ref()
                 .is_some_and(|bound| Arc::ptr_eq(bound, &process)),
             "the back-reference is flushed after the commit"

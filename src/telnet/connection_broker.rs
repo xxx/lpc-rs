@@ -108,19 +108,14 @@ impl ConnectionBroker {
                             }
                         }
                         BrokerOp::SendMessage(msg, address) => {
-                            let tx = {
-                                let Some(connection) = connections.get(&address) else {
-                                    error!("Failed to find connection for {}", address);
-                                    continue;
-                                };
-
-                                connection.tx.clone()
+                            let Some(connection) = connections.get(&address) else {
+                                error!("Failed to find connection for {}", address);
+                                continue;
                             };
-
-                            let Ok(_) = tx.send(ConnectionOp::SendMessage(msg)).await else {
+                            if connection.send(ConnectionOp::SendMessage(msg)).is_err() {
                                 error!("Failed to send ConnectionOp::SendMessage");
                                 return;
-                            };
+                            }
                         }
                         BrokerOp::Shutdown => {
                             info!("Shutting down broker main loop");
@@ -196,7 +191,7 @@ mod tests {
     async fn test_connection_broker() {
         let (broker_tx, broker_rx) = flume::bounded(10);
         let (vm_tx, mut vm_rx) = tokio::sync::mpsc::channel(10);
-        let (connection_tx, mut connection_rx) = tokio::sync::mpsc::channel(10);
+        let (connection_tx, mut connection_rx) = tokio::sync::mpsc::unbounded_channel();
         let telnet = Telnet::new(broker_tx.clone());
         let config = Arc::new(test_config());
         let _object_space = Arc::new(ObjectSpace::new(config.clone()));

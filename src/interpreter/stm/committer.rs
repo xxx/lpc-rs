@@ -414,7 +414,7 @@ impl Committer {
                 // The connection's `input_to` target is a strong ref: it keeps
                 // its function alive for the next input line.
                 if let Some(connection) = maybe_connection
-                    && let Some(input_to) = connection.input_to.load_full()
+                    && let Some(input_to) = connection.input_to()
                 {
                     vec![MarkWork::Ref(LpcRef::Function(input_to.ptr.clone()))]
                 } else {

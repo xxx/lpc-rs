@@ -139,7 +139,7 @@ impl Telnet {
     {
         let mut session = Session::new();
         let mut out = BytesMut::with_capacity(4096);
-        let (connection_tx, mut connection_rx) = mpsc::channel::<ConnectionOp>(128);
+        let (connection_tx, mut connection_rx) = mpsc::unbounded_channel::<ConnectionOp>();
         let connection = Arc::new(Connection::new(remote_ip, connection_tx, broker_tx.clone()));
 
         if broker_tx
@@ -179,7 +179,7 @@ impl Telnet {
                             if input_to.no_echo {
                                 session.send(Op::EchoOff);
                             }
-                            connection.input_to.store(Some(Arc::new(input_to)));
+                            connection.set_input_to(Some(input_to));
                         }
                         Some(ConnectionOp::Gmcp { package, payload }) => session.send(Op::Gmcp {
                             package: &package,
@@ -262,19 +262,19 @@ impl Telnet {
                 if shutting_down {
                     return;
                 }
-                if let Some(input_to) = connection.input_to.swap(None) {
+                if let Some(input_to) = connection.take_input_to() {
                     Self::resolve_input_to(&input_to, &line, session, connection, template).await;
                     Self::request_prompt(connection);
                     return;
                 }
-                let Some(proc) = connection.process.load_full() else {
+                let Some(proc) = connection.body() else {
                     warn!("No process for connection. Ignoring input.");
                     return;
                 };
                 let template = template.clone();
                 template.set_this_player(Some(proc.clone()));
                 if let Err(e) = run_command_line(&template, proc, line).await {
-                    apply_runtime_error(&e, connection.process.load_full(), template.clone()).await;
+                    apply_runtime_error(&e, connection.body(), template.clone()).await;
                 }
                 Self::request_prompt(connection);
             }
@@ -434,7 +434,7 @@ impl Telnet {
         connection: &Connection,
         template: &TaskTemplate,
     ) {
-        let Some(body) = connection.process.load_full() else {
+        let Some(body) = connection.body() else {
             trace!("{} has no body for {name}", connection.address);
             return;
         };
@@ -457,24 +457,20 @@ impl Telnet {
         Self::apply_on_body(WINDOW_SIZE, &args, connection, template).await;
     }
 
-    /// Queue the prompt cycle behind everything the command just sent; the
-    /// loop is this channel's only consumer, so a full channel drops the
-    /// prompt rather than waiting on itself.
+    /// Queue the prompt cycle behind everything the command just sent.
     fn request_prompt(connection: &Connection) {
-        if let Err(e) = connection.tx.try_send(ConnectionOp::PromptCycle) {
-            warn!("{}: prompt cycle dropped: {e}", connection.address);
-        }
+        let _ = connection.send(ConnectionOp::PromptCycle);
     }
 
     /// The mark alone behind a pending `input_to`; else the body's
     /// `write_prompt`, whose text is queued so its own output goes first;
     /// a body without the apply gets nothing.
     async fn prompt_cycle(session: &mut Session, connection: &Connection, template: &TaskTemplate) {
-        if connection.input_to.load().is_some() {
+        if connection.awaits_input() {
             session.send(Op::Prompt(""));
             return;
         }
-        let Some(body) = connection.process.load_full() else {
+        let Some(body) = connection.body() else {
             return;
         };
         if !body.program.unmangled_functions.contains_key(WRITE_PROMPT) {
@@ -499,9 +495,7 @@ impl Telnet {
                 String::new()
             }
         };
-        if let Err(e) = connection.tx.try_send(ConnectionOp::Prompt(text)) {
-            warn!("{}: prompt dropped: {e}", connection.address);
-        }
+        let _ = connection.send(ConnectionOp::Prompt(text));
     }
 
     async fn resolve_input_to(
@@ -521,7 +515,7 @@ impl Telnet {
             .prepare_function_ptr(
                 &input_to.ptr,
                 std::slice::from_ref(&input),
-                connection.process.load_full(),
+                connection.body(),
             )
             .await;
         let PreparedCall {
@@ -618,7 +612,7 @@ mod tests {
             .unwrap();
 
         let (broker_tx, _broker_rx) = flume::unbounded();
-        let (connection_tx, _connection_rx) = mpsc::channel(1);
+        let (connection_tx, _connection_rx) = mpsc::unbounded_channel();
 
         let mut session = Session::new();
 
@@ -657,7 +651,7 @@ mod tests {
                 .unwrap();
 
             let (broker_tx, _broker_rx) = flume::unbounded();
-            let (connection_tx, _connection_rx) = mpsc::channel(1);
+            let (connection_tx, _connection_rx) = mpsc::unbounded_channel();
 
             let mut session = Session::new();
 
@@ -734,7 +728,7 @@ mod tests {
                 panic!("global 1 holds the pointer");
             };
             let (broker_tx, _broker_rx) = flume::unbounded();
-            let (connection_tx, _connection_rx) = mpsc::channel(1);
+            let (connection_tx, _connection_rx) = mpsc::unbounded_channel();
             let mut session = Session::new();
             let addr = "127.0.0.1:12343".to_socket_addrs().unwrap().next().unwrap();
             let connection = Connection::new(addr, connection_tx, broker_tx.clone());
@@ -914,11 +908,7 @@ mod tests {
         #[tokio::test]
         async fn a_send_message_reaches_the_client() {
             let mut w = wire().await;
-            w.connection
-                .tx
-                .send(ConnectionOp::SendMessage("hi\n".into()))
-                .await
-                .unwrap();
+            w.connection.send(ConnectionOp::SendMessage("hi\n".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 4).await, b"hi\r\n");
         }
 
@@ -943,16 +933,12 @@ mod tests {
                 .address(FunctionAddress::Local(Arc::downgrade(&proc), func))
                 .build()
                 .unwrap();
-            w.connection.process.store(Some(proc.clone()));
+            w.connection.set_body(Some(proc.clone()));
 
-            w.connection
-                .tx
-                .send(ConnectionOp::InputTo(InputTo {
+            w.connection.send(ConnectionOp::InputTo(InputTo {
                     ptr: Arc::new(ptr),
                     no_echo: true,
-                }))
-                .await
-                .unwrap();
+                })).unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, [IAC, WILL, ECHO]);
             // A real client acks WILL ECHO with DO ECHO; without it EchoOn
             // queues its WONT and sends nothing.
@@ -963,11 +949,7 @@ mod tests {
 
             // The loop handles one op at a time, so this message arrives only
             // after the pointer has fired and committed.
-            w.connection
-                .tx
-                .send(ConnectionOp::SendMessage("done\n".into()))
-                .await
-                .unwrap();
+            w.connection.send(ConnectionOp::SendMessage("done\n".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 6).await, b"done\r\n");
             assert_eq!(
                 w.vm.global_state.committed_global(&proc, 0u16),
@@ -978,12 +960,8 @@ mod tests {
         #[tokio::test]
         async fn close_sends_what_was_queued_first() {
             let mut w = wire().await;
-            w.connection
-                .tx
-                .send(ConnectionOp::SendMessage("bye\n".into()))
-                .await
-                .unwrap();
-            w.connection.tx.send(ConnectionOp::Close).await.unwrap();
+            w.connection.send(ConnectionOp::SendMessage("bye\n".into())).unwrap();
+            w.connection.send(ConnectionOp::Close).unwrap();
             assert_eq!(read_n(&mut w.client, 5).await, b"bye\r\n");
             let mut rest = [0u8; 8];
             assert_eq!(
@@ -1012,13 +990,10 @@ mod tests {
             let mut w = wire().await;
             w.client.write_all(&[IAC, DO, GMCP]).await.unwrap();
             eventually(|| w.connection.snapshot().gmcp).await;
-            w.connection
-                .send(ConnectionOp::Gmcp {
+            w.connection.send(ConnectionOp::Gmcp {
                     package: "Char.Vitals".into(),
                     payload: "{}".into(),
-                })
-                .await
-                .unwrap();
+                }).unwrap();
             let mut expected = vec![IAC, SB, GMCP];
             expected.extend(b"Char.Vitals {}");
             expected.extend([IAC, SE]);
@@ -1028,17 +1003,11 @@ mod tests {
         #[tokio::test]
         async fn a_gmcp_op_is_dropped_while_gmcp_is_off() {
             let mut w = wire().await;
-            w.connection
-                .send(ConnectionOp::Gmcp {
+            w.connection.send(ConnectionOp::Gmcp {
                     package: "Char.Vitals".into(),
                     payload: "{}".into(),
-                })
-                .await
-                .unwrap();
-            w.connection
-                .send(ConnectionOp::SendMessage("z\n".into()))
-                .await
-                .unwrap();
+                }).unwrap();
+            w.connection.send(ConnectionOp::SendMessage("z\n".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
         }
 
@@ -1047,43 +1016,28 @@ mod tests {
             let mut w = wire().await;
             w.client.write_all(&[IAC, DO, MXP]).await.unwrap();
             assert_eq!(read_n(&mut w.client, 5).await, [IAC, SB, MXP, IAC, SE]);
-            w.connection
-                .send(ConnectionOp::SendMessage("<b>\n".into()))
-                .await
-                .unwrap();
+            w.connection.send(ConnectionOp::SendMessage("<b>\n".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 11).await, b"&lt;b&gt;\r\n");
-            w.connection
-                .send(ConnectionOp::Mxp("<b>x</b>".into()))
-                .await
-                .unwrap();
+            w.connection.send(ConnectionOp::Mxp("<b>x</b>".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 8).await, b"<b>x</b>");
         }
 
         #[tokio::test]
         async fn a_prompt_ends_with_the_negotiated_mark() {
             let mut w = wire().await;
-            w.connection
-                .send(ConnectionOp::Prompt("> ".into()))
-                .await
-                .unwrap();
+            w.connection.send(ConnectionOp::Prompt("> ".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 4).await, [b'>', b' ', IAC, GA]);
             w.client.write_all(&[IAC, DO, EOR]).await.unwrap();
             eventually(|| w.connection.snapshot().eor).await;
-            w.connection
-                .send(ConnectionOp::Prompt("> ".into()))
-                .await
-                .unwrap();
+            w.connection.send(ConnectionOp::Prompt("> ".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 4).await, [b'>', b' ', IAC, EOR_CMD]);
         }
 
         #[tokio::test]
         async fn attached_is_quiet_on_the_wire() {
             let mut w = wire().await;
-            w.connection.send(ConnectionOp::Attached).await.unwrap();
-            w.connection
-                .send(ConnectionOp::SendMessage("z\n".into()))
-                .await
-                .unwrap();
+            w.connection.send(ConnectionOp::Attached).unwrap();
+            w.connection.send(ConnectionOp::SendMessage("z\n".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
         }
 
@@ -1095,7 +1049,7 @@ mod tests {
                     .unwrap()
                     .context
                     .process;
-            w.connection.process.store(Some(proc.clone()));
+            w.connection.set_body(Some(proc.clone()));
             proc
         }
 
@@ -1159,7 +1113,7 @@ mod tests {
                 "int calls; int c;\nvoid window_size(int cols, int rows) { calls += 1; c = cols; }",
             )
             .await;
-            w.connection.send(ConnectionOp::Attached).await.unwrap();
+            w.connection.send(ConnectionOp::Attached).unwrap();
             eventually(|| w.vm.global_state.committed_global(&proc, 0u16) == LpcRef::from(1)).await;
             assert_eq!(
                 w.vm.global_state.committed_global(&proc, 1u16),
@@ -1175,11 +1129,8 @@ mod tests {
                 "int calls;\nvoid window_size(int cols, int rows) { calls += 1; }",
             )
             .await;
-            w.connection.send(ConnectionOp::Attached).await.unwrap();
-            w.connection
-                .send(ConnectionOp::SendMessage("z\n".into()))
-                .await
-                .unwrap();
+            w.connection.send(ConnectionOp::Attached).unwrap();
+            w.connection.send(ConnectionOp::SendMessage("z\n".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
             assert_eq!(
                 w.vm.global_state.committed_global(&proc, 0u16),
@@ -1200,18 +1151,15 @@ mod tests {
                 .address(FunctionAddress::Local(Arc::downgrade(&proc), func))
                 .build()
                 .unwrap();
-            w.connection
-                .send(ConnectionOp::InputTo(InputTo {
+            w.connection.send(ConnectionOp::InputTo(InputTo {
                     ptr: Arc::new(ptr),
                     no_echo: false,
-                }))
-                .await
-                .unwrap();
+                })).unwrap();
             w.client.write_all(&[IAC, DO, GMCP]).await.unwrap();
             w.client.write_all(&gmcp_frame("Core.Ping")).await.unwrap();
             eventually(|| w.vm.global_state.committed_global(&proc, 0u16) != LpcRef::from(0)).await;
             assert!(
-                w.connection.input_to.load().is_some(),
+                w.connection.awaits_input(),
                 "the input_to still waits"
             );
         }
@@ -1224,11 +1172,8 @@ mod tests {
                 "int calls;\nvoid gmcp(string p, string j) { calls += 1; }\nvoid window_size(int c, int r) { calls += 1; }",
             )
             .await;
-            w.connection.send(ConnectionOp::Shutdown).await.unwrap();
-            w.connection
-                .send(ConnectionOp::SendMessage("z\n".into()))
-                .await
-                .unwrap();
+            w.connection.send(ConnectionOp::Shutdown).unwrap();
+            w.connection.send(ConnectionOp::SendMessage("z\n".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
             w.client.write_all(&[IAC, DO, GMCP]).await.unwrap();
             w.client.write_all(&gmcp_frame("Core.Ping")).await.unwrap();
@@ -1236,10 +1181,7 @@ mod tests {
             eventually(|| w.connection.snapshot().cols == 100).await;
             // The snapshot refreshes before the events drain, so only the
             // sentinel's round trip proves they finished.
-            w.connection
-                .send(ConnectionOp::SendMessage("z\n".into()))
-                .await
-                .unwrap();
+            w.connection.send(ConnectionOp::SendMessage("z\n".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
             assert_eq!(
                 w.vm.global_state.committed_global(&proc, 0u16),
@@ -1255,10 +1197,7 @@ mod tests {
             w.client.write_all(&gmcp_frame("Core.Ping")).await.unwrap();
             w.client.write_all(&NAWS_100_40).await.unwrap();
             eventually(|| w.connection.snapshot().cols == 100).await;
-            w.connection
-                .send(ConnectionOp::SendMessage("z\n".into()))
-                .await
-                .unwrap();
+            w.connection.send(ConnectionOp::SendMessage("z\n".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
         }
 
@@ -1384,11 +1323,8 @@ mod tests {
             w.vm.initialize_process_from_code("/secure/master.c", master)
                 .await
                 .unwrap();
-            w.connection.send(ConnectionOp::Shutdown).await.unwrap();
-            w.connection
-                .send(ConnectionOp::SendMessage("z\n".into()))
-                .await
-                .unwrap();
+            w.connection.send(ConnectionOp::Shutdown).unwrap();
+            w.connection.send(ConnectionOp::SendMessage("z\n".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
             w.client.write_all(&[IAC, DO, MSSP]).await.unwrap();
             let vars = read_mssp(&mut w.client).await;
@@ -1510,10 +1446,7 @@ mod tests {
             commanding_body(&w, "").await;
             w.client.write_all(b"look\r\n").await.unwrap();
             assert_eq!(read_n(&mut w.client, 6).await, b"seen\r\n");
-            w.connection
-                .send(ConnectionOp::SendMessage("z\n".into()))
-                .await
-                .unwrap();
+            w.connection.send(ConnectionOp::SendMessage("z\n".into())).unwrap();
             assert_eq!(read_n(&mut w.client, 3).await, b"z\r\n");
         }
     }

@@ -35,7 +35,7 @@ pub async fn input_to<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
             .txn()
             .with(|t| t.read_connection(process.connection.id))
     {
-        let _ = connection.tx.send(ConnectionOp::InputTo(input_to)).await;
+        let _ = connection.send(ConnectionOp::InputTo(input_to));
         context.return_efun_result(LpcRef::from(1));
         return Ok(());
     } else {

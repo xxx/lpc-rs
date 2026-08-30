@@ -5,7 +5,7 @@ use std::{net::ToSocketAddrs, sync::Arc};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::{Receiver, UnboundedReceiver};
 
 use async_trait::async_trait;
 
@@ -72,7 +72,7 @@ macro_rules! test_config_builder {
 /// arrives on `rx` after each commit.
 pub struct Connected {
     /// The connection's outgoing operations.
-    pub rx: Receiver<ConnectionOp>,
+    pub rx: UnboundedReceiver<ConnectionOp>,
     /// What the connection asks of the broker.
     pub broker_rx: flume::Receiver<BrokerOp>,
     /// The connection itself.
@@ -81,7 +81,7 @@ pub struct Connected {
 
 /// Bind a fresh connection to `process` through the takeover path.
 pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
-    let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let (broker_tx, broker_rx) = flume::unbounded();
     let connection = Arc::new(Connection::new(
         "127.0.0.1:23123"
@@ -92,7 +92,7 @@ pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
         tx,
         broker_tx,
     ));
-    connection.process.store(Some(process.clone()));
+    connection.set_body(Some(process.clone()));
     vm.global_state
         .takeover(connection.clone(), process.clone())
         .await;

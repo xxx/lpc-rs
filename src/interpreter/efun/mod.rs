@@ -581,7 +581,7 @@ fn send_to_connection<const N: usize>(context: &EfunContext<'_, N>, op: Connecti
     match connection {
         Some(connection) => context.record_effect(Effect::Socket {
             op,
-            tx: connection.tx.clone(),
+            tx: connection.sender(),
         }),
         None => trace!("{op:?} to an object without a connection"),
     }

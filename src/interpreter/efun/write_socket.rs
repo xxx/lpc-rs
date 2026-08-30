@@ -29,7 +29,7 @@ pub async fn write_socket<const N: usize>(context: &mut EfunContext<'_, N>) -> R
             // after commit without needing the connection again.
             context.record_effect(Effect::Socket {
                 op: ConnectionOp::SendMessage(result),
-                tx: connection.tx.clone(),
+                tx: connection.sender(),
             });
             context.return_efun_result(LpcRef::from(1));
         }
