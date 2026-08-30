@@ -468,6 +468,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 if self.stack.is_empty() {
                     return Ok(true);
                 }
+                // A return into a frame mid-way through a collection `->`.
+                if self.stack.current_frame()?.pending.is_some() {
+                    self.advance_collection_call().await?;
+                }
             }
             Instruction::Sizeof(r1, r2) => {
                 let lpc_ref = &*get_location(&self.stack, &self.context.txn, r1)?;

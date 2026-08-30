@@ -381,6 +381,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         )?;
         let frame = self.stack.current_frame_mut()?;
 
+        // An element's callee threw: the collection call dies here, or the
+        // next unrelated return into this frame would resume it.
+        frame.pending = None;
+
         // jump to the corresponding catchend instruction
         frame.set_pc(new_pc);
 

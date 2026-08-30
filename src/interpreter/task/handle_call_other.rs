@@ -1,21 +1,19 @@
 use std::{path::PathBuf, sync::Arc};
 
-use async_recursion::async_recursion;
 use itertools::Itertools;
-use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
-use lpc_rs_errors::{Result, lpc_bug};
+use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, register::RegisterVariant};
+use lpc_rs_errors::Result;
 use tracing::{instrument, trace};
 
-use crate::{
-    compile_time_config::MAX_CALL_STACK_SIZE,
-    interpreter::{
-        lpc_array::LpcArray,
-        lpc_mapping::LpcMapping,
-        lpc_ref::{LpcRef, NULL},
-        process::Process,
-        task::{Arg, Task, get_location},
-        task_context::{ObjectLookup, TaskContext},
-    },
+use crate::interpreter::{
+    call_frame::{CallFrame, CollectionCall},
+    lpc_array::LpcArray,
+    lpc_mapping::LpcMapping,
+    lpc_ref::{LpcRef, NULL},
+    process::Process,
+    stm::VarId,
+    task::{Arg, Task, get_location},
+    task_context::{ObjectLookup, TaskContext},
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
@@ -65,33 +63,34 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Ok(());
                 }
             }
-            LpcRef::Array(_) => {
+            LpcRef::Array(_) | LpcRef::Mapping(_) => {
                 let args = self.arg_values()?;
-                let mut refs = receiver_ref
-                    .with_array(&self.context.txn, |a| a.iter().cloned().collect_vec())?;
-                for lpc_ref in &mut refs {
-                    let result =
-                        Self::resolve_result(lpc_ref, &function_name, &args, &self.context).await?;
-                    *lpc_ref = result;
-                }
-                LpcRef::Array(self.context.txn.with(|t| t.mint_array(LpcArray::new(refs))))
-            }
-            LpcRef::Mapping(_) => {
-                let args = self.arg_values()?;
-                let mut map = receiver_ref.with_mapping(&self.context.txn, |m| {
-                    m.iter().map(|(k, v)| (k.clone(), v.clone())).collect_vec()
-                })?;
-                for (_key_ref, value_ref) in map.iter_mut() {
-                    let result =
-                        Self::resolve_result(value_ref, &function_name, &args, &self.context)
-                            .await?;
-                    *value_ref = result;
-                }
-                LpcRef::Mapping(
-                    self.context
-                        .txn
-                        .with(|t| t.mint_mapping(LpcMapping::new(map.into_iter().collect()))),
-                )
+                let (remaining, keys) = match &receiver_ref {
+                    LpcRef::Array(_) => {
+                        let mut receivers = receiver_ref
+                            .with_array(&self.context.txn, |a| a.iter().cloned().collect_vec())?;
+                        receivers.reverse();
+                        (receivers, None)
+                    }
+                    _ => {
+                        let pairs = receiver_ref.with_mapping(&self.context.txn, |m| {
+                            m.iter().map(|(k, v)| (k.clone(), v.clone())).collect_vec()
+                        })?;
+                        let (keys, mut receivers): (Vec<_>, Vec<_>) = pairs.into_iter().unzip();
+                        receivers.reverse();
+                        (receivers, Some(keys))
+                    }
+                };
+                let results = Vec::with_capacity(remaining.len());
+                self.stack.current_frame_mut()?.pending = Some(Box::new(CollectionCall {
+                    name: function_name,
+                    args,
+                    remaining,
+                    keys,
+                    results,
+                    owed: false,
+                }));
+                return self.advance_collection_call().await;
             }
             _ => {
                 return Err(self
@@ -116,54 +115,101 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .collect()
     }
 
-    #[async_recursion]
-    async fn resolve_result<T>(
-        receiver_ref: &LpcRef,
-        function_name: T,
-        args: &[LpcRef],
-        task_context: &TaskContext,
-    ) -> Result<LpcRef>
-    where
-        T: AsRef<str> + Send + Sync,
-    {
-        let resolved = Task::<MAX_CALL_STACK_SIZE>::resolve_call_other_receiver(
-            receiver_ref,
-            function_name.as_ref(),
-            task_context,
-        )
-        .await?;
-
-        if let Some(receiver) = resolved {
-            let new_context = task_context.nested(receiver.clone())?;
-            let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(new_context);
-
-            // unwrap() is ok because resolve_call_other_receiver() checks
-            // for the function's presence.
-            let function = receiver
-                .program
-                .lookup_function(function_name.as_ref())
-                .unwrap()
-                .clone();
-
-            let result = if function.public() {
-                let max_execution_time = task_context.config().max_execution_time;
-                task.timed_eval(function, args, max_execution_time).await?;
-
-                let Some(r) = task.context.into_result() else {
-                    return Err(lpc_bug!(
-                        "resolve_result finished the task, but it has no result? wtf."
-                    ));
-                };
-
-                r
-            } else {
-                NULL
+    /// Drive the current frame's collection `->`: bank the owed `r0`, push
+    /// the next receiver that has the function, or mint the results into
+    /// `r0` and clear the call.
+    pub(crate) async fn advance_collection_call(&mut self) -> Result<()> {
+        loop {
+            let step = {
+                let frame = self.stack.current_frame_mut()?;
+                let r0 = frame.registers[0].clone();
+                let call = frame
+                    .pending
+                    .as_mut()
+                    .expect("advance_collection_call runs on a frame with a pending call");
+                if call.owed {
+                    call.results.push(r0);
+                    call.owed = false;
+                }
+                let name = call.name.clone();
+                match call.remaining.pop() {
+                    Some(receiver) => Step::Call(receiver, name),
+                    None => Step::Done(*frame.pending.take().expect("checked just above")),
+                }
             };
-
-            Ok(result)
-        } else {
-            Ok(NULL)
+            match step {
+                Step::Done(call) => {
+                    let value = match call.keys {
+                        None => LpcRef::Array(
+                            self.context
+                                .txn
+                                .with(|t| t.mint_array(LpcArray::new(call.results))),
+                        ),
+                        Some(keys) => LpcRef::Mapping(self.context.txn.with(|t| {
+                            t.mint_mapping(LpcMapping::new(
+                                keys.into_iter().zip(call.results).collect(),
+                            ))
+                        })),
+                    };
+                    self.stack.current_frame_mut()?.registers[0] = value;
+                    return Ok(());
+                }
+                Step::Call(receiver, name) => {
+                    let Some(frame) = self.collection_element_frame(&receiver, &name).await? else {
+                        self.pending_call_mut()?.results.push(NULL);
+                        continue;
+                    };
+                    self.pending_call_mut()?.owed = true;
+                    self.stack.push(frame)?;
+                    return Ok(());
+                }
+            }
         }
+    }
+
+    /// The current frame's collection call.
+    fn pending_call_mut(&mut self) -> Result<&mut CollectionCall> {
+        Ok(self
+            .stack
+            .current_frame_mut()?
+            .pending
+            .as_mut()
+            .expect("a collection call is in flight"))
+    }
+
+    /// The frame for one receiver of a collection call, built from the
+    /// captured values; `None` when it has no live object or no public
+    /// function (its slot is 0).
+    async fn collection_element_frame(
+        &mut self,
+        receiver: &LpcRef,
+        name: &str,
+    ) -> Result<Option<CallFrame>> {
+        let Some(process) =
+            Self::resolve_call_other_receiver(receiver, name, &self.context).await?
+        else {
+            return Ok(None);
+        };
+        let function = process
+            .program
+            .lookup_function(name)
+            .expect("resolve_call_other_receiver checked the function is present")
+            .clone();
+        if !function.public() {
+            return Ok(None);
+        }
+        debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
+        let args = self.pending_call_mut()?.args.clone();
+        let mut frame = CallFrame::new(
+            process,
+            function,
+            RegisterSize::try_from(args.len())?,
+            None::<&[VarId]>,
+        );
+        for (i, arg) in args.into_iter().enumerate() {
+            frame.push_arg(&self.context.txn, i, arg)?;
+        }
+        Ok(Some(frame))
     }
 
     #[instrument(level = "debug", skip_all)]
@@ -218,6 +264,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 }
 
+/// What `advance_collection_call` does next.
+enum Step {
+    /// Call `receiver`'s function of this name.
+    Call(LpcRef, String),
+    /// Every receiver is called; mint the results.
+    Done(CollectionCall),
+}
+
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
@@ -231,6 +285,7 @@ mod tests {
         string who() { return file_name(this_object()); }
         private int hidden() { return 7; }
         int two() { return 2; }
+        int boom() { throw("second"); }
         void take(int ref x) { x = 1; }
     "# };
 
@@ -443,5 +498,184 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("by reference"), "{err}");
+    }
+
+    /// A collection `->` used to build a `Task` per element; 1000 deep on
+    /// the one stack.
+    #[tokio::test]
+    async fn collection_recursion_runs_on_the_one_stack() {
+        let vm = Vm::new(test_config());
+        let code = indoc! { r#"
+            int depth;
+            int f(int n) {
+                if (n < 1000) {
+                    int *r = ({ this_object() })->f(n + 1);
+                    return r[0];
+                }
+                return n;
+            }
+            void create() { depth = f(0); }
+        "# };
+        let process = vm
+            .initialize_process_from_code("/deep.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&process, 0u16),
+            LpcRef::from(1000)
+        );
+    }
+
+    #[tokio::test]
+    async fn collection_recursion_past_the_stack_is_an_lpc_error() {
+        let vm = Vm::new(test_config());
+        let code = indoc! { r#"
+            int f(int n) {
+                if (n < 2000) {
+                    int *r = ({ this_object() })->f(n + 1);
+                    return r[0];
+                }
+                return n;
+            }
+            void create() { f(0); }
+        "# };
+        let err = vm
+            .initialize_process_from_code("/deeper.c", code)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("stack overflow"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn a_mapping_receiver_keeps_its_keys() {
+        let vm = vm_with_other().await;
+        let code = indoc! { r#"
+            int total;
+            int size;
+            void create() {
+                mapping m = ([ "a": "/other", "b": "/other" ])->two();
+                size = sizeof(m);
+                total = m["a"] * 10 + m["b"];
+            }
+        "# };
+        let process = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&process, 0u16),
+            LpcRef::from(22)
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&process, 1u16),
+            LpcRef::from(2)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_missing_function_is_zero_in_its_slot() {
+        let vm = vm_with_other().await;
+        let code = indoc! { r#"
+            int total;
+            void create() {
+                int *r = ({ "/other", this_object(), "/other" })->two();
+                total = r[0] * 100 + r[1] * 10 + r[2];
+            }
+        "# };
+        let process = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&process, 0u16),
+            LpcRef::from(202)
+        );
+    }
+
+    /// The catch frame survives with the collection call in flight; a later
+    /// `->` in the same frame must not resume it.
+    #[tokio::test]
+    async fn a_caught_element_error_leaves_no_dead_call() {
+        let vm = vm_with_other().await;
+        let code = indoc! { r#"
+            string caught;
+            int later;
+            void create() {
+                caught = catch(({ "/other", "/other" })->boom());
+                later = "/other"->two();
+            }
+        "# };
+        let process = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let caught = vm.global_state.committed_global(&process, 0u16);
+        let text = caught.with_string(|s| s.to_string()).unwrap_or_default();
+        assert!(text.contains("second"), "{text:?}");
+        assert_eq!(
+            vm.global_state.committed_global(&process, 1u16),
+            LpcRef::from(2),
+            "the plain -> after the catch returns its own value"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_empty_array_yields_an_empty_array() {
+        let vm = vm_with_other().await;
+        let code = indoc! { r#"
+            int size;
+            void create() {
+                mixed *none = ({});
+                size = sizeof(none->two());
+            }
+        "# };
+        let process = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&process, 0u16),
+            LpcRef::from(0)
+        );
+    }
+
+    /// The element's callee makes its own collection call: two frames each
+    /// with a call in flight.
+    #[tokio::test]
+    async fn an_element_callee_may_make_its_own_collection_call() {
+        let vm = vm_with_other().await;
+        vm.create_process_from_code(
+            "/inner.c",
+            r#"int *pair() { return ({ "/other", "/other" })->two(); }"#,
+        )
+        .await
+        .unwrap();
+        let code = indoc! { r#"
+            int total;
+            void create() {
+                mixed *rr = ({ "/inner" })->pair();
+                total = rr[0][0] + rr[0][1];
+            }
+        "# };
+        let process = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&process, 0u16),
+            LpcRef::from(4)
+        );
     }
 }

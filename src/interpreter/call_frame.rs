@@ -25,6 +25,24 @@ use crate::interpreter::{
     stm::{MergeOp, TxnHandle, VarId},
 };
 
+/// A collection `->` in flight: one receiver's frame on the stack at a time,
+/// driven by `Task::advance_collection_call` from the frame that issued it.
+#[derive(Debug, Clone)]
+pub struct CollectionCall {
+    /// The function every receiver is called with.
+    pub name: String,
+    /// The argument values, captured when the instruction ran.
+    pub args: Vec<LpcRef>,
+    /// Receivers not yet called, last first (`pop` yields the next).
+    pub remaining: Vec<LpcRef>,
+    /// The mapping's keys in results order; `None` for an array.
+    pub keys: Option<Vec<LpcRef>>,
+    /// One result per receiver called so far.
+    pub results: Vec<LpcRef>,
+    /// The last receiver's frame is on the stack; its `r0` is owed.
+    pub owed: bool,
+}
+
 /// Where a [`RegisterVariant`] resolves in a frame: a local register, or the
 /// world cell behind a global or an upvalue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,6 +109,10 @@ pub struct CallFrame {
     /// index, cell)`, written back through `EfunContext::write_ref`.
     #[builder(default)]
     pub ref_cells: ThinVec<(RegisterSize, VarId)>,
+
+    /// The collection `->` this frame issued and has not finished.
+    #[builder(default)]
+    pub pending: Option<Box<CollectionCall>>,
 }
 
 impl CallFrame {
@@ -157,6 +179,7 @@ impl CallFrame {
             called_with_num_args,
             upvalue_ptrs: ups,
             ref_cells: ThinVec::new(),
+            pending: None,
         };
 
         instance.populate_upvalues();
