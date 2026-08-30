@@ -207,8 +207,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
         debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
         let args = self.pending_call_mut()?.args.clone();
-        // A too-short call: `push_arg` only refuses a `ref` param it reaches,
-        // so a missing trailing ref argument needs its own check here.
+        // `push_arg` only refuses a `ref` parameter it is given a value for.
         if let Some(i) = function.prototype.first_ref_param()
             && i >= args.len()
         {
@@ -519,7 +518,7 @@ mod tests {
     }
 
     /// A collection `->` used to build a `Task` per element; 500 deep on
-    /// the one stack (1000 peaks near `MAX_CALL_STACK_SIZE`'s 1024 frames).
+    /// the one stack.
     #[tokio::test]
     async fn collection_recursion_runs_on_the_one_stack() {
         let vm = Vm::new(test_config());
@@ -697,9 +696,7 @@ mod tests {
         );
     }
 
-    /// A too-short collection `->`: `push_arg` only refuses a `ref`
-    /// parameter it is given a value for, so a missing trailing `ref`
-    /// argument needs its own check (else a fresh, unbound cell runs).
+    /// A missing trailing `ref` argument — `push_arg` never sees it.
     #[tokio::test]
     async fn a_ref_parameter_is_refused_across_a_collection_call_other() {
         let vm = vm_with_other().await;
