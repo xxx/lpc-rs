@@ -13,6 +13,7 @@ use crate::debug_log::DebugLog;
 const DEFAULT_MAX_INHERIT_DEPTH: u8 = 10;
 const DEFAULT_MAX_EXECUTION_TIME: u64 = 300;
 const DEFAULT_GC_INTERVAL: u64 = 300;
+const DEFAULT_MAX_PENDING_OUTPUT: usize = 64 * 1024;
 
 /// The main struct that handles runtime use configurations.
 #[derive(Debug, Builder)]
@@ -45,6 +46,11 @@ pub struct Config {
 
     #[builder(default = "DEFAULT_MAX_INHERIT_DEPTH")]
     pub max_inherit_depth: u8,
+
+    /// Bytes pending to one client before its output is truncated; `0` for
+    /// no bound.
+    #[builder(setter(into), default = "DEFAULT_MAX_PENDING_OUTPUT")]
+    pub max_pending_output: usize,
 
     /// Seconds between garbage-collection passes; `0` disables them.
     #[builder(setter(into), default = "DEFAULT_GC_INTERVAL")]
@@ -143,6 +149,11 @@ impl ConfigBuilder {
                 .or_else(|| env.get("MAX_INHERIT_DEPTH"))
                 .map(|x| x.parse::<u8>().unwrap())
                 .or(self.max_inherit_depth),
+            max_pending_output: env
+                .get("LPC_MAX_PENDING_OUTPUT")
+                .or_else(|| env.get("MAX_PENDING_OUTPUT"))
+                .map(|x| x.parse::<usize>().unwrap())
+                .or(self.max_pending_output),
             gc_interval: env
                 .get("LPC_GC_INTERVAL")
                 .or_else(|| env.get("GC_INTERVAL"))

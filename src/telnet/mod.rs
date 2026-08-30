@@ -143,8 +143,8 @@ impl Telnet {
         let mut session = Session::new();
         let (connection_tx, mut connection_rx) = mpsc::unbounded_channel::<ConnectionOp>();
         let connection = Arc::new(Connection::new(remote_ip, connection_tx));
-        let mut outbox = Outbox::new(connection.clone());
         let global_state = template.global_state.clone();
+        let mut outbox = Outbox::new(connection.clone(), global_state.config.max_pending_output);
         global_state.registry.insert(connection.clone());
 
         if global_state
