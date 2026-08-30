@@ -29,7 +29,7 @@ mod tests {
     use crate::{
         interpreter::vm::Vm,
         telnet::ops::ConnectionOp,
-        test_support::{connect, run_prog, test_config},
+        test_support::{allow_exec, connect, run_prog, test_config},
     };
 
     #[tokio::test]
@@ -86,6 +86,7 @@ mod tests {
     #[tokio::test]
     async fn exec_then_destruct_of_the_old_body_keeps_the_connection() {
         let vm = Vm::new(test_config());
+        allow_exec(&vm).await;
         let player = vm.create_process_from_code("/player.c", "").await.unwrap();
         let mut connected = connect(&vm, &player).await;
         vm.create_process_from_code("/body.c", "").await.unwrap();

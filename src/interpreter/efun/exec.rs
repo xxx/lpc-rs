@@ -5,8 +5,11 @@ use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
+    VALID_EXEC,
+    apply::apply_nested,
     efun::efun_context::EfunContext,
     lpc_ref::{LpcRef, NULL},
+    process::Process,
     stm::Effect,
 };
 
@@ -15,6 +18,9 @@ pub(crate) const DISPLACED: &str =
     "You are being disconnected because someone else logged in as you.";
 
 /// `exec`, an efun for moving a connection into an object.
+///
+/// The master's `valid_exec(caller, new, old)` gates every well-formed call;
+/// a refusal, a master without the apply, or no master returns 0.
 ///
 /// The binding is transactional: the connection cells of both bodies are
 /// written into this transaction, so the rest of the task (and efuns it
@@ -35,6 +41,11 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
             // One cell: the displaced holder would be the connection itself.
             if Arc::ptr_eq(&new_ob, &old_ob) {
                 return Err(context.runtime_error("exec: `new` and `old` are the same object"));
+            }
+
+            if !valid_exec(context, &new_ob, &old_ob).await? {
+                context.return_efun_result(NULL);
+                return Ok(());
             }
 
             let txn = context.txn();
@@ -76,6 +87,29 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
     }
 }
 
+/// Ask the master; `false` without a master or the apply. `this_player` is
+/// whatever it was.
+async fn valid_exec<const N: usize>(
+    context: &EfunContext<'_, N>,
+    new: &Arc<Process>,
+    old: &Arc<Process>,
+) -> Result<bool> {
+    let ctx = context.task_context();
+    let Some(master) = ctx.object_space().master_object() else {
+        return Ok(false);
+    };
+    let Some(function) = master.program.unmangled_functions.get(VALID_EXEC).cloned() else {
+        return Ok(false);
+    };
+    let args = [
+        LpcRef::from(Arc::downgrade(context.process())),
+        LpcRef::from(Arc::downgrade(new)),
+        LpcRef::from(Arc::downgrade(old)),
+    ];
+    let verdict = apply_nested(ctx, &master, function, &args).await?;
+    Ok(verdict.is_truthy(ctx.txn()))
+}
+
 #[cfg(test)]
 mod tests {
     use std::{net::ToSocketAddrs, sync::Arc};
@@ -84,16 +118,17 @@ mod tests {
 
     use crate::{
         interpreter::{
-            CommittedReader, lpc_int::LpcInt, lpc_ref::LpcRef, task::Task,
+            CommittedReader, lpc_int::LpcInt, lpc_ref::LpcRef, process::Process, task::Task,
             task::task_template::TaskTemplate, vm::Vm,
         },
         telnet::{connection::Connection, ops::ConnectionOp},
-        test_support::{connect, test_config},
+        test_support::{allow_exec, connect, test_config},
     };
 
     #[tokio::test]
     async fn the_displaced_holder_hears_why_and_is_closed() {
         let vm = Vm::new(test_config());
+        allow_exec(&vm).await;
         let a = vm.create_process_from_code("/a.c", "").await.unwrap();
         let b = vm.create_process_from_code("/b.c", "").await.unwrap();
         let mut on_a = connect(&vm, &a).await;
@@ -151,6 +186,7 @@ mod tests {
     #[tokio::test]
     async fn an_exec_from_a_body_that_is_not_interactive_returns_zero() {
         let vm = Vm::new(test_config());
+        allow_exec(&vm).await;
         vm.create_process_from_code("/a.c", "").await.unwrap();
         vm.create_process_from_code("/b.c", "").await.unwrap();
         let main = indoc! { r#"
@@ -163,6 +199,94 @@ mod tests {
         vm.initialize_process_from_code("/main.c", main)
             .await
             .unwrap();
+    }
+
+    /// `exec(/b, /a)` from `/main` with `a` connected; what each side got.
+    async fn exec_under(vm: &Vm) -> (crate::test_support::Connected, Arc<Process>) {
+        let a = vm.create_process_from_code("/a.c", "").await.unwrap();
+        vm.create_process_from_code("/b.c", "").await.unwrap();
+        let on_a = connect(vm, &a).await;
+        let main = indoc! { r#"
+            int result;
+            void create() { result = exec(find_object("/b"), find_object("/a")); }
+        "# };
+        let main = vm
+            .initialize_process_from_code("/main.c", main)
+            .await
+            .unwrap()
+            .context
+            .process;
+        (on_a, main)
+    }
+
+    fn refused(vm: &Vm, on_a: &crate::test_support::Connected, main: &Arc<Process>) {
+        assert_eq!(
+            vm.global_state.committed_global(main, 0u16),
+            LpcRef::from(0)
+        );
+        assert_eq!(
+            on_a.connection.body().as_ref().map(|p| p.to_string()),
+            Some("/a".to_owned()),
+            "the connection stays where it was"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_refusing_master_leaves_the_connection_where_it_was() {
+        let vm = Vm::new(test_config());
+        vm.global_state
+            .initialize_process_from_code(
+                "/secure/master.c",
+                "int valid_exec(object caller, object new, object old) { return 0; }",
+            )
+            .await
+            .unwrap();
+        let (mut on_a, main) = exec_under(&vm).await;
+        refused(&vm, &on_a, &main);
+        assert!(on_a.rx.try_recv().is_err(), "nothing reaches the player");
+    }
+
+    #[tokio::test]
+    async fn a_master_without_valid_exec_refuses() {
+        let vm = Vm::new(test_config());
+        vm.global_state
+            .initialize_process_from_code("/secure/master.c", "")
+            .await
+            .unwrap();
+        let (on_a, main) = exec_under(&vm).await;
+        refused(&vm, &on_a, &main);
+    }
+
+    #[tokio::test]
+    async fn no_master_refuses() {
+        let vm = Vm::new(test_config());
+        let (on_a, main) = exec_under(&vm).await;
+        refused(&vm, &on_a, &main);
+    }
+
+    #[tokio::test]
+    async fn the_master_hears_the_caller_and_both_bodies() {
+        let vm = Vm::new(test_config());
+        let master = indoc! { r#"
+            int valid_exec(object caller, object new, object old) {
+                return file_name(caller) == "/main"
+                    && file_name(new) == "/b"
+                    && file_name(old) == "/a";
+            }
+        "# };
+        vm.global_state
+            .initialize_process_from_code("/secure/master.c", master)
+            .await
+            .unwrap();
+        let (on_a, main) = exec_under(&vm).await;
+        assert_eq!(
+            vm.global_state.committed_global(&main, 0u16),
+            LpcRef::from(1)
+        );
+        assert_eq!(
+            on_a.connection.body().as_ref().map(|p| p.to_string()),
+            Some("/b".to_owned())
+        );
     }
 
     /// Build a [`Connection`] whose own channels are dropped after the test.
@@ -213,6 +337,7 @@ mod tests {
         "# };
 
         let vm = Vm::new(test_config());
+        allow_exec(&vm).await;
         let connection = make_connection();
 
         let target_proc = vm

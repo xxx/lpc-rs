@@ -96,6 +96,20 @@ pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
     Connected { rx, connection }
 }
 
+/// A master whose `valid_exec` allows everything; `exec` refuses without
+/// one.
+pub async fn allow_exec(vm: &Vm) -> Arc<Process> {
+    vm.global_state
+        .initialize_process_from_code(
+            "/secure/master.c",
+            "int valid_exec(object caller, object new, object old) { return 1; }",
+        )
+        .await
+        .expect("the master compiles")
+        .context
+        .process
+}
+
 pub fn test_config() -> Config {
     test_config_builder!().build().unwrap()
 }
