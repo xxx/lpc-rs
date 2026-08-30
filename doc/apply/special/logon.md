@@ -8,6 +8,10 @@ that was made for this user. The return value determines what happens next.
 If `0` is returned, the user is disconnected. If `1` is returned, the user is
 not disconnected. At its core, that's all this function does.
 
+A client that goes away after `logon` — or during it, once `connect` has
+returned an object — is unbound from that object, which then receives
+`net_dead`.
+
 During `logon`, `this_player` and `this_interactive` are now available for use,
 though commands have not been enabled yet (this is the place to do it, though).
 
@@ -41,4 +45,4 @@ private void enter_game() {
 
 ### See also
 
-`connect`, `exec`, `enable_commands`
+`connect`, `exec`, `enable_commands`, `net_dead`

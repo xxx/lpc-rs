@@ -4,7 +4,7 @@ use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use tokio::{signal, sync::mpsc::Receiver};
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 use vm_op::VmOp;
 
 use crate::{
@@ -15,8 +15,11 @@ use crate::{
         task_context::TaskContext,
         vm::global_state::GlobalState,
     },
-    telnet::Telnet,
+    telnet::{Telnet, ops::ConnectionOp},
 };
+
+/// How long shutdown waits for the last connection loop to flush and exit.
+const SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
 
 mod initiate_login;
 mod object_initializers;
@@ -140,15 +143,22 @@ impl Vm {
         self.shutdown().await
     }
 
-    /// Shut down the [`Vm`], and all subsystems.
+    /// Shut down the [`Vm`], and all subsystems: stop accepting, tell every
+    /// connection, run the master's `shutdown()`, unbind and close every
+    /// connection while the committer is still open, then wait for the
+    /// loops to finish flushing.
     pub async fn shutdown(&mut self) -> Result<()> {
         self.telnet.shutdown();
-        self.global_state.with_call_outs_mut(|c| c.clear());
+        let global_state = self.global_state.clone();
+        for connection in global_state.registry.connections() {
+            let _ = connection.send(ConnectionOp::Shutdown);
+        }
+        global_state.with_call_outs_mut(|c| c.clear());
 
         match apply_function_in_master(
             SHUTDOWN,
             &[],
-            TaskTemplate::from(self.global_state.clone()),
+            TaskTemplate::from(global_state.clone()),
             Some(5000), // a much longer timeout than normal, to allow for saving.
         )
         .await
@@ -164,10 +174,28 @@ impl Vm {
             }
         }
 
+        for connection in global_state.registry.connections() {
+            global_state.detach(&connection, None).await;
+        }
+
         // Stop the STM committer deterministically as the VM winds down,
         // after the master's shutdown hook has run. GlobalState's Drop will also
         // close + join; this just makes the ordering explicit.
-        self.global_state.close_committer();
+        global_state.close_committer();
+
+        let drained = tokio::time::timeout(SHUTDOWN_DRAIN, async {
+            while !global_state.registry.is_empty() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        if drained.is_err() {
+            warn!(
+                "{} connections still open after {:?}",
+                global_state.registry.len(),
+                SHUTDOWN_DRAIN
+            );
+        }
 
         Ok(())
     }

@@ -1593,5 +1593,32 @@ mod tests {
             expected.extend(b"got bob\r\n");
             assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
         }
+
+        #[tokio::test]
+        async fn shutdown_says_goodbye_then_closes_and_waits_for_the_loop() {
+            let mut w = wire().await;
+            commanding_body(&w, "").await;
+            let master = indoc! { r#"
+                void shutdown() { tell_object(find_object("/body"), "bye\n"); }
+            "# };
+            w.vm.initialize_process_from_code("/secure/master.c", master)
+                .await
+                .unwrap();
+
+            w.vm.shutdown().await.unwrap();
+
+            assert_eq!(read_n(&mut w.client, 5).await, b"bye\r\n");
+            let mut rest = [0u8; 8];
+            assert_eq!(
+                within(w.client.read(&mut rest)).await.unwrap(),
+                0,
+                "EOF after the goodbye"
+            );
+            assert!(
+                w.vm.global_state.registry.is_empty(),
+                "shutdown returned only once the loop had left"
+            );
+            assert!(w.connection.body().is_none());
+        }
     }
 }
