@@ -2,9 +2,9 @@
 
 use lpc_rs_core::RegisterSize;
 
-/// The maximum size of an execution call stack, in
-/// [`CallFrame`](crate::interpreter::call_frame::CallFrame)s.
-pub const MAX_CALL_STACK_SIZE: usize = 64;
+/// Frames one task may hold — every LPC call, `->` included; past it a call
+/// is a "stack overflow" runtime error. CD's `MAX_TRACE`.
+pub const MAX_CALL_STACK_SIZE: usize = 1024;
 
 /// `$64` (or whatever this is set to) is the maximum implicit closure argument
 /// allowed, as enough memory slots for all preceding arguments is also
@@ -22,7 +22,8 @@ pub const MAX_COMMAND_DEPTH: usize = 16;
 
 /// How many driver tasks may nest on one native stack before the next
 /// nesting is a runtime error. Measured 2026-08-30, debug build on a 2 MiB
-/// thread: `catch_tell` levels abort at 24 and `->` levels at 50.
+/// thread: `catch_tell` levels abort at 24 and `->` levels (a `Task` each,
+/// then) at 50.
 pub const MAX_TASK_CHAIN: u8 = 64;
 
 /// The stack of every runtime thread: `MAX_TASK_CHAIN` levels at the ~87 KB

@@ -184,14 +184,21 @@ mod tests {
         );
     }
 
-    /// `->` nests a task per call; the budget is the bound on its recursion.
+    /// `->` over a collection still nests a task per element; the budget is
+    /// the bound on its recursion.
     #[tokio::test]
-    async fn call_other_recursion_fills_the_budget_and_no_more() {
+    async fn collection_call_other_recursion_fills_the_budget_and_no_more() {
         let vm = Vm::new(test_config());
         let fits = format!(
             r#"
             int depth;
-            int f(int n) {{ if (n < {MAX_TASK_CHAIN}) return this_object()->f(n + 1); return n; }}
+            int f(int n) {{
+                if (n < {MAX_TASK_CHAIN}) {{
+                    int *r = ({{ this_object() }})->f(n + 1);
+                    return r[0];
+                }}
+                return n;
+            }}
             void create() {{ depth = f(0); }}
             "#
         );
@@ -207,7 +214,13 @@ mod tests {
         );
 
         let past = indoc! { r#"
-            int f(int n) { if (n < 1000) return this_object()->f(n + 1); return n; }
+            int f(int n) {
+                if (n < 1000) {
+                    int *r = ({ this_object() })->f(n + 1);
+                    return r[0];
+                }
+                return n;
+            }
             void create() { f(0); }
         "# };
         let err = vm
