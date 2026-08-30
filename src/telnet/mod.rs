@@ -1719,14 +1719,14 @@ mod tests {
         /// kick inside the quiet window.
         #[tokio::test]
         async fn a_line_restarts_the_clock_and_the_kick_tells_the_body() {
-            let mut w = wire_with(idle_config(3)).await;
+            let mut w = wire_with(idle_config(4)).await;
             let proc = commanding_body(&w, "int dead;\nvoid net_dead() { dead = 1; }").await;
             tokio::time::sleep(Duration::from_millis(2000)).await;
             w.client.write_all(b"look\r\n").await.unwrap();
             assert_eq!(read_n(&mut w.client, 6).await, b"seen\r\n");
             let mut probe = [0u8; 1];
             assert!(
-                tokio::time::timeout(Duration::from_millis(1200), w.client.read(&mut probe))
+                tokio::time::timeout(Duration::from_millis(2500), w.client.read(&mut probe))
                     .await
                     .is_err(),
                 "the line pushed the deadline out"
@@ -1734,7 +1734,7 @@ mod tests {
             let mut buf = vec![0; KICKED.len()];
             tokio::time::timeout(Duration::from_secs(4), w.client.read_exact(&mut buf))
                 .await
-                .expect("the kick lands after the line's own three seconds")
+                .expect("the kick lands after the line's own four seconds")
                 .unwrap();
             assert_eq!(buf, KICKED);
             eventually(|| w.vm.global_state.committed_global(&proc, 0u16) == LpcRef::from(1)).await;
