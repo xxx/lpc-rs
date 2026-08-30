@@ -1,15 +1,10 @@
 pub mod connection;
 pub mod ops;
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the loop takes it in the next task")
-)]
 mod outbox;
 
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use bytes::BytesMut;
 use indexmap::IndexMap;
 use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::lpc_error;
@@ -42,6 +37,7 @@ use crate::{
     telnet::{
         connection::{Connection, InputTo},
         ops::ConnectionOp,
+        outbox::Outbox,
     },
 };
 
@@ -67,6 +63,22 @@ enum Flow {
     Continue,
     /// Stop; who ended it.
     Leave(Departure),
+}
+
+/// How long a departing loop waits for the client to take its goodbye —
+/// under `Vm::shutdown`'s drain, so a stuck client's loop still leaves the
+/// registry inside it.
+const GOODBYE_FLUSH: Duration = Duration::from_secs(1);
+
+/// What one `select!` produced; acted on after it, so no arm holds a borrow
+/// the handling needs.
+enum Turn {
+    /// An op from the VM side; `None` is the channel closing.
+    Op(Option<ConnectionOp>),
+    /// A socket read into the buffer.
+    Read(std::io::Result<usize>),
+    /// A socket write of what was pending.
+    Wrote(std::io::Result<usize>),
 }
 
 impl Telnet {
@@ -123,14 +135,15 @@ impl Telnet {
 
     /// Start the main loop for a single user's connection. Handles sends and receives.
     #[instrument(skip(stream, template))]
-    async fn connection_loop<S>(mut stream: S, remote_ip: SocketAddr, template: TaskTemplate)
+    async fn connection_loop<S>(stream: S, remote_ip: SocketAddr, template: TaskTemplate)
     where
         S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     {
+        let (mut reader, mut writer) = tokio::io::split(stream);
         let mut session = Session::new();
-        let mut out = BytesMut::with_capacity(4096);
         let (connection_tx, mut connection_rx) = mpsc::unbounded_channel::<ConnectionOp>();
         let connection = Arc::new(Connection::new(remote_ip, connection_tx));
+        let mut outbox = Outbox::new(connection.clone());
         let global_state = template.global_state.clone();
         global_state.registry.insert(connection.clone());
 
@@ -144,16 +157,8 @@ impl Telnet {
             session.send(Op::Text(
                 "The server is currently unable to accept new connections. Please try again shortly.\n",
             ));
-            let _ = flush(&mut session, &mut out, &mut stream).await;
+            say_goodbye(&mut writer, &mut session, &mut outbox, remote_ip).await;
             Self::leave(&connection, &template, Departure::Server, false).await;
-            return;
-        }
-
-        // The offers go out before anything else; a client that never
-        // answers them still gets its login.
-        if let Err(e) = flush(&mut session, &mut out, &mut stream).await {
-            warn!("Failed to send to {}: {}", &remote_ip, e);
-            Self::leave(&connection, &template, Departure::Client, false).await;
             return;
         }
 
@@ -163,42 +168,82 @@ impl Telnet {
         let mut mud_stats: Option<IndexMap<String, Vec<String>>> = None;
 
         let departure = loop {
-            let flow = tokio::select! {
-                op = connection_rx.recv() => {
-                    Self::handle_op(op, &mut session, &connection, &template, &mut shutting_down).await
+            // The offers go out on the first turn; a client that never
+            // answers them still gets its login.
+            outbox.fill_from(&mut session);
+            let turn = tokio::select! {
+                op = connection_rx.recv() => Turn::Op(op),
+                read = reader.read(&mut buf), if !outbox.is_overflowed() => Turn::Read(read),
+                wrote = writer.write(outbox.pending()), if !outbox.pending().is_empty() => Turn::Wrote(wrote),
+            };
+            let flow = match turn {
+                Turn::Op(op) => {
+                    Self::handle_op(
+                        op,
+                        &mut session,
+                        &connection,
+                        &template,
+                        &mut shutting_down,
+                        &mut outbox,
+                    )
+                    .await
                 }
-                read = stream.read(&mut buf) => {
-                    match read {
-                        Ok(0) => {
-                            info!("Connection closed by {}.", &remote_ip);
-                            Flow::Leave(Departure::Client)
-                        }
-                        Ok(n) => {
-                            session.feed(&buf[..n]);
-                            connection.refresh(&session);
-                            let mut flow = Flow::Continue;
-                            while let Some(event) = session.next_event() {
-                                Self::handle_event(event, &mut session, &connection, &template, shutting_down, &mut mud_stats).await;
-                                // What the event queued lands before the next
-                                // event: a second line in the same read must
-                                // see the first line's `input_to`.
-                                while let Ok(op) = connection_rx.try_recv() {
-                                    flow = Self::handle_op(Some(op), &mut session, &connection, &template, &mut shutting_down).await;
-                                    if matches!(flow, Flow::Leave(_)) {
-                                        break;
-                                    }
-                                }
-                                if matches!(flow, Flow::Leave(_)) {
-                                    break;
-                                }
+                Turn::Read(Ok(0)) => {
+                    info!("Connection closed by {}.", &remote_ip);
+                    Flow::Leave(Departure::Client)
+                }
+                Turn::Read(Ok(n)) => {
+                    session.feed(&buf[..n]);
+                    connection.refresh(&session);
+                    let mut flow = Flow::Continue;
+                    while let Some(event) = session.next_event() {
+                        Self::handle_event(
+                            event,
+                            &mut session,
+                            &connection,
+                            &template,
+                            shutting_down,
+                            &mut mud_stats,
+                        )
+                        .await;
+                        // What the event queued lands before the next
+                        // event: a second line in the same read must
+                        // see the first line's `input_to`.
+                        while let Ok(op) = connection_rx.try_recv() {
+                            flow = Self::handle_op(
+                                Some(op),
+                                &mut session,
+                                &connection,
+                                &template,
+                                &mut shutting_down,
+                                &mut outbox,
+                            )
+                            .await;
+                            if matches!(flow, Flow::Leave(_)) {
+                                break;
                             }
-                            flow
                         }
-                        Err(e) => {
-                            warn!("User input error for {}: {:?}", &remote_ip, e);
-                            Flow::Leave(Departure::Client)
+                        if matches!(flow, Flow::Leave(_)) {
+                            break;
                         }
                     }
+                    flow
+                }
+                Turn::Read(Err(e)) => {
+                    warn!("User input error for {}: {:?}", &remote_ip, e);
+                    Flow::Leave(Departure::Client)
+                }
+                Turn::Wrote(Ok(n)) if n > 0 => {
+                    outbox.wrote(n);
+                    Flow::Continue
+                }
+                Turn::Wrote(Ok(_)) => {
+                    warn!("{} took no bytes; closing", &remote_ip);
+                    Flow::Leave(Departure::Client)
+                }
+                Turn::Wrote(Err(e)) => {
+                    warn!("Failed to send to {}: {}", &remote_ip, e);
+                    Flow::Leave(Departure::Client)
                 }
             };
 
@@ -206,14 +251,9 @@ impl Telnet {
                 // The driver's close sends what was queued first; a client
                 // that left cannot hear it.
                 if departure == Departure::Server {
-                    let _ = flush(&mut session, &mut out, &mut stream).await;
+                    say_goodbye(&mut writer, &mut session, &mut outbox, remote_ip).await;
                 }
                 break departure;
-            }
-
-            if let Err(e) = flush(&mut session, &mut out, &mut stream).await {
-                warn!("Failed to send to {}: {}", &remote_ip, e);
-                break Departure::Client;
             }
         };
 
@@ -227,22 +267,26 @@ impl Telnet {
         connection: &Connection,
         template: &TaskTemplate,
         shutting_down: &mut bool,
+        outbox: &mut Outbox,
     ) -> Flow {
         trace!("Received message from VM: {:?}", op);
         match op {
-            Some(ConnectionOp::SendMessage(msg)) => session.send(Op::Text(&msg)),
+            Some(ConnectionOp::SendMessage(msg)) => outbox.send(session, Op::Text(&msg)),
             Some(ConnectionOp::InputTo(input_to)) => {
                 if input_to.no_echo {
                     session.send(Op::EchoOff);
                 }
                 connection.set_input_to(Some(input_to));
             }
-            Some(ConnectionOp::Gmcp { package, payload }) => session.send(Op::Gmcp {
-                package: &package,
-                payload: &payload,
-            }),
-            Some(ConnectionOp::Mxp(markup)) => session.send(Op::Mxp(&markup)),
-            Some(ConnectionOp::Prompt(text)) => session.send(Op::Prompt(&text)),
+            Some(ConnectionOp::Gmcp { package, payload }) => outbox.send(
+                session,
+                Op::Gmcp {
+                    package: &package,
+                    payload: &payload,
+                },
+            ),
+            Some(ConnectionOp::Mxp(markup)) => outbox.send(session, Op::Mxp(&markup)),
+            Some(ConnectionOp::Prompt(text)) => outbox.send(session, Op::Prompt(&text)),
             Some(ConnectionOp::Attached) => {
                 if let Some((cols, rows)) = session.naws()
                     && !*shutting_down
@@ -251,7 +295,8 @@ impl Telnet {
                 }
             }
             Some(ConnectionOp::PromptCycle) => {
-                if !*shutting_down {
+                // A prompt for a client that is not reading would be dropped.
+                if !*shutting_down && !outbox.is_overflowed() {
                     Self::prompt_cycle(session, connection, template).await;
                 }
             }
@@ -632,19 +677,20 @@ impl Telnet {
     }
 }
 
-/// Write whatever the session has queued.
-async fn flush<S: AsyncWrite + Unpin>(
+/// What is pending, for a client that is reading; one that is not gets
+/// `GOODBYE_FLUSH` of patience and then nothing.
+async fn say_goodbye<W: AsyncWrite + Unpin>(
+    writer: &mut W,
     session: &mut Session,
-    out: &mut BytesMut,
-    stream: &mut S,
-) -> std::io::Result<()> {
-    session.drain_output(out);
-    if out.is_empty() {
-        return Ok(());
+    outbox: &mut Outbox,
+    address: SocketAddr,
+) {
+    outbox.fill_from(session);
+    match tokio::time::timeout(GOODBYE_FLUSH, writer.write_all(outbox.pending())).await {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => trace!("goodbye to {address} failed: {e}"),
+        Err(_) => info!("{address} did not take its goodbye within {GOODBYE_FLUSH:?}"),
     }
-    let written = stream.write_all(&out[..]).await;
-    out.clear();
-    written
 }
 
 #[cfg(test)]
@@ -1630,6 +1676,104 @@ mod tests {
             expected.extend([IAC, GA]);
             expected.extend(b"got bob\r\n");
             assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+        }
+
+        const MARKER: &[u8] = b"*** Output truncated ***\r\n";
+
+        /// Eighty KiB-sized messages: past the high-water mark even with the
+        /// pipe's 4 KiB taken, while the client reads nothing.
+        async fn flood(w: &Wired) {
+            let line = format!("{}\n", "x".repeat(1023));
+            for _ in 0..80 {
+                w.connection
+                    .send(ConnectionOp::SendMessage(line.clone()))
+                    .unwrap();
+            }
+            eventually(|| w.connection.is_overflowed()).await;
+        }
+
+        /// Read until the truncation line has arrived: what came before it,
+        /// and whatever followed it in the same reads.
+        async fn read_past_marker(client: &mut DuplexStream) -> (Vec<u8>, Vec<u8>) {
+            let mut got = Vec::new();
+            let mut buf = [0u8; 4096];
+            within(async {
+                loop {
+                    let n = client.read(&mut buf).await.unwrap();
+                    assert!(n > 0, "EOF before the marker");
+                    got.extend_from_slice(&buf[..n]);
+                    if let Some(at) = got.windows(MARKER.len()).position(|w| w == MARKER) {
+                        let after = got.split_off(at + MARKER.len());
+                        got.truncate(at);
+                        break (got, after);
+                    }
+                }
+            })
+            .await
+        }
+
+        /// `have` topped up to `n` bytes.
+        async fn read_to(client: &mut DuplexStream, mut have: Vec<u8>, n: usize) -> Vec<u8> {
+            let more = read_n(client, n - have.len()).await;
+            have.extend(more);
+            have
+        }
+
+        #[tokio::test]
+        async fn a_client_that_stops_reading_is_told_once_and_then_nothing() {
+            let mut w = wire().await;
+            flood(&w).await;
+            w.connection
+                .send(ConnectionOp::SendMessage("dropped\n".into()))
+                .unwrap();
+            let (before, after) = read_past_marker(&mut w.client).await;
+            assert!(before.len() >= 60 * 1024, "the flood before the marker");
+            assert!(
+                before.iter().all(|b| matches!(b, b'x' | b'\r' | b'\n')),
+                "only the flood precedes the marker"
+            );
+            assert!(after.is_empty());
+            let mut rest = [0u8; 8];
+            assert!(
+                tokio::time::timeout(Duration::from_millis(200), w.client.read(&mut rest))
+                    .await
+                    .is_err(),
+                "nothing follows the marker"
+            );
+            assert!(!w.connection.is_overflowed(), "recovered once drained");
+        }
+
+        #[tokio::test]
+        async fn output_resumes_once_the_client_catches_up() {
+            let mut w = wire().await;
+            flood(&w).await;
+            let (_, after) = read_past_marker(&mut w.client).await;
+            assert!(after.is_empty());
+            w.connection
+                .send(ConnectionOp::SendMessage("after\n".into()))
+                .unwrap();
+            assert_eq!(read_n(&mut w.client, 7).await, b"after\r\n");
+        }
+
+        #[tokio::test]
+        async fn input_waits_while_output_is_not_taken() {
+            let mut w = wire().await;
+            commanding_body(&w, "").await;
+            flood(&w).await;
+            // Not read while overflowed: its output lands after the marker.
+            w.client.write_all(b"look\r\n").await.unwrap();
+            let (_, after) = read_past_marker(&mut w.client).await;
+            assert_eq!(read_to(&mut w.client, after, 6).await, b"seen\r\n");
+        }
+
+        #[tokio::test]
+        async fn close_reaches_a_client_that_is_not_reading() {
+            let w = wire().await;
+            flood(&w).await;
+            w.connection.send(ConnectionOp::Close).unwrap();
+            // The goodbye gives up after GOODBYE_FLUSH; the loop leaves.
+            eventually(|| w.vm.global_state.registry.is_empty()).await;
+            assert!(w.connection.is_dead());
         }
 
         #[tokio::test]
