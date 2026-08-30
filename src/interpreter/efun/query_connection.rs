@@ -20,7 +20,7 @@ pub async fn query_connection<const N: usize>(context: &mut EfunContext<'_, N>) 
         Some(charset) => LpcString::from(charset.as_str()).into(),
         None => LpcRef::from(0),
     };
-    let entries: [(&str, LpcRef); 8] = [
+    let entries: [(&str, LpcRef); 9] = [
         (
             "ip",
             LpcString::from(connection.address.ip().to_string()).into(),
@@ -35,6 +35,7 @@ pub async fn query_connection<const N: usize>(context: &mut EfunContext<'_, N>) 
         ("gmcp", LpcRef::from(snapshot.gmcp)),
         ("mxp", LpcRef::from(snapshot.mxp)),
         ("eor", LpcRef::from(snapshot.eor)),
+        ("idle", LpcRef::from(connection.idle() as LpcIntInner)),
     ];
     let mapping: IndexMap<LpcRef, LpcRef> = entries
         .into_iter()
@@ -99,7 +100,11 @@ mod tests {
         assert_eq!(get("gmcp"), LpcRef::from(1));
         assert_eq!(get("mxp"), LpcRef::from(0));
         assert_eq!(get("eor"), LpcRef::from(0));
-        assert_eq!(m.len(), 8, "the key set is fixed");
+        assert!(
+            matches!(get("idle"), LpcRef::Int(_)),
+            "idle is whole seconds"
+        );
+        assert_eq!(m.len(), 9, "the key set is fixed");
     }
 
     #[tokio::test]

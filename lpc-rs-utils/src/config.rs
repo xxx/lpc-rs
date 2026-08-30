@@ -14,6 +14,7 @@ const DEFAULT_MAX_INHERIT_DEPTH: u8 = 10;
 const DEFAULT_MAX_EXECUTION_TIME: u64 = 300;
 const DEFAULT_GC_INTERVAL: u64 = 300;
 const DEFAULT_MAX_PENDING_OUTPUT: usize = 64 * 1024;
+const DEFAULT_MAX_IDLE_TIME: u64 = 0;
 
 /// The main struct that handles runtime use configurations.
 #[derive(Debug, Builder)]
@@ -43,6 +44,11 @@ pub struct Config {
 
     #[builder(setter(into), default = "DEFAULT_MAX_EXECUTION_TIME")]
     pub max_execution_time: u64,
+
+    /// Seconds a connection may go without a line of input before the
+    /// driver disconnects it; `0` for no limit.
+    #[builder(setter(into), default = "DEFAULT_MAX_IDLE_TIME")]
+    pub max_idle_time: u64,
 
     #[builder(default = "DEFAULT_MAX_INHERIT_DEPTH")]
     pub max_inherit_depth: u8,
@@ -144,6 +150,11 @@ impl ConfigBuilder {
                 .or_else(|| env.get("MAX_EXECUTION_TIME"))
                 .map(|x| x.parse::<u64>().unwrap())
                 .or(self.max_execution_time),
+            max_idle_time: env
+                .get("LPC_MAX_IDLE_TIME")
+                .or_else(|| env.get("MAX_IDLE_TIME"))
+                .map(|x| x.parse::<u64>().unwrap())
+                .or(self.max_idle_time),
             max_inherit_depth: env
                 .get("LPC_MAX_INHERIT_DEPTH")
                 .or_else(|| env.get("MAX_INHERIT_DEPTH"))

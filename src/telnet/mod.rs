@@ -55,6 +55,9 @@ enum Departure {
     Server,
     /// The client's socket ended or failed.
     Client,
+    /// The driver closed it for idling past `max_idle_time`; the body is
+    /// told with `net_dead`, as if the client had left.
+    Idle,
 }
 
 /// What an op told the loop to do next.
@@ -70,6 +73,9 @@ enum Flow {
 /// registry inside it.
 const GOODBYE_FLUSH: Duration = Duration::from_secs(1);
 
+/// The one line an idle-kicked client gets before the close.
+const IDLE_KICKED: &str = "*** Disconnected: idle too long ***\n";
+
 /// What one `select!` produced; acted on after it, so no arm holds a borrow
 /// the handling needs.
 enum Turn {
@@ -79,6 +85,8 @@ enum Turn {
     Read(std::io::Result<usize>),
     /// A socket write of what was pending.
     Wrote(std::io::Result<usize>),
+    /// The idle deadline passed with no line of input.
+    Idle,
 }
 
 impl Telnet {
@@ -145,6 +153,7 @@ impl Telnet {
         let connection = Arc::new(Connection::new(remote_ip, connection_tx));
         let global_state = template.global_state.clone();
         let mut outbox = Outbox::new(connection.clone(), global_state.config.max_pending_output);
+        let max_idle_time = global_state.config.max_idle_time;
         global_state.registry.insert(connection.clone());
 
         if global_state
@@ -174,6 +183,7 @@ impl Telnet {
                 op = connection_rx.recv() => Turn::Op(op),
                 read = reader.read(&mut buf), if !outbox.is_overflowed() => Turn::Read(read),
                 wrote = writer.write(outbox.pending()), if !outbox.pending().is_empty() => Turn::Wrote(wrote),
+                _ = idle_deadline(&connection, max_idle_time), if max_idle_time != 0 => Turn::Idle,
             };
             let flow = match turn {
                 Turn::Op(op) => {
@@ -244,12 +254,20 @@ impl Telnet {
                     warn!("Failed to send to {}: {}", &remote_ip, e);
                     Flow::Leave(Departure::Client)
                 }
+                Turn::Idle => {
+                    info!(
+                        "{} sent nothing for {max_idle_time} seconds; disconnecting",
+                        &remote_ip
+                    );
+                    outbox.send(&mut session, Op::Text(IDLE_KICKED));
+                    Flow::Leave(Departure::Idle)
+                }
             };
 
             if let Flow::Leave(departure) = flow {
                 // The driver's close sends what was queued first; a client
                 // that left cannot hear it.
-                if departure == Departure::Server {
+                if departure != Departure::Client {
                     say_goodbye(&mut writer, &mut session, &mut outbox, remote_ip).await;
                 }
                 break departure;
@@ -321,7 +339,7 @@ impl Telnet {
     }
 
     /// Every exit path: unbind whatever body the connection had, tell it
-    /// if the client left, then leave the registry.
+    /// if the link died on it, then leave the registry.
     async fn leave(
         connection: &Arc<Connection>,
         template: &TaskTemplate,
@@ -336,7 +354,7 @@ impl Telnet {
             body.is_some()
         );
         if let Some(body) = body
-            && departure == Departure::Client
+            && matches!(departure, Departure::Client | Departure::Idle)
             && !shutting_down
         {
             Self::net_dead(body, template).await;
@@ -379,6 +397,7 @@ impl Telnet {
     ) {
         match event {
             Event::Line(line) => {
+                connection.mark_line();
                 if shutting_down {
                     return;
                 }
@@ -692,6 +711,16 @@ async fn say_goodbye<W: AsyncWrite + Unpin>(
     }
 }
 
+/// Resolves once `connection` has gone `max_idle_time` whole seconds with
+/// no line of input; recreated every select turn, so each line pushes it
+/// out.
+async fn idle_deadline(connection: &Connection, max_idle_time: u64) {
+    tokio::time::sleep(Duration::from_secs(
+        max_idle_time.saturating_sub(connection.idle()),
+    ))
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use std::net::ToSocketAddrs;
@@ -901,6 +930,7 @@ mod tests {
     mod over_a_duplex {
         use std::time::Duration;
 
+        use lpc_rs_utils::config::{Config, ConfigBuilder};
         use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 
         use super::*;
@@ -943,7 +973,12 @@ mod tests {
         /// Spawn the loop and return once it has registered itself and sent
         /// its offers. The client says nothing: login is not gated on it.
         async fn wire() -> Wired {
-            let vm = Vm::new(test_config());
+            wire_with(test_config()).await
+        }
+
+        /// `wire`, under the test's own config.
+        async fn wire_with(config: Config) -> Wired {
+            let vm = Vm::new(config);
             let (mut client, server) = tokio::io::duplex(4096);
             let addr: SocketAddr = ADDR.parse().expect("a literal address");
             tokio::spawn(Telnet::connection_loop(
@@ -1655,6 +1690,63 @@ mod tests {
                 w.vm.global_state.committed_global(&proc, 0u16),
                 LpcRef::from(0)
             );
+        }
+
+        /// `test_config`, with the idle kick at `seconds`.
+        fn idle_config(seconds: u64) -> Config {
+            crate::test_config_builder!()
+                .max_idle_time(seconds)
+                .build()
+                .unwrap()
+        }
+
+        /// `IDLE_KICKED` on the wire.
+        const KICKED: &[u8] = b"*** Disconnected: idle too long ***\r\n";
+
+        #[tokio::test]
+        async fn a_silent_connection_is_kicked_before_login() {
+            assert_eq!(KICKED, IDLE_KICKED.replace('\n', "\r\n").as_bytes());
+            let mut w = wire_with(idle_config(1)).await;
+            assert_eq!(read_n(&mut w.client, KICKED.len()).await, KICKED);
+            eventually(|| w.vm.global_state.registry.is_empty()).await;
+        }
+
+        /// The clock restarts at each line, and the body hears `net_dead`
+        /// as if the client had hung up.
+        #[tokio::test]
+        async fn an_idle_kick_tells_the_body_with_net_dead() {
+            let mut w = wire_with(idle_config(2)).await;
+            let proc = commanding_body(&w, "int dead;\nvoid net_dead() { dead = 1; }").await;
+            w.client.write_all(b"look\r\n").await.unwrap();
+            assert_eq!(read_n(&mut w.client, 6).await, b"seen\r\n");
+            let mut buf = vec![0; KICKED.len()];
+            tokio::time::timeout(Duration::from_secs(4), w.client.read_exact(&mut buf))
+                .await
+                .expect("the kick lands within four seconds")
+                .unwrap();
+            assert_eq!(buf, KICKED);
+            eventually(|| w.vm.global_state.committed_global(&proc, 0u16) == LpcRef::from(1)).await;
+            assert!(w.connection.body().is_none());
+            eventually(|| w.vm.global_state.registry.is_empty()).await;
+        }
+
+        /// Keys without Enter are not activity: bytes that never finish a
+        /// line do not defer the kick.
+        #[tokio::test]
+        async fn bytes_without_a_line_do_not_defer_the_kick() {
+            let w = wire_with(idle_config(1)).await;
+            let (mut read_half, mut write_half) = tokio::io::split(w.client);
+            tokio::spawn(async move {
+                while write_half.write_all(b"x").await.is_ok() {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+            });
+            let mut buf = vec![0; KICKED.len()];
+            tokio::time::timeout(Duration::from_secs(3), read_half.read_exact(&mut buf))
+                .await
+                .expect("chatter does not defer the kick")
+                .unwrap();
+            assert_eq!(buf, KICKED);
         }
 
         #[tokio::test]

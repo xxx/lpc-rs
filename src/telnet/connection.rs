@@ -2,8 +2,9 @@ use std::{
     net::SocketAddr,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
+    time::Instant,
 };
 
 use arc_swap::{ArcSwap, ArcSwapOption};
@@ -94,6 +95,12 @@ pub struct Connection {
 
     /// The outbox passed its high-water mark; the loop's write.
     overflowed: AtomicBool,
+
+    /// When the connection began; `last_line` counts from it.
+    epoch: Instant,
+
+    /// Whole seconds after `epoch` of the client's last line of input.
+    last_line: AtomicU64,
 }
 
 impl Connection {
@@ -108,6 +115,8 @@ impl Connection {
             dead: AtomicBool::new(false),
             logged_in: AtomicBool::new(false),
             overflowed: AtomicBool::new(false),
+            epoch: Instant::now(),
+            last_line: AtomicU64::new(0),
         }
     }
 
@@ -182,6 +191,21 @@ impl Connection {
         self.overflowed.store(overflowed, Ordering::Release);
     }
 
+    /// Seconds since the client's last line of input — or since the
+    /// connection began, before any line.
+    pub fn idle(&self) -> u64 {
+        self.epoch
+            .elapsed()
+            .as_secs()
+            .saturating_sub(self.last_line.load(Ordering::Acquire))
+    }
+
+    /// A line of input arrived; the idle clock restarts.
+    pub(crate) fn mark_line(&self) {
+        self.last_line
+            .store(self.epoch.elapsed().as_secs(), Ordering::Release);
+    }
+
     /// What the session knows about this client right now.
     pub fn snapshot(&self) -> Arc<Snapshot> {
         self.snapshot.load_full()
@@ -216,6 +240,15 @@ mod tests {
     const DO: u8 = 253;
     const NAWS: u8 = 31;
     const GMCP: u8 = 201;
+
+    #[test]
+    fn a_line_restarts_the_idle_clock() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let connection = Connection::new("127.0.0.1:1".parse().unwrap(), tx);
+        assert_eq!(connection.idle(), 0);
+        connection.mark_line();
+        assert_eq!(connection.idle(), 0);
+    }
 
     #[test]
     fn a_fresh_session_knows_nothing() {

@@ -3,7 +3,8 @@
 `void net_dead()`
 
 The driver applies `net_dead` to a body whose client went away without
-logging out: the socket closed, or reading from or writing to it failed. By
+logging out: the socket closed, reading from or writing to it failed, or the
+driver dropped it for idling past `MAX_IDLE_TIME`. By
 the time it runs the body is no longer interactive — `interactive()` returns
 `0`, and anything it `write`s goes to the debug log. What happens to the body
 next is the mudlib's decision: keep it as a link-dead player for a while,
