@@ -20,7 +20,7 @@ pub async fn query_connection<const N: usize>(context: &mut EfunContext<'_, N>) 
         Some(charset) => LpcString::from(charset.as_str()).into(),
         None => LpcRef::from(0),
     };
-    let entries: [(&str, LpcRef); 9] = [
+    let entries: [(&str, LpcRef); 10] = [
         (
             "ip",
             LpcString::from(connection.address.ip().to_string()).into(),
@@ -36,6 +36,7 @@ pub async fn query_connection<const N: usize>(context: &mut EfunContext<'_, N>) 
         ("mxp", LpcRef::from(snapshot.mxp)),
         ("eor", LpcRef::from(snapshot.eor)),
         ("idle", LpcRef::from(connection.idle() as LpcIntInner)),
+        ("overflowed", LpcRef::from(connection.is_overflowed())),
     ];
     let mapping: IndexMap<LpcRef, LpcRef> = entries
         .into_iter()
@@ -76,6 +77,7 @@ mod tests {
         let mut session = Session::new();
         session.feed(&[IAC, DO, GMCP, IAC, SB, NAWS, 0, 100, 0, 40, IAC, SE]);
         connected.connection.refresh(&session);
+        connected.connection.set_overflowed(true);
 
         let main = indoc! { r#"
             mapping m;
@@ -101,7 +103,8 @@ mod tests {
         assert_eq!(get("mxp"), LpcRef::from(0));
         assert_eq!(get("eor"), LpcRef::from(0));
         assert_eq!(get("idle"), LpcRef::from(0));
-        assert_eq!(m.len(), 9, "the key set is fixed");
+        assert_eq!(get("overflowed"), LpcRef::from(1));
+        assert_eq!(m.len(), 10, "the key set is fixed");
     }
 
     #[tokio::test]
