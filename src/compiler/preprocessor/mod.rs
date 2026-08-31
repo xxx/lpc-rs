@@ -343,7 +343,7 @@ impl Preprocessor {
 
         // Lex the body in place — tokens are born with their true
         // definition-site spans (card ④ R3). A directive line inside a
-        // body has no legal reading (R6 — LPC has no `#` operator).
+        // body has no legal reading (card ③ R6 — LPC has no `#` operator).
         let lex_body = |body: &str| -> Result<Vec<Token>> {
             let tokens = LexWrapper::new_at(body, body_span.file_id(), body_span.l())
                 .collect::<Result<Vec<_>>>()?;
@@ -605,35 +605,10 @@ mod tests {
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
-    use crate::{assert_regex, compiler::compilation_context::CompilationContextBuilder};
-
-    /// A uniquely named scratch directory (test name + pid) for a
-    /// filesystem-backed fixture; removed on drop, panic included.
-    struct TempLib(std::path::PathBuf);
-
-    impl TempLib {
-        fn new(name: &str) -> Self {
-            let root = std::env::temp_dir()
-                .join(format!("lpc-rs-preprocessor-{name}-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&root);
-            std::fs::create_dir_all(&root).unwrap();
-            Self(root)
-        }
-    }
-
-    impl std::ops::Deref for TempLib {
-        type Target = std::path::Path;
-
-        fn deref(&self) -> &std::path::Path {
-            &self.0
-        }
-    }
-
-    impl Drop for TempLib {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
+    use crate::{
+        assert_regex, compiler::compilation_context::CompilationContextBuilder,
+        test_support::TempLib,
+    };
 
     fn fixture() -> Preprocessor {
         let config = ConfigBuilder::default()
@@ -1147,7 +1122,7 @@ mod tests {
 
         #[tokio::test]
         async fn a_directive_in_a_macro_body_errors_at_define_time() {
-            // Stored silently before; it leaked to the parser at use (R6).
+            // Stored silently before; it leaked to the parser at use (card ③ R6).
             test_invalid(
                 "#define X #include \"foo.h\"\n",
                 "a preprocessor directive cannot appear in a macro body",
@@ -2063,7 +2038,7 @@ mod tests {
         #[tokio::test]
         async fn a_zero_parameter_empty_body_call_expands_to_nothing() {
             // `F()` is a call: its (empty) body vanishes, leaving `;`.
-            // Bare `F` with no `(` is a plain identifier (R2).
+            // Bare `F` with no `(` is a plain identifier (card ② R2).
             let prog = "#define F()\nF();\nF;\n";
             test_valid(prog, &[";", "F", ";"]).await;
         }
@@ -2383,7 +2358,7 @@ mod tests {
     #[tokio::test]
     async fn a_comment_closing_on_the_directive_line_is_legal() {
         // The `*/ #define` shape: the gap back to the previous token
-        // spans the comment's newline (spec R2) — matches C's
+        // spans the comment's newline (card ③ R2) — matches C's
         // first-token-on-the-line reading.
         let prog = "int a;\n/* header\n comment */ #define FOO 1\nFOO;\n";
         test_valid(prog, &["int", "a", ";", "1", ";"]).await;

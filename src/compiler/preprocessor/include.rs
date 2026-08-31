@@ -248,14 +248,7 @@ mod tests {
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
-
-    fn temp_lib(name: &str) -> PathBuf {
-        let root =
-            std::env::temp_dir().join(format!("lpc-rs-include-walk-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        root
-    }
+    use crate::test_support::TempLib;
 
     fn config_at(root: &Path) -> Config {
         ConfigBuilder::default()
@@ -276,7 +269,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_reopened_file_reuses_its_id_and_text() {
-        let root = temp_lib("memo");
+        let root = TempLib::new("memo");
         std::fs::write(root.join("a.h"), "1\n").unwrap();
         let config = config_at(&root);
         let mut walk = rooted(&config);
@@ -299,7 +292,7 @@ mod tests {
 
     #[tokio::test]
     async fn an_open_of_an_active_file_is_a_cycle() {
-        let root = temp_lib("cycle");
+        let root = TempLib::new("cycle");
         std::fs::write(root.join("a.h"), "1\n").unwrap();
         let config = config_at(&root);
         let mut walk = rooted(&config);
@@ -319,7 +312,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_once_marked_file_opens_to_nothing() {
-        let root = temp_lib("once");
+        let root = TempLib::new("once");
         std::fs::write(root.join("o.h"), "1\n").unwrap();
         let config = config_at(&root);
         let mut walk = rooted(&config);
@@ -339,7 +332,9 @@ mod tests {
 
     #[tokio::test]
     async fn once_precedes_the_cycle_check() {
-        let config = config_at(&temp_lib("once-cycle"));
+        // Bound so the directory outlives this statement.
+        let root = TempLib::new("once-cycle");
+        let config = config_at(&root);
         let mut walk = rooted(&config);
         // Marks the root, which stays on the stack.
         walk.mark_once();
@@ -353,7 +348,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_depth_cap_fires_at_the_limit() {
-        let root = temp_lib("depth");
+        let root = TempLib::new("depth");
         for i in 0..MAX_INCLUDE_DEPTH + 5 {
             std::fs::write(root.join(format!("h{i}.h")), "1\n").unwrap();
         }
@@ -380,7 +375,7 @@ mod tests {
 
     #[tokio::test]
     async fn open_close_balances_the_stack() {
-        let root = temp_lib("balance");
+        let root = TempLib::new("balance");
         std::fs::write(root.join("a.h"), "1\n").unwrap();
         let config = config_at(&root);
         let mut walk = rooted(&config);
