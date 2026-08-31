@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, iter::Peekable, path::Path};
+use std::{collections::HashMap, fmt::Debug, path::Path};
 
 use async_recursion::async_recursion;
 use define::{Define, ObjectMacro};
@@ -17,13 +17,14 @@ use crate::{
     compiler::{
         ast::binary_op_node::BinaryOperation,
         compilation_context::CompilationContext,
-        lexer::{LexWrapper, Spanned, Token, TokenVecWrapper, logos_token::StringToken},
+        lexer::{LexWrapper, Spanned, Token, logos_token::StringToken},
         preprocessor::preprocessor_node::PreprocessorNode,
     },
     preprocessor_parser,
 };
 
 pub mod define;
+mod expand;
 pub mod preprocessor_node;
 
 macro_rules! regex {
@@ -257,7 +258,8 @@ impl Preprocessor {
 
                         // Handle macro expansion
                         Token::Id(t) => {
-                            let appends = self.expand_token(t, &mut iter)?;
+                            let appends =
+                                expand::Expander::new(&self.defines).expand_use(t, &mut iter)?;
 
                             match appends {
                                 Some(mut vec) => {
@@ -289,171 +291,6 @@ impl Preprocessor {
         Ok(output)
     }
 
-    /// Expand a `#define`d token, if necessary
-    #[instrument(skip(self))]
-    fn expand_token<T>(
-        &self,
-        token: &StringToken,
-        iter: &mut Peekable<T>,
-    ) -> Result<Option<Vec<Spanned<Token>>>>
-    where
-        T: Iterator<Item = Result<Spanned<Token>>> + Debug,
-    {
-        let span = token.0;
-        let name = &token.1;
-
-        match self.defines.get(name) {
-            Some(Define::Object(object)) => {
-                let mut tokens = Vec::with_capacity(object.tokens.len());
-
-                for (tl, tok, tr) in object.tokens.clone() {
-                    match &tok {
-                        Token::Id(s) => {
-                            let mut iter = TokenVecWrapper::new(&object.tokens).peekable();
-
-                            match self.expand_token(s, &mut iter)? {
-                                Some(mut vec) => tokens.append(&mut vec),
-                                None => tokens.push((tl, Token::Id(s.clone()), tr)),
-                            }
-                        }
-                        _ => {
-                            // Set the span to that of the token before its replacement.
-                            // let new_spanned = (span.l, tok.with_span(span), span.r);
-                            // tokens.push(new_spanned);
-                            tokens.push((span.l(), tok, span.r()));
-                        }
-                    }
-                }
-                Ok(Some(tokens))
-            }
-            Some(Define::Function(function)) => {
-                if !matches!(iter.peek(), Some(Ok((_, Token::LParen(_), _)))) {
-                    return Err(lpc_error!(
-                        Some(token.0),
-                        "functional macro call missing arguments"
-                    ));
-                }
-
-                let args = Preprocessor::consume_macro_arguments(iter, span)?;
-
-                if args.len() != function.args.len() {
-                    return Err(lpc_error!(
-                        Some(span),
-                        "incorrect number of macro arguments"
-                    ));
-                }
-
-                let arg_map = function
-                    .args
-                    .iter()
-                    .cloned()
-                    .zip(args)
-                    .collect::<HashMap<_, _>>();
-
-                let mut replacements = Vec::with_capacity(function.tokens.len());
-                let mut iter = TokenVecWrapper::new(&function.tokens).peekable();
-
-                while let Some(Ok(replacement)) = iter.next() {
-                    if let (tl, Token::Id(s), tr) = replacement {
-                        if let Some(arg_tokens) = arg_map.get(&s.1) {
-                            // Arguments are macro-expanded before
-                            // substitution; without it `ENV(TP)` leaves `TP`
-                            // raw in the output.
-                            let mut arg_iter = TokenVecWrapper::new(arg_tokens).peekable();
-                            while let Some(Ok(arg_spanned)) = arg_iter.next() {
-                                match arg_spanned {
-                                    (al, Token::Id(a), ar) => {
-                                        match self.expand_token(&a, &mut arg_iter)? {
-                                            Some(mut vec) => replacements.append(&mut vec),
-                                            None => replacements.push((al, Token::Id(a), ar)),
-                                        }
-                                    }
-                                    other => replacements.push(other),
-                                }
-                            }
-                        } else {
-                            match self.expand_token(&s, &mut iter)? {
-                                Some(mut vec) => replacements.append(&mut vec),
-                                None => replacements.push((tl, Token::Id(s.clone()), tr)),
-                            }
-                        }
-                    } else {
-                        replacements.push(replacement.clone())
-                    }
-                }
-
-                Ok(Some(replacements))
-            }
-            None => Ok(None),
-        }
-    }
-
-    /// Consume tokens until the end of the arguments list, then collect them
-    /// into a vector-per-argument.
-    /// Assumes the next token in the iterator is the opening left parenthesis,
-    /// and has already been checked for its presence.
-    #[instrument]
-    fn consume_macro_arguments<T>(
-        iter: &mut Peekable<T>,
-        span: Span,
-    ) -> Result<Vec<Vec<Spanned<Token>>>>
-    where
-        T: Iterator<Item = Result<Spanned<Token>>> + Debug,
-    {
-        iter.next(); // consume the opening paren
-
-        let mut parens = 1;
-        let mut args: Vec<Vec<Spanned<Token>>> = vec![];
-        let mut arg = vec![];
-
-        while parens != 0 {
-            let next = iter.next();
-
-            match next {
-                Some(Ok(t)) => {
-                    let (_, arg_tok, _) = &t;
-                    match &arg_tok {
-                        Token::LParen(_) => {
-                            parens += 1;
-                            arg.push(t);
-                        }
-                        Token::RParen(_) => {
-                            parens -= 1;
-
-                            if parens == 0 {
-                                args.push(arg);
-                                arg = vec![];
-                            } else {
-                                arg.push(t);
-                            }
-                        }
-                        Token::Comma(_) => {
-                            if parens == 1 {
-                                // we're inside only the outermost parens
-                                args.push(arg);
-                                arg = vec![];
-                            } else {
-                                arg.push(t)
-                            }
-                        }
-                        Token::NewLine(_) => { /* ignore */ }
-                        _ => {
-                            arg.push(t);
-                        }
-                    }
-                }
-                Some(Err(e)) => return Err(e),
-                None => break,
-            }
-        }
-
-        if parens != 0 {
-            return Err(lpc_error!(Some(span), "mismatched parentheses"));
-        }
-
-        Ok(args)
-    }
-
     #[instrument(skip(self))]
     fn handle_define(&mut self, token: &StringToken) -> Result<()> {
         if self.skipping_lines() {
@@ -483,10 +320,15 @@ impl Preprocessor {
             check_duplicate(&captures[1], span)?;
 
             let name = String::from(&captures[1]);
-            let args: Vec<String> = COMMA_SEPARATOR
-                .split(&captures[2])
-                .map(String::from)
-                .collect();
+            let raw_params = captures[2].trim();
+            let args: Vec<String> = if raw_params.is_empty() {
+                vec![]
+            } else {
+                COMMA_SEPARATOR
+                    .split(raw_params)
+                    .map(String::from)
+                    .collect()
+            };
             let body = &captures[3];
 
             // re-span these tokens to just be the entire #define line
@@ -2039,23 +1881,23 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn test_errors_if_no_args() {
+        async fn test_bare_function_macro_name_is_an_identifier() {
             let prog = indoc! { r##"
                 #define BAR(a, b) (a - b)
                 BAR;
             "## };
 
-            test_invalid(prog, "functional macro call missing arguments").await;
+            test_valid(prog, &["BAR", ";"]).await;
         }
 
         #[tokio::test]
-        async fn test_errors_if_mismatched_parens() {
+        async fn test_errors_if_unterminated_call() {
             let prog = indoc! { r##"
                 #define BAR(a, b) (a - b)
                 BAR(dump("asdf");
             "## };
 
-            test_invalid(prog, "mismatched parentheses").await;
+            test_invalid(prog, "unterminated call to macro `BAR`").await;
         }
 
         #[tokio::test]
@@ -2065,7 +1907,7 @@ mod tests {
                 BAR(34);
             "## };
 
-            test_invalid(prog, "incorrect number of macro arguments").await;
+            test_invalid(prog, "macro `BAR` takes 2 arguments, 1 given").await;
         }
     }
 

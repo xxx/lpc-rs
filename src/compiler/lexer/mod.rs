@@ -67,13 +67,12 @@ impl Iterator for LexWrapper<'_> {
 /// A wrapper for vectors of tokens, for lalrpop compatibility
 #[derive(Debug)]
 pub struct TokenVecWrapper<'a> {
-    vec: &'a Vec<Spanned<Token>>,
+    vec: &'a [Spanned<Token>],
     count: usize,
 }
 
 impl<'a> TokenVecWrapper<'a> {
-    #[allow(clippy::ptr_arg)]
-    pub fn new(vec: &'a Vec<Spanned<Token>>) -> Self {
+    pub fn new(vec: &'a [Spanned<Token>]) -> Self {
         Self { vec, count: 0 }
     }
 }
@@ -539,7 +538,7 @@ impl HasSpan for Token {
 impl Token {
     /// A helper to allow us to correct spans, for cases when we lex `#define`d
     /// values for macro expansion.
-    fn span_ref(&mut self) -> Option<&mut Span> {
+    pub(crate) fn span_ref(&mut self) -> Option<&mut Span> {
         let span = match self {
             Token::Plus(x)
             | Token::Minus(x)
