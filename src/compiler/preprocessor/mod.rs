@@ -258,16 +258,14 @@ impl Preprocessor {
 
                         // Handle macro expansion
                         Token::Id(t) => {
-                            let appends =
-                                expand::Expander::new(&self.defines).expand_use(t, &mut iter)?;
+                            if !self.skipping_lines() {
+                                let appends = expand::Expander::new(&self.defines)
+                                    .expand_use(t, &mut iter)?;
 
-                            match appends {
-                                Some(mut vec) => {
-                                    if !self.skipping_lines() {
-                                        output.append(&mut vec)
-                                    }
+                                match appends {
+                                    Some(mut vec) => output.append(&mut vec),
+                                    None => self.append_spanned(&mut output, spanned),
                                 }
-                                None => self.append_spanned(&mut output, spanned),
                             }
                         }
                         _ => self.append_spanned(&mut output, spanned),
@@ -276,7 +274,9 @@ impl Preprocessor {
                     self.last_slice = token_string;
                 }
                 Err(e) => {
-                    return Err(e);
+                    if !self.skipping_lines() {
+                        return Err(e);
+                    }
                 }
             }
         }
@@ -391,6 +391,10 @@ impl Preprocessor {
 
     #[instrument(skip(self))]
     fn handle_undef(&mut self, token: &StringToken) -> Result<()> {
+        if self.skipping_lines() {
+            return Ok(());
+        }
+
         self.check_for_previous_newline(token.0)?;
 
         if let Some(captures) = UNDEF.captures(&token.1) {
@@ -759,6 +763,10 @@ impl Preprocessor {
 
     #[instrument(skip(self))]
     fn handle_pragma(&mut self, token: &StringToken) -> Result<()> {
+        if self.skipping_lines() {
+            return Ok(());
+        }
+
         self.check_for_previous_newline(token.0)?;
 
         if let Some(captures) = PRAGMA.captures(&token.1) {
@@ -2130,5 +2138,49 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_undef_in_dead_region_is_inert() {
+        let prog = indoc! { r##"
+            #define FOO 1
+            #ifdef NOPE
+            #undef FOO
+            #endif
+            FOO
+        "## };
+
+        test_valid(prog, &["1"]).await;
+    }
+
+    #[tokio::test]
+    async fn test_pragma_in_dead_region_is_inert() {
+        let mut preprocessor = fixture();
+        let prog = indoc! { r##"
+            #ifdef NOPE
+            #pragma no_clone
+            #endif
+        "## };
+        let _ = preprocessor.scan("/test.c", prog).await.unwrap();
+
+        assert!(!preprocessor.context.pragmas.no_clone());
+    }
+
+    #[tokio::test]
+    async fn test_dead_region_diagnoses_nothing() {
+        // Arity error, unterminated call, and a lex error (`#elif` has no
+        // token) — all inside a dead region: the classic `#if 0` around
+        // broken code.
+        let prog = indoc! { r##"
+            #define BAR(a, b) (a - b)
+            #ifdef NOPE
+            BAR(1);
+            BAR(2
+            #elif spurious
+            #endif
+            "ok"
+        "## };
+
+        test_valid(prog, &["ok"]).await;
     }
 }
