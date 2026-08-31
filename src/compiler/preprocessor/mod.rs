@@ -175,8 +175,7 @@ impl Preprocessor {
         };
 
         let src = code.as_ref();
-        let mut token_stream = LexWrapper::new(src);
-        token_stream.set_file_id(file_id);
+        let token_stream = LexWrapper::new(src, file_id);
 
         let mut iter = token_stream.peekable();
         // The end of the last token this loop drew — the placement
@@ -337,7 +336,7 @@ impl Preprocessor {
         // directive line inside a body has no legal reading (R6 — LPC
         // has no `#` operator).
         let lex_body = |body: &str| -> Result<Vec<Spanned<Token>>> {
-            let tokens = LexWrapper::new(body)
+            let tokens = LexWrapper::new(body, span.file_id())
                 .collect::<Result<Vec<_>>>()
                 .map_err(|e| e.with_span(Some(span)))?;
             if tokens

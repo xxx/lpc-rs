@@ -364,7 +364,7 @@ mod tests {
     /// Drive the engine over `src` the way internal_scan does; Display strings out.
     fn expand_all(preprocessor: &Preprocessor, src: &str) -> Result<Vec<String>> {
         let expander = Expander::new(&preprocessor.defines);
-        let mut cursor = LexWrapper::new(src).peekable();
+        let mut cursor = LexWrapper::new(src, 0).peekable();
         let mut out = vec![];
         while let Some(next) = cursor.next() {
             let spanned = next?;
@@ -551,7 +551,7 @@ mod tests {
     async fn body_tokens_take_the_use_site_span() {
         let pp = table("#define FOO 42\n").await;
         let expander = Expander::new(&pp.defines);
-        let mut cursor = LexWrapper::new("FOO").peekable();
+        let mut cursor = LexWrapper::new("FOO", 0).peekable();
         let Some(Ok((_, Token::Id(st), _))) = cursor.next() else {
             panic!("expected an Id");
         };
@@ -567,7 +567,7 @@ mod tests {
         let pp = table("#define ID(x) x\n").await;
         let expander = Expander::new(&pp.defines);
         let src = "ID(marf)";
-        let mut cursor = LexWrapper::new(src).peekable();
+        let mut cursor = LexWrapper::new(src, 0).peekable();
         let Some(Ok((_, Token::Id(st), _))) = cursor.next() else {
             panic!("expected an Id");
         };
@@ -579,7 +579,7 @@ mod tests {
 
         // Not just "not the use span" — exactly what a fresh lex of the
         // same source gives the "marf" token.
-        let mut fresh = LexWrapper::new(src);
+        let mut fresh = LexWrapper::new(src, 0);
         let marf_span = loop {
             match fresh.next().unwrap().unwrap() {
                 (_, Token::Id(marf_st), _) if marf_st.1 == "marf" => break marf_st.0,

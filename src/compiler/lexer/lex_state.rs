@@ -5,13 +5,8 @@ use lpc_rs_errors::source_map::FileId;
 pub struct LexState {
     pub last_slice: String,
     pub current_file_id: FileId,
-}
-
-impl Default for LexState {
-    fn default() -> Self {
-        LexState {
-            last_slice: String::from("\n"),
-            current_file_id: 0,
-        }
-    }
+    /// Byte offset of the lexed text within `current_file_id`'s source —
+    /// nonzero when lexing a fragment (a `#define` body, a `#if`
+    /// operand), so spans are born in file coordinates.
+    pub base_offset: usize,
 }

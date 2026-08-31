@@ -3259,7 +3259,7 @@ mod tests {
 
         fn get_call_node(code: &str, context: &mut CompilationContext) -> CallNode {
             let mut prog_node = lpc_parser::ProgramParser::new()
-                .parse(context, LexWrapper::new(code))
+                .parse(context, LexWrapper::new(code, 0))
                 .unwrap();
             if_chain! {
                 if let Some(AstNode::Decl(mut node)) = prog_node.body.pop();
@@ -3709,7 +3709,10 @@ mod tests {
         async fn test_visit_block_populates_instructions() {
             let block = "void marf() { { int a = '🏯'; dump(a); } }";
             let mut prog_node: ProgramNode = lpc_parser::ProgramParser::new()
-                .parse(&mut CompilationContext::default(), LexWrapper::new(block))
+                .parse(
+                    &mut CompilationContext::default(),
+                    LexWrapper::new(block, 0),
+                )
                 .unwrap();
             let node = if let AstNode::FunctionDef(n) = prog_node.body.first_mut().unwrap() {
                 if let AstNode::Block(n) = n.body.first_mut().unwrap() {
@@ -3775,7 +3778,7 @@ mod tests {
 
         fn get_closure_node(code: &str, context: &mut CompilationContext) -> ClosureNode {
             let mut prog_node = lpc_parser::ProgramParser::new()
-                .parse(context, LexWrapper::new(code))
+                .parse(context, LexWrapper::new(code, 0))
                 .unwrap();
             if_chain! {
                 if let Some(AstNode::Decl(mut node)) = prog_node.body.pop();
@@ -4236,7 +4239,7 @@ mod tests {
     async fn test_decl_sets_scope_and_instructions() {
         let call = "int foo = 1, *bar = ({ 56 });";
         let mut prog_node: ProgramNode = lpc_parser::ProgramParser::new()
-            .parse(&mut CompilationContext::default(), LexWrapper::new(call))
+            .parse(&mut CompilationContext::default(), LexWrapper::new(call, 0))
             .unwrap();
         let node = if let AstNode::Decl(node) = prog_node.body.first_mut().unwrap() {
             node
@@ -4424,7 +4427,7 @@ mod tests {
             let mut prototype_walker = FunctionPrototypeWalker::default();
 
             let mut prog_node: ProgramNode = lpc_parser::ProgramParser::new()
-                .parse(&mut CompilationContext::default(), LexWrapper::new(code))
+                .parse(&mut CompilationContext::default(), LexWrapper::new(code, 0))
                 .unwrap();
             let ast_node = prog_node.body.first_mut().unwrap();
             let node = if let AstNode::FunctionDef(node) = ast_node {

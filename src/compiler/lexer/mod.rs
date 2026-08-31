@@ -30,8 +30,23 @@ pub struct LexWrapper<'input> {
 }
 
 impl<'input> LexWrapper<'input> {
-    pub fn new(prog: &'input str) -> LexWrapper<'input> {
-        let lexer = Token::lexer(prog);
+    /// Lex `prog` as the full text of `file_id`.
+    pub fn new(prog: &'input str, file_id: FileId) -> LexWrapper<'input> {
+        Self::new_at(prog, file_id, 0)
+    }
+
+    /// Lex a fragment of `file_id`'s text that starts at byte `base`:
+    /// every span this lexer births — token and lex-error alike — is
+    /// offset into file coordinates.
+    pub fn new_at(prog: &'input str, file_id: FileId, base: usize) -> LexWrapper<'input> {
+        let lexer = Token::lexer_with_extras(
+            prog,
+            LexState {
+                last_slice: String::new(),
+                current_file_id: file_id,
+                base_offset: base,
+            },
+        );
         Self { lexer }
     }
 
@@ -52,11 +67,15 @@ impl Iterator for LexWrapper<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         let token = self.lexer.next()?;
         let span = self.lexer.span();
+        let base = self.lexer.extras.base_offset;
 
         match token {
-            Ok(t) => Some(Ok((span.start, t, span.end))),
+            Ok(t) => Some(Ok((base + span.start, t, base + span.end))),
             Err(_) => Some(Err(lpc_error!(
-                Some(Span::new(self.lexer.extras.current_file_id, span)),
+                Some(Span::new(
+                    self.lexer.extras.current_file_id,
+                    base + span.start..base + span.end,
+                )),
                 "Lex Error: Invalid Token `{}`",
                 self.lexer.slice(),
             ))),
@@ -265,9 +284,7 @@ pub enum Token {
 
     // Allow multiple bytes so any Unicode scalar can be matched.
     #[regex(r#"'(\\.|[^']){1,4}'"#, |lex| {
-    track_slice(lex);
-
-    let span = Span::new(lex.extras.current_file_id, lex.span());
+    let span = track_slice(lex);
 
     match lex.slice().chars().nth(1) {
         Some(c) => Ok(IntToken(span, c as LpcIntInner)),
@@ -280,15 +297,15 @@ pub enum Token {
     }
     })]
     #[regex(r"[1-9][0-9_]*|0", |lex| {
-        track_slice(lex);
+        let span = track_slice(lex);
 
         match LpcIntInner::from_str(&lex.slice().replace('_', "")) {
-            Ok(i) => Ok(IntToken(Span::new(lex.extras.current_file_id, lex.span()), i)),
+            Ok(i) => Ok(IntToken(span, i)),
             Err(_e) => Err(())
         }
     }, priority = 2)]
     #[regex(r"0[xX][0-9a-fA-F][0-9a-fA-F_]*", |lex| {
-        track_slice(lex);
+        let span = track_slice(lex);
 
         let r = LpcIntInner::from_str_radix(
             lex.slice().replace('_', "")
@@ -297,12 +314,12 @@ pub enum Token {
             16);
 
         match r {
-            Ok(i) => Ok(IntToken(Span::new(lex.extras.current_file_id, lex.span()), i)),
+            Ok(i) => Ok(IntToken(span, i)),
             Err(_e) => Err(())
         }
     }, priority = 2)]
     #[regex(r"0[oO]?[0-7][0-7_]*", |lex| {
-        track_slice(lex);
+        let span = track_slice(lex);
 
         let r = LpcIntInner::from_str_radix(
             lex.slice().replace('_', "")
@@ -311,12 +328,12 @@ pub enum Token {
             8);
 
         match r {
-            Ok(i) => Ok(IntToken(Span::new(lex.extras.current_file_id, lex.span()), i)),
+            Ok(i) => Ok(IntToken(span, i)),
             Err(_e) => Err(())
         }
     }, priority = 2)]
     #[regex(r"0[bB][01][01_]*", |lex| {
-        track_slice(lex);
+        let span = track_slice(lex);
 
         let r = LpcIntInner::from_str_radix(
             lex.slice().replace('_', "")
@@ -325,7 +342,7 @@ pub enum Token {
             2);
 
         match r {
-            Ok(i) => Ok(IntToken(Span::new(lex.extras.current_file_id, lex.span()), i)),
+            Ok(i) => Ok(IntToken(span, i)),
             Err(_e) => Err(())
         }
     }, priority = 2)]
@@ -354,17 +371,15 @@ pub enum Token {
 #[inline]
 fn track_slice(lex: &mut Lexer<Token>) -> Span {
     let slice = lex.slice();
-
-    // For the span, we do not want to include any trailing newlines,
-    // else they show up in error messages.
-    let newline_count = slice.to_string().matches('\n').count();
     let span = lex.span();
+    let base = lex.extras.base_offset;
+
+    // A trailing newline never belongs in a caret; only `DirectiveLine`'s
+    // grab can consume one, and its regex admits exactly one.
+    let end = span.end - usize::from(slice.ends_with('\n'));
 
     lex.extras.last_slice = slice.to_string();
-    Span::new(
-        lex.extras.current_file_id,
-        span.start..(span.end - newline_count),
-    )
+    Span::new(lex.extras.current_file_id, base + span.start..base + end)
 }
 
 fn string_token(lex: &mut Lexer<Token>) -> StringToken {
@@ -376,7 +391,7 @@ fn string_token(lex: &mut Lexer<Token>) -> StringToken {
 /// Strip off the start and end characters of a string, then store the result in
 /// a [`StringToken`]. Used for processing string literals and include paths.
 fn string_token_without_startend(lex: &mut Lexer<Token>) -> StringToken {
-    track_slice(lex);
+    let span = track_slice(lex);
     let slice: &str = &lex.extras.last_slice;
 
     let s = if slice.len() < 3 {
@@ -385,14 +400,14 @@ fn string_token_without_startend(lex: &mut Lexer<Token>) -> StringToken {
         convert_escapes(&slice[1..=(slice.len() - 2)])
     };
 
-    StringToken(Span::new(lex.extras.current_file_id, lex.span()), s)
+    StringToken(span, s)
 }
 
 /// Track and convert float literals to [`FloatToken`]s
 fn float_literal(lex: &mut Lexer<Token>) -> FloatToken {
-    track_slice(lex);
+    let span = track_slice(lex);
     let f = BaseFloat::from_str(&lex.slice().replace('_', "")).unwrap();
-    FloatToken(Span::new(lex.extras.current_file_id, lex.span()), f)
+    FloatToken(span, f)
 }
 
 impl HasSpan for Token {
@@ -697,9 +712,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_fragment_is_born_in_file_coordinates() {
+        let mut lexer = LexWrapper::new_at("x + 1", 4, 100);
+        let (l, tok, r) = lexer.next().unwrap().unwrap();
+        assert_eq!((l, r), (100, 101));
+        assert_eq!(tok.span(), Span::new(4, 100..101));
+
+        let error = LexWrapper::new_at("`", 4, 100)
+            .next()
+            .unwrap()
+            .expect_err("a backtick does not lex");
+        assert_eq!(error.span(), Some(Span::new(4, 100..101)));
+    }
+
+    #[test]
+    fn a_multi_line_string_spans_the_whole_literal() {
+        let vec = lex_vec("\"a\nb\"");
+        let Ok((_, Token::StringLiteral(st), _)) = &vec[0] else {
+            panic!("expected a string literal");
+        };
+        assert_eq!(st.0, Span::new(0, 0..5));
+    }
+
+    #[test]
     fn an_invalid_token_carries_its_span() {
-        let mut lexer = LexWrapper::new("int x = `;");
-        lexer.set_file_id(7);
+        let mut lexer = LexWrapper::new("int x = `;", 7);
         let error = lexer
             .find_map(|item| item.err())
             .expect("a backtick does not lex");
@@ -708,7 +745,7 @@ mod tests {
     }
 
     fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>>> {
-        LexWrapper::new(prog).collect::<Vec<_>>()
+        LexWrapper::new(prog, 0).collect::<Vec<_>>()
     }
 
     #[test]

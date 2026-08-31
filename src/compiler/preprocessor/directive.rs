@@ -443,7 +443,7 @@ pub fn parse(line: &str, span: Span) -> Result<Directive> {
 /// are recognized contextually. `base` locates `text` in its file, so
 /// diagnostics carry real source spans.
 pub fn parse_if_expression(text: &str, base: Span) -> Result<PreprocessorNode> {
-    let tokens = LexWrapper::new(text)
+    let tokens = LexWrapper::new(text, base.file_id())
         .collect::<Result<Vec<_>>>()
         .map_err(|e| {
             // The fragment's spans are meaningless; shift them into the file.

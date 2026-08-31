@@ -58,7 +58,7 @@ use crate::compiler::{
 /// };
 ///
 /// let prog = "int main() { int b = 123; return b; }";
-/// let lexer = LexWrapper::new(prog);
+/// let lexer = LexWrapper::new(prog, 0);
 /// let mut program_node = lpc_parser::ProgramParser::new()
 ///     .parse(&mut CompilationContext::default(), lexer)
 ///     .unwrap();
