@@ -2178,6 +2178,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_nested_else_inside_outer_else_is_valid() {
+        let prog = indoc! { r##"
+            #ifdef NOPE
+            "a"
+            #else
+            #ifdef X
+            "b"
+            #else
+            "c"
+            #endif
+            "d"
+            #endif
+        "## };
+
+        test_valid(prog, &["c", "d"]).await;
+    }
+
+    #[tokio::test]
     async fn test_duplicate_else_across_nesting_errors() {
         let prog = indoc! { r##"
             #ifdef NOPE
