@@ -15,7 +15,7 @@ use lpc_rs_errors::{
 use tracing::{instrument, trace};
 
 use crate::compiler::{
-    ast::binary_op_node::BinaryOperation,
+    ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
     compilation_context::CompilationContext,
     lexer::{LexWrapper, Token, logos_token::StringToken},
     preprocessor::preprocessor_node::PreprocessorNode,
@@ -493,24 +493,18 @@ impl Preprocessor {
             PreprocessorNode::String(_) => Ok(true),
             PreprocessorNode::Defined(x, negated) => Ok(self.defines.contains_key(x) != *negated),
             PreprocessorNode::BinaryOp(op, l, r) => match op {
-                BinaryOperation::Add => Ok(self
-                    .resolve_int(l, span, hide)?
-                    .wrapping_add(self.resolve_int(r, span, hide)?)
-                    != 0),
-                BinaryOperation::Sub => Ok(self
-                    .resolve_int(l, span, hide)?
-                    .wrapping_sub(self.resolve_int(r, span, hide)?)
-                    != 0),
+                // Short-circuit at bool level, so `#if 0 && 1/0` is fine (C's rule).
                 BinaryOperation::AndAnd => Ok(self.eval_expr_for_skipping(l, span, hide)?
                     && self.eval_expr_for_skipping(r, span, hide)?),
                 BinaryOperation::OrOr => Ok(self.eval_expr_for_skipping(l, span, hide)?
                     || self.eval_expr_for_skipping(r, span, hide)?),
-                op => Err(lpc_error!(
-                    span,
-                    "unknown binary operation `{}` in expression `{}`",
-                    op,
-                    expr
-                )),
+                _ => Ok(self.resolve_int(expr, span, hide)? != 0),
+            },
+            PreprocessorNode::UnaryOp(op, inner) => match op {
+                // Bool position stays lenient: `!FOO` is true for an
+                // undefined FOO (the Var rule); int position is strict.
+                UnaryOperation::Bang => Ok(!self.eval_expr_for_skipping(inner, span, hide)?),
+                _ => Ok(self.resolve_int(expr, span, hide)? != 0),
             },
         }
     }
@@ -566,12 +560,45 @@ impl Preprocessor {
                 match op {
                     BinaryOperation::Add => Ok(li.wrapping_add(ri)),
                     BinaryOperation::Sub => Ok(li.wrapping_sub(ri)),
+                    BinaryOperation::Mul => Ok(li.wrapping_mul(ri)),
+                    BinaryOperation::Div if ri == 0 => Err(lpc_error!(span, "Division by zero")),
+                    BinaryOperation::Div => Ok(li.wrapping_div(ri)),
+                    BinaryOperation::Mod if ri == 0 => {
+                        Err(lpc_error!(span, "Remainder division by zero"))
+                    }
+                    BinaryOperation::Mod => Ok(li.wrapping_rem(ri)),
                     BinaryOperation::AndAnd => Ok(((li != 0) && (ri != 0)) as LpcIntInner),
                     BinaryOperation::OrOr => Ok(((li != 0) || (ri != 0)) as LpcIntInner),
-
+                    BinaryOperation::And => Ok(li & ri),
+                    BinaryOperation::Or => Ok(li | ri),
+                    BinaryOperation::Xor => Ok(li ^ ri),
+                    BinaryOperation::Shl => Ok(li.checked_shl(shift_amount(ri)).unwrap_or(0)),
+                    BinaryOperation::Shr => Ok(li.checked_shr(shift_amount(ri)).unwrap_or(0)),
+                    BinaryOperation::EqEq => Ok((li == ri) as LpcIntInner),
+                    BinaryOperation::NotEq => Ok((li != ri) as LpcIntInner),
+                    BinaryOperation::Lt => Ok((li < ri) as LpcIntInner),
+                    BinaryOperation::Lte => Ok((li <= ri) as LpcIntInner),
+                    BinaryOperation::Gt => Ok((li > ri) as LpcIntInner),
+                    BinaryOperation::Gte => Ok((li >= ri) as LpcIntInner),
+                    // Compose/Index — the sub-grammar cannot produce them.
                     operation => Err(lpc_error!(
                         span,
                         "unknown binary operation `{}` in expression `{}`",
+                        operation,
+                        expr
+                    )),
+                }
+            }
+            PreprocessorNode::UnaryOp(op, inner) => {
+                let i = self.resolve_int(inner, span, hide)?;
+                match op {
+                    UnaryOperation::Bang => Ok((i == 0) as LpcIntInner),
+                    UnaryOperation::Negate => Ok(i.wrapping_neg()),
+                    UnaryOperation::BitwiseNot => Ok(!i),
+                    // Inc/Dec — the sub-grammar cannot produce them.
+                    operation => Err(lpc_error!(
+                        span,
+                        "unknown unary operation `{}` in expression `{}`",
                         operation,
                         expr
                     )),
@@ -625,6 +652,18 @@ impl Default for Preprocessor {
             conditionals: Conditionals::default(),
             includes: IncludeWalk::default(),
         }
+    }
+}
+
+/// The runtime's shift-amount fold, replicated from
+/// `interpreter/lpc_ref.rs::shift_amount` — a euclidean modulo of the
+/// width, so `1 << 64 == 1` and negative amounts wrap from the top.
+fn shift_amount(y: LpcIntInner) -> u32 {
+    let modulo = y % (LpcIntInner::BITS as LpcIntInner);
+    if modulo < 0 {
+        LpcIntInner::BITS - (modulo.unsigned_abs() as u32)
+    } else {
+        modulo as u32
     }
 }
 
@@ -1989,7 +2028,7 @@ mod tests {
         fn test_unknown_operation_is_an_error_not_a_panic() {
             let preprocessor = fixture();
             let node = PreprocessorNode::BinaryOp(
-                BinaryOperation::Mul,
+                BinaryOperation::Compose,
                 Box::new(PreprocessorNode::Int(1)),
                 Box::new(PreprocessorNode::Int(2)),
             );
@@ -2066,6 +2105,38 @@ mod tests {
         async fn an_error_directive_fails_the_compile_with_its_text() {
             test_invalid("#error bad config\n", "#error: bad config").await;
             test_invalid("#error\n", "#error").await;
+        }
+
+        #[tokio::test]
+        async fn comparisons_and_arithmetic_drive_if() {
+            test_valid("#define V 4\n#if V > 3\n\"new\";\n#endif\n", &["new", ";"]).await;
+            test_valid("#if 2 * 3 == 6\n\"y\";\n#endif\n", &["y", ";"]).await;
+            test_valid("#if (1 << 64) == 1\n\"fold\";\n#endif\n", &["fold", ";"]).await;
+            test_valid("#if 7 % 2\n\"odd\";\n#endif\n", &["odd", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn division_by_zero_is_an_error_only_when_evaluated() {
+            test_invalid("#if 1 / 0\n#endif\n", "Division by zero").await;
+            test_invalid("#if 1 % 0\n#endif\n", "Remainder division by zero").await;
+            // Short-circuit shields the right side, as in C.
+            test_valid("#if 0 && 1 / 0\n\"no\";\n#endif\n\"ok\";\n", &["ok", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn bang_is_lenient_in_bool_position_and_strict_in_int_position() {
+            test_valid("#if !FOO\n\"unset\";\n#endif\n", &["unset", ";"]).await;
+            test_invalid(
+                "#if (!FOO) + 0\n#endif\n",
+                "unable to resolve into an int: `FOO`",
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn unary_minus_parses_in_if() {
+            test_valid("#if -1\n\"neg\";\n#endif\n", &["neg", ";"]).await;
+            test_valid("#if -0\n\"no\";\n#endif\n\"after\";\n", &["after", ";"]).await;
         }
     }
 
