@@ -559,59 +559,28 @@ impl ExprParser {
                     Err(self.err(l, r, "unmatched `(` in `#if` expression"))
                 }
             }
-            Token::DefinedParen(_) => self.defined_call_paren(false, l, r),
-            Token::Defined(_) => {
-                if matches!(self.peek(0), Some(Token::LParen(_))) {
-                    self.defined_call(false, l, r)
-                } else {
-                    Ok(PreprocessorNode::Var("defined".to_string()))
-                }
+            Token::Id(t) if t.1 == "not" && self.is_defined_call_ahead() => {
+                self.pos += 1; // the `defined`
+                self.defined_call(true)
             }
-            Token::Not(_) if self.is_defined_call_ahead() => match self.peek(0) {
-                Some(Token::DefinedParen(_)) => {
-                    self.pos += 1;
-                    self.defined_call_paren(true, l, r)
-                }
-                Some(Token::Defined(_)) => {
-                    self.pos += 1;
-                    self.defined_call(true, l, r)
-                }
-                _ => Ok(PreprocessorNode::Var("not".to_string())),
-            },
-            Token::Not(_) => Ok(PreprocessorNode::Var("not".to_string())),
+            Token::Id(t) if t.1 == "defined" && matches!(self.peek(0), Some(Token::LParen(_))) => {
+                self.defined_call(false)
+            }
             Token::Id(t) => Ok(PreprocessorNode::Var(t.1)),
             _ => Err(self.err(l, r, "unexpected token in `#if` expression")),
         }
     }
 
-    /// Is the upcoming pair `defined` `(` or `defined(` — i.e. `not` really
-    /// negates a defined-test? Otherwise `not` is a plain Var.
+    /// Is the upcoming pair `defined` `(` — i.e. `not` really negates a
+    /// defined-test? Otherwise `not` is a plain Var.
     fn is_defined_call_ahead(&self) -> bool {
-        matches!(self.peek(0), Some(Token::DefinedParen(_)))
-            || (matches!(self.peek(0), Some(Token::Defined(_)))
-                && matches!(self.peek(1), Some(Token::LParen(_))))
+        matches!(self.peek(0), Some(Token::Id(t)) if t.1 == "defined")
+            && matches!(self.peek(1), Some(Token::LParen(_)))
     }
 
-    /// `( name )` after a `defined` token. The caller consumed `defined`.
-    fn defined_call(&mut self, negated: bool, l: usize, r: usize) -> Result<PreprocessorNode> {
-        let _lparen = self.next().expect("caller checked for LParen");
-        match self.next() {
-            Some((_, Token::Id(t), _)) => match self.next() {
-                Some((_, Token::RParen(_), _)) => Ok(PreprocessorNode::Defined(t.1, negated)),
-                _ => Err(self.err(l, r, "unmatched `(` in `#if` expression")),
-            },
-            Some((nl, _, nr)) => Err(self.err(nl, nr, "unexpected token in `#if` expression")),
-            None => Err(self.end_err()),
-        }
-    }
-
-    /// Handle a `defined(` token followed by `name )`.
-    fn defined_call_paren(
-        &mut self,
-        negated: bool,
-        l: usize,
-        r: usize,
-    ) -> Result<PreprocessorNode> {
+    /// `( name )` after a `defined`. The caller peeked the `(`.
+    fn defined_call(&mut self, negated: bool) -> Result<PreprocessorNode> {
+        let (l, _, r) = self.next().expect("caller peeked the `(`");
         match self.next() {
             Some((_, Token::Id(t), _)) => match self.next() {
                 Some((_, Token::RParen(_), _)) => Ok(PreprocessorNode::Defined(t.1, negated)),

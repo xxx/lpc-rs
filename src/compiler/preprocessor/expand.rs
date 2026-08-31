@@ -211,8 +211,8 @@ impl<'a> Expansion<'a> {
     }
 
     /// Capture a call's arguments from `cursor`: paren depth only, commas
-    /// split at depth 1, newlines skipped (R6). The opening paren is
-    /// already consumed.
+    /// split at depth 1; calls may span lines, since newlines never
+    /// tokenize (R6). The opening paren is already consumed.
     fn capture_arguments<T>(
         &mut self,
         name: &str,
@@ -247,7 +247,6 @@ impl<'a> Expansion<'a> {
                     args.push(arg);
                     arg = vec![];
                 }
-                Token::NewLine(_) => { /* calls may span lines */ }
                 t if is_directive(t) => return Err(self.unterminated(name)),
                 _ => arg.push(spanned),
             }
@@ -328,22 +327,10 @@ impl<'a> Expansion<'a> {
     }
 }
 
-/// The whole-line directive tokens; one inside argument capture means the
-/// call ran into a directive line (R6).
+/// A directive line inside argument capture means the call ran into a
+/// directive (R6) — the capture is unterminated.
 fn is_directive(token: &Token) -> bool {
-    matches!(
-        token,
-        Token::LocalInclude(_)
-            | Token::SysInclude(_)
-            | Token::PreprocessorIf(_)
-            | Token::IfDef(_)
-            | Token::IfNDef(_)
-            | Token::PreprocessorElse(_)
-            | Token::Endif(_)
-            | Token::Define(_)
-            | Token::Undef(_)
-            | Token::Pragma(_)
-    )
+    matches!(token, Token::DirectiveLine(_))
 }
 
 #[cfg(test)]
@@ -386,7 +373,6 @@ mod tests {
                     Some(tokens) => out.extend(tokens),
                     None => out.push(spanned),
                 },
-                Token::NewLine(_) => {}
                 _ => out.push(spanned),
             }
         }

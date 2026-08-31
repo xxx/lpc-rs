@@ -260,9 +260,6 @@ pub enum Token {
     #[token("..", track_slice)]
     Range(Span),
 
-    #[token("\n", track_slice, priority = 3)]
-    NewLine(Span),
-
     #[regex(r#""(\\.|[^"])*""#, string_token_without_startend)]
     StringLiteral(StringToken),
 
@@ -346,44 +343,12 @@ pub enum Token {
     #[regex(r"\$[1-9]\d*", string_token, priority = 2)]
     ClosureArgVar(StringToken),
 
-    // Preprocessor "tokens" just grab the entire line
-    #[regex("#[^\n\\S]*?include[^\n\\S]+\"[^\"]+\"[^\n]*?\n?", string_token)]
-    LocalInclude(StringToken),
-
-    #[regex("#[^\n\\S]*?include[^\n\\S]+<[^>]+>[^\n]*?\n?", string_token)]
-    SysInclude(StringToken),
-
-    #[regex("#[^\n\\S]*?if[^\n]*?\n?", string_token)]
-    PreprocessorIf(StringToken),
-
-    #[regex("#[^\n\\S]*?ifdef[^\n]*?\n?", string_token)]
-    IfDef(StringToken),
-
-    #[regex("#[^\n\\S]*?ifndef[^\n]*?\n?", string_token)]
-    IfNDef(StringToken),
-
-    #[regex("#[^\n\\S]*?else[^\n]*?\n?", string_token)]
-    PreprocessorElse(StringToken),
-
-    #[regex("#[^\n\\S]*?endif[^\n]*?\n?", string_token)]
-    Endif(StringToken),
-
-    #[regex("#[^\n\\S]*?define[^\n]*?\n?", string_token)]
-    Define(StringToken),
-
-    #[regex("#[^\n\\S]*?undef[^\n]*?\n?", string_token)]
-    Undef(StringToken),
-
-    #[token("defined", track_slice)]
-    Defined(Span),
-    #[token("defined(", track_slice)]
-    DefinedParen(Span),
-
-    #[token("not", track_slice)]
-    Not(Span),
-
-    #[regex("#[^\n\\S]*?pragma[^\n]*?\n?", string_token)]
-    Pragma(StringToken),
+    // A `#` grabs the whole line: one token, and the directive grammar
+    // (`preprocessor::directive`) owns everything after the `#`. Whether
+    // it is actually a directive is positional — the scan loop judges
+    // placement — mid-line and dead it is plain text.
+    #[regex("#[^\n]*\n?", string_token, allow_greedy = true)]
+    DirectiveLine(StringToken),
 }
 
 #[inline]
@@ -505,25 +470,12 @@ impl HasSpan for Token {
             | Token::Semi(x)
             | Token::Ellipsis(x)
             | Token::Range(x)
-            | Token::NewLine(x)
             | Token::StringLiteral(StringToken(x, _))
             | Token::IntLiteral(IntToken(x, _))
             | Token::FloatLiteral(FloatToken(x, _))
             | Token::Id(StringToken(x, _))
             | Token::ClosureArgVar(StringToken(x, _))
-            | Token::LocalInclude(StringToken(x, _))
-            | Token::SysInclude(StringToken(x, _))
-            | Token::PreprocessorIf(StringToken(x, _))
-            | Token::IfDef(StringToken(x, _))
-            | Token::IfNDef(StringToken(x, _))
-            | Token::PreprocessorElse(StringToken(x, _))
-            | Token::Endif(StringToken(x, _))
-            | Token::Define(StringToken(x, _))
-            | Token::Undef(StringToken(x, _))
-            | Token::Defined(x)
-            | Token::DefinedParen(x)
-            | Token::Not(x)
-            | Token::Pragma(StringToken(x, _))
+            | Token::DirectiveLine(StringToken(x, _))
             | Token::Switch(x)
             | Token::Default(x)
             | Token::ForEach(x)
@@ -612,25 +564,12 @@ impl Token {
             | Token::Semi(x)
             | Token::Ellipsis(x)
             | Token::Range(x)
-            | Token::NewLine(x)
             | Token::StringLiteral(StringToken(x, _))
             | Token::IntLiteral(IntToken(x, _))
             | Token::FloatLiteral(FloatToken(x, _))
             | Token::Id(StringToken(x, _))
             | Token::ClosureArgVar(StringToken(x, _))
-            | Token::LocalInclude(StringToken(x, _))
-            | Token::SysInclude(StringToken(x, _))
-            | Token::PreprocessorIf(StringToken(x, _))
-            | Token::IfDef(StringToken(x, _))
-            | Token::IfNDef(StringToken(x, _))
-            | Token::PreprocessorElse(StringToken(x, _))
-            | Token::Endif(StringToken(x, _))
-            | Token::Define(StringToken(x, _))
-            | Token::Undef(StringToken(x, _))
-            | Token::Defined(x)
-            | Token::DefinedParen(x)
-            | Token::Not(x)
-            | Token::Pragma(StringToken(x, _))
+            | Token::DirectiveLine(StringToken(x, _))
             | Token::Switch(x)
             | Token::Default(x)
             | Token::ForEach(x)
@@ -740,27 +679,13 @@ impl Display for Token {
             Token::Semi(_) => ";",
             Token::Ellipsis(_) => "...",
             Token::Range(_) => "..",
-            Token::NewLine(_) => "\n",
             Token::IntLiteral(i) => return write!(f, "{}", i.1),
             Token::FloatLiteral(fl) => return write!(f, "{}", fl.1),
 
             Token::StringLiteral(s)
             | Token::Id(s)
             | Token::ClosureArgVar(s)
-            | Token::LocalInclude(s)
-            | Token::SysInclude(s)
-            | Token::PreprocessorIf(s)
-            | Token::IfDef(s)
-            | Token::IfNDef(s)
-            | Token::PreprocessorElse(s)
-            | Token::Endif(s)
-            | Token::Define(s)
-            | Token::Undef(s)
-            | Token::Pragma(s) => &s.1,
-
-            Token::Defined(_) => "defined",
-            Token::DefinedParen(_) => "defined(",
-            Token::Not(_) => "not",
+            | Token::DirectiveLine(s) => &s.1,
         };
 
         write!(f, "{out}")
@@ -783,10 +708,7 @@ mod tests {
     }
 
     fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>>> {
-        let lexer = LexWrapper::new(prog);
-        lexer
-            .filter(|i| !matches!(i, Ok((_, Token::NewLine(..), _))))
-            .collect::<Vec<_>>()
+        LexWrapper::new(prog).collect::<Vec<_>>()
     }
 
     #[test]

@@ -26,4 +26,3 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 lalrpop_mod!(#[allow(clippy::all)] pub lpc_parser);
-lalrpop_mod!(#[allow(clippy::all)] pub preprocessor_parser);

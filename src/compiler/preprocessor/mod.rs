@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, path::Path};
+use std::{collections::HashMap, path::Path};
 
 use async_recursion::async_recursion;
 use define::{Define, ObjectMacro};
@@ -9,47 +9,22 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::{LpcError, Result, lpc_error, source_map::SOURCE_MAP, span::Span};
 use lpc_rs_utils::read_lpc_file;
-use once_cell::sync::Lazy;
-use regex::Regex;
 use tracing::{instrument, trace};
 
-use crate::{
-    compiler::{
-        ast::binary_op_node::BinaryOperation,
-        compilation_context::CompilationContext,
-        lexer::{LexWrapper, Spanned, Token, logos_token::StringToken},
-        preprocessor::preprocessor_node::PreprocessorNode,
-    },
-    preprocessor_parser,
+use crate::compiler::{
+    ast::binary_op_node::BinaryOperation,
+    compilation_context::CompilationContext,
+    lexer::{LexWrapper, Spanned, Token, logos_token::StringToken},
+    preprocessor::preprocessor_node::PreprocessorNode,
 };
 use conditional::Conditionals;
+use directive::{Directive, DirectiveKind};
 
 mod conditional;
 pub mod define;
 pub mod directive;
 mod expand;
 pub mod preprocessor_node;
-
-macro_rules! regex {
-    ($re:literal $(,)?) => {{ Lazy::new(|| Regex::new($re).unwrap()) }};
-}
-
-static SYS_INCLUDE: Lazy<Regex> = regex!(r"\A\s*#\s*include\s+<([^>]+)>\s*\z");
-static LOCAL_INCLUDE: Lazy<Regex> = regex!("\\A\\s*#\\s*include\\s+\"([^\"]+)\"[^\\S\n]*\n?\\z");
-static DEFINE: Lazy<Regex> =
-    regex!("\\A\\s*#\\s*define\\s+([\\p{Alphabetic}_]\\w*)(?:\\s*((?:\\\\.|[^\n])*))?\n?\\z");
-static DEFINEMACRO: Lazy<Regex> = regex!(
-    "\\A\\s*#\\s*define\\s+([\\p{Alphabetic}_]\\w*)\\(([^)]*)\\)\\s*((?:\\\\.|[^\n])*)\n?\\z"
-);
-static UNDEF: Lazy<Regex> = regex!(r#"\A\s*#\s*undef\s+([\p{Alphabetic}_]\w*)\s*\z"#);
-static IF: Lazy<Regex> = regex!("\\A\\s*#\\s*if\\s+([^\n]*)\\s*\\z");
-static IFDEF: Lazy<Regex> = regex!(r#"\A\s*#\s*ifdef\s+([\p{Alphabetic}_]\w*)\s*\z"#);
-static IFNDEF: Lazy<Regex> = regex!(r#"\A\s*#\s*ifndef\s+([\p{Alphabetic}_]\w*)\s*\z"#);
-// static ENDIF: Lazy<Regex> = regex!(r#"\A\s*#\s*endif\s*\z"#);
-static ELSE: Lazy<Regex> = regex!(r#"\A\s*#\s*else\s*\z"#);
-static PRAGMA: Lazy<Regex> =
-    regex!(r#"\A\s*#\s*pragma\s+([\p{Alphabetic}_]\w*(?:\s*,\s*[\p{Alphabetic}_]\w*)*)\s*\z"#);
-static COMMA_SEPARATOR: Lazy<Regex> = regex!(r"\s*,\s*");
 
 #[derive(Debug)]
 pub struct Preprocessor {
@@ -61,10 +36,6 @@ pub struct Preprocessor {
 
     /// The stack of open `#if`/`#ifdef`/`#ifndef`s, for the current file.
     conditionals: Conditionals,
-
-    /// We Track the last slice, because things like preprocessor directives
-    /// need to check it.
-    last_slice: String,
 }
 
 impl Preprocessor {
@@ -203,45 +174,26 @@ impl Preprocessor {
             )
         };
 
-        let mut token_stream = LexWrapper::new(code.as_ref());
+        let src = code.as_ref();
+        let mut token_stream = LexWrapper::new(src);
         token_stream.set_file_id(file_id);
 
         let mut iter = token_stream.peekable();
+        // The end of the last token this loop drew — the placement
+        // check's anchor (spec R2).
+        let mut prev_end: usize = 0;
 
         while let Some(spanned_result) = iter.next() {
             match spanned_result {
                 Ok(spanned) => {
-                    let (_l, token, _r) = &spanned;
-
-                    let token_string = token.to_string();
+                    let (_l, token, r) = &spanned;
+                    let end = *r;
 
                     match token {
-                        Token::LocalInclude(t) => {
-                            let cwd = lpc_path
-                                .as_in_game(self.context.config.lib_dir.as_str())
-                                .parent()
-                                .unwrap_or_else(|| Path::new("/"))
-                                .to_path_buf();
-                            self.handle_local_include(t, &cwd, &mut output).await?
+                        Token::DirectiveLine(t) => {
+                            self.handle_directive(t, prev_end, src, lpc_path, &mut output)
+                                .await?;
                         }
-                        Token::SysInclude(t) => {
-                            let cwd = lpc_path
-                                .as_in_game(self.context.config.lib_dir.as_str())
-                                .parent()
-                                .unwrap_or_else(|| Path::new("/"))
-                                .to_path_buf();
-                            self.handle_sys_include(t, &cwd, &mut output).await?
-                        }
-                        Token::PreprocessorElse(t) => self.handle_else(t)?,
-                        Token::Endif(t) => self.handle_endif(t)?,
-                        Token::Define(t) => self.handle_define(t)?,
-                        Token::Undef(t) => self.handle_undef(t)?,
-                        Token::PreprocessorIf(t) => self.handle_if(t)?,
-                        Token::IfDef(t) => self.handle_ifdef(t)?,
-                        Token::IfNDef(t) => self.handle_ifndef(t)?,
-                        Token::Pragma(t) => self.handle_pragma(t)?,
-
-                        Token::NewLine(_) => { /* Ignore */ }
 
                         // Handle macro expansion
                         Token::Id(t) => {
@@ -258,7 +210,7 @@ impl Preprocessor {
                         _ => self.append_spanned(&mut output, spanned),
                     }
 
-                    self.last_slice = token_string;
+                    prev_end = end;
                 }
                 Err(e) => {
                     if self.conditionals.live() {
@@ -274,94 +226,148 @@ impl Preprocessor {
         Ok(output)
     }
 
-    /// Parse a `#define` directive — object or function-style — and add it
-    /// to the defines table.
-    #[instrument(skip(self))]
-    fn handle_define(&mut self, token: &StringToken) -> Result<()> {
-        if !self.conditionals.live() {
+    /// One directive line: judge placement (R2), classify when dead (R3),
+    /// parse and dispatch when live.
+    async fn handle_directive(
+        &mut self,
+        token: &StringToken,
+        prev_end: usize,
+        src: &str,
+        lpc_path: &LpcPath,
+        output: &mut Vec<Spanned<Token>>,
+    ) -> Result<()> {
+        let hash = token.0.l();
+        // Well-placed iff nothing but line-leading whitespace precedes
+        // the `#`: the file starts here, a newline sits in the skipped
+        // gap, or the previous token consumed its trailing newline —
+        // which only a directive line does (spec R2).
+        let placed =
+            prev_end == 0 || src[prev_end..hash].contains('\n') || src[..prev_end].ends_with('\n');
+        if !placed {
+            if self.conditionals.live() {
+                return Err(lpc_error!(
+                    Some(token.0),
+                    "preprocessor directives must appear on their own line.",
+                ));
+            }
+            // Dead: a mid-line `#` is text, not a directive (C99 6.10.1).
             return Ok(());
         }
 
-        let span = token.0;
-
-        self.check_for_previous_newline(span)?;
-
-        let check_duplicate = |key, error_span| -> Result<()> {
-            if self.defines.contains_key(key) {
-                return Err(LpcError::new(format!("duplicate `#define`: `{key}`"))
-                    .with_span(Some(error_span)));
+        if !self.conditionals.live() {
+            // Dead regions know directive names, never operands — except
+            // `#else`/`#endif`, whose grammar is just EOL-or-error and
+            // holds whether or not the region we're leaving was live;
+            // they fall through to the full parse below.
+            match directive::classify(&token.1) {
+                DirectiveKind::If | DirectiveKind::IfDef | DirectiveKind::IfNDef => {
+                    self.conditionals.enter(token.0, false);
+                    return Ok(());
+                }
+                DirectiveKind::Else | DirectiveKind::Endif => {}
+                _ => return Ok(()),
             }
+        }
 
-            Ok(())
-        };
+        match directive::parse(&token.1, token.0)? {
+            Directive::Include { path, sys } => {
+                let cwd = lpc_path
+                    .as_in_game(self.context.config.lib_dir.as_str())
+                    .parent()
+                    .unwrap_or_else(|| Path::new("/"))
+                    .to_path_buf();
+                if sys {
+                    self.handle_sys_include(&path, token.0, &cwd, output).await
+                } else {
+                    self.handle_local_include(&path, token.0, &cwd, output)
+                        .await
+                }
+            }
+            Directive::Define { name, params, body } => {
+                self.handle_define(token.0, name, params, body)
+            }
+            Directive::Undef { name } => {
+                self.defines.remove(&name);
+                Ok(())
+            }
+            Directive::If { expr } => {
+                let printing_lines =
+                    self.eval_expr_for_skipping(&expr, Some(token.0), &mut Vec::new())?;
+                self.conditionals.enter(token.0, printing_lines);
+                Ok(())
+            }
+            Directive::IfDef { name } => {
+                let taken = self.defines.contains_key(&name);
+                self.conditionals.enter(token.0, taken);
+                Ok(())
+            }
+            Directive::IfNDef { name } => {
+                let taken = !self.defines.contains_key(&name);
+                self.conditionals.enter(token.0, taken);
+                Ok(())
+            }
+            Directive::Else => self.conditionals.flip_else(token.0),
+            Directive::Endif => self.conditionals.leave(token.0),
+            Directive::Pragma { names } => self.handle_pragma(token.0, names),
+            Directive::Null => Ok(()),
+        }
+    }
 
-        let lex_vec = |input| -> Result<Vec<Spanned<Token>>> {
-            let lexer = LexWrapper::new(input);
+    /// Add a parsed `#define` — object or function-style — to the
+    /// defines table.
+    #[instrument(skip(self))]
+    fn handle_define(
+        &mut self,
+        span: Span,
+        name: String,
+        params: Option<Vec<String>>,
+        body: String,
+    ) -> Result<()> {
+        if self.defines.contains_key(&name) {
+            return Err(
+                LpcError::new(format!("duplicate `#define`: `{name}`")).with_span(Some(span))
+            );
+        }
 
-            lexer.collect()
-        };
-
-        if let Some(captures) = DEFINEMACRO.captures(&token.1) {
-            check_duplicate(&captures[1], span)?;
-
-            let name = String::from(&captures[1]);
-            let raw_params = captures[2].trim();
-            let args: Vec<String> = if raw_params.is_empty() {
-                vec![]
-            } else {
-                COMMA_SEPARATOR
-                    .split(raw_params)
-                    .map(String::from)
-                    .collect()
-            };
-            let body = &captures[3];
-
-            // re-span these tokens to just be the entire #define line
-            let tokens = lex_vec(body)
-                .map_err(|e| e.with_span(Some(token.0)))?
+        // Lex the body once, re-spanned to the whole #define line. A
+        // directive line inside a body has no legal reading (R6: LPC has
+        // no `#` operator, and expansion output is never reinterpreted
+        // as a directive).
+        let lex_body = |body: &str| -> Result<Vec<Spanned<Token>>> {
+            let tokens = LexWrapper::new(body)
+                .collect::<Result<Vec<_>>>()
+                .map_err(|e| e.with_span(Some(span)))?;
+            if tokens
+                .iter()
+                .any(|(_, t, _)| matches!(t, Token::DirectiveLine(_)))
+            {
+                return Err(lpc_error!(
+                    Some(span),
+                    "a preprocessor directive cannot appear in a macro body",
+                ));
+            }
+            Ok(tokens
                 .into_iter()
                 .map(|(_, t, _)| (span.l(), t.with_span(span), span.r()))
-                .collect::<Vec<_>>();
+                .collect())
+        };
 
-            let define = Define::new_function(tokens, args);
-
-            self.defines.insert(name, define);
-
-            Ok(())
-        } else if let Some(captures) = DEFINE.captures(&token.1) {
-            check_duplicate(&captures[1], token.0)?;
-
-            let name = String::from(&captures[1]);
-            let body = captures[2].trim();
-
-            let tokens = if body.is_empty() {
-                vec![]
-            } else {
-                // tokenize with the full language lexer, so we can store it
-                lex_vec(body)
-                    .map_err(|e| e.with_span(Some(token.0)))?
-                    .into_iter()
-                    .map(|(_, t, _)| (span.l(), t.with_span(span), span.r()))
-                    .collect::<Vec<_>>()
-            };
-
-            // A body that is not an expression is still fine to substitute;
-            // only an `#if` over it is an error. An empty body is no expression (R13).
-            let expr = if body.is_empty() {
-                None
-            } else {
-                preprocessor_parser::ExpressionParser::new()
-                    .parse(LexWrapper::new(body))
-                    .ok()
-            };
-
-            let define = Define::new_object(tokens, expr);
-
-            self.defines.insert(name, define);
-            Ok(())
+        let define = if let Some(args) = params {
+            Define::new_function(lex_body(&body)?, args)
+        } else if body.is_empty() {
+            // A bare `#define FOO` expands to nothing and is no
+            // expression (card ② R13).
+            Define::new_object(vec![], None)
         } else {
-            Err(lpc_error!(Some(token.0), "invalid `#define`."))
-        }
+            let tokens = lex_body(&body)?;
+            // A body that is not an expression is still fine to
+            // substitute; only an `#if` over it is an error.
+            let expr = directive::parse_if_expression(&body, span).ok();
+            Define::new_object(tokens, expr)
+        };
+
+        self.defines.insert(name, define);
+        Ok(())
     }
 
     fn not_an_expression(name: &str, span: Option<Span>) -> LpcError {
@@ -372,62 +378,40 @@ impl Preprocessor {
         )
     }
 
-    #[instrument(skip(self))]
-    fn handle_undef(&mut self, token: &StringToken) -> Result<()> {
-        if !self.conditionals.live() {
-            return Ok(());
-        }
+    /// `#include <path>`: the first system dir holding the file wins;
+    /// whatever goes wrong including it is reported from there.
+    #[instrument(skip(self, output))]
+    async fn handle_sys_include(
+        &mut self,
+        path: &str,
+        span: Span,
+        cwd: &Path,
+        output: &mut Vec<Spanned<Token>>,
+    ) -> Result<()> {
+        let config = self.context.config.clone();
+        let found = config.system_include_dirs.iter().find_map(|dir| {
+            let candidate = LpcPath::new_in_game(path, dir.as_str(), &*config.lib_dir);
+            candidate
+                .as_server(&*config.lib_dir)
+                .exists()
+                .then_some(candidate)
+        });
+        let to_include = found.unwrap_or_else(|| LpcPath::new_in_game(path, cwd, &*config.lib_dir));
 
-        self.check_for_previous_newline(token.0)?;
-
-        if let Some(captures) = UNDEF.captures(&token.1) {
-            self.defines.remove(&captures[1]);
-        }
-
-        Ok(())
+        self.include_into(&to_include, span, output).await
     }
 
-    /// # Arguments
-    /// `token` - The matched lexer token
-    /// `cwd` - an in-game directory, to use as the reference for relative paths.
-    /// `output` - The vector to append included tokens to
+    /// `#include "path"`, relative to `cwd`.
     #[instrument(skip(self, output))]
-    async fn handle_sys_include<U>(
+    async fn handle_local_include(
         &mut self,
-        token: &StringToken,
-        cwd: &U,
+        path: &str,
+        span: Span,
+        cwd: &Path,
         output: &mut Vec<Spanned<Token>>,
-    ) -> Result<()>
-    where
-        U: AsRef<Path> + Debug,
-    {
-        if !self.conditionals.live() {
-            return Ok(());
-        }
-
-        self.check_for_previous_newline(token.0)?;
-
-        if let Some(captures) = SYS_INCLUDE.captures(&token.1) {
-            let matched = captures.get(1).unwrap();
-
-            let config = self.context.config.clone();
-            // The first system dir holding the file wins; whatever goes
-            // wrong including it is reported from there.
-            let found = config.system_include_dirs.iter().find_map(|dir| {
-                let candidate =
-                    LpcPath::new_in_game(matched.as_str(), dir.as_str(), &*config.lib_dir);
-                candidate
-                    .as_server(&*config.lib_dir)
-                    .exists()
-                    .then_some(candidate)
-            });
-            let to_include = found
-                .unwrap_or_else(|| LpcPath::new_in_game(matched.as_str(), cwd, &*config.lib_dir));
-
-            self.include_into(&to_include, token.0, output).await
-        } else {
-            Err(lpc_error!(Some(token.0), "invalid `#include`."))
-        }
+    ) -> Result<()> {
+        let to_include = LpcPath::new_in_game(path, cwd, &*self.context.config.lib_dir);
+        self.include_into(&to_include, span, output).await
     }
 
     /// Include `path` at `span`, appending its tokens to `output`.
@@ -442,68 +426,6 @@ impl Preprocessor {
             self.append_spanned(output, spanned)
         }
         Ok(())
-    }
-
-    /// # Arguments
-    /// `token` - The matched lexer token
-    /// `cwd` - an in-game directory, to use as the reference for relative
-    /// paths. `output` - The vector to append included tokens to
-    #[instrument(skip(self, output))]
-    #[async_recursion]
-    async fn handle_local_include<U>(
-        &mut self,
-        token: &StringToken,
-        cwd: &U,
-        output: &mut Vec<Spanned<Token>>,
-    ) -> Result<()>
-    where
-        U: AsRef<Path> + Debug + Send + Sync,
-    {
-        if !self.conditionals.live() {
-            return Ok(());
-        }
-
-        self.check_for_previous_newline(token.0)?;
-
-        if let Some(captures) = LOCAL_INCLUDE.captures(&token.1) {
-            let matched = captures.get(1).unwrap();
-            let to_include =
-                LpcPath::new_in_game(matched.as_str(), cwd, &*self.context.config.lib_dir);
-
-            self.include_into(&to_include, token.0, output).await
-        } else {
-            Err(lpc_error!(Some(token.0), "invalid `#include`."))
-        }
-    }
-
-    #[instrument(skip(self))]
-    fn handle_if(&mut self, token: &StringToken) -> Result<()> {
-        self.check_for_previous_newline(token.0)?;
-
-        if !self.conditionals.live() {
-            self.conditionals.enter(token.0, false);
-            return Ok(());
-        }
-
-        if let Some(captures) = IF.captures(&token.1) {
-            // parse the captures into an expression, then evaluate it.
-            match preprocessor_parser::ExpressionParser::new().parse(LexWrapper::new(&captures[1]))
-            {
-                Ok(expr) => {
-                    let printing_lines =
-                        self.eval_expr_for_skipping(&expr, Some(token.0), &mut Vec::new())?;
-
-                    self.conditionals.enter(token.0, printing_lines);
-                }
-                // The expression was lexed on its own, so its tokens' spans
-                // mean nothing; the directive's span is the location.
-                Err(e) => return Err(LpcError::from(e).with_span(Some(token.0))),
-            }
-
-            Ok(())
-        } else {
-            Err(lpc_error!(Some(token.0), "invalid `#if`."))
-        }
     }
 
     /// Determine if a particular node will enable line skipping or not.
@@ -656,83 +578,19 @@ impl Preprocessor {
         }
     }
 
+    /// Apply a parsed `#pragma`'s names. Which names exist is semantic,
+    /// so the unknown-pragma error lives here, not in the grammar.
     #[instrument(skip(self))]
-    fn handle_ifdef(&mut self, token: &StringToken) -> Result<()> {
-        self.check_for_previous_newline(token.0)?;
-
-        if !self.conditionals.live() {
-            self.conditionals.enter(token.0, false);
-            return Ok(());
-        }
-
-        IFDEF.captures(&token.1).map_or_else(
-            || Err(lpc_error!(Some(token.0), "invalid `#ifdef`.")),
-            |captures| {
-                let taken = self.defines.contains_key(&captures[1]);
-                self.conditionals.enter(token.0, taken);
-
-                Ok(())
-            },
-        )
-    }
-
-    #[instrument(skip(self))]
-    fn handle_ifndef(&mut self, token: &StringToken) -> Result<()> {
-        self.check_for_previous_newline(token.0)?;
-
-        if !self.conditionals.live() {
-            self.conditionals.enter(token.0, false);
-            return Ok(());
-        }
-
-        IFNDEF.captures(&token.1).map_or_else(
-            || Err(lpc_error!(Some(token.0), "invalid `#ifndef`.")),
-            |captures| {
-                let taken = !self.defines.contains_key(&captures[1]);
-                self.conditionals.enter(token.0, taken);
-
-                Ok(())
-            },
-        )
-    }
-
-    #[instrument(skip(self))]
-    fn handle_else(&mut self, token: &StringToken) -> Result<()> {
-        self.check_for_previous_newline(token.0)?;
-
-        if ELSE.is_match(&token.1) {
-            self.conditionals.flip_else(token.0)
-        } else {
-            Err(lpc_error!(Some(token.0), "invalid `#else`."))
-        }
-    }
-
-    #[instrument(skip(self))]
-    fn handle_endif(&mut self, token: &StringToken) -> Result<()> {
-        self.check_for_previous_newline(token.0)?;
-
-        self.conditionals.leave(token.0)
-    }
-
-    #[instrument(skip(self))]
-    fn handle_pragma(&mut self, token: &StringToken) -> Result<()> {
-        if !self.conditionals.live() {
-            return Ok(());
-        }
-
-        self.check_for_previous_newline(token.0)?;
-
-        if let Some(captures) = PRAGMA.captures(&token.1) {
-            for arg in COMMA_SEPARATOR.split(&captures[1]) {
-                match arg {
-                    NO_CLONE => self.context.pragmas.set_no_clone(true),
-                    NO_INHERIT => self.context.pragmas.set_no_inherit(true),
-                    NO_SHADOW => self.context.pragmas.set_no_shadow(true),
-                    RESIDENT => self.context.pragmas.set_resident(true),
-                    STRICT_TYPES => self.context.pragmas.set_strict_types(true),
-                    x => {
-                        return Err(lpc_error!(Some(token.0), "unknown pragma `{}`", x));
-                    }
+    fn handle_pragma(&mut self, span: Span, names: Vec<String>) -> Result<()> {
+        for arg in names {
+            match arg.as_str() {
+                NO_CLONE => self.context.pragmas.set_no_clone(true),
+                NO_INHERIT => self.context.pragmas.set_no_inherit(true),
+                NO_SHADOW => self.context.pragmas.set_no_shadow(true),
+                RESIDENT => self.context.pragmas.set_resident(true),
+                STRICT_TYPES => self.context.pragmas.set_strict_types(true),
+                x => {
+                    return Err(lpc_error!(Some(span), "unknown pragma `{}`", x));
                 }
             }
         }
@@ -806,20 +664,6 @@ impl Preprocessor {
             output.push(to_append);
         }
     }
-
-    /// A convenience function for checking if preprocessor directives follow a
-    /// newline.
-    #[instrument(skip(self))]
-    fn check_for_previous_newline(&self, span: Span) -> Result<()> {
-        if !self.last_slice.ends_with('\n') {
-            return Err(lpc_error!(
-                Some(span),
-                "preprocessor directives must appear on their own line.",
-            ));
-        }
-
-        Ok(())
-    }
 }
 
 impl Default for Preprocessor {
@@ -829,7 +673,6 @@ impl Default for Preprocessor {
             context: CompilationContext::default(),
             defines: HashMap::new(),
             conditionals: Conditionals::default(),
-            last_slice: String::from("\n"),
         }
     }
 }
@@ -1058,7 +901,7 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "invalid `#include`").await;
+            test_invalid(prog, "unexpected tokens after `#include`").await;
         }
     }
 
@@ -1158,7 +1001,7 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "invalid `#include`").await;
+            test_invalid(prog, "unexpected tokens after `#include`").await;
         }
     }
 
@@ -1307,13 +1150,35 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn consecutive_directive_lines_are_each_well_placed() {
+            // The first grab consumes its trailing newline; the placement
+            // check must credit it (spec R2, third clause).
+            let prog = indoc! { r#"
+                #define A 1
+                #define B 2
+                A + B;
+            "# };
+            test_valid(prog, &["1", "+", "2", ";"]).await;
+        }
+
+        #[tokio::test]
         async fn test_error_if_invalid() {
             let prog = indoc! { r#"
                 #define
             "#
             };
 
-            test_invalid(prog, "invalid `#define`").await;
+            test_invalid(prog, "expected an identifier after `#define`").await;
+        }
+
+        #[tokio::test]
+        async fn a_directive_in_a_macro_body_errors_at_define_time() {
+            // Stored silently before; it leaked to the parser at use (R6).
+            test_invalid(
+                "#define X #include \"foo.h\"\n",
+                "a preprocessor directive cannot appear in a macro body",
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -1433,7 +1298,7 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "invalid `#ifdef`").await;
+            test_invalid(prog, "expected an identifier after `#ifdef`").await;
         }
     }
 
@@ -1508,7 +1373,7 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "invalid `#ifndef`").await;
+            test_invalid(prog, "expected an identifier after `#ifndef`").await;
         }
     }
 
@@ -1596,7 +1461,31 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "invalid `#else`").await;
+            test_invalid(prog, "unexpected tokens after `#else`").await;
+        }
+
+        #[tokio::test]
+        async fn a_trailing_endif_operand_is_an_error() {
+            // Silently accepted before the directive grammar: the `#endif`
+            // re-check regex was commented out.
+            test_invalid(
+                "#ifdef FOO\n#endif garbage\n",
+                "unexpected tokens after `#endif`",
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn an_else_comment_is_whitespace() {
+            // An error before the directive grammar; C strips comments first.
+            let prog = indoc! { r#"
+                #ifdef NOPE
+                "dead"
+                #else /* why we are here */
+                "live"
+                #endif
+            "# };
+            test_valid(prog, &["live"]).await;
         }
     }
 
@@ -1710,21 +1599,42 @@ mod tests {
 
         #[tokio::test]
         async fn a_malformed_if_is_invalid() {
-            test_invalid("#iffy\n#endif\n", "invalid `#if`").await;
+            test_invalid("#iffy\n#endif\n", "unknown preprocessor directive `#iffy`").await;
         }
 
         #[tokio::test]
-        async fn an_expression_error_points_at_the_directive() {
+        async fn an_expression_error_points_at_the_offending_token() {
             let mut preprocessor = fixture();
             let e = preprocessor
                 .scan("/if_lex_error.c", "int a;\n#if 1 + `\n#endif\n")
                 .await
                 .unwrap_err();
             assert_eq!(e.to_string(), "Lex Error: Invalid Token ```");
-            assert_eq!(
-                e.span().and_then(|s| s.code()).as_deref(),
-                Some("#if 1 + `")
-            );
+            assert_eq!(e.span().and_then(|s| s.code()).as_deref(), Some("`"));
+        }
+
+        #[tokio::test]
+        async fn an_unknown_directive_is_named_live() {
+            test_invalid("#elif 1\n", "unknown preprocessor directive `#elif`").await;
+        }
+
+        #[tokio::test]
+        async fn defined_and_not_are_ordinary_identifiers() {
+            // They used to lex as preprocessor keywords the main parser
+            // rejects as "Unrecognized Token" (R7).
+            let mut preprocessor = fixture();
+            let tokens = preprocessor
+                .scan("/unreserved.c", "int not = 1;\nint defined = 2;\n")
+                .await
+                .expect("scans clean");
+            let ids: Vec<_> = tokens
+                .iter()
+                .filter_map(|(_, t, _)| match t {
+                    Token::Id(s) => Some(s.1.as_str()),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(ids, vec!["not", "defined"]);
         }
 
         #[tokio::test]
@@ -2076,6 +1986,21 @@ mod tests {
                 }
             }
         }
+
+        #[tokio::test]
+        async fn a_bare_pragma_is_an_error() {
+            test_invalid("#pragma\n", "expected a pragma name after `#pragma`").await;
+        }
+    }
+
+    #[tokio::test]
+    async fn a_bare_undef_is_an_error() {
+        test_invalid("#undef\n", "expected an identifier after `#undef`").await;
+    }
+
+    #[tokio::test]
+    async fn a_null_directive_is_a_no_op() {
+        test_valid("#\n1;\n", &["1", ";"]).await;
     }
 
     #[tokio::test]
@@ -2223,5 +2148,20 @@ mod tests {
         "## };
 
         test_valid(prog, &["ok"]).await;
+    }
+
+    #[tokio::test]
+    async fn a_dead_midline_hash_is_text() {
+        // C99 6.10.1: a skipped group's non-directive lines are text. A
+        // mid-line `#if` in a dead region used to error on placement;
+        // now nothing mid-line is a directive when dead — and it pushes
+        // no frame, so the single #endif below balances the outer #if.
+        let prog = indoc! { r#"
+            #if 0
+            x; #if BROKEN
+            #endif
+            "after";
+        "# };
+        test_valid(prog, &["after", ";"]).await;
     }
 }
