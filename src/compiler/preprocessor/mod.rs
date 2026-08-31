@@ -263,6 +263,7 @@ impl Preprocessor {
                     if self.conditionals.live() {
                         return Err(e);
                     }
+                    // Dead region: drop it — logos recovers per-token.
                 }
             }
         }
@@ -788,8 +789,8 @@ impl Preprocessor {
 
         let path = LpcPath::new_server(canon_include_path);
         // An included file gets its own conditional stack: a `#if` it opens
-        // and closes internally must not leak into (or be confused with)
-        // the includer's stack.
+        // and closes internally must not leak into the includer's stack.
+        debug_assert!(self.conditionals.live());
         let saved = std::mem::take(&mut self.conditionals);
         let result = self.internal_scan(&path, &file_content, None).await;
         self.conditionals = saved;
@@ -2105,8 +2106,7 @@ mod tests {
     #[tokio::test]
     async fn test_dead_region_diagnoses_nothing() {
         // Arity error, unterminated call, and a lex error (`#elif` has no
-        // token) — all inside a dead region: the classic `#if 0` around
-        // broken code.
+        // token) — all inside a dead region.
         let prog = indoc! { r##"
             #define BAR(a, b) (a - b)
             #ifdef NOPE

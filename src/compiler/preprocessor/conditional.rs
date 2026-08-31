@@ -8,6 +8,7 @@ use lpc_rs_errors::{LpcError, Result, lpc_error, span::Span};
 /// One open `#if`/`#ifdef`/`#ifndef`.
 #[derive(Debug)]
 struct Frame {
+    /// The span of this frame's opening directive, reported by `finish()` if never closed.
     span: Span,
     /// Was the surrounding region live when this frame opened?
     parent_live: bool,
