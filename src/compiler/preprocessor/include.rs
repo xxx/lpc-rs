@@ -19,20 +19,10 @@ use tracing::instrument;
 pub(super) const MAX_INCLUDE_DEPTH: usize = 64;
 
 /// The pragma name that marks the current file include-once.
-#[cfg_attr(test, allow(dead_code))]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "wired in by the include-walk flip")
-)]
 pub(super) const ONCE: &str = "once";
 
 /// One entry form of an include.
 #[derive(Debug)]
-#[cfg_attr(test, allow(dead_code))]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "wired in by the include-walk flip")
-)]
 pub(super) enum IncludeSource<'a> {
     /// `#include <path>`
     System {

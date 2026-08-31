@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::collections::HashMap;
 
 use async_recursion::async_recursion;
 use define::{Define, ObjectMacro};
@@ -9,10 +9,9 @@ use lpc_rs_core::{
 };
 use lpc_rs_errors::{
     LpcError, Result, lpc_error,
-    source_map::SOURCE_MAP,
+    source_map::FileId,
     span::{HasSpan, Span},
 };
-use lpc_rs_utils::read_lpc_file;
 use tracing::{instrument, trace};
 
 use crate::compiler::{
@@ -23,17 +22,12 @@ use crate::compiler::{
 };
 use conditional::Conditionals;
 use directive::{Directive, DirectiveKind};
+use include::{IncludeSource, IncludeWalk, ONCE};
 
 mod conditional;
 pub mod define;
 pub mod directive;
 mod expand;
-// Nothing calls the walk until the flip (next task); in test builds its
-// own unit tests do, so the expectation is scoped to non-test builds.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "wired in by the include-walk flip")
-)]
 mod include;
 pub mod preprocessor_node;
 
@@ -47,6 +41,9 @@ pub struct Preprocessor {
 
     /// The stack of open `#if`/`#ifdef`/`#ifndef`s, for the current file.
     conditionals: Conditionals,
+
+    /// The include walk: `#include` traversal state for this compile.
+    includes: IncludeWalk,
 }
 
 impl Preprocessor {
@@ -147,43 +144,41 @@ impl Preprocessor {
 
         trace!("scanning {:?} :: {:?}", lpc_path, code.as_ref());
 
+        let config = self.context.config.clone();
+        let root_id = self.includes.open_root(&lpc_path, code.as_ref(), &config);
+
         // handle auto-include
-        if let Some(auto_include) = &self.context.config.auto_include_file {
+        if let Some(auto_include) = &config.auto_include_file {
             let auto_include_path =
-                LpcPath::new_server(format!("{}/{}", &self.context.config.lib_dir, auto_include));
+                LpcPath::new_server(format!("{}/{}", &config.lib_dir, auto_include));
 
             if auto_include_path != lpc_path {
-                let included = self.include_local_file(&auto_include_path, None).await?;
-
-                for spanned in included {
-                    self.append_spanned(&mut output, spanned)
-                }
+                self.scan_include(
+                    IncludeSource::Configured(&auto_include_path),
+                    None,
+                    &mut output,
+                )
+                .await?;
             }
         }
 
-        self.internal_scan(&lpc_path, code, Some(output)).await
+        let result = self.internal_scan(code, root_id, Some(output)).await;
+        self.includes.close();
+        result
     }
 
     /// The recursive function that takes care of scanning everything.
     #[async_recursion]
     async fn internal_scan<C>(
         &mut self,
-        lpc_path: &LpcPath,
         code: C,
+        file_id: FileId,
         existing_output: Option<Vec<Spanned<Token>>>,
     ) -> Result<Vec<Spanned<Token>>>
     where
         C: AsRef<str> + Send,
     {
         let mut output = existing_output.unwrap_or_default();
-
-        let file_id = {
-            let server_path = lpc_path.as_server(self.context.config.lib_dir.as_str());
-            SOURCE_MAP.write().add(
-                server_path.to_string_lossy().into_owned(),
-                code.as_ref().to_owned(),
-            )
-        };
 
         let src = code.as_ref();
         let token_stream = LexWrapper::new(src, file_id);
@@ -201,8 +196,7 @@ impl Preprocessor {
 
                     match token {
                         Token::DirectiveLine(t) => {
-                            self.handle_directive(t, prev_end, src, lpc_path, &mut output)
-                                .await?;
+                            self.handle_directive(t, prev_end, src, &mut output).await?;
                         }
 
                         // Handle macro expansion
@@ -246,7 +240,6 @@ impl Preprocessor {
         token: &StringToken,
         prev_end: usize,
         src: &str,
-        lpc_path: &LpcPath,
         output: &mut Vec<Spanned<Token>>,
     ) -> Result<()> {
         let hash = token.0.l();
@@ -285,17 +278,12 @@ impl Preprocessor {
 
         match directive::parse(&token.1, token.0)? {
             Directive::Include { path, sys } => {
-                let cwd = lpc_path
-                    .as_in_game(self.context.config.lib_dir.as_str())
-                    .parent()
-                    .unwrap_or_else(|| Path::new("/"))
-                    .to_path_buf();
-                if sys {
-                    self.handle_sys_include(&path, token.0, &cwd, output).await
+                let source = if sys {
+                    IncludeSource::System { path: &path }
                 } else {
-                    self.handle_local_include(&path, token.0, &cwd, output)
-                        .await
-                }
+                    IncludeSource::Local { path: &path }
+                };
+                self.scan_include(source, Some(token.0), output).await
             }
             Directive::Define {
                 name,
@@ -391,51 +379,31 @@ impl Preprocessor {
         )
     }
 
-    /// `#include <path>`: the first system dir holding the file wins;
-    /// whatever goes wrong including it is reported from there.
+    /// One include: open through the walk, scan the file with its own
+    /// conditional stack, close on the success and error paths alike.
     #[instrument(skip(self, output))]
-    async fn handle_sys_include(
+    async fn scan_include(
         &mut self,
-        path: &str,
-        span: Span,
-        cwd: &Path,
+        source: IncludeSource<'_>,
+        span: Option<Span>,
         output: &mut Vec<Spanned<Token>>,
     ) -> Result<()> {
         let config = self.context.config.clone();
-        let found = config.system_include_dirs.iter().find_map(|dir| {
-            let candidate = LpcPath::new_in_game(path, dir.as_str(), &*config.lib_dir);
-            candidate
-                .as_server(&*config.lib_dir)
-                .exists()
-                .then_some(candidate)
-        });
-        let to_include = found.unwrap_or_else(|| LpcPath::new_in_game(path, cwd, &*config.lib_dir));
+        let Some(opened) = self.includes.open(source, span, &config).await? else {
+            return Ok(());
+        };
 
-        self.include_into(&to_include, span, output).await
-    }
+        // An included file gets its own conditional stack: a `#if` it opens
+        // and closes internally must not leak into the includer's stack.
+        debug_assert!(self.conditionals.live());
+        let saved = std::mem::take(&mut self.conditionals);
+        let result = self
+            .internal_scan(opened.content, opened.file_id, None)
+            .await;
+        self.conditionals = saved;
+        self.includes.close();
 
-    /// `#include "path"`, relative to `cwd`.
-    #[instrument(skip(self, output))]
-    async fn handle_local_include(
-        &mut self,
-        path: &str,
-        span: Span,
-        cwd: &Path,
-        output: &mut Vec<Spanned<Token>>,
-    ) -> Result<()> {
-        let to_include = LpcPath::new_in_game(path, cwd, &*self.context.config.lib_dir);
-        self.include_into(&to_include, span, output).await
-    }
-
-    /// Include `path` at `span`, appending its tokens to `output`.
-    async fn include_into(
-        &mut self,
-        path: &LpcPath,
-        span: Span,
-        output: &mut Vec<Spanned<Token>>,
-    ) -> Result<()> {
-        let included = self.include_local_file(path, Some(span)).await?;
-        for spanned in included {
+        for spanned in result? {
             self.append_spanned(output, spanned)
         }
         Ok(())
@@ -597,6 +565,7 @@ impl Preprocessor {
     fn handle_pragma(&mut self, span: Span, names: Vec<String>) -> Result<()> {
         for arg in names {
             match arg.as_str() {
+                ONCE => self.includes.mark_once(),
                 NO_CLONE => self.context.pragmas.set_no_clone(true),
                 NO_INHERIT => self.context.pragmas.set_no_inherit(true),
                 NO_SHADOW => self.context.pragmas.set_no_shadow(true),
@@ -609,64 +578,6 @@ impl Preprocessor {
         }
 
         Ok(())
-    }
-
-    /// Read in a local file, and scan it through this preprocessor.
-    ///
-    /// # Arguments
-    /// `path` - The path of the file we're going to scan. This is intended to
-    /// be the file from     the `#include` directive.
-    /// `cwd` - The current working directory. Used for resolving relative
-    /// pathnames. `span` - The [`Span`] of the `#include` token.
-    #[instrument(skip(self))]
-    #[async_recursion]
-    async fn include_local_file(
-        &mut self,
-        path: &LpcPath,
-        span: Option<Span>,
-    ) -> Result<Vec<Spanned<Token>>> {
-        let canon_include_path = path.as_server(self.context.lib_dir());
-
-        if !path.is_within_root(self.context.lib_dir()) {
-            return Err(lpc_error!(
-                span,
-                "attempt to include a file outside the root: `{}` (expanded to `{}`) (lib_dir: `{}`)",
-                path,
-                canon_include_path.display(),
-                self.context.lib_dir()
-            ));
-        }
-
-        if canon_include_path.is_dir() {
-            return Err(lpc_error!(
-                span,
-                "attempt to include a directory: `{}` (expanded to `{}`) (lib_dir: `{}`)",
-                path,
-                canon_include_path.display(),
-                self.context.lib_dir()
-            ));
-        }
-
-        let file_content = match read_lpc_file(&canon_include_path).await {
-            Ok(content) => content,
-            Err(e) => {
-                return Err(lpc_error!(
-                    span,
-                    "unable to read include file `{}`: {}",
-                    path,
-                    e
-                ));
-            }
-        };
-
-        let path = LpcPath::new_server(canon_include_path);
-        // An included file gets its own conditional stack: a `#if` it opens
-        // and closes internally must not leak into the includer's stack.
-        debug_assert!(self.conditionals.live());
-        let saved = std::mem::take(&mut self.conditionals);
-        let result = self.internal_scan(&path, &file_content, None).await;
-        self.conditionals = saved;
-        result
     }
 
     /// skip-aware way to append to the output
@@ -686,6 +597,7 @@ impl Default for Preprocessor {
             context: CompilationContext::default(),
             defines: HashMap::new(),
             conditionals: Conditionals::default(),
+            includes: IncludeWalk::default(),
         }
     }
 }
@@ -962,6 +874,35 @@ mod tests {
             let expected = vec!["1", "+", "2", "+", "3", "+", "4", "+", "5", ";"];
 
             test_valid(input, &expected).await;
+        }
+
+        #[tokio::test]
+        async fn a_reincluded_header_keeps_one_file_id() {
+            // No auto-include: the token list must be exactly two copies.
+            let config = ConfigBuilder::default()
+                .lib_dir("./tests/fixtures/code")
+                .build()
+                .unwrap();
+            let context = CompilationContextBuilder::default()
+                .filename(Arc::new("test.c".into()))
+                .config(config)
+                .build()
+                .unwrap();
+            let mut preprocessor = Preprocessor::new(context);
+
+            let input = indoc! { r#"
+                #include "include/simple.h"
+                #include "include/simple.h"
+            "# };
+            let result = preprocessor.scan("/test.c", input).await.unwrap();
+
+            assert!(!result.is_empty(), "simple.h holds tokens");
+            assert_eq!(result.len() % 2, 0);
+            let (first, second) = result.split_at(result.len() / 2);
+            for (a, b) in first.iter().zip(second) {
+                assert_eq!(a.1.to_string(), b.1.to_string());
+                assert_eq!(a.1.span().file_id(), b.1.span().file_id());
+            }
         }
 
         #[tokio::test]
@@ -2051,6 +1992,20 @@ mod tests {
         #[tokio::test]
         async fn a_bare_pragma_is_an_error() {
             test_invalid("#pragma\n", "expected a pragma name after `#pragma`").await;
+        }
+
+        #[tokio::test]
+        async fn pragma_once_is_a_known_pragma() {
+            test_valid("#pragma once\n1\n", &["1"]).await;
+        }
+
+        #[tokio::test]
+        async fn pragma_names_process_in_order() {
+            test_invalid(
+                "#pragma once, not_a_pragma\n",
+                "unknown pragma `not_a_pragma`",
+            )
+            .await;
         }
     }
 
