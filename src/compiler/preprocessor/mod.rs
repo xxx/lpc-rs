@@ -270,14 +270,15 @@ impl Preprocessor {
 
         if !self.conditionals.live() {
             // Dead regions know directive names, never operands.
-            // `#else`/`#endif` have no operands — their shape-only
-            // grammar is checked dead or live (card ③ R3).
+            // `#else`/`#endif` have no operands, and `#elif` stores its
+            // operand raw — all three parse without reading one, so the
+            // shared handlers run dead or live (card ③ R3; elif-bundle R4).
             match directive::classify(&token.1) {
                 DirectiveKind::If | DirectiveKind::IfDef | DirectiveKind::IfNDef => {
                     self.conditionals.enter(token.0, false);
                     return Ok(());
                 }
-                DirectiveKind::Else | DirectiveKind::Endif => {}
+                DirectiveKind::Else | DirectiveKind::Endif | DirectiveKind::Elif => {}
                 _ => return Ok(()),
             }
         }
@@ -318,8 +319,20 @@ impl Preprocessor {
                 Ok(())
             }
             Directive::Else => self.conditionals.flip_else(token.0),
+            Directive::Elif {
+                operand,
+                operand_span,
+            } => self.handle_elif(token.0, &operand, operand_span),
             Directive::Endif => self.conditionals.leave(token.0),
             Directive::Pragma { names } => self.handle_pragma(token.0, names),
+            Directive::Error { text } => {
+                let message = if text.is_empty() {
+                    "#error".to_owned()
+                } else {
+                    format!("#error: {text}")
+                };
+                Err(LpcError::new(message).with_span(Some(token.0)))
+            }
             Directive::Null => Ok(()),
         }
     }
@@ -371,6 +384,24 @@ impl Preprocessor {
         };
 
         self.defines.insert(name, define);
+        Ok(())
+    }
+
+    /// One `#elif`, dead or live: the chain decides whether the operand
+    /// is ever read (elif-bundle R4).
+    fn handle_elif(&mut self, span: Span, operand: &str, operand_span: Span) -> Result<()> {
+        if !self.conditionals.elif(span)? {
+            return Ok(());
+        }
+        if operand.is_empty() {
+            return Err(lpc_error!(
+                Some(operand_span),
+                "expected an expression after `#elif`"
+            ));
+        }
+        let expr = directive::parse_if_expression(operand, operand_span)?;
+        let taken = self.eval_expr_for_skipping(&expr, Some(span), &mut Vec::new())?;
+        self.conditionals.take_elif(taken);
         Ok(())
     }
 
@@ -1607,8 +1638,14 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn an_unknown_directive_is_named_live() {
-            test_invalid("#elif 1\n", "unknown preprocessor directive `#elif`").await;
+        async fn a_live_orphan_elif_is_an_error() {
+            // `#elif` now classifies and parses (elif-bundle); an orphan
+            // one still errors, live.
+            test_invalid(
+                "#elif 1\n",
+                "found `#elif` without a corresponding `#if` or `#ifdef`",
+            )
+            .await;
         }
 
         #[tokio::test]
@@ -1961,6 +1998,75 @@ mod tests {
                 .unwrap_err();
             assert_regex!(e.message(), "unknown binary operation");
         }
+
+        #[tokio::test]
+        async fn an_elif_chain_emits_the_first_true_branch_only() {
+            let prog = indoc! { r##"
+                #if 0
+                "a";
+                #elif 1
+                "b";
+                #elif 1
+                "c";
+                #else
+                "d";
+                #endif
+            "## };
+            test_valid(prog, &["b", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn an_elif_after_a_taken_branch_accepts_garbage() {
+            // C99 6.10p6 / GCC: a decided chain never reads the operand.
+            let prog = "#if 1\n\"kept\";\n#elif )utter( garbage\n\"dropped\";\n#endif\n";
+            test_valid(prog, &["kept", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn an_undecided_elifs_bad_operand_is_an_error() {
+            test_invalid(
+                "#if 0\n#elif )bad\n#endif\n",
+                "unexpected token in `#if` expression",
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn an_undecided_elifs_empty_operand_is_an_error() {
+            test_invalid(
+                "#if 0\n#elif\n#endif\n",
+                "expected an expression after `#elif`",
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn an_elif_decides_a_dead_ifdef_chain() {
+            let prog = indoc! { r##"
+                #define FOO 1
+                #ifdef NOPE
+                "a";
+                #elif FOO
+                "b";
+                #endif
+            "## };
+            test_valid(prog, &["b", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn an_elif_after_else_is_an_error() {
+            test_invalid(
+                "#if 1\n#else\n#elif 1\n#endif\n",
+                "found `#elif` after `#else`",
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn an_error_directive_fails_the_compile_with_its_text() {
+            test_invalid("#error bad config\n", "#error: bad config").await;
+            test_invalid("#error\n", "#error").await;
+        }
     }
 
     mod test_macros {
@@ -2156,14 +2262,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_dead_region_diagnoses_nothing() {
-        // Arity error, unterminated call, and an unknown directive (`#elif`
+        // Arity error, unterminated call, and an unknown directive (`#line`
         // classifies as Unknown) — all inside a dead region.
         let prog = indoc! { r##"
             #define BAR(a, b) (a - b)
             #ifdef NOPE
             BAR(1);
             BAR(2
-            #elif spurious
+            #line 5
             #endif
             "ok"
         "## };
@@ -2384,10 +2490,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_dead_unknown_directive_is_inert() {
+    async fn a_dead_regions_unknown_and_error_directives_are_inert() {
+        // `#line` classifies as Unknown; `#error` is a known name that a
+        // dead region never fires (elif-bundle R4).
         let prog = indoc! { r#"
             #if 0
-            #elif WHATEVER
+            #line 5
             #error also fine here
             #endif
             "after";

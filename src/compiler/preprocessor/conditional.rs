@@ -45,7 +45,6 @@ impl Conditionals {
     /// decides the chain — the parent is live and nothing is taken yet
     /// (C99 6.10p6: otherwise the operand is never read). Orphan and
     /// after-`#else` are errors, live or dead.
-    #[allow(dead_code)]
     pub(super) fn elif(&mut self, span: Span) -> Result<bool> {
         let Some(frame) = self.frames.last_mut() else {
             return Err(lpc_error!(
@@ -67,7 +66,6 @@ impl Conditionals {
 
     /// Record an armed `#elif`'s verdict. Call only when [`elif`](Self::elif)
     /// returned `true` — otherwise the branch is already dead and stays dead.
-    #[allow(dead_code)]
     pub(super) fn take_elif(&mut self, taken: bool) {
         let frame = self.frames.last_mut().expect("elif() found this frame");
         frame.branch_live = taken;
