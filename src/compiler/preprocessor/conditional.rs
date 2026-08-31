@@ -1,7 +1,8 @@
 //! The conditional stack: the one owner of conditional-compilation state.
-//! A frame per open conditional; `live()` is the only question the
-//! directive handlers ask. Balanced per file — the include boundary swaps
-//! the stack.
+//! A frame per open conditional chain (an `#if`/`#ifdef`/`#ifndef` through
+//! its `#elif`s and `#else` to its `#endif`); `live()` is the only
+//! question the directive handlers ask. Balanced per file — the include
+//! boundary swaps the stack.
 
 use lpc_rs_errors::{LpcError, Result, lpc_error, span::Span};
 

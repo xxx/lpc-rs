@@ -990,7 +990,6 @@ mod tests {
 
     #[test]
     fn unary_operators_stack_and_bind_tightest() {
-        use crate::compiler::ast::unary_op_node::UnaryOperation;
         assert_eq!(
             x("!!FOO").unwrap(),
             PreprocessorNode::UnaryOp(
@@ -1037,6 +1036,47 @@ mod tests {
                 )),
             )
         );
+    }
+
+    #[test]
+    fn the_ladder_orders_the_mid_ladder_levels() {
+        // `|` is loosest of the three: `1 | 2 ^ 3` is `1 | (2 ^ 3)`.
+        assert_eq!(
+            x("1 | 2 ^ 3").unwrap(),
+            PreprocessorNode::BinaryOp(
+                BinaryOperation::Or,
+                Box::new(PreprocessorNode::Int(1)),
+                Box::new(PreprocessorNode::BinaryOp(
+                    BinaryOperation::Xor,
+                    Box::new(PreprocessorNode::Int(2)),
+                    Box::new(PreprocessorNode::Int(3)),
+                )),
+            )
+        );
+        // `==` binds tighter than `&`: `1 & 2 == 3` is `1 & (2 == 3)`.
+        assert_eq!(
+            x("1 & 2 == 3").unwrap(),
+            PreprocessorNode::BinaryOp(
+                BinaryOperation::And,
+                Box::new(PreprocessorNode::Int(1)),
+                Box::new(PreprocessorNode::BinaryOp(
+                    BinaryOperation::EqEq,
+                    Box::new(PreprocessorNode::Int(2)),
+                    Box::new(PreprocessorNode::Int(3)),
+                )),
+            )
+        );
+    }
+
+    #[test]
+    fn every_ladder_level_parses_in_one_expression() {
+        let tree = x("1 || 2 && 3 | 4 ^ 5 & 6 == 7 < 8 << 9 + 10 * !11").unwrap();
+        // Display parenthesizes nothing, so shape is pinned by the trees
+        // above; here: it parses, and the loosest split is `||`.
+        let PreprocessorNode::BinaryOp(BinaryOperation::OrOr, l, _) = &tree else {
+            panic!("`||` must be the loosest binding");
+        };
+        assert_eq!(**l, PreprocessorNode::Int(1));
     }
 
     #[test]
