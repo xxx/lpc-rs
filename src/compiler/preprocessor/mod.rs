@@ -389,6 +389,7 @@ impl Preprocessor {
 
     /// One `#elif`, dead or live: the chain decides whether the operand
     /// is ever read (elif-bundle R4).
+    #[instrument(skip(self))]
     fn handle_elif(&mut self, span: Span, operand: &str, operand_span: Span) -> Result<()> {
         if !self.conditionals.elif(span)? {
             return Ok(());
@@ -1678,8 +1679,8 @@ mod tests {
 
         #[tokio::test]
         async fn a_live_orphan_elif_is_an_error() {
-            // `#elif` now classifies and parses (elif-bundle); an orphan
-            // one still errors, live.
+            // `#elif` classifies and parses like any other directive; an
+            // orphan one is an error, live.
             test_invalid(
                 "#elif 1\n",
                 "found `#elif` without a corresponding `#if` or `#ifdef`",
@@ -2062,6 +2063,14 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn a_fully_skipped_region_never_reads_its_names() {
+            // C99 6.10p6: inside a dead `#if`, a nested `#if`'s condition
+            // and a nested `#elif`'s operand are both unparsed garbage.
+            let prog = "#if 0\n#if 1\n#elif )utter garbage(\n#endif\n#endif\n\"live\";\n";
+            test_valid(prog, &["live", ";"]).await;
+        }
+
+        #[tokio::test]
         async fn an_undecided_elifs_bad_operand_is_an_error() {
             test_invalid(
                 "#if 0\n#elif )bad\n#endif\n",
@@ -2102,9 +2111,26 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn an_elif_after_else_renders_the_else_label() {
+            let prog = "#if 1\n#else\n#elif 1\n#endif\n";
+            let mut preprocessor = fixture();
+            let e = preprocessor.scan("/test.c", prog).await.unwrap_err();
+            let rendered = e.diagnostic_string();
+            assert!(
+                rendered.contains("found `#elif` after `#else`"),
+                "{rendered}"
+            );
+            assert!(rendered.contains("`#else` is here"), "{rendered}");
+        }
+
+        #[tokio::test]
         async fn an_error_directive_fails_the_compile_with_its_text() {
             test_invalid("#error bad config\n", "#error: bad config").await;
-            test_invalid("#error\n", "#error").await;
+
+            // Exact, not the regex helper above — that also matches `#error: junk`.
+            let mut preprocessor = fixture();
+            let e = preprocessor.scan("/test.c", "#error\n").await.unwrap_err();
+            assert_eq!(e.to_string(), "#error");
         }
 
         #[tokio::test]
@@ -2137,6 +2163,41 @@ mod tests {
         async fn unary_minus_parses_in_if() {
             test_valid("#if -1\n\"neg\";\n#endif\n", &["neg", ";"]).await;
             test_valid("#if -0\n\"no\";\n#endif\n\"after\";\n", &["after", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn bitwise_operators_drive_if() {
+            test_valid("#if (6 & 3) == 2\n\"t\";\n#endif\n", &["t", ";"]).await;
+            test_valid("#if (4 | 1) == 5\n\"t\";\n#endif\n", &["t", ";"]).await;
+            test_valid("#if (5 ^ 3) == 6\n\"t\";\n#endif\n", &["t", ";"]).await;
+            test_valid("#if ~0 + 1 == 0\n\"t\";\n#endif\n", &["t", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn comparison_operators_drive_if() {
+            test_valid("#if 3 != 4\n\"t\";\n#endif\n", &["t", ";"]).await;
+            test_valid("#if 2 < 3\n\"t\";\n#endif\n", &["t", ";"]).await;
+            test_valid("#if 3 <= 3\n\"t\";\n#endif\n", &["t", ";"]).await;
+            test_valid("#if 3 >= 3\n\"t\";\n#endif\n", &["t", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn shift_and_division_drive_if() {
+            test_valid("#if 8 >> 2 == 2\n\"t\";\n#endif\n", &["t", ";"]).await;
+            test_valid("#if 10 / 3 == 3\n\"t\";\n#endif\n", &["t", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn int_position_bang_drives_if() {
+            // Unlike the bool-position pin, this actually reaches the
+            // Bang arm in `resolve_int`.
+            test_valid("#if (!0) + 0 == 1\n\"t\";\n#endif\n", &["t", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn a_negative_shift_amount_folds_euclidean() {
+            // shift_amount(-1) == 63 on 64-bit ints.
+            test_valid("#if (1 << -1) == 1 << 63\n\"t\";\n#endif\n", &["t", ";"]).await;
         }
     }
 
