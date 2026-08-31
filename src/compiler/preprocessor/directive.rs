@@ -32,6 +32,8 @@ pub enum DirectiveKind {
     Else,
     /// `#endif`
     Endif,
+    /// `#elif`
+    Elif,
     /// `#include`
     Include,
     /// `#define`
@@ -40,6 +42,8 @@ pub enum DirectiveKind {
     Undef,
     /// `#pragma`
     Pragma,
+    /// `#error`
+    Error,
     /// A bare `#` line — the C99 6.10.7 null directive.
     Null,
     /// A `#` followed by anything that is not a known directive name.
@@ -93,6 +97,15 @@ pub enum Directive {
     },
     /// `#else`.
     Else,
+    /// `#elif expr`. The operand is raw — parsed only when the chain is
+    /// still undecided (C99 6.10p6; elif-bundle R2).
+    Elif {
+        /// The raw operand text, trimmed.
+        operand: String,
+        /// The trimmed operand's file coordinates; for an empty operand,
+        /// the (widened) point at end of line.
+        operand_span: Span,
+    },
     /// `#endif`.
     Endif,
     /// `#pragma name[, name]*` — names validated as identifiers here,
@@ -100,6 +113,12 @@ pub enum Directive {
     Pragma {
         /// The pragma names, in order.
         names: Vec<String>,
+    },
+    /// `#error text` — the rest of the line verbatim, comments included,
+    /// macros never expanded (GCC-faithful).
+    Error {
+        /// The trimmed message text; empty for a bare `#error`.
+        text: String,
     },
     /// A bare `#` line: legal, does nothing.
     Null,
@@ -159,6 +178,8 @@ fn kind_of(name: &str) -> DirectiveKind {
         "define" => DirectiveKind::Define,
         "undef" => DirectiveKind::Undef,
         "pragma" => DirectiveKind::Pragma,
+        "elif" => DirectiveKind::Elif,
+        "error" => DirectiveKind::Error,
         _ => DirectiveKind::Unknown,
     }
 }
@@ -372,6 +393,25 @@ impl<'a> Cursor<'a> {
         Ok(directive)
     }
 
+    /// `#elif expr` — the operand is stored raw, `#define`-body style.
+    fn elif(self) -> Result<Directive> {
+        let rest = &self.text[self.pos..];
+        let operand = rest.trim();
+        let start = self.pos + (rest.len() - rest.trim_start().len());
+        let operand_span = self.sub_span(start, start + operand.len());
+        Ok(Directive::Elif {
+            operand: operand.to_owned(),
+            operand_span,
+        })
+    }
+
+    /// `#error text` — nothing to validate.
+    fn error_directive(self) -> Result<Directive> {
+        Ok(Directive::Error {
+            text: self.text[self.pos..].trim().to_owned(),
+        })
+    }
+
     fn if_expr(mut self) -> Result<Directive> {
         self.skip_ws()?;
         if self.at_end() {
@@ -439,7 +479,9 @@ pub fn parse(line: &str, span: Span) -> Result<Directive> {
         DirectiveKind::IfNDef => c.named(|name| Directive::IfNDef { name }, "ifndef"),
         DirectiveKind::Else => c.bare(Directive::Else, "else"),
         DirectiveKind::Endif => c.bare(Directive::Endif, "endif"),
+        DirectiveKind::Elif => c.elif(),
         DirectiveKind::Pragma => c.pragma(),
+        DirectiveKind::Error => c.error_directive(),
         DirectiveKind::Null => unreachable!("a name was read"),
         DirectiveKind::Unknown => Err(c.err(
             start,
@@ -649,7 +691,9 @@ mod tests {
             ("#pragma x", DirectiveKind::Pragma),
             ("#", DirectiveKind::Null),
             ("#  // c", DirectiveKind::Null),
-            ("#elif FOO", DirectiveKind::Unknown),
+            ("#elif FOO", DirectiveKind::Elif),
+            ("#error out", DirectiveKind::Error),
+            ("#line 5", DirectiveKind::Unknown),
             ("#iffy", DirectiveKind::Unknown),
             ("#123", DirectiveKind::Unknown),
             ("#/* junk", DirectiveKind::Unknown),
@@ -796,6 +840,42 @@ mod tests {
     }
 
     #[test]
+    fn an_elif_operand_is_raw_and_located() {
+        let line = "#elif  FOO + )junk( /* open";
+        let Directive::Elif {
+            operand,
+            operand_span,
+        } = p(line).unwrap()
+        else {
+            panic!("expected an elif");
+        };
+        // Raw: junk and an unterminated comment survive parse (elif-bundle R2).
+        assert_eq!(operand, "FOO + )junk( /* open");
+        assert_eq!(&line[operand_span.l()..operand_span.r()], operand);
+
+        let Directive::Elif { operand, .. } = p("#elif").unwrap() else {
+            panic!("expected an elif");
+        };
+        assert!(operand.is_empty());
+    }
+
+    #[test]
+    fn error_text_is_verbatim() {
+        let text_of = |line: &str| {
+            let Directive::Error { text } = p(line).unwrap() else {
+                panic!("expected an error directive");
+            };
+            text
+        };
+        assert_eq!(
+            text_of("#error bad config /* kept */"),
+            "bad config /* kept */"
+        );
+        assert_eq!(text_of("#error"), "");
+        assert_eq!(text_of("#error   UNDEFINED_MACRO  "), "UNDEFINED_MACRO");
+    }
+
+    #[test]
     fn pragma_takes_comma_separated_names() {
         assert_eq!(
             p("#pragma no_clone").unwrap(),
@@ -824,11 +904,11 @@ mod tests {
 
     #[test]
     fn unknown_directives_are_named_in_the_error() {
-        assert_eq!(perr("#elif FOO"), "unknown preprocessor directive `#elif`");
         assert_eq!(perr("#iffy"), "unknown preprocessor directive `#iffy`");
+        assert_eq!(perr("#line 5"), "unknown preprocessor directive `#line`");
         assert_eq!(
-            perr("#error out"),
-            "unknown preprocessor directive `#error`"
+            perr("#warning w"),
+            "unknown preprocessor directive `#warning`"
         );
         assert_eq!(perr("#123"), "expected a directive name after `#`");
     }
