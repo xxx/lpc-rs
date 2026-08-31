@@ -26,6 +26,7 @@ use conditional::Conditionals;
 
 mod conditional;
 pub mod define;
+pub mod directive;
 mod expand;
 pub mod preprocessor_node;
 
