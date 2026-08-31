@@ -25,6 +25,17 @@ const MAX_EXPANDED_TOKENS: usize = 65_536;
 /// chains, and (mod.rs's `#if` resolvers) define chains too.
 pub(super) const MAX_EXPANSION_DEPTH: usize = 256;
 
+/// A completed top-level expansion: the emitted tokens and the whole
+/// use's span — the Id alone, or Id widened through the top-level `)`.
+/// The scan loop anchors directive placement past `use_span`, so a
+/// consumed call's newlines never credit a mid-line directive (R4).
+pub(super) struct Expanded {
+    /// The expansion's output, already respanned and budgeted.
+    pub(super) tokens: Vec<Token>,
+    /// The whole use at the source site.
+    pub(super) use_span: Span,
+}
+
 /// The engine over one define table. Cheap to build; one per use is fine.
 pub(super) struct Expander<'a> {
     defines: &'a HashMap<String, Define>,
@@ -44,7 +55,7 @@ impl<'a> Expander<'a> {
         &self,
         token: &StringToken,
         cursor: &mut Peekable<T>,
-    ) -> Result<Option<Vec<Token>>>
+    ) -> Result<Option<Expanded>>
     where
         T: Iterator<Item = Result<Token>>,
     {
@@ -67,7 +78,10 @@ impl<'a> Expander<'a> {
         };
         let mut out = vec![];
         expansion.expand_named(name, cursor, &mut out)?;
-        Ok(Some(out))
+        Ok(Some(Expanded {
+            tokens: out,
+            use_span: expansion.use_span,
+        }))
     }
 }
 
@@ -373,7 +387,7 @@ mod tests {
             let token = next?;
             match &token {
                 Token::Id(st) => match expander.expand_use(st, &mut cursor)? {
-                    Some(tokens) => out.extend(tokens),
+                    Some(expanded) => out.extend(expanded.tokens),
                     None => out.push(token),
                 },
                 _ => out.push(token),
@@ -559,10 +573,10 @@ mod tests {
             panic!("expected an Id");
         };
         let use_span = st.0;
-        let mut tokens = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
-        assert_eq!(*tokens[0].span_ref().unwrap(), use_span);
-        assert_eq!(tokens[0].span().l(), use_span.l());
-        assert_eq!(tokens[0].span().r(), use_span.r());
+        let mut expanded = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
+        assert_eq!(*expanded.tokens[0].span_ref().unwrap(), use_span);
+        assert_eq!(expanded.tokens[0].span().l(), use_span.l());
+        assert_eq!(expanded.tokens[0].span().r(), use_span.r());
     }
 
     #[tokio::test]
@@ -575,10 +589,10 @@ mod tests {
             panic!("expected an Id");
         };
         let use_span = st.0;
-        let mut tokens = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
-        let got = *tokens[0].span_ref().unwrap();
+        let mut expanded = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
+        let got = *expanded.tokens[0].span_ref().unwrap();
         assert_ne!(got, use_span);
-        assert_eq!(tokens[0].to_string(), "marf");
+        assert_eq!(expanded.tokens[0].to_string(), "marf");
 
         // Not just "not the use span" — exactly what a fresh lex of the
         // same source gives the "marf" token.
@@ -611,11 +625,11 @@ mod tests {
         let Some(Ok(Token::Id(st))) = cursor.next() else {
             panic!("expected an Id");
         };
-        let tokens = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
+        let expanded = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
         // `+` is body-derived: the whole call `F(9)`.
-        assert_eq!(tokens[1].span(), Span::new(0, 0..4));
+        assert_eq!(expanded.tokens[1].span(), Span::new(0, 0..4));
         // `9` is an argument: its own span.
-        assert_eq!(tokens[0].span(), Span::new(0, 2..3));
+        assert_eq!(expanded.tokens[0].span(), Span::new(0, 2..3));
     }
 
     #[tokio::test]

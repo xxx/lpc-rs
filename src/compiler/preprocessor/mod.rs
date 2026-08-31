@@ -191,7 +191,7 @@ impl Preprocessor {
         while let Some(next) = iter.next() {
             match next {
                 Ok(token) => {
-                    let end = token.span().r();
+                    let mut end = token.span().r();
 
                     match &token {
                         Token::DirectiveLine(t) => {
@@ -205,7 +205,12 @@ impl Preprocessor {
                                     .expand_use(st, &mut iter)?;
 
                                 match appends {
-                                    Some(mut vec) => output.append(&mut vec),
+                                    Some(mut expanded) => {
+                                        output.append(&mut expanded.tokens);
+                                        // The capture consumed source
+                                        // through the top-level `)` (R4).
+                                        end = expanded.use_span.r();
+                                    }
                                     None => self.append(&mut output, token),
                                 }
                             }
@@ -247,9 +252,7 @@ impl Preprocessor {
         // loop drew. Span ends never cover a newline (`track_slice`
         // trims `DirectiveLine`'s trailing grab; no other token's text
         // ends with one), so the newline a directive consumed is always
-        // gap. The gap is a text-level approximation: tokens a macro
-        // expansion consumed sit inside it (spec R2 documents the
-        // micro-hole).
+        // gap.
         let placed = prev_end == 0 || src[prev_end..hash].contains('\n');
         if !placed {
             if self.conditionals.live() {
@@ -2278,6 +2281,46 @@ mod tests {
         test_valid(
             "int x;\n    #define A 1\nA;\n",
             &["int", "x", ";", "1", ";"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_multi_line_call_does_not_launder_a_directive() {
+        // The consumed call's newline used to sit in the placement gap
+        // (card ③'s documented micro-hole, closed by card ⑥ R4).
+        test_invalid(
+            "#define F(a, b) a + b\nint x = F(1,\n2) #define X 1\n",
+            "preprocessor directives must appear on their own line",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_multi_line_string_argument_does_not_launder_a_directive() {
+        test_invalid(
+            "#define STR(s) s\nstring q = STR(\"a\nb\") #define X 1\n",
+            "preprocessor directives must appear on their own line",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_zero_token_expansion_still_anchors_past_its_call() {
+        // Nothing is emitted, so only the reported use span can anchor.
+        test_invalid(
+            "#define F(a, b)\nF(1,\n2) #define X 1\n",
+            "preprocessor directives must appear on their own line",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_directive_after_a_multi_line_call_line_is_well_placed() {
+        // The gap's own newline — after the `)` — still counts.
+        test_valid(
+            "#define F(a, b) a\nint x = F(1,\n2);\n#define X 1\nX;\n",
+            &["int", "x", "=", "1", ";", "1", ";"],
         )
         .await;
     }
