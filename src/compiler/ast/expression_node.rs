@@ -53,19 +53,6 @@ pub enum ExpressionNode {
     Mapping(MappingNode),
 }
 
-/// A convenience helper to get the first `span` we can find in a list of nodes.
-/// Returns a default if no spans are found.
-///
-/// # Arguments
-/// `nodes` - A reference to a slice of Expression nodes.
-pub fn first_span(nodes: &[&ExpressionNode]) -> Span {
-    nodes
-        .iter()
-        .find(|node| node.span().is_some())
-        .and_then(|node| node.span())
-        .unwrap_or_else(|| Span::new(0, 0..0))
-}
-
 macro_rules! delegated_traits {
     ( $( $x:path ),+ ) => {
         #[async_trait]

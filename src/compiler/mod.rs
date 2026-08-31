@@ -15,7 +15,10 @@ use derive_builder::Builder;
 use educe::Educe;
 use lexer::{Spanned, Token, TokenVecWrapper};
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{self, LpcError, Result, lpc_error, span::Span};
+use lpc_rs_errors::{
+    self, LpcError, Result, lpc_error,
+    span::{HasSpan, Span},
+};
 use lpc_rs_utils::{config::Config, read_lpc_file};
 use preprocessor::Preprocessor;
 use tracing::instrument;
@@ -297,7 +300,12 @@ impl Compiler {
         lpc_parser::ProgramParser::new()
             .parse(&mut context, wrapper)
             .map(|p| (p, context))
-            .map_err(LpcError::from)
+            .map_err(|e| {
+                // lalrpop's bare-usize locations carry no file id, so the
+                // EOF arm arrives span-less; point it at the last token.
+                let last = tokens.last().map(|(_, t, _)| t.span());
+                LpcError::from(e).or_span(last)
+            })
     }
 }
 
@@ -565,6 +573,64 @@ mod tests {
                 &err.to_string(),
                 "call to unknown function `auto_inherited`"
             );
+        }
+    }
+
+    mod test_parse_errors {
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        use super::*;
+        use crate::{
+            compiler::ast::{
+                ast_node::{AstNode, SpannedNode},
+                expression_node::ExpressionNode,
+            },
+            test_support::test_config,
+        };
+
+        #[tokio::test]
+        async fn an_unexpected_eof_carries_the_last_tokens_span() {
+            let compiler = Compiler::new(test_config());
+            let e = compiler
+                .compile_string("/eof.c", "int x = 1 +")
+                .await
+                .map(|_| ())
+                .expect_err("expected a parse error");
+            assert_eq!(e.to_string(), "Unexpected EOF");
+            assert_eq!(e.span().and_then(|s| s.code()).as_deref(), Some("+"));
+        }
+
+        #[tokio::test]
+        async fn a_cross_file_expression_span_stays_in_the_including_file() {
+            let root =
+                std::env::temp_dir().join(format!("lpc-rs-cross-file-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            std::fs::create_dir_all(&root).unwrap();
+            std::fs::write(root.join("two.h"), "2\n").unwrap();
+
+            let config: Arc<Config> = ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .build()
+                .unwrap()
+                .into();
+            let compiler = CompilerBuilder::default().config(config).build().unwrap();
+
+            let code = "int x = y +\n#include \"two.h\"\n;\n";
+            let path = LpcPath::new_in_game("/main.c", "/", root.to_str().unwrap());
+            let (prog, _context) = compiler.parse_string(&path, code).await.unwrap();
+
+            let AstNode::Decl(decl) = &prog.body[0] else {
+                panic!("expected a decl");
+            };
+            let Some(ExpressionNode::BinaryOp(op)) = &decl.initializations[0].value else {
+                panic!("expected a binary op");
+            };
+            let l_span = op.l.span().expect("lhs span");
+            let r_span = op.r.span().expect("rhs span");
+            assert_ne!(l_span.file_id(), r_span.file_id());
+            // join's cross-file rule: the node keeps the left operand's span.
+            assert_eq!(op.span, Some(l_span));
+            assert_eq!(l_span.code().as_deref(), Some("y"));
         }
     }
 }
