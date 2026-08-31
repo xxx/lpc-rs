@@ -613,6 +613,20 @@ mod tests {
         p(line).expect_err("should not parse").to_string()
     }
 
+    /// Parse `line` as a `#define`, panicking on anything else.
+    fn define_of(line: &str) -> (String, Option<Vec<String>>, String, Span) {
+        let Directive::Define {
+            name,
+            params,
+            body,
+            body_span,
+        } = p(line).unwrap()
+        else {
+            panic!("expected a define");
+        };
+        (name, params, body, body_span)
+    }
+
     fn x(text: &str) -> Result<PreprocessorNode> {
         parse_if_expression(text, Span::new(0, 0..text.len()))
     }
@@ -687,12 +701,7 @@ mod tests {
     #[test]
     fn a_define_body_span_locates_the_body() {
         let line = "#define ADD(a, b)   a + b";
-        let Directive::Define {
-            body, body_span, ..
-        } = p(line).unwrap()
-        else {
-            panic!("expected a define");
-        };
+        let (_, _, body, body_span) = define_of(line);
         assert_eq!(body, "a + b");
         assert_eq!(&line[body_span.l()..body_span.r()], "a + b");
     }
@@ -700,36 +709,18 @@ mod tests {
     #[test]
     fn define_object_macros() {
         let line = "#define FOO 1 + 2";
-        let Directive::Define {
-            name,
-            params,
-            body,
-            body_span,
-        } = p(line).unwrap()
-        else {
-            panic!("expected a define");
-        };
+        let (name, params, body, body_span) = define_of(line);
         assert_eq!(name, "FOO");
         assert_eq!(params, None);
         assert_eq!(body, "1 + 2");
         assert_eq!(&line[body_span.l()..body_span.r()], "1 + 2");
 
-        let Directive::Define { body, .. } = p("#define FOO").unwrap() else {
-            panic!("expected a define");
-        };
+        let (_, _, body, _) = define_of("#define FOO");
         assert!(body.is_empty());
 
         // C99's space rule: `(` not flush against the name = object macro.
         let line = "#define F (x)";
-        let Directive::Define {
-            name,
-            params,
-            body,
-            body_span,
-        } = p(line).unwrap()
-        else {
-            panic!("expected a define");
-        };
+        let (name, params, body, body_span) = define_of(line);
         assert_eq!(name, "F");
         assert_eq!(params, None);
         assert_eq!(body, "(x)");
@@ -745,30 +736,14 @@ mod tests {
     #[test]
     fn define_function_macros() {
         let line = "#define F(a, b) a + b";
-        let Directive::Define {
-            name,
-            params,
-            body,
-            body_span,
-        } = p(line).unwrap()
-        else {
-            panic!("expected a define");
-        };
+        let (name, params, body, body_span) = define_of(line);
         assert_eq!(name, "F");
         assert_eq!(params, Some(vec!["a".into(), "b".into()]));
         assert_eq!(body, "a + b");
         assert_eq!(&line[body_span.l()..body_span.r()], "a + b");
 
         let line = "#define F() body";
-        let Directive::Define {
-            name,
-            params,
-            body,
-            body_span,
-        } = p(line).unwrap()
-        else {
-            panic!("expected a define");
-        };
+        let (name, params, body, body_span) = define_of(line);
         assert_eq!(name, "F");
         assert_eq!(params, Some(vec![]));
         assert_eq!(body, "body");
@@ -869,9 +844,7 @@ mod tests {
             "unterminated comment in a preprocessor directive"
         );
         // A define BODY is the re-lex's domain; the grammar accepts it raw.
-        let Directive::Define { body, .. } = p("#define X /* open").unwrap() else {
-            panic!("expected a define");
-        };
+        let (_, _, body, _) = define_of("#define X /* open");
         assert_eq!(body, "/* open");
     }
 

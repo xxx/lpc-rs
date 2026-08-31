@@ -612,6 +612,35 @@ mod tests {
     use super::*;
     use crate::{assert_regex, compiler::compilation_context::CompilationContextBuilder};
 
+    /// A uniquely named scratch directory (test name + pid) for a
+    /// filesystem-backed fixture; removed on drop, panic included, so
+    /// parallel tests stay isolated and nothing leaks.
+    struct TempLib(std::path::PathBuf);
+
+    impl TempLib {
+        fn new(name: &str) -> Self {
+            let root = std::env::temp_dir()
+                .join(format!("lpc-rs-preprocessor-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            std::fs::create_dir_all(&root).unwrap();
+            Self(root)
+        }
+    }
+
+    impl std::ops::Deref for TempLib {
+        type Target = std::path::Path;
+
+        fn deref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempLib {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     fn fixture() -> Preprocessor {
         let config = ConfigBuilder::default()
             .lib_dir("./tests/fixtures/code")
@@ -763,9 +792,7 @@ mod tests {
         async fn an_unreadable_system_header_is_an_error_not_a_fallthrough() {
             use std::os::unix::fs::PermissionsExt;
 
-            let root = std::env::temp_dir()
-                .join(format!("lpc-rs-unreadable-header-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&root);
+            let root = TempLib::new("unreadable-header");
             std::fs::create_dir_all(root.join("sys")).unwrap();
             std::fs::create_dir_all(root.join("sys2")).unwrap();
             std::fs::write(root.join("sys/secret.h"), "first").unwrap();
@@ -789,7 +816,6 @@ mod tests {
             let mut preprocessor = Preprocessor::new(context);
 
             let result = preprocessor.scan("/test.c", "#include <secret.h>").await;
-            let _ = std::fs::remove_dir_all(&root);
 
             let e = result.unwrap_err();
             assert_eq!(
@@ -2039,6 +2065,44 @@ mod tests {
 
             test_invalid(prog, "macro `BAR` takes 2 arguments, 1 given").await;
         }
+
+        #[tokio::test]
+        async fn a_zero_parameter_empty_body_call_expands_to_nothing() {
+            // `F()` is a call: its (empty) body vanishes, leaving `;`.
+            // Bare `F` with no `(` is a plain identifier (R2).
+            let prog = "#define F()\nF();\nF;\n";
+            test_valid(prog, &[";", "F", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn a_nested_calls_argument_token_keeps_its_own_span() {
+            // ID(9) is F's argument: 9 is spliced as an ARGUMENT token,
+            // so it keeps its own source span — not F(ID(9))'s widened
+            // use-span. R5's depth==1 guard widens use_span internally
+            // as the outer capture completes, but only a literal BODY
+            // token (`substitute`'s non-param arm) is ever respanned to it.
+            let prog = "#define ID(x) x\n#define F(x) x\nint a = F(ID(9));\n";
+            let mut preprocessor = fixture();
+            let tokens = preprocessor.scan("/test.c", prog).await.unwrap();
+            let nine = tokens.iter().find(|t| t.to_string() == "9").unwrap();
+            let l = prog.find('9').unwrap();
+            assert_eq!((nine.span().l(), nine.span().r()), (l, l + 1));
+        }
+
+        #[tokio::test]
+        async fn a_nested_calls_body_token_takes_the_outer_widened_span() {
+            // Same nesting, but F's body carries a literal token: it DOES
+            // take the widened use-span, through the OUTER `)` — the
+            // nested ID(9) capture (depth 2) must not narrow it back to
+            // ID(9)'s own extent (card ④ R5).
+            let prog = "#define ID(x) x\n#define F(x) x + 1\nint a = F(ID(9));\n";
+            let mut preprocessor = fixture();
+            let tokens = preprocessor.scan("/test.c", prog).await.unwrap();
+            let plus = tokens.iter().find(|t| t.to_string() == "+").unwrap();
+            let call_l = prog.find("F(ID(9))").unwrap();
+            let call_r = call_l + "F(ID(9))".len();
+            assert_eq!((plus.span().l(), plus.span().r()), (call_l, call_r));
+        }
     }
 
     mod test_pragmas {
@@ -2474,14 +2538,6 @@ mod tests {
     mod test_include_walk {
         use super::*;
 
-        fn temp_lib(name: &str) -> std::path::PathBuf {
-            let root = std::env::temp_dir()
-                .join(format!("lpc-rs-preprocessor-{name}-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&root);
-            std::fs::create_dir_all(&root).unwrap();
-            root
-        }
-
         fn fixture_at(root: &std::path::Path) -> Preprocessor {
             let config = ConfigBuilder::default()
                 .lib_dir(root.to_str().unwrap())
@@ -2511,7 +2567,7 @@ mod tests {
 
         #[tokio::test]
         async fn an_include_cycle_renders_the_chain() {
-            let root = temp_lib("cycle-chain");
+            let root = TempLib::new("cycle-chain");
             std::fs::write(root.join("a.h"), "#include \"b.h\"\n").unwrap();
             std::fs::write(root.join("b.h"), "#include \"a.h\"\n").unwrap();
 
@@ -2526,7 +2582,7 @@ mod tests {
 
         #[tokio::test]
         async fn a_self_include_is_a_cycle() {
-            let root = temp_lib("self-include");
+            let root = TempLib::new("self-include");
             std::fs::write(root.join("a.h"), "#include \"a.h\"\n").unwrap();
             let e = error_of(&root, "#include \"a.h\"\n").await;
             assert_eq!(
@@ -2537,7 +2593,7 @@ mod tests {
 
         #[tokio::test]
         async fn a_header_including_the_root_is_a_cycle() {
-            let root = temp_lib("root-cycle");
+            let root = TempLib::new("root-cycle");
             std::fs::write(root.join("a.h"), "#include \"main.c\"\n").unwrap();
             let e = error_of(&root, "#include \"a.h\"\n1\n").await;
             assert_eq!(
@@ -2548,7 +2604,7 @@ mod tests {
 
         #[tokio::test]
         async fn a_once_root_reincluded_is_skipped_not_cyclic() {
-            let root = temp_lib("once-root");
+            let root = TempLib::new("once-root");
             std::fs::write(root.join("a.h"), "#include \"main.c\"\n1\n").unwrap();
             let tokens = tokens_of(&root, "#pragma once\n#include \"a.h\"\n2\n").await;
             assert_eq!(tokens, vec!["1", "2"]);
@@ -2556,7 +2612,7 @@ mod tests {
 
         #[tokio::test]
         async fn a_chain_at_the_cap_scans() {
-            let root = temp_lib("depth-at-cap");
+            let root = TempLib::new("depth-at-cap");
             // Root + h0..h(leaf) fill the cap exactly.
             let leaf = include::MAX_INCLUDE_DEPTH - 2;
             for i in 0..leaf {
@@ -2573,7 +2629,7 @@ mod tests {
 
         #[tokio::test]
         async fn a_chain_past_the_cap_nests_too_deeply() {
-            let root = temp_lib("depth-past-cap");
+            let root = TempLib::new("depth-past-cap");
             let leaf = include::MAX_INCLUDE_DEPTH - 1;
             for i in 0..leaf {
                 std::fs::write(
@@ -2589,7 +2645,7 @@ mod tests {
 
         #[tokio::test]
         async fn a_pragma_once_header_includes_once() {
-            let root = temp_lib("once-header");
+            let root = TempLib::new("once-header");
             std::fs::write(root.join("o.h"), "#pragma once\n1\n").unwrap();
             let tokens = tokens_of(&root, "#include \"o.h\"\n#include \"o.h\"\n").await;
             assert_eq!(tokens, vec!["1"]);
@@ -2597,7 +2653,7 @@ mod tests {
 
         #[tokio::test]
         async fn a_dead_pragma_once_is_inert() {
-            let root = temp_lib("dead-once");
+            let root = TempLib::new("dead-once");
             std::fs::write(root.join("d.h"), "#if 0\n#pragma once\n#endif\n1\n").unwrap();
             let tokens = tokens_of(&root, "#include \"d.h\"\n#include \"d.h\"\n").await;
             assert_eq!(tokens, vec!["1", "1"]);
