@@ -133,7 +133,7 @@ mod tests {
         c.flip_else(sp(3)).unwrap();
         assert!(!c.live()); // no flip — but a second #else still errors
         let e = c.flip_else(sp(4)).unwrap_err();
-        assert!(e.message().contains("duplicate `#else`"));
+        assert_eq!(e.to_string(), "duplicate `#else` found");
     }
 
     #[test]
@@ -150,8 +150,16 @@ mod tests {
     #[test]
     fn orphan_else_and_endif_error() {
         let mut c = Conditionals::default();
-        assert!(c.flip_else(sp(1)).is_err());
-        assert!(c.leave(sp(2)).is_err());
+        let else_err = c.flip_else(sp(1)).unwrap_err();
+        assert_eq!(
+            else_err.to_string(),
+            "found `#else` without a corresponding `#if` or `#ifdef`"
+        );
+        let endif_err = c.leave(sp(2)).unwrap_err();
+        assert_eq!(
+            endif_err.to_string(),
+            "found `#endif` without a corresponding `#if`"
+        );
     }
 
     #[test]
@@ -160,7 +168,10 @@ mod tests {
         c.enter(sp(1), true);
         c.enter(sp(9), true);
         let e = c.finish().unwrap_err();
-        assert!(e.message().contains("without a corresponding `#endif`"));
+        assert_eq!(
+            e.to_string(),
+            "Found `#if` without a corresponding `#endif`"
+        );
         assert_eq!(e.span(), Some(sp(9)));
     }
 
