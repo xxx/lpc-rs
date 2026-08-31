@@ -76,19 +76,21 @@ impl Iterator for LexWrapper<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let token = self.lexer.next()?;
-        let span = self.lexer.span();
-        let base = self.lexer.extras.base_offset;
 
         match token {
             Ok(t) => Some(Ok(t)),
-            Err(_) => Some(Err(lpc_error!(
-                Some(Span::new(
-                    self.lexer.extras.current_file_id,
-                    base + span.start..base + span.end,
-                )),
-                "Lex Error: Invalid Token `{}`",
-                self.lexer.slice(),
-            ))),
+            Err(_) => {
+                let span = self.lexer.span();
+                let base = self.lexer.extras.base_offset;
+                Some(Err(lpc_error!(
+                    Some(Span::new(
+                        self.lexer.extras.current_file_id,
+                        base + span.start..base + span.end,
+                    )),
+                    "Lex Error: Invalid Token `{}`",
+                    self.lexer.slice(),
+                )))
+            }
         }
     }
 }
@@ -513,8 +515,8 @@ impl Token {
     /// The use-site collapse (preprocessor card ④ R5): macro expansion
     /// respans body-derived tokens onto the call, once, at replacement
     /// construction. The only span rewrite in the system.
-    pub(crate) fn span_ref(&mut self) -> Option<&mut Span> {
-        let span = match self {
+    pub(in crate::compiler) fn span_ref(&mut self) -> &mut Span {
+        match self {
             Token::Plus(x)
             | Token::Minus(x)
             | Token::Mul(x)
@@ -600,16 +602,12 @@ impl Token {
             | Token::Private(x)
             | Token::Public(x)
             | Token::Protected(x) => x,
-        };
-
-        Some(span)
+        }
     }
 
     /// Allow directly setting a new span on a token
     pub fn with_span(mut self, new_span: Span) -> Self {
-        if let Some(span) = self.span_ref() {
-            *span = new_span;
-        }
+        *self.span_ref() = new_span;
 
         self
     }

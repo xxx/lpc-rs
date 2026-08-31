@@ -188,7 +188,7 @@ impl Preprocessor {
 
         let mut iter = token_stream.peekable();
         // The end of the last token this loop drew — the placement
-        // check's anchor (spec R2).
+        // check's anchor (card ③ R2).
         let mut prev_end: usize = 0;
 
         while let Some(next) = iter.next() {
@@ -211,7 +211,7 @@ impl Preprocessor {
                                     Some(mut expanded) => {
                                         output.append(&mut expanded.tokens);
                                         // Anchor placement past the whole use — the Id, or
-                                        // through the top-level `)` the capture consumed (R4).
+                                        // through the top-level `)` the capture consumed (card ⑥ R4).
                                         end = expanded.use_span.r();
                                     }
                                     None => self.append(&mut output, token),
@@ -240,8 +240,8 @@ impl Preprocessor {
         Ok(output)
     }
 
-    /// One directive line: judge placement (R2), classify when dead (R3),
-    /// parse and dispatch when live.
+    /// One directive line: judge placement (card ③ R2), classify when dead
+    /// (card ③ R3), parse and dispatch when live.
     async fn handle_directive(
         &mut self,
         token: &StringToken,
@@ -271,7 +271,7 @@ impl Preprocessor {
         if !self.conditionals.live() {
             // Dead regions know directive names, never operands.
             // `#else`/`#endif` have no operands — their shape-only
-            // grammar is checked dead or live (spec R3).
+            // grammar is checked dead or live (card ③ R3).
             match directive::classify(&token.1) {
                 DirectiveKind::If | DirectiveKind::IfDef | DirectiveKind::IfNDef => {
                     self.conditionals.enter(token.0, false);
@@ -382,6 +382,15 @@ impl Preprocessor {
         )
     }
 
+    fn nests_too_deeply(name: &str, span: Option<Span>) -> LpcError {
+        lpc_error!(
+            span,
+            "expansion of `{}` nests too deeply (limit {})",
+            name,
+            expand::MAX_EXPANSION_DEPTH
+        )
+    }
+
     /// One include: open through the walk, scan the file with its own
     /// conditional stack, close on the success and error paths alike.
     #[instrument(skip(self, output))]
@@ -436,12 +445,7 @@ impl Preprocessor {
                         expr: Some(expr), ..
                     })) => {
                         if hide.len() >= expand::MAX_EXPANSION_DEPTH {
-                            return Err(lpc_error!(
-                                span,
-                                "expansion of `{}` nests too deeply (limit {})",
-                                x,
-                                expand::MAX_EXPANSION_DEPTH
-                            ));
+                            return Err(Self::nests_too_deeply(x, span));
                         }
                         hide.push(x);
                         let result = self.eval_expr_for_skipping(expr, span, hide);
@@ -456,14 +460,7 @@ impl Preprocessor {
             }
             PreprocessorNode::Int(i) => Ok(i != &0),
             PreprocessorNode::String(_) => Ok(true),
-            PreprocessorNode::Defined(x, negated) => {
-                let option = self.defines.get(x);
-                Ok(if *negated {
-                    option.is_none()
-                } else {
-                    option.is_some()
-                })
-            }
+            PreprocessorNode::Defined(x, negated) => Ok(self.defines.contains_key(x) != *negated),
             PreprocessorNode::BinaryOp(op, l, r) => match op {
                 BinaryOperation::Add => Ok(self
                     .resolve_int(l, span, hide)?
@@ -511,12 +508,7 @@ impl Preprocessor {
                             expr: Some(expr), ..
                         }) => {
                             if hide.len() >= expand::MAX_EXPANSION_DEPTH {
-                                return Err(lpc_error!(
-                                    span,
-                                    "expansion of `{}` nests too deeply (limit {})",
-                                    x,
-                                    expand::MAX_EXPANSION_DEPTH
-                                ));
+                                return Err(Self::nests_too_deeply(x, span));
                             }
                             hide.push(x);
                             let result = self.resolve_int(expr, span, hide);
@@ -2192,8 +2184,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_dead_region_diagnoses_nothing() {
-        // Arity error, unterminated call, and a lex error (`#elif` has no
-        // token) — all inside a dead region.
+        // Arity error, unterminated call, and an unknown directive (`#elif`
+        // classifies as Unknown) — all inside a dead region.
         let prog = indoc! { r##"
             #define BAR(a, b) (a - b)
             #ifdef NOPE

@@ -32,7 +32,7 @@ pub(super) const MAX_EXPANSION_DEPTH: usize = 256;
 pub(super) struct Expanded {
     /// The expansion's output, already respanned and budgeted.
     pub(super) tokens: Vec<Token>,
-    /// The whole use at the source site.
+    /// Read by the scan loop as the placement anchor.
     pub(super) use_span: Span,
 }
 
@@ -574,7 +574,7 @@ mod tests {
         };
         let use_span = st.0;
         let mut expanded = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
-        assert_eq!(*expanded.tokens[0].span_ref().unwrap(), use_span);
+        assert_eq!(*expanded.tokens[0].span_ref(), use_span);
     }
 
     #[tokio::test]
@@ -588,7 +588,7 @@ mod tests {
         };
         let use_span = st.0;
         let mut expanded = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
-        let got = *expanded.tokens[0].span_ref().unwrap();
+        let got = *expanded.tokens[0].span_ref();
         assert_ne!(got, use_span);
         assert_eq!(expanded.tokens[0].to_string(), "marf");
 
