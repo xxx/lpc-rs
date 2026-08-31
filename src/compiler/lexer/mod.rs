@@ -777,4 +777,45 @@ mod tests {
 
         assert!(vec.is_empty());
     }
+
+    #[test]
+    fn lex_wrapper_triples_are_each_tokens_own_l_and_r() {
+        // Include a directive line so its trimmed end (the span excludes
+        // the trailing newline) shows up in the triple too.
+        let src = "x\n#define FOO 1\n";
+        let triples: Vec<_> = LexWrapper::new(src, 0)
+            .triples()
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+
+        assert_eq!(triples.len(), 2);
+        let (l, tok, r) = &triples[0];
+        assert!(matches!(tok, Token::Id(_)));
+        assert_eq!((*l, *r), (0, 1));
+
+        let (l, tok, r) = &triples[1];
+        let Token::DirectiveLine(st) = tok else {
+            panic!("expected a directive line");
+        };
+        // The lexer's raw slice keeps the trailing newline; only the span
+        // (used for carets) trims it.
+        assert_eq!(st.1, "#define FOO 1\n");
+        assert_eq!((*l, *r), (2, 15));
+    }
+
+    #[test]
+    fn token_triples_wrap_a_token_slice_the_same_shape() {
+        let tokens = vec![
+            Token::Id(StringToken(Span::new(0, 0..1), "x".into())),
+            Token::Semi(Span::new(0, 1..2)),
+        ];
+        let triples: Vec<_> = TokenTriples::new(&tokens)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+
+        assert_eq!(
+            triples,
+            vec![(0, tokens[0].clone(), 1), (1, tokens[1].clone(), 2)]
+        );
+    }
 }
