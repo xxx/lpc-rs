@@ -76,7 +76,7 @@ struct Expansion<'a> {
     defines: &'a HashMap<String, Define>,
     /// The top-level macro, named by the cap diagnostic.
     top: &'a str,
-    /// Every body-derived token emits with this span (R10).
+    /// Every body-derived token emits with this span (R10): the use-site Id, widened through the closing `)` when the top-level capture completes (card ④ R5).
     use_span: Span,
     /// Names being expanded on the current path (R4). A stack; `contains`
     /// is the membership test — macro chains are short.
@@ -235,9 +235,19 @@ impl<'a> Expansion<'a> {
                     depth += 1;
                     arg.push(spanned);
                 }
-                Token::RParen(_) => {
+                Token::RParen(rp) => {
                     depth -= 1;
                     if depth == 0 {
+                        if self.depth == 1 {
+                            // The top-level call's `)` closes the use
+                            // site: widen so body-derived tokens and
+                            // engine diagnostics caret the whole call
+                            // (card ④ R5). Nested captures read
+                            // replacement tokens — already collapsed or
+                            // argument-real — and joining those could
+                            // pull the end inward.
+                            self.use_span = Span::join(self.use_span, *rp);
+                        }
                         args.push(arg);
                         return Ok(args);
                     }
@@ -598,5 +608,36 @@ mod tests {
         };
         let (_, x, _) = &o.tokens[2];
         assert_eq!(x.span().code().as_deref(), Some("x"));
+    }
+
+    #[tokio::test]
+    async fn body_tokens_of_a_call_take_the_whole_call_span() {
+        let pp = table("#define F(x) x + 1\n").await;
+        let expander = Expander::new(&pp.defines);
+        let src = "F(9)";
+        let mut cursor = LexWrapper::new(src, 0).peekable();
+        let Some(Ok((_, Token::Id(st), _))) = cursor.next() else {
+            panic!("expected an Id");
+        };
+        let tokens = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
+        // `+` is body-derived: the whole call `F(9)`.
+        assert_eq!(tokens[1].1.span(), Span::new(0, 0..4));
+        // `9` is an argument: its own span.
+        assert_eq!(tokens[0].1.span(), Span::new(0, 2..3));
+    }
+
+    #[tokio::test]
+    async fn an_arity_error_carets_the_whole_call() {
+        let pp = table("#define F(a) a\n").await;
+        let e = expand_all(&pp, "F(1, 2)").unwrap_err();
+        assert_eq!(e.span(), Some(Span::new(0, 0..7)));
+        assert!(e.message().contains("takes 1 argument, 2 given"));
+    }
+
+    #[tokio::test]
+    async fn an_unterminated_call_carets_the_name() {
+        let pp = table("#define F(a) a\n").await;
+        let e = expand_all(&pp, "F(1").unwrap_err();
+        assert_eq!(e.span(), Some(Span::new(0, 0..1)));
     }
 }

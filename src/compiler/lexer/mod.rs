@@ -499,8 +499,9 @@ impl HasSpan for Token {
 }
 
 impl Token {
-    /// A helper to allow us to correct spans, for cases when we lex `#define`d
-    /// values for macro expansion.
+    /// The use-site collapse (preprocessor card ④ R5): macro expansion
+    /// respans body-derived tokens onto the call, once, at replacement
+    /// construction. The only span rewrite in the system.
     pub(crate) fn span_ref(&mut self) -> Option<&mut Span> {
         let span = match self {
             Token::Plus(x)
