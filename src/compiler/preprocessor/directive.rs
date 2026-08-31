@@ -286,7 +286,7 @@ impl<'a> Cursor<'a> {
             ));
         };
         // C99's rule, and today's: a function macro only when `(` sits
-        // flush against the name. `#define F (x)` is an object macro.
+        // flush against the name.
         let params = if self.peek_char() == Some('(') {
             self.pos += 1;
             Some(self.params()?)

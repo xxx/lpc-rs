@@ -212,7 +212,7 @@ impl<'a> Expansion<'a> {
 
     /// Capture a call's arguments from `cursor`: paren depth only, commas
     /// split at depth 1; calls may span lines, since newlines never
-    /// tokenize (R6). The opening paren is already consumed.
+    /// tokenize. The opening paren is already consumed.
     fn capture_arguments<T>(
         &mut self,
         name: &str,

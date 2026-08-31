@@ -334,9 +334,8 @@ impl Preprocessor {
         }
 
         // Lex the body once, re-spanned to the whole #define line. A
-        // directive line inside a body has no legal reading (R6: LPC has
-        // no `#` operator, and expansion output is never reinterpreted
-        // as a directive).
+        // directive line inside a body has no legal reading (R6 — LPC
+        // has no `#` operator).
         let lex_body = |body: &str| -> Result<Vec<Spanned<Token>>> {
             let tokens = LexWrapper::new(body)
                 .collect::<Result<Vec<_>>>()
