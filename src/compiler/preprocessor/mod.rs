@@ -243,13 +243,14 @@ impl Preprocessor {
     ) -> Result<()> {
         let hash = token.0.l();
         // Well-placed iff a line start can be credited: the file starts
-        // here, a newline sits in the gap since the last token this loop
-        // drew, or the previous token consumed its trailing newline —
-        // which only a directive line does. The gap is a text-level
-        // approximation: tokens a macro expansion consumed sit inside it
-        // (spec R2 documents the micro-hole).
-        let placed =
-            prev_end == 0 || src[prev_end..hash].contains('\n') || src[..prev_end].ends_with('\n');
+        // here, or a newline sits in the gap since the last token this
+        // loop drew. Span ends never cover a newline (`track_slice`
+        // trims `DirectiveLine`'s trailing grab; no other token's text
+        // ends with one), so the newline a directive consumed is always
+        // gap. The gap is a text-level approximation: tokens a macro
+        // expansion consumed sit inside it (spec R2 documents the
+        // micro-hole).
+        let placed = prev_end == 0 || src[prev_end..hash].contains('\n');
         if !placed {
             if self.conditionals.live() {
                 return Err(lpc_error!(
