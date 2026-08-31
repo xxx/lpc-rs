@@ -1,0 +1,382 @@
+//! The include walk: the one owner of `#include` traversal for a compile.
+
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+
+use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_errors::{
+    LpcError, Result, lpc_error,
+    source_map::{FileId, SOURCE_MAP},
+    span::Span,
+};
+use lpc_rs_utils::{config::Config, read_lpc_file};
+use tracing::instrument;
+
+/// Deepest `#include` nesting allowed, the root file included.
+pub(super) const MAX_INCLUDE_DEPTH: usize = 64;
+
+/// The pragma name that marks the current file include-once.
+#[cfg_attr(test, allow(dead_code))]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "wired in by the include-walk flip")
+)]
+pub(super) const ONCE: &str = "once";
+
+/// One entry form of an include.
+#[derive(Debug)]
+#[cfg_attr(test, allow(dead_code))]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "wired in by the include-walk flip")
+)]
+pub(super) enum IncludeSource<'a> {
+    /// `#include <path>`
+    System {
+        /// The directive's path text.
+        path: &'a str,
+    },
+    /// `#include "path"`
+    Local {
+        /// The directive's path text.
+        path: &'a str,
+    },
+    /// The configured auto-include file.
+    Configured(&'a LpcPath),
+}
+
+/// A successfully opened include: its registered id and its text.
+#[derive(Debug)]
+pub(super) struct Opened {
+    /// The file's `SOURCE_MAP` id — one per file per compile.
+    pub file_id: FileId,
+    /// The file's text, shared with the memo.
+    pub content: Arc<str>,
+}
+
+/// One file on the active include chain.
+#[derive(Debug)]
+struct Frame {
+    /// Canonical server path — the memo/once/cycle key.
+    canon: PathBuf,
+    /// The file as resolved; nested resolution derives its cwd from this.
+    path: LpcPath,
+    /// The `#include` that opened this frame; `None` for the root and
+    /// the auto-include.
+    site: Option<Span>,
+}
+
+/// The one owner of `#include` traversal for a compile: resolution,
+/// containment, IO, `SOURCE_MAP` registration, the active chain, the
+/// depth cap, and the `#pragma once` set.
+#[derive(Debug, Default)]
+pub(super) struct IncludeWalk {
+    /// The active chain, root first.
+    stack: Vec<Frame>,
+    /// One disk read and one `SOURCE_MAP` id per file per compile.
+    memo: HashMap<PathBuf, (FileId, Arc<str>)>,
+    /// Files marked `#pragma once`.
+    once: HashSet<PathBuf>,
+}
+
+impl IncludeWalk {
+    /// Register the root file's text and push its frame. Called once,
+    /// first, by `scan`.
+    pub fn open_root(&mut self, path: &LpcPath, code: &str, config: &Config) -> FileId {
+        let canon = path.as_server(config.lib_dir.as_str()).into_owned();
+        let file_id = SOURCE_MAP
+            .write()
+            .add(canon.to_string_lossy().into_owned(), code.to_owned());
+        self.memo.insert(canon.clone(), (file_id, Arc::from(code)));
+        self.stack.push(Frame {
+            canon,
+            path: path.clone(),
+            site: None,
+        });
+        file_id
+    }
+
+    /// Resolve and open one include, pushing its frame. `Ok(None)` is
+    /// the `#pragma once` skip; the caller scans `Some` and then
+    /// [`close`](Self::close)s.
+    #[instrument(skip(self, config))]
+    pub async fn open(
+        &mut self,
+        source: IncludeSource<'_>,
+        span: Option<Span>,
+        config: &Config,
+    ) -> Result<Option<Opened>> {
+        let lib_dir = config.lib_dir.as_str();
+        let path = self.resolve(source, config);
+        let canon = path.as_server(lib_dir).into_owned();
+
+        if !path.is_within_root(lib_dir) {
+            return Err(lpc_error!(
+                span,
+                "attempt to include a file outside the root: `{}` (expanded to `{}`) (lib_dir: `{}`)",
+                path,
+                canon.display(),
+                lib_dir
+            ));
+        }
+
+        // Before the cycle check: a once-marked file on the active
+        // chain is a skip, not a cycle.
+        if self.once.contains(&canon) {
+            return Ok(None);
+        }
+
+        if self.stack.iter().any(|frame| frame.canon == canon) {
+            return Err(self.cycle_error(&path, span));
+        }
+
+        if self.stack.len() >= MAX_INCLUDE_DEPTH {
+            return Err(lpc_error!(span, "`#include` nests too deeply"));
+        }
+
+        let (file_id, content) = match self.memo.get(&canon) {
+            Some((file_id, content)) => (*file_id, content.clone()),
+            None => {
+                if canon.is_dir() {
+                    return Err(lpc_error!(
+                        span,
+                        "attempt to include a directory: `{}` (expanded to `{}`) (lib_dir: `{}`)",
+                        path,
+                        canon.display(),
+                        lib_dir
+                    ));
+                }
+                let text = match read_lpc_file(&canon).await {
+                    Ok(text) => text,
+                    Err(e) => {
+                        return Err(lpc_error!(
+                            span,
+                            "unable to read include file `{}`: {}",
+                            path,
+                            e
+                        ));
+                    }
+                };
+                let file_id = SOURCE_MAP
+                    .write()
+                    .add(canon.to_string_lossy().into_owned(), text.clone());
+                let content: Arc<str> = Arc::from(text);
+                self.memo.insert(canon.clone(), (file_id, content.clone()));
+                (file_id, content)
+            }
+        };
+
+        self.stack.push(Frame {
+            canon,
+            path,
+            site: span,
+        });
+        Ok(Some(Opened { file_id, content }))
+    }
+
+    /// Pop the active frame — the success and error paths alike.
+    pub fn close(&mut self) {
+        let popped = self.stack.pop();
+        debug_assert!(popped.is_some(), "include close without an open");
+    }
+
+    /// Mark the active file `#pragma once` (idempotent).
+    pub fn mark_once(&mut self) {
+        let frame = self
+            .stack
+            .last()
+            .expect("a pragma executes inside an open file");
+        self.once.insert(frame.canon.clone());
+    }
+
+    /// Turn a directive's path into an [`LpcPath`], relative to the
+    /// including file — the active frame.
+    fn resolve(&self, source: IncludeSource<'_>, config: &Config) -> LpcPath {
+        match source {
+            IncludeSource::Configured(path) => path.clone(),
+            IncludeSource::Local { path } => {
+                LpcPath::new_in_game(path, self.cwd(config), &*config.lib_dir)
+            }
+            IncludeSource::System { path } => {
+                let found = config.system_include_dirs.iter().find_map(|dir| {
+                    let candidate = LpcPath::new_in_game(path, dir.as_str(), &*config.lib_dir);
+                    candidate
+                        .as_server(&*config.lib_dir)
+                        .exists()
+                        .then_some(candidate)
+                });
+                found.unwrap_or_else(|| {
+                    LpcPath::new_in_game(path, self.cwd(config), &*config.lib_dir)
+                })
+            }
+        }
+    }
+
+    /// The including file's directory — the resolution cwd.
+    fn cwd(&self, config: &Config) -> PathBuf {
+        self.stack
+            .last()
+            .map(|frame| {
+                frame
+                    .path
+                    .as_in_game(config.lib_dir.as_str())
+                    .parent()
+                    .unwrap_or_else(|| Path::new("/"))
+                    .to_path_buf()
+            })
+            .unwrap_or_else(|| PathBuf::from("/"))
+    }
+
+    /// The cycle diagnostic: names the offending file and labels every
+    /// open include site, outermost first.
+    fn cycle_error(&self, path: &LpcPath, span: Option<Span>) -> LpcError {
+        let mut e = lpc_error!(
+            span,
+            "cyclic `#include`: `{}` is already being included",
+            path
+        );
+        for frame in &self.stack {
+            e = e.with_label("included from here", frame.site);
+        }
+        e
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use lpc_rs_utils::config::ConfigBuilder;
+
+    use super::*;
+
+    fn temp_lib(name: &str) -> PathBuf {
+        let root =
+            std::env::temp_dir().join(format!("lpc-rs-include-walk-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    fn config_at(root: &Path) -> Config {
+        ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .build()
+            .unwrap()
+    }
+
+    fn rooted(config: &Config) -> IncludeWalk {
+        let mut walk = IncludeWalk::default();
+        walk.open_root(
+            &LpcPath::new_in_game("/main.c", "/", &*config.lib_dir),
+            "int x;\n",
+            config,
+        );
+        walk
+    }
+
+    #[tokio::test]
+    async fn a_reopened_file_reuses_its_id_and_text() {
+        let root = temp_lib("memo");
+        std::fs::write(root.join("a.h"), "1\n").unwrap();
+        let config = config_at(&root);
+        let mut walk = rooted(&config);
+
+        let first = walk
+            .open(IncludeSource::Local { path: "a.h" }, None, &config)
+            .await
+            .unwrap()
+            .expect("not once-marked");
+        walk.close();
+        let second = walk
+            .open(IncludeSource::Local { path: "a.h" }, None, &config)
+            .await
+            .unwrap()
+            .expect("not once-marked");
+
+        assert_eq!(first.file_id, second.file_id);
+        assert!(Arc::ptr_eq(&first.content, &second.content));
+    }
+
+    #[tokio::test]
+    async fn an_open_of_an_active_file_is_a_cycle() {
+        let root = temp_lib("cycle");
+        std::fs::write(root.join("a.h"), "1\n").unwrap();
+        let config = config_at(&root);
+        let mut walk = rooted(&config);
+
+        walk.open(IncludeSource::Local { path: "a.h" }, None, &config)
+            .await
+            .unwrap();
+        let e = walk
+            .open(IncludeSource::Local { path: "a.h" }, None, &config)
+            .await
+            .unwrap_err();
+
+        let msg = e.to_string();
+        assert!(msg.starts_with("cyclic `#include`"), "{msg}");
+        assert!(msg.contains("a.h"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn a_once_marked_file_opens_to_nothing() {
+        let root = temp_lib("once");
+        std::fs::write(root.join("o.h"), "1\n").unwrap();
+        let config = config_at(&root);
+        let mut walk = rooted(&config);
+
+        walk.open(IncludeSource::Local { path: "o.h" }, None, &config)
+            .await
+            .unwrap();
+        walk.mark_once();
+        walk.close();
+
+        let reopened = walk
+            .open(IncludeSource::Local { path: "o.h" }, None, &config)
+            .await
+            .unwrap();
+        assert!(reopened.is_none());
+    }
+
+    #[tokio::test]
+    async fn once_precedes_the_cycle_check() {
+        let config = config_at(&temp_lib("once-cycle"));
+        let mut walk = rooted(&config);
+        // Marks the root, which stays on the stack.
+        walk.mark_once();
+
+        let reopened = walk
+            .open(IncludeSource::Local { path: "main.c" }, None, &config)
+            .await
+            .unwrap();
+        assert!(reopened.is_none());
+    }
+
+    #[tokio::test]
+    async fn the_depth_cap_fires_at_the_limit() {
+        let root = temp_lib("depth");
+        for i in 0..MAX_INCLUDE_DEPTH + 5 {
+            std::fs::write(root.join(format!("h{i}.h")), "1\n").unwrap();
+        }
+        let config = config_at(&root);
+        let mut walk = rooted(&config);
+
+        let mut opened = 0;
+        let err = loop {
+            let path = format!("h{opened}.h");
+            match walk
+                .open(IncludeSource::Local { path: &path }, None, &config)
+                .await
+            {
+                Ok(Some(_)) => opened += 1,
+                Ok(None) => panic!("nothing is once-marked"),
+                Err(e) => break e,
+            }
+        };
+
+        // The root frame counts: 63 nested opens fill the cap.
+        assert_eq!(opened, MAX_INCLUDE_DEPTH - 1);
+        assert_eq!(err.to_string(), "`#include` nests too deeply");
+    }
+}

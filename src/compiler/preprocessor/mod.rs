@@ -28,6 +28,13 @@ mod conditional;
 pub mod define;
 pub mod directive;
 mod expand;
+// Nothing calls the walk until the flip (next task); in test builds its
+// own unit tests do, so the expectation is scoped to non-test builds.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "wired in by the include-walk flip")
+)]
+mod include;
 pub mod preprocessor_node;
 
 #[derive(Debug)]
