@@ -153,6 +153,9 @@ impl Preprocessor {
                 LpcPath::new_server(format!("{}/{}", &config.lib_dir, auto_include));
 
             if auto_include_path != lpc_path {
+                // On error, this `?` skips the `close()` below, leaving the
+                // root frame on the stack — inert, since this walk is
+                // per-compile and never reused.
                 self.scan_include(
                     IncludeSource::Configured(&auto_include_path),
                     None,
@@ -2657,6 +2660,20 @@ mod tests {
             std::fs::write(root.join("d.h"), "#if 0\n#pragma once\n#endif\n1\n").unwrap();
             let tokens = tokens_of(&root, "#include \"d.h\"\n#include \"d.h\"\n").await;
             assert_eq!(tokens, vec!["1", "1"]);
+        }
+
+        #[tokio::test]
+        async fn including_a_directory_is_an_error() {
+            let root = TempLib::new("include-dir");
+            std::fs::create_dir(root.join("subdir")).unwrap();
+
+            let e = error_of(&root, "#include \"subdir\"\n").await;
+            let rendered = e.to_string().replace(root.to_str().unwrap(), "");
+
+            assert_eq!(
+                rendered,
+                "attempt to include a directory: `/subdir` (expanded to `/subdir`) (lib_dir: ``)"
+            );
         }
     }
 }
