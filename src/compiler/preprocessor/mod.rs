@@ -22,7 +22,9 @@ use crate::{
     },
     preprocessor_parser,
 };
+use conditional::Conditionals;
 
+mod conditional;
 pub mod define;
 mod expand;
 pub mod preprocessor_node;
@@ -49,19 +51,6 @@ static PRAGMA: Lazy<Regex> =
 static COMMA_SEPARATOR: Lazy<Regex> = regex!(r"\s*,\s*");
 
 #[derive(Debug)]
-struct IfDef {
-    pub span: Span,
-
-    /// This field on the top IfDef in the stack indicates if we're currently in
-    /// a section that's conditionally compiled out. We mutate this field
-    /// when we see #else.
-    pub skipping_lines: bool,
-
-    /// Is this `#ifdef` itself conditionally compiled out?
-    pub compiled_out: bool,
-}
-
-#[derive(Debug)]
 pub struct Preprocessor {
     /// The compilation context
     context: CompilationContext,
@@ -69,11 +58,8 @@ pub struct Preprocessor {
     /// We keep track of `#define`d things here.
     defines: HashMap<String, Define>,
 
-    /// Stack of ifdefs that are in play, so we can handle `#else` and `#endif`s
-    ifdefs: Vec<IfDef>,
-
-    /// Have we seen an `#else` clause for the current `#if`?
-    current_else: Option<Span>,
+    /// The stack of open `#if`/`#ifdef`/`#ifndef`s, for the current file.
+    conditionals: Conditionals,
 
     /// We Track the last slice, because things like preprocessor directives
     /// need to check it.
@@ -258,7 +244,7 @@ impl Preprocessor {
 
                         // Handle macro expansion
                         Token::Id(t) => {
-                            if !self.skipping_lines() {
+                            if self.conditionals.live() {
                                 let appends = expand::Expander::new(&self.defines)
                                     .expand_use(t, &mut iter)?;
 
@@ -274,19 +260,14 @@ impl Preprocessor {
                     self.last_slice = token_string;
                 }
                 Err(e) => {
-                    if !self.skipping_lines() {
+                    if self.conditionals.live() {
                         return Err(e);
                     }
                 }
             }
         }
 
-        if let Some(ifdef) = self.ifdefs.last() {
-            return Err(lpc_error!(
-                Some(ifdef.span),
-                "Found `#if` without a corresponding `#endif`"
-            ));
-        }
+        self.conditionals.finish()?;
 
         Ok(output)
     }
@@ -295,7 +276,7 @@ impl Preprocessor {
     /// to the defines table.
     #[instrument(skip(self))]
     fn handle_define(&mut self, token: &StringToken) -> Result<()> {
-        if self.skipping_lines() {
+        if !self.conditionals.live() {
             return Ok(());
         }
 
@@ -304,7 +285,7 @@ impl Preprocessor {
         self.check_for_previous_newline(span)?;
 
         let check_duplicate = |key, error_span| -> Result<()> {
-            if !self.skipping_lines() && self.defines.contains_key(key) {
+            if self.defines.contains_key(key) {
                 return Err(LpcError::new(format!("duplicate `#define`: `{key}`"))
                     .with_span(Some(error_span)));
             }
@@ -391,7 +372,7 @@ impl Preprocessor {
 
     #[instrument(skip(self))]
     fn handle_undef(&mut self, token: &StringToken) -> Result<()> {
-        if self.skipping_lines() {
+        if !self.conditionals.live() {
             return Ok(());
         }
 
@@ -418,7 +399,7 @@ impl Preprocessor {
     where
         U: AsRef<Path> + Debug,
     {
-        if self.skipping_lines() {
+        if !self.conditionals.live() {
             return Ok(());
         }
 
@@ -476,7 +457,7 @@ impl Preprocessor {
     where
         U: AsRef<Path> + Debug + Send + Sync,
     {
-        if self.skipping_lines() {
+        if !self.conditionals.live() {
             return Ok(());
         }
 
@@ -497,6 +478,11 @@ impl Preprocessor {
     fn handle_if(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
+        if !self.conditionals.live() {
+            self.conditionals.enter(token.0, false);
+            return Ok(());
+        }
+
         if let Some(captures) = IF.captures(&token.1) {
             // parse the captures into an expression, then evaluate it.
             match preprocessor_parser::ExpressionParser::new().parse(LexWrapper::new(&captures[1]))
@@ -505,12 +491,7 @@ impl Preprocessor {
                     let printing_lines =
                         self.eval_expr_for_skipping(&expr, Some(token.0), &mut Vec::new())?;
 
-                    self.ifdefs.push(IfDef {
-                        // code: String::from(&captures[1]),
-                        skipping_lines: !printing_lines,
-                        compiled_out: self.skipping_lines(),
-                        span: token.0,
-                    });
+                    self.conditionals.enter(token.0, printing_lines);
                 }
                 // The expression was lexed on its own, so its tokens' spans
                 // mean nothing; the directive's span is the location.
@@ -677,15 +658,16 @@ impl Preprocessor {
     fn handle_ifdef(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
+        if !self.conditionals.live() {
+            self.conditionals.enter(token.0, false);
+            return Ok(());
+        }
+
         IFDEF.captures(&token.1).map_or_else(
             || Err(lpc_error!(Some(token.0), "invalid `#ifdef`.")),
             |captures| {
-                self.ifdefs.push(IfDef {
-                    // code: String::from(&captures[1]),
-                    skipping_lines: !self.defines.contains_key(&captures[1]),
-                    compiled_out: self.skipping_lines(),
-                    span: token.0,
-                });
+                let taken = self.defines.contains_key(&captures[1]);
+                self.conditionals.enter(token.0, taken);
 
                 Ok(())
             },
@@ -696,15 +678,16 @@ impl Preprocessor {
     fn handle_ifndef(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
+        if !self.conditionals.live() {
+            self.conditionals.enter(token.0, false);
+            return Ok(());
+        }
+
         IFNDEF.captures(&token.1).map_or_else(
             || Err(lpc_error!(Some(token.0), "invalid `#ifndef`.")),
             |captures| {
-                self.ifdefs.push(IfDef {
-                    // code: String::from(&captures[1]),
-                    skipping_lines: self.defines.contains_key(&captures[1]),
-                    compiled_out: self.skipping_lines(),
-                    span: token.0,
-                });
+                let taken = !self.defines.contains_key(&captures[1]);
+                self.conditionals.enter(token.0, taken);
 
                 Ok(())
             },
@@ -716,29 +699,7 @@ impl Preprocessor {
         self.check_for_previous_newline(token.0)?;
 
         if ELSE.is_match(&token.1) {
-            if self.ifdefs.is_empty() {
-                return Err(lpc_error!(
-                    Some(token.0),
-                    "found `#else` without a corresponding `#if` or `#ifdef`",
-                ));
-            }
-
-            if let Some(else_span) = &self.current_else {
-                let err = LpcError::new("duplicate `#else` found")
-                    .with_span(Some(token.0))
-                    .with_label("first used here", Some(*else_span));
-
-                return Err(err);
-            }
-
-            self.current_else = Some(token.0);
-
-            if !self.current_if_is_compiled_out() {
-                let last = self.ifdefs.last_mut().unwrap();
-                last.skipping_lines = !last.skipping_lines;
-            }
-
-            Ok(())
+            self.conditionals.flip_else(token.0)
         } else {
             Err(lpc_error!(Some(token.0), "invalid `#else`."))
         }
@@ -748,22 +709,12 @@ impl Preprocessor {
     fn handle_endif(&mut self, token: &StringToken) -> Result<()> {
         self.check_for_previous_newline(token.0)?;
 
-        if self.ifdefs.is_empty() {
-            return Err(lpc_error!(
-                Some(token.0),
-                "found `#endif` without a corresponding `#if`"
-            ));
-        }
-
-        self.ifdefs.pop();
-        self.current_else = None;
-
-        Ok(())
+        self.conditionals.leave(token.0)
     }
 
     #[instrument(skip(self))]
     fn handle_pragma(&mut self, token: &StringToken) -> Result<()> {
-        if self.skipping_lines() {
+        if !self.conditionals.live() {
             return Ok(());
         }
 
@@ -836,34 +787,20 @@ impl Preprocessor {
         };
 
         let path = LpcPath::new_server(canon_include_path);
-        self.internal_scan(&path, &file_content, None).await
-    }
-
-    /// Are we skipping lines right now due to `#if`s?
-    #[inline]
-    #[instrument(skip(self))]
-    fn skipping_lines(&self) -> bool {
-        match self.ifdefs.last() {
-            Some(ifdef) => ifdef.skipping_lines || ifdef.compiled_out,
-            None => false,
-        }
-    }
-
-    /// Is the current `#if` / `#ifdef` entirely compiled out?
-    #[inline]
-    #[instrument(skip(self))]
-    fn current_if_is_compiled_out(&self) -> bool {
-        match self.ifdefs.last() {
-            Some(ifdef) => ifdef.compiled_out,
-            None => false,
-        }
+        // An included file gets its own conditional stack: a `#if` it opens
+        // and closes internally must not leak into (or be confused with)
+        // the includer's stack.
+        let saved = std::mem::take(&mut self.conditionals);
+        let result = self.internal_scan(&path, &file_content, None).await;
+        self.conditionals = saved;
+        result
     }
 
     /// skip-aware way to append to the output
     #[inline]
     #[instrument(skip(self, output, to_append))]
     fn append_spanned(&self, output: &mut Vec<Spanned<Token>>, to_append: Spanned<Token>) {
-        if !self.skipping_lines() {
+        if self.conditionals.live() {
             output.push(to_append);
         }
     }
@@ -889,8 +826,7 @@ impl Default for Preprocessor {
         Self {
             context: CompilationContext::default(),
             defines: HashMap::new(),
-            ifdefs: vec![],
-            current_else: None,
+            conditionals: Conditionals::default(),
             last_slice: String::from("\n"),
         }
     }
@@ -2177,6 +2113,92 @@ mod tests {
             BAR(1);
             BAR(2
             #elif spurious
+            #endif
+            "ok"
+        "## };
+
+        test_valid(prog, &["ok"]).await;
+    }
+
+    #[tokio::test]
+    async fn test_include_inside_taken_conditional() {
+        let prog = indoc! { r##"
+            #define YES
+            #ifdef YES
+            #include "include/balanced_conditional.h"
+            #endif
+            marf
+        "## };
+
+        test_valid(
+            prog,
+            &[
+                "int",
+                "from_else",
+                "=",
+                "2",
+                ";",
+                "int",
+                "from_header",
+                "=",
+                "3",
+                ";",
+                "marf",
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_unbalanced_include_errors_on_its_own_frame() {
+        let prog = indoc! { r##"
+            #define YES
+            #ifdef YES
+            #include "include/unbalanced_conditional.h"
+            #endif
+        "## };
+
+        test_invalid(prog, "Found `#if` without a corresponding `#endif`").await;
+    }
+
+    #[tokio::test]
+    async fn test_nested_conditional_inside_else_emits_one_branch() {
+        let prog = indoc! { r##"
+            #ifdef NOPE
+            "a"
+            #else
+            #ifdef ALSO_NOPE
+            "b"
+            #endif
+            "c"
+            #endif
+        "## };
+
+        test_valid(prog, &["c"]).await;
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_else_across_nesting_errors() {
+        let prog = indoc! { r##"
+            #ifdef NOPE
+            #else
+            #ifdef X
+            #endif
+            #else
+            #endif
+        "## };
+
+        test_invalid(prog, "duplicate `#else` found").await;
+    }
+
+    #[tokio::test]
+    async fn test_dead_if_operand_never_evaluated() {
+        let prog = indoc! { r##"
+            #ifdef NOPE
+            #if total ! garbage ?
+            #endif
+            #if UNDEFINED_NAME + 0
+            #endif
             #endif
             "ok"
         "## };
