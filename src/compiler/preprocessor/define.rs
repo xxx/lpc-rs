@@ -1,13 +1,10 @@
-use crate::compiler::{
-    lexer::{Spanned, Token},
-    preprocessor::preprocessor_node::PreprocessorNode,
-};
+use crate::compiler::{lexer::Token, preprocessor::preprocessor_node::PreprocessorNode};
 
 /// An object macro, e.g. `#define FOO 123`
 #[derive(Debug)]
 pub struct ObjectMacro {
     /// The vector of Tokens being defined
-    pub tokens: Vec<Spanned<Token>>,
+    pub tokens: Vec<Token>,
     /// The body as a preprocessor expression, for `#if`; `None` when the
     /// body is substitution-only text that no `#if` can evaluate.
     pub expr: Option<PreprocessorNode>,
@@ -17,7 +14,7 @@ pub struct ObjectMacro {
 #[derive(Debug)]
 pub struct FunctionMacro {
     /// The vector of Tokens being defined
-    pub tokens: Vec<Spanned<Token>>,
+    pub tokens: Vec<Token>,
     /// The vector of defined arguments, which are matched against during
     /// expansion for replacement
     pub args: Vec<String>,
@@ -32,12 +29,12 @@ pub enum Define {
 
 impl Define {
     /// Create a new object macro
-    pub fn new_object(tokens: Vec<Spanned<Token>>, expr: Option<PreprocessorNode>) -> Self {
+    pub fn new_object(tokens: Vec<Token>, expr: Option<PreprocessorNode>) -> Self {
         Define::Object(ObjectMacro { tokens, expr })
     }
 
     /// Create a new function macro
-    pub fn new_function(tokens: Vec<Spanned<Token>>, args: Vec<String>) -> Self {
+    pub fn new_function(tokens: Vec<Token>, args: Vec<String>) -> Self {
         Define::Function(FunctionMacro { tokens, args })
     }
 }

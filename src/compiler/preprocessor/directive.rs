@@ -15,7 +15,7 @@ use lpc_rs_errors::{
 
 use crate::compiler::{
     ast::binary_op_node::BinaryOperation,
-    lexer::{LexWrapper, Spanned, Token},
+    lexer::{LexWrapper, Token},
     preprocessor::preprocessor_node::PreprocessorNode,
 };
 
@@ -460,7 +460,7 @@ pub fn parse_if_expression(text: &str, base: Span) -> Result<PreprocessorNode> {
     }
     let mut parser = ExprParser { tokens, pos: 0 };
     let expr = parser.or_expr()?;
-    if let Some((_, t, _)) = parser.tokens.get(parser.pos) {
+    if let Some(t) = parser.tokens.get(parser.pos) {
         return Err(ExprParser::err_at(
             t.span(),
             "unexpected tokens after `#if` expression",
@@ -472,7 +472,7 @@ pub fn parse_if_expression(text: &str, base: Span) -> Result<PreprocessorNode> {
 /// Recursive descent over the operand's tokens. Precedence, loosest
 /// first: `||` · `&&` · `+` `-` · primary — today's operator set exactly.
 struct ExprParser {
-    tokens: Vec<Spanned<Token>>,
+    tokens: Vec<Token>,
     pos: usize,
 }
 
@@ -485,12 +485,12 @@ impl ExprParser {
         let span = self
             .tokens
             .last()
-            .map(|(_, t, _)| t.span())
+            .map(|t| t.span())
             .expect("parse_if_expression rejects an empty operand");
         Self::err_at(span, "unexpected end of `#if` expression")
     }
 
-    fn next(&mut self) -> Option<Spanned<Token>> {
+    fn next(&mut self) -> Option<Token> {
         let t = self.tokens.get(self.pos).cloned();
         if t.is_some() {
             self.pos += 1;
@@ -499,7 +499,7 @@ impl ExprParser {
     }
 
     fn peek(&self, ahead: usize) -> Option<&Token> {
-        self.tokens.get(self.pos + ahead).map(|(_, t, _)| t)
+        self.tokens.get(self.pos + ahead)
     }
 
     fn eat(&mut self, pred: fn(&Token) -> bool) -> bool {
@@ -545,7 +545,7 @@ impl ExprParser {
     }
 
     fn primary(&mut self) -> Result<PreprocessorNode> {
-        let Some((_, token, _)) = self.next() else {
+        let Some(token) = self.next() else {
             return Err(self.end_err());
         };
         match token {
@@ -583,16 +583,16 @@ impl ExprParser {
 
     /// `( name )` after a `defined`. The caller peeked the `(`.
     fn defined_call(&mut self, negated: bool) -> Result<PreprocessorNode> {
-        let (_, lparen, _) = self.next().expect("caller peeked the `(`");
+        let lparen = self.next().expect("caller peeked the `(`");
         match self.next() {
-            Some((_, Token::Id(t), _)) => match self.next() {
-                Some((_, Token::RParen(_), _)) => Ok(PreprocessorNode::Defined(t.1, negated)),
+            Some(Token::Id(t)) => match self.next() {
+                Some(Token::RParen(_)) => Ok(PreprocessorNode::Defined(t.1, negated)),
                 _ => Err(Self::err_at(
                     lparen.span(),
                     "unmatched `(` in `#if` expression",
                 )),
             },
-            Some((_, other, _)) => Err(Self::err_at(
+            Some(other) => Err(Self::err_at(
                 other.span(),
                 "unexpected token in `#if` expression",
             )),

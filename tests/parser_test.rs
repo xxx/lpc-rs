@@ -21,7 +21,7 @@ use lpc_rs::{
             var_node::VarNode,
         },
         compilation_context::CompilationContext,
-        lexer::{LexWrapper, TokenVecWrapper},
+        lexer::{LexWrapper, TokenTriples},
     },
     lpc_parser,
 };
@@ -36,7 +36,7 @@ use ustr::ustr;
 fn assert_int(value: LpcIntInner, expr: &str) {
     let code = format!("void create() {{ {}; }}", expr);
     // File id 0 = coordinate-only scratch: these tests never render or call code().
-    let lexer = LexWrapper::new(&code, 0);
+    let lexer = LexWrapper::new(&code, 0).triples();
     let prog_node: ProgramNode = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
@@ -58,7 +58,7 @@ fn assert_int(value: LpcIntInner, expr: &str) {
 #[test]
 fn program_global_vars() {
     let prog = "int i = 123; private int j = i - 8; private static string *k;";
-    let lexer = LexWrapper::new(prog, 0);
+    let lexer = LexWrapper::new(prog, 0).triples();
     let node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
@@ -172,7 +172,7 @@ fn int_literal_binary() {
 #[test]
 fn float_literal_underscores() {
     let expr = "void create() { 1_1.234_332e2_2; }";
-    let lexer = LexWrapper::new(expr, 0);
+    let lexer = LexWrapper::new(expr, 0).triples();
     let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
@@ -195,7 +195,7 @@ fn float_literal_underscores() {
 #[test]
 fn string_literal_concat() {
     let expr = r##"void create() { "foo" + "bar" + "baz" + "quux"; }"##;
-    let lexer = LexWrapper::new(expr, 0);
+    let lexer = LexWrapper::new(expr, 0).triples();
     let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
@@ -216,7 +216,7 @@ fn string_literal_concat() {
 
     // test overflow
     let expr = r##"void create() { ("f" * 5000) + ("b" * 5000); }"##;
-    let lexer = LexWrapper::new(expr, 0);
+    let lexer = LexWrapper::new(expr, 0).triples();
     let error = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap_err();
@@ -227,7 +227,7 @@ fn string_literal_concat() {
 #[test]
 fn string_literal_repeat() {
     let expr = r##"void create() { "foo" * 3; }"##;
-    let lexer = LexWrapper::new(expr, 0);
+    let lexer = LexWrapper::new(expr, 0).triples();
     let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
@@ -248,7 +248,7 @@ fn string_literal_repeat() {
 
     // test negative multiplier
     let expr = r##"void create() { "foo" * -3; }"##;
-    let lexer = LexWrapper::new(expr, 0);
+    let lexer = LexWrapper::new(expr, 0).triples();
     let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
@@ -269,7 +269,7 @@ fn string_literal_repeat() {
 
     // test overflow
     let expr = r##"void create() { "foo" * 9223372036854775807; }"##;
-    let lexer = LexWrapper::new(expr, 0);
+    let lexer = LexWrapper::new(expr, 0).triples();
     let error = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap_err();
@@ -280,7 +280,7 @@ fn string_literal_repeat() {
 #[test]
 fn compound_assignment_decompose() {
     let expr = "void create() { a += 2; }";
-    let lexer = LexWrapper::new(expr, 0);
+    let lexer = LexWrapper::new(expr, 0).triples();
     let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
@@ -324,7 +324,7 @@ fn typeless_functions_are_mixed() {
             return "hello, we're marfin'!";
         }"#
     .replace('\n', "");
-    let lexer = LexWrapper::new(&prog, 0);
+    let lexer = LexWrapper::new(&prog, 0).triples();
     let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
@@ -390,7 +390,7 @@ fn ellipsis_sets_the_flag_when_only_arg() {
     }
     .replace('\n', "");
 
-    let lexer = LexWrapper::new(&prog, 0);
+    let lexer = LexWrapper::new(&prog, 0).triples();
     let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
@@ -413,7 +413,7 @@ fn ellipsis_sets_the_flag_when_not_only_arg() {
     }
     .replace('\n', "");
 
-    let lexer = LexWrapper::new(&prog, 0);
+    let lexer = LexWrapper::new(&prog, 0).triples();
     let prog_node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
@@ -548,7 +548,7 @@ async fn warning_on_prototype() {
 
     let compiler = Compiler::default();
     let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).await.unwrap();
-    let code = TokenVecWrapper::new(&code);
+    let code = TokenTriples::new(&code);
     let mut context = preprocessor.into_context();
 
     let program = lpc_parser::ProgramParser::new().parse(&mut context, code);
@@ -589,7 +589,7 @@ async fn test_closure_bodies() {
 async fn parse_prog(prog: &str) -> Result<ProgramNode> {
     let compiler = Compiler::default();
     let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).await.unwrap();
-    let code = TokenVecWrapper::new(&code);
+    let code = TokenTriples::new(&code);
     let mut context = preprocessor.into_context();
 
     lpc_parser::ProgramParser::new()
@@ -600,7 +600,7 @@ async fn parse_prog(prog: &str) -> Result<ProgramNode> {
 #[test]
 fn a_ref_parameter_is_marked() {
     let prog = "void inc(int ref x) { }";
-    let lexer = LexWrapper::new(prog, 0);
+    let lexer = LexWrapper::new(prog, 0).triples();
     let node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
@@ -616,7 +616,7 @@ fn a_ref_parameter_is_marked() {
 #[test]
 fn a_ref_argument_parses_to_a_ref_node() {
     let prog = "void f() { inc(ref y); }";
-    let lexer = LexWrapper::new(prog, 0);
+    let lexer = LexWrapper::new(prog, 0).triples();
     let node = lpc_parser::ProgramParser::new()
         .parse(&mut CompilationContext::default(), lexer)
         .unwrap();
@@ -639,7 +639,7 @@ fn a_ref_argument_parses_to_a_ref_node() {
 #[test]
 fn ref_needs_a_bare_variable() {
     for prog in ["void f() { inc(ref a[1]); }", "void f() { inc(ref g()); }"] {
-        let lexer = LexWrapper::new(prog, 0);
+        let lexer = LexWrapper::new(prog, 0).triples();
         let error = lpc_parser::ProgramParser::new()
             .parse(&mut CompilationContext::default(), lexer)
             .unwrap_err();
@@ -650,7 +650,7 @@ fn ref_needs_a_bare_variable() {
         );
     }
 
-    let lexer = LexWrapper::new("int ref x;", 0);
+    let lexer = LexWrapper::new("int ref x;", 0).triples();
     assert!(
         lpc_parser::ProgramParser::new()
             .parse(&mut CompilationContext::default(), lexer)

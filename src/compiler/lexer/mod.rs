@@ -20,11 +20,14 @@ use crate::compiler::lexer::{
 pub mod lex_state;
 pub mod logos_token;
 
+/// The lalrpop location triple. It exists only at the parser doorstep
+/// ([`LexWrapper::triples`], [`TokenTriples`]); everywhere else the
+/// token's own [`Span`] is the position channel.
 pub type Spanned<T> = (usize, T, usize);
 
-/// A wrapper for the Lexer to attach our `Iterator` implementation to,
-/// which allows us to output items that match the shape of the tuples
-/// expected by lalrpop.
+/// The language lexer over one file's text (or a fragment of it, via
+/// [`new_at`](LexWrapper::new_at)): tokens are born carrying their true
+/// file-coordinate spans.
 pub struct LexWrapper<'input> {
     lexer: Lexer<'input, Token>,
 }
@@ -49,6 +52,17 @@ impl<'input> LexWrapper<'input> {
         );
         Self { lexer }
     }
+
+    /// The lalrpop doorstep for direct lexing (tests and doctests):
+    /// location triples derived from each token's span.
+    pub fn triples(self) -> impl Iterator<Item = Result<Spanned<Token>>> {
+        self.map(|result| {
+            result.map(|t| {
+                let span = t.span();
+                (span.l(), t, span.r())
+            })
+        })
+    }
 }
 
 impl Debug for LexWrapper<'_> {
@@ -58,7 +72,7 @@ impl Debug for LexWrapper<'_> {
 }
 
 impl Iterator for LexWrapper<'_> {
-    type Item = Result<Spanned<Token>>;
+    type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let token = self.lexer.next()?;
@@ -66,7 +80,7 @@ impl Iterator for LexWrapper<'_> {
         let base = self.lexer.extras.base_offset;
 
         match token {
-            Ok(t) => Some(Ok((base + span.start, t, base + span.end))),
+            Ok(t) => Some(Ok(t)),
             Err(_) => Some(Err(lpc_error!(
                 Some(Span::new(
                     self.lexer.extras.current_file_id,
@@ -79,30 +93,27 @@ impl Iterator for LexWrapper<'_> {
     }
 }
 
-/// A wrapper for vectors of tokens, for lalrpop compatibility
+/// The lalrpop doorstep for the scan product: location triples derived
+/// from each token's span.
 #[derive(Debug)]
-pub struct TokenVecWrapper<'a> {
-    vec: &'a [Spanned<Token>],
+pub struct TokenTriples<'a> {
+    tokens: &'a [Token],
     count: usize,
 }
 
-impl<'a> TokenVecWrapper<'a> {
-    pub fn new(vec: &'a [Spanned<Token>]) -> Self {
-        Self { vec, count: 0 }
+impl<'a> TokenTriples<'a> {
+    /// Wrap a scan product for the parser.
+    pub fn new(tokens: &'a [Token]) -> Self {
+        Self { tokens, count: 0 }
     }
 }
 
-impl<'a> Iterator for TokenVecWrapper<'a> {
+impl Iterator for TokenTriples<'_> {
     type Item = Result<Spanned<Token>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let token = self.vec.get(self.count);
-
-        let token = token?;
-
+        let t = self.tokens.get(self.count)?;
         self.count += 1;
-
-        let t = &token.1;
         let span = t.span();
         Some(Ok((span.l(), t.clone(), span.r())))
     }
@@ -711,8 +722,8 @@ mod tests {
     #[test]
     fn a_fragment_is_born_in_file_coordinates() {
         let mut lexer = LexWrapper::new_at("x + 1", 4, 100);
-        let (l, tok, r) = lexer.next().unwrap().unwrap();
-        assert_eq!((l, r), (100, 101));
+        let tok = lexer.next().unwrap().unwrap();
+        assert_eq!((tok.span().l(), tok.span().r()), (100, 101));
         assert_eq!(tok.span(), Span::new(4, 100..101));
 
         let error = LexWrapper::new_at("`", 4, 100)
@@ -725,7 +736,7 @@ mod tests {
     #[test]
     fn a_multi_line_string_spans_the_whole_literal() {
         let vec = lex_vec("\"a\nb\"");
-        let Ok((_, Token::StringLiteral(st), _)) = &vec[0] else {
+        let Ok(Token::StringLiteral(st)) = &vec[0] else {
             panic!("expected a string literal");
         };
         assert_eq!(st.0, Span::new(0, 0..5));
@@ -734,7 +745,7 @@ mod tests {
     #[test]
     fn a_directive_line_span_excludes_its_trailing_newline() {
         let vec = lex_vec("#define FOO 1\n");
-        let Ok((_, Token::DirectiveLine(st), _)) = &vec[0] else {
+        let Ok(Token::DirectiveLine(st)) = &vec[0] else {
             panic!("expected a directive line");
         };
         assert_eq!(st.0, Span::new(0, 0..13));
@@ -750,7 +761,7 @@ mod tests {
         assert_eq!(error.to_string(), "Lex Error: Invalid Token ```");
     }
 
-    fn lex_vec(prog: &str) -> Vec<Result<Spanned<Token>>> {
+    fn lex_vec(prog: &str) -> Vec<Result<Token>> {
         LexWrapper::new(prog, 0).collect::<Vec<_>>()
     }
 

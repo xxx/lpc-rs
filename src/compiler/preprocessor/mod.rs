@@ -17,7 +17,7 @@ use tracing::{instrument, trace};
 use crate::compiler::{
     ast::binary_op_node::BinaryOperation,
     compilation_context::CompilationContext,
-    lexer::{LexWrapper, Spanned, Token, logos_token::StringToken},
+    lexer::{LexWrapper, Token, logos_token::StringToken},
     preprocessor::preprocessor_node::PreprocessorNode,
 };
 use conditional::Conditionals;
@@ -133,7 +133,7 @@ impl Preprocessor {
     /// let processed = preprocessor.scan("foo.c", code);
     /// ```
     #[instrument(skip_all)]
-    pub async fn scan<P, C>(&mut self, path: P, code: C) -> Result<Vec<Spanned<Token>>>
+    pub async fn scan<P, C>(&mut self, path: P, code: C) -> Result<Vec<Token>>
     where
         P: Into<LpcPath>,
         C: AsRef<str> + Send,
@@ -173,8 +173,8 @@ impl Preprocessor {
         &mut self,
         code: C,
         file_id: FileId,
-        existing_output: Option<Vec<Spanned<Token>>>,
-    ) -> Result<Vec<Spanned<Token>>>
+        existing_output: Option<Vec<Token>>,
+    ) -> Result<Vec<Token>>
     where
         C: AsRef<str> + Send,
     {
@@ -188,30 +188,29 @@ impl Preprocessor {
         // check's anchor (spec R2).
         let mut prev_end: usize = 0;
 
-        while let Some(spanned_result) = iter.next() {
-            match spanned_result {
-                Ok(spanned) => {
-                    let (_l, token, r) = &spanned;
-                    let end = *r;
+        while let Some(next) = iter.next() {
+            match next {
+                Ok(token) => {
+                    let end = token.span().r();
 
-                    match token {
+                    match &token {
                         Token::DirectiveLine(t) => {
                             self.handle_directive(t, prev_end, src, &mut output).await?;
                         }
 
                         // Handle macro expansion
-                        Token::Id(t) => {
+                        Token::Id(st) => {
                             if self.conditionals.live() {
                                 let appends = expand::Expander::new(&self.defines)
-                                    .expand_use(t, &mut iter)?;
+                                    .expand_use(st, &mut iter)?;
 
                                 match appends {
                                     Some(mut vec) => output.append(&mut vec),
-                                    None => self.append_spanned(&mut output, spanned),
+                                    None => self.append(&mut output, token),
                                 }
                             }
                         }
-                        _ => self.append_spanned(&mut output, spanned),
+                        _ => self.append(&mut output, token),
                     }
 
                     prev_end = end;
@@ -240,7 +239,7 @@ impl Preprocessor {
         token: &StringToken,
         prev_end: usize,
         src: &str,
-        output: &mut Vec<Spanned<Token>>,
+        output: &mut Vec<Token>,
     ) -> Result<()> {
         let hash = token.0.l();
         // Well-placed iff a line start can be credited: the file starts
@@ -338,13 +337,10 @@ impl Preprocessor {
         // Lex the body in place — tokens are born with their true
         // definition-site spans (card ④ R3). A directive line inside a
         // body has no legal reading (R6 — LPC has no `#` operator).
-        let lex_body = |body: &str| -> Result<Vec<Spanned<Token>>> {
+        let lex_body = |body: &str| -> Result<Vec<Token>> {
             let tokens = LexWrapper::new_at(body, body_span.file_id(), body_span.l())
                 .collect::<Result<Vec<_>>>()?;
-            if let Some((_, t, _)) = tokens
-                .iter()
-                .find(|(_, t, _)| matches!(t, Token::DirectiveLine(_)))
-            {
+            if let Some(t) = tokens.iter().find(|t| matches!(t, Token::DirectiveLine(_))) {
                 return Err(lpc_error!(
                     Some(t.span()),
                     "a preprocessor directive cannot appear in a macro body",
@@ -386,7 +382,7 @@ impl Preprocessor {
         &mut self,
         source: IncludeSource<'_>,
         span: Option<Span>,
-        output: &mut Vec<Spanned<Token>>,
+        output: &mut Vec<Token>,
     ) -> Result<()> {
         let config = self.context.config.clone();
         let Some(opened) = self.includes.open(source, span, &config).await? else {
@@ -403,8 +399,8 @@ impl Preprocessor {
         self.conditionals = saved;
         self.includes.close();
 
-        for spanned in result? {
-            self.append_spanned(output, spanned)
+        for token in result? {
+            self.append(output, token)
         }
         Ok(())
     }
@@ -582,10 +578,10 @@ impl Preprocessor {
 
     /// skip-aware way to append to the output
     #[inline]
-    #[instrument(skip(self, output, to_append))]
-    fn append_spanned(&self, output: &mut Vec<Spanned<Token>>, to_append: Spanned<Token>) {
+    #[instrument(skip(self, output, token))]
+    fn append(&self, output: &mut Vec<Token>, token: Token) {
         if self.conditionals.live() {
-            output.push(to_append);
+            output.push(token);
         }
     }
 }
@@ -632,7 +628,7 @@ mod tests {
         let mut preprocessor = fixture();
         match preprocessor.scan("/test.c", input).await {
             Ok(result) => {
-                let mapped = result.iter().map(|i| i.1.to_string()).collect::<Vec<_>>();
+                let mapped = result.iter().map(|i| i.to_string()).collect::<Vec<_>>();
 
                 assert_eq!(mapped, expected)
             }
@@ -900,8 +896,8 @@ mod tests {
             assert_eq!(result.len() % 2, 0);
             let (first, second) = result.split_at(result.len() / 2);
             for (a, b) in first.iter().zip(second) {
-                assert_eq!(a.1.to_string(), b.1.to_string());
-                assert_eq!(a.1.span().file_id(), b.1.span().file_id());
+                assert_eq!(a.to_string(), b.to_string());
+                assert_eq!(a.span().file_id(), b.span().file_id());
             }
         }
 
@@ -1538,10 +1534,7 @@ mod tests {
             ];
             let mut preprocessor = fixture();
             let tokens = preprocessor.scan("/if_literal.c", prog).await.unwrap();
-            let kinds: Vec<_> = tokens
-                .iter()
-                .map(|(_, t, _)| std::mem::discriminant(t))
-                .collect();
+            let kinds: Vec<_> = tokens.iter().map(std::mem::discriminant).collect();
             assert_eq!(
                 kinds,
                 expected
@@ -1611,7 +1604,7 @@ mod tests {
                 .expect("scans clean");
             let ids: Vec<_> = tokens
                 .iter()
-                .filter_map(|(_, t, _)| match t {
+                .filter_map(|t| match t {
                     Token::Id(s) => Some(s.1.as_str()),
                     _ => None,
                 })
@@ -1623,7 +1616,7 @@ mod tests {
         async fn defined_and_not_parse_as_ordinary_identifiers() {
             // The pin above checks scan-level token kinds; the spec's
             // promise is that the parser accepts them too.
-            use crate::{compiler::lexer::TokenVecWrapper, lpc_parser};
+            use crate::{compiler::lexer::TokenTriples, lpc_parser};
 
             let mut preprocessor = fixture();
             let tokens = preprocessor
@@ -1634,7 +1627,7 @@ mod tests {
             lpc_parser::ProgramParser::new()
                 .parse(
                     &mut CompilationContext::default(),
-                    TokenVecWrapper::new(&tokens),
+                    TokenTriples::new(&tokens),
                 )
                 .expect("`not` and `defined` parse as plain identifiers");
         }
@@ -2315,7 +2308,7 @@ mod tests {
         async fn tokens_of(root: &std::path::Path, code: &str) -> Vec<String> {
             let mut preprocessor = fixture_at(root);
             let scanned = preprocessor.scan("/main.c", code).await.unwrap();
-            scanned.iter().map(|sp| sp.1.to_string()).collect()
+            scanned.iter().map(|t| t.to_string()).collect()
         }
 
         async fn error_of(root: &std::path::Path, code: &str) -> LpcError {

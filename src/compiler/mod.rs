@@ -13,7 +13,7 @@ use codegen::{
 use compilation_context::CompilationContext;
 use derive_builder::Builder;
 use educe::Educe;
-use lexer::{Spanned, Token, TokenVecWrapper};
+use lexer::{Token, TokenTriples};
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{
     self, LpcError, Result, lpc_error,
@@ -169,7 +169,7 @@ impl Compiler {
         &self,
         path: P,
         code: S,
-    ) -> Result<(Vec<Spanned<Token>>, Preprocessor)>
+    ) -> Result<(Vec<Token>, Preprocessor)>
     where
         P: Into<LpcPath> + Debug,
         S: AsRef<str> + Send + Sync,
@@ -294,7 +294,7 @@ impl Compiler {
     {
         let (tokens, preprocessor) = self.preprocess_string(path, code).await?;
 
-        let wrapper = TokenVecWrapper::new(&tokens);
+        let wrapper = TokenTriples::new(&tokens);
         let mut context = preprocessor.into_context();
 
         lpc_parser::ProgramParser::new()
@@ -303,7 +303,7 @@ impl Compiler {
             .map_err(|e| {
                 // lalrpop's bare-usize locations carry no file id, so the
                 // EOF arm arrives span-less.
-                let last = tokens.last().map(|(_, t, _)| t.span());
+                let last = tokens.last().map(|t| t.span());
                 LpcError::from(e).or_span(last)
             })
     }
