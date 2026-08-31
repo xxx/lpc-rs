@@ -304,8 +304,7 @@ impl Compiler {
                 // lalrpop's bare-usize locations carry no file id, so the
                 // EOF/InvalidToken arms arrive span-less; every other arm
                 // — `ParseError::User`'s grammar-action errors included —
-                // already carries one, so `.or_span` only ever fills
-                // those two.
+                // already carries one.
                 let last = tokens.last().map(|t| t.span());
                 LpcError::from(e).or_span(last)
             })
