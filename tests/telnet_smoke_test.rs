@@ -124,13 +124,15 @@ async fn the_whole_telnet_surface_over_a_real_socket() {
         "and the master's extra variable: {answers:?}"
     );
 
-    // Logging in lands in the room; the prompt gets the negotiated EOR mark,
-    // with `>` escaped while MXP is on.
+    // Logging in lands in the room; the prompt gets the negotiated EOR mark.
     client.write_all(b"smoke\r\n").await.unwrap();
     let login = read_until(&mut client, &[IAC, EOR_CMD]).await;
     assert!(contains(&login, b"Welcome, smoke!"), "{login:?}");
-    assert!(contains(&login, b"The Spark"), "{login:?}");
-    assert!(contains(&login, b"smoke&gt; "), "{login:?}");
+    assert!(
+        contains(&login, b"The place where it all begins."),
+        "{login:?}"
+    );
+    assert!(contains(&login, b"smoke> "), "{login:?}");
 
     // The connection answers query_connection through the stats verb.
     client.write_all(b"stats\r\n").await.unwrap();
@@ -164,10 +166,10 @@ async fn the_whole_telnet_surface_over_a_real_socket() {
     echo.extend([IAC, SE]);
     assert!(contains(&out, &echo), "{out:?}");
 
-    // send_mxp markup goes out unescaped while MXP is on.
+    // send_mxp markup rides out as a secure line.
     client.write_all(b"mxp\r\n").await.unwrap();
     let mxp = read_until(&mut client, &[IAC, EOR_CMD]).await;
-    assert!(contains(&mxp, b"<b>bold</b>\r\n"), "{mxp:?}");
+    assert!(contains(&mxp, b"\x1b[1z<b>bold</b>\r\n"), "{mxp:?}");
 
     // A window resize reaches the window_size() apply.
     client

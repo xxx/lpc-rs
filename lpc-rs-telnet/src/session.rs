@@ -44,9 +44,9 @@ pub enum Event {
 /// What the caller asks the session to send.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Op<'a> {
-    /// Literal text: LF becomes CR LF; with MXP on, `<`, `>` and `&` are escaped.
+    /// Literal text: LF becomes CR LF.
     Text(&'a str),
-    /// MXP markup, sent as written. Dropped when MXP is off.
+    /// MXP markup, framed as secure lines (ESC[1z). Dropped when MXP is off.
     Mxp(&'a str),
     /// Text followed by the prompt mark the client negotiated: EOR, else GA
     /// unless SGA is on, else nothing.
@@ -127,6 +127,11 @@ const OFFERS: [Opt; 6] = [
     Opt::Eor,
     Opt::Mssp,
 ];
+
+// MXP line modes: [1z opens one secure line; [7z locks the client's
+// default to locked, so plain text is never parsed as markup.
+const MXP_SECURE_LINE: &[u8] = b"\x1b[1z";
+const MXP_LOCK_LOCKED: &[u8] = b"\x1b[7z";
 
 const CHARSET_REQUEST: u8 = 1;
 const CHARSET_ACCEPTED: u8 = 2;
@@ -214,20 +219,23 @@ impl Session {
     /// Something to send. Bytes queue up in the output buffer.
     pub fn send(&mut self, op: Op<'_>) {
         match op {
-            Op::Text(s) => {
-                let mxp_literal = self.is_on(Opt::Mxp);
-                wire::text(&mut self.out, s, mxp_literal);
-            }
+            Op::Text(s) => wire::text(&mut self.out, s),
             Op::Mxp(s) => {
                 if self.is_on(Opt::Mxp) {
-                    wire::text(&mut self.out, s, false);
+                    for line in s.split_inclusive('\n') {
+                        self.out.extend_from_slice(MXP_SECURE_LINE);
+                        wire::text(&mut self.out, line);
+                    }
+                    // A line the markup left open would parse what follows.
+                    if !s.ends_with('\n') {
+                        self.out.extend_from_slice(MXP_LOCK_LOCKED);
+                    }
                 } else {
                     self.stats.dropped += 1;
                 }
             }
             Op::Prompt(s) => {
-                let mxp_literal = self.is_on(Opt::Mxp);
-                wire::text(&mut self.out, s, mxp_literal);
+                wire::text(&mut self.out, s);
                 if self.is_on(Opt::Eor) {
                     wire::command(&mut self.out, EOR_CMD);
                 } else if !self.is_on(Opt::Sga) {
@@ -379,7 +387,10 @@ impl Session {
                 wire::subnegotiation(&mut self.out, opt.into(), &payload);
             }
             Opt::Mssp => self.events.push_back(Event::MsspRequested),
-            Opt::Mxp => wire::subnegotiation(&mut self.out, opt.into(), &[]),
+            Opt::Mxp => {
+                wire::subnegotiation(&mut self.out, opt.into(), &[]);
+                self.out.extend_from_slice(MXP_LOCK_LOCKED);
+            }
             _ => {}
         }
     }
@@ -830,7 +841,7 @@ mod tests {
     }
 
     #[test]
-    fn mxp_text_is_escaped_only_when_on() {
+    fn mxp_markup_is_framed_and_text_stays_literal() {
         let mut s = connected();
         s.send(Op::Text("a<b>&c"));
         assert_eq!(out(&mut s), b"a<b>&c");
@@ -838,18 +849,24 @@ mod tests {
         assert!(out(&mut s).is_empty());
         assert_eq!(s.stats().dropped, 1);
         s.feed(&[IAC, DO, MXP]);
-        assert_eq!(out(&mut s), [IAC, SB, MXP, IAC, SE]);
+        let mut expected = vec![IAC, SB, MXP, IAC, SE];
+        expected.extend_from_slice(b"\x1b[7z");
+        assert_eq!(out(&mut s), expected);
         s.send(Op::Text("a<b>&c"));
-        assert_eq!(out(&mut s), b"a&lt;b&gt;&amp;c");
+        assert_eq!(out(&mut s), b"a<b>&c");
         s.send(Op::Mxp("<send>x</send>"));
-        assert_eq!(out(&mut s), b"<send>x</send>");
+        assert_eq!(out(&mut s), b"\x1b[1z<send>x</send>\x1b[7z");
+        s.send(Op::Mxp("<b>two</b>\nlines\n"));
+        assert_eq!(out(&mut s), b"\x1b[1z<b>two</b>\r\n\x1b[1zlines\r\n");
     }
 
     #[test]
     fn mxp_agreed_sends_the_mode_start() {
         let mut s = connected();
         s.feed(&[IAC, DO, MXP]);
-        assert_eq!(out(&mut s), [IAC, SB, MXP, IAC, SE]);
+        let mut expected = vec![IAC, SB, MXP, IAC, SE];
+        expected.extend_from_slice(b"\x1b[7z");
+        assert_eq!(out(&mut s), expected);
         assert!(s.is_on(Opt::Mxp));
     }
 

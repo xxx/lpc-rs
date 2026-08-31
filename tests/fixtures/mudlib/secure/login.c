@@ -48,7 +48,7 @@ private int do_look(string arg) {
         write("You float in the void.\n");
         return 1;
     }
-    write(env->query_short() + "\n" + env->query_long());
+    write(env->query_long());
     return 1;
 }
 

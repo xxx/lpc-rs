@@ -29,16 +29,12 @@ pub(crate) fn subnegotiation(out: &mut BytesMut, opt: u8, payload: &[u8]) {
 }
 
 /// Text for the client: LF becomes CR LF (an existing CR LF is kept), and
-/// with `mxp_literal` the three MXP markup characters become entities.
-pub(crate) fn text(out: &mut BytesMut, s: &str, mxp_literal: bool) {
+pub(crate) fn text(out: &mut BytesMut, s: &str) {
     out.reserve(s.len() + s.len() / 8);
     let mut previous = 0u8;
     for &byte in s.as_bytes() {
         match byte {
             b'\n' if previous != b'\r' => out.put_slice(b"\r\n"),
-            b'<' if mxp_literal => out.put_slice(b"&lt;"),
-            b'>' if mxp_literal => out.put_slice(b"&gt;"),
-            b'&' if mxp_literal => out.put_slice(b"&amp;"),
             other => out.put_u8(other),
         }
         previous = byte;
@@ -75,22 +71,21 @@ mod tests {
 
     #[test]
     fn lf_becomes_cr_lf() {
-        assert_eq!(collect(|o| text(o, "a\nb\n", false)), b"a\r\nb\r\n");
+        assert_eq!(collect(|o| text(o, "a\nb\n")), b"a\r\nb\r\n");
     }
 
     #[test]
     fn an_existing_cr_lf_is_kept() {
-        assert_eq!(collect(|o| text(o, "a\r\nb", false)), b"a\r\nb");
+        assert_eq!(collect(|o| text(o, "a\r\nb")), b"a\r\nb");
     }
 
     #[test]
-    fn mxp_literal_escapes_markup() {
-        assert_eq!(collect(|o| text(o, "a<b>&c", true)), b"a&lt;b&gt;&amp;c");
-        assert_eq!(collect(|o| text(o, "a<b>&c", false)), b"a<b>&c");
+    fn markup_characters_pass_through() {
+        assert_eq!(collect(|o| text(o, "a<b>&c")), b"a<b>&c");
     }
 
     #[test]
     fn utf8_passes_through() {
-        assert_eq!(collect(|o| text(o, "é", false)), "é".as_bytes());
+        assert_eq!(collect(|o| text(o, "é")), "é".as_bytes());
     }
 }

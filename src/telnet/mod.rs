@@ -76,6 +76,9 @@ const GOODBYE_FLUSH: Duration = Duration::from_secs(1);
 /// The one line an idle-kicked client gets before the close.
 const IDLE_KICKED: &str = "*** Disconnected: idle too long ***\n";
 
+// Queued at the driver-shutdown close; a lone destruct stays silent.
+const SHUTDOWN_NOTICE: &str = "*** Server shutting down ***\n";
+
 /// What one `select!` produced; acted on after it, so no arm holds a borrow
 /// the handling needs.
 enum Turn {
@@ -325,6 +328,9 @@ impl Telnet {
             }
             Some(ConnectionOp::Close) => {
                 info!("Closing connection for {}.", connection.address);
+                if *shutting_down {
+                    session.send(Op::Text(SHUTDOWN_NOTICE));
+                }
                 return Flow::Leave(Departure::Server);
             }
             // Unreachable while the loop holds its own `Connection` (the
@@ -1174,18 +1180,20 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn mxp_markup_goes_out_raw_while_text_is_escaped() {
+        async fn mxp_markup_is_framed_while_text_stays_literal() {
             let mut w = wire().await;
             w.client.write_all(&[IAC, DO, MXP]).await.unwrap();
-            assert_eq!(read_n(&mut w.client, 5).await, [IAC, SB, MXP, IAC, SE]);
+            let mut expected = vec![IAC, SB, MXP, IAC, SE];
+            expected.extend_from_slice(b"\x1b[7z");
+            assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
             w.connection
                 .send(ConnectionOp::SendMessage("<b>\n".into()))
                 .unwrap();
-            assert_eq!(read_n(&mut w.client, 11).await, b"&lt;b&gt;\r\n");
+            assert_eq!(read_n(&mut w.client, 5).await, b"<b>\r\n");
             w.connection
                 .send(ConnectionOp::Mxp("<b>x</b>".into()))
                 .unwrap();
-            assert_eq!(read_n(&mut w.client, 8).await, b"<b>x</b>");
+            assert_eq!(read_n(&mut w.client, 16).await, b"\x1b[1z<b>x</b>\x1b[7z");
         }
 
         #[tokio::test]
@@ -1683,6 +1691,17 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn the_close_of_a_shutdown_says_goodbye() {
+            let mut w = wire().await;
+            w.connection.send(ConnectionOp::Shutdown).unwrap();
+            w.connection.send(ConnectionOp::Close).unwrap();
+            assert_eq!(
+                read_n(&mut w.client, 30).await,
+                b"*** Server shutting down ***\r\n"
+            );
+        }
+
+        #[tokio::test]
         async fn a_hang_up_while_shutting_down_is_silent() {
             let mut w = wire().await;
             let proc = commanding_body(&w, "int dead;\nvoid net_dead() { dead = 1; }").await;
@@ -1927,6 +1946,10 @@ mod tests {
             w.vm.shutdown().await.unwrap();
 
             assert_eq!(read_n(&mut w.client, 5).await, b"bye\r\n");
+            assert_eq!(
+                read_n(&mut w.client, 30).await,
+                b"*** Server shutting down ***\r\n"
+            );
             let mut rest = [0u8; 8];
             assert_eq!(
                 within(w.client.read(&mut rest)).await.unwrap(),
