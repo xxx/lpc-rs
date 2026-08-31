@@ -89,7 +89,7 @@ async fn read_to_eof(stream: &mut TcpStream) -> Vec<u8> {
 }
 
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-    haystack.windows(needle.len()).any(|w| w == needle)
+    haystack.windows(needle.len().max(1)).any(|w| w == needle)
 }
 
 #[tokio::test]
