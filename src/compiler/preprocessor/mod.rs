@@ -216,7 +216,10 @@ impl Preprocessor {
                     if self.conditionals.live() {
                         return Err(e);
                     }
-                    // Dead region: drop it — logos recovers per-token.
+                    // Dead region: drop it — logos recovers per-token —
+                    // but keep the anchor honest so a later mid-line
+                    // directive on the same line isn't over-credited.
+                    prev_end = e.span().map_or(prev_end, |s| s.r());
                 }
             }
         }
@@ -1639,6 +1642,26 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn defined_and_not_parse_as_ordinary_identifiers() {
+            // The pin above checks scan-level token kinds; the spec's
+            // promise is that the parser accepts them too.
+            use crate::{compiler::lexer::TokenVecWrapper, lpc_parser};
+
+            let mut preprocessor = fixture();
+            let tokens = preprocessor
+                .scan("/unreserved.c", "int not = 1;\nint defined = 2;\n")
+                .await
+                .expect("scans clean");
+
+            lpc_parser::ProgramParser::new()
+                .parse(
+                    &mut CompilationContext::default(),
+                    TokenVecWrapper::new(&tokens),
+                )
+                .expect("`not` and `defined` parse as plain identifiers");
+        }
+
+        #[tokio::test]
         async fn test_simple_if() {
             let prog = indoc! { r##"
                 #define FOO 1
@@ -2163,6 +2186,15 @@ mod tests {
             #endif
             "after";
         "# };
+        test_valid(prog, &["after", ";"]).await;
+    }
+
+    #[tokio::test]
+    async fn a_dead_lex_error_does_not_launder_a_midline_directive() {
+        // The backtick is a dropped lex error; the mid-line `#if` after
+        // it is text (C99 6.10.1), not a frame — the single `#endif`
+        // below must balance the outer `#if`.
+        let prog = "#if 0\n` #if BROKEN\n#endif\n\"after\";\n";
         test_valid(prog, &["after", ";"]).await;
     }
 
