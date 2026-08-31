@@ -237,10 +237,12 @@ impl Preprocessor {
         output: &mut Vec<Spanned<Token>>,
     ) -> Result<()> {
         let hash = token.0.l();
-        // Well-placed iff nothing but line-leading whitespace precedes
-        // the `#`: the file starts here, a newline sits in the skipped
-        // gap, or the previous token consumed its trailing newline —
-        // which only a directive line does (spec R2).
+        // Well-placed iff a line start can be credited: the file starts
+        // here, a newline sits in the gap since the last token this loop
+        // drew, or the previous token consumed its trailing newline —
+        // which only a directive line does. The gap is a text-level
+        // approximation: tokens a macro expansion consumed sit inside it
+        // (spec R2 documents the micro-hole).
         let placed =
             prev_end == 0 || src[prev_end..hash].contains('\n') || src[..prev_end].ends_with('\n');
         if !placed {
@@ -255,10 +257,9 @@ impl Preprocessor {
         }
 
         if !self.conditionals.live() {
-            // Dead regions know directive names, never operands — except
-            // `#else`/`#endif`, whose grammar is just EOL-or-error and
-            // holds whether or not the region we're leaving was live;
-            // they fall through to the full parse below.
+            // Dead regions know directive names, never operands.
+            // `#else`/`#endif` have no operands — their shape-only
+            // grammar is checked dead or live (spec R3).
             match directive::classify(&token.1) {
                 DirectiveKind::If | DirectiveKind::IfDef | DirectiveKind::IfNDef => {
                     self.conditionals.enter(token.0, false);
@@ -2163,5 +2164,103 @@ mod tests {
             "after";
         "# };
         test_valid(prog, &["after", ";"]).await;
+    }
+
+    #[tokio::test]
+    async fn a_comment_closing_on_the_directive_line_is_legal() {
+        // The `*/ #define` shape: the gap back to the previous token
+        // spans the comment's newline (spec R2) — matches C's
+        // first-token-on-the-line reading.
+        let prog = "int a;\n/* header\n comment */ #define FOO 1\nFOO;\n";
+        test_valid(prog, &["int", "a", ";", "1", ";"]).await;
+    }
+
+    #[tokio::test]
+    async fn a_string_ending_in_newline_does_not_launder_a_directive() {
+        // The old Display-string check saw a trailing `\n` inside the
+        // *decoded string value* and accepted this. Position does not.
+        test_invalid(
+            "string s = \"ab\\n\" #define FOO 1\n",
+            "preprocessor directives must appear on their own line",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_dead_unknown_directive_is_inert() {
+        let prog = indoc! { r#"
+            #if 0
+            #elif WHATEVER
+            #error also fine here
+            #endif
+            "after";
+        "# };
+        test_valid(prog, &["after", ";"]).await;
+    }
+
+    #[tokio::test]
+    async fn junk_macro_parameters_are_an_error() {
+        test_invalid(
+            "#define F(1, 2) x\n",
+            "macro parameters must be identifiers",
+        )
+        .await;
+        test_invalid("#define F(a, a) x\n", "duplicate macro parameter `a`").await;
+    }
+
+    #[tokio::test]
+    async fn a_spaced_paren_defines_an_object_macro() {
+        // C99's rule: `(` not flush against the name = object macro
+        // whose body starts with the paren.
+        test_valid("#define F (x)\nF;\n", &["(", "x", ")", ";"]).await;
+    }
+
+    #[tokio::test]
+    async fn trailing_junk_after_an_if_expression_is_an_error() {
+        test_invalid(
+            "#if 1 2\n#endif\n",
+            "unexpected tokens after `#if` expression",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn an_unterminated_include_path_is_an_error() {
+        test_invalid("#include \"foo.h\n", "unterminated path in `#include`").await;
+    }
+
+    #[tokio::test]
+    async fn an_unterminated_directive_comment_is_an_error() {
+        test_invalid(
+            "#ifdef FOO\n#endif /* open\n",
+            "unterminated comment in a preprocessor directive",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_bare_if_is_an_error() {
+        test_invalid("#if\n#endif\n", "expected an expression after `#if`").await;
+    }
+
+    #[tokio::test]
+    async fn defined_without_a_call_shape_is_a_variable() {
+        // `defined` alone is an (undefined) name: bare-name falsy (R5/R7).
+        let prog = indoc! { r#"
+            #if defined
+            "should not appear"
+            #endif
+            "after";
+        "# };
+        test_valid(prog, &["after", ";"]).await;
+    }
+
+    #[tokio::test]
+    async fn an_indented_directive_is_well_placed() {
+        test_valid(
+            "int x;\n    #define A 1\nA;\n",
+            &["int", "x", ";", "1", ";"],
+        )
+        .await;
     }
 }
