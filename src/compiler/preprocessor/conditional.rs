@@ -12,8 +12,10 @@ struct Frame {
     span: Span,
     /// Was the surrounding region live when this frame opened?
     parent_live: bool,
-    /// Is this frame's current branch emitting? Flipped by `#else`.
+    /// Is this frame's current branch emitting?
     branch_live: bool,
+    /// Has any branch of this frame emitted? `#elif` and `#else` consult it.
+    taken_any: bool,
     /// The span of this frame's `#else`, once seen.
     else_seen: Option<Span>,
 }
@@ -34,8 +36,42 @@ impl Conditionals {
             span,
             parent_live,
             branch_live: taken,
+            taken_any: taken,
             else_seen: None,
         });
+    }
+
+    /// `#elif`: end the previous branch and say whether this operand
+    /// decides the chain — the parent is live and nothing is taken yet
+    /// (C99 6.10p6: otherwise the operand is never read). Orphan and
+    /// after-`#else` are errors, live or dead.
+    #[allow(dead_code)]
+    pub(super) fn elif(&mut self, span: Span) -> Result<bool> {
+        let Some(frame) = self.frames.last_mut() else {
+            return Err(lpc_error!(
+                Some(span),
+                "found `#elif` without a corresponding `#if` or `#ifdef`",
+            ));
+        };
+        if let Some(else_span) = frame.else_seen {
+            let err = LpcError::new("found `#elif` after `#else`")
+                .with_span(Some(span))
+                .with_label("`#else` is here", Some(else_span));
+            return Err(err);
+        }
+        if frame.parent_live {
+            frame.branch_live = false;
+        }
+        Ok(frame.parent_live && !frame.taken_any)
+    }
+
+    /// Record an armed `#elif`'s verdict. Call only when [`elif`](Self::elif)
+    /// returned `true` — otherwise the branch is already dead and stays dead.
+    #[allow(dead_code)]
+    pub(super) fn take_elif(&mut self, taken: bool) {
+        let frame = self.frames.last_mut().expect("elif() found this frame");
+        frame.branch_live = taken;
+        frame.taken_any |= taken;
     }
 
     /// `#else`: record it, and flip the branch iff the parent region is
@@ -55,7 +91,10 @@ impl Conditionals {
         }
         frame.else_seen = Some(span);
         if frame.parent_live {
-            frame.branch_live = !frame.branch_live;
+            // `!branch_live` would wrongly take the else after a taken
+            // `#elif` — the chain question is "was anything taken?".
+            frame.branch_live = !frame.taken_any;
+            frame.taken_any = true;
         }
         Ok(())
     }
@@ -181,5 +220,63 @@ mod tests {
         c.enter(sp(1), false);
         c.leave(sp(2)).unwrap();
         assert!(c.finish().is_ok());
+    }
+
+    #[test]
+    fn an_elif_chain_takes_the_first_true_branch() {
+        let mut c = Conditionals::default();
+        c.enter(sp(1), false); // #if 0
+        assert!(c.elif(sp(2)).unwrap()); // undecided: operand decides
+        c.take_elif(true);
+        assert!(c.live());
+        assert!(!c.elif(sp(3)).unwrap()); // decided: never evaluated
+        assert!(!c.live());
+        c.flip_else(sp(4)).unwrap();
+        assert!(!c.live()); // something was taken — else stays dead
+        c.leave(sp(5)).unwrap();
+    }
+
+    #[test]
+    fn an_all_false_chain_takes_the_else() {
+        let mut c = Conditionals::default();
+        c.enter(sp(1), false);
+        assert!(c.elif(sp(2)).unwrap());
+        c.take_elif(false);
+        assert!(c.elif(sp(3)).unwrap()); // still undecided
+        c.take_elif(false);
+        c.flip_else(sp(4)).unwrap();
+        assert!(c.live());
+    }
+
+    #[test]
+    fn an_elif_after_a_taken_if_ends_the_branch_unread() {
+        let mut c = Conditionals::default();
+        c.enter(sp(1), true);
+        assert!(c.live());
+        assert!(!c.elif(sp(2)).unwrap());
+        assert!(!c.live());
+        c.flip_else(sp(3)).unwrap();
+        assert!(!c.live()); // the flip_else fix: !taken_any, not !branch_live
+    }
+
+    #[test]
+    fn a_dead_parents_elif_validates_but_never_decides() {
+        let mut c = Conditionals::default();
+        c.enter(sp(1), false); // dead from here
+        c.enter(sp(2), true); // inert frame
+        assert!(!c.elif(sp(3)).unwrap());
+        c.flip_else(sp(4)).unwrap();
+        let e = c.elif(sp(5)).unwrap_err();
+        assert_eq!(e.to_string(), "found `#elif` after `#else`");
+    }
+
+    #[test]
+    fn orphan_elif_errors() {
+        let mut c = Conditionals::default();
+        let e = c.elif(sp(1)).unwrap_err();
+        assert_eq!(
+            e.to_string(),
+            "found `#elif` without a corresponding `#if` or `#ifdef`"
+        );
     }
 }
