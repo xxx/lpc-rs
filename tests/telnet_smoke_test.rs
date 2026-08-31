@@ -132,6 +132,10 @@ async fn the_whole_telnet_surface_over_a_real_socket() {
         contains(&login, b"The place where it all begins."),
         "{login:?}"
     );
+    assert!(
+        !contains(&login, b"The Spark"),
+        "look is the long description only: {login:?}"
+    );
     assert!(contains(&login, b"smoke> "), "{login:?}");
 
     // The connection answers query_connection through the stats verb.

@@ -28,7 +28,7 @@ pub(crate) fn subnegotiation(out: &mut BytesMut, opt: u8, payload: &[u8]) {
     out.put_slice(&[IAC, SE]);
 }
 
-/// Text for the client: LF becomes CR LF (an existing CR LF is kept), and
+/// Text for the client: LF becomes CR LF (an existing CR LF is kept).
 pub(crate) fn text(out: &mut BytesMut, s: &str) {
     out.reserve(s.len() + s.len() / 8);
     let mut previous = 0u8;
