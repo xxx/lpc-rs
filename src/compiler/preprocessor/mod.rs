@@ -2287,4 +2287,137 @@ mod tests {
         )
         .await;
     }
+
+    mod test_include_walk {
+        use super::*;
+
+        fn temp_lib(name: &str) -> std::path::PathBuf {
+            let root = std::env::temp_dir()
+                .join(format!("lpc-rs-preprocessor-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            std::fs::create_dir_all(&root).unwrap();
+            root
+        }
+
+        fn fixture_at(root: &std::path::Path) -> Preprocessor {
+            let config = ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .build()
+                .unwrap();
+            let context = CompilationContextBuilder::default()
+                .filename(Arc::new("main.c".into()))
+                .config(config)
+                .build()
+                .unwrap();
+            Preprocessor::new(context)
+        }
+
+        async fn tokens_of(root: &std::path::Path, code: &str) -> Vec<String> {
+            let mut preprocessor = fixture_at(root);
+            let scanned = preprocessor.scan("/main.c", code).await.unwrap();
+            scanned.iter().map(|sp| sp.1.to_string()).collect()
+        }
+
+        async fn error_of(root: &std::path::Path, code: &str) -> LpcError {
+            let mut preprocessor = fixture_at(root);
+            preprocessor
+                .scan("/main.c", code)
+                .await
+                .expect_err("expected the scan to fail")
+        }
+
+        #[tokio::test]
+        async fn an_include_cycle_renders_the_chain() {
+            let root = temp_lib("cycle-chain");
+            std::fs::write(root.join("a.h"), "#include \"b.h\"\n").unwrap();
+            std::fs::write(root.join("b.h"), "#include \"a.h\"\n").unwrap();
+
+            let e = error_of(&root, "#include \"a.h\"\n").await;
+            let rendered = e.diagnostic_string().replace(root.to_str().unwrap(), "");
+
+            assert_eq!(
+                rendered,
+                "error: cyclic `#include`: `/a.h` is already being included\n  ┌─ /b.h:1:1\n  │\n1 │ #include \"a.h\"\n  │ ^^^^^^^^^^^^^^\n  │\n  ┌─ /main.c:1:1\n  │\n1 │ #include \"a.h\"\n  │ -------------- included from here\n  │\n  ┌─ /a.h:1:1\n  │\n1 │ #include \"b.h\"\n  │ -------------- included from here\n\n"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_self_include_is_a_cycle() {
+            let root = temp_lib("self-include");
+            std::fs::write(root.join("a.h"), "#include \"a.h\"\n").unwrap();
+            let e = error_of(&root, "#include \"a.h\"\n").await;
+            assert_eq!(
+                e.to_string(),
+                "cyclic `#include`: `/a.h` is already being included"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_header_including_the_root_is_a_cycle() {
+            let root = temp_lib("root-cycle");
+            std::fs::write(root.join("a.h"), "#include \"main.c\"\n").unwrap();
+            let e = error_of(&root, "#include \"a.h\"\n1\n").await;
+            assert_eq!(
+                e.to_string(),
+                "cyclic `#include`: `/main.c` is already being included"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_once_root_reincluded_is_skipped_not_cyclic() {
+            let root = temp_lib("once-root");
+            std::fs::write(root.join("a.h"), "#include \"main.c\"\n1\n").unwrap();
+            let tokens = tokens_of(&root, "#pragma once\n#include \"a.h\"\n2\n").await;
+            assert_eq!(tokens, vec!["1", "2"]);
+        }
+
+        #[tokio::test]
+        async fn a_chain_at_the_cap_scans() {
+            let root = temp_lib("depth-at-cap");
+            // Root + h0..h(leaf) fill the cap exactly.
+            let leaf = include::MAX_INCLUDE_DEPTH - 2;
+            for i in 0..leaf {
+                std::fs::write(
+                    root.join(format!("h{i}.h")),
+                    format!("#include \"h{}.h\"\n", i + 1),
+                )
+                .unwrap();
+            }
+            std::fs::write(root.join(format!("h{leaf}.h")), "1\n").unwrap();
+            let tokens = tokens_of(&root, "#include \"h0.h\"\n").await;
+            assert_eq!(tokens, vec!["1"]);
+        }
+
+        #[tokio::test]
+        async fn a_chain_past_the_cap_nests_too_deeply() {
+            let root = temp_lib("depth-past-cap");
+            let leaf = include::MAX_INCLUDE_DEPTH - 1;
+            for i in 0..leaf {
+                std::fs::write(
+                    root.join(format!("h{i}.h")),
+                    format!("#include \"h{}.h\"\n", i + 1),
+                )
+                .unwrap();
+            }
+            std::fs::write(root.join(format!("h{leaf}.h")), "1\n").unwrap();
+            let e = error_of(&root, "#include \"h0.h\"\n").await;
+            assert_eq!(e.to_string(), "`#include` nests too deeply");
+        }
+
+        #[tokio::test]
+        async fn a_pragma_once_header_includes_once() {
+            let root = temp_lib("once-header");
+            std::fs::write(root.join("o.h"), "#pragma once\n1\n").unwrap();
+            let tokens = tokens_of(&root, "#include \"o.h\"\n#include \"o.h\"\n").await;
+            assert_eq!(tokens, vec!["1"]);
+        }
+
+        #[tokio::test]
+        async fn a_dead_pragma_once_is_inert() {
+            let root = temp_lib("dead-once");
+            std::fs::write(root.join("d.h"), "#if 0\n#pragma once\n#endif\n1\n").unwrap();
+            let tokens = tokens_of(&root, "#include \"d.h\"\n#include \"d.h\"\n").await;
+            assert_eq!(tokens, vec!["1", "1"]);
+        }
+    }
 }
