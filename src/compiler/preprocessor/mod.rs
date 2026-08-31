@@ -1167,6 +1167,25 @@ mod tests {
 
             test_valid(prog, &["yes"]).await;
         }
+
+        #[tokio::test]
+        async fn a_whitespace_only_body_expands_to_nothing() {
+            // `body = rest.trim()` at parse time — trailing whitespace and
+            // no body collapse to the same empty body.
+            let prog = "#define FOO   \nFOO;\n";
+            test_valid(prog, &[";"]).await;
+        }
+
+        #[tokio::test]
+        async fn a_whitespace_only_body_is_not_an_expression() {
+            let prog = "#define FOO  \n#if FOO\n#endif\n";
+            let mut preprocessor = fixture();
+            let e = preprocessor.scan("/test.c", prog).await.unwrap_err();
+            assert_eq!(
+                e.to_string(),
+                "`FOO` does not expand to a preprocessor expression"
+            );
+        }
     }
 
     mod test_ifdef {
@@ -1813,6 +1832,20 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn a_chained_not_an_expression_names_the_offending_leaf() {
+            // A -> B -> "1 +" (not an expression). The error names B, the
+            // define whose body actually fails to parse — not A, the name
+            // written in the `#if`.
+            let prog = "#define A B\n#define B 1 +\n#if A\n#endif\n";
+            let mut preprocessor = fixture();
+            let e = preprocessor.scan("/test.c", prog).await.unwrap_err();
+            assert_eq!(
+                e.to_string(),
+                "`B` does not expand to a preprocessor expression"
+            );
+        }
+
+        #[tokio::test]
         async fn test_defined_is_an_integer() {
             let prog = indoc! { r##"
                 #define A 1
@@ -1846,6 +1879,14 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn test_if_arithmetic_wraps_through_subtraction() {
+            // 0 - i64::MAX - i64::MAX - 2 wraps clean through zero.
+            let prog = "#if 0 - 9223372036854775807 - 9223372036854775807 - 2\n\"t\";\n#endif\n\"after\";\n";
+
+            test_valid(prog, &["after", ";"]).await;
+        }
+
+        #[tokio::test]
         async fn deep_acyclic_chain_in_if_nests_too_deeply() {
             // A chain of distinct names never trips the hide set (it only
             // catches cycles); without a depth bound this recurses one
@@ -1870,6 +1911,46 @@ mod tests {
             prog.push_str("#if B300 + 0\n#endif\n");
 
             test_invalid(&prog, "nests too deeply").await;
+        }
+
+        #[tokio::test]
+        async fn a_negated_defined_contributes_to_arithmetic() {
+            // X undefined: `not defined(X)` -> 1, `+ 0` -> 1, taken.
+            let prog = "#if not defined(X) + 0\n\"t\";\n#endif\n";
+            test_valid(prog, &["t", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn a_negated_defined_of_a_defined_name_is_zero_in_arithmetic() {
+            // X defined: `not defined(X)` -> 0, `+ 0` -> 0, not taken.
+            let prog = "#define X 1\n#if not defined(X) + 0\n\"t\";\n#endif\n\"after\";\n";
+            test_valid(prog, &["after", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn defined_contributes_its_value_not_just_truthiness() {
+            // defined(X) + defined(Y) - 1 == 1 + 0 - 1 == 0: not taken.
+            let prog = "#define X 1\n#if defined(X) + defined(Y) - 1\n\"t\";\n#endif\n\"after\";\n";
+            test_valid(prog, &["after", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn defined_contributes_its_value_not_just_truthiness_both_defined() {
+            // defined(X) + defined(Y) - 1 == 1 + 1 - 1 == 1: taken.
+            let prog =
+                "#define X 1\n#define Y 1\n#if defined(X) + defined(Y) - 1\n\"t\";\n#endif\n";
+            test_valid(prog, &["t", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn mutual_recursion_in_arithmetic_position_is_unresolvable() {
+            // The hide set makes a mutually-recursive name unresolvable as
+            // an int (unlike boolean position, which reads it as false —
+            // see `test_mutually_recursive_if_is_false`).
+            let prog = "#define A B\n#define B A\n#if A + 0\n#endif\n";
+            let mut preprocessor = fixture();
+            let e = preprocessor.scan("/test.c", prog).await.unwrap_err();
+            assert_eq!(e.to_string(), "unable to resolve into an int: `A`");
         }
 
         #[test]
@@ -2060,6 +2141,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_dead_macro_call_is_never_checked_for_arity() {
+        let prog = indoc! { r##"
+            #define BAR(a, b) (a - b)
+            #if 0
+            BAR(1);
+            #endif
+            "ok";
+        "## };
+        test_valid(prog, &["ok", ";"]).await;
+    }
+
+    #[tokio::test]
+    async fn a_dead_macro_call_is_never_checked_for_termination() {
+        let prog = indoc! { r##"
+            #define BAR(a, b) (a - b)
+            #if 0
+            BAR(2
+            #endif
+            "ok";
+        "## };
+        test_valid(prog, &["ok", ";"]).await;
+    }
+
+    #[tokio::test]
+    async fn a_dead_macro_call_never_hits_the_expansion_depth_cap() {
+        // Live, this shape trips `expand.rs`'s `deep_nesting_hits_the_depth_cap`
+        // (limit 256). Dead, `Token::Id` is dropped without touching the
+        // engine, so it never runs at all.
+        let src = format!(
+            "#define F(x) x\n#if 0\n{}1{}\n#endif\n\"ok\";\n",
+            "F(".repeat(300),
+            ")".repeat(300)
+        );
+        test_valid(&src, &["ok", ";"]).await;
+    }
+
+    #[tokio::test]
     async fn test_include_inside_taken_conditional() {
         let prog = indoc! { r##"
             #define YES
@@ -2097,7 +2215,17 @@ mod tests {
             #endif
         "## };
 
-        test_invalid(prog, "Found `#if` without a corresponding `#endif`").await;
+        let mut preprocessor = fixture();
+        let e = preprocessor.scan("/test.c", prog).await.unwrap_err();
+        assert_eq!(
+            e.to_string(),
+            "Found `#if` without a corresponding `#endif`"
+        );
+        // The span lands in the header's own frame, not the includer's.
+        assert_eq!(
+            e.span().and_then(|s| s.code()).as_deref(),
+            Some("#ifdef NEVER")
+        );
     }
 
     #[tokio::test]
@@ -2164,6 +2292,15 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_dead_ifdef_never_reads_its_operand() {
+        // Dead regions know directive names, never operands: garbage that
+        // would be a live "expected an identifier after `#ifdef`" error
+        // skips silently when dead.
+        let prog = "#if 0\n#ifdef !!! ??? garbage\n#endif\n#endif\n\"after\";\n";
+        test_valid(prog, &["after", ";"]).await;
+    }
+
+    #[tokio::test]
     async fn a_dead_midline_hash_is_text() {
         // C99 6.10.1: a skipped group's non-directive lines are text. A
         // mid-line `#if` in a dead region used to error on placement;
@@ -2205,6 +2342,15 @@ mod tests {
             "preprocessor directives must appear on their own line",
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn a_dead_multi_line_call_directive_is_text() {
+        // Dead regions never expand, so per-token anchors judge the `#`
+        // mid-line: text. X stays undefined — the dead mid-line `#define`
+        // was text — so `X;` emits the raw Id.
+        let prog = "#define F(a, b) a\n#if 0\nF(1,\n2) #define X 1\n#endif\nX;\n";
+        test_valid(prog, &["X", ";"]).await;
     }
 
     #[tokio::test]
