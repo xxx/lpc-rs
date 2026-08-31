@@ -17,10 +17,7 @@ use crate::{
     compiler::{
         ast::binary_op_node::BinaryOperation,
         compilation_context::CompilationContext,
-        lexer::{
-            LexWrapper, Spanned, Token, TokenVecWrapper,
-            logos_token::{IntToken, StringToken},
-        },
+        lexer::{LexWrapper, Spanned, Token, TokenVecWrapper, logos_token::StringToken},
         preprocessor::preprocessor_node::PreprocessorNode,
     },
     preprocessor_parser,
@@ -508,11 +505,13 @@ impl Preprocessor {
             check_duplicate(&captures[1], token.0)?;
 
             let name = String::from(&captures[1]);
-            let tokens = if captures[2].is_empty() {
-                vec![(span.l(), Token::IntLiteral(IntToken(span, 0)), span.r())]
+            let body = captures[2].trim();
+
+            let tokens = if body.is_empty() {
+                vec![]
             } else {
-                // tokenize captures[2] with our full language lexer, so we can store it
-                lex_vec(&captures[2])
+                // tokenize with the full language lexer, so we can store it
+                lex_vec(body)
                     .map_err(|e| e.with_span(Some(token.0)))?
                     .into_iter()
                     .map(|(_, t, _)| (span.l(), t.with_span(span), span.r()))
@@ -520,12 +519,12 @@ impl Preprocessor {
             };
 
             // A body that is not an expression is still fine to substitute;
-            // only an `#if` over it is an error.
-            let expr = if captures[2].is_empty() {
-                Some(PreprocessorNode::Int(0))
+            // only an `#if` over it is an error. An empty body is no expression (R13).
+            let expr = if body.is_empty() {
+                None
             } else {
                 preprocessor_parser::ExpressionParser::new()
-                    .parse(LexWrapper::new(&captures[2]))
+                    .parse(LexWrapper::new(body))
                     .ok()
             };
 
@@ -1336,10 +1335,7 @@ mod tests {
                     ));
                     assert!(matches!(
                         preprocessor.defines.get("MAR").unwrap(),
-                        Define::Object(ObjectMacro {
-                            expr: Some(PreprocessorNode::Int(0)),
-                            ..
-                        })
+                        Define::Object(ObjectMacro { expr: None, .. })
                     ));
                     if let Define::Object(ObjectMacro { expr, .. }) =
                         preprocessor.defines.get("DOOD").unwrap()
@@ -1464,6 +1460,39 @@ mod tests {
             };
 
             test_invalid(prog, "invalid `#define`").await;
+        }
+
+        #[tokio::test]
+        async fn test_empty_define_expands_to_nothing() {
+            let prog = indoc! { r##"
+                #define FOO
+                marf FOO tarf
+            "## };
+
+            test_valid(prog, &["marf", "tarf"]).await;
+        }
+
+        #[tokio::test]
+        async fn test_empty_define_is_not_an_expression() {
+            let prog = indoc! { r##"
+                #define FOO
+                #if FOO
+                #endif
+            "## };
+
+            test_invalid(prog, "`FOO` does not expand to a preprocessor expression").await;
+        }
+
+        #[tokio::test]
+        async fn test_empty_define_is_defined() {
+            let prog = indoc! { r##"
+                #define FOO
+                #ifdef FOO
+                "yes"
+                #endif
+            "## };
+
+            test_valid(prog, &["yes"]).await;
         }
     }
 
@@ -1848,13 +1877,9 @@ mod tests {
         async fn test_simple_if() {
             let prog = indoc! { r##"
                 #define FOO 1
-                #define BAR
                 #define BAZ 0
                 #if FOO
                     "#if FOO works"
-                #endif
-                #if BAR
-                    "#if BAR works, but should not"
                 #endif
                 #if BAZ
                     "#if BAZ works, but should not"
@@ -1929,16 +1954,16 @@ mod tests {
                     "this should not be printed"
                 #endif
 
-                #if defined(FOO) && BAR
-                    "this should not be printed"
-                #endif
-
-                #if defined(FOO) && (BAR || defined(BAZ))
+                #if defined(FOO) && defined(BAR)
                     "fifth test passes"
                 #endif
 
-                #if not defined(FOO) || not defined(UNDEFINED)
+                #if defined(FOO) && (defined(BAR) || defined(BAZ))
                     "sixth test passes"
+                #endif
+
+                #if not defined(FOO) || not defined(UNDEFINED)
+                    "seventh test passes"
                 #endif
             "## };
 
@@ -1951,6 +1976,7 @@ mod tests {
                     "fourth test passes",
                     "fifth test passes",
                     "sixth test passes",
+                    "seventh test passes",
                 ],
             )
             .await;
