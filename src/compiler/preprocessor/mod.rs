@@ -2150,6 +2150,22 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn logical_operators_in_int_position_are_eager() {
+            // Only the bool level short-circuits (elif-bundle R7); inside
+            // arithmetic, `&&` resolves both sides — a C divergence.
+            test_invalid("#if (0 && 1 / 0) + 1\n#endif\n", "Division by zero").await;
+            test_valid("#if (0 && 9) + 1\n\"t\";\n#endif\n", &["t", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn a_ladder_operator_works_inside_a_macro_body() {
+            // `V > 3` failed to parse as an object-macro expression before
+            // the ladder; `#if COND` then errored as not-an-expression.
+            let prog = "#define V 4\n#define COND V > 3\n#if COND\n\"y\";\n#endif\n";
+            test_valid(prog, &["y", ";"]).await;
+        }
+
+        #[tokio::test]
         async fn bang_is_lenient_in_bool_position_and_strict_in_int_position() {
             test_valid("#if !FOO\n\"unset\";\n#endif\n", &["unset", ";"]).await;
             test_invalid(
