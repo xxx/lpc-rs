@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use lpc_rs_core::LpcIntInner;
 
-use crate::compiler::ast::binary_op_node::BinaryOperation;
+use crate::compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation};
 
 /// A node type for evaluating preprocessor `#if` expressions
 #[derive(Debug, PartialEq)]
@@ -17,6 +17,7 @@ pub enum PreprocessorNode {
         Box<PreprocessorNode>,
         Box<PreprocessorNode>,
     ),
+    UnaryOp(UnaryOperation, Box<PreprocessorNode>),
 }
 
 impl Display for PreprocessorNode {
@@ -31,6 +32,7 @@ impl Display for PreprocessorNode {
                 write!(f, "{not}defined({x})")
             }
             PreprocessorNode::BinaryOp(op, l, r) => write!(f, "{l} {op} {r}"),
+            PreprocessorNode::UnaryOp(op, inner) => write!(f, "{op}{inner}"),
         }
     }
 }

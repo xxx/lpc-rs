@@ -14,7 +14,7 @@ use lpc_rs_errors::{
 };
 
 use crate::compiler::{
-    ast::binary_op_node::BinaryOperation,
+    ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
     lexer::{LexWrapper, Token},
     preprocessor::preprocessor_node::PreprocessorNode,
 };
@@ -501,7 +501,7 @@ pub fn parse_if_expression(text: &str, base: Span) -> Result<PreprocessorNode> {
         return Err(lpc_error!(Some(base), "expected an expression after `#if`"));
     }
     let mut parser = ExprParser { tokens, pos: 0 };
-    let expr = parser.or_expr()?;
+    let expr = parser.expr()?;
     if let Some(t) = parser.tokens.get(parser.pos) {
         return Err(ExprParser::err_at(
             t.span(),
@@ -511,8 +511,46 @@ pub fn parse_if_expression(text: &str, base: Span) -> Result<PreprocessorNode> {
     Ok(expr)
 }
 
-/// Recursive descent over the operand's tokens. Precedence, loosest
-/// first: `||` · `&&` · `+` `-` · primary — today's operator set exactly.
+/// One precedence level per entry, loosest first — C's ladder below
+/// `||`/`&&` down to `* / %` (elif-bundle R6).
+const LADDER: &[fn(&Token) -> Option<BinaryOperation>] = &[
+    |t| matches!(t, Token::OrOr(_)).then_some(BinaryOperation::OrOr),
+    |t| matches!(t, Token::AndAnd(_)).then_some(BinaryOperation::AndAnd),
+    |t| matches!(t, Token::Or(_)).then_some(BinaryOperation::Or),
+    |t| matches!(t, Token::Caret(_)).then_some(BinaryOperation::Xor),
+    |t| matches!(t, Token::And(_)).then_some(BinaryOperation::And),
+    |t| match t {
+        Token::EqEq(_) => Some(BinaryOperation::EqEq),
+        Token::NotEq(_) => Some(BinaryOperation::NotEq),
+        _ => None,
+    },
+    |t| match t {
+        Token::LessThan(_) => Some(BinaryOperation::Lt),
+        Token::GreaterThan(_) => Some(BinaryOperation::Gt),
+        Token::LessThanEq(_) => Some(BinaryOperation::Lte),
+        Token::GreaterThanEq(_) => Some(BinaryOperation::Gte),
+        _ => None,
+    },
+    |t| match t {
+        Token::LeftShift(_) => Some(BinaryOperation::Shl),
+        Token::RightShift(_) => Some(BinaryOperation::Shr),
+        _ => None,
+    },
+    |t| match t {
+        Token::Plus(_) => Some(BinaryOperation::Add),
+        Token::Minus(_) => Some(BinaryOperation::Sub),
+        _ => None,
+    },
+    |t| match t {
+        Token::Mul(_) => Some(BinaryOperation::Mul),
+        Token::Div(_) => Some(BinaryOperation::Div),
+        Token::Mod(_) => Some(BinaryOperation::Mod),
+        _ => None,
+    },
+];
+
+/// Recursive descent over the operand's tokens: C's integer operator
+/// ladder (elif-bundle R6) — [`LADDER`] levels, then unary, then primary.
 struct ExprParser {
     tokens: Vec<Token>,
     pos: usize,
@@ -553,37 +591,34 @@ impl ExprParser {
         }
     }
 
-    fn or_expr(&mut self) -> Result<PreprocessorNode> {
-        let mut node = self.and_expr()?;
-        while self.eat(|t| matches!(t, Token::OrOr(_))) {
-            let rhs = self.and_expr()?;
-            node = PreprocessorNode::BinaryOp(BinaryOperation::OrOr, Box::new(node), Box::new(rhs));
-        }
-        Ok(node)
+    fn expr(&mut self) -> Result<PreprocessorNode> {
+        self.level(0)
     }
 
-    fn and_expr(&mut self) -> Result<PreprocessorNode> {
-        let mut node = self.additive()?;
-        while self.eat(|t| matches!(t, Token::AndAnd(_))) {
-            let rhs = self.additive()?;
-            node =
-                PreprocessorNode::BinaryOp(BinaryOperation::AndAnd, Box::new(node), Box::new(rhs));
-        }
-        Ok(node)
-    }
-
-    fn additive(&mut self) -> Result<PreprocessorNode> {
-        let mut node = self.primary()?;
-        loop {
-            let op = match self.peek(0) {
-                Some(Token::Plus(_)) => BinaryOperation::Add,
-                Some(Token::Minus(_)) => BinaryOperation::Sub,
-                _ => return Ok(node),
-            };
+    fn level(&mut self, prec: usize) -> Result<PreprocessorNode> {
+        let Some(op_of) = LADDER.get(prec) else {
+            return self.unary();
+        };
+        let mut node = self.level(prec + 1)?;
+        while let Some(op) = self.peek(0).and_then(op_of) {
             self.pos += 1;
-            let rhs = self.primary()?;
+            let rhs = self.level(prec + 1)?;
             node = PreprocessorNode::BinaryOp(op, Box::new(node), Box::new(rhs));
         }
+        Ok(node)
+    }
+
+    /// Prefix `!` `-` `~`, stacking (`!!X`, `-~X`).
+    fn unary(&mut self) -> Result<PreprocessorNode> {
+        let op = match self.peek(0) {
+            Some(Token::Bang(_)) => UnaryOperation::Bang,
+            Some(Token::Minus(_)) => UnaryOperation::Negate,
+            Some(Token::Tilde(_)) => UnaryOperation::BitwiseNot,
+            _ => return self.primary(),
+        };
+        self.pos += 1;
+        let inner = self.unary()?;
+        Ok(PreprocessorNode::UnaryOp(op, Box::new(inner)))
     }
 
     fn primary(&mut self) -> Result<PreprocessorNode> {
@@ -594,7 +629,7 @@ impl ExprParser {
             Token::IntLiteral(t) => Ok(PreprocessorNode::Int(t.1)),
             Token::StringLiteral(t) => Ok(PreprocessorNode::String(t.1)),
             Token::LParen(sp) => {
-                let inner = self.or_expr()?;
+                let inner = self.expr()?;
                 if self.eat(|t| matches!(t, Token::RParen(_))) {
                     Ok(inner)
                 } else {
@@ -949,6 +984,57 @@ mod tests {
                     Box::new(PreprocessorNode::Int(3)),
                 )),
                 Box::new(PreprocessorNode::Int(4)),
+            )
+        );
+    }
+
+    #[test]
+    fn unary_operators_stack_and_bind_tightest() {
+        use crate::compiler::ast::unary_op_node::UnaryOperation;
+        assert_eq!(
+            x("!!FOO").unwrap(),
+            PreprocessorNode::UnaryOp(
+                UnaryOperation::Bang,
+                Box::new(PreprocessorNode::UnaryOp(
+                    UnaryOperation::Bang,
+                    Box::new(PreprocessorNode::Var("FOO".into())),
+                )),
+            )
+        );
+        assert_eq!(
+            x("!defined(FOO)").unwrap(),
+            PreprocessorNode::UnaryOp(
+                UnaryOperation::Bang,
+                Box::new(PreprocessorNode::Defined("FOO".into(), false)),
+            )
+        );
+        // `-1 * 2` is `(-1) * 2`: unary binds above `*`.
+        assert_eq!(
+            x("-1 * 2").unwrap(),
+            PreprocessorNode::BinaryOp(
+                BinaryOperation::Mul,
+                Box::new(PreprocessorNode::UnaryOp(
+                    UnaryOperation::Negate,
+                    Box::new(PreprocessorNode::Int(1)),
+                )),
+                Box::new(PreprocessorNode::Int(2)),
+            )
+        );
+    }
+
+    #[test]
+    fn the_ladder_orders_comparisons_below_shifts() {
+        // `1 < 2 << 3` is `1 < (2 << 3)` — shift binds tighter.
+        assert_eq!(
+            x("1 < 2 << 3").unwrap(),
+            PreprocessorNode::BinaryOp(
+                BinaryOperation::Lt,
+                Box::new(PreprocessorNode::Int(1)),
+                Box::new(PreprocessorNode::BinaryOp(
+                    BinaryOperation::Shl,
+                    Box::new(PreprocessorNode::Int(2)),
+                    Box::new(PreprocessorNode::Int(3)),
+                )),
             )
         );
     }
