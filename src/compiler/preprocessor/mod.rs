@@ -542,6 +542,14 @@ impl Preprocessor {
                     Some(Define::Object(ObjectMacro {
                         expr: Some(expr), ..
                     })) => {
+                        if hide.len() >= expand::MAX_EXPANSION_DEPTH {
+                            return Err(lpc_error!(
+                                span,
+                                "expansion of `{}` nests too deeply (limit {})",
+                                x,
+                                expand::MAX_EXPANSION_DEPTH
+                            ));
+                        }
                         hide.push(x);
                         let result = self.eval_expr_for_skipping(expr, span, hide);
                         hide.pop();
@@ -609,6 +617,14 @@ impl Preprocessor {
                         Define::Object(ObjectMacro {
                             expr: Some(expr), ..
                         }) => {
+                            if hide.len() >= expand::MAX_EXPANSION_DEPTH {
+                                return Err(lpc_error!(
+                                    span,
+                                    "expansion of `{}` nests too deeply (limit {})",
+                                    x,
+                                    expand::MAX_EXPANSION_DEPTH
+                                ));
+                            }
                             hide.push(x);
                             let result = self.resolve_int(expr, span, hide);
                             hide.pop();
@@ -1945,6 +1961,8 @@ mod tests {
         async fn test_defined_is_an_integer() {
             let prog = indoc! { r##"
                 #define A 1
+                #define D 1
+                #define E 2
                 #if defined(A) + defined(B)
                 "one"
                 #endif
@@ -1953,9 +1971,12 @@ mod tests {
                 #else
                 "none"
                 #endif
+                #if defined(D) + defined(E)
+                "two"
+                #endif
             "## };
 
-            test_valid(prog, &["one", "none"]).await;
+            test_valid(prog, &["one", "none", "two"]).await;
         }
 
         #[tokio::test]
@@ -1967,6 +1988,33 @@ mod tests {
             "## };
 
             test_valid(prog, &["wrapped"]).await;
+        }
+
+        #[tokio::test]
+        async fn deep_acyclic_chain_in_if_nests_too_deeply() {
+            // A chain of distinct names never trips the hide set (it only
+            // catches cycles); without a depth bound this recurses one
+            // Rust frame per hop and would eventually blow the stack.
+            let mut prog = String::from("#define B0 1\n");
+            for i in 1..=300 {
+                prog.push_str(&format!("#define B{i} B{}\n", i - 1));
+            }
+            prog.push_str("#if B300\n#endif\n");
+
+            test_invalid(&prog, "nests too deeply").await;
+        }
+
+        #[tokio::test]
+        async fn deep_acyclic_chain_in_if_arithmetic_nests_too_deeply() {
+            // Same chain, but forced through `resolve_int`'s `Var` arm via
+            // an arithmetic position, pinning that arm's bound too.
+            let mut prog = String::from("#define B0 1\n");
+            for i in 1..=300 {
+                prog.push_str(&format!("#define B{i} B{}\n", i - 1));
+            }
+            prog.push_str("#if B300 + 0\n#endif\n");
+
+            test_invalid(&prog, "nests too deeply").await;
         }
 
         #[test]

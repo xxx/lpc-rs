@@ -12,13 +12,18 @@ use crate::compiler::{
 };
 
 /// Hard cap on tokens one top-level expansion may emit (R5): the hide set
-/// bounds re-expansion of names, this bounds width.
+/// bounds re-expansion of names, this bounds width. A work bound on what
+/// one top-level expansion may materialize — `substitute`'s construction
+/// and `emit`'s rescan both count against it — conservative, not an exact
+/// count of the final output.
 const MAX_EXPANDED_TOKENS: usize = 65_536;
 
 /// Hard cap on nested invocation depth (R5): source nesting like
 /// `F(F(F(...)))` recurses once per level and isn't bounded by the hide
-/// set at all — only this stops it before the real call stack would.
-const MAX_EXPANSION_DEPTH: usize = 256;
+/// set at all — only this stops it before the real call stack would. The
+/// same bound guards recursion generally: nested invocations, long alias
+/// chains, and (mod.rs's `#if` resolvers) define chains too.
+pub(super) const MAX_EXPANSION_DEPTH: usize = 256;
 
 /// The engine over one define table. Cheap to build; one per use is fine.
 pub(super) struct Expander<'a> {
@@ -120,7 +125,7 @@ impl<'a> Expansion<'a> {
     {
         match self.defines.get(name).expect("caller looked the name up") {
             Define::Object(object) => {
-                let replacement = self.substitute(&object.tokens, &no_args());
+                let replacement = self.substitute(&object.tokens, &no_args())?;
                 self.hide.push(name);
                 let walked = self.walk(&replacement, out);
                 self.hide.pop();
@@ -130,7 +135,7 @@ impl<'a> Expansion<'a> {
                 cursor.next(); // the `(` the caller peeked
                 let raw = self.capture_arguments(name, cursor)?;
                 let args = self.bind_arguments(name, function, raw)?;
-                let replacement = self.substitute(&function.tokens, &args);
+                let replacement = self.substitute(&function.tokens, &args)?;
                 self.hide.push(name);
                 let walked = self.walk(&replacement, out);
                 self.hide.pop();
@@ -142,19 +147,28 @@ impl<'a> Expansion<'a> {
     /// Build one macro's replacement from its raw body: a parameter Id
     /// splices its bound (already-expanded) tokens verbatim, their own
     /// spans kept; every other token is respanned to the use site here, at
-    /// construction (R10) — once, not on every rescan.
+    /// construction (R10) — once, not on every rescan. Budgeted against
+    /// `MAX_EXPANDED_TOKENS` here too (R5): a parameter splice can multiply
+    /// body-occurrences by argument size, so `walk`/`emit`'s cap alone
+    /// would let construction build an unbounded vector first.
     fn substitute(
         &self,
         body: &[Spanned<Token>],
         args: &HashMap<&str, Vec<Spanned<Token>>>,
-    ) -> Vec<Spanned<Token>> {
+    ) -> Result<Vec<Spanned<Token>>> {
         let mut replacement = Vec::with_capacity(body.len());
         for spanned in body {
             if let Token::Id(st) = &spanned.1
                 && let Some(arg_tokens) = args.get(st.1.as_str())
             {
+                if self.emitted + replacement.len() + arg_tokens.len() > MAX_EXPANDED_TOKENS {
+                    return Err(self.too_many());
+                }
                 replacement.extend(arg_tokens.iter().cloned());
                 continue;
+            }
+            if self.emitted + replacement.len() + 1 > MAX_EXPANDED_TOKENS {
+                return Err(self.too_many());
             }
             let tok = spanned.1.clone();
             replacement.push((
@@ -163,7 +177,7 @@ impl<'a> Expansion<'a> {
                 self.use_span.r(),
             ));
         }
-        replacement
+        Ok(replacement)
     }
 
     /// Rescan one already-substituted, already-spanned replacement (R2):
@@ -280,27 +294,36 @@ impl<'a> Expansion<'a> {
     fn emit(&mut self, spanned: Spanned<Token>, out: &mut Vec<Spanned<Token>>) -> Result<()> {
         self.emitted += 1;
         if self.emitted > MAX_EXPANDED_TOKENS {
-            return Err(lpc_error!(
-                Some(self.use_span),
-                "expansion of `{}` produces too many tokens (limit {})",
-                self.top,
-                MAX_EXPANDED_TOKENS
-            ));
+            return Err(self.too_many());
         }
         out.push(spanned);
         Ok(())
     }
 
+    /// The "unterminated call" diagnostic (R6), naming the macro being called.
     fn unterminated(&self, name: &str) -> lpc_rs_errors::LpcError {
         lpc_error!(Some(self.use_span), "unterminated call to macro `{}`", name)
     }
 
+    /// The "nests too deeply" diagnostic (R5), naming the top-level macro.
     fn too_deep(&self) -> lpc_rs_errors::LpcError {
         lpc_error!(
             Some(self.use_span),
             "expansion of `{}` nests too deeply (limit {})",
             self.top,
             MAX_EXPANSION_DEPTH
+        )
+    }
+
+    /// The "produces too many tokens" diagnostic (R5), naming the top-level
+    /// macro; shared by `emit`'s rescan-time check and `substitute`'s
+    /// construction-time one.
+    fn too_many(&self) -> lpc_rs_errors::LpcError {
+        lpc_error!(
+            Some(self.use_span),
+            "expansion of `{}` produces too many tokens (limit {})",
+            self.top,
+            MAX_EXPANDED_TOKENS
         )
     }
 }
@@ -411,6 +434,28 @@ mod tests {
         assert!(
             e.message()
                 .contains("expansion of `X17` produces too many tokens")
+        );
+    }
+
+    #[tokio::test]
+    async fn splice_bomb_hits_the_cap_without_materializing_it() {
+        // DUP's body repeats its parameter 1,000 times; the argument is
+        // 1,000 tokens. Unbudgeted, `substitute` would splice 1,000,000
+        // tokens before `walk`/`emit` ever see them. Budgeted, it must
+        // bail during construction — this test itself must stay fast.
+        let body = "x ".repeat(1_000);
+        let defines = format!("#define DUP(x) {}\n", body.trim_end());
+        let pp = table(&defines).await;
+        let arg = "1 ".repeat(1_000);
+        let src = format!("DUP({})", arg.trim_end());
+
+        let start = std::time::Instant::now();
+        let e = expand_all(&pp, &src).unwrap_err();
+        assert!(start.elapsed() < std::time::Duration::from_secs(2));
+
+        assert!(
+            e.message()
+                .contains("expansion of `DUP` produces too many tokens")
         );
     }
 
