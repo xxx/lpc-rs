@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{Result, lpc_error};
 use lpc_rs_utils::config::Config;
 use tokio::{signal, sync::mpsc::Receiver};
 use tracing::{debug, error, info, instrument, warn};
@@ -108,12 +108,21 @@ impl Vm {
         let mut gc_ticks = tokio::time::interval(Duration::from_secs(gc_interval.max(1)));
         gc_ticks.tick().await;
 
+        // Process managers stop a server with TERM first; it must reach the
+        // same clean shutdown as Ctrl-C.
+        let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
+            .map_err(|e| lpc_error!("installing the SIGTERM handler: {e}"))?;
+
         loop {
             tokio::select! {
                 biased; // we want signal handlers checked first, always.
                 _ = signal::ctrl_c() => {
                     // SIGINT on Linux
                     info!("Ctrl-C received... shutting down");
+                    break;
+                }
+                _ = sigterm.recv() => {
+                    info!("SIGTERM received... shutting down");
                     break;
                 }
                 _ = gc_ticks.tick(), if gc_interval > 0 => {
