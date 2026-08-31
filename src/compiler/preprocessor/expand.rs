@@ -13,8 +13,13 @@ use crate::compiler::{
 };
 
 /// Hard cap on tokens one top-level expansion may emit (R5): the hide set
-/// bounds depth, this bounds width.
+/// bounds re-expansion of names, this bounds width.
 const MAX_EXPANDED_TOKENS: usize = 65_536;
+
+/// Hard cap on nested invocation depth (R5): source nesting like
+/// `F(F(F(...)))` recurses once per level and isn't bounded by the hide
+/// set at all — only this stops it before the real call stack would.
+const MAX_EXPANSION_DEPTH: usize = 256;
 
 /// The engine over one define table. Cheap to build; one per use is fine.
 pub(super) struct Expander<'a> {
@@ -54,6 +59,7 @@ impl<'a> Expander<'a> {
             use_span: token.0,
             hide: vec![],
             emitted: 0,
+            depth: 0,
         };
         let mut out = vec![];
         expansion.expand_named(name, cursor, &mut out)?;
@@ -72,16 +78,46 @@ struct Expansion<'a> {
     /// is the membership test — macro chains are short.
     hide: Vec<&'a str>,
     emitted: usize,
+    /// Current nested-invocation depth (R5), independent of the hide set:
+    /// bounds source nesting like `F(F(F(...)))`, which the hide set
+    /// (a same-name re-entrancy guard) doesn't touch at all.
+    depth: usize,
 }
 
-/// No parameters to substitute: object-macro bodies and argument streams.
+/// No parameters to substitute: object-macro bodies have none.
 fn no_args() -> HashMap<&'static str, Vec<Spanned<Token>>> {
     HashMap::new()
 }
 
 impl<'a> Expansion<'a> {
     /// Expand the already-looked-up macro `name`, arguments from `cursor`.
+    /// Depth-checked (R5): this recurses once per nesting level regardless
+    /// of the hide set, so `F(F(F(...)))` needs its own bound.
     fn expand_named<T>(
+        &mut self,
+        name: &'a str,
+        cursor: &mut Peekable<T>,
+        out: &mut Vec<Spanned<Token>>,
+    ) -> Result<()>
+    where
+        T: Iterator<Item = Result<Spanned<Token>>>,
+    {
+        if self.depth >= MAX_EXPANSION_DEPTH {
+            return Err(self.too_deep());
+        }
+        self.depth += 1;
+        let result = self.expand_named_at_depth(name, cursor, out);
+        self.depth -= 1;
+        result
+    }
+
+    /// Substitute-then-rescan (C99): build the replacement list — body
+    /// tokens with parameters spliced in and everything else respanned to
+    /// the use site — then walk it as one stream. A nested invocation
+    /// captures its own arguments off this same replacement cursor, so it
+    /// sees the substitution that already happened, not the raw parameter
+    /// name.
+    fn expand_named_at_depth<T>(
         &mut self,
         name: &'a str,
         cursor: &mut Peekable<T>,
@@ -92,8 +128,9 @@ impl<'a> Expansion<'a> {
     {
         match self.defines.get(name).expect("caller looked the name up") {
             Define::Object(object) => {
+                let replacement = self.substitute(&object.tokens, &no_args());
                 self.hide.push(name);
-                let walked = self.walk(&object.tokens, &no_args(), true, out);
+                let walked = self.walk(&replacement, out);
                 self.hide.pop();
                 walked
             }
@@ -101,49 +138,65 @@ impl<'a> Expansion<'a> {
                 cursor.next(); // the `(` the caller peeked
                 let raw = self.capture_arguments(name, cursor)?;
                 let args = self.bind_arguments(name, function, raw)?;
+                let replacement = self.substitute(&function.tokens, &args);
                 self.hide.push(name);
-                let walked = self.walk(&function.tokens, &args, true, out);
+                let walked = self.walk(&replacement, out);
                 self.hide.pop();
                 walked
             }
         }
     }
 
-    /// Walk one stream with a single cursor (R2), substituting parameters
-    /// and expanding nested uses in-stream. `respan`: body-derived tokens
-    /// take the use-site span (R10); argument streams pass false.
-    fn walk(
-        &mut self,
-        stream: &[Spanned<Token>],
+    /// Build one macro's replacement from its raw body: a parameter Id
+    /// splices its bound (already-expanded) tokens verbatim, their own
+    /// spans kept; every other token is respanned to the use site here, at
+    /// construction (R10) — once, not on every rescan.
+    fn substitute(
+        &self,
+        body: &[Spanned<Token>],
         args: &HashMap<&str, Vec<Spanned<Token>>>,
-        respan: bool,
-        out: &mut Vec<Spanned<Token>>,
-    ) -> Result<()> {
+    ) -> Vec<Spanned<Token>> {
+        let mut replacement = Vec::with_capacity(body.len());
+        for spanned in body {
+            if let Token::Id(st) = &spanned.1
+                && let Some(arg_tokens) = args.get(st.1.as_str())
+            {
+                replacement.extend(arg_tokens.iter().cloned());
+                continue;
+            }
+            let tok = spanned.1.clone();
+            replacement.push((
+                self.use_span.l(),
+                tok.with_span(self.use_span),
+                self.use_span.r(),
+            ));
+        }
+        replacement
+    }
+
+    /// Rescan one already-substituted, already-spanned replacement (R2):
+    /// hidden names and non-macro tokens emit verbatim; a live macro name
+    /// expands in place, off this same cursor — so a nested call's
+    /// argument capture sees the substitution `substitute` already made.
+    fn walk(&mut self, stream: &[Spanned<Token>], out: &mut Vec<Spanned<Token>>) -> Result<()> {
         let mut cursor = TokenVecWrapper::new(stream).peekable();
         while let Some(next) = cursor.next() {
             let spanned = next?;
             let Token::Id(st) = &spanned.1 else {
-                self.emit(spanned, respan, out)?;
+                self.emit(spanned, out)?;
                 continue;
             };
-            if let Some(arg_tokens) = args.get(st.1.as_str()) {
-                // A parameter: already expanded, spans kept (R10).
-                for t in arg_tokens {
-                    self.emit(t.clone(), false, out)?;
-                }
-                continue;
-            }
             match self.defines.get_key_value(&st.1) {
-                None => self.emit(spanned, respan, out)?,
+                None => self.emit(spanned, out)?,
                 Some((name, _)) if self.hide.contains(&name.as_str()) => {
                     // Hidden: a plain identifier (R4).
-                    self.emit(spanned, respan, out)?;
+                    self.emit(spanned, out)?;
                 }
                 Some((_, Define::Function(_)))
                     if !matches!(cursor.peek(), Some(Ok((_, Token::LParen(_), _)))) =>
                 {
                     // Function-macro name, no `(`: a plain identifier (R2).
-                    self.emit(spanned, respan, out)?;
+                    self.emit(spanned, out)?;
                 }
                 Some((name, _)) => self.expand_named(name, &mut cursor, out)?,
             }
@@ -198,7 +251,8 @@ impl<'a> Expansion<'a> {
     /// C99 arity (R7): a zero-parameter macro's `()` is zero arguments; on
     /// one-plus parameters `()` is one empty argument. Each argument is
     /// fully expanded before substitution (R3), under the hide set in
-    /// force at the call.
+    /// force at the call — `name` itself isn't pushed onto it until after
+    /// this returns, so a same-named call inside an argument expands freely.
     fn bind_arguments(
         &mut self,
         name: &'a str,
@@ -223,19 +277,15 @@ impl<'a> Expansion<'a> {
         let mut map = HashMap::new();
         for (param, tokens) in function.args.iter().zip(raw) {
             let mut expanded = vec![];
-            self.walk(&tokens, &no_args(), false, &mut expanded)?;
+            self.walk(&tokens, &mut expanded)?;
             map.insert(param.as_str(), expanded);
         }
         Ok(map)
     }
 
-    /// Emit one token, budgeted (R5) and respanned (R10).
-    fn emit(
-        &mut self,
-        spanned: Spanned<Token>,
-        respan: bool,
-        out: &mut Vec<Spanned<Token>>,
-    ) -> Result<()> {
+    /// Emit one token, budgeted (R5). Its span is already final —
+    /// `substitute` set it once, at replacement construction (R10).
+    fn emit(&mut self, spanned: Spanned<Token>, out: &mut Vec<Spanned<Token>>) -> Result<()> {
         self.emitted += 1;
         if self.emitted > MAX_EXPANDED_TOKENS {
             return Err(lpc_error!(
@@ -245,21 +295,21 @@ impl<'a> Expansion<'a> {
                 MAX_EXPANDED_TOKENS
             ));
         }
-        if respan {
-            let (_, tok, _) = spanned;
-            out.push((
-                self.use_span.l(),
-                tok.with_span(self.use_span),
-                self.use_span.r(),
-            ));
-        } else {
-            out.push(spanned);
-        }
+        out.push(spanned);
         Ok(())
     }
 
     fn unterminated(&self, name: &str) -> lpc_rs_errors::LpcError {
         lpc_error!(Some(self.use_span), "unterminated call to macro `{}`", name)
+    }
+
+    fn too_deep(&self) -> lpc_rs_errors::LpcError {
+        lpc_error!(
+            Some(self.use_span),
+            "expansion of `{}` nests too deeply (limit {})",
+            self.top,
+            MAX_EXPANSION_DEPTH
+        )
     }
 }
 
@@ -437,6 +487,44 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_parameter_used_as_a_nested_calls_argument_is_substituted() {
+        let pp = table("#define ENV(o) environment(o)\n#define WRAP(a) ENV(a)\n").await;
+        assert_eq!(
+            expand_all(&pp, "WRAP(this_player())").unwrap(),
+            &["environment", "(", "this_player", "(", ")", ")"]
+        );
+    }
+
+    #[tokio::test]
+    async fn hide_set_does_not_cover_argument_pre_expansion() {
+        let pp = table("#define F(x) x\n").await;
+        assert_eq!(expand_all(&pp, "F(F(1))").unwrap(), &["1"]);
+    }
+
+    #[tokio::test]
+    async fn an_object_macros_body_does_not_reach_past_its_own_tokens_for_a_paren() {
+        let pp = table("#define A F\n#define F(x) x\n").await;
+        assert_eq!(expand_all(&pp, "A (1)").unwrap(), &["F", "(", "1", ")"]);
+    }
+
+    #[tokio::test]
+    async fn brackets_protect_argument_commas() {
+        let pp = table("#define F(a) a\n").await;
+        assert_eq!(
+            expand_all(&pp, "F( ([ 1, 2 ]) )").unwrap(),
+            &["(", "[", "1", ",", "2", "]", ")"]
+        );
+    }
+
+    #[tokio::test]
+    async fn deep_nesting_hits_the_depth_cap() {
+        let pp = table("#define F(x) x\n").await;
+        let src = format!("{}1{}", "F(".repeat(300), ")".repeat(300));
+        let e = expand_all(&pp, &src).unwrap_err();
+        assert!(e.message().contains("nests too deeply (limit 256)"));
+    }
+
+    #[tokio::test]
     async fn body_tokens_take_the_use_site_span() {
         let pp = table("#define FOO 42\n").await;
         let expander = Expander::new(&pp.defines);
@@ -447,13 +535,16 @@ mod tests {
         let use_span = st.0;
         let mut tokens = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
         assert_eq!(*tokens[0].1.span_ref().unwrap(), use_span);
+        assert_eq!(tokens[0].0, use_span.l());
+        assert_eq!(tokens[0].2, use_span.r());
     }
 
     #[tokio::test]
     async fn argument_tokens_keep_their_own_spans() {
         let pp = table("#define ID(x) x\n").await;
         let expander = Expander::new(&pp.defines);
-        let mut cursor = LexWrapper::new("ID(marf)").peekable();
+        let src = "ID(marf)";
+        let mut cursor = LexWrapper::new(src).peekable();
         let Some(Ok((_, Token::Id(st), _))) = cursor.next() else {
             panic!("expected an Id");
         };
@@ -462,5 +553,16 @@ mod tests {
         let got = *tokens[0].1.span_ref().unwrap();
         assert_ne!(got, use_span);
         assert_eq!(tokens[0].1.to_string(), "marf");
+
+        // Not just "not the use span" — exactly what a fresh lex of the
+        // same source gives the "marf" token.
+        let mut fresh = LexWrapper::new(src);
+        let marf_span = loop {
+            match fresh.next().unwrap().unwrap() {
+                (_, Token::Id(marf_st), _) if marf_st.1 == "marf" => break marf_st.0,
+                _ => continue,
+            }
+        };
+        assert_eq!(got, marf_span);
     }
 }
