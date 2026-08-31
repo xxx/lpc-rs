@@ -302,7 +302,7 @@ impl Compiler {
             .map(|p| (p, context))
             .map_err(|e| {
                 // lalrpop's bare-usize locations carry no file id, so the
-                // EOF arm arrives span-less; point it at the last token.
+                // EOF arm arrives span-less.
                 let last = tokens.last().map(|(_, t, _)| t.span());
                 LpcError::from(e).or_span(last)
             })

@@ -68,7 +68,7 @@ pub enum Directive {
         body: String,
         /// The trimmed body's file coordinates — the base for the body's
         /// in-place lex. For an empty body it is the (widened) point at
-        /// end of line and is never used to lex.
+        /// end of line — an empty body lexes to nothing.
         body_span: Span,
     },
     /// `#undef name`.

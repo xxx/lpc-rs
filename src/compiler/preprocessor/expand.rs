@@ -76,7 +76,9 @@ struct Expansion<'a> {
     defines: &'a HashMap<String, Define>,
     /// The top-level macro, named by the cap diagnostic.
     top: &'a str,
-    /// Every body-derived token emits with this span (R10): the use-site Id, widened through the closing `)` when the top-level capture completes (card ④ R5).
+    /// Every body-derived token emits with this span (R10): the use-site
+    /// Id, widened through the closing `)` when the top-level capture
+    /// completes (card ④ R5).
     use_span: Span,
     /// Names being expanded on the current path (R4). A stack; `contains`
     /// is the membership test — macro chains are short.
@@ -241,11 +243,10 @@ impl<'a> Expansion<'a> {
                         if self.depth == 1 {
                             // The top-level call's `)` closes the use
                             // site: widen so body-derived tokens and
-                            // engine diagnostics caret the whole call
-                            // (card ④ R5). Nested captures read
-                            // replacement tokens — already collapsed or
-                            // argument-real — and joining those could
-                            // pull the end inward.
+                            // engine diagnostics caret the whole call.
+                            // Nested captures read replacement tokens —
+                            // already collapsed or argument-real — and
+                            // joining those could pull the end inward.
                             self.use_span = Span::join(self.use_span, *rp);
                         }
                         args.push(arg);
