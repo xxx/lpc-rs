@@ -496,7 +496,8 @@ impl Preprocessor {
             match preprocessor_parser::ExpressionParser::new().parse(LexWrapper::new(&captures[1]))
             {
                 Ok(expr) => {
-                    let printing_lines = self.eval_expr_for_skipping(&expr, Some(token.0))?;
+                    let printing_lines =
+                        self.eval_expr_for_skipping(&expr, Some(token.0), &mut Vec::new())?;
 
                     self.ifdefs.push(IfDef {
                         // code: String::from(&captures[1]),
@@ -519,18 +520,37 @@ impl Preprocessor {
     /// Determine if a particular node will enable line skipping or not.
     /// Returns `true` if we should print lines, and `false` if they should be
     /// skipped.
-    #[instrument(skip(self, expr))]
-    fn eval_expr_for_skipping(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<bool> {
+    ///
+    /// `hide` tracks the names currently being resolved, so a name that
+    /// refers back to itself (directly or mutually) resolves as undefined
+    /// rather than recursing forever.
+    #[instrument(skip(self, expr, hide))]
+    fn eval_expr_for_skipping<'a>(
+        &'a self,
+        expr: &'a PreprocessorNode,
+        span: Option<Span>,
+        hide: &mut Vec<&'a str>,
+    ) -> Result<bool> {
         match expr {
-            PreprocessorNode::Var(x) => match self.defines.get(x) {
-                Some(Define::Object(ObjectMacro {
-                    expr: Some(expr), ..
-                })) => Ok(self.resolve_int(expr, span)? != 0),
-                Some(Define::Object(ObjectMacro { expr: None, .. })) => {
-                    Err(Self::not_an_expression(x, span))
+            PreprocessorNode::Var(x) => {
+                if hide.contains(&x.as_str()) {
+                    return Ok(false); // hidden behaves as undefined (R8)
                 }
-                _ => Ok(false),
-            },
+                match self.defines.get(x) {
+                    Some(Define::Object(ObjectMacro {
+                        expr: Some(expr), ..
+                    })) => {
+                        hide.push(x);
+                        let result = self.eval_expr_for_skipping(expr, span, hide);
+                        hide.pop();
+                        result
+                    }
+                    Some(Define::Object(ObjectMacro { expr: None, .. })) => {
+                        Err(Self::not_an_expression(x, span))
+                    }
+                    _ => Ok(false),
+                }
+            }
             PreprocessorNode::Int(i) => Ok(i != &0),
             PreprocessorNode::String(_) => Ok(true),
             PreprocessorNode::Defined(x, negated) => {
@@ -542,31 +562,55 @@ impl Preprocessor {
                 })
             }
             PreprocessorNode::BinaryOp(op, l, r) => match op {
-                BinaryOperation::Add => {
-                    Ok(self.resolve_int(l, span)? + self.resolve_int(r, span)? != 0)
-                }
-                BinaryOperation::Sub => {
-                    Ok(self.resolve_int(l, span)? - self.resolve_int(r, span)? != 0)
-                }
-                BinaryOperation::AndAnd => Ok(self.eval_expr_for_skipping(l, span)?
-                    && self.eval_expr_for_skipping(r, span)?),
-                BinaryOperation::OrOr => Ok(self.eval_expr_for_skipping(l, span)?
-                    || self.eval_expr_for_skipping(r, span)?),
-                _ => unimplemented!(),
+                BinaryOperation::Add => Ok(self
+                    .resolve_int(l, span, hide)?
+                    .wrapping_add(self.resolve_int(r, span, hide)?)
+                    != 0),
+                BinaryOperation::Sub => Ok(self
+                    .resolve_int(l, span, hide)?
+                    .wrapping_sub(self.resolve_int(r, span, hide)?)
+                    != 0),
+                BinaryOperation::AndAnd => Ok(self.eval_expr_for_skipping(l, span, hide)?
+                    && self.eval_expr_for_skipping(r, span, hide)?),
+                BinaryOperation::OrOr => Ok(self.eval_expr_for_skipping(l, span, hide)?
+                    || self.eval_expr_for_skipping(r, span, hide)?),
+                op => Err(lpc_error!(
+                    span,
+                    "unknown binary operation `{}` in expression `{}`",
+                    op,
+                    expr
+                )),
             },
         }
     }
 
     /// Resolve a [`PreprocessorNode`] to an Int if possible.
-    #[instrument(skip(self, expr))]
-    fn resolve_int(&self, expr: &PreprocessorNode, span: Option<Span>) -> Result<LpcIntInner> {
+    ///
+    /// `hide` tracks the names currently being resolved, so a name that
+    /// refers back to itself (directly or mutually) errors instead of
+    /// recursing forever.
+    #[instrument(skip(self, expr, hide))]
+    fn resolve_int<'a>(
+        &'a self,
+        expr: &'a PreprocessorNode,
+        span: Option<Span>,
+        hide: &mut Vec<&'a str>,
+    ) -> Result<LpcIntInner> {
         match expr {
             PreprocessorNode::Var(x) => {
+                if hide.contains(&x.as_str()) {
+                    return Err(lpc_error!(span, "unable to resolve into an int: `{}`", x));
+                }
                 if let Some(val) = self.defines.get(x) {
                     match val {
                         Define::Object(ObjectMacro {
                             expr: Some(expr), ..
-                        }) => self.resolve_int(expr, span),
+                        }) => {
+                            hide.push(x);
+                            let result = self.resolve_int(expr, span, hide);
+                            hide.pop();
+                            result
+                        }
                         Define::Object(ObjectMacro { expr: None, .. }) => {
                             Err(Self::not_an_expression(x, span))
                         }
@@ -577,13 +621,16 @@ impl Preprocessor {
                 }
             }
             PreprocessorNode::Int(i) => Ok(*i),
+            PreprocessorNode::Defined(x, negated) => {
+                Ok((self.defines.contains_key(x) != *negated) as LpcIntInner)
+            }
             PreprocessorNode::BinaryOp(op, l, r) => {
-                let li = self.resolve_int(l, span)?;
-                let ri = self.resolve_int(r, span)?;
+                let li = self.resolve_int(l, span, hide)?;
+                let ri = self.resolve_int(r, span, hide)?;
 
                 match op {
-                    BinaryOperation::Add => Ok(li + ri),
-                    BinaryOperation::Sub => Ok(li - ri),
+                    BinaryOperation::Add => Ok(li.wrapping_add(ri)),
+                    BinaryOperation::Sub => Ok(li.wrapping_sub(ri)),
                     BinaryOperation::AndAnd => Ok(((li != 0) && (ri != 0)) as LpcIntInner),
                     BinaryOperation::OrOr => Ok(((li != 0) || (ri != 0)) as LpcIntInner),
 
@@ -1835,6 +1882,102 @@ mod tests {
             "## };
 
             test_valid(prog, &[]).await
+        }
+
+        #[tokio::test]
+        async fn test_self_referential_if_is_false() {
+            let prog = indoc! { r##"
+                #define A A
+                #if A
+                "yes"
+                #else
+                "no"
+                #endif
+            "## };
+
+            test_valid(prog, &["no"]).await;
+        }
+
+        #[tokio::test]
+        async fn test_string_bodied_define_is_truthy() {
+            let prog = indoc! { r##"
+                #define A "str"
+                #if A
+                "yes"
+                #else
+                "no"
+                #endif
+            "## };
+
+            test_valid(prog, &["yes"]).await;
+        }
+
+        #[tokio::test]
+        async fn test_mutually_recursive_if_is_false() {
+            let prog = indoc! { r##"
+                #define A B
+                #define B A
+                #if A
+                "yes"
+                #else
+                "no"
+                #endif
+            "## };
+
+            test_valid(prog, &["no"]).await;
+        }
+
+        #[tokio::test]
+        async fn test_self_referential_arithmetic_errors() {
+            let prog = indoc! { r##"
+                #define A A
+                #if A + 0
+                #endif
+            "## };
+
+            test_invalid(prog, "unable to resolve into an int").await;
+        }
+
+        #[tokio::test]
+        async fn test_defined_is_an_integer() {
+            let prog = indoc! { r##"
+                #define A 1
+                #if defined(A) + defined(B)
+                "one"
+                #endif
+                #if defined(B) + defined(C)
+                "zero"
+                #else
+                "none"
+                #endif
+            "## };
+
+            test_valid(prog, &["one", "none"]).await;
+        }
+
+        #[tokio::test]
+        async fn test_if_arithmetic_wraps() {
+            let prog = indoc! { r##"
+                #if 9223372036854775807 + 1
+                "wrapped"
+                #endif
+            "## };
+
+            test_valid(prog, &["wrapped"]).await;
+        }
+
+        #[test]
+        fn test_unknown_operation_is_an_error_not_a_panic() {
+            let preprocessor = fixture();
+            let node = PreprocessorNode::BinaryOp(
+                BinaryOperation::Mul,
+                Box::new(PreprocessorNode::Int(1)),
+                Box::new(PreprocessorNode::Int(2)),
+            );
+            let e = preprocessor
+                .eval_expr_for_skipping(&node, None, &mut Vec::new())
+                .unwrap_err();
+            assert_regex!(e.message(), "unknown binary operation");
         }
     }
 
