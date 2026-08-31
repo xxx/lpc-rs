@@ -331,7 +331,7 @@ pub struct TempLib(std::path::PathBuf);
 impl TempLib {
     pub fn new(name: &str) -> Self {
         // The counter keeps two tests that share a name from racing on
-        // one directory when the suite runs them in parallel.
+        // one directory.
         static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!("lpc-rs-{name}-{}-{n}", std::process::id()));
