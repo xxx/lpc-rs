@@ -91,7 +91,7 @@ impl Conditionals {
         frame.else_seen = Some(span);
         if frame.parent_live {
             // `!branch_live` would wrongly take the else after a taken
-            // `#elif` — the chain question is "was anything taken?".
+            // `#elif`.
             frame.branch_live = !frame.taken_any;
             frame.taken_any = true;
         }

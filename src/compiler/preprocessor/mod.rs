@@ -270,9 +270,9 @@ impl Preprocessor {
 
         if !self.conditionals.live() {
             // Dead regions know directive names, never operands.
-            // `#else`/`#endif` have no operands, and `#elif` stores its
-            // operand raw — all three parse without reading one, so the
-            // shared handlers run dead or live (card ③ R3; elif-bundle R4).
+            // `#else`/`#endif` have no operands and `#elif` stores its
+            // raw, so the shared handlers parse dead or live (card ③ R3;
+            // elif-bundle R4).
             match directive::classify(&token.1) {
                 DirectiveKind::If | DirectiveKind::IfDef | DirectiveKind::IfNDef => {
                     self.conditionals.enter(token.0, false);
@@ -1679,8 +1679,7 @@ mod tests {
 
         #[tokio::test]
         async fn a_live_orphan_elif_is_an_error() {
-            // `#elif` classifies and parses like any other directive; an
-            // orphan one is an error, live.
+            // An orphan `#elif` is an error even in live text.
             test_invalid(
                 "#elif 1\n",
                 "found `#elif` without a corresponding `#if` or `#ifdef`",
@@ -2151,8 +2150,8 @@ mod tests {
 
         #[tokio::test]
         async fn logical_operators_in_int_position_are_eager() {
-            // Only the bool level short-circuits (elif-bundle R7); inside
-            // arithmetic, `&&` resolves both sides — a C divergence.
+            // Only the bool level short-circuits (elif-bundle R7) —
+            // int-position `&&` is eager, a C divergence.
             test_invalid("#if (0 && 1 / 0) + 1\n#endif\n", "Division by zero").await;
             test_valid("#if (0 && 9) + 1\n\"t\";\n#endif\n", &["t", ";"]).await;
         }
