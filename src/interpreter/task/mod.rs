@@ -76,9 +76,8 @@ struct CatchPoint {
     register: RegisterVariant,
 }
 
-/// One entry argument of a [`TaskSeed`]: a value passed as-is, or a mapping
-/// minted fresh into each attempt's transaction — a cell minted before the
-/// task begins is discarded when the attempt opens its own transaction.
+/// One entry argument of a [`TaskSeed`] — a cell minted before the task
+/// begins is discarded when the attempt opens its own transaction.
 #[derive(Debug, Clone)]
 pub enum SeedArg {
     /// A value pushed as-is.

@@ -4,8 +4,8 @@ private string long_desc;
 nomask public void create() {
     short_desc = "A room";
     long_desc = "A room.\n";
-    // Not a plain call: unqualified calls run the base's own copy
-    // (static dispatch); call_other reaches the override.
+    // Unqualified calls run the base's own copy; call_other reaches
+    // the override.
     this_object()->create_room();
 }
 

@@ -186,8 +186,8 @@ pub async fn apply_runtime_error(
         LpcString::from(s).into(),
     );
 
-    // Minted per attempt via the seed — a cell minted into `ctx`'s
-    // transaction here is discarded when the task opens its own.
+    // A cell minted into `ctx`'s transaction here is discarded when the
+    // task opens its own.
     let args = vec![SeedArg::FreshMapping(LpcMapping::new(mapping))];
     // TODO wire the timeout up to config
     Some(apply_function_seeded(error_handler, args, ctx, Some(300)).await)
