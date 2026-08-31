@@ -100,7 +100,7 @@ impl IncludeWalk {
         config: &Config,
     ) -> Result<Option<Opened>> {
         let lib_dir = config.lib_dir.as_str();
-        let path = self.resolve(source, config);
+        let path = self.resolve(source, config).await;
         let canon = path.as_server(lib_dir).into_owned();
 
         if !path.is_within_root(lib_dir) {
@@ -130,7 +130,11 @@ impl IncludeWalk {
         let (file_id, content) = match self.memo.get(&canon) {
             Some((file_id, content)) => (*file_id, content.clone()),
             None => {
-                if canon.is_dir() {
+                let is_dir = tokio::fs::metadata(&canon)
+                    .await
+                    .map(|m| m.is_dir())
+                    .unwrap_or(false);
+                if is_dir {
                     return Err(lpc_error!(
                         span,
                         "attempt to include a directory: `{}` (expanded to `{}`) (lib_dir: `{}`)",
@@ -184,20 +188,24 @@ impl IncludeWalk {
 
     /// Turn a directive's path into an [`LpcPath`], relative to the
     /// including file — the active frame.
-    fn resolve(&self, source: IncludeSource<'_>, config: &Config) -> LpcPath {
+    async fn resolve(&self, source: IncludeSource<'_>, config: &Config) -> LpcPath {
         match source {
             IncludeSource::Configured(path) => path.clone(),
             IncludeSource::Local { path } => {
                 LpcPath::new_in_game(path, self.cwd(config), &*config.lib_dir)
             }
             IncludeSource::System { path } => {
-                let found = config.system_include_dirs.iter().find_map(|dir| {
+                let mut found = None;
+                for dir in &config.system_include_dirs {
                     let candidate = LpcPath::new_in_game(path, dir.as_str(), &*config.lib_dir);
-                    candidate
-                        .as_server(&*config.lib_dir)
-                        .exists()
-                        .then_some(candidate)
-                });
+                    let exists = tokio::fs::metadata(candidate.as_server(&*config.lib_dir))
+                        .await
+                        .is_ok();
+                    if exists {
+                        found = Some(candidate);
+                        break;
+                    }
+                }
                 found.unwrap_or_else(|| {
                     LpcPath::new_in_game(path, self.cwd(config), &*config.lib_dir)
                 })
@@ -368,5 +376,28 @@ mod tests {
         // The root frame counts: 63 nested opens fill the cap.
         assert_eq!(opened, MAX_INCLUDE_DEPTH - 1);
         assert_eq!(err.to_string(), "`#include` nests too deeply");
+    }
+
+    #[tokio::test]
+    async fn open_close_balances_the_stack() {
+        let root = temp_lib("balance");
+        std::fs::write(root.join("a.h"), "1\n").unwrap();
+        let config = config_at(&root);
+        let mut walk = rooted(&config);
+        assert_eq!(walk.stack.len(), 1, "open_root leaves the root frame");
+
+        walk.open(IncludeSource::Local { path: "a.h" }, None, &config)
+            .await
+            .unwrap();
+        assert_eq!(walk.stack.len(), 2, "open pushes the included frame");
+
+        walk.close();
+        assert_eq!(walk.stack.len(), 1, "close pops back to the root frame");
+
+        walk.close();
+        assert!(
+            walk.stack.is_empty(),
+            "closing the root frame empties the stack"
+        );
     }
 }
