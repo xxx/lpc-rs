@@ -49,10 +49,6 @@ impl<'input> LexWrapper<'input> {
         );
         Self { lexer }
     }
-
-    pub fn set_file_id(&mut self, id: FileId) {
-        self.lexer.extras.current_file_id = id;
-    }
 }
 
 impl Debug for LexWrapper<'_> {
@@ -732,6 +728,15 @@ mod tests {
             panic!("expected a string literal");
         };
         assert_eq!(st.0, Span::new(0, 0..5));
+    }
+
+    #[test]
+    fn a_directive_line_span_excludes_its_trailing_newline() {
+        let vec = lex_vec("#define FOO 1\n");
+        let Ok((_, Token::DirectiveLine(st), _)) = &vec[0] else {
+            panic!("expected a directive line");
+        };
+        assert_eq!(st.0, Span::new(0, 0..13));
     }
 
     #[test]
