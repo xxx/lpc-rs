@@ -155,7 +155,7 @@ impl Preprocessor {
             if auto_include_path != lpc_path {
                 // On error, this `?` skips the `close()` below, leaving the
                 // root frame on the stack — inert, since this walk is
-                // per-compile and never reused.
+                // per-compile.
                 self.scan_include(
                     IncludeSource::Configured(&auto_include_path),
                     None,
@@ -608,8 +608,7 @@ mod tests {
     use crate::{assert_regex, compiler::compilation_context::CompilationContextBuilder};
 
     /// A uniquely named scratch directory (test name + pid) for a
-    /// filesystem-backed fixture; removed on drop, panic included, so
-    /// parallel tests stay isolated and nothing leaks.
+    /// filesystem-backed fixture; removed on drop, panic included.
     struct TempLib(std::path::PathBuf);
 
     impl TempLib {
@@ -2073,9 +2072,7 @@ mod tests {
         async fn a_nested_calls_argument_token_keeps_its_own_span() {
             // ID(9) is F's argument: 9 is spliced as an ARGUMENT token,
             // so it keeps its own source span — not F(ID(9))'s widened
-            // use-span. R5's depth==1 guard widens use_span internally
-            // as the outer capture completes, but only a literal BODY
-            // token (`substitute`'s non-param arm) is ever respanned to it.
+            // use-span.
             let prog = "#define ID(x) x\n#define F(x) x\nint a = F(ID(9));\n";
             let mut preprocessor = fixture();
             let tokens = preprocessor.scan("/test.c", prog).await.unwrap();
@@ -2227,7 +2224,7 @@ mod tests {
     async fn a_dead_macro_call_never_hits_the_expansion_depth_cap() {
         // Live, this shape trips `expand.rs`'s `deep_nesting_hits_the_depth_cap`
         // (limit 256). Dead, `Token::Id` is dropped without touching the
-        // engine, so it never runs at all.
+        // engine.
         let src = format!(
             "#define F(x) x\n#if 0\n{}1{}\n#endif\n\"ok\";\n",
             "F(".repeat(300),
@@ -2406,8 +2403,7 @@ mod tests {
     #[tokio::test]
     async fn a_dead_multi_line_call_directive_is_text() {
         // Dead regions never expand, so per-token anchors judge the `#`
-        // mid-line: text. X stays undefined — the dead mid-line `#define`
-        // was text — so `X;` emits the raw Id.
+        // mid-line: text. X stays undefined, so `X;` emits the raw Id.
         let prog = "#define F(a, b) a\n#if 0\nF(1,\n2) #define X 1\n#endif\nX;\n";
         test_valid(prog, &["X", ";"]).await;
     }
