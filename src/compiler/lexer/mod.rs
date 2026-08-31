@@ -723,7 +723,6 @@ mod tests {
     fn a_fragment_is_born_in_file_coordinates() {
         let mut lexer = LexWrapper::new_at("x + 1", 4, 100);
         let tok = lexer.next().unwrap().unwrap();
-        assert_eq!((tok.span().l(), tok.span().r()), (100, 101));
         assert_eq!(tok.span(), Span::new(4, 100..101));
 
         let error = LexWrapper::new_at("`", 4, 100)

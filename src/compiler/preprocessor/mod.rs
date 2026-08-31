@@ -207,8 +207,8 @@ impl Preprocessor {
                                 match appends {
                                     Some(mut expanded) => {
                                         output.append(&mut expanded.tokens);
-                                        // The capture consumed source
-                                        // through the top-level `)` (R4).
+                                        // Anchor placement past the whole use — the Id, or
+                                        // through the top-level `)` the capture consumed (R4).
                                         end = expanded.use_span.r();
                                     }
                                     None => self.append(&mut output, token),
@@ -1105,8 +1105,8 @@ mod tests {
 
         #[tokio::test]
         async fn consecutive_directive_lines_are_each_well_placed() {
-            // The first grab consumes its trailing newline; the placement
-            // check must credit it (spec R2, third clause).
+            // The first grab's consumed newline sits in the gap, where the
+            // placement check sees it.
             let prog = indoc! { r#"
                 #define A 1
                 #define B 2

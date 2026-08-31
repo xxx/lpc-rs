@@ -575,8 +575,6 @@ mod tests {
         let use_span = st.0;
         let mut expanded = expander.expand_use(&st, &mut cursor).unwrap().unwrap();
         assert_eq!(*expanded.tokens[0].span_ref().unwrap(), use_span);
-        assert_eq!(expanded.tokens[0].span().l(), use_span.l());
-        assert_eq!(expanded.tokens[0].span().r(), use_span.r());
     }
 
     #[tokio::test]
