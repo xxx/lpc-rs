@@ -330,10 +330,9 @@ mod tests {
         async fn a_diagnostic_renders_the_compiled_text_not_todays_disk_content() {
             use lpc_rs_utils::config::ConfigBuilder;
 
-            let root =
-                std::env::temp_dir().join(format!("lpc-rs-stale-render-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&root);
-            std::fs::create_dir_all(&root).unwrap();
+            use crate::test_support::TempLib;
+
+            let root = TempLib::new("stale-render");
             std::fs::write(root.join("stale.c"), "int x = ;\n").unwrap();
 
             let config: Arc<Config> = ConfigBuilder::default()
@@ -346,7 +345,6 @@ mod tests {
 
             std::fs::write(root.join("stale.c"), "// rewritten since the compile\n").unwrap();
             let rendered = e.diagnostic_string();
-            let _ = std::fs::remove_dir_all(&root);
 
             assert!(rendered.contains("int x = ;"), "{rendered}");
             assert!(!rendered.contains("rewritten"), "{rendered}");
@@ -587,7 +585,7 @@ mod tests {
                 ast_node::{AstNode, SpannedNode},
                 expression_node::ExpressionNode,
             },
-            test_support::test_config,
+            test_support::{TempLib, test_config},
         };
 
         #[tokio::test]
@@ -604,10 +602,7 @@ mod tests {
 
         #[tokio::test]
         async fn a_cross_file_expression_span_stays_in_the_including_file() {
-            let root =
-                std::env::temp_dir().join(format!("lpc-rs-cross-file-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&root);
-            std::fs::create_dir_all(&root).unwrap();
+            let root = TempLib::new("cross-file");
             std::fs::write(root.join("two.h"), "2\n").unwrap();
 
             let config: Arc<Config> = ConfigBuilder::default()

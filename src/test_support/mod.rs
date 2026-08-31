@@ -324,6 +324,37 @@ impl CompileThrough for CodegenWalker {
     }
 }
 
+/// A uniquely named scratch directory (test name + pid + counter) for a
+/// filesystem-backed fixture; removed on drop, panic included.
+pub struct TempLib(std::path::PathBuf);
+
+impl TempLib {
+    pub fn new(name: &str) -> Self {
+        // The counter keeps two tests that share a name from racing on
+        // one directory when the suite runs them in parallel.
+        static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!("lpc-rs-{name}-{}-{n}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        Self(root)
+    }
+}
+
+impl std::ops::Deref for TempLib {
+    type Target = std::path::Path;
+
+    fn deref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for TempLib {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 #[cfg(test)]
 mod compile_through_tests {
     use super::*;
