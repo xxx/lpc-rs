@@ -8,7 +8,10 @@
 //! as whitespace (C strips them before directive parsing); `defined` and
 //! `not` mean something only inside a `#if` operand.
 
-use lpc_rs_errors::{LpcError, Result, lpc_error, span::Span};
+use lpc_rs_errors::{
+    LpcError, Result, lpc_error,
+    span::{HasSpan, Span},
+};
 
 use crate::compiler::{
     ast::binary_op_node::BinaryOperation,
@@ -63,6 +66,10 @@ pub enum Directive {
         params: Option<Vec<String>>,
         /// The raw body text (the preprocessor re-lexes it).
         body: String,
+        /// The trimmed body's file coordinates — the base for the body's
+        /// in-place lex. For an empty body it is the (widened) point at
+        /// end of line and is never used to lex.
+        body_span: Span,
     },
     /// `#undef name`.
     Undef {
@@ -293,11 +300,15 @@ impl<'a> Cursor<'a> {
         } else {
             None
         };
-        let body = self.text[self.pos..].trim();
+        let rest = &self.text[self.pos..];
+        let body = rest.trim();
+        let start = self.pos + (rest.len() - rest.trim_start().len());
+        let body_span = self.sub_span(start, start + body.len());
         Ok(Directive::Define {
             name: name.to_owned(),
             params,
             body: body.to_owned(),
+            body_span,
         })
     }
 
@@ -443,27 +454,17 @@ pub fn parse(line: &str, span: Span) -> Result<Directive> {
 /// are recognized contextually. `base` locates `text` in its file, so
 /// diagnostics carry real source spans.
 pub fn parse_if_expression(text: &str, base: Span) -> Result<PreprocessorNode> {
-    let tokens = LexWrapper::new(text, base.file_id())
-        .collect::<Result<Vec<_>>>()
-        .map_err(|e| {
-            // The fragment's spans are meaningless; shift them into the file.
-            let remapped = e
-                .span()
-                .map(|s| Span::new(base.file_id(), base.l() + s.l()..base.l() + s.r()))
-                .or(Some(base));
-            e.with_span(remapped)
-        })?;
+    let tokens = LexWrapper::new_at(text, base.file_id(), base.l()).collect::<Result<Vec<_>>>()?;
     if tokens.is_empty() {
         return Err(lpc_error!(Some(base), "expected an expression after `#if`"));
     }
-    let mut parser = ExprParser {
-        tokens,
-        pos: 0,
-        base,
-    };
+    let mut parser = ExprParser { tokens, pos: 0 };
     let expr = parser.or_expr()?;
-    if let Some((l, _, r)) = parser.tokens.get(parser.pos) {
-        return Err(parser.err(*l, *r, "unexpected tokens after `#if` expression"));
+    if let Some((_, t, _)) = parser.tokens.get(parser.pos) {
+        return Err(ExprParser::err_at(
+            t.span(),
+            "unexpected tokens after `#if` expression",
+        ));
     }
     Ok(expr)
 }
@@ -473,21 +474,20 @@ pub fn parse_if_expression(text: &str, base: Span) -> Result<PreprocessorNode> {
 struct ExprParser {
     tokens: Vec<Spanned<Token>>,
     pos: usize,
-    base: Span,
 }
 
 impl ExprParser {
-    fn err(&self, lo: usize, hi: usize, msg: &str) -> LpcError {
-        let span = Span::new(
-            self.base.file_id(),
-            self.base.l() + lo..self.base.l() + hi.max(lo + 1),
-        );
+    fn err_at(span: Span, msg: &str) -> LpcError {
         lpc_error!(Some(span), "{msg}")
     }
 
     fn end_err(&self) -> LpcError {
-        let end = self.tokens.last().map(|&(_, _, r)| r).unwrap_or(0);
-        self.err(end, end + 1, "unexpected end of `#if` expression")
+        let span = self
+            .tokens
+            .last()
+            .map(|(_, t, _)| t.span())
+            .expect("parse_if_expression rejects an empty operand");
+        Self::err_at(span, "unexpected end of `#if` expression")
     }
 
     fn next(&mut self) -> Option<Spanned<Token>> {
@@ -545,18 +545,18 @@ impl ExprParser {
     }
 
     fn primary(&mut self) -> Result<PreprocessorNode> {
-        let Some((l, token, r)) = self.next() else {
+        let Some((_, token, _)) = self.next() else {
             return Err(self.end_err());
         };
         match token {
             Token::IntLiteral(t) => Ok(PreprocessorNode::Int(t.1)),
             Token::StringLiteral(t) => Ok(PreprocessorNode::String(t.1)),
-            Token::LParen(_) => {
+            Token::LParen(sp) => {
                 let inner = self.or_expr()?;
                 if self.eat(|t| matches!(t, Token::RParen(_))) {
                     Ok(inner)
                 } else {
-                    Err(self.err(l, r, "unmatched `(` in `#if` expression"))
+                    Err(Self::err_at(sp, "unmatched `(` in `#if` expression"))
                 }
             }
             Token::Id(t) if t.1 == "not" && self.is_defined_call_ahead() => {
@@ -567,7 +567,10 @@ impl ExprParser {
                 self.defined_call(false)
             }
             Token::Id(t) => Ok(PreprocessorNode::Var(t.1)),
-            _ => Err(self.err(l, r, "unexpected token in `#if` expression")),
+            other => Err(Self::err_at(
+                other.span(),
+                "unexpected token in `#if` expression",
+            )),
         }
     }
 
@@ -580,13 +583,19 @@ impl ExprParser {
 
     /// `( name )` after a `defined`. The caller peeked the `(`.
     fn defined_call(&mut self, negated: bool) -> Result<PreprocessorNode> {
-        let (l, _, r) = self.next().expect("caller peeked the `(`");
+        let (_, lparen, _) = self.next().expect("caller peeked the `(`");
         match self.next() {
             Some((_, Token::Id(t), _)) => match self.next() {
                 Some((_, Token::RParen(_), _)) => Ok(PreprocessorNode::Defined(t.1, negated)),
-                _ => Err(self.err(l, r, "unmatched `(` in `#if` expression")),
+                _ => Err(Self::err_at(
+                    lparen.span(),
+                    "unmatched `(` in `#if` expression",
+                )),
             },
-            Some((nl, _, nr)) => Err(self.err(nl, nr, "unexpected token in `#if` expression")),
+            Some((_, other, _)) => Err(Self::err_at(
+                other.span(),
+                "unexpected token in `#if` expression",
+            )),
             None => Err(self.end_err()),
         }
     }
@@ -676,32 +685,56 @@ mod tests {
     }
 
     #[test]
+    fn a_define_body_span_locates_the_body() {
+        let line = "#define ADD(a, b)   a + b";
+        let Directive::Define {
+            body, body_span, ..
+        } = p(line).unwrap()
+        else {
+            panic!("expected a define");
+        };
+        assert_eq!(body, "a + b");
+        assert_eq!(&line[body_span.l()..body_span.r()], "a + b");
+    }
+
+    #[test]
     fn define_object_macros() {
-        assert_eq!(
-            p("#define FOO 1 + 2").unwrap(),
-            Directive::Define {
-                name: "FOO".into(),
-                params: None,
-                body: "1 + 2".into()
-            }
-        );
-        assert_eq!(
-            p("#define FOO").unwrap(),
-            Directive::Define {
-                name: "FOO".into(),
-                params: None,
-                body: String::new()
-            }
-        );
+        let line = "#define FOO 1 + 2";
+        let Directive::Define {
+            name,
+            params,
+            body,
+            body_span,
+        } = p(line).unwrap()
+        else {
+            panic!("expected a define");
+        };
+        assert_eq!(name, "FOO");
+        assert_eq!(params, None);
+        assert_eq!(body, "1 + 2");
+        assert_eq!(&line[body_span.l()..body_span.r()], "1 + 2");
+
+        let Directive::Define { body, .. } = p("#define FOO").unwrap() else {
+            panic!("expected a define");
+        };
+        assert!(body.is_empty());
+
         // C99's space rule: `(` not flush against the name = object macro.
-        assert_eq!(
-            p("#define F (x)").unwrap(),
-            Directive::Define {
-                name: "F".into(),
-                params: None,
-                body: "(x)".into()
-            }
-        );
+        let line = "#define F (x)";
+        let Directive::Define {
+            name,
+            params,
+            body,
+            body_span,
+        } = p(line).unwrap()
+        else {
+            panic!("expected a define");
+        };
+        assert_eq!(name, "F");
+        assert_eq!(params, None);
+        assert_eq!(body, "(x)");
+        assert_eq!(&line[body_span.l()..body_span.r()], "(x)");
+
         assert_eq!(perr("#define"), "expected an identifier after `#define`");
         assert_eq!(
             perr("#define 123"),
@@ -711,22 +744,36 @@ mod tests {
 
     #[test]
     fn define_function_macros() {
-        assert_eq!(
-            p("#define F(a, b) a + b").unwrap(),
-            Directive::Define {
-                name: "F".into(),
-                params: Some(vec!["a".into(), "b".into()]),
-                body: "a + b".into()
-            }
-        );
-        assert_eq!(
-            p("#define F() body").unwrap(),
-            Directive::Define {
-                name: "F".into(),
-                params: Some(vec![]),
-                body: "body".into()
-            }
-        );
+        let line = "#define F(a, b) a + b";
+        let Directive::Define {
+            name,
+            params,
+            body,
+            body_span,
+        } = p(line).unwrap()
+        else {
+            panic!("expected a define");
+        };
+        assert_eq!(name, "F");
+        assert_eq!(params, Some(vec!["a".into(), "b".into()]));
+        assert_eq!(body, "a + b");
+        assert_eq!(&line[body_span.l()..body_span.r()], "a + b");
+
+        let line = "#define F() body";
+        let Directive::Define {
+            name,
+            params,
+            body,
+            body_span,
+        } = p(line).unwrap()
+        else {
+            panic!("expected a define");
+        };
+        assert_eq!(name, "F");
+        assert_eq!(params, Some(vec![]));
+        assert_eq!(body, "body");
+        assert_eq!(&line[body_span.l()..body_span.r()], "body");
+
         assert_eq!(
             perr("#define F(1, 2) x"),
             "macro parameters must be identifiers"
@@ -822,14 +869,10 @@ mod tests {
             "unterminated comment in a preprocessor directive"
         );
         // A define BODY is the re-lex's domain; the grammar accepts it raw.
-        assert_eq!(
-            p("#define X /* open").unwrap(),
-            Directive::Define {
-                name: "X".into(),
-                params: None,
-                body: "/* open".into()
-            }
-        );
+        let Directive::Define { body, .. } = p("#define X /* open").unwrap() else {
+            panic!("expected a define");
+        };
+        assert_eq!(body, "/* open");
     }
 
     #[test]

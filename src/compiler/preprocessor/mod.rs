@@ -7,7 +7,11 @@ use lpc_rs_core::{
     lpc_path::LpcPath,
     pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
 };
-use lpc_rs_errors::{LpcError, Result, lpc_error, source_map::SOURCE_MAP, span::Span};
+use lpc_rs_errors::{
+    LpcError, Result, lpc_error,
+    source_map::SOURCE_MAP,
+    span::{HasSpan, Span},
+};
 use lpc_rs_utils::read_lpc_file;
 use tracing::{instrument, trace};
 
@@ -286,9 +290,12 @@ impl Preprocessor {
                         .await
                 }
             }
-            Directive::Define { name, params, body } => {
-                self.handle_define(token.0, name, params, body)
-            }
+            Directive::Define {
+                name,
+                params,
+                body,
+                body_span,
+            } => self.handle_define(token.0, name, params, body, body_span),
             Directive::Undef { name } => {
                 self.defines.remove(&name);
                 Ok(())
@@ -325,6 +332,7 @@ impl Preprocessor {
         name: String,
         params: Option<Vec<String>>,
         body: String,
+        body_span: Span,
     ) -> Result<()> {
         if self.defines.contains_key(&name) {
             return Err(
@@ -332,26 +340,22 @@ impl Preprocessor {
             );
         }
 
-        // Lex the body once, re-spanned to the whole #define line. A
-        // directive line inside a body has no legal reading (R6 — LPC
-        // has no `#` operator).
+        // Lex the body in place — tokens are born with their true
+        // definition-site spans (card ④ R3). A directive line inside a
+        // body has no legal reading (R6 — LPC has no `#` operator).
         let lex_body = |body: &str| -> Result<Vec<Spanned<Token>>> {
-            let tokens = LexWrapper::new(body, span.file_id())
-                .collect::<Result<Vec<_>>>()
-                .map_err(|e| e.with_span(Some(span)))?;
-            if tokens
+            let tokens = LexWrapper::new_at(body, body_span.file_id(), body_span.l())
+                .collect::<Result<Vec<_>>>()?;
+            if let Some((_, t, _)) = tokens
                 .iter()
-                .any(|(_, t, _)| matches!(t, Token::DirectiveLine(_)))
+                .find(|(_, t, _)| matches!(t, Token::DirectiveLine(_)))
             {
                 return Err(lpc_error!(
-                    Some(span),
+                    Some(t.span()),
                     "a preprocessor directive cannot appear in a macro body",
                 ));
             }
-            Ok(tokens
-                .into_iter()
-                .map(|(_, t, _)| (span.l(), t.with_span(span), span.r()))
-                .collect())
+            Ok(tokens)
         };
 
         let define = if let Some(args) = params {
@@ -364,7 +368,7 @@ impl Preprocessor {
             let tokens = lex_body(&body)?;
             // A body that is not an expression is still fine to
             // substitute; only an `#if` over it is an error.
-            let expr = directive::parse_if_expression(&body, span).ok();
+            let expr = directive::parse_if_expression(&body, body_span).ok();
             Define::new_object(tokens, expr)
         };
 
@@ -1613,6 +1617,34 @@ mod tests {
                 .unwrap_err();
             assert_eq!(e.to_string(), "Lex Error: Invalid Token ```");
             assert_eq!(e.span().and_then(|s| s.code()).as_deref(), Some("`"));
+        }
+
+        #[tokio::test]
+        async fn a_define_body_lex_error_carets_the_byte() {
+            let mut preprocessor = fixture();
+            let e = preprocessor
+                .scan("/def_lex_error.c", "#define FOO 666 ` 54\n")
+                .await
+                .unwrap_err();
+            assert_eq!(e.to_string(), "Lex Error: Invalid Token ```");
+            assert_eq!(e.span().and_then(|s| s.code()).as_deref(), Some("`"));
+        }
+
+        #[tokio::test]
+        async fn a_directive_in_a_macro_body_carets_the_directive() {
+            let mut preprocessor = fixture();
+            let e = preprocessor
+                .scan("/def_directive.c", "#define FOO 1 + #undef BAR\n")
+                .await
+                .unwrap_err();
+            assert_eq!(
+                e.to_string(),
+                "a preprocessor directive cannot appear in a macro body"
+            );
+            assert_eq!(
+                e.span().and_then(|s| s.code()).as_deref(),
+                Some("#undef BAR")
+            );
         }
 
         #[tokio::test]

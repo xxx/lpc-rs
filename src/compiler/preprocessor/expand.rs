@@ -337,6 +337,7 @@ fn is_directive(token: &Token) -> bool {
 mod tests {
     use std::sync::Arc;
 
+    use lpc_rs_errors::span::HasSpan;
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
@@ -587,5 +588,15 @@ mod tests {
             }
         };
         assert_eq!(got, marf_span);
+    }
+
+    #[tokio::test]
+    async fn define_body_tokens_are_born_at_the_definition_site() {
+        let pp = table("#define F 1 + x\n").await;
+        let Define::Object(o) = &pp.defines["F"] else {
+            panic!("expected an object macro");
+        };
+        let (_, x, _) = &o.tokens[2];
+        assert_eq!(x.span().code().as_deref(), Some("x"));
     }
 }
