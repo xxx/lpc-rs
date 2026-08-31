@@ -1,7 +1,6 @@
 //! The expansion engine: the one rewriter of token streams against the
 //! define table. One cursor per stream, non-reexpansion via the hide set,
 //! an output cap, paren-balanced argument capture.
-//! Spec: local/specs/2026-08-30-expansion-engine.md.
 
 use std::{collections::HashMap, iter::Peekable};
 
@@ -78,9 +77,7 @@ struct Expansion<'a> {
     /// is the membership test — macro chains are short.
     hide: Vec<&'a str>,
     emitted: usize,
-    /// Current nested-invocation depth (R5), independent of the hide set:
-    /// bounds source nesting like `F(F(F(...)))`, which the hide set
-    /// (a same-name re-entrancy guard) doesn't touch at all.
+    /// Current nested-invocation depth; see `MAX_EXPANSION_DEPTH`.
     depth: usize,
 }
 
@@ -91,8 +88,6 @@ fn no_args() -> HashMap<&'static str, Vec<Spanned<Token>>> {
 
 impl<'a> Expansion<'a> {
     /// Expand the already-looked-up macro `name`, arguments from `cursor`.
-    /// Depth-checked (R5): this recurses once per nesting level regardless
-    /// of the hide set, so `F(F(F(...)))` needs its own bound.
     fn expand_named<T>(
         &mut self,
         name: &'a str,
@@ -113,10 +108,7 @@ impl<'a> Expansion<'a> {
 
     /// Substitute-then-rescan (C99): build the replacement list — body
     /// tokens with parameters spliced in and everything else respanned to
-    /// the use site — then walk it as one stream. A nested invocation
-    /// captures its own arguments off this same replacement cursor, so it
-    /// sees the substitution that already happened, not the raw parameter
-    /// name.
+    /// the use site — then walk it as one stream.
     fn expand_named_at_depth<T>(
         &mut self,
         name: &'a str,

@@ -291,6 +291,8 @@ impl Preprocessor {
         Ok(output)
     }
 
+    /// Parse a `#define` directive — object or function-style — and add it
+    /// to the defines table.
     #[instrument(skip(self))]
     fn handle_define(&mut self, token: &StringToken) -> Result<()> {
         if self.skipping_lines() {
@@ -534,7 +536,7 @@ impl Preprocessor {
         match expr {
             PreprocessorNode::Var(x) => {
                 if hide.contains(&x.as_str()) {
-                    return Ok(false); // hidden behaves as undefined (R8)
+                    return Ok(false); // hidden name reads as undefined
                 }
                 match self.defines.get(x) {
                     Some(Define::Object(ObjectMacro {
@@ -599,6 +601,7 @@ impl Preprocessor {
         match expr {
             PreprocessorNode::Var(x) => {
                 if hide.contains(&x.as_str()) {
+                    // hidden name reads as undefined
                     return Err(lpc_error!(span, "unable to resolve into an int: `{}`", x));
                 }
                 if let Some(val) = self.defines.get(x) {
