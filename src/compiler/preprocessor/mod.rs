@@ -393,8 +393,8 @@ impl Preprocessor {
             return Ok(());
         };
 
-        // An included file gets its own conditional stack: a `#if` it opens
-        // and closes internally must not leak into the includer's stack.
+        // An included file's `#if`s must not leak into the includer's
+        // conditional stack.
         debug_assert!(self.conditionals.live());
         let saved = std::mem::take(&mut self.conditionals);
         let result = self
