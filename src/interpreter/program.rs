@@ -17,6 +17,20 @@ use lpc_rs_core::{
 };
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use path_dedot::*;
+use ustr::Ustr;
+
+/// One program's block of global slots within a program that holds it.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Region {
+    /// The program the block belongs to.
+    pub filename: Arc<LpcPath>,
+    /// The first slot of the block.
+    pub base: RegisterSize,
+    /// How many slots the block holds.
+    pub count: RegisterSize,
+    /// The mangled name of the function that initializes the block.
+    pub init: Ustr,
+}
 
 #[derive(Debug, Default, PartialEq, Eq, Clone, Builder)]
 #[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
@@ -46,6 +60,10 @@ pub struct Program {
     /// How many globals does this program need storage for?
     /// Note that this number includes inherited globals.
     pub num_globals: RegisterSize,
+
+    /// Every program whose globals this one holds, in initialization order,
+    /// its own block last. A program reached through two parents appears once.
+    pub layout: Box<[Region]>,
 
     /// Which pragmas have been set for this program?
     pub pragmas: PragmaFlags,
@@ -102,24 +120,46 @@ impl<'a> Program {
         }
     }
 
-    /// Move every global this program owns up by `base`, so it can be
-    /// imported into a child whose earlier parents hold the first `base` slots.
-    pub fn rebase_globals(&mut self, base: RegisterSize) {
-        if base == 0 {
+    /// Move each block of `layout` to the slot in `targets` at the same
+    /// index — blocks two parents share land on one target.
+    pub fn relocate_globals(&mut self, targets: &[RegisterSize]) {
+        debug_assert_eq!(targets.len(), self.layout.len());
+        let layout = std::mem::take(&mut self.layout);
+        if layout.iter().zip(targets).all(|(r, &t)| r.base == t) {
+            self.layout = layout;
             return;
         }
-        for func in self.functions.values_mut() {
-            let mut shifted = ProgramFunction::clone(func);
-            for instruction in &mut shifted.instructions {
-                *instruction = instruction.shift_globals(base);
+
+        let relocate = |register: RegisterVariant| match register {
+            RegisterVariant::Global(reg) => {
+                let index = reg.index();
+                let (position, region) = layout
+                    .iter()
+                    .enumerate()
+                    .find(|(_, r)| (r.base..r.base + r.count).contains(&index))
+                    .expect("every global slot is in a layout block");
+                RegisterVariant::Global(Register(targets[position] + index - region.base))
             }
-            *func = Arc::new(shifted);
+            other => other,
+        };
+        for func in self.functions.values_mut() {
+            let mut moved = ProgramFunction::clone(func);
+            for instruction in &mut moved.instructions {
+                *instruction = instruction.map_registers(relocate);
+            }
+            *func = Arc::new(moved);
         }
         for symbol in self.global_variables.values_mut() {
-            if let Some(RegisterVariant::Global(reg)) = symbol.location {
-                symbol.location = Some(RegisterVariant::Global(Register(reg.index() + base)));
-            }
+            symbol.location = symbol.location.map(relocate);
         }
+        self.layout = layout
+            .iter()
+            .zip(targets)
+            .map(|(region, &base)| Region {
+                base,
+                ..region.clone()
+            })
+            .collect();
     }
 
     /// Get a listing of this Program's assembly language, suitable for printing
@@ -203,5 +243,61 @@ mod tests {
 
         program.filename = Arc::new("../foo/bar/marf.c".into());
         assert_eq!(program.cwd().to_str().unwrap(), "/foo/bar");
+    }
+
+    #[test]
+    fn relocate_moves_each_block_to_its_target() {
+        use lpc_rs_asm::instruction::Instruction;
+        use lpc_rs_core::lpc_type::LpcType;
+        use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
+        use ustr::ustr;
+
+        let region = |filename: &str, base, count| Region {
+            filename: Arc::new(LpcPath::InGame(filename.into())),
+            base,
+            count,
+            init: ustr(""),
+        };
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("f")
+            .filename(Arc::new(LpcPath::InGame("/own.c".into())))
+            .return_type(LpcType::Void)
+            .build()
+            .unwrap();
+        let mut function = ProgramFunction::new(prototype, 0);
+        function.push_instruction(
+            Instruction::Copy(
+                RegisterVariant::Global(Register(1)),
+                RegisterVariant::Global(Register(4)),
+            ),
+            None,
+        );
+        let mut functions: IndexMap<String, Arc<ProgramFunction>, ahash::RandomState> =
+            IndexMap::default();
+        functions.insert("f".into(), Arc::new(function));
+        let mut symbol = Symbol::new("g", LpcType::Int(false));
+        symbol.location = Some(RegisterVariant::Global(Register(4)));
+        let mut program = Program {
+            functions: Box::new(functions),
+            global_variables: Box::new(HashMap::from([("g".to_string(), symbol)])),
+            layout: Box::new([region("/gp.c", 0, 3), region("/own.c", 3, 2)]),
+            ..Program::default()
+        };
+
+        program.relocate_globals(&[10, 0]);
+
+        assert_eq!(
+            program.functions["f"].instructions,
+            [Instruction::Copy(
+                RegisterVariant::Global(Register(11)),
+                RegisterVariant::Global(Register(1)),
+            )]
+        );
+        assert_eq!(
+            program.global_variables["g"].location,
+            Some(RegisterVariant::Global(Register(1)))
+        );
+        let bases: Vec<_> = program.layout.iter().map(|r| r.base).collect();
+        assert_eq!(bases, [10, 0]);
     }
 }

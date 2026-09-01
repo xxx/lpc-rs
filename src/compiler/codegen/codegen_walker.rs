@@ -71,7 +71,7 @@ use crate::{
     },
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
-        program::Program,
+        program::{Program, Region},
     },
 };
 
@@ -162,6 +162,9 @@ pub struct CodegenWalker {
     /// The initialization function for the program, which sets up global variables.
     initializer: Option<Arc<ProgramFunction>>,
 
+    /// The mangled name of this program's own global initializer.
+    init_globals: Ustr,
+
     /// Track where the result of a child branch is
     current_result: RegisterVariant,
 
@@ -209,8 +212,8 @@ impl CodegenWalker {
         result
     }
 
-    /// Start this program's own global initializer: it first runs each
-    /// parent's, in inheritance order, then the globals declared here.
+    /// Start this program's own global initializer, for the globals declared
+    /// here; `init-program` runs the inherited blocks' initializers itself.
     #[instrument(skip_all)]
     pub fn setup_init(&mut self) {
         let prototype = FunctionPrototypeBuilder::default()
@@ -221,22 +224,13 @@ impl CodegenWalker {
             .build()
             .expect("Failed to build init prototype");
 
-        let mut func = ProgramFunction::new(prototype, 0);
-        for inherit in &self.context.inherits {
-            let parent_init = inherit
-                .functions
-                .values()
-                .find(|f| f.name() == INIT_GLOBALS)
-                .expect("an inherited program initializes its globals");
-            func.push_instruction(Instruction::ClearArgs, None);
-            func.push_instruction(Instruction::Call(ustr(&parent_init.mangle())), None);
-        }
-
-        self.function_stack.push(func);
+        self.init_globals = ustr(&prototype.mangle());
+        self.function_stack.push(ProgramFunction::new(prototype, 0));
     }
 
-    /// The function that initializes a new object: this program's globals
-    /// (parents' first), then `create()` if any program in the chain defines it.
+    /// The function that initializes a new object: each inherited block's
+    /// globals in layout order, this program's own, then `create()` if any
+    /// program in the chain defines it.
     async fn build_initializer(&mut self, init_globals: Ustr) -> Result<ProgramFunction> {
         let prototype = FunctionPrototypeBuilder::default()
             .name(INIT_PROGRAM)
@@ -249,8 +243,11 @@ impl CodegenWalker {
         self.backpatch_maps.push(HashMap::new());
         self.register_counter.push();
 
-        push_instruction!(self, Instruction::ClearArgs, None);
-        push_instruction!(self, Instruction::Call(init_globals), None);
+        let inits: Vec<Ustr> = self.context.layout.iter().map(|r| r.init).collect();
+        for init in inits.into_iter().chain(std::iter::once(init_globals)) {
+            push_instruction!(self, Instruction::ClearArgs, None);
+            push_instruction!(self, Instruction::Call(init), None);
+        }
 
         if self
             .context
@@ -317,19 +314,32 @@ impl CodegenWalker {
 
         let num_globals = self.global_counter.number_emitted();
 
-        let filename = self
-            .context
-            .filename
-            .as_in_game(self.context.config.lib_dir.as_str())
-            .into_owned();
+        let filename = Arc::new(LpcPath::InGame(
+            self.context
+                .filename
+                .as_in_game(self.context.config.lib_dir.as_str())
+                .into_owned(),
+        ));
+
+        let own = Region {
+            filename: Arc::clone(&filename),
+            base: self.context.num_globals,
+            count: num_globals - self.context.num_globals,
+            init: self.init_globals,
+        };
+        let layout = std::mem::take(&mut self.context.layout)
+            .into_iter()
+            .chain(std::iter::once(own))
+            .collect();
 
         Ok(Program {
-            filename: Arc::new(LpcPath::InGame(filename)),
+            filename,
             functions: Box::new(functions),
             initializer: self.initializer,
             unmangled_functions: Box::new(unmangled_functions),
             global_variables: Box::new(global_variables),
             num_globals,
+            layout,
             pragmas: self.context.pragmas,
         })
     }
@@ -1926,6 +1936,7 @@ impl TreeWalker for CodegenWalker {
         let init_globals = self.finalize_function(0, None, None)?;
         debug_assert!(init_globals.name() == INIT_GLOBALS);
         let init_globals_name = ustr(&init_globals.mangle());
+        debug_assert_eq!(init_globals_name, self.init_globals);
         self.functions
             .insert(init_globals.mangle(), init_globals.into());
 
@@ -2382,6 +2393,7 @@ impl Default for CodegenWalker {
             label_count: 0,
             functions: Default::default(),
             initializer: None,
+            init_globals: Ustr::default(),
             current_result: RegisterVariant::Local(Register(0)),
             register_counter,
             global_counter,
@@ -5883,23 +5895,75 @@ mod tests {
         assert_eq!(globals_written, vec![4, 5, 6]);
 
         let own_init = &program.functions["init-globals__v____pv__"];
+        assert!(own_init.instructions.iter().all(|i| !matches!(i, Call(_))));
+
         assert_eq!(
-            &own_init.instructions[..4],
-            &[
+            program.initializer.unwrap().instructions,
+            vec![
                 ClearArgs,
                 Call(ustr("init-globals__v__/sibling_a.c__pv__")),
                 ClearArgs,
                 Call(ustr("init-globals__v__/sibling_b.c__pv__")),
+                ClearArgs,
+                Call(ustr("init-globals__v____pv__")),
+                ClearArgs,
+                Call(ustr("create__v__/sibling_b.c__pb__")),
+                Ret,
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_program_reached_through_two_parents_has_one_block() {
+        let code = r##"
+            inherit "/diamond_left";
+            inherit "/diamond_right";
+            int own = 5;
+        "##;
+        let program = walk_prog(code).await.into_program().unwrap();
+
+        // grandparent's 3 slots are shared, so `own` follows them directly.
+        assert_eq!(program.num_globals, 4);
+        assert_eq!(
+            program.global_variables["own"].location,
+            Some(RegisterVariant::Global(Register(3)))
+        );
+        let blocks: Vec<_> = program
+            .layout
+            .iter()
+            .map(|r| (r.filename.to_string(), r.base, r.count))
+            .collect();
+        assert_eq!(
+            blocks,
+            [
+                ("/grandparent.c".to_string(), 0, 3),
+                ("/diamond_left.c".to_string(), 3, 0),
+                ("/diamond_right.c".to_string(), 3, 0),
+                (program.filename.to_string(), 3, 1),
+            ]
+        );
+
+        let set_left_a = &program.functions["set_left_a__v__/diamond_left.c__pb__i"];
+        assert!(
+            set_left_a
+                .instructions
+                .iter()
+                .any(|i| { i.dest_register() == Some(RegisterVariant::Global(Register(0))) })
         );
 
         assert_eq!(
             program.initializer.unwrap().instructions,
             vec![
                 ClearArgs,
+                Call(ustr("init-globals__v__/grandparent.c__pv__")),
+                ClearArgs,
+                Call(ustr("init-globals__v__/diamond_left.c__pv__")),
+                ClearArgs,
+                Call(ustr("init-globals__v__/diamond_right.c__pv__")),
+                ClearArgs,
                 Call(ustr("init-globals__v____pv__")),
                 ClearArgs,
-                Call(ustr("create__v__/sibling_b.c__pb__")),
+                Call(ustr("create__v__/grandparent.c__pb__")),
                 Ret,
             ]
         );

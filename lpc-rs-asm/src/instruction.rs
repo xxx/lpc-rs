@@ -4,9 +4,8 @@ use std::{
 };
 
 use lpc_rs_core::{
-    LpcFloatInner, LpcIntInner, RegisterSize,
-    function_receiver::FunctionReceiver,
-    register::{Register, RegisterVariant},
+    LpcFloatInner, LpcIntInner, RegisterSize, function_receiver::FunctionReceiver,
+    register::RegisterVariant,
 };
 use lpc_rs_errors::{Result, lpc_bug};
 use ustr::Ustr;
@@ -391,14 +390,6 @@ impl Instruction {
             Self::SConst(a0, a1) => Self::SConst(f(a0), a1),
             Self::Xor(a0, a1, a2) => Self::Xor(f(a0), f(a1), f(a2)),
         }
-    }
-
-    /// This instruction with every global register moved up by `base`.
-    pub fn shift_globals(self, base: RegisterSize) -> Self {
-        self.map_registers(|r| match r {
-            RegisterVariant::Global(reg) => RegisterVariant::Global(Register(reg.index() + base)),
-            other => other,
-        })
     }
 
     /// Backpatch an instruction with a new address.

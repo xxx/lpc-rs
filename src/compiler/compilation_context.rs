@@ -15,7 +15,11 @@ use ustr::Ustr;
 
 use crate::{
     compiler::semantic::scope_tree::ScopeTree,
-    interpreter::{efun::EFUN_PROTOTYPES, process::Process, program::Program},
+    interpreter::{
+        efun::EFUN_PROTOTYPES,
+        process::Process,
+        program::{Program, Region},
+    },
 };
 
 // TODO: trim the bytesize of this down
@@ -66,6 +70,9 @@ pub struct CompilationContext {
     /// This is how we determine how much space the final [`Process`] needs to
     /// allocate for global variables.
     pub num_globals: RegisterSize,
+
+    /// The blocks of global slots the parents hold, in initialization order.
+    pub layout: Vec<Region>,
 
     /// Pointer to the simul efuns
     pub simul_efuns: Option<Arc<Process>>,
@@ -260,6 +267,7 @@ impl Default for CompilationContext {
             inherited_functions: IndexMap::new(),
             inherit_depth: 0,
             num_globals: 0,
+            layout: vec![],
             simul_efuns: None,
             closure_count: 0,
         }

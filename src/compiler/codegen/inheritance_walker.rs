@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use lpc_rs_core::{EFUN, lpc_path::LpcPath};
-use lpc_rs_errors::{LpcError, Result, lpc_error};
+use lpc_rs_core::{EFUN, RegisterSize, lpc_path::LpcPath};
+use lpc_rs_errors::{LpcError, Result, lpc_error, span::Span};
 
 use crate::compiler::{
     Compiled, CompilerBuilder,
@@ -9,6 +9,7 @@ use crate::compiler::{
     compilation_context::CompilationContext,
     diagnostics::Diagnostics,
 };
+use crate::interpreter::program::Region;
 
 /// A walker to handle compiling and linking inherited files.
 #[derive(Debug, Default)]
@@ -66,6 +67,39 @@ impl Pass for InheritanceWalker {
     fn diagnostics_mut(&mut self) -> &mut Diagnostics {
         &mut self.context.diagnostics
     }
+}
+
+/// The block each of `imported`'s regions lands on: a program the child
+/// already holds keeps its block, a new one takes the next slots.
+fn place(
+    layout: &mut Vec<Region>,
+    num_globals: &mut RegisterSize,
+    imported: &[Region],
+    span: Option<Span>,
+) -> Result<Vec<RegisterSize>> {
+    let mut targets = Vec::with_capacity(imported.len());
+    for region in imported {
+        match layout.iter().find(|held| held.filename == region.filename) {
+            Some(held) if held.count != region.count => {
+                return Err(lpc_error!(
+                    span,
+                    "inherited two different versions of `{}`",
+                    region.filename
+                ));
+            }
+            Some(held) => targets.push(held.base),
+            None => {
+                let base = *num_globals;
+                *num_globals += region.count;
+                layout.push(Region {
+                    base,
+                    ..region.clone()
+                });
+                targets.push(base);
+            }
+        }
+    }
+    Ok(targets)
 }
 
 #[async_trait]
@@ -127,8 +161,14 @@ impl TreeWalker for InheritanceWalker {
                 }
 
                 let mut program = program;
-                program.rebase_globals(self.context.num_globals);
-                self.context.num_globals += program.num_globals;
+                let targets = place(
+                    &mut self.context.layout,
+                    &mut self.context.num_globals,
+                    &program.layout,
+                    node.span,
+                )
+                .map_err(|e| self.context.diagnostics.fail(e))?;
+                program.relocate_globals(&targets);
                 self.context.inherited_functions.extend(
                     program
                         .functions
@@ -164,6 +204,57 @@ mod tests {
             .unwrap();
 
         InheritanceWalker::new(context)
+    }
+
+    mod test_place {
+        use std::sync::Arc;
+
+        use ustr::ustr;
+
+        use super::*;
+
+        fn region(filename: &str, base: RegisterSize, count: RegisterSize) -> Region {
+            Region {
+                filename: Arc::new(LpcPath::InGame(filename.into())),
+                base,
+                count,
+                init: ustr(""),
+            }
+        }
+
+        #[test]
+        fn a_held_program_keeps_its_block_and_a_new_one_follows() {
+            let mut layout = vec![region("/gp.c", 0, 3), region("/left.c", 3, 2)];
+            let mut num_globals = 5;
+            let imported = [region("/gp.c", 0, 3), region("/right.c", 3, 1)];
+
+            let targets = place(&mut layout, &mut num_globals, &imported, None).unwrap();
+
+            assert_eq!(targets, [0, 5]);
+            assert_eq!(num_globals, 6);
+            let held: Vec<_> = layout
+                .iter()
+                .map(|r| (r.filename.to_string(), r.base))
+                .collect();
+            assert_eq!(
+                held,
+                [
+                    ("/gp.c".to_string(), 0),
+                    ("/left.c".to_string(), 3),
+                    ("/right.c".to_string(), 5)
+                ]
+            );
+        }
+
+        #[test]
+        fn two_versions_of_one_program_are_rejected() {
+            let mut layout = vec![region("/gp.c", 0, 3)];
+            let err = place(&mut layout, &mut 3, &[region("/gp.c", 0, 4)], None).unwrap_err();
+            assert_eq!(
+                err.to_string(),
+                "inherited two different versions of `/gp.c`"
+            );
+        }
     }
 
     mod test_visit_inherit {

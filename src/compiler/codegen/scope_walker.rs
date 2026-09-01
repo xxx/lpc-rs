@@ -76,13 +76,13 @@ fn file_list(declarations: &[(&Program, &Symbol)]) -> String {
     }
 }
 
-/// Each distinct declaration site — a diamond inherit carries one site twice,
-/// under two source-map ids.
+/// Each distinct declaration's site, keyed by slot — a diamond's two parents
+/// carry the one declaration under two source-map ids.
 fn declaration_sites(declarations: &[(&Program, &Symbol)]) -> Vec<Option<Span>> {
     declarations
         .iter()
+        .unique_by(|(_, symbol)| symbol.location)
         .map(|(_, symbol)| symbol.span)
-        .unique_by(|span| span.map(|s| s.to_string()))
         .collect()
 }
 
@@ -161,7 +161,8 @@ impl ScopeWalker {
             return;
         }
         let declarations = self.inherited_declarations(&name);
-        if declarations.len() < 2 {
+        let sites = declaration_sites(&declarations);
+        if sites.len() < 2 {
             return;
         }
         let Some((used, _)) = declarations.last() else {
@@ -174,7 +175,7 @@ impl ScopeWalker {
             file_list(&declarations),
             used.filename
         );
-        for site in declaration_sites(&declarations) {
+        for site in sites {
             warning = warning.with_label("declared here", site);
         }
         self.ambiguous.insert(name);
@@ -1077,24 +1078,10 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn a_diamond_is_ambiguous_with_one_site() {
+        async fn a_diamond_is_not_ambiguous() {
             let code =
                 r#"inherit "/diamond_left"; inherit "/diamond_right"; int f() { return a; }"#;
-            let rendered = rendered(code).await;
-            assert_eq!(rendered.len(), 1, "{rendered:?}");
-            assert!(
-                rendered[0].contains(
-                    "`a` is declared by `/diamond_left.c` and `/diamond_right.c`; `/diamond_right.c`'s is used"
-                ),
-                "{}",
-                rendered[0]
-            );
-            assert_eq!(
-                rendered[0].matches("declared here").count(),
-                1,
-                "{}",
-                rendered[0]
-            );
+            assert!(warnings(code).await.is_empty());
         }
 
         #[tokio::test]
