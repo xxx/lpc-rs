@@ -120,7 +120,6 @@ pub(crate) enum Effect {
 
     /// `rm`'s unlink of the file at `server`, once the attempt commits;
     /// `in_game` names it in the log when the unlink fails.
-    #[allow(dead_code)]
     RemoveFile { in_game: String, server: PathBuf },
 }
 
