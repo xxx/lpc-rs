@@ -51,12 +51,12 @@ mod tests {
             .await
             .unwrap();
         let mut names = Vec::new();
-        let _ = task
-            .result()
+        task.result()
             .unwrap()
             .with_array(task.context.txn(), |arr| {
                 names = arr.iter().map(|x| x.to_string()).collect();
-            });
+            })
+            .expect("an array");
         names
     }
 

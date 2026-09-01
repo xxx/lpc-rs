@@ -9,13 +9,14 @@ use crate::interpreter::{
 };
 
 /// `rm(path)`: unlink the file, once the master's `valid_write` allows it.
-/// Checked now — it exists and is a file — and removed at commit.
+/// Checked now — it exists and is a file or a symlink — and removed at
+/// commit. A symlink is unlinked as a link, never followed.
 pub async fn rm<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "rm", VALID_WRITE, 1 as RegisterSize).await?;
-    let metadata = tokio::fs::metadata(&access.server)
+    let metadata = tokio::fs::symlink_metadata(&access.server)
         .await
         .map_err(|e| context.runtime_error(format!("rm: {}: {e}", access.in_game)))?;
-    if !metadata.is_file() {
+    if !(metadata.is_file() || metadata.is_symlink()) {
         return Err(context.runtime_error(format!("rm: {} is not a file", access.in_game)));
     }
     context.record_effect(Effect::RemoveFile {
@@ -76,6 +77,21 @@ mod tests {
             !err.contains(vm.global_state.config.lib_dir.as_str()),
             "server path leaked: {err}"
         );
+    }
+
+    /// A symlink to a directory is unlinked as a link; the directory it
+    /// pointed at stays.
+    #[tokio::test]
+    async fn a_symlink_to_a_directory_is_removed_without_following_it() {
+        let root = TempLib::new("rm-symlink-dir");
+        std::fs::create_dir_all(root.join("d")).unwrap();
+        std::os::unix::fs::symlink(root.join("d"), root.join("link")).unwrap();
+        let vm = allowing_vm(&root).await;
+        vm.initialize_process_from_code("/r.c", r#"void create() { rm("/link"); }"#)
+            .await
+            .unwrap();
+        assert!(std::fs::symlink_metadata(root.join("link")).is_err());
+        assert!(root.join("d").is_dir());
     }
 
     #[tokio::test]

@@ -3,7 +3,7 @@
 `string *get_dir(string path)`
 
 The names of the entries in the directory at `path`, sorted, as plain names
-(no directory prefix, no type markers); `({ })` for an empty directory. A
+(no directory prefix, no type markers); `({})` for an empty directory. A
 `path` that is not a directory is a runtime error naming its in-game path.
 
 Every call is first put to the master's `valid_read(path, "get_dir", caller,

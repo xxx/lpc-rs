@@ -17,14 +17,24 @@ pub async fn write_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
     };
     let contents = contents.to_owned();
     let access = authorize(context, "write_file", VALID_WRITE, 1 as RegisterSize).await?;
-    if tokio::fs::metadata(&access.server)
-        .await
-        .is_ok_and(|m| m.is_dir())
-    {
-        return Err(context.runtime_error(format!("write_file: {} is a directory", access.in_game)));
+    let io_error =
+        |e: std::io::Error| context.runtime_error(format!("write_file: {}: {e}", access.in_game));
+    match tokio::fs::metadata(&access.server).await {
+        Ok(m) if m.is_dir() => {
+            return Err(
+                context.runtime_error(format!("write_file: {} is a directory", access.in_game))
+            );
+        }
+        // Missing is fine: the target may be created. Any other stat error is real.
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(io_error(e)),
+        _ => {}
     }
     let parent_is_dir = match access.server.parent() {
-        Some(parent) => tokio::fs::metadata(parent).await.is_ok_and(|m| m.is_dir()),
+        Some(parent) => match tokio::fs::metadata(parent).await {
+            Ok(m) => m.is_dir(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+            Err(e) => return Err(io_error(e)),
+        },
         None => false,
     };
     if !parent_is_dir {
@@ -171,6 +181,25 @@ mod tests {
             "{err}"
         );
         assert!(!root.join("nodir").exists());
+    }
+
+    /// A parent path component that is a regular file is `ENOTDIR`, not
+    /// `NotFound`: a real stat error, not a missing parent.
+    #[tokio::test]
+    async fn a_non_directory_path_component_is_a_runtime_error() {
+        let root = TempLib::new("write-enotdir");
+        std::fs::write(root.join("f.txt"), "").unwrap();
+        let vm = allowing_vm(&root).await;
+        let err = vm
+            .initialize_process_from_code(
+                "/w.c",
+                r#"void create() { write_file("/f.txt/o.txt", "x"); }"#,
+            )
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("write_file: /f.txt/o.txt:"), "{err}");
+        assert!(!err.contains(root.to_str().unwrap()), "{err}");
     }
 
     #[tokio::test]
