@@ -127,9 +127,14 @@ impl TreeWalker for InheritanceWalker {
 
         match compiler.compile_in_game_file(&full_path, node.span).await {
             Ok(Compiled { program, warnings }) => {
-                for warning in warnings {
-                    self.context.diagnostics.record(warning);
-                }
+                // Before `place` adds this parent's programs to the layout, or
+                // every group reads as held.
+                let held = &self.context.layout;
+                self.context.inherited_warnings.extend(
+                    warnings
+                        .into_iter()
+                        .filter(|w| held.iter().all(|r| r.filename != w.filename)),
+                );
 
                 if program.pragmas.no_inherit() {
                     return Err(lpc_error!(
@@ -277,6 +282,36 @@ mod tests {
 
             assert_ok!(result);
             assert_eq!(walker.context.inherits.len(), 1);
+        }
+
+        #[tokio::test]
+        async fn a_program_reached_through_two_parents_warns_once() {
+            let mut walker = walker();
+
+            for path in ["/warns_left.c", "/warns_right.c"] {
+                let mut node = InheritNode {
+                    path: ustr(path),
+                    namespace: None,
+                    span: None,
+                };
+                assert_ok!(walker.visit_inherit(&mut node).await);
+            }
+
+            let groups: Vec<_> = walker
+                .context
+                .inherited_warnings
+                .iter()
+                .map(|w| (w.filename.to_string(), w.warnings.len()))
+                .collect();
+            assert_eq!(
+                groups,
+                [
+                    ("/warns.c".to_string(), 2),
+                    ("/warns_left.c".to_string(), 0),
+                    ("/warns_right.c".to_string(), 0),
+                ]
+            );
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
 
         #[tokio::test]

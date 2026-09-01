@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::compiler::diagnostics::Diagnostics;
+use crate::compiler::{ProgramWarnings, diagnostics::Diagnostics};
 use derive_builder::Builder;
 use indexmap::IndexMap;
 use lpc_rs_core::{
@@ -73,6 +73,9 @@ pub struct CompilationContext {
 
     /// The blocks of global slots the parents hold, in initialization order.
     pub layout: Vec<Region>,
+
+    /// The warnings of every program the parents hold, in `layout`'s order.
+    pub inherited_warnings: Vec<ProgramWarnings>,
 
     /// Pointer to the simul efuns
     pub simul_efuns: Option<Arc<Process>>,
@@ -268,6 +271,7 @@ impl Default for CompilationContext {
             inherit_depth: 0,
             num_globals: 0,
             layout: vec![],
+            inherited_warnings: vec![],
             simul_efuns: None,
             closure_count: 0,
         }

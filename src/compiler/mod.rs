@@ -56,14 +56,23 @@ pub struct Compiler {
     simul_efuns: Option<Arc<Process>>,
 }
 
-/// A successful compile: the program, and every warning recorded on the
-/// way — an inherited file's too — in recording order.
+/// One program's own compile warnings.
+#[derive(Debug, Clone)]
+pub struct ProgramWarnings {
+    /// The program that recorded them.
+    pub filename: Arc<LpcPath>,
+    /// The warnings, in recording order.
+    pub warnings: Vec<LpcError>,
+}
+
+/// A successful compile: the program, and one group of warnings per program
+/// in its [`layout`](Program::layout), in that order.
 #[derive(Debug)]
 pub struct Compiled {
     /// The compiled program.
     pub program: Program,
     /// The warnings; a compile that recorded an error fails instead.
-    pub warnings: Vec<LpcError>,
+    pub warnings: Vec<ProgramWarnings>,
 }
 
 impl Compiler {
@@ -263,8 +272,13 @@ impl Compiler {
             .into_context();
 
         let mut asm_walker: CodegenWalker = apply(&mut program_node, context, true).await?;
-        let warnings = asm_walker.diagnostics_mut().finish()?;
+        let own = asm_walker.diagnostics_mut().finish()?;
+        let mut warnings = std::mem::take(&mut asm_walker.context_mut().inherited_warnings);
         let program = asm_walker.into_program()?;
+        warnings.push(ProgramWarnings {
+            filename: Arc::clone(&program.filename),
+            warnings: own,
+        });
 
         Ok(Compiled { program, warnings })
     }
@@ -654,7 +668,12 @@ mod tests {
                 .await
                 .unwrap();
             assert!(compiled.program.functions.values().any(|f| f.name() == "f"));
-            let messages: Vec<_> = compiled.warnings.iter().map(|w| w.message()).collect();
+            let messages: Vec<_> = compiled
+                .warnings
+                .iter()
+                .flat_map(|w| &w.warnings)
+                .map(|w| w.message())
+                .collect();
             assert_eq!(
                 messages,
                 ["non-void function does not return a value. defaulting to 0."]
@@ -671,11 +690,35 @@ mod tests {
             let rendered: Vec<_> = compiled
                 .warnings
                 .iter()
+                .flat_map(|w| &w.warnings)
                 .map(|w| w.diagnostic_string())
                 .collect();
             assert_eq!(rendered.len(), 2, "{rendered:?}");
             assert!(rendered[0].contains("/warns.c:2:1"), "{}", rendered[0]);
             assert!(rendered[1].contains("/warns.c:5:1"), "{}", rendered[1]);
+        }
+
+        #[tokio::test]
+        async fn a_program_reached_through_two_parents_warns_once() {
+            let compiler = Compiler::new(test_config());
+            let compiled = compiler
+                .compile_string("/w.c", r#"inherit "/warns_left"; inherit "/warns_right";"#)
+                .await
+                .unwrap();
+            let groups: Vec<_> = compiled
+                .warnings
+                .iter()
+                .map(|w| (w.filename.to_string(), w.warnings.len()))
+                .collect();
+            assert_eq!(
+                groups,
+                [
+                    ("/warns.c".to_string(), 2),
+                    ("/warns_left.c".to_string(), 0),
+                    ("/warns_right.c".to_string(), 0),
+                    ("/w.c".to_string(), 0),
+                ]
+            );
         }
 
         async fn warnings_of(code: &str) -> Vec<String> {
@@ -684,6 +727,7 @@ mod tests {
             compiled
                 .warnings
                 .iter()
+                .flat_map(|w| &w.warnings)
                 .map(|w| w.message().to_string())
                 .collect()
         }
