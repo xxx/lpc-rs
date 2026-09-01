@@ -35,9 +35,8 @@ mod include;
 pub mod preprocessor_node;
 
 /// Recursion budget for evaluating one `#if`: tree levels and macro levels
-/// along one path together. A deliberate third limit — a chain of small
-/// macro bodies can reach it before `MAX_EXPANSION_DEPTH` does. 512 levels
-/// × ≈2.6 KB (debug) ≈ 1.3 MB.
+/// along one path together — a chain of small macro bodies reaches it
+/// before `MAX_EXPANSION_DEPTH` does. 512 levels × ≈2.6 KB (debug) ≈ 1.3 MB.
 const MAX_IF_EVAL_DEPTH: usize = 2 * MAX_NESTING_DEPTH;
 
 #[derive(Debug)]
@@ -2246,9 +2245,8 @@ mod tests {
             test_valid("#if (1 << -1) == 1 << 63\n\"t\";\n#endif\n", &["t", ";"]).await;
         }
 
-        /// Tree levels and macro levels stack on one path; the budget is the
-        /// sum: two 250-term macros nest within 512, three do
-        /// not.
+        /// Tree levels and macro levels add along one path: two 250-term
+        /// macros nest within 512, three do not.
         #[tokio::test]
         async fn if_evaluation_has_a_frame_budget() {
             let chain = |term: &str| vec![term; 250].join(" + ");

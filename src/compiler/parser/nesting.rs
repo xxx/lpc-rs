@@ -2,8 +2,7 @@
 //! [`MAX_NESTING_DEPTH`]. Every consumer of a tree — the walkers, the
 //! derived `Clone`/`Debug`, `Display`, drop glue — recurses once per level,
 //! so the bound is enforced where nodes are built: each grammar action that
-//! owns children hands its node through [`guard`], which errors instead of
-//! building the node that would cross the cap.
+//! owns children hands its node through [`guard`].
 
 use lpc_rs_errors::{LpcError, lpc_error, span::Span};
 
@@ -68,8 +67,7 @@ child_from!(
 );
 
 impl Child<'_> {
-    /// The node's own span. Blocks, decls, labeled statements, and the
-    /// program carry none.
+    /// The node's own span.
     fn span(self) -> Option<Span> {
         match self {
             Child::Expr(e) => e.span(),
@@ -105,9 +103,8 @@ impl Child<'_> {
 }
 
 /// The one statement of which nodes are a node's children, in source
-/// order. A new node variant fails to compile until it has an arm here; a
-/// new child field on an existing node needs an arm and a shape pin in the
-/// tests below.
+/// order. A new child field on an existing node needs an arm here and a
+/// shape pin in the tests below.
 fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
     match node {
         Child::Expr(e) => match e {
@@ -495,11 +492,11 @@ mod tests {
         }
     }
 
-    /// Each shape's largest size whose tree is at most 256 high (
-    /// program → function → return are three levels; a `[0]`, `!`, `?:`,
-    /// `=`, call, closure, array, or mapping adds one per step above the
-    /// innermost atom; a range or a closure parameter adds two; a
-    /// `switch { case: }` adds three). One size more must fail.
+    /// Each shape's largest size whose tree is at most 256 high: program →
+    /// function → return are three levels; a `[0]`, `!`, `?:`, `=`, call,
+    /// closure, array, or mapping adds one per step above the innermost
+    /// atom; a range or a closure parameter adds two; a `switch { case: }`
+    /// adds three.
     const BOUNDARIES: &[(&str, usize)] = &[
         ("binary_left", 253),
         ("binary_right", 253),
