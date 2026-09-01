@@ -3,14 +3,16 @@
 
 use std::sync::Arc;
 
-use lpc_rs_errors::Result;
+use indexmap::IndexMap;
+use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::{
     interpreter::{
-        CATCH_TELL, function_type::function_ptr::FunctionPtr, lpc_ref::LpcRef,
-        lpc_string::LpcString, process::Process, stm::Effect, task::apply_function::apply_function,
-        task_context::TaskContext,
+        CATCH_TELL, WARNING_HANDLER, function_type::function_ptr::FunctionPtr,
+        lpc_mapping::LpcMapping, lpc_ref::LpcRef, lpc_string::LpcString, process::Process,
+        stm::Effect, task::apply_function::apply_function, task_context::TaskContext,
     },
     telnet::ops::ConnectionOp,
 };
@@ -118,6 +120,58 @@ pub(crate) async fn deliver(
     Ok(received)
 }
 
+/// Each of `warnings`, raised compiling `file`, to the master's
+/// `warning_handler`, nested in `ctx`'s transaction; without the apply, to
+/// the debug log as effects.
+pub(crate) async fn report_warnings(
+    ctx: &TaskContext,
+    file: &LpcPath,
+    warnings: Vec<LpcError>,
+) -> Result<()> {
+    let handler = ctx.object_space().master_object().and_then(|master| {
+        let function = master
+            .program
+            .unmangled_functions
+            .get(WARNING_HANDLER)
+            .cloned()?;
+        Some((master, function))
+    });
+    for warning in warnings {
+        let Some((master, function)) = &handler else {
+            ctx.txn()
+                .with(|t| t.record_effect(Effect::DebugLog(warning.diagnostic_string())));
+            continue;
+        };
+        let mapping = warning_mapping(ctx, file, &warning);
+        apply_nested(ctx, master, function.clone(), &[mapping]).await?;
+    }
+    Ok(())
+}
+
+/// The `warning_handler` argument — `message`, `location`, `file`,
+/// `diagnostic` — minted in `ctx`'s transaction.
+fn warning_mapping(ctx: &TaskContext, file: &LpcPath, warning: &LpcError) -> LpcRef {
+    let lib_dir = ctx.config().lib_dir.as_str();
+    let entries = [
+        ("message", warning.message().to_owned()),
+        ("location", in_game_location(warning.span(), lib_dir)),
+        ("file", file.as_in_game(lib_dir).display().to_string()),
+        ("diagnostic", warning.diagnostic_string()),
+    ];
+    let mapping: IndexMap<LpcRef, LpcRef> = entries
+        .into_iter()
+        .map(|(key, value)| (LpcString::from(key).into(), LpcString::from(value).into()))
+        .collect();
+    let cell = ctx.txn().with(|t| t.mint_mapping(LpcMapping::new(mapping)));
+    LpcRef::Mapping(cell)
+}
+
+/// `span` as an in-game `path:line:column`; `<unknown>` without one.
+pub(crate) fn in_game_location(span: Option<Span>, lib_dir: &str) -> String {
+    span.and_then(|s| s.to_string().strip_prefix(lib_dir).map(str::to_owned))
+        .unwrap_or_else(|| String::from("<unknown>"))
+}
+
 /// Run `function` in `nested` under `ctx`'s configured execution time.
 async fn timed(
     ctx: &TaskContext,
@@ -182,5 +236,131 @@ mod tests {
                 .contains(&format!("nested task depth of {MAX_TASK_CHAIN} exceeded")),
             "{err}"
         );
+    }
+
+    /// `/warns.c` raises two warnings; the master hears each, as the loader's
+    /// `this_player`.
+    #[tokio::test]
+    async fn a_compile_warning_reaches_the_masters_warning_handler() {
+        let vm = Vm::new(test_config());
+        let master = vm
+            .initialize_process_from_code(
+                "/secure/master.c",
+                indoc! { r#"
+                    int count;
+                    string message;
+                    string location;
+                    string file;
+                    string diagnostic;
+                    string who;
+                    void warning_handler(mapping w) {
+                        count++;
+                        message = w["message"];
+                        location = w["location"];
+                        file = w["file"];
+                        diagnostic = w["diagnostic"];
+                        who = file_name(this_player());
+                    }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        vm.initialize_process_from_code(
+            "/loader.c",
+            r#"void create() { set_this_player(this_object()); clone_object("/warns"); }"#,
+        )
+        .await
+        .unwrap();
+
+        let global = |reg: u16| match vm.global_state.committed_global(&master, reg) {
+            LpcRef::String(s) => s.to_str().to_owned(),
+            other => panic!("a string in {reg}: {other:?}"),
+        };
+        assert_eq!(
+            vm.global_state.committed_global(&master, 0u16),
+            LpcRef::from(2)
+        );
+        assert_eq!(
+            global(1),
+            "non-void function does not return a value. defaulting to 0."
+        );
+        assert_eq!(global(2), "/warns.c:5:1");
+        assert_eq!(global(3), "/warns.c");
+        assert!(
+            global(4).starts_with("warning: non-void function does not return a value"),
+            "{}",
+            global(4)
+        );
+        assert!(global(4).contains("warns.c:5:1"), "{}", global(4));
+        assert_eq!(global(5), "/loader");
+    }
+
+    #[tokio::test]
+    async fn a_master_without_the_apply_still_loads() {
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code("/secure/master.c", "void create() {}")
+            .await
+            .unwrap();
+        let loader = vm
+            .initialize_process_from_code(
+                "/loader.c",
+                r#"object o; void create() { o = clone_object("/warns"); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert!(matches!(
+            vm.global_state.committed_global(&loader, 0u16),
+            LpcRef::Object(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_throwing_warning_handler_fails_the_load() {
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            r#"void warning_handler(mapping w) { throw("no warnings allowed"); }"#,
+        )
+        .await
+        .unwrap();
+        let loader = vm
+            .initialize_process_from_code(
+                "/loader.c",
+                indoc! { r#"
+                    string err;
+                    object o;
+                    void create() {
+                        err = catch(clone_object("/warns"));
+                        o = find_object("/warns");
+                    }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let LpcRef::String(err) = vm.global_state.committed_global(&loader, 0u16) else {
+            panic!("the error string");
+        };
+        assert!(err.to_str().contains("no warnings allowed"), "{err}");
+        assert!(
+            !matches!(
+                vm.global_state.committed_global(&loader, 1u16),
+                LpcRef::Object(_)
+            ),
+            "nothing was inserted"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_master_compiles_with_warnings_before_any_master_exists() {
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code("/secure/master.c", "int f() { }")
+            .await
+            .unwrap();
     }
 }

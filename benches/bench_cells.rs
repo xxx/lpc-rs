@@ -49,7 +49,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         let program: Arc<Program> = Arc::new(
             runtime
                 .block_on(Compiler::default().compile_string("~/cells.c", code))
-                .expect("Failed to compile."),
+                .expect("Failed to compile.")
+                .program,
         );
         group.bench_function(*name, |b| {
             b.to_async(&runtime).iter(|| async {

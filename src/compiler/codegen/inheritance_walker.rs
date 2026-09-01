@@ -3,7 +3,7 @@ use lpc_rs_core::{EFUN, lpc_path::LpcPath};
 use lpc_rs_errors::{LpcError, Result, lpc_error};
 
 use crate::compiler::{
-    CompilerBuilder,
+    Compiled, CompilerBuilder,
     ast::inherit_node::InheritNode,
     codegen::tree_walker::{ContextHolder, Pass, TreeWalker},
     compilation_context::CompilationContext,
@@ -92,7 +92,11 @@ impl TreeWalker for InheritanceWalker {
             .build()?;
 
         match compiler.compile_in_game_file(&full_path, node.span).await {
-            Ok(program) => {
+            Ok(Compiled { program, warnings }) => {
+                for warning in warnings {
+                    self.context.diagnostics.record(warning);
+                }
+
                 if program.pragmas.no_inherit() {
                     return Err(lpc_error!(
                         node.span,

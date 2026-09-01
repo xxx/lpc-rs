@@ -10,6 +10,7 @@ use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
         ERROR_HANDLER,
+        apply::in_game_location,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
         lpc_string::LpcString,
@@ -154,20 +155,13 @@ pub async fn apply_runtime_error(
         LpcString::from(error.to_string()).into(),
     );
 
-    // get the path and line number from the span, stripping off the lib dir so
-    // the path is an in-game path.
-    let span_string = error
-        .span()
-        .and_then(|s| {
-            s.to_string()
-                .strip_prefix(ctx.config().lib_dir.as_str())
-                .map(|s| s.to_string())
-        })
-        .unwrap_or_else(|| String::from("<unknown>"));
-
     mapping.insert(
         LpcString::from("location").into(),
-        LpcString::from(span_string).into(),
+        LpcString::from(in_game_location(
+            error.span(),
+            ctx.config().lib_dir.as_str(),
+        ))
+        .into(),
     );
 
     let object = proc
@@ -182,7 +176,7 @@ pub async fn apply_runtime_error(
     let s = std::str::from_utf8(buffer.as_slice()).unwrap_or("<diagnostic with invalid utf8?>");
 
     mapping.insert(
-        LpcString::from("diagnostics").into(),
+        LpcString::from("diagnostic").into(),
         LpcString::from(s).into(),
     );
 
@@ -247,7 +241,11 @@ mod tests {
                 "/secure/master.c",
                 indoc! { r#"
                     string last;
-                    void error_handler(mapping m) { last = m["error"]; }
+                    string diagnostic;
+                    void error_handler(mapping m) {
+                        last = m["error"];
+                        diagnostic = m["diagnostic"];
+                    }
                 "# },
             )
             .await
@@ -264,5 +262,12 @@ mod tests {
             panic!("a string");
         };
         assert!(s.to_str().contains("boom"), "read the mapping: {s}");
+        let LpcRef::String(d) = vm.global_state.committed_global(&master, 1u16) else {
+            panic!("a string");
+        };
+        assert!(
+            d.to_str().contains("runtime error: boom"),
+            "the rendered key: {d}"
+        );
     }
 }

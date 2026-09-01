@@ -56,6 +56,16 @@ pub struct Compiler {
     simul_efuns: Option<Arc<Process>>,
 }
 
+/// A successful compile: the program, and every warning recorded on the
+/// way — an inherited file's too — in recording order.
+#[derive(Debug)]
+pub struct Compiled {
+    /// The compiled program.
+    pub program: Program,
+    /// The warnings; a compile that recorded an error fails instead.
+    pub warnings: Vec<LpcError>,
+}
+
 impl Compiler {
     /// Create a new [`Compiler`] with the passed [`Config`]
     pub fn new<C>(config: C) -> Self
@@ -80,7 +90,7 @@ impl Compiler {
     /// use lpc_rs::compiler::Compiler;
     /// use lpc_rs_core::lpc_path::LpcPath;
     ///
-    /// let prog = Compiler::default()
+    /// let compiled = Compiler::default()
     ///     .compile_file(LpcPath::new_server("tests/fixtures/code/example.c"))
     ///     .await
     ///     .expect("Unable to compile.");
@@ -88,7 +98,7 @@ impl Compiler {
     /// ```
     #[instrument(skip(self))]
     #[async_recursion]
-    pub async fn compile_file<T>(&self, path: T) -> Result<Program>
+    pub async fn compile_file<T>(&self, path: T) -> Result<Compiled>
     where
         T: Into<LpcPath> + Debug + Send,
     {
@@ -129,7 +139,7 @@ impl Compiler {
         &self,
         path: &LpcPath,
         span: Option<Span>,
-    ) -> Result<Program> {
+    ) -> Result<Compiled> {
         self.config.validate_in_game_path(path, span)?;
 
         // owned here, not a reference: a &LpcPath would take the blanket `T: Into<PathBuf>` From impl and drop the Server variant
@@ -191,7 +201,8 @@ impl Compiler {
             .map(|tokens| (tokens, preprocessor))
     }
 
-    /// Compile a string containing an LPC program into a Program struct
+    /// Compile a string containing an LPC program into a [`Compiled`]
+    /// program with its warnings.
     ///
     /// # Arguments
     /// `path` - The absolute on-server path to the file being represented by `code`
@@ -210,21 +221,14 @@ impl Compiler {
     /// "#;
     ///
     /// let compiler = Compiler::default();
-    /// let prog = compiler
+    /// let compiled = compiler
     ///     .compile_string("~/my_file.c", code)
     ///     .await
     ///     .expect("Failed to compile.");
     /// # });
     /// ```
-    /// Where a successful compile's warnings go.
-    async fn report_warnings(&self, warnings: Vec<LpcError>) {
-        for warning in warnings {
-            self.config.debug_log(warning.diagnostic_string()).await;
-        }
-    }
-
     #[instrument(skip_all)]
-    pub async fn compile_string<T, U>(&self, path: T, code: U) -> Result<Program>
+    pub async fn compile_string<T, U>(&self, path: T, code: U) -> Result<Compiled>
     where
         T: Into<LpcPath>,
         U: AsRef<str> + Send + Sync,
@@ -245,10 +249,6 @@ impl Compiler {
                 program_node.inherits.insert(0, node);
             }
         }
-        // println!("{:?}", program);
-
-        // let mut printer = TreePrinter::new();
-        // let _ = program.visit(&mut printer);
 
         let context = apply::<InheritanceWalker>(&mut program_node, context, true)
             .await?
@@ -265,17 +265,9 @@ impl Compiler {
 
         let mut asm_walker: CodegenWalker = apply(&mut program_node, context, true).await?;
         let warnings = asm_walker.diagnostics_mut().finish()?;
-        self.report_warnings(warnings).await;
-
         let program = asm_walker.into_program()?;
 
-        // println!("{}", program.filename);
-        // for s in program.listing() {
-        //     println!("{s}");
-        // }
-        // println!();
-
-        Ok(program)
+        Ok(Compiled { program, warnings })
     }
 
     /// Preprocess, then parse a string of code for the file at `path`
@@ -541,7 +533,11 @@ mod tests {
 
                 string foo = auto_inherited();
             "#;
-            let prog = compiler.compile_string("my_file.c", code).await.unwrap();
+            let prog = compiler
+                .compile_string("my_file.c", code)
+                .await
+                .unwrap()
+                .program;
             let _inherited = prog
                 .functions
                 .iter()
@@ -628,6 +624,43 @@ mod tests {
             // join's cross-file rule: the node keeps the left operand's span.
             assert_eq!(op.span, Some(l_span));
             assert_eq!(l_span.code().as_deref(), Some("y"));
+        }
+    }
+
+    mod test_warnings {
+        use super::*;
+        use crate::test_support::{strip_lib_dir, test_config};
+
+        #[tokio::test]
+        async fn a_successful_compile_returns_its_warnings() {
+            let compiler = Compiler::new(test_config());
+            let compiled = compiler
+                .compile_string("/w.c", "int f() { }")
+                .await
+                .unwrap();
+            assert!(compiled.program.functions.values().any(|f| f.name() == "f"));
+            let messages: Vec<_> = compiled.warnings.iter().map(|w| w.message()).collect();
+            assert_eq!(
+                messages,
+                ["non-void function does not return a value. defaulting to 0."]
+            );
+        }
+
+        #[tokio::test]
+        async fn an_inherited_files_warnings_come_along() {
+            let compiler = Compiler::new(test_config());
+            let compiled = compiler
+                .compile_string("/child.c", r#"inherit "/warns";"#)
+                .await
+                .unwrap();
+            let rendered: Vec<_> = compiled
+                .warnings
+                .iter()
+                .map(|w| strip_lib_dir(&w.diagnostic_string()))
+                .collect();
+            assert_eq!(rendered.len(), 2, "{rendered:?}");
+            assert!(rendered[0].contains("/warns.c:2:1"), "{}", rendered[0]);
+            assert!(rendered[1].contains("/warns.c:5:1"), "{}", rendered[1]);
         }
     }
 }
