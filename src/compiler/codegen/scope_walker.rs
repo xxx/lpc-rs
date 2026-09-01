@@ -109,7 +109,7 @@ impl ScopeWalker {
                 program
                     .global_variables
                     .get(name)
-                    .filter(|symbol| symbol.public())
+                    .filter(|symbol| symbol.visible_to_children())
                     .map(|symbol| (program, symbol))
             })
             .collect()
@@ -223,14 +223,14 @@ impl ScopeWalker {
     }
 
     /// The "accessed outside of its file" diagnostic for `name`'s `symbol`,
-    /// or `None` when it's public or defined in the current file.
+    /// or `None` when it's child-visible or defined in the current file.
     fn visibility_error(
         name: Ustr,
         symbol: &Symbol,
         is_local: bool,
         span: Option<Span>,
     ) -> Option<LpcError> {
-        if symbol.public() || is_local {
+        if symbol.visible_to_children() || is_local {
             return None;
         }
 
@@ -995,6 +995,33 @@ mod tests {
                     .collect();
                 assert!(messages.is_empty(), "{code}: {messages:?}");
             }
+        }
+
+        #[tokio::test]
+        async fn a_protected_inherited_global_is_visible() {
+            for code in [
+                r#"inherit "/guarded"; int f() { return shared; }"#,
+                "protected int mine = 4; int f() { return mine; }",
+            ] {
+                let walker = ScopeWalker::compile_through(code).await.unwrap();
+                let messages: Vec<_> = walker
+                    .context
+                    .diagnostics
+                    .errors()
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect();
+                assert!(messages.is_empty(), "{code}: {messages:?}");
+            }
+        }
+
+        #[tokio::test]
+        async fn a_protected_declaration_is_ambiguous_with_a_visible_one() {
+            let code = r#"inherit "/visible"; inherit "/guarded"; int f() { return shared; }"#;
+            assert_eq!(
+                warnings(code).await,
+                ["`shared` is declared by `/visible.c` and `/guarded.c`; `/guarded.c`'s is used"]
+            );
         }
 
         #[tokio::test]
