@@ -558,7 +558,7 @@ const LADDER: &[fn(&Token) -> Option<BinaryOperation>] = &[
 
 /// Recursive descent over the operand's tokens: C's integer operator
 /// ladder (elif-bundle R6) — [`LADDER`] levels, then unary, then primary.
-/// Two checks keep every tree under `MAX_NESTING_DEPTH` (nesting-cap R5):
+/// Two checks keep every tree under `MAX_NESTING_DEPTH`:
 /// `depth` refuses to descend into a `(` or prefix operator the tree could
 /// not afford, and every built node reports its height upward.
 struct ExprParser {

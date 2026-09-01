@@ -2247,7 +2247,7 @@ mod tests {
         }
 
         /// Tree levels and macro levels stack on one path; the budget is the
-        /// sum (nesting-cap R6): two 250-term macros nest within 512, three do
+        /// sum: two 250-term macros nest within 512, three do
         /// not.
         #[tokio::test]
         async fn if_evaluation_has_a_frame_budget() {
@@ -2268,7 +2268,7 @@ mod tests {
             test_invalid(&three, "`#if` evaluation nests too deeply \\(limit 512\\)").await;
         }
 
-        /// Nesting-cap R7: a too-deep `#define` body is substitution-only, like any body
+        /// A too-deep `#define` body is substitution-only, like any body
         /// that is not an expression.
         #[tokio::test]
         async fn a_too_deep_define_body_is_substitution_only() {
