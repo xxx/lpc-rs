@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use if_chain::if_chain;
 use lpc_rs_core::{EFUN, ScopeId, call_namespace::CallNamespace, lpc_type::LpcType};
-use lpc_rs_errors::{LpcError, Result, lpc_error};
+use lpc_rs_errors::{LpcError, Result, lpc_error, lpc_warning, span::Span};
 use lpc_rs_utils::string::closure_arg_number;
 
 use crate::{
@@ -9,8 +9,9 @@ use crate::{
     compiler::{
         ast::{
             assignment_node::AssignmentNode,
-            ast_node::{AstNodeTrait, SpannedNode},
+            ast_node::{AstNode, AstNodeTrait, SpannedNode},
             binary_op_node::BinaryOpNode,
+            block_node::BlockNode,
             break_node::BreakNode,
             call_node::{CallChain, CallNode},
             closure_node::ClosureNode,
@@ -34,10 +35,10 @@ use crate::{
             while_node::WhileNode,
         },
         codegen::tree_walker::{
-            ContextHolder, Pass, TreeWalker, walk_assignment, walk_binary_op, walk_closure,
-            walk_do_while, walk_for, walk_foreach, walk_function_def, walk_function_ptr,
-            walk_label, walk_range, walk_return, walk_switch, walk_ternary, walk_unary_op,
-            walk_var_init,
+            ContextHolder, Pass, TreeWalker, walk_assignment, walk_binary_op, walk_block,
+            walk_closure, walk_do_while, walk_for, walk_foreach, walk_function_def,
+            walk_function_ptr, walk_label, walk_range, walk_return, walk_switch, walk_ternary,
+            walk_unary_op, walk_var_init,
         },
         compilation_context::CompilationContext,
         diagnostics::Diagnostics,
@@ -112,6 +113,46 @@ impl SemanticCheckWalker {
     fn can_use_labels(&self) -> bool {
         !self.valid_labels.is_empty() && self.valid_labels.last().unwrap().0
     }
+
+    /// Warn at the first statement of `body` that follows a `return`,
+    /// `break`, or `continue`; a `case` or `default` label makes what follows
+    /// reachable again.
+    fn check_unreachable(&mut self, body: &[AstNode]) {
+        let mut jump: Option<&AstNode> = None;
+        for statement in body {
+            match statement {
+                AstNode::NoOp => {}
+                AstNode::LabeledStatement(labeled) => {
+                    jump = is_jump(&labeled.node).then_some(&*labeled.node);
+                }
+                _ if jump.is_some() => {
+                    let w = lpc_warning!(statement_span(statement), "unreachable statement")
+                        .with_label("control leaves here", jump.and_then(statement_span));
+                    self.context.diagnostics.record(w);
+                    return;
+                }
+                _ if is_jump(statement) => jump = Some(statement),
+                _ => {}
+            }
+        }
+    }
+}
+
+/// Whether `node` is a `return`, `break`, or `continue`.
+fn is_jump(node: &AstNode) -> bool {
+    matches!(
+        node,
+        AstNode::Return(_) | AstNode::Break(_) | AstNode::Continue(_)
+    )
+}
+
+/// Where `node` starts: a block or declaration borrows its first member's span.
+fn statement_span(node: &AstNode) -> Option<Span> {
+    match node {
+        AstNode::Block(block) => block.body.first().and_then(statement_span),
+        AstNode::Decl(decl) => decl.initializations.first().and_then(|init| init.span),
+        _ => node.span(),
+    }
 }
 
 impl ContextHolder for SemanticCheckWalker {
@@ -172,6 +213,11 @@ impl TreeWalker for SemanticCheckWalker {
             Ok(_) => Ok(()),
             Err(err) => Err(self.context.diagnostics.fail(err)),
         }
+    }
+
+    async fn visit_block(&mut self, node: &mut BlockNode) -> Result<()> {
+        self.check_unreachable(&node.body);
+        walk_block(self, node).await
     }
 
     async fn visit_break(&mut self, node: &mut BreakNode) -> Result<()> {
@@ -407,6 +453,7 @@ impl TreeWalker for SemanticCheckWalker {
             }
         }
 
+        self.check_unreachable(&node.body);
         walk_closure(self, node).await?;
 
         self.closure_depth -= 1;
@@ -495,6 +542,7 @@ impl TreeWalker for SemanticCheckWalker {
             }
         }
 
+        self.check_unreachable(&node.body);
         walk_function_def(self, node).await?;
 
         self.context.scopes.pop();
@@ -2896,6 +2944,69 @@ mod tests {
         }
     }
 
+    mod unreachable {
+        use indoc::indoc;
+
+        use super::*;
+
+        async fn warnings(code: &str) -> Vec<String> {
+            let context = walk_code(code).await.unwrap();
+            context
+                .diagnostics
+                .errors()
+                .iter()
+                .filter(|e| e.is_warning())
+                .map(|e| e.to_string())
+                .collect()
+        }
+
+        #[tokio::test]
+        async fn the_first_statement_after_a_jump_warns_once_per_list() {
+            let code = indoc! { r#"
+                int f(int x) {
+                    while (x) { break; x++; x--; }
+                    do { continue; x++; } while (x);
+                    return x;
+                    x++;
+                    x--;
+                }
+            "# };
+            assert_eq!(warnings(code).await, ["unreachable statement"; 3]);
+        }
+
+        #[tokio::test]
+        async fn the_warning_points_at_the_statement_and_labels_the_jump() {
+            let context = walk_code("void f() {\n    return;\n    1;\n}")
+                .await
+                .unwrap();
+            let warning = context.diagnostics.errors().iter().find(|e| e.is_warning());
+            let rendered = warning.unwrap().diagnostic_string();
+            assert!(rendered.contains(":3:5"), "{rendered}");
+            assert!(rendered.contains("control leaves here"), "{rendered}");
+        }
+
+        #[tokio::test]
+        async fn a_label_makes_the_rest_reachable() {
+            let code = indoc! { r#"
+                int f(int x) {
+                    switch (x) {
+                        case 1: return 1;
+                        case 2: x++; break;
+                        default: return 3; x++;
+                    }
+                    return 0;
+                }
+            "# };
+            assert_eq!(warnings(code).await, ["unreachable statement"]);
+        }
+
+        #[tokio::test]
+        async fn a_closure_body_is_a_list_too() {
+            let code = "void f() { function g = (: return 1; 2; :); g(); }";
+            assert_eq!(warnings(code).await, ["unreachable statement"]);
+        }
+    }
+
     mod references {
         use super::*;
 
@@ -2905,6 +3016,7 @@ mod tests {
                 .diagnostics
                 .errors()
                 .iter()
+                .filter(|e| !e.is_warning())
                 .map(|e| e.to_string())
                 .collect()
         }

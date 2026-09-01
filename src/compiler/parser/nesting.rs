@@ -71,26 +71,7 @@ impl Child<'_> {
     fn span(self) -> Option<Span> {
         match self {
             Child::Expr(e) => e.span(),
-            Child::Stmt(s) => match s {
-                AstNode::Block(_)
-                | AstNode::Decl(_)
-                | AstNode::LabeledStatement(_)
-                | AstNode::Program(_)
-                | AstNode::NoOp => None,
-                AstNode::Break(n) => n.span,
-                AstNode::Call(n) => n.span,
-                AstNode::Continue(n) => n.span,
-                AstNode::DoWhile(n) => n.span,
-                AstNode::Expression(e) => e.span(),
-                AstNode::For(n) => n.span,
-                AstNode::ForEach(n) => n.span,
-                AstNode::FunctionDef(n) => n.span,
-                AstNode::If(n) => n.span,
-                AstNode::Return(n) => n.span,
-                AstNode::Switch(n) => n.span,
-                AstNode::VarInit(n) => n.span,
-                AstNode::While(n) => n.span,
-            },
+            Child::Stmt(s) => s.span(),
             Child::Block(_) | Child::Decl(_) | Child::Program(_) => None,
             Child::FunctionDef(n) => n.span,
             Child::Call(n) => n.span,
