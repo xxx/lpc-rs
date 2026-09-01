@@ -9,7 +9,8 @@ it from there.
 The error mapping has the following keys:
 
 * `error["error"]` (string) - The error message.
-* `error["location"]` (string) - The file:line:column where the error occurred.
+* `error["location"]` (string) - The in-game file:line:column where the error
+  occurred.
 * `error["object"]` (object) - The object in which the error occurred.
 * `error["diagnostic"]` (string) - The full diagnostic message, if any.
   _note:_ This field may be broken up further in the future.
@@ -17,7 +18,7 @@ The error mapping has the following keys:
 Diagnostic example:
 ```c
 error: call to unknown function `clone_obect`
-   ┌─ /home/mpd/git-sources/lpc-rs/lib/secure/master.c:15:12
+   ┌─ /secure/master.c:15:12
    │
 15 │     return clone_obect("/secure/login");
    │            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

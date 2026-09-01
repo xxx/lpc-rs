@@ -157,11 +157,7 @@ pub async fn apply_runtime_error(
 
     mapping.insert(
         LpcString::from("location").into(),
-        LpcString::from(in_game_location(
-            error.span(),
-            ctx.config().lib_dir.as_str(),
-        ))
-        .into(),
+        LpcString::from(in_game_location(error.span())).into(),
     );
 
     let object = proc

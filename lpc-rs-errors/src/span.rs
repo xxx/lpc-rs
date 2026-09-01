@@ -35,7 +35,7 @@ impl Display for Span {
         if let Ok(name) = files.name(self.file_id())
             && let Ok(idx) = files.line_index(self.file_id(), self.l())
             && let Ok(line_num) = files.line_number(self.file_id(), idx)
-            && let Ok(column_num) = files.column_number(self.file_id(), idx, line_num)
+            && let Ok(column_num) = files.column_number(self.file_id(), idx, self.l())
         {
             write!(f, "{name}:{line_num}:{column_num}")
         } else {
@@ -169,6 +169,15 @@ mod tests {
         assert_eq!(big.file_id(), u32::MAX as usize - 1);
         assert_eq!(big.l(), u32::MAX as usize);
         assert_eq!(big.r(), u32::MAX as usize);
+    }
+
+    #[test]
+    fn display_is_the_name_line_and_column_of_the_start() {
+        let file_id = crate::source_map::SOURCE_MAP
+            .write()
+            .add("/where.c".to_owned(), "int x;\nint y = 42;\n".to_owned());
+        assert_eq!(Span::new(file_id, 0..3).to_string(), "/where.c:1:1");
+        assert_eq!(Span::new(file_id, 15..17).to_string(), "/where.c:2:9");
     }
 
     #[test]
