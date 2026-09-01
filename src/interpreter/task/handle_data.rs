@@ -145,6 +145,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .address(address)
             .partial_args(partial_args)
             .upvalue_ptrs(upvalue_ptrs)
+            .origin(Some(frame.function.prototype.filename.clone()))
             .build()
             .unwrap();
 

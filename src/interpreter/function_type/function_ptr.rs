@@ -50,6 +50,11 @@ pub struct FunctionPtr {
     /// The captured cells the pointed-to closure continues, from the frame that created it.
     #[builder(default)]
     pub upvalue_ptrs: ThinVec<VarId>,
+
+    /// The file whose code wrote this pointer; `None` for a pointer the
+    /// driver minted itself.
+    #[builder(default)]
+    pub origin: Option<Arc<LpcPath>>,
 }
 
 impl FunctionPtr {
