@@ -6,10 +6,9 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_EXEC,
-    apply::apply_nested,
+    apply::valid_apply,
     efun::efun_context::EfunContext,
     lpc_ref::{LpcRef, NULL},
-    process::Process,
     stm::Effect,
 };
 
@@ -43,7 +42,12 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
                 return Err(context.runtime_error("exec: `new` and `old` are the same object"));
             }
 
-            if !valid_exec(context, &new_ob, &old_ob).await? {
+            let args = [
+                LpcRef::from(Arc::downgrade(context.process())),
+                LpcRef::from(Arc::downgrade(&new_ob)),
+                LpcRef::from(Arc::downgrade(&old_ob)),
+            ];
+            if !valid_apply(context.task_context(), VALID_EXEC, &args).await? {
                 context.return_efun_result(NULL);
                 return Ok(());
             }
@@ -85,28 +89,6 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
             Ok(())
         }
     }
-}
-
-/// The master's verdict; `false` without a master or the apply.
-async fn valid_exec<const N: usize>(
-    context: &EfunContext<'_, N>,
-    new: &Arc<Process>,
-    old: &Arc<Process>,
-) -> Result<bool> {
-    let ctx = context.task_context();
-    let Some(master) = ctx.object_space().master_object() else {
-        return Ok(false);
-    };
-    let Some(function) = master.program.unmangled_functions.get(VALID_EXEC).cloned() else {
-        return Ok(false);
-    };
-    let args = [
-        LpcRef::from(Arc::downgrade(context.process())),
-        LpcRef::from(Arc::downgrade(new)),
-        LpcRef::from(Arc::downgrade(old)),
-    ];
-    let verdict = apply_nested(ctx, &master, function, &args).await?;
-    Ok(verdict.is_truthy(ctx.txn()))
 }
 
 #[cfg(test)]
