@@ -3,7 +3,6 @@ use std::sync::Arc;
 use indexmap::IndexMap;
 use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use termcolor::Buffer;
 
 use super::{SeedArg, TaskSeed};
 use crate::{
@@ -165,15 +164,9 @@ pub async fn apply_runtime_error(
         .unwrap_or_else(|| LpcString::from("<no object>").into());
     mapping.insert(LpcString::from("object").into(), object);
 
-    let mut buffer = Buffer::ansi();
-    let diagnostics = error.to_diagnostics();
-
-    lpc_rs_errors::output_diagnostics(&diagnostics, &mut buffer);
-    let s = std::str::from_utf8(buffer.as_slice()).unwrap_or("<diagnostic with invalid utf8?>");
-
     mapping.insert(
         LpcString::from("diagnostic").into(),
-        LpcString::from(s).into(),
+        LpcString::from(error.diagnostic_string()).into(),
     );
 
     // A cell minted into `ctx`'s transaction here is discarded when the
@@ -265,5 +258,6 @@ mod tests {
             d.to_str().contains("runtime error: boom"),
             "the rendered key: {d}"
         );
+        assert!(!d.to_str().contains('\u{1b}'), "plain text: {d:?}");
     }
 }

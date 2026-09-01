@@ -261,8 +261,8 @@ impl LpcError {
         );
     }
 
-    /// Emit the diagnostics as a plain-text String, for logs and tests;
-    /// `emit_diagnostics` is the colored terminal output.
+    /// The diagnostics rendered as plain text; `emit_diagnostics` is the
+    /// colored terminal output.
     pub fn diagnostic_string(&self) -> String {
         let mut buffer = Buffer::no_color();
         output_diagnostics(&self.to_diagnostics(), &mut buffer);

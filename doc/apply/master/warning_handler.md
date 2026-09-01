@@ -16,7 +16,7 @@ The warning mapping has the following keys:
 * `warning["file"]` (string) - The in-game path of the file being compiled.
   A path, not an object: the warning is raised before the object exists.
 * `warning["diagnostic"]` (string) - The rendered diagnostic, source excerpt
-  included.
+  included, no terminal color codes.
 
 The apply runs inside the loading task: `this_player` is whatever it was at
 the `load_object`, `clone_object`, or call that triggered the compile, so a

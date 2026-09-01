@@ -1373,7 +1373,6 @@ dependencies = [
  "rpds",
  "stable-vec",
  "syn 1.0.109",
- "termcolor",
  "thin-vec",
  "tokio",
  "tokio-test",
