@@ -1,0 +1,53 @@
+//! The shared front of the file efuns: the path argument canonicalized,
+//! confined to the lib, and put to the master.
+
+use std::{path::PathBuf, sync::Arc};
+
+use lpc_rs_core::RegisterSize;
+use lpc_rs_errors::Result;
+
+use crate::interpreter::{apply::valid_apply, efun::efun_context::EfunContext, lpc_ref::LpcRef};
+
+/// A file path the master has allowed an efun to touch.
+pub(crate) struct FileAccess {
+    /// The canonical absolute in-game path: what the master saw, what
+    /// messages name.
+    pub in_game: String,
+    /// The file on the server.
+    pub server: PathBuf,
+}
+
+/// The path in `register`, canonicalized against the caller's directory
+/// and allowed by the master's `apply` (`valid_read`/`valid_write`) for
+/// `efun`. A non-string, a path that leaves the lib (the master is not
+/// asked), or a refusal is a runtime error.
+pub(crate) async fn authorize<const N: usize>(
+    context: &EfunContext<'_, N>,
+    efun: &str,
+    apply: &str,
+    register: RegisterSize,
+) -> Result<FileAccess> {
+    let Some(arg) = context.resolve_local_register(register).as_str() else {
+        return Err(context.runtime_error(format!("{efun}: path must be a string")));
+    };
+    let path = context.in_game_path(arg);
+    let server = context
+        .config()
+        .validate_in_game_path(&path, None)
+        .map_err(|_| context.runtime_error(format!("{efun}: `{arg}` is not a valid path")))?
+        .into_owned();
+    let in_game = path
+        .as_in_game(context.config().lib_dir.as_str())
+        .display()
+        .to_string();
+    let args = [
+        LpcRef::from(in_game.clone()),
+        LpcRef::from(efun),
+        LpcRef::from(Arc::downgrade(context.process())),
+        context.calling_program(),
+    ];
+    if !valid_apply(context.task_context(), apply, &args).await? {
+        return Err(context.runtime_error(format!("{efun}: permission denied")));
+    }
+    Ok(FileAccess { in_game, server })
+}

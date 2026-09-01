@@ -37,6 +37,10 @@ pub const CATCH_TELL: &str = "catch_tell";
 pub const COMMAND_NOT_FOUND: &str = "command_not_found";
 /// Master apply: whether the calling object may `exec` (`doc/apply/master/valid_exec.md`).
 pub const VALID_EXEC: &str = "valid_exec";
+/// The master's gate on every efun that reads the filesystem.
+pub const VALID_READ: &str = "valid_read";
+/// The master's gate on every efun that writes the filesystem.
+pub const VALID_WRITE: &str = "valid_write";
 /// Master apply: returns the object a new connection becomes (`doc/apply/master/connect.md`).
 pub const CONNECT: &str = "connect";
 /// Master apply: receives each uncaught runtime error (`doc/apply/master/error_handler.md`).

@@ -17,6 +17,7 @@ pub(crate) mod enable_commands;
 pub(crate) mod environment;
 pub(crate) mod exec;
 pub(crate) mod explode;
+pub(crate) mod file_access;
 pub(crate) mod file_name;
 pub(crate) mod find_object;
 pub(crate) mod implode;
@@ -44,6 +45,7 @@ pub(crate) mod query_ip_number;
 pub(crate) mod query_notify_fail;
 pub(crate) mod query_resident_memory;
 pub(crate) mod query_verb;
+pub(crate) mod read_file;
 pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
 pub(crate) mod remove_rule;
@@ -523,6 +525,11 @@ efuns! {
         arity: 2,
         args: [LpcType::Object(false), LpcType::String(false)],
     },
+    read_file => {
+        returns: LpcType::String(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -695,6 +702,7 @@ mod tests {
                 "query_ip_number",
                 "send_gmcp",
                 "send_mxp",
+                "read_file",
             ]
         );
     }

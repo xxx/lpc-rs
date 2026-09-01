@@ -26,6 +26,8 @@ use crate::{
         semantic::scope_tree::ScopeTree,
     },
     interpreter::{
+        CommittedReader,
+        lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
         program::Program,
@@ -111,6 +113,22 @@ pub async fn allow_exec(vm: &Vm) -> Arc<Process> {
 
 pub fn test_config() -> Config {
     test_config_builder!().build().unwrap()
+}
+
+/// A [`Config`] whose lib is `root`, without simul efuns or a master.
+pub fn temp_lib_config(root: &TempLib) -> Config {
+    ConfigBuilder::default()
+        .lib_dir(root.to_str().unwrap())
+        .build()
+        .unwrap()
+}
+
+/// The string in `process`'s committed global `reg`; anything else panics.
+pub fn committed_string(vm: &Vm, process: &Arc<Process>, reg: u16) -> String {
+    match vm.global_state.committed_global(process, reg) {
+        LpcRef::String(s) => s.to_str().to_owned(),
+        other => panic!("a string in register {reg}: {other:?}"),
+    }
 }
 
 async fn compile_simul_efuns(config: &Arc<Config>) -> Program {
