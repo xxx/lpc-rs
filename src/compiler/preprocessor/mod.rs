@@ -105,7 +105,7 @@ impl Preprocessor {
     /// preprocessor
     ///
     /// # Arguments
-    /// `path` - The in-game [`Path`]like representing the file.
+    /// `path` - The in-game [`LpcPath`] of the file.
     /// `code` - The code to scan.
     ///
     /// # Examples
