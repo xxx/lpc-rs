@@ -1281,6 +1281,34 @@ mod test_instructions {
         }
 
         #[tokio::test]
+        async fn a_program_reached_through_two_parents_has_one_set_of_globals() {
+            let code = indoc! { r##"
+                mixed r;
+                void create() {
+                    object o = clone_object("/diamond_child");
+                    mixed before = o->both();
+                    o->set_left_a(7);
+                    r = before + o->both();
+                }
+            "##};
+
+            let task = run_prog(code).await;
+            let gs = &task.context.global_state;
+            let globals = committed_globals_by_name(gs, task.context.process());
+            let LpcRef::Array(cell) = &globals["r"] else {
+                panic!("both() returns an array");
+            };
+            let values: Vec<String> = gs
+                .committed_array(cell.id)
+                .unwrap()
+                .iter()
+                .map(|v| v.to_string())
+                .collect();
+
+            assert_eq!(values, ["123", "123", "123", "7", "7", "7"]);
+        }
+
+        #[tokio::test]
         async fn sibling_parents_keep_their_strings_calls_and_globals() {
             let code = indoc! { r##"
                 mixed r;
