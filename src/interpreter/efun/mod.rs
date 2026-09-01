@@ -20,6 +20,7 @@ pub(crate) mod explode;
 pub(crate) mod file_access;
 pub(crate) mod file_name;
 pub(crate) mod find_object;
+pub(crate) mod get_dir;
 pub(crate) mod implode;
 pub(crate) mod input_to;
 pub(crate) mod interactive;
@@ -525,6 +526,11 @@ efuns! {
         arity: 2,
         args: [LpcType::Object(false), LpcType::String(false)],
     },
+    get_dir => {
+        returns: LpcType::String(true),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
     read_file => {
         returns: LpcType::String(false),
         arity: 1,
@@ -702,6 +708,7 @@ mod tests {
                 "query_ip_number",
                 "send_gmcp",
                 "send_mxp",
+                "get_dir",
                 "read_file",
             ]
         );
