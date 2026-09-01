@@ -335,20 +335,23 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         &self.frame().process
     }
 
-    /// The defining file of the code that called this efun — the nearest
+    /// The defining file of the code that called this efun — the file that
+    /// wrote the pointer when it was fired through one, else the nearest
     /// frame under it that is not an efun's — as an in-game path with its
     /// extension (`/secure/master.c`); `NULL` when there is none (an efun
     /// pointer fired as a task's entry).
     pub(crate) fn calling_program(&self) -> LpcRef {
         let lib_dir = self.config().lib_dir.as_str();
-        self.stack
-            .iter()
-            .rev()
-            .find(|frame| !frame.function.prototype.is_efun())
-            .map_or(NULL, |frame| {
-                let file = frame.function.prototype.filename.as_in_game(lib_dir);
-                LpcRef::from(file.display().to_string())
-            })
+        let render = |path: &LpcPath| LpcRef::from(path.as_in_game(lib_dir).display().to_string());
+        for frame in self.stack.iter().rev() {
+            if !frame.function.prototype.is_efun() {
+                return render(&frame.function.prototype.filename);
+            }
+            if let Some(origin) = &frame.origin {
+                return render(origin);
+            }
+        }
+        NULL
     }
 
     /// Get a reference to `this_player` from the context
@@ -511,6 +514,26 @@ mod tests {
         stack.push(efun_frame).unwrap();
         let ctx = EfunContext::new(&mut stack, &task_context);
         assert_eq!(ctx.calling_program().as_str(), Some("/caller"));
+    }
+
+    /// An efun frame fired through a pointer reports the pointer's writer,
+    /// not the frame under it.
+    #[test]
+    fn an_efun_frame_fired_through_a_pointer_reports_the_pointers_origin() {
+        use crate::interpreter::{efun::EFUN_FUNCTIONS, stm::VarId};
+
+        let (task_context, mut stack) = efun_context();
+        let process = stack.last().unwrap().process.clone();
+        let mut efun_frame = CallFrame::new(
+            process,
+            EFUN_FUNCTIONS["this_object"].clone(),
+            0 as RegisterSize,
+            None::<&[VarId]>,
+        );
+        efun_frame.origin = Some(Arc::new(LpcPath::InGame("/writer.c".into())));
+        stack.push(efun_frame).unwrap();
+        let ctx = EfunContext::new(&mut stack, &task_context);
+        assert_eq!(ctx.calling_program().as_str(), Some("/writer.c"));
     }
 
     /// An efun fired as a task's entry has no LPC caller.

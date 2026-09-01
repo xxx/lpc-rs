@@ -11,6 +11,7 @@ use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::LpcIntInner;
 use lpc_rs_core::{
     RegisterSize,
+    lpc_path::LpcPath,
     register::{Register, RegisterVariant},
 };
 use lpc_rs_errors::{LpcError, Result, span::Span};
@@ -113,6 +114,11 @@ pub struct CallFrame {
     /// The collection `->` this frame issued and has not finished.
     #[builder(default)]
     pub pending: Option<Box<CollectionCall>>,
+
+    /// For an efun frame fired through a pointer: the file that wrote the
+    /// pointer, which is the code the efun acts for.
+    #[builder(default)]
+    pub origin: Option<Arc<LpcPath>>,
 }
 
 impl CallFrame {
@@ -180,6 +186,7 @@ impl CallFrame {
             upvalue_ptrs: ups,
             ref_cells: ThinVec::new(),
             pending: None,
+            origin: None,
         };
 
         instance.populate_upvalues();

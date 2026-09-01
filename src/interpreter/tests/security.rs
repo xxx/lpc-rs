@@ -110,6 +110,35 @@ async fn a_closure_reports_the_file_it_was_written_in() {
     assert_eq!(committed_string(&vm, &master, SEEN_PROGRAM), "/a.c");
 }
 
+/// A pointer `u` wrote and `x` fired acts for `u`'s code, exactly as a
+/// closure would.
+#[tokio::test]
+async fn an_efun_pointer_fired_by_another_object_reports_the_file_that_wrote_it() {
+    let root = TempLib::new("prov-pointer");
+    let vm = Vm::new(temp_lib_config(&root));
+    let master = recording_master(&vm, &root).await;
+    run(
+        &vm,
+        "/u.c",
+        r#"function make() { return &read_file("/data.txt"); }"#,
+    )
+    .await;
+    run(
+        &vm,
+        "/x.c",
+        indoc! { r#"
+            string got;
+            void create() {
+                function f = find_object("/u")->make();
+                got = f();
+            }
+        "# },
+    )
+    .await;
+    assert_eq!(committed_string(&vm, &master, SEEN_PROGRAM), "/u.c");
+    assert_eq!(committed_string(&vm, &master, SEEN_CALLER), "/u");
+}
+
 /// `b` asking `a` to read for it hands the master `a`'s code, not `b`'s.
 #[tokio::test]
 async fn a_call_other_trampoline_reports_the_callees_file() {

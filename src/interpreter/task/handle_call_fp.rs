@@ -74,6 +74,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         for (i, arg) in args.into_iter().enumerate() {
             new_frame.push_arg(&self.context.txn, i, arg)?;
         }
+        new_frame.origin = ptr.origin.clone();
 
         self.stack.push(new_frame)?;
 
