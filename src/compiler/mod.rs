@@ -711,5 +711,25 @@ mod tests {
                 ["`g` shadows a global variable"]
             );
         }
+
+        #[tokio::test]
+        async fn a_global_shadowing_an_inherited_global_is_a_warning() {
+            assert_eq!(
+                warnings_of(r#"inherit "/parent"; int b;"#).await,
+                [
+                    "`b` shadows a global inherited from `/grandparent.c`",
+                    "`b` shadows a global inherited from `/parent.c`",
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_name_declared_by_two_parents_is_a_warning() {
+            assert_eq!(
+                warnings_of(r#"inherit "/twin_a"; inherit "/twin_b"; int f() { return twin; }"#)
+                    .await,
+                ["`twin` is declared by `/twin_a.c` and `/twin_b.c`; `/twin_b.c`'s is used"]
+            );
+        }
     }
 }

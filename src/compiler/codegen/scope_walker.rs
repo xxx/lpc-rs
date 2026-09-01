@@ -29,6 +29,7 @@ use crate::compiler::{
     diagnostics::Diagnostics,
     semantic::semantic_checks::check_var_redefinition,
 };
+use crate::interpreter::program::Program;
 
 /// A tree walker to handle populating all the scopes in the program, as well as
 /// generating errors for undefined and redefined variables.
@@ -49,6 +50,9 @@ pub struct ScopeWalker {
 
     /// The `(scope, name)` of every variable a reference resolved to.
     referenced: HashSet<(ScopeId, Ustr)>,
+
+    /// Names already reported as declared by more than one parent.
+    ambiguous: HashSet<Ustr>,
 }
 
 /// A local variable's identity and declaration site.
@@ -57,6 +61,29 @@ struct DeclaredLocal {
     scope_id: ScopeId,
     name: Ustr,
     span: Option<Span>,
+}
+
+/// The programs' names for a message: "`/a.c`, `/b.c` and `/c.c`".
+fn file_list(declarations: &[(&Program, &Symbol)]) -> String {
+    let names: Vec<String> = declarations
+        .iter()
+        .map(|(program, _)| format!("`{}`", program.filename))
+        .collect();
+    match names.split_last() {
+        None => String::new(),
+        Some((last, [])) => last.clone(),
+        Some((last, rest)) => format!("{} and {}", rest.join(", "), last),
+    }
+}
+
+/// Each distinct declaration site — a diamond inherit carries one site twice,
+/// under two source-map ids.
+fn declaration_sites(declarations: &[(&Program, &Symbol)]) -> Vec<Option<Span>> {
+    declarations
+        .iter()
+        .map(|(_, symbol)| symbol.span)
+        .unique_by(|span| span.map(|s| s.to_string()))
+        .collect()
 }
 
 impl ScopeWalker {
@@ -68,29 +95,90 @@ impl ScopeWalker {
             closure_scopes: HashSet::new(),
             locals: vec![],
             referenced: HashSet::new(),
+            ambiguous: HashSet::new(),
         }
     }
 
-    /// The warning for a local named `node.name` when an enclosing scope or
-    /// a visible global already declares that name.
+    /// The visible declarations of `name` among the inherited programs, in
+    /// inherit order.
+    fn inherited_declarations(&self, name: &str) -> Vec<(&Program, &Symbol)> {
+        self.context
+            .inherits
+            .iter()
+            .filter_map(|program| {
+                program
+                    .global_variables
+                    .get(name)
+                    .filter(|symbol| symbol.public())
+                    .map(|symbol| (program, symbol))
+            })
+            .collect()
+    }
+
+    /// The warning for a declaration of `node.name` when an enclosing scope,
+    /// this file's globals, or a parent already declares that name.
     fn shadow_warning(&self, node: &VarInitNode) -> Option<LpcError> {
-        if node.global || node.name.starts_with('$') {
+        if node.name.starts_with('$') {
             return None;
         }
-        let is_local = self.context.scopes.lookup(&node.name).is_some();
-        let shadowed = self.context.lookup_var(node.name)?;
-        if !(shadowed.public() || is_local) {
+        if let Some(shadowed) = self.context.scopes.lookup(&node.name) {
+            let kind = if shadowed.is_global() {
+                "a global"
+            } else {
+                "an outer"
+            };
+            return Some(
+                lpc_warning!(node.span, "`{}` shadows {} variable", node.name, kind)
+                    .with_label("shadowed declaration here", shadowed.span),
+            );
+        }
+        let declarations = self.inherited_declarations(&node.name);
+        if declarations.is_empty() {
             return None;
         }
-        let kind = if shadowed.is_global() {
-            "a global"
-        } else {
-            "an outer"
+        let mut warning = lpc_warning!(
+            node.span,
+            "`{}` shadows a global inherited from {}",
+            node.name,
+            file_list(&declarations)
+        );
+        for site in declaration_sites(&declarations) {
+            warning = warning.with_label("shadowed declaration here", site);
+        }
+        if node.global {
+            warning = warning.with_note(format!(
+                "inherited functions keep their own `{}`",
+                node.name
+            ));
+        }
+        Some(warning)
+    }
+
+    /// Warn, once per name, when a reference to `name` outside this file's
+    /// own declarations could mean more than one parent's global.
+    fn check_ambiguity(&mut self, name: Ustr, span: Option<Span>) {
+        if self.ambiguous.contains(&name) || self.context.scopes.lookup(&name).is_some() {
+            return;
+        }
+        let declarations = self.inherited_declarations(&name);
+        if declarations.len() < 2 {
+            return;
+        }
+        let Some((used, _)) = declarations.last() else {
+            return;
         };
-        Some(
-            lpc_warning!(node.span, "`{}` shadows {} variable", node.name, kind)
-                .with_label("shadowed declaration here", shadowed.span),
-        )
+        let mut warning = lpc_warning!(
+            span,
+            "`{}` is declared by {}; `{}`'s is used",
+            name,
+            file_list(&declarations),
+            used.filename
+        );
+        for site in declaration_sites(&declarations) {
+            warning = warning.with_label("declared here", site);
+        }
+        self.ambiguous.insert(name);
+        self.context.diagnostics.record(warning);
     }
 
     /// Record that a reference to `name` resolved to `symbol`.
@@ -243,7 +331,9 @@ impl TreeWalker for ScopeWalker {
             && symbol.type_.matches_type(LpcType::Function(false))
         {
             Self::note_reference(&mut self.referenced, symbol, *name);
-            if self.should_upvalue_symbol(symbol) {
+            let upvalue = self.should_upvalue_symbol(symbol);
+            self.check_ambiguity(*name, node.span);
+            if upvalue {
                 trace!("upvaluing called function var {}", name);
                 let symbol = self.context.lookup_var_mut(name).unwrap();
                 symbol.upvalue = true;
@@ -386,6 +476,7 @@ impl TreeWalker for ScopeWalker {
         }
 
         let is_local = self.context.scopes.lookup(&node.name).is_some();
+        self.check_ambiguity(node.name, node.span);
 
         let Some(symbol) = self.context.lookup_var(node.name) else {
             // check for functions (i.e. declaring function pointers with no arguments)
@@ -432,6 +523,7 @@ impl TreeWalker for ScopeWalker {
 
     async fn visit_ref(&mut self, node: &mut RefNode) -> Result<()> {
         let is_local = self.context.scopes.lookup(&node.name).is_some();
+        self.check_ambiguity(node.name, node.span);
 
         let Some(symbol) = self.context.lookup_var(node.name) else {
             let e = lpc_error!(node.span, "undefined variable `{}`", node.name);
@@ -567,8 +659,15 @@ mod tests {
                 "inherit \"./parent\"; void inc(int ref x) { x++; } void f() { inc(ref priv); }",
             )
             .await;
+            let errors: Vec<_> = walker
+                .context
+                .diagnostics
+                .errors()
+                .iter()
+                .filter(|e| !e.is_warning())
+                .collect();
             assert_regex!(
-                walker.context.diagnostics.errors()[0].message(),
+                errors[0].message(),
                 "private variable `priv` accessed outside of its file"
             );
         }
@@ -834,7 +933,168 @@ mod tests {
         #[tokio::test]
         async fn an_inherited_global_is_shadowed_only_when_visible() {
             let code = r#"inherit "/parent"; void f(int b, int priv) { b++; priv++; }"#;
-            assert_eq!(warnings(code).await, ["`b` shadows a global variable"]);
+            assert_eq!(
+                warnings(code).await,
+                [
+                    "`b` shadows a global inherited from `/grandparent.c`",
+                    "`b` shadows a global inherited from `/parent.c`",
+                ]
+            );
+        }
+
+        async fn rendered(code: &str) -> Vec<String> {
+            let walker = ScopeWalker::compile_through(code).await.unwrap();
+            walker
+                .context
+                .diagnostics
+                .errors()
+                .iter()
+                .filter(|e| e.is_warning())
+                .map(|e| e.diagnostic_string())
+                .collect()
+        }
+
+        #[tokio::test]
+        async fn a_global_that_shadows_an_inherited_global_names_the_parent() {
+            let code = r#"inherit "/parent"; int b;"#;
+            assert_eq!(
+                warnings(code).await,
+                [
+                    "`b` shadows a global inherited from `/grandparent.c`",
+                    "`b` shadows a global inherited from `/parent.c`",
+                ]
+            );
+            let rendered = rendered(code).await;
+            assert!(
+                rendered[1].contains("shadowed declaration here"),
+                "{}",
+                rendered[1]
+            );
+            assert!(rendered[1].contains("/parent.c:3:"), "{}", rendered[1]);
+            assert!(
+                rendered[1].contains("inherited functions keep their own `b`"),
+                "{}",
+                rendered[1]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_private_inherited_global_is_not_shadowed() {
+            let code = r#"inherit "/parent"; int priv;"#;
+            assert_eq!(
+                warnings(code).await,
+                ["`b` shadows a global inherited from `/grandparent.c`"]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_grandparents_global_is_reached_through_the_parent() {
+            let code = r#"inherit "/parent"; int a;"#;
+            let rendered = rendered(code).await;
+            assert_eq!(rendered.len(), 2, "{rendered:?}");
+            assert!(
+                rendered[1].contains("`a` shadows a global inherited from `/parent.c`"),
+                "{}",
+                rendered[1]
+            );
+            assert!(rendered[1].contains("/grandparent.c:1:"), "{}", rendered[1]);
+        }
+
+        #[tokio::test]
+        async fn every_parent_declaring_the_name_is_labeled() {
+            let code = r#"inherit "/twin_a"; inherit "/twin_b"; int twin;"#;
+            let rendered = rendered(code).await;
+            assert_eq!(rendered.len(), 1, "{rendered:?}");
+            assert!(
+                rendered[0]
+                    .contains("`twin` shadows a global inherited from `/twin_a.c` and `/twin_b.c`"),
+                "{}",
+                rendered[0]
+            );
+            assert_eq!(
+                rendered[0].matches("shadowed declaration here").count(),
+                2,
+                "{}",
+                rendered[0]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_diamond_labels_the_shared_declaration_once() {
+            let code = r#"inherit "/diamond_left"; inherit "/diamond_right"; int a;"#;
+            let rendered = rendered(code).await;
+            assert_eq!(rendered.len(), 1, "{rendered:?}");
+            assert!(
+                rendered[0].contains("inherited from `/diamond_left.c` and `/diamond_right.c`"),
+                "{}",
+                rendered[0]
+            );
+            assert_eq!(
+                rendered[0].matches("shadowed declaration here").count(),
+                1,
+                "{}",
+                rendered[0]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_name_two_parents_declare_warns_once_at_its_first_reference() {
+            let code = r#"inherit "/twin_a"; inherit "/twin_b"; int f() { twin++; return twin; }"#;
+            let rendered = rendered(code).await;
+            assert_eq!(rendered.len(), 1, "{rendered:?}");
+            assert!(
+                rendered[0].contains(
+                    "`twin` is declared by `/twin_a.c` and `/twin_b.c`; `/twin_b.c`'s is used"
+                ),
+                "{}",
+                rendered[0]
+            );
+            assert_eq!(
+                rendered[0].matches("declared here").count(),
+                2,
+                "{}",
+                rendered[0]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_ref_to_an_ambiguous_name_warns_too() {
+            let code = r#"inherit "/twin_a"; inherit "/twin_b"; void inc(int ref x) { x++; } void f() { inc(ref twin); }"#;
+            assert_eq!(
+                warnings(code).await,
+                ["`twin` is declared by `/twin_a.c` and `/twin_b.c`; `/twin_b.c`'s is used"]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_declaration_in_this_file_settles_the_name() {
+            let code =
+                r#"inherit "/twin_a"; inherit "/twin_b"; int twin; int f() { return twin; }"#;
+            assert_eq!(
+                warnings(code).await,
+                ["`twin` shadows a global inherited from `/twin_a.c` and `/twin_b.c`"]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_diamond_is_ambiguous_with_one_site() {
+            let code =
+                r#"inherit "/diamond_left"; inherit "/diamond_right"; int f() { return a; }"#;
+            let rendered = rendered(code).await;
+            assert_eq!(rendered.len(), 1, "{rendered:?}");
+            assert!(
+                rendered[0].contains(
+                    "`a` is declared by `/diamond_left.c` and `/diamond_right.c`; `/diamond_right.c`'s is used"
+                ),
+                "{}",
+                rendered[0]
+            );
+            assert_eq!(
+                rendered[0].matches("declared here").count(),
+                1,
+                "{}",
+                rendered[0]
+            );
         }
 
         #[tokio::test]
