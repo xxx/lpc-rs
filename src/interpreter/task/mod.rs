@@ -841,4 +841,52 @@ mod stm_retry_tests {
         drop(tx);
         let _ = handle.join();
     }
+
+    /// A retried task's file write lands once: the first attempt's recorded
+    /// append is discarded with it, the re-run's is the one delivered.
+    #[tokio::test]
+    async fn a_retried_write_file_lands_once() {
+        use lpc_rs_utils::config::ConfigBuilder;
+
+        use crate::test_support::TempLib;
+
+        let root = TempLib::new("retried-write");
+        std::fs::create_dir_all(root.join("secure")).unwrap();
+        std::fs::write(root.join("secure/simul_efuns.c"), "").unwrap();
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .simul_efun_file("/secure/simul_efuns")
+            .build()
+            .unwrap();
+        let mut task = run_prog_with_config(
+            r#"int foo() { write_file("/out.txt", "one\n"); return 10; }"#,
+            std::sync::Arc::new(config),
+        )
+        .await;
+        task.context
+            .global_state
+            .initialize_process_from_code(
+                "/secure/master.c",
+                "int valid_write(string p, string e, object c, string g) { return 1; }",
+            )
+            .await
+            .unwrap();
+
+        let (tx, rx) = flume::bounded(4);
+        let committer_tx = tx.clone();
+        let handle =
+            std::thread::spawn(move || Committer::new().run_with_rejections(committer_tx, rx, 1));
+        let (res, stats) = eval_foo(&mut task, &tx).await;
+        assert!(res.is_ok(), "{res:?}");
+        assert_eq!(stats.attempts, 2, "first commit rejected, re-run commits");
+        assert_eq!(
+            std::fs::read_to_string(root.join("out.txt")).unwrap(),
+            "one\n",
+            "the aborted attempt's append never landed; the committed one landed once"
+        );
+        tx.send(CommitProtocol::Close)
+            .expect("committer channel closed");
+        drop(tx);
+        let _ = handle.join();
+    }
 }

@@ -112,7 +112,6 @@ pub(crate) enum Effect {
 
     /// `write_file`'s append of `contents` to the file at `server`, once the
     /// attempt commits; `in_game` names it in the log when the append fails.
-    #[allow(dead_code)]
     AppendFile {
         in_game: String,
         server: PathBuf,

@@ -60,6 +60,7 @@ pub(crate) mod this_player;
 pub(crate) mod throw;
 pub(crate) mod type_predicates;
 pub(crate) mod write;
+pub(crate) mod write_file;
 pub(crate) mod write_socket;
 
 use std::sync::Arc;
@@ -536,6 +537,11 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false)],
     },
+    write_file => {
+        returns: LpcType::Int(false),
+        arity: 2,
+        args: [LpcType::String(false), LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -710,6 +716,7 @@ mod tests {
                 "send_mxp",
                 "get_dir",
                 "read_file",
+                "write_file",
             ]
         );
     }
