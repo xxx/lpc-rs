@@ -6,6 +6,7 @@ mod parse_command;
 mod parse_string;
 mod parser;
 mod references;
+mod security;
 
 use lpc_rs_utils::config::Config;
 
