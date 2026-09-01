@@ -125,9 +125,10 @@ mod tests {
         assert!(committed_string(&vm, &reader, 1).contains("not today"));
     }
 
-    /// The master hears the efun's name and the canonical path.
+    /// The master hears the canonical path, the efun's name, the calling
+    /// object, and the file that defines the calling code.
     #[tokio::test]
-    async fn the_master_hears_the_path_and_the_efun() {
+    async fn the_master_hears_every_argument() {
         let root = lib_with_data("read-args");
         let vm = Vm::new(temp_lib_config(&root));
         let master = vm
@@ -135,10 +136,14 @@ mod tests {
                 "/secure/master.c",
                 indoc! { r#"
                     string seen_path;
-                    string seen_efun;
-                    int valid_read(string path, string which, object caller, string program) {
+                    string seen_func;
+                    string seen_caller;
+                    string seen_program;
+                    int valid_read(string path, string func, object caller, string program) {
                         seen_path = path;
-                        seen_efun = which;
+                        seen_func = func;
+                        seen_caller = file_name(caller);
+                        seen_program = program;
                         return 1;
                     }
                 "# },
@@ -150,6 +155,8 @@ mod tests {
         read_under(&vm).await;
         assert_eq!(committed_string(&vm, &master, 0), "/data.txt");
         assert_eq!(committed_string(&vm, &master, 1), "read_file");
+        assert_eq!(committed_string(&vm, &master, 2), "/reader");
+        assert_eq!(committed_string(&vm, &master, 3), "/reader.c");
     }
 
     /// A missing file is an error naming the in-game path — never a 0.
