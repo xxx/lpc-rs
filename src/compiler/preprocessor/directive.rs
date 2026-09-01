@@ -101,7 +101,7 @@ pub enum Directive {
     /// `#else`.
     Else,
     /// `#elif expr`. The operand is raw — parsed only when the chain is
-    /// still undecided (C99 6.10p6; elif-bundle R2).
+    /// still undecided (C99 6.10p6).
     Elif {
         /// The raw operand text, trimmed.
         operand: String,
@@ -254,7 +254,7 @@ impl<'a> Cursor<'a> {
         read_name_raw(self.text, &mut self.pos)
     }
 
-    /// Only whitespace and comments may remain (R4's "EOL").
+    /// Only whitespace and comments may remain.
     fn end_of_line(&mut self, directive: &str) -> Result<()> {
         self.skip_ws()?;
         if self.at_end() {
@@ -519,7 +519,7 @@ pub fn parse_if_expression(text: &str, base: Span) -> Result<PreprocessorNode> {
 }
 
 /// One precedence level per entry, loosest first — C's ladder below
-/// `||`/`&&` down to `* / %` (elif-bundle R6).
+/// `||`/`&&` down to `* / %`.
 const LADDER: &[fn(&Token) -> Option<BinaryOperation>] = &[
     |t| matches!(t, Token::OrOr(_)).then_some(BinaryOperation::OrOr),
     |t| matches!(t, Token::AndAnd(_)).then_some(BinaryOperation::AndAnd),
@@ -557,7 +557,7 @@ const LADDER: &[fn(&Token) -> Option<BinaryOperation>] = &[
 ];
 
 /// Recursive descent over the operand's tokens: C's integer operator
-/// ladder (elif-bundle R6) — [`LADDER`] levels, then unary, then primary.
+/// ladder — [`LADDER`] levels, then unary, then primary.
 /// Two checks keep every tree under `MAX_NESTING_DEPTH`:
 /// `depth` refuses to descend into a `(` or prefix operator the tree could
 /// not afford, and every built node reports its height upward.
@@ -948,7 +948,7 @@ mod tests {
         else {
             panic!("expected an elif");
         };
-        // Raw: junk and an unterminated comment survive parse (elif-bundle R2).
+        // Raw: junk and an unterminated comment survive parse.
         assert_eq!(operand, "FOO + )junk( /* open");
         assert_eq!(&line[operand_span.l()..operand_span.r()], operand);
 
@@ -1191,7 +1191,7 @@ mod tests {
             x("not defined(FOO)").unwrap(),
             PreprocessorNode::Defined("FOO".into(), true)
         );
-        // Without a call shape, they are ordinary names (R7).
+        // Without a call shape, they are ordinary names.
         assert_eq!(
             x("defined").unwrap(),
             PreprocessorNode::Var("defined".into())
