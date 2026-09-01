@@ -235,7 +235,7 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
 /// Where a tree crossed the cap: the first node found more than `max`
 /// levels down, or the nearest ancestor with a span when it has none, or
 /// the caller's fallback when the whole path is spanless.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct TooDeep(pub Option<Span>);
 
 /// Does `root`'s height exceed `max`? Recursion-free, so it is safe on any
@@ -273,11 +273,12 @@ where
 {
     match exceeds((&node).into(), MAX_NESTING_DEPTH, span) {
         Ok(()) => Ok(node),
-        Err(TooDeep(at)) => Err(lpc_error!(
-            at,
-            "code nests too deeply (limit {})",
-            MAX_NESTING_DEPTH
-        )),
+        Err(TooDeep(at)) => {
+            Err(
+                lpc_error!(at, "code nests too deeply (limit {})", MAX_NESTING_DEPTH)
+                    .with_note("statements and expressions nest together; split the construct"),
+            )
+        }
     }
 }
 
@@ -586,9 +587,7 @@ mod tests {
             Some(code.find("return a").unwrap() + 7)
         );
 
-        // An `else if` chain: the last condition (its block is empty and
-        // spanless; the condition is visited first in source order and
-        // carries its own span, so no ancestor fallback is needed).
+        // An `else if` chain: the innermost condition (its block has no span).
         let code = shape("elseif", 254);
         let e = compiler
             .parse_string(&path, &code)
@@ -612,8 +611,9 @@ mod tests {
     }
 
     /// Shapes that do not type-check at any size (`range_*` need int
-    /// bounds; `++` wants an int) — the pipeline still must not overflow,
-    /// and must not blame the cap.
+    /// bounds; `++` wants an int), so they stop before codegen; their cost
+    /// classes run through `index` and `unary`. The pipeline still must not
+    /// overflow, and must not blame the cap.
     const NOT_TYPED: &[&str] = &["range_l", "range_r", "postfix_inc"];
 
     /// The safety property: a debug build on the 16 MiB test thread runs
