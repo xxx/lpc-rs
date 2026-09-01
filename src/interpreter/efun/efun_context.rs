@@ -339,7 +339,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// frame under it that is not an efun's — as an in-game path with its
     /// extension (`/secure/master.c`); `NULL` when there is none (an efun
     /// pointer fired as a task's entry).
-    #[allow(dead_code)]
+    #[cfg_attr(not(test), expect(dead_code))]
     pub(crate) fn calling_program(&self) -> LpcRef {
         let lib_dir = self.config().lib_dir.as_str();
         self.stack
