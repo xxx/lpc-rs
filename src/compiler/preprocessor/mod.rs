@@ -2821,6 +2821,40 @@ mod tests {
         .await;
     }
 
+    #[tokio::test]
+    async fn a_call_may_open_on_the_next_line() {
+        // Newlines never tokenize.
+        test_valid("#define F(a, b) a + b\nF\n(1, 2);\n", &["1", "+", "2", ";"]).await;
+    }
+
+    #[tokio::test]
+    async fn blank_and_comment_lines_do_not_end_the_paren_lookahead() {
+        test_valid(
+            "#define F(a, b) a + b\nint x = F /* c */\n\n// d\n(1, 2);\n",
+            &["int", "x", "=", "1", "+", "2", ";"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_directive_line_ends_the_paren_lookahead() {
+        // GCC does the same.
+        test_valid(
+            "#define F(a, b) a + b\nF\n#define X 1\n(1, 2);\nX;\n",
+            &["F", "(", "1", ",", "2", ")", ";", "1", ";"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_call_opening_on_the_next_line_still_anchors_placement() {
+        test_invalid(
+            "#define F(a, b) a + b\nF\n(1, 2) #define X 1\n",
+            "preprocessor directives must appear on their own line",
+        )
+        .await;
+    }
+
     mod test_include_walk {
         use super::*;
 
@@ -2886,6 +2920,23 @@ mod tests {
                 e.to_string(),
                 "cyclic `#include`: `/main.c` is already being included"
             );
+        }
+
+        #[tokio::test]
+        async fn a_name_ending_an_include_does_not_read_the_includer() {
+            // GCC's buffers end the lookahead the same way.
+            let root = TempLib::new("name-ends-include");
+            std::fs::write(root.join("f.h"), "#define F(a, b) a + b\nF\n").unwrap();
+            let tokens = tokens_of(&root, "#include \"f.h\"\n(1, 2);\n").await;
+            assert_eq!(tokens, ["F", "(", "1", ",", "2", ")", ";"]);
+        }
+
+        #[tokio::test]
+        async fn a_call_spanning_an_include_end_is_unterminated() {
+            let root = TempLib::new("call-spans-include");
+            std::fs::write(root.join("f.h"), "#define F(a, b) a + b\nF(1,\n").unwrap();
+            let e = error_of(&root, "#include \"f.h\"\n2);\n").await;
+            assert_eq!(e.to_string(), "unterminated call to macro `F`");
         }
 
         #[tokio::test]
