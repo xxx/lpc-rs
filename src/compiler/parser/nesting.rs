@@ -610,4 +610,58 @@ mod tests {
             .expect_err("too deep");
         assert_eq!(e.span().and_then(|s| s.code()).as_deref(), Some("void f"));
     }
+
+    /// Shapes that do not type-check at any size (`range_*` need int
+    /// bounds; `++` wants an int) — the pipeline still must not overflow,
+    /// and must not blame the cap.
+    const NOT_TYPED: &[&str] = &["range_l", "range_r", "postfix_inc"];
+
+    /// The safety property: a debug build on the 16 MiB test thread runs
+    /// every walker, codegen included, over each shape at its boundary
+    /// without overflowing. Nested closures are the costliest level
+    /// (≈12 KB) and the load-bearing row.
+    #[tokio::test]
+    async fn every_shape_compiles_at_the_cap_without_overflowing() {
+        let compiler = Compiler::new(test_config());
+        for &(kind, ok) in BOUNDARIES {
+            let result = compiler.compile_string("/cap.c", shape(kind, ok)).await.map(|_| ());
+            if NOT_TYPED.contains(&kind) {
+                if let Err(e) = result {
+                    assert_ne!(e.to_string(), TOO_DEEP, "{kind}");
+                }
+            } else {
+                result.unwrap_or_else(|e| panic!("{kind} at {ok}: {e}"));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn one_past_the_cap_is_a_compile_error_not_an_abort() {
+        let compiler = Compiler::new(test_config());
+        for kind in ["closure_body", "call_args", "binary_left", "elseif", "block"] {
+            let ok = BOUNDARIES.iter().find(|(k, _)| *k == kind).unwrap().1;
+            let e = compiler
+                .compile_string("/cap.c", shape(kind, ok + 1))
+                .await
+                .expect_err(&format!("{kind} compiled"));
+            assert_eq!(e.to_string(), TOO_DEEP, "{kind}");
+        }
+    }
+
+    /// Literal chains fold at parse time and parentheses build no node, so
+    /// neither is nesting.
+    #[tokio::test]
+    async fn folded_literals_and_parentheses_are_flat() {
+        let compiler = Compiler::new(test_config());
+        let strings = vec!["\"s\""; 5_000].join(" + ");
+        let ints = vec!["1"; 5_000].join(" + ");
+        let parens = format!("{}a{}", "(".repeat(5_000), ")".repeat(5_000));
+        compiler
+            .compile_string(
+                "/flat.c",
+                format!("string s = {strings};\nint i = {ints};\nmixed f(mixed a) {{ return {parens}; }}"),
+            )
+            .await
+            .expect("flat");
+    }
 }
