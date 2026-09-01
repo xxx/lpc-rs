@@ -17,7 +17,7 @@ pub const MAX_CLOSURE_ARG_REFERENCE: RegisterSize = 64;
 pub const VM_CHANNEL_CAPACITY: usize = 1024;
 
 /// How deep `command()` may nest: a level costs ~85KB of native stack in a
-/// debug build, and 16 fit the 2MiB stack tokio gives a worker thread.
+/// debug build, and 16 fit the 2 MiB a worker had before `THREAD_STACK`.
 pub const MAX_COMMAND_DEPTH: usize = 16;
 
 /// How many driver tasks — applies and object initialisation; `->` is a
@@ -35,7 +35,7 @@ pub const MAX_TASK_CHAIN: u8 = 16;
 pub const MAX_NESTING_DEPTH: usize = 256;
 
 /// The stack of every runtime thread: `MAX_TASK_CHAIN` levels at the ~87 KB
-/// a debug `catch_tell` level costs, three times over, and
-/// `MAX_NESTING_DEPTH` levels of the costliest AST walk, five times over.
+/// a debug `catch_tell` level costs, plus `MAX_NESTING_DEPTH` levels of the
+/// costliest AST walk — together still three times over.
 /// Tests take the same through `RUST_MIN_STACK` in `.cargo/config.toml`.
 pub const THREAD_STACK: usize = 16 * 1024 * 1024;

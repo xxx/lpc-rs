@@ -35,9 +35,9 @@ mod include;
 pub mod preprocessor_node;
 
 /// Recursion budget for evaluating one `#if`: tree levels and macro levels
-/// along one path together. A macro's tree may be `MAX_NESTING_DEPTH` high
-/// and a macro chain `MAX_EXPANSION_DEPTH` long; their product would not
-/// fit, their sum does — 512 levels × ≈2.6 KB (debug) ≈ 1.3 MB.
+/// along one path together. A deliberate third limit — a chain of small
+/// macro bodies can reach it before `MAX_EXPANSION_DEPTH` does. 512 levels
+/// × ≈2.6 KB (debug) ≈ 1.3 MB.
 const MAX_IF_EVAL_DEPTH: usize = 2 * MAX_NESTING_DEPTH;
 
 #[derive(Debug)]

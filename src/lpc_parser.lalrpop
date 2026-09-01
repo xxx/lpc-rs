@@ -859,6 +859,7 @@ Expression: ExpressionNode = {
 
         list.extend_from_slice(&[ass]);
 
+        // Re-guarding the whole list per append is quadratic in width — the only such guard.
         Ok(guard(ExpressionNode::CommaExpression(CommaExpressionNode {
             value: list,
             span,
