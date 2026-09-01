@@ -245,8 +245,7 @@ pub fn exceeds(root: Child<'_>, max: usize, fallback: Option<Span>) -> Result<()
     let mut stack = vec![(root, 1usize, root.span().or(fallback))];
     let mut children = Vec::new();
     while let Some((node, depth, nearest)) = stack.pop() {
-        // The statement-position wrapper is not a level: its expression
-        // takes its slot.
+        // The statement-position wrapper is not a level.
         let node = match node {
             Child::Stmt(AstNode::Expression(e)) => Child::Expr(e),
             other => other,
@@ -426,7 +425,7 @@ mod tests {
         assert_eq!(at, Some(fallback));
     }
 
-    // The guard's message is pinned through the grammar in Task 2.
+    // The guard's message is pinned by the boundary tests below.
     #[tokio::test]
     async fn guard_hands_the_node_back() {
         let prog = parsed("mixed f(mixed a) { return a; }").await;
@@ -496,7 +495,7 @@ mod tests {
         }
     }
 
-    /// Each shape's largest size whose tree is at most 256 high (spec R2:
+    /// Each shape's largest size whose tree is at most 256 high (nesting-cap R2:
     /// program → function → return are three levels; a `[0]`, `!`, `?:`,
     /// `=`, call, closure, array, or mapping adds one per step above the
     /// innermost atom; a range or a closure parameter adds two; a
@@ -611,9 +610,8 @@ mod tests {
     }
 
     /// Shapes that do not type-check at any size (`range_*` need int
-    /// bounds; `++` wants an int), so they stop before codegen; their cost
-    /// classes run through `index` and `unary`. The pipeline still must not
-    /// overflow, and must not blame the cap.
+    /// bounds; `++` wants an int) stop before codegen; their cost classes
+    /// run through `index` and `unary`.
     const NOT_TYPED: &[&str] = &["range_l", "range_r", "postfix_inc"];
 
     /// The safety property: a debug build on the 16 MiB test thread runs
@@ -674,7 +672,7 @@ mod tests {
             .expect("flat");
     }
 
-    /// R7: a too-deep macro body expanded into code meets the LPC guard at
+    /// Nesting-cap R7: a too-deep macro body expanded into code meets the LPC guard at
     /// the use site — the expanded tokens carry the use span.
     #[tokio::test]
     async fn a_too_deep_macro_body_in_code_is_reported_at_the_use() {
