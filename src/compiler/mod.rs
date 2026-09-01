@@ -472,7 +472,7 @@ mod tests {
                 rendered,
                 vec![
                     "Invalid operation on `int` literal",
-                    "prototypes are ignored in this flavor of LPC",
+                    "function prototypes are ignored; the definition declares the function",
                 ]
             );
         }
