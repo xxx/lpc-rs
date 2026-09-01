@@ -624,7 +624,10 @@ mod tests {
     async fn every_shape_compiles_at_the_cap_without_overflowing() {
         let compiler = Compiler::new(test_config());
         for &(kind, ok) in BOUNDARIES {
-            let result = compiler.compile_string("/cap.c", shape(kind, ok)).await.map(|_| ());
+            let result = compiler
+                .compile_string("/cap.c", shape(kind, ok))
+                .await
+                .map(|_| ());
             if NOT_TYPED.contains(&kind) {
                 if let Err(e) = result {
                     assert_ne!(e.to_string(), TOO_DEEP, "{kind}");
@@ -638,7 +641,13 @@ mod tests {
     #[tokio::test]
     async fn one_past_the_cap_is_a_compile_error_not_an_abort() {
         let compiler = Compiler::new(test_config());
-        for kind in ["closure_body", "call_args", "binary_left", "elseif", "block"] {
+        for kind in [
+            "closure_body",
+            "call_args",
+            "binary_left",
+            "elseif",
+            "block",
+        ] {
             let ok = BOUNDARIES.iter().find(|(k, _)| *k == kind).unwrap().1;
             let e = compiler
                 .compile_string("/cap.c", shape(kind, ok + 1))
@@ -663,5 +672,20 @@ mod tests {
             )
             .await
             .expect("flat");
+    }
+
+    /// R7: a too-deep macro body expanded into code meets the LPC guard at
+    /// the use site — the expanded tokens carry the use span.
+    #[tokio::test]
+    async fn a_too_deep_macro_body_in_code_is_reported_at_the_use() {
+        let body = vec!["a"; 257].join(" + ");
+        let code = format!("#define A {body}\nmixed f(mixed a) {{ return A; }}\n");
+        let e = Compiler::new(test_config())
+            .compile_string("/use.c", code)
+            .await
+            .map(|_| ())
+            .expect_err("too deep at the use");
+        assert_eq!(e.to_string(), TOO_DEEP);
+        assert_eq!(e.span().and_then(|s| s.code()).as_deref(), Some("A"));
     }
 }
