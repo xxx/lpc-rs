@@ -25,7 +25,7 @@ pub async fn write_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
                 context.runtime_error(format!("write_file: {} is a directory", access.in_game))
             );
         }
-        // Missing is fine: the target may be created. Any other stat error is real.
+        // Missing is fine: the target may be created.
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(io_error(e)),
         _ => {}
     }
@@ -184,7 +184,7 @@ mod tests {
     }
 
     /// A parent path component that is a regular file is `ENOTDIR`, not
-    /// `NotFound`: a real stat error, not a missing parent.
+    /// `NotFound`.
     #[tokio::test]
     async fn a_non_directory_path_component_is_a_runtime_error() {
         let root = TempLib::new("write-enotdir");
