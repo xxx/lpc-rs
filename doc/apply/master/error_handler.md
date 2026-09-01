@@ -12,8 +12,8 @@ The error mapping has the following keys:
 * `error["location"]` (string) - The in-game file:line:column where the error
   occurred.
 * `error["object"]` (object) - The object in which the error occurred.
-* `error["diagnostic"]` (string) - The full diagnostic message, if any.
-  _note:_ This field may be broken up further in the future.
+* `error["diagnostic"]` (string) - The rendered diagnostic, source excerpt
+  included, no terminal color codes.
 
 Diagnostic example:
 ```c
