@@ -50,6 +50,7 @@ pub(crate) mod read_file;
 pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
 pub(crate) mod remove_rule;
+pub(crate) mod rm;
 pub(crate) mod send_gmcp;
 pub(crate) mod send_mxp;
 pub(crate) mod set_this_player;
@@ -537,6 +538,11 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false)],
     },
+    rm => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
     write_file => {
         returns: LpcType::Int(false),
         arity: 2,
@@ -716,6 +722,7 @@ mod tests {
                 "send_mxp",
                 "get_dir",
                 "read_file",
+                "rm",
                 "write_file",
             ]
         );
