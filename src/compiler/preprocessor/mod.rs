@@ -196,7 +196,7 @@ impl Preprocessor {
 
         let mut iter = token_stream.peekable();
         // The end of the last token this loop drew — the placement
-        // check's anchor (card ③ R2).
+        // check's anchor.
         let mut prev_end: usize = 0;
 
         while let Some(next) = iter.next() {
@@ -219,7 +219,7 @@ impl Preprocessor {
                                     Some(mut expanded) => {
                                         output.append(&mut expanded.tokens);
                                         // Anchor placement past the whole use — the Id, or
-                                        // through the top-level `)` the capture consumed (card ⑥ R4).
+                                        // through the top-level `)` the capture consumed.
                                         end = expanded.use_span.r();
                                     }
                                     None => self.append(&mut output, token),
@@ -248,8 +248,8 @@ impl Preprocessor {
         Ok(output)
     }
 
-    /// One directive line: judge placement (card ③ R2), classify when dead
-    /// (card ③ R3), parse and dispatch when live.
+    /// One directive line: judge placement, classify when dead, parse and
+    /// dispatch when live.
     async fn handle_directive(
         &mut self,
         token: &StringToken,
@@ -279,8 +279,7 @@ impl Preprocessor {
         if !self.conditionals.live() {
             // Dead regions know directive names, never operands.
             // `#else`/`#endif` have no operands and `#elif` stores its
-            // raw, so the shared handlers parse dead or live (card ③ R3;
-            // elif-bundle R4).
+            // raw, so the shared handlers parse dead or live.
             match directive::classify(&token.1) {
                 DirectiveKind::If | DirectiveKind::IfDef | DirectiveKind::IfNDef => {
                     self.conditionals.enter(token.0, false);
@@ -363,8 +362,8 @@ impl Preprocessor {
         }
 
         // Lex the body in place — tokens are born with their true
-        // definition-site spans (card ④ R3). A directive line inside a
-        // body has no legal reading (card ③ R6 — LPC has no `#` operator).
+        // definition-site spans. A directive line inside a
+        // body has no legal reading (LPC has no `#` operator).
         let lex_body = |body: &str| -> Result<Vec<Token>> {
             let tokens = LexWrapper::new_at(body, body_span.file_id(), body_span.l())
                 .collect::<Result<Vec<_>>>()?;
@@ -381,7 +380,7 @@ impl Preprocessor {
             Define::new_function(lex_body(&body)?, args)
         } else if body.is_empty() {
             // A bare `#define FOO` expands to nothing and is no
-            // expression (card ② R13).
+            // expression.
             Define::new_object(vec![], None)
         } else {
             let tokens = lex_body(&body)?;
@@ -396,7 +395,7 @@ impl Preprocessor {
     }
 
     /// One `#elif`, dead or live: the chain decides whether the operand
-    /// is ever read (elif-bundle R4).
+    /// is ever read.
     #[instrument(skip(self))]
     fn handle_elif(&mut self, span: Span, operand: &str, operand_span: Span) -> Result<()> {
         if !self.conditionals.elif(span)? {
@@ -1223,7 +1222,7 @@ mod tests {
 
         #[tokio::test]
         async fn a_directive_in_a_macro_body_errors_at_define_time() {
-            // Stored silently before; it leaked to the parser at use (card ③ R6).
+            // Stored silently before; it leaked to the parser at use.
             test_invalid(
                 "#define X #include \"foo.h\"\n",
                 "a preprocessor directive cannot appear in a macro body",
@@ -1720,7 +1719,7 @@ mod tests {
         #[tokio::test]
         async fn defined_and_not_are_ordinary_identifiers() {
             // They used to lex as preprocessor keywords the main parser
-            // rejects as "Unrecognized Token" (R7).
+            // rejects as "Unrecognized Token".
             let mut preprocessor = fixture();
             let tokens = preprocessor
                 .scan("/unreserved.c", "int not = 1;\nint defined = 2;\n")
@@ -2180,7 +2179,7 @@ mod tests {
 
         #[tokio::test]
         async fn logical_operators_in_int_position_are_eager() {
-            // Only the bool level short-circuits (elif-bundle R7) —
+            // Only the bool level short-circuits —
             // int-position `&&` is eager, a C divergence.
             test_invalid("#if (0 && 1 / 0) + 1\n#endif\n", "Division by zero").await;
             test_valid("#if (0 && 9) + 1\n\"t\";\n#endif\n", &["t", ";"]).await;
@@ -2358,7 +2357,7 @@ mod tests {
         #[tokio::test]
         async fn a_zero_parameter_empty_body_call_expands_to_nothing() {
             // `F()` is a call: its (empty) body vanishes, leaving `;`.
-            // Bare `F` with no `(` is a plain identifier (card ② R2).
+            // Bare `F` with no `(` is a plain identifier.
             let prog = "#define F()\nF();\nF;\n";
             test_valid(prog, &[";", "F", ";"]).await;
         }
@@ -2381,7 +2380,7 @@ mod tests {
             // Same nesting, but F's body carries a literal token: it DOES
             // take the widened use-span, through the OUTER `)` — the
             // nested ID(9) capture (depth 2) must not narrow it back to
-            // ID(9)'s own extent (card ④ R5).
+            // ID(9)'s own extent.
             let prog = "#define ID(x) x\n#define F(x) x + 1\nint a = F(ID(9));\n";
             let mut preprocessor = fixture();
             let tokens = preprocessor.scan("/test.c", prog).await.unwrap();
@@ -2678,7 +2677,7 @@ mod tests {
     #[tokio::test]
     async fn a_comment_closing_on_the_directive_line_is_legal() {
         // The `*/ #define` shape: the gap back to the previous token
-        // spans the comment's newline (card ③ R2) — matches C's
+        // spans the comment's newline — matches C's
         // first-token-on-the-line reading.
         let prog = "int a;\n/* header\n comment */ #define FOO 1\nFOO;\n";
         test_valid(prog, &["int", "a", ";", "1", ";"]).await;
@@ -2706,7 +2705,7 @@ mod tests {
     #[tokio::test]
     async fn a_dead_regions_unknown_and_error_directives_are_inert() {
         // `#line` classifies as Unknown; `#error` is a known name that a
-        // dead region never fires (elif-bundle R4).
+        // dead region never fires.
         let prog = indoc! { r#"
             #if 0
             #line 5
@@ -2764,7 +2763,7 @@ mod tests {
 
     #[tokio::test]
     async fn defined_without_a_call_shape_is_a_variable() {
-        // `defined` alone is an (undefined) name: bare-name falsy (R5/R7).
+        // `defined` alone is an (undefined) name: bare-name falsy.
         let prog = indoc! { r#"
             #if defined
             "should not appear"
@@ -2785,8 +2784,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_multi_line_call_does_not_launder_a_directive() {
-        // The consumed call's newline used to sit in the placement gap
-        // (card ③'s documented micro-hole, closed by card ⑥ R4).
+        // The consumed call's newline used to sit in the placement gap.
         test_invalid(
             "#define F(a, b) a + b\nint x = F(1,\n2) #define X 1\n",
             "preprocessor directives must appear on their own line",

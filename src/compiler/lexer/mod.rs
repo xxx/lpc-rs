@@ -512,7 +512,7 @@ impl HasSpan for Token {
 }
 
 impl Token {
-    /// The use-site collapse (preprocessor card ④ R5): macro expansion
+    /// The use-site collapse: macro expansion
     /// respans body-derived tokens onto the call, once, at replacement
     /// construction. The only span rewrite in the system.
     pub(in crate::compiler) fn span_ref(&mut self) -> &mut Span {

@@ -11,14 +11,14 @@ use crate::compiler::{
     preprocessor::define::{Define, FunctionMacro},
 };
 
-/// Hard cap on tokens one top-level expansion may emit (R5): the hide set
+/// Hard cap on tokens one top-level expansion may emit: the hide set
 /// bounds re-expansion of names, this bounds width. A work bound on what
 /// one top-level expansion may materialize — `substitute`'s construction
 /// and `emit`'s rescan both count against it — conservative, not an exact
 /// count of the final output.
 const MAX_EXPANDED_TOKENS: usize = 65_536;
 
-/// Hard cap on nested invocation depth (R5): source nesting like
+/// Hard cap on nested invocation depth: source nesting like
 /// `F(F(F(...)))` recurses once per level and isn't bounded by the hide
 /// set at all — only this stops it before the real call stack would. The
 /// same bound guards recursion generally: nested invocations, long alias
@@ -28,7 +28,7 @@ pub(super) const MAX_EXPANSION_DEPTH: usize = 256;
 /// A completed top-level expansion: the emitted tokens and the whole
 /// use's span — the Id alone, or Id widened through the top-level `)`.
 /// The scan loop anchors directive placement past `use_span`, so a
-/// consumed call's newlines never credit a mid-line directive (R4).
+/// consumed call's newlines never credit a mid-line directive.
 pub(super) struct Expanded {
     /// The expansion's output, already respanned and budgeted.
     pub(super) tokens: Vec<Token>,
@@ -50,7 +50,7 @@ impl<'a> Expander<'a> {
     /// Expand one potential macro use. `cursor` is the stream the use sits
     /// in; a function-macro's arguments are captured from it. `None`: not a
     /// macro use (undefined name, or a function-macro name with no `(`
-    /// following — R2's plain-identifier rule); the caller emits the Id.
+    /// following); the caller emits the Id.
     pub(super) fn expand_use<T>(
         &self,
         token: &StringToken,
@@ -90,11 +90,11 @@ struct Expansion<'a> {
     defines: &'a HashMap<String, Define>,
     /// The top-level macro, named by the cap diagnostic.
     top: &'a str,
-    /// Every body-derived token emits with this span (R10): the use-site
+    /// Every body-derived token emits with this span: the use-site
     /// Id, widened through the closing `)` when the top-level capture
-    /// completes (card ④ R5).
+    /// completes.
     use_span: Span,
-    /// Names being expanded on the current path (R4). A stack; `contains`
+    /// Names being expanded on the current path. A stack; `contains`
     /// is the membership test — macro chains are short.
     hide: Vec<&'a str>,
     emitted: usize,
@@ -163,8 +163,8 @@ impl<'a> Expansion<'a> {
     /// Build one macro's replacement from its raw body: a parameter Id
     /// splices its bound (already-expanded) tokens verbatim, their own
     /// spans kept; every other token is respanned to the use site here, at
-    /// construction (R10) — once, not on every rescan. Budgeted against
-    /// `MAX_EXPANDED_TOKENS` here too (R5): a parameter splice can multiply
+    /// construction — once, not on every rescan. Budgeted against
+    /// `MAX_EXPANDED_TOKENS` here too: a parameter splice can multiply
     /// body-occurrences by argument size, so `walk`/`emit`'s cap alone
     /// would let construction build an unbounded vector first.
     fn substitute(&self, body: &[Token], args: &HashMap<&str, Vec<Token>>) -> Result<Vec<Token>> {
@@ -187,7 +187,7 @@ impl<'a> Expansion<'a> {
         Ok(replacement)
     }
 
-    /// Rescan one already-substituted, already-spanned replacement (R2):
+    /// Rescan one already-substituted, already-spanned replacement:
     /// hidden names and non-macro tokens emit verbatim; a live macro name
     /// expands in place, off this same cursor — so a nested call's
     /// argument capture sees the substitution `substitute` already made.
@@ -202,13 +202,13 @@ impl<'a> Expansion<'a> {
             match self.defines.get_key_value(&st.1) {
                 None => self.emit(token, out)?,
                 Some((name, _)) if self.hide.contains(&name.as_str()) => {
-                    // Hidden: a plain identifier (R4).
+                    // Hidden: a plain identifier.
                     self.emit(token, out)?;
                 }
                 Some((_, Define::Function(_)))
                     if !matches!(cursor.peek(), Some(Ok(Token::LParen(_)))) =>
                 {
-                    // Function-macro name, no `(`: a plain identifier (R2).
+                    // Function-macro name, no `(`: a plain identifier.
                     self.emit(token, out)?;
                 }
                 Some((name, _)) => self.expand_named(name, &mut cursor, out)?,
@@ -269,9 +269,9 @@ impl<'a> Expansion<'a> {
         }
     }
 
-    /// C99 arity (R7): a zero-parameter macro's `()` is zero arguments; on
+    /// C99 arity: a zero-parameter macro's `()` is zero arguments; on
     /// one-plus parameters `()` is one empty argument. Each argument is
-    /// fully expanded before substitution (R3), under the hide set in
+    /// fully expanded before substitution, under the hide set in
     /// force at the call — `name` itself isn't pushed onto it until after
     /// this returns, so a same-named call inside an argument expands freely.
     fn bind_arguments(
@@ -304,8 +304,8 @@ impl<'a> Expansion<'a> {
         Ok(map)
     }
 
-    /// Emit one token, budgeted (R5). Its span is already final —
-    /// `substitute` set it once, at replacement construction (R10).
+    /// Emit one token, budgeted. Its span is already final —
+    /// `substitute` set it once, at replacement construction.
     fn emit(&mut self, token: Token, out: &mut Vec<Token>) -> Result<()> {
         self.emitted += 1;
         if self.emitted > MAX_EXPANDED_TOKENS {
@@ -315,12 +315,12 @@ impl<'a> Expansion<'a> {
         Ok(())
     }
 
-    /// The "unterminated call" diagnostic (R6), naming the macro being called.
+    /// The "unterminated call" diagnostic, naming the macro being called.
     fn unterminated(&self, name: &str) -> lpc_rs_errors::LpcError {
         lpc_error!(Some(self.use_span), "unterminated call to macro `{}`", name)
     }
 
-    /// The "nests too deeply" diagnostic (R5), naming the top-level macro.
+    /// The "nests too deeply" diagnostic, naming the top-level macro.
     fn too_deep(&self) -> lpc_rs_errors::LpcError {
         lpc_error!(
             Some(self.use_span),
@@ -330,7 +330,7 @@ impl<'a> Expansion<'a> {
         )
     }
 
-    /// The "produces too many tokens" diagnostic (R5), naming the top-level
+    /// The "produces too many tokens" diagnostic, naming the top-level
     /// macro; shared by `emit`'s rescan-time check and `substitute`'s
     /// construction-time one.
     fn too_many(&self) -> lpc_rs_errors::LpcError {
@@ -344,7 +344,7 @@ impl<'a> Expansion<'a> {
 }
 
 /// A directive line inside argument capture means the call ran into a
-/// directive (R6) — the capture is unterminated.
+/// directive — the capture is unterminated.
 fn is_directive(token: &Token) -> bool {
     matches!(token, Token::DirectiveLine(_))
 }
