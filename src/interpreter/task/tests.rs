@@ -1281,6 +1281,21 @@ mod test_instructions {
         }
 
         #[tokio::test]
+        async fn a_reference_resolves_to_the_visible_parents_global() {
+            for order in [
+                r#"inherit "/visible"; inherit "/hidden";"#,
+                r#"inherit "/hidden"; inherit "/visible";"#,
+            ] {
+                let code = format!("{order}\nmixed r;\nvoid create() {{ r = shared; }}");
+                let task = run_prog(&code).await;
+                let globals =
+                    committed_globals_by_name(&task.context.global_state, task.context.process());
+
+                assert_eq!(globals["r"].to_string(), "1", "{order}");
+            }
+        }
+
+        #[tokio::test]
         async fn a_program_reached_through_two_parents_has_one_set_of_globals() {
             let code = indoc! { r##"
                 mixed r;

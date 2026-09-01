@@ -232,10 +232,8 @@ impl CompilationContext {
         let r = name.as_ref();
 
         self.scopes.lookup(r).or_else(|| {
-            self.inherits
-                .iter()
-                .rev()
-                .find_map(|p| p.global_variables.get(r))
+            self.inherited_var_index(r)
+                .and_then(|i| self.inherits[i].global_variables.get(r))
         })
     }
 
@@ -247,12 +245,32 @@ impl CompilationContext {
     {
         let r = name.as_ref();
 
-        self.scopes.lookup_mut(r).or_else(|| {
-            self.inherits
-                .iter_mut()
-                .rev()
-                .find_map(|p| p.global_variables.get_mut(r))
-        })
+        if self.scopes.lookup(r).is_none() {
+            let i = self.inherited_var_index(r)?;
+            return self.inherits[i].global_variables.get_mut(r);
+        }
+
+        self.scopes.lookup_mut(r)
+    }
+
+    /// The parent in `inherits` that a reference to global `name` resolves
+    /// to: the last one whose declaration is visible to children, else the
+    /// last one declaring it at all, so visibility errors can still name
+    /// the symbol.
+    fn inherited_var_index(&self, name: &str) -> Option<usize> {
+        let mut hidden = None;
+        for (i, parent) in self.inherits.iter().enumerate().rev() {
+            if let Some(symbol) = parent.global_variables.get(name) {
+                if symbol.visible_to_children() {
+                    return Some(i);
+                }
+                if hidden.is_none() {
+                    hidden = Some(i);
+                }
+            }
+        }
+
+        hidden
     }
 }
 
@@ -280,7 +298,7 @@ impl Default for CompilationContext {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_core::lpc_type::LpcType;
+    use lpc_rs_core::{global_var_flags::GlobalVarFlags, lpc_type::LpcType};
     use lpc_rs_function_support::{
         function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
     };
@@ -697,6 +715,50 @@ mod tests {
         assert_eq!(
             context.contains_function_complete("simul_efun", &CallNamespace::Parent),
             false
+        );
+    }
+
+    #[test]
+    fn test_lookup_var_prefers_child_visible_declarations() {
+        let mut context = CompilationContext::default();
+        context.scopes.push_new();
+
+        let mut visible_parent = Program::default();
+        let visible = Symbol::new("shared", LpcType::Int(false));
+        visible_parent
+            .global_variables
+            .insert("shared".into(), visible.clone());
+
+        let mut hidden_parent = Program::default();
+        let mut hidden = Symbol::new("shared", LpcType::Float(false));
+        hidden.flags = GlobalVarFlags::from(vec!["private"]);
+        hidden_parent
+            .global_variables
+            .insert("shared".into(), hidden);
+
+        let mut private_parent = Program::default();
+        let mut solo = Symbol::new("solo", LpcType::Int(false));
+        solo.flags = GlobalVarFlags::from(vec!["private"]);
+        private_parent
+            .global_variables
+            .insert("solo".into(), solo.clone());
+
+        context.inherits.push(visible_parent);
+        context.inherits.push(hidden_parent);
+        context.inherits.push(private_parent);
+
+        // a later private declaration does not hide the earlier visible one
+        assert_eq!(context.lookup_var("shared"), Some(&visible));
+        assert_eq!(
+            context.lookup_var_mut("shared").map(|s| s.type_),
+            Some(LpcType::Int(false))
+        );
+
+        // with no visible declaration, the private one is still found
+        assert_eq!(context.lookup_var("solo"), Some(&solo));
+        assert_eq!(
+            context.lookup_var_mut("solo").map(|s| s.type_),
+            Some(LpcType::Int(false))
         );
     }
 
