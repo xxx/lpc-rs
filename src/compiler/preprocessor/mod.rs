@@ -450,7 +450,9 @@ impl Preprocessor {
         let saved = std::mem::take(&mut self.conditionals);
         let result = self
             .internal_scan(opened.content, opened.file_id, None)
-            .await;
+            .await
+            // The chain reads immediate includer first, as GCC prints it.
+            .map_err(|e| e.with_label("included from here", span));
         self.conditionals = saved;
         self.includes.close();
 
@@ -2896,7 +2898,74 @@ mod tests {
 
             assert_eq!(
                 rendered,
-                "error: cyclic `#include`: `/a.h` is already being included\n  ┌─ /b.h:1:1\n  │\n1 │ #include \"a.h\"\n  │ ^^^^^^^^^^^^^^\n  │\n  ┌─ /main.c:1:1\n  │\n1 │ #include \"a.h\"\n  │ -------------- included from here\n  │\n  ┌─ /a.h:1:1\n  │\n1 │ #include \"b.h\"\n  │ -------------- included from here\n\n"
+                "error: cyclic `#include`: `/a.h` is already being included\n  ┌─ /b.h:1:1\n  │\n1 │ #include \"a.h\"\n  │ ^^^^^^^^^^^^^^\n  │\n  ┌─ /a.h:1:1\n  │\n1 │ #include \"b.h\"\n  │ -------------- included from here\n  │\n  ┌─ /main.c:1:1\n  │\n1 │ #include \"a.h\"\n  │ -------------- included from here\n\n"
+            );
+        }
+
+        async fn rendered_of(root: &TempLib, code: &str) -> String {
+            error_of(root, code)
+                .await
+                .diagnostic_string()
+                .replace(root.to_str().unwrap(), "")
+        }
+
+        #[tokio::test]
+        async fn an_error_inside_a_header_names_its_include_site() {
+            let root = TempLib::new("header-error-site");
+            std::fs::write(root.join("h.h"), "#pragma bogus\n").unwrap();
+            assert_eq!(
+                rendered_of(&root, "int x;\n#include \"h.h\"\n").await,
+                "error: unknown pragma `bogus`\n  ┌─ /h.h:1:1\n  │\n1 │ #pragma bogus\n  │ ^^^^^^^^^^^^^\n  │\n  ┌─ /main.c:2:1\n  │\n2 │ #include \"h.h\"\n  │ -------------- included from here\n\n"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_nested_header_error_lists_the_immediate_includer_first() {
+            let root = TempLib::new("nested-header-error");
+            std::fs::write(root.join("a.h"), "#include \"b.h\"\n").unwrap();
+            std::fs::write(root.join("b.h"), "#pragma bogus\n").unwrap();
+            assert_eq!(
+                rendered_of(&root, "#include \"a.h\"\n").await,
+                "error: unknown pragma `bogus`\n  ┌─ /b.h:1:1\n  │\n1 │ #pragma bogus\n  │ ^^^^^^^^^^^^^\n  │\n  ┌─ /a.h:1:1\n  │\n1 │ #include \"b.h\"\n  │ -------------- included from here\n  │\n  ┌─ /main.c:1:1\n  │\n1 │ #include \"a.h\"\n  │ -------------- included from here\n\n"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_failed_include_inside_a_header_names_its_include_site() {
+            let root = TempLib::new("failed-nested-include");
+            std::fs::write(root.join("h.h"), "#include \"missing.h\"\n").unwrap();
+            let rendered = rendered_of(&root, "#include \"h.h\"\n").await;
+            assert!(
+                rendered.starts_with("error: unable to read include file `/missing.h`"),
+                "{rendered}"
+            );
+            assert!(rendered.contains("┌─ /h.h:1:1"), "{rendered}");
+            assert_eq!(
+                rendered.matches("included from here").count(),
+                1,
+                "{rendered}"
+            );
+            assert!(rendered.contains("┌─ /main.c:1:1"), "{rendered}");
+        }
+
+        #[tokio::test]
+        async fn a_root_error_carries_no_include_label() {
+            let root = TempLib::new("root-error");
+            let rendered = rendered_of(&root, "#pragma bogus\n").await;
+            assert!(!rendered.contains("included from here"), "{rendered}");
+        }
+
+        #[tokio::test]
+        async fn a_header_included_twice_is_labeled_at_the_failing_site() {
+            let root = TempLib::new("twice-included");
+            std::fs::write(root.join("h.h"), "#ifndef SKIP\n#pragma bogus\n#endif\n").unwrap();
+            assert_eq!(
+                rendered_of(
+                    &root,
+                    "#define SKIP\n#include \"h.h\"\n#undef SKIP\n#include \"h.h\"\n"
+                )
+                .await,
+                "error: unknown pragma `bogus`\n  ┌─ /h.h:2:1\n  │\n2 │ #pragma bogus\n  │ ^^^^^^^^^^^^^\n  │\n  ┌─ /main.c:4:1\n  │\n4 │ #include \"h.h\"\n  │ -------------- included from here\n\n"
             );
         }
 

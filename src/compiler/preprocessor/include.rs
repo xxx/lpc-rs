@@ -54,9 +54,6 @@ struct Frame {
     canon: PathBuf,
     /// The file as resolved; nested resolution derives its cwd from this.
     path: LpcPath,
-    /// The `#include` that opened this frame; `None` for the root and
-    /// the auto-include.
-    site: Option<Span>,
 }
 
 /// The one owner of `#include` traversal for a compile: resolution,
@@ -84,7 +81,6 @@ impl IncludeWalk {
         self.stack.push(Frame {
             canon,
             path: path.clone(),
-            site: None,
         });
         file_id
     }
@@ -163,11 +159,7 @@ impl IncludeWalk {
             }
         };
 
-        self.stack.push(Frame {
-            canon,
-            path,
-            site: span,
-        });
+        self.stack.push(Frame { canon, path });
         Ok(Some(Opened { file_id, content }))
     }
 
@@ -228,18 +220,13 @@ impl IncludeWalk {
             .unwrap_or_else(|| PathBuf::from("/"))
     }
 
-    /// The cycle diagnostic: names the offending file and labels every
-    /// open include site, outermost first.
+    /// The cycle diagnostic; `scan_include` adds the chain labels.
     fn cycle_error(&self, path: &LpcPath, span: Option<Span>) -> LpcError {
-        let mut e = lpc_error!(
+        lpc_error!(
             span,
             "cyclic `#include`: `{}` is already being included",
             path
-        );
-        for frame in &self.stack {
-            e = e.with_label("included from here", frame.site);
-        }
-        e
+        )
     }
 }
 
