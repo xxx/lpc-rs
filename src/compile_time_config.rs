@@ -26,7 +26,16 @@ pub const MAX_COMMAND_DEPTH: usize = 16;
 /// `catch_tell` levels abort at 24.
 pub const MAX_TASK_CHAIN: u8 = 16;
 
+/// How deep source may nest — the height of any node in the AST, or of a
+/// `#if` expression tree (parentheses included); past it the parser
+/// reports `nests too deeply`. Measured 2026-08-31, debug build on a
+/// 16 MiB thread: the costliest level is a nested closure at ≈12 KB
+/// through codegen (a nested call ≈8 KB, a binary-operator chain ≈6 KB),
+/// so 256 levels use ≈3 MB of `THREAD_STACK`.
+pub const MAX_NESTING_DEPTH: usize = 256;
+
 /// The stack of every runtime thread: `MAX_TASK_CHAIN` levels at the ~87 KB
-/// a debug `catch_tell` level costs, three times over. Tests take the same
-/// through `RUST_MIN_STACK` in `.cargo/config.toml`.
+/// a debug `catch_tell` level costs, three times over, and
+/// `MAX_NESTING_DEPTH` levels of the costliest AST walk, five times over.
+/// Tests take the same through `RUST_MIN_STACK` in `.cargo/config.toml`.
 pub const THREAD_STACK: usize = 16 * 1024 * 1024;
