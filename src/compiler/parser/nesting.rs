@@ -495,7 +495,7 @@ mod tests {
         }
     }
 
-    /// Each shape's largest size whose tree is at most 256 high (nesting-cap R2:
+    /// Each shape's largest size whose tree is at most 256 high (
     /// program → function → return are three levels; a `[0]`, `!`, `?:`,
     /// `=`, call, closure, array, or mapping adds one per step above the
     /// innermost atom; a range or a closure parameter adds two; a
@@ -672,7 +672,7 @@ mod tests {
             .expect("flat");
     }
 
-    /// Nesting-cap R7: a too-deep macro body expanded into code meets the LPC guard at
+    /// A too-deep macro body expanded into code meets the LPC guard at
     /// the use site — the expanded tokens carry the use span.
     #[tokio::test]
     async fn a_too_deep_macro_body_in_code_is_reported_at_the_use() {
