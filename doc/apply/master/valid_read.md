@@ -14,16 +14,23 @@ caller. A path that leads out of the lib fails before this apply.
   all. (`efun` itself is a reserved word: `efun::name()` calls the real
   efun.)
 - `caller` is the object whose code called the efun — what `this_object()`
-  names there.
+  names there; for an efun fired through a function pointer, the object that
+  wrote the pointer.
 - `program` is the in-game path of the file that *defines* the calling code,
   extension included (`"/secure/master.c"`). An inherited function names the
   file that defines it, not the inheriting object's; a closure names the file
-  it was written in; a simul_efun names the simul_efun file. When nothing
-  called the efun from LPC — an efun pointer fired straight from `call_out` —
-  `program` is 0.
+  it was written in; a simul_efun names the simul_efun file; an efun fired
+  through a function pointer names the file that wrote the pointer. When
+  nothing called the efun from LPC — an efun pointer fired straight from
+  `call_out` — `program` is 0.
 
 `program` is what to build policy on: it says where the code came from, and no
-object can change it by asking another object to do the reading.
+object can change it by asking another object to do the reading, nor by
+handing it a pointer or closure. What it cannot yet promise is where the code
+was *loaded*: until object loading is gated, any object may `inherit` a
+privileged program and call its functions under that program's name, so a
+program that reads or writes files on a caller's behalf must not be
+inheritable by untrusted code.
 
 The read is refused when the master does not define `valid_read`, so a master
 that never defines it has no file reads at all. The apply runs inside the
