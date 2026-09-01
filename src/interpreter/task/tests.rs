@@ -1296,6 +1296,21 @@ mod test_instructions {
         }
 
         #[tokio::test]
+        async fn a_protected_parents_global_is_readable_from_the_child() {
+            let code = indoc! { r##"
+                inherit "/guarded";
+                mixed r;
+                void create() { r = shared; }
+            "##};
+
+            let task = run_prog(code).await;
+            let globals =
+                committed_globals_by_name(&task.context.global_state, task.context.process());
+
+            assert_eq!(globals["r"].to_string(), "3");
+        }
+
+        #[tokio::test]
         async fn a_program_reached_through_two_parents_has_one_set_of_globals() {
             let code = indoc! { r##"
                 mixed r;

@@ -53,12 +53,6 @@ impl Symbol {
         self.scope_id.is_none() || Into::<usize>::into(self.scope_id.unwrap()) == 1_usize
     }
 
-    /// Visibility only matters for globals.
-    #[inline]
-    pub fn public(&self) -> bool {
-        self.flags.visibility() == Visibility::Public
-    }
-
     /// Whether inheriting programs can see this global.
     #[inline]
     pub fn visible_to_children(&self) -> bool {
