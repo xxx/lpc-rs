@@ -2268,7 +2268,7 @@ mod tests {
             test_invalid(&three, "`#if` evaluation nests too deeply \\(limit 512\\)").await;
         }
 
-        /// R7: a too-deep `#define` body is substitution-only, like any body
+        /// Nesting-cap R7: a too-deep `#define` body is substitution-only, like any body
         /// that is not an expression.
         #[tokio::test]
         async fn a_too_deep_define_body_is_substitution_only() {

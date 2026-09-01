@@ -1080,9 +1080,9 @@ mod tests {
         assert_eq!(e.to_string(), too_deep);
         assert_eq!(e.span().map(|s| s.l()), Some(4 * (MAX - 1) + 2)); // the 256th `+`
 
-        // Nesting and chains add: 100 bangs, then a chain of 156 is 256.
+        // Nesting and chains add: 100 bangs, a paren, and a 155-term chain is 256.
         let mixed = |terms: usize| format!("{}({})", "!".repeat(100), chain(terms));
-        assert!(x(&mixed(MAX - 101)).is_ok()); // 100 bangs + paren + 155 chain
+        assert!(x(&mixed(MAX - 101)).is_ok());
         assert!(x(&mixed(MAX - 100)).is_err());
     }
 
