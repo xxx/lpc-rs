@@ -44,6 +44,7 @@ where
         .compile_string(path, code)
         .await
         .expect("Failed to compile.")
+        .program
 }
 
 pub async fn run_prog_custom<P>(code: &str, path: P, config: Config) -> Task<MAX_CALL_STACK_SIZE>

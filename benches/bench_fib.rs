@@ -31,7 +31,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     let program = runtime
         .block_on(Compiler::default().compile_string("~/my_file.c", code))
-        .expect("Failed to compile.");
+        .expect("Failed to compile.")
+        .program;
 
     let program = Arc::new(program);
     let (tx, _rx) = tokio::sync::mpsc::channel(1024);

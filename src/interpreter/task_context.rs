@@ -11,6 +11,7 @@ use tokio::sync::mpsc::Sender;
 use crate::compile_time_config::MAX_TASK_CHAIN;
 use crate::{
     interpreter::{
+        apply::report_warnings,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
@@ -199,9 +200,12 @@ impl TaskContext {
 
     /// Compile the file at `path` into a [`Process`], without inserting it;
     /// the caller performs the insert (and any initialization), so the
-    /// object is not visible until placed.
+    /// object is not visible until placed. The compile's warnings go to the
+    /// master's `warning_handler` first.
     pub async fn compile_process(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        compile_process_from_path(self.object_space(), path).await
+        let (process, warnings) = compile_process_from_path(self.object_space(), path).await?;
+        report_warnings(self, &process.program.filename, warnings).await?;
+        Ok(process)
     }
 
     /// Insert an object transactionally: write its cell and record a deferred

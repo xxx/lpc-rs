@@ -25,3 +25,10 @@ error: call to unknown function `clone_obect`
 
 Defining `error_handler` is optional, and errors will instead be written to the
 debug log if not defined.
+
+A compile that fails carries its warnings inside the error's diagnostic; a
+compile that succeeds hands its warnings to `warning_handler` instead.
+
+### See also
+
+`warning_handler`

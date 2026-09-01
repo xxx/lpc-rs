@@ -686,7 +686,7 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let gs = Arc::new(GlobalState::new_rejecting(Arc::new(test_config()), tx, 1));
 
-        let target = compile_process_from_code(
+        let (target, _) = compile_process_from_code(
             &gs.object_space,
             "/target.c",
             "int i = 123; int get() { return i; }",
@@ -696,7 +696,7 @@ mod tests {
         ObjectSpace::insert_process_physical(&gs.object_space, target.clone());
         assert!(!gs.is_initialized(&target));
 
-        let caller = compile_process_from_code(
+        let (caller, _) = compile_process_from_code(
             &gs.object_space,
             "/caller.c",
             r#"int r = "/target"->get();"#,

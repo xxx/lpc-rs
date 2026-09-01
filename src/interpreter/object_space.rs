@@ -18,7 +18,7 @@ use crate::{
         program::Program,
         stm::{SVar, VarId},
     },
-    util::process_builder::{compile_process_from_code, compile_process_from_path},
+    util::process_builder::{compile_process_from_code, compile_process_from_path, log_warnings},
 };
 
 /// The initial size (in objects) of the object space
@@ -93,7 +93,8 @@ impl ObjectSpace {
     /// cell, no initialization). Bootstrap only; in-game creation goes through
     /// `insert_process_transactional`.
     pub async fn create_process_from_path(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        let process = compile_process_from_path(self, path).await?;
+        let (process, warnings) = compile_process_from_path(self, path).await?;
+        log_warnings(&self.config, warnings).await;
         Self::insert_process_physical(self, process.clone());
         Ok(process)
     }
@@ -105,7 +106,8 @@ impl ObjectSpace {
         P: Into<LpcPath> + Send + Sync,
         S: AsRef<str> + Send + Sync,
     {
-        let process = compile_process_from_code(self, filename, code).await?;
+        let (process, warnings) = compile_process_from_code(self, filename, code).await?;
+        log_warnings(&self.config, warnings).await;
         Self::insert_process_physical(self, process.clone());
         Ok(process)
     }

@@ -148,7 +148,8 @@ impl<'a> Program {
     /// let program = compiler
     ///     .compile_string("~/my_file.c", code)
     ///     .await
-    ///     .expect("Failed to compile.");
+    ///     .expect("Failed to compile.")
+    ///     .program;
     ///
     /// for instruction in program.listing() {
     ///     println!("{}", instruction);

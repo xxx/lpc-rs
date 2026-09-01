@@ -130,7 +130,11 @@ async fn compile_simul_efuns(config: &Arc<Config>) -> Program {
         "/",
         &*config.lib_dir,
     );
-    compiler.compile_in_game_file(&path, None).await.unwrap()
+    compiler
+        .compile_in_game_file(&path, None)
+        .await
+        .unwrap()
+        .program
 }
 
 pub async fn compile_prog(code: &str) -> (Program, Arc<Config>, Arc<Process>) {
@@ -154,7 +158,8 @@ pub async fn compile_prog_with_config(
     let program = compiler
         .compile_string(path, code)
         .await
-        .expect("Failed to compile.");
+        .expect("Failed to compile.")
+        .program;
 
     (program, config, se_proc)
 }

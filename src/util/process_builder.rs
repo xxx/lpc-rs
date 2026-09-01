@@ -1,42 +1,53 @@
 use std::{future::Future, sync::Arc};
 
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_utils::config::Config;
 
 use crate::{
-    compiler::{Compiler, CompilerBuilder},
+    compiler::{Compiled, Compiler, CompilerBuilder},
     interpreter::{
         object_space::ObjectSpace,
         process::Process,
-        program::Program,
         task::{Task, task_template::TaskTemplate},
     },
     util::get_simul_efuns,
 };
 
 /// The one compile core: `compile` runs in a [`Compiler`] configured from
-/// `object_space` and yields a [`Program`], wrapped in a fresh, un-inserted
-/// [`Process`].
-async fn compile_to_process<F, Fut>(object_space: &ObjectSpace, compile: F) -> Result<Arc<Process>>
+/// `object_space` and yields a [`Program`](crate::interpreter::program::Program)
+/// wrapped in a fresh, un-inserted [`Process`], with the compile's warnings.
+async fn compile_to_process<F, Fut>(
+    object_space: &ObjectSpace,
+    compile: F,
+) -> Result<(Arc<Process>, Vec<LpcError>)>
 where
     F: FnOnce(Compiler) -> Fut + Send,
-    Fut: Future<Output = Result<Program>> + Send,
+    Fut: Future<Output = Result<Compiled>> + Send,
 {
     let config = object_space.config();
     let compiler = CompilerBuilder::default()
         .config(config.clone())
         .simul_efuns(get_simul_efuns(config, object_space))
         .build()?;
-    let program = compile(compiler).await?;
-    Ok(Arc::new(Process::new(program)))
+    let Compiled { program, warnings } = compile(compiler).await?;
+    Ok((Arc::new(Process::new(program)), warnings))
+}
+
+/// Where warnings go with no task running to hand them to the master: the
+/// debug log, one rendered diagnostic each.
+pub(crate) async fn log_warnings(config: &Config, warnings: Vec<LpcError>) {
+    for warning in warnings {
+        config.debug_log(warning.diagnostic_string()).await;
+    }
 }
 
 /// Compile the in-game file at `path` into an un-inserted [`Process`] (no
-/// placement), in `object_space`'s compiler.
+/// placement), in `object_space`'s compiler, with the compile's warnings.
 pub(crate) async fn compile_process_from_path(
     object_space: &ObjectSpace,
     path: &LpcPath,
-) -> Result<Arc<Process>> {
+) -> Result<(Arc<Process>, Vec<LpcError>)> {
     compile_to_process(object_space, |compiler| async move {
         compiler.compile_in_game_file(path, None).await
     })
@@ -44,12 +55,13 @@ pub(crate) async fn compile_process_from_path(
 }
 
 /// Compile `code` (masquerading as `filename`) into an un-inserted
-/// [`Process`] (no placement), in `object_space`'s compiler.
+/// [`Process`] (no placement), in `object_space`'s compiler, with the
+/// compile's warnings.
 pub(crate) async fn compile_process_from_code<P, S>(
     object_space: &ObjectSpace,
     filename: P,
     code: S,
-) -> Result<Arc<Process>>
+) -> Result<(Arc<Process>, Vec<LpcError>)>
 where
     P: Into<LpcPath> + Send + Sync,
     S: AsRef<str> + Send + Sync,

@@ -41,6 +41,8 @@ pub const VALID_EXEC: &str = "valid_exec";
 pub const CONNECT: &str = "connect";
 /// Master apply: receives each uncaught runtime error (`doc/apply/master/error_handler.md`).
 pub const ERROR_HANDLER: &str = "error_handler";
+/// Master apply: receives each warning a successful compile raised (`doc/apply/master/warning_handler.md`).
+pub const WARNING_HANDLER: &str = "warning_handler";
 /// Master apply: the MSSP variables a client is told (`doc/apply/master/get_mud_stats.md`).
 pub const GET_MUD_STATS: &str = "get_mud_stats";
 /// Body apply: a GMCP message from the client (`doc/apply/special/gmcp.md`).

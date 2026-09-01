@@ -12,7 +12,8 @@ use crate::{
         vm::{Vm, global_state::GlobalState},
     },
     util::process_builder::{
-        compile_process_from_code, compile_process_from_path, process_insert_and_initialize_program,
+        compile_process_from_code, compile_process_from_path, log_warnings,
+        process_insert_and_initialize_program,
     },
 };
 
@@ -72,7 +73,8 @@ impl GlobalState {
         self: &Arc<Self>,
         path: &LpcPath,
     ) -> Result<task::Task<MAX_CALL_STACK_SIZE>> {
-        let process = compile_process_from_path(&self.object_space, path).await?;
+        let (process, warnings) = compile_process_from_path(&self.object_space, path).await?;
+        log_warnings(&self.config, warnings).await;
         process_insert_and_initialize_program(process, TaskTemplate::from(self.clone())).await
     }
 
@@ -87,7 +89,9 @@ impl GlobalState {
         P: Into<LpcPath> + Send + Sync,
         S: AsRef<str> + Send + Sync,
     {
-        let process = compile_process_from_code(&self.object_space, filename, code).await?;
+        let (process, warnings) =
+            compile_process_from_code(&self.object_space, filename, code).await?;
+        log_warnings(&self.config, warnings).await;
         process_insert_and_initialize_program(process, TaskTemplate::from(self.clone())).await
     }
 }
