@@ -1,17 +1,20 @@
-use crate::compiler::ast::{
-    expression_node::ExpressionNode,
-    float_node::FloatNode,
-    int_node::IntNode,
-    unary_op_node::{UnaryOpNode, UnaryOperation},
+use lpc_rs_errors::LpcError;
+
+use crate::compiler::{
+    ast::{
+        expression_node::ExpressionNode,
+        float_node::FloatNode,
+        int_node::IntNode,
+        unary_op_node::{UnaryOpNode, UnaryOperation},
+    },
+    parser::nesting::guard,
 };
 
-/// # Arguments
-/// * `op` - The operation being performed
-/// * `l` - The left operand
-/// * `r` - The right operand
-/// * `span` - The span encompassing the entire expression
-pub fn collapse_unary_op(node: UnaryOpNode) -> ExpressionNode {
-    match node.op {
+/// Fold a unary operation on a literal, and apply the nesting cap to
+/// whatever results.
+pub fn collapse_unary_op(node: UnaryOpNode) -> Result<ExpressionNode, LpcError> {
+    let span = node.span;
+    let folded = match node.op {
         UnaryOperation::Negate => match &*node.expr {
             ExpressionNode::Int(x) => ExpressionNode::Int(IntNode {
                 value: -x.value,
@@ -33,7 +36,8 @@ pub fn collapse_unary_op(node: UnaryOpNode) -> ExpressionNode {
             }),
             _ => ExpressionNode::UnaryOp(node),
         },
-    }
+    };
+    guard(folded, span)
 }
 
 /// A statement-position `x++`/`x--` never uses its value, so it demotes to
@@ -66,7 +70,7 @@ mod tests {
             span,
         };
 
-        let result = collapse_unary_op(node);
+        let result = collapse_unary_op(node).unwrap();
         assert_eq!(result, ExpressionNode::Int(IntNode { value: -123, span }));
     }
 
@@ -80,7 +84,7 @@ mod tests {
             span,
         };
 
-        let result = collapse_unary_op(node);
+        let result = collapse_unary_op(node).unwrap();
         assert_eq!(
             result,
             ExpressionNode::Float(FloatNode {
@@ -100,7 +104,7 @@ mod tests {
             span,
         };
 
-        let result = collapse_unary_op(node.clone());
+        let result = collapse_unary_op(node.clone()).unwrap();
         assert_eq!(result, ExpressionNode::UnaryOp(node));
     }
 
@@ -114,7 +118,7 @@ mod tests {
             span,
         };
 
-        let result = collapse_unary_op(node.clone());
+        let result = collapse_unary_op(node.clone()).unwrap();
         assert_eq!(result, ExpressionNode::UnaryOp(node));
     }
 
@@ -128,7 +132,7 @@ mod tests {
             span,
         };
 
-        let result = collapse_unary_op(node.clone());
+        let result = collapse_unary_op(node.clone()).unwrap();
         assert_eq!(result, ExpressionNode::UnaryOp(node));
     }
 
@@ -142,7 +146,7 @@ mod tests {
             span,
         };
 
-        let result = collapse_unary_op(node);
+        let result = collapse_unary_op(node).unwrap();
         assert_eq!(result, ExpressionNode::Int(IntNode { value: !123, span }));
     }
 }

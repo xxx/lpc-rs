@@ -432,4 +432,182 @@ mod tests {
         let prog = guard(prog, None).expect("height 4");
         assert_eq!(height(&prog), 4);
     }
+
+    /// One nesting shape at size `n`. Expression shapes sit under
+    /// `mixed f(mixed a) { return …; }` (three levels above the expression),
+    /// statement shapes under `void f(mixed a) { … }` (two), the last two at
+    /// program level.
+    fn shape(kind: &str, n: usize) -> String {
+        let rep = |s: &str| s.repeat(n);
+        let chain = |m: usize| vec!["a"; m].join(" + ");
+        let nest = |open: &str, close: &str, core: &str| {
+            format!("{}{core}{}", open.repeat(n), close.repeat(n))
+        };
+        let expr = |x: String| format!("mixed f(mixed a) {{ return {x}; }}");
+        let stmt = |s: String| format!("void f(mixed a) {{ {s} }}");
+        match kind {
+            "binary_left" => expr(chain(n)),
+            "binary_right" => expr(format!("{}a{}", "a + (".repeat(n - 1), ")".repeat(n - 1))),
+            "index" => expr(format!("a{}", rep("[0]"))),
+            "range_l" => expr(nest("a[", "..]", "a")),
+            "range_r" => expr(nest("a[..", "]", "a")),
+            "unary" => expr(format!("{}a", rep("!"))),
+            "postfix_inc" => expr(format!("a{}", rep("++"))),
+            "ternary_else" => expr(format!("{}a", rep("a ? a : "))),
+            "ternary_body" => expr(nest("a ? ", " : a", "a")),
+            "ternary_cond" => expr(nest("(", ") ? a : a", "a")),
+            "assign_rhs" => expr(format!("{}1", rep("a = "))),
+            "assign_lhs" => expr(format!("a{} = 1", rep("[0]"))),
+            "comma" => expr(nest("(a, ", ")", "a")),
+            "call_args" => expr(nest("f(", ")", "a")),
+            "call_receiver" => expr(format!("a{}", rep("->f()"))),
+            "call_node" => expr(format!("f(a){}", "()".repeat(n - 1))),
+            "closure_body" => expr(nest("(: ", " :)", "1")),
+            "closure_param" => expr(nest("(: [int p = ", "] :)", "1")),
+            "fptr_args" => expr(nest("&f(", ")", "1")),
+            "fptr_receiver" => expr(nest("&(", ")->f()", "a")),
+            "array" => expr(nest("({ ", " })", "1")),
+            "mapping_value" => expr(nest("([ 1 : ", " ])", "1")),
+            "mapping_key" => expr(nest("([ ", " : 1 ])", "1")),
+            "block" => stmt(nest("{ ", " }", "")),
+            "if" => stmt(format!("{}{{}}", rep("if (a) "))),
+            "elseif" => stmt(format!("if (a) {{}}{}", " else if (a) {}".repeat(n - 1))),
+            "while" => stmt(format!("{}{{}}", rep("while (a) "))),
+            "do_while" => stmt(format!("{}{{}}{}", rep("do "), rep(" while (a);"))),
+            "for" => stmt(format!("{}{{}}", rep("for (;;) "))),
+            "foreach" => stmt(format!("{}{{}}", rep("foreach (x : a) "))),
+            "switch" => stmt(nest("switch (a) { case 1: ", " }", "{}")),
+            "expression_statement" => stmt(format!("{};", chain(n))),
+            "decl" => stmt(format!("int x = {};", chain(n))),
+            "label_case" => stmt(format!("switch (a) {{ case {}: {{}} }}", chain(n))),
+            "for_init_expr" => stmt(format!("for ({};;) {{}}", chain(n))),
+            "for_init_decl" => stmt(format!("for (int i = {};;) {{}}", chain(n))),
+            "for_cond" => stmt(format!("for (;{};) {{}}", chain(n))),
+            "for_inc" => stmt(format!("for (;;{}) {{}}", chain(n))),
+            "foreach_collection" => stmt(format!("foreach (x : {}) {{}}", chain(n))),
+            "switch_expr" => stmt(format!("switch ({}) {{}}", chain(n))),
+            "while_cond" => stmt(format!("while ({}) {{}}", chain(n))),
+            "if_cond" => stmt(format!("if ({}) {{}}", chain(n))),
+            "do_while_cond" => stmt(format!("do {{}} while ({});", chain(n))),
+            "global_decl" => format!("mixed a;\nmixed x = {};", chain(n)),
+            "param_default" => format!("mixed a;\nvoid f(mixed p = {}) {{}}", chain(n)),
+            other => panic!("unknown shape `{other}`"),
+        }
+    }
+
+    /// Each shape's largest size whose tree is at most 256 high (spec R2:
+    /// program → function → return are three levels; a `[0]`, `!`, `?:`,
+    /// `=`, call, closure, array, or mapping adds one per step above the
+    /// innermost atom; a range or a closure parameter adds two; a
+    /// `switch { case: }` adds three). One size more must fail.
+    const BOUNDARIES: &[(&str, usize)] = &[
+        ("binary_left", 253),
+        ("binary_right", 253),
+        ("index", 252),
+        ("range_l", 126),
+        ("range_r", 126),
+        ("unary", 252),
+        ("postfix_inc", 252),
+        ("ternary_else", 252),
+        ("ternary_body", 252),
+        ("ternary_cond", 252),
+        ("assign_rhs", 252),
+        ("assign_lhs", 251),
+        ("comma", 252),
+        ("call_args", 252),
+        ("call_receiver", 252),
+        ("call_node", 252),
+        ("closure_body", 252),
+        ("closure_param", 126),
+        ("fptr_args", 252),
+        ("fptr_receiver", 252),
+        ("array", 252),
+        ("mapping_value", 252),
+        ("mapping_key", 252),
+        ("block", 254),
+        ("if", 253),
+        ("elseif", 253),
+        ("while", 253),
+        ("do_while", 253),
+        ("for", 253),
+        ("foreach", 253),
+        ("switch", 84),
+        ("expression_statement", 254),
+        ("decl", 252),
+        ("label_case", 250),
+        ("for_init_expr", 253),
+        ("for_init_decl", 251),
+        ("for_cond", 253),
+        ("for_inc", 253),
+        ("foreach_collection", 253),
+        ("switch_expr", 253),
+        ("while_cond", 253),
+        ("if_cond", 253),
+        ("do_while_cond", 253),
+        ("global_decl", 253),
+        ("param_default", 253),
+    ];
+
+    const TOO_DEEP: &str = "code nests too deeply (limit 256)";
+
+    #[tokio::test]
+    async fn every_shape_parses_at_the_cap_and_fails_one_past_it() {
+        let compiler = Compiler::new(test_config());
+        let path = LpcPath::from("/cap.c");
+        for &(kind, ok) in BOUNDARIES {
+            compiler
+                .parse_string(&path, shape(kind, ok))
+                .await
+                .unwrap_or_else(|e| panic!("{kind} at {ok}: {e}"));
+            let e = compiler
+                .parse_string(&path, shape(kind, ok + 1))
+                .await
+                .map(|_| ())
+                .expect_err(&format!("{kind} at {} parsed", ok + 1));
+            assert_eq!(e.to_string(), TOO_DEEP, "{kind}");
+        }
+    }
+
+    #[tokio::test]
+    async fn the_error_lands_inside_the_construct() {
+        let compiler = Compiler::new(test_config());
+        let path = LpcPath::from("/cap.c");
+
+        // A left-deep chain: the first operand.
+        let code = shape("binary_left", 254);
+        let e = compiler
+            .parse_string(&path, &code)
+            .await
+            .map(|_| ())
+            .expect_err("too deep");
+        assert_eq!(e.span().and_then(|s| s.code()).as_deref(), Some("a"));
+        assert_eq!(
+            e.span().map(|s| s.l()),
+            Some(code.find("return a").unwrap() + 7)
+        );
+
+        // An `else if` chain: the last condition (its block is empty and
+        // spanless; the condition is visited first in source order and
+        // carries its own span, so no ancestor fallback is needed).
+        let code = shape("elseif", 254);
+        let e = compiler
+            .parse_string(&path, &code)
+            .await
+            .map(|_| ())
+            .expect_err("too deep");
+        assert_eq!(e.span().and_then(|s| s.code()).as_deref(), Some("a"));
+        assert_eq!(
+            e.span().map(|s| s.l()),
+            Some(code.rfind("if (a)").unwrap() + 4)
+        );
+
+        // Bare blocks all the way down: the nearest ancestor with a span is
+        // the function.
+        let e = compiler
+            .parse_string(&path, shape("block", 255))
+            .await
+            .map(|_| ())
+            .expect_err("too deep");
+        assert_eq!(e.span().and_then(|s| s.code()).as_deref(), Some("void f"));
+    }
 }

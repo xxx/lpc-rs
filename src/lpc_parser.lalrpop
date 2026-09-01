@@ -41,6 +41,7 @@ use lpc_rs_core::call_namespace::CallNamespace;
 use lpc_rs_core::EFUN;
 use crate::compiler::parser::collapse_binary_op::collapse_binary_op;
 use crate::compiler::parser::collapse_unary_op::{collapse_unary_op, demote_statement_post_op};
+use crate::compiler::parser::nesting::guard;
 use lpc_rs_errors::span::Span;
 use crate::compiler::lexer::Token;
 use lpc_rs_errors::{LpcError, lpc_error, lpc_bug, lpc_warning};
@@ -150,9 +151,12 @@ extern {
     }
 }
 
-pub Program: ProgramNode = <inherits:Inherit*> <body:Def*> => ProgramNode {
-    inherits,
-    body: body.into_iter().map(|i| AstNode::from(i)).collect::<Vec<_>>()
+pub Program: ProgramNode = <inherits:Inherit*> <body:Def*> =>? {
+    let program = ProgramNode {
+        inherits,
+        body: body.into_iter().map(|i| AstNode::from(i)).collect::<Vec<_>>()
+    };
+    Ok(guard(program, None)?)
 };
 
 Inherit: InheritNode = {
@@ -259,14 +263,14 @@ FunctionDef: FunctionDefNode = {
         }
         let flags = FunctionFlags::from(&flag_strs[..]).with_ellipsis(ellipsis);
 
-        Ok(FunctionDefNode {
+        Ok(guard(FunctionDefNode {
             name: ustr(&name.1),
             parameters,
             flags,
             body,
             return_type,
             span: Some(span)
-        })
+        }, Some(span))?)
     },
 }
 
@@ -301,7 +305,7 @@ Closure: ExpressionNode = {
         let name = format!("closure-{}", context.closure_count);
         context.closure_count += 1;
 
-        Ok(ExpressionNode::Closure(ClosureNode {
+        Ok(guard(ExpressionNode::Closure(ClosureNode {
             name: ustr(&name),
             return_type: LpcType::Mixed(false),
             parameters,
@@ -309,7 +313,7 @@ Closure: ExpressionNode = {
             body: body.unwrap_or_default(),
             span: Some(span),
             scope_id: None,
-        }))
+        }), Some(span))?)
     },
 }
 
@@ -393,72 +397,74 @@ JumpStatement: AstNode = {
 };
 
 OpenStatement: AstNode = {
-    <if_t:"if"> "(" <cond:Expression> ")" <body:Statement> => {
+    <if_t:"if"> "(" <cond:Expression> ")" <body:Statement> =>? {
         // https://github.com/lalrpop/lalrpop/issues/67#issuecomment-188951041
         let node = IfNode::new(cond, body, None, Some(if_t));
-        AstNode::from(node)
+        Ok(guard(AstNode::from(node), Some(if_t))?)
     },
-    <if_t:"if"> "(" <cond:Expression> ")" <body:ClosedStatement> "else" <else_clause:OpenStatement> => {
+    <if_t:"if"> "(" <cond:Expression> ")" <body:ClosedStatement> "else" <else_clause:OpenStatement> =>? {
         let node = IfNode::new(cond, body, Some(else_clause), Some(if_t));
-        AstNode::from(node)
+        Ok(guard(AstNode::from(node), Some(if_t))?)
     },
-    <while_t:"while"> "(" <cond:Expression> ")" <body:OpenStatement> => {
+    <while_t:"while"> "(" <cond:Expression> ")" <body:OpenStatement> =>? {
         let node = WhileNode::new(cond, body, Some(while_t));
-        AstNode::from(node)
+        Ok(guard(AstNode::from(node), Some(while_t))?)
     },
-    <for_t:"for"> "(" <init:ForInit?> ";" <cond:Expression?> ";" <inc:Expression?> ")" <body:OpenStatement> => {
+    <for_t:"for"> "(" <init:ForInit?> ";" <cond:Expression?> ";" <inc:Expression?> ")" <body:OpenStatement> =>? {
         let node = ForNode::new(init, cond, inc.map(demote_statement_post_op), body, Some(for_t));
-        AstNode::from(node)
+        Ok(guard(AstNode::from(node), Some(for_t))?)
     },
-    <foreach_t:"foreach"> "(" <init:ForEachInit> ":" <collection:Expression> ")" <body:OpenStatement> => {
+    <foreach_t:"foreach"> "(" <init:ForEachInit> ":" <collection:Expression> ")" <body:OpenStatement> =>? {
         let node = ForEachNode::new(init, collection, body, Some(foreach_t));
-        AstNode::from(node)
+        Ok(guard(AstNode::from(node), Some(foreach_t))?)
     },
-    <l:"switch"> "(" <expression:Expression> <r:")"> <body:OpenStatement> => {
+    <l:"switch"> "(" <expression:Expression> <r:")"> <body:OpenStatement> =>? {
         let span = Span::join(l, r);
         let node = SwitchNode {
             expression,
             body: body.into(),
             span: Some(l),
         };
-        AstNode::from(node)
+        Ok(guard(AstNode::from(node), Some(span))?)
     },
-    <label:Label> <statement:OpenStatement> => {
+    <label:Label> <statement:OpenStatement> =>? {
+        let span = label.span;
         let labeled = LabeledStatementNode::new(statement, label);
-        AstNode::from(labeled)
+        Ok(guard(AstNode::from(labeled), span)?)
     }
 };
 
 ClosedStatement: AstNode = {
     <SimpleStatement>,
-    <if_t:"if"> "(" <cond:Expression> ")" < body:ClosedStatement> "else" <else_clause:ClosedStatement> => {
+    <if_t:"if"> "(" <cond:Expression> ")" < body:ClosedStatement> "else" <else_clause:ClosedStatement> =>? {
         let node = IfNode::new(cond, body, Some(else_clause), Some(if_t));
-        AstNode::from(node)
+        Ok(guard(AstNode::from(node), Some(if_t))?)
     },
-    <while_t:"while"> "(" <cond:Expression> ")" <body:ClosedStatement> => {
+    <while_t:"while"> "(" <cond:Expression> ")" <body:ClosedStatement> =>? {
         let node = WhileNode::new(cond, body, Some(while_t));
-        AstNode::from(node)
+        Ok(guard(AstNode::from(node), Some(while_t))?)
     },
-    <for_t:"for"> "(" <init:ForInit?> ";" <cond:Expression?> ";" <inc:Expression?> ")" <body:ClosedStatement> => {
+    <for_t:"for"> "(" <init:ForInit?> ";" <cond:Expression?> ";" <inc:Expression?> ")" <body:ClosedStatement> =>? {
         let node = ForNode::new(init, cond, inc.map(demote_statement_post_op), body, Some(for_t));
-        AstNode::from(node)
+        Ok(guard(AstNode::from(node), Some(for_t))?)
     },
-    <foreach_t:"foreach"> "(" <init:ForEachInit> ":" <collection:Expression> ")" <body:ClosedStatement> => {
+    <foreach_t:"foreach"> "(" <init:ForEachInit> ":" <collection:Expression> ")" <body:ClosedStatement> =>? {
         let node = ForEachNode::new(init, collection, body, Some(foreach_t));
-        AstNode::from(node)
+        Ok(guard(AstNode::from(node), Some(foreach_t))?)
     },
-    <l:"switch"> "(" <expression:Expression> <r:")"> <body:ClosedStatement> => {
+    <l:"switch"> "(" <expression:Expression> <r:")"> <body:ClosedStatement> =>? {
         let span = Span::join(l, r);
         let node = SwitchNode {
             expression,
             body: body.into(),
             span: Some(l),
         };
-        AstNode::from(node)
+        Ok(guard(AstNode::from(node), Some(span))?)
     },
-    <label:Label> <statement:ClosedStatement> => {
+    <label:Label> <statement:ClosedStatement> =>? {
+        let span = label.span;
         let labeled = LabeledStatementNode::new(statement, label);
-        AstNode::from(labeled)
+        Ok(guard(AstNode::from(labeled), span)?)
     }
 };
 
@@ -486,15 +492,15 @@ ForEachInit: ForEachInit = {
 };
 
 DoWhile: DoWhileNode = {
-    <do_t:"do"> <body:Statement> "while" "(" <cond:Expression> ")" ";" => {
-        DoWhileNode::new(body, cond, Some(do_t))
+    <do_t:"do"> <body:Statement> "while" "(" <cond:Expression> ")" ";" =>? {
+        Ok(guard(DoWhileNode::new(body, cond, Some(do_t)), Some(do_t))?)
     }
 };
 
 Label: LabelNode = {
-    <word:"case"> <case:SwitchCase> <colon:":"> => {
+    <word:"case"> <case:SwitchCase> <colon:":"> =>? {
         let span = Span::join(word, colon);
-        LabelNode::new(case, Some(span))
+        Ok(guard(LabelNode::new(case, Some(span)), Some(span))?)
     },
     <d:"default"> ":" => {
         LabelNode::new_default(Some(d))
@@ -503,27 +509,30 @@ Label: LabelNode = {
 
 SwitchCase: ExpressionNode = {
     <Expression>,
-    <e1:ConditionalExpression> ".." <e2:ConditionalExpression> => {
+    <e1:ConditionalExpression> ".." <e2:ConditionalExpression> =>? {
         let span = Span::combine(e1.span(), e2.span());
-        RangeNode::new(Some(e1), Some(e2), span).into()
+        let node: ExpressionNode = RangeNode::new(Some(e1), Some(e2), span).into();
+        Ok(guard(node, span)?)
     },
-    <rng:".."> <e:ConditionalExpression> => {
+    <rng:".."> <e:ConditionalExpression> =>? {
         let span = Span::combine(Some(rng), e.span());
-        RangeNode::new(None, Some(e), span).into()
+        let node: ExpressionNode = RangeNode::new(None, Some(e), span).into();
+        Ok(guard(node, span)?)
     },
-    <e:ConditionalExpression> <rng:".."> => {
+    <e:ConditionalExpression> <rng:".."> =>? {
         let span = Span::combine(e.span(), Some(rng));
-        RangeNode::new(Some(e), None, span).into()
+        let node: ExpressionNode = RangeNode::new(Some(e), None, span).into();
+        Ok(guard(node, span)?)
     },
 };
 
 VarInit: VarInitNode = {
-    <array:"*"?> <name:"ID"> <value:("=" <AssignmentExpression>)?> => {
+    <array:"*"?> <name:"ID"> <value:("=" <AssignmentExpression>)?> =>? {
         let name_span = name.0;
         let value_span = value.as_ref().and_then(|node| node.span());
         let span = Span::combine(Some(array.unwrap_or(name_span)), value_span.or(Some(name_span)));
 
-        VarInitNode {
+        Ok(guard(VarInitNode {
             type_: LpcType::Int(false), // placeholder. Corrected in Decl.
             name: ustr(&name.1),
             value,
@@ -532,12 +541,12 @@ VarInit: VarInitNode = {
             span,
             flags: None,
             by_ref: false,
-        }
+        }, span)?)
     }
 }
 
 Decl: DeclNode = {
-    <var_type:Type> <init:VarInit> <optional:("," <VarInit>)*> => {
+    <var_type:Type> <init:VarInit> <optional:("," <VarInit>)*> =>? {
         let new_type = LpcType::from(var_type.1).as_array(init.array);
         let mut initializations = vec![init];
 
@@ -548,16 +557,13 @@ Decl: DeclNode = {
             init.update_type(new_type)
         }
 
-        DeclNode {
-            type_: new_type,
-            initializations
-        }
+        Ok(guard(DeclNode { type_: new_type, initializations }, Some(var_type.0))?)
     }
 }
 
 Block: BlockNode = {
-    "{" <Statements> "}" => {
-        BlockNode::new(<>)
+    <l:"{"> <body:Statements> <r:"}"> =>? {
+        Ok(guard(BlockNode::new(body), Some(Span::join(l, r)))?)
     }
 };
 
@@ -569,12 +575,11 @@ PrimaryExpression: ExpressionNode = {
     <FunctionPointer>,
     <Closure>,
     "(" <Expression> ")",
-    "(" "{" <l:(ExpressionList ","?)?>  "}" ")" => {
-        let vec = l.map(|list| list.0).unwrap_or_else(|| vec![]);
-
-        ExpressionNode::Array(ArrayNode::new(vec))
+    <l:"("> "{" <list:(ExpressionList ","?)?>  "}" <r:")"> =>? {
+        let vec = list.map(|list| list.0).unwrap_or_else(|| vec![]);
+        Ok(guard(ExpressionNode::Array(ArrayNode::new(vec)), Some(Span::join(l, r)))?)
     },
-    <l:"("> "[" <list:(MappingExpressionList ","?)?> "]" <r:")"> => {
+    <l:"("> "[" <list:(MappingExpressionList ","?)?> "]" <r:")"> =>? {
         let vec = if let Some(v) = list {
             // Deduplicate kv pairs, in reverse so later-declared pairs override earlier ones.
             let reversed = v.0.into_iter().rev().unique_by(|(k, _)| k.to_string()).collect_vec();
@@ -589,7 +594,7 @@ PrimaryExpression: ExpressionNode = {
 
         let span = Span::join(l, r);
 
-        ExpressionNode::Mapping(MappingNode::new(vec, Some(span)))
+        Ok(guard(ExpressionNode::Mapping(MappingNode::new(vec, Some(span))), Some(span))?)
     }
 };
 
@@ -633,18 +638,17 @@ PostfixExpression: ExpressionNode = {
 
         collapse_binary_op(BinaryOperation::Index, l, r, span)
     },
-    <e:(<PostfixExpression> "->")?> <mut c:Call> => {
+    <e:(<PostfixExpression> "->")?> <mut c:Call> =>? {
         if let Some(rcvr) = e {
             let span = Span::combine(rcvr.span(), c.span);
             c.set_receiver(rcvr);
             c.span = span;
-
-            ExpressionNode::from(c)
+            Ok(guard(ExpressionNode::from(c), span)?)
         } else {
-            ExpressionNode::from(c)
+            Ok(ExpressionNode::from(c))
         }
     },
-    <e:PostfixExpression> "++" => {
+    <e:PostfixExpression> "++" =>? {
         let span = e.span();
         let n = UnaryOpNode {
             expr: Box::new(e),
@@ -653,9 +657,9 @@ PostfixExpression: ExpressionNode = {
             span
         };
 
-        collapse_unary_op(n)
+        Ok(collapse_unary_op(n)?)
     },
-    <e:PostfixExpression> "--" => {
+    <e:PostfixExpression> "--" =>? {
         let span = e.span();
         let n = UnaryOpNode {
             expr: Box::new(e),
@@ -664,13 +668,13 @@ PostfixExpression: ExpressionNode = {
             span
         };
 
-        collapse_unary_op(n)
+        Ok(collapse_unary_op(n)?)
     },
 };
 
 UnaryExpression: ExpressionNode = {
     <PostfixExpression>,
-    <op:UnaryOp> <expr:CastExpression> => {
+    <op:UnaryOp> <expr:CastExpression> =>? {
         let span = Span::combine(Some(op.1), expr.span());
 
         let n = UnaryOpNode {
@@ -680,7 +684,7 @@ UnaryExpression: ExpressionNode = {
             span
         };
 
-        collapse_unary_op(n)
+        Ok(collapse_unary_op(n)?)
     }
 };
 
@@ -790,16 +794,15 @@ LogicalOrExpression: ExpressionNode = {
 
 ConditionalExpression: ExpressionNode = {
     <LogicalOrExpression>,
-    <cond:LogicalOrExpression> "?" <body:Expression> ":" <else_clause:ConditionalExpression> => {
+    <cond:LogicalOrExpression> "?" <body:Expression> ":" <else_clause:ConditionalExpression> =>? {
         let span = Span::combine(cond.span(), else_clause.span());
-
-        ExpressionNode::from(TernaryNode::new(cond, body, else_clause, span))
+        Ok(guard(ExpressionNode::from(TernaryNode::new(cond, body, else_clause, span)), span)?)
     }
 };
 
 AssignmentExpression: ExpressionNode = {
     <ConditionalExpression>,
-    <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> => {
+    <lhs:UnaryExpression> <op:AssignmentOp> <rhs:AssignmentExpression> =>? {
         let span = Span::combine(lhs.span(), rhs.span());
 
         // Desugar `op=` operators (e.g. `x += y`, etc.) into `x = x op y`
@@ -835,17 +838,17 @@ AssignmentExpression: ExpressionNode = {
             _ => panic!("unknown operation in assignment: `{}`", op)
         };
 
-        ExpressionNode::Assignment(AssignmentNode {
+        Ok(guard(ExpressionNode::Assignment(AssignmentNode {
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
             span,
-        })
+        }), span)?)
     }
 };
 
 Expression: ExpressionNode = {
     <AssignmentExpression>,
-    <e:Expression> <c:","> <ass:AssignmentExpression> => {
+    <e:Expression> <c:","> <ass:AssignmentExpression> =>? {
         let span = Span::combine(e.span().or(Some(c)), ass.span().or(Some(c)));
 
         let mut list = if let ExpressionNode::CommaExpression(ce) = e {
@@ -856,17 +859,17 @@ Expression: ExpressionNode = {
 
         list.extend_from_slice(&[ass]);
 
-        ExpressionNode::CommaExpression(CommaExpressionNode {
+        Ok(guard(ExpressionNode::CommaExpression(CommaExpressionNode {
             value: list,
             span,
-        })
+        }), span)?)
     }
 };
 
 Return: ReturnNode = {
-    <ret:"return"> <e:Expression?> => {
+    <ret:"return"> <e:Expression?> =>? {
         let span = Span::combine(Some(ret), e.as_ref().and_then(|expr| expr.span()));
-        ReturnNode { value: e, span }
+        Ok(guard(ReturnNode { value: e, span }, span)?)
     }
 }
 
@@ -925,30 +928,31 @@ MappingInitializer: (ExpressionNode, ExpressionNode) = {
 }
 
 Call: CallNode = {
-    <ns:CallNamespace?> <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> => {
+    <ns:CallNamespace?> <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> =>? {
         let arguments = list.unwrap_or_else(|| vec![]);
 
         let (left, namespace) = ns.unwrap_or_else(|| (name.0, CallNamespace::default()));
+        let span = Some(Span::join(left, right));
 
-        CallNode {
+        Ok(guard(CallNode {
             chain: CallChain::Root {
                 receiver: None,
                 name: ustr(&name.1),
                 namespace
             },
             arguments,
-            span: Some(Span::join(left, right)),
-        }
+            span,
+        }, span)?)
     },
-    <expr:Call> <lparen:"("> <list:ArgumentExpressionList?> <right:")"> => {
+    <expr:Call> <lparen:"("> <list:ArgumentExpressionList?> <right:")"> =>? {
         let arguments = list.unwrap_or_else(|| vec![]);
         let span = Span::combine(expr.span().or(Some(lparen)), Some(right));
 
-        CallNode {
+        Ok(guard(CallNode {
             chain: CallChain::Node(Box::new(expr)),
             arguments,
             span,
-        }
+        }, span)?)
     }
 };
 
@@ -1077,15 +1081,16 @@ String: ExpressionNode = {
 };
 
 FunctionPointer: ExpressionNode = {
-    <l:"&"> <receiver:FunctionPointerReceiver?> <mut name:"ID"> "(" <arguments:PartialArgumentExpressionList?> <r:")"> => {
+    <l:"&"> <receiver:FunctionPointerReceiver?> <mut name:"ID"> "(" <arguments:PartialArgumentExpressionList?> <r:")"> =>? {
+        let span = Span::join(l, r);
         let ptr_node = FunctionPtrNode {
             receiver,
             arguments,
             name: ustr(&std::mem::take(&mut name.1)),
-            span: Some(Span::join(l, r))
+            span: Some(span)
         };
 
-        ExpressionNode::from(ptr_node)
+        Ok(guard(ExpressionNode::from(ptr_node), Some(span))?)
     }
 };
 

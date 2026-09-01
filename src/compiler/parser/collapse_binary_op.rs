@@ -11,6 +11,7 @@ use crate::compiler::{
         string_node::StringNode,
     },
     lexer,
+    parser::nesting::guard,
 };
 
 /// Combine literals in cases where we have enough information to do so.
@@ -26,7 +27,7 @@ pub fn collapse_binary_op(
     r: ExpressionNode,
     span: Option<Span>,
 ) -> Result<ExpressionNode, ParseError<usize, lexer::Token, LpcError>> {
-    match op {
+    let node = match op {
         BinaryOperation::Add => collapse_add(op, l, r, span),
         BinaryOperation::Sub => collapse_sub(op, l, r, span),
         BinaryOperation::Mul => collapse_mul(op, l, r, span),
@@ -47,7 +48,9 @@ pub fn collapse_binary_op(
         | BinaryOperation::Gte
         | BinaryOperation::AndAnd
         | BinaryOperation::OrOr => Ok(non_collapse(op, l, r, span)),
-    }
+    }?;
+    // A folded literal is height 1 and passes.
+    Ok(guard(node, span)?)
 }
 
 fn collapse_add(
