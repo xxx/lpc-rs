@@ -13,10 +13,13 @@ use lpc_rs_errors::{
     span::{HasSpan, Span},
 };
 
-use crate::compiler::{
-    ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
-    lexer::{LexWrapper, Token},
-    preprocessor::preprocessor_node::PreprocessorNode,
+use crate::{
+    compile_time_config::MAX_NESTING_DEPTH,
+    compiler::{
+        ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
+        lexer::{LexWrapper, Token},
+        preprocessor::preprocessor_node::PreprocessorNode,
+    },
 };
 
 /// A directive's name alone — everything a dead region is allowed to know.
@@ -500,8 +503,12 @@ pub fn parse_if_expression(text: &str, base: Span) -> Result<PreprocessorNode> {
     if tokens.is_empty() {
         return Err(lpc_error!(Some(base), "expected an expression after `#if`"));
     }
-    let mut parser = ExprParser { tokens, pos: 0 };
-    let expr = parser.expr()?;
+    let mut parser = ExprParser {
+        tokens,
+        pos: 0,
+        depth: 0,
+    };
+    let (expr, _height) = parser.expr()?;
     if let Some(t) = parser.tokens.get(parser.pos) {
         return Err(ExprParser::err_at(
             t.span(),
@@ -551,14 +558,30 @@ const LADDER: &[fn(&Token) -> Option<BinaryOperation>] = &[
 
 /// Recursive descent over the operand's tokens: C's integer operator
 /// ladder (elif-bundle R6) — [`LADDER`] levels, then unary, then primary.
+/// Two checks keep every tree under `MAX_NESTING_DEPTH` (nesting-cap R5):
+/// `depth` refuses to descend into a `(` or prefix operator the tree could
+/// not afford, and every built node reports its height upward.
 struct ExprParser {
     tokens: Vec<Token>,
     pos: usize,
+    /// `(` and prefix operators enclosing the current point.
+    depth: usize,
 }
+
+/// A node and its height.
+type Built = (PreprocessorNode, usize);
 
 impl ExprParser {
     fn err_at(span: Span, msg: &str) -> LpcError {
         lpc_error!(Some(span), "{msg}")
+    }
+
+    fn too_deep(span: Span) -> LpcError {
+        lpc_error!(
+            Some(span),
+            "`#if` expression nests too deeply (limit {})",
+            MAX_NESTING_DEPTH
+        )
     }
 
     fn end_err(&self) -> LpcError {
@@ -591,59 +614,100 @@ impl ExprParser {
         }
     }
 
-    fn expr(&mut self) -> Result<PreprocessorNode> {
+    /// Before descending into a `(` or prefix operator at `span`: the node
+    /// built there is at least `depth + 2` high (itself, its enclosing
+    /// levels, the atom under it).
+    fn descend(&mut self, span: Span) -> Result<()> {
+        if self.depth + 2 > MAX_NESTING_DEPTH {
+            return Err(Self::too_deep(span));
+        }
+        self.depth += 1;
+        Ok(())
+    }
+
+    fn ascend(&mut self) {
+        self.depth -= 1;
+    }
+
+    /// A node of height `height`, built at `span`.
+    fn built(node: PreprocessorNode, height: usize, span: Span) -> Result<Built> {
+        if height > MAX_NESTING_DEPTH {
+            return Err(Self::too_deep(span));
+        }
+        Ok((node, height))
+    }
+
+    fn expr(&mut self) -> Result<Built> {
         self.level(0)
     }
 
-    fn level(&mut self, prec: usize) -> Result<PreprocessorNode> {
+    fn level(&mut self, prec: usize) -> Result<Built> {
         let Some(op_of) = LADDER.get(prec) else {
             return self.unary();
         };
-        let mut node = self.level(prec + 1)?;
-        while let Some(op) = self.peek(0).and_then(op_of) {
+        let (mut node, mut height) = self.level(prec + 1)?;
+        while let Some(tok) = self.peek(0) {
+            let Some(op) = op_of(tok) else { break };
+            let op_span = tok.span();
             self.pos += 1;
-            let rhs = self.level(prec + 1)?;
-            node = PreprocessorNode::BinaryOp(op, Box::new(node), Box::new(rhs));
+            let (rhs, rhs_height) = self.level(prec + 1)?;
+            (node, height) = Self::built(
+                PreprocessorNode::BinaryOp(op, Box::new(node), Box::new(rhs)),
+                1 + height.max(rhs_height),
+                op_span,
+            )?;
         }
-        Ok(node)
+        Ok((node, height))
     }
 
     /// Prefix `!` `-` `~`, stacking (`!!X`, `-~X`).
-    fn unary(&mut self) -> Result<PreprocessorNode> {
-        let op = match self.peek(0) {
-            Some(Token::Bang(_)) => UnaryOperation::Bang,
-            Some(Token::Minus(_)) => UnaryOperation::Negate,
-            Some(Token::Tilde(_)) => UnaryOperation::BitwiseNot,
+    fn unary(&mut self) -> Result<Built> {
+        let (op, span) = match self.peek(0) {
+            Some(t @ Token::Bang(_)) => (UnaryOperation::Bang, t.span()),
+            Some(t @ Token::Minus(_)) => (UnaryOperation::Negate, t.span()),
+            Some(t @ Token::Tilde(_)) => (UnaryOperation::BitwiseNot, t.span()),
             _ => return self.primary(),
         };
         self.pos += 1;
-        let inner = self.unary()?;
-        Ok(PreprocessorNode::UnaryOp(op, Box::new(inner)))
+        self.descend(span)?;
+        let inner = self.unary();
+        self.ascend();
+        let (inner, height) = inner?;
+        Self::built(
+            PreprocessorNode::UnaryOp(op, Box::new(inner)),
+            height + 1,
+            span,
+        )
     }
 
-    fn primary(&mut self) -> Result<PreprocessorNode> {
+    fn primary(&mut self) -> Result<Built> {
         let Some(token) = self.next() else {
             return Err(self.end_err());
         };
         match token {
-            Token::IntLiteral(t) => Ok(PreprocessorNode::Int(t.1)),
-            Token::StringLiteral(t) => Ok(PreprocessorNode::String(t.1)),
+            Token::IntLiteral(t) => Ok((PreprocessorNode::Int(t.1), 1)),
+            Token::StringLiteral(t) => Ok((PreprocessorNode::String(t.1), 1)),
             Token::LParen(sp) => {
-                let inner = self.expr()?;
+                // A paren counts as a level here: each one costs this
+                // parser 13 frames.
+                self.descend(sp)?;
+                let inner = self.expr();
+                self.ascend();
+                let (inner, height) = inner?;
                 if self.eat(|t| matches!(t, Token::RParen(_))) {
-                    Ok(inner)
+                    Self::built(inner, height + 1, sp)
                 } else {
                     Err(Self::err_at(sp, "unmatched `(` in `#if` expression"))
                 }
             }
             Token::Id(t) if t.1 == "not" && self.is_defined_call_ahead() => {
                 self.pos += 1; // the `defined`
-                self.defined_call(true)
+                Ok((self.defined_call(true)?, 1))
             }
             Token::Id(t) if t.1 == "defined" && matches!(self.peek(0), Some(Token::LParen(_))) => {
-                self.defined_call(false)
+                Ok((self.defined_call(false)?, 1))
             }
-            Token::Id(t) => Ok(PreprocessorNode::Var(t.1)),
+            Token::Id(t) => Ok((PreprocessorNode::Var(t.1), 1)),
             other => Err(Self::err_at(
                 other.span(),
                 "unexpected token in `#if` expression",
@@ -986,6 +1050,40 @@ mod tests {
                 Box::new(PreprocessorNode::Int(4)),
             )
         );
+    }
+
+    #[test]
+    fn nesting_is_capped_at_the_constant() {
+        use crate::compile_time_config::MAX_NESTING_DEPTH as MAX;
+        let too_deep = format!("`#if` expression nests too deeply (limit {MAX})");
+
+        // 255 parens around an atom is height 256; the 256th `(` is refused
+        // before the parser descends into it.
+        let parens = |n: usize| format!("{}1{}", "(".repeat(n), ")".repeat(n));
+        assert!(x(&parens(MAX - 1)).is_ok());
+        let e = x(&parens(MAX)).expect_err("256 parens");
+        assert_eq!(e.to_string(), too_deep);
+        assert_eq!(e.span().map(|s| s.l()), Some(MAX - 1)); // the 256th `(`
+
+        // 255 prefix operators likewise.
+        let bangs = |n: usize| format!("{}1", "!".repeat(n));
+        assert!(x(&bangs(MAX - 1)).is_ok());
+        let e = x(&bangs(MAX)).expect_err("256 bangs");
+        assert_eq!(e.to_string(), too_deep);
+        assert_eq!(e.span().map(|s| s.l()), Some(MAX - 1));
+
+        // A chain never recurses; its height is caught bottom-up at the
+        // operator that would make it 257.
+        let chain = |terms: usize| vec!["1"; terms].join(" + ");
+        assert!(x(&chain(MAX)).is_ok());
+        let e = x(&chain(MAX + 1)).expect_err("257 terms");
+        assert_eq!(e.to_string(), too_deep);
+        assert_eq!(e.span().map(|s| s.l()), Some(4 * (MAX - 1) + 2)); // the 256th `+`
+
+        // Nesting and chains add: 100 bangs, then a chain of 156 is 256.
+        let mixed = |terms: usize| format!("{}({})", "!".repeat(100), chain(terms));
+        assert!(x(&mixed(MAX - 101)).is_ok()); // 100 bangs + paren + 155 chain
+        assert!(x(&mixed(MAX - 100)).is_err());
     }
 
     #[test]

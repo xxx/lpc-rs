@@ -14,11 +14,14 @@ use lpc_rs_errors::{
 };
 use tracing::{instrument, trace};
 
-use crate::compiler::{
-    ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
-    compilation_context::CompilationContext,
-    lexer::{LexWrapper, Token, logos_token::StringToken},
-    preprocessor::preprocessor_node::PreprocessorNode,
+use crate::{
+    compile_time_config::MAX_NESTING_DEPTH,
+    compiler::{
+        ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
+        compilation_context::CompilationContext,
+        lexer::{LexWrapper, Token, logos_token::StringToken},
+        preprocessor::preprocessor_node::PreprocessorNode,
+    },
 };
 use conditional::Conditionals;
 use directive::{Directive, DirectiveKind};
@@ -30,6 +33,12 @@ pub mod directive;
 mod expand;
 mod include;
 pub mod preprocessor_node;
+
+/// Recursion budget for evaluating one `#if`: tree levels and macro levels
+/// along one path together. A macro's tree may be `MAX_NESTING_DEPTH` high
+/// and a macro chain `MAX_EXPANSION_DEPTH` long; their product would not
+/// fit, their sum does — 512 levels × ≈2.6 KB (debug) ≈ 1.3 MB.
+const MAX_IF_EVAL_DEPTH: usize = 2 * MAX_NESTING_DEPTH;
 
 #[derive(Debug)]
 pub struct Preprocessor {
@@ -304,7 +313,7 @@ impl Preprocessor {
             }
             Directive::If { expr } => {
                 let printing_lines =
-                    self.eval_expr_for_skipping(&expr, Some(token.0), &mut Vec::new())?;
+                    self.eval_expr_for_skipping(&expr, Some(token.0), &mut Vec::new(), 1)?;
                 self.conditionals.enter(token.0, printing_lines);
                 Ok(())
             }
@@ -401,7 +410,7 @@ impl Preprocessor {
             ));
         }
         let expr = directive::parse_if_expression(operand, operand_span)?;
-        let taken = self.eval_expr_for_skipping(&expr, Some(span), &mut Vec::new())?;
+        let taken = self.eval_expr_for_skipping(&expr, Some(span), &mut Vec::new(), 1)?;
         self.conditionals.take_elif(taken);
         Ok(())
     }
@@ -460,13 +469,21 @@ impl Preprocessor {
     /// `hide` tracks the names currently being resolved, so a name that
     /// refers back to itself (directly or mutually) resolves as undefined
     /// rather than recursing forever.
-    #[instrument(skip(self, expr, hide))]
+    #[instrument(skip(self, expr, hide, depth))]
     fn eval_expr_for_skipping<'a>(
         &'a self,
         expr: &'a PreprocessorNode,
         span: Option<Span>,
         hide: &mut Vec<&'a str>,
+        depth: usize,
     ) -> Result<bool> {
+        if depth > MAX_IF_EVAL_DEPTH {
+            return Err(lpc_error!(
+                span,
+                "`#if` evaluation nests too deeply (limit {})",
+                MAX_IF_EVAL_DEPTH
+            ));
+        }
         match expr {
             PreprocessorNode::Var(x) => {
                 if hide.contains(&x.as_str()) {
@@ -480,7 +497,7 @@ impl Preprocessor {
                             return Err(Self::nests_too_deeply(x, span));
                         }
                         hide.push(x);
-                        let result = self.eval_expr_for_skipping(expr, span, hide);
+                        let result = self.eval_expr_for_skipping(expr, span, hide, depth + 1);
                         hide.pop();
                         result
                     }
@@ -495,17 +512,23 @@ impl Preprocessor {
             PreprocessorNode::Defined(x, negated) => Ok(self.defines.contains_key(x) != *negated),
             PreprocessorNode::BinaryOp(op, l, r) => match op {
                 // Short-circuit at bool level, so `#if 0 && 1/0` is fine (C's rule).
-                BinaryOperation::AndAnd => Ok(self.eval_expr_for_skipping(l, span, hide)?
-                    && self.eval_expr_for_skipping(r, span, hide)?),
-                BinaryOperation::OrOr => Ok(self.eval_expr_for_skipping(l, span, hide)?
-                    || self.eval_expr_for_skipping(r, span, hide)?),
-                _ => Ok(self.resolve_int(expr, span, hide)? != 0),
+                BinaryOperation::AndAnd => {
+                    Ok(self.eval_expr_for_skipping(l, span, hide, depth + 1)?
+                        && self.eval_expr_for_skipping(r, span, hide, depth + 1)?)
+                }
+                BinaryOperation::OrOr => {
+                    Ok(self.eval_expr_for_skipping(l, span, hide, depth + 1)?
+                        || self.eval_expr_for_skipping(r, span, hide, depth + 1)?)
+                }
+                _ => Ok(self.resolve_int(expr, span, hide, depth + 1)? != 0),
             },
             PreprocessorNode::UnaryOp(op, inner) => match op {
                 // Bool position stays lenient: `!FOO` is true for an
                 // undefined FOO (the Var rule); int position is strict.
-                UnaryOperation::Bang => Ok(!self.eval_expr_for_skipping(inner, span, hide)?),
-                _ => Ok(self.resolve_int(expr, span, hide)? != 0),
+                UnaryOperation::Bang => {
+                    Ok(!self.eval_expr_for_skipping(inner, span, hide, depth + 1)?)
+                }
+                _ => Ok(self.resolve_int(expr, span, hide, depth + 1)? != 0),
             },
         }
     }
@@ -515,13 +538,21 @@ impl Preprocessor {
     /// `hide` tracks the names currently being resolved, so a name that
     /// refers back to itself (directly or mutually) errors instead of
     /// recursing forever.
-    #[instrument(skip(self, expr, hide))]
+    #[instrument(skip(self, expr, hide, depth))]
     fn resolve_int<'a>(
         &'a self,
         expr: &'a PreprocessorNode,
         span: Option<Span>,
         hide: &mut Vec<&'a str>,
+        depth: usize,
     ) -> Result<LpcIntInner> {
+        if depth > MAX_IF_EVAL_DEPTH {
+            return Err(lpc_error!(
+                span,
+                "`#if` evaluation nests too deeply (limit {})",
+                MAX_IF_EVAL_DEPTH
+            ));
+        }
         match expr {
             PreprocessorNode::Var(x) => {
                 if hide.contains(&x.as_str()) {
@@ -537,7 +568,7 @@ impl Preprocessor {
                                 return Err(Self::nests_too_deeply(x, span));
                             }
                             hide.push(x);
-                            let result = self.resolve_int(expr, span, hide);
+                            let result = self.resolve_int(expr, span, hide, depth + 1);
                             hide.pop();
                             result
                         }
@@ -555,8 +586,8 @@ impl Preprocessor {
                 Ok((self.defines.contains_key(x) != *negated) as LpcIntInner)
             }
             PreprocessorNode::BinaryOp(op, l, r) => {
-                let li = self.resolve_int(l, span, hide)?;
-                let ri = self.resolve_int(r, span, hide)?;
+                let li = self.resolve_int(l, span, hide, depth + 1)?;
+                let ri = self.resolve_int(r, span, hide, depth + 1)?;
 
                 match op {
                     BinaryOperation::Add => Ok(li.wrapping_add(ri)),
@@ -591,7 +622,7 @@ impl Preprocessor {
                 }
             }
             PreprocessorNode::UnaryOp(op, inner) => {
-                let i = self.resolve_int(inner, span, hide)?;
+                let i = self.resolve_int(inner, span, hide, depth + 1)?;
                 match op {
                     UnaryOperation::Bang => Ok((i == 0) as LpcIntInner),
                     UnaryOperation::Negate => Ok(i.wrapping_neg()),
@@ -2033,7 +2064,7 @@ mod tests {
                 Box::new(PreprocessorNode::Int(2)),
             );
             let e = preprocessor
-                .eval_expr_for_skipping(&node, None, &mut Vec::new())
+                .eval_expr_for_skipping(&node, None, &mut Vec::new(), 1)
                 .unwrap_err();
             assert_regex!(e.message(), "unknown binary operation");
         }
@@ -2213,6 +2244,44 @@ mod tests {
         async fn a_negative_shift_amount_folds_euclidean() {
             // shift_amount(-1) == 63 on 64-bit ints.
             test_valid("#if (1 << -1) == 1 << 63\n\"t\";\n#endif\n", &["t", ";"]).await;
+        }
+
+        /// Tree levels and macro levels stack on one path; the budget is the
+        /// sum (nesting-cap R6): two 250-term macros nest within 512, three do
+        /// not.
+        #[tokio::test]
+        async fn if_evaluation_has_a_frame_budget() {
+            let chain = |term: &str| vec![term; 250].join(" + ");
+            let two = format!(
+                "#define A {}\n#define B {}\n#if B\n\"y\";\n#endif\n",
+                chain("1"),
+                chain("A")
+            );
+            test_valid(&two, &["y", ";"]).await;
+
+            let three = format!(
+                "#define A {}\n#define B {}\n#define C {}\n#if C\n\"y\";\n#endif\n",
+                chain("1"),
+                chain("A"),
+                chain("B")
+            );
+            test_invalid(&three, "`#if` evaluation nests too deeply \\(limit 512\\)").await;
+        }
+
+        /// R7: a too-deep `#define` body is substitution-only, like any body
+        /// that is not an expression.
+        #[tokio::test]
+        async fn a_too_deep_define_body_is_substitution_only() {
+            let body = vec!["1"; 257].join(" + ");
+            let prog = format!("#define A {body}\n#if A\n\"y\";\n#endif\n");
+            test_invalid(&prog, "`A` does not expand to a preprocessor expression").await;
+
+            // Its tokens still substitute.
+            let prog = format!("#define A {body}\nint x = A;\n");
+            let mut expected = vec!["int", "x", "="];
+            expected.extend(std::iter::repeat_n(["1", "+"], 256).flatten());
+            expected.extend(["1", ";"]);
+            test_valid(&prog, &expected).await;
         }
     }
 
