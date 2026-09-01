@@ -154,7 +154,7 @@ fn warning_mapping(ctx: &TaskContext, file: &LpcPath, warning: &LpcError) -> Lpc
     let lib_dir = ctx.config().lib_dir.as_str();
     let entries = [
         ("message", warning.message().to_owned()),
-        ("location", in_game_location(warning.span(), lib_dir)),
+        ("location", in_game_location(warning.span())),
         ("file", file.as_in_game(lib_dir).display().to_string()),
         ("diagnostic", warning.diagnostic_string()),
     ];
@@ -167,8 +167,8 @@ fn warning_mapping(ctx: &TaskContext, file: &LpcPath, warning: &LpcError) -> Lpc
 }
 
 /// `span` as an in-game `path:line:column`; `<unknown>` without one.
-pub(crate) fn in_game_location(span: Option<Span>, lib_dir: &str) -> String {
-    span.and_then(|s| s.to_string().strip_prefix(lib_dir).map(str::to_owned))
+pub(crate) fn in_game_location(span: Option<Span>) -> String {
+    span.map(|s| s.to_string())
         .unwrap_or_else(|| String::from("<unknown>"))
 }
 
@@ -293,7 +293,7 @@ mod tests {
             "{}",
             global(4)
         );
-        assert!(global(4).contains("warns.c:5:1"), "{}", global(4));
+        assert!(global(4).contains("┌─ /warns.c:5:1"), "{}", global(4));
         assert_eq!(global(5), "/loader");
     }
 

@@ -142,7 +142,6 @@ impl Compiler {
     ) -> Result<Compiled> {
         self.config.validate_in_game_path(path, span)?;
 
-        // owned here, not a reference: a &LpcPath would take the blanket `T: Into<PathBuf>` From impl and drop the Server variant
         self.compile_file(path.clone()).await
     }
 
@@ -196,7 +195,7 @@ impl Compiler {
         let mut preprocessor = Preprocessor::new(context);
 
         preprocessor
-            .scan(&lpc_path, &code)
+            .scan(lpc_path, &code)
             .await
             .map(|tokens| (tokens, preprocessor))
     }
@@ -284,7 +283,7 @@ impl Compiler {
     where
         T: AsRef<str> + Send + Sync,
     {
-        let (tokens, preprocessor) = self.preprocess_string(path, code).await?;
+        let (tokens, preprocessor) = self.preprocess_string(path.clone(), code).await?;
 
         let wrapper = TokenTriples::new(&tokens);
         let mut context = preprocessor.into_context();
@@ -347,7 +346,7 @@ mod tests {
         use indoc::indoc;
 
         use super::*;
-        use crate::test_support::{strip_lib_dir, test_config};
+        use crate::test_support::test_config;
 
         async fn rendered_error(code: &str) -> String {
             let compiler = Compiler::new(test_config());
@@ -356,7 +355,23 @@ mod tests {
                 .await
                 .map(|_| ())
                 .expect_err("expected a compile error");
-            strip_lib_dir(&e.diagnostic_string())
+            e.diagnostic_string()
+        }
+
+        #[tokio::test]
+        async fn a_root_named_by_its_server_path_renders_in_game() {
+            let config = test_config();
+            let path = LpcPath::new_server(format!("{}/served.c", config.lib_dir));
+            let e = Compiler::new(config)
+                .compile_string(path, "int x = ;")
+                .await
+                .map(|_| ())
+                .expect_err("expected a compile error");
+            assert!(
+                e.diagnostic_string().contains("┌─ /served.c:1:9"),
+                "{}",
+                e.diagnostic_string()
+            );
         }
 
         #[tokio::test]
@@ -629,7 +644,7 @@ mod tests {
 
     mod test_warnings {
         use super::*;
-        use crate::test_support::{strip_lib_dir, test_config};
+        use crate::test_support::test_config;
 
         #[tokio::test]
         async fn a_successful_compile_returns_its_warnings() {
@@ -656,7 +671,7 @@ mod tests {
             let rendered: Vec<_> = compiled
                 .warnings
                 .iter()
-                .map(|w| strip_lib_dir(&w.diagnostic_string()))
+                .map(|w| w.diagnostic_string())
                 .collect();
             assert_eq!(rendered.len(), 2, "{rendered:?}");
             assert!(rendered[0].contains("/warns.c:2:1"), "{}", rendered[0]);

@@ -157,6 +157,8 @@ impl Mangle for LpcPath {
     }
 }
 
+// No `AsRef<OsStr>` impl: with one, `&LpcPath` would convert through
+// here and come out `InGame`, dropping the Server variant.
 impl<T> From<T> for LpcPath
 where
     T: Into<PathBuf>,
@@ -164,8 +166,6 @@ where
     fn from(pb: T) -> Self {
         let pb = pb.into();
         let dedotted = pb.parse_dot_from("/").into_owned();
-        // .map(|path| path.into_owned())
-        // .unwrap_or(pb);
         Self::InGame(dedotted)
     }
 }
@@ -176,14 +176,6 @@ impl AsRef<str> for LpcPath {
             // terrible defaults here. is there anything better?
             LpcPath::Server(x) => x.to_str().unwrap_or("."),
             LpcPath::InGame(x) => x.to_str().unwrap_or("/"),
-        }
-    }
-}
-
-impl AsRef<OsStr> for LpcPath {
-    fn as_ref(&self) -> &OsStr {
-        match self {
-            LpcPath::Server(x) | LpcPath::InGame(x) => x.as_os_str(),
         }
     }
 }

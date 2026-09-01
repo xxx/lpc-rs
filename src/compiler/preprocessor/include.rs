@@ -58,7 +58,9 @@ struct Frame {
 
 /// The one owner of `#include` traversal for a compile: resolution,
 /// containment, IO, `SOURCE_MAP` registration, the active chain, the
-/// depth cap, and the `#pragma once` set.
+/// depth cap, and the `#pragma once` set. The memo, once and cycle keys
+/// are canonical server paths; the name registered for rendering is the
+/// in-game path.
 #[derive(Debug, Default)]
 pub(super) struct IncludeWalk {
     /// The active chain, root first.
@@ -76,7 +78,7 @@ impl IncludeWalk {
         let canon = path.as_server(config.lib_dir.as_str()).into_owned();
         let file_id = SOURCE_MAP
             .write()
-            .add(canon.to_string_lossy().into_owned(), code.to_owned());
+            .add(in_game_name(&canon, config), code.to_owned());
         self.memo.insert(canon.clone(), (file_id, Arc::from(code)));
         self.stack.push(Frame {
             canon,
@@ -152,7 +154,7 @@ impl IncludeWalk {
                 };
                 let file_id = SOURCE_MAP
                     .write()
-                    .add(canon.to_string_lossy().into_owned(), text.clone());
+                    .add(in_game_name(&canon, config), text.clone());
                 let content: Arc<str> = Arc::from(text);
                 self.memo.insert(canon.clone(), (file_id, content.clone()));
                 (file_id, content)
@@ -228,6 +230,14 @@ impl IncludeWalk {
             path
         )
     }
+}
+
+/// The name a file is registered under for rendering: its in-game path.
+fn in_game_name(canon: &Path, config: &Config) -> String {
+    LpcPath::new_server(canon)
+        .as_in_game(config.lib_dir.as_str())
+        .display()
+        .to_string()
 }
 
 #[cfg(test)]
@@ -358,6 +368,31 @@ mod tests {
         // The root frame counts: 63 nested opens fill the cap.
         assert_eq!(opened, MAX_INCLUDE_DEPTH - 1);
         assert_eq!(err.to_string(), "`#include` nests too deeply");
+    }
+
+    #[tokio::test]
+    async fn files_are_registered_under_their_in_game_names() {
+        let root = TempLib::new("in-game-names");
+        std::fs::write(root.join("a.h"), "1\n").unwrap();
+        let config = config_at(&root);
+        let mut walk = rooted(&config);
+        let opened = walk
+            .open(IncludeSource::Local { path: "a.h" }, None, &config)
+            .await
+            .unwrap()
+            .unwrap();
+        let root_id = walk.memo[&walk.stack[0].canon].0;
+        assert_eq!(Span::new(root_id, 0..3).to_string(), "/main.c:1:1");
+        assert_eq!(Span::new(opened.file_id, 0..1).to_string(), "/a.h:1:1");
+
+        // A root named by its server path, as `lpcc` does.
+        let mut walk = IncludeWalk::default();
+        let server_root = walk.open_root(
+            &LpcPath::new_server(root.join("main.c")),
+            "int x;\n",
+            &config,
+        );
+        assert_eq!(Span::new(server_root, 0..3).to_string(), "/main.c:1:1");
     }
 
     #[tokio::test]

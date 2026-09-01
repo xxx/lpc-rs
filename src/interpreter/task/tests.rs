@@ -1081,8 +1081,8 @@ mod test_instructions {
             "##};
             let e = try_run_prog(code).await.unwrap_err();
             assert_eq!(
-                crate::test_support::strip_lib_dir(&e.diagnostic_string()),
-                "error: runtime error: Division by zero\n  ┌─ /my_file.c:3:13\n  │\n3 │     int x = 10 / j;\n  │             ^^^^^^\n  │\n  = Stack trace:\n    \n    /my_file.c:3:1 in create()\n    (unknown) in init-program()\n\n"
+                e.diagnostic_string(),
+                "error: runtime error: Division by zero\n  ┌─ /my_file.c:3:13\n  │\n3 │     int x = 10 / j;\n  │             ^^^^^^\n  │\n  = Stack trace:\n    \n    /my_file.c:3:13 in create()\n    (unknown) in init-program()\n\n"
             );
         }
 

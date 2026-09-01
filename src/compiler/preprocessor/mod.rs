@@ -2894,7 +2894,7 @@ mod tests {
             std::fs::write(root.join("b.h"), "#include \"a.h\"\n").unwrap();
 
             let e = error_of(&root, "#include \"a.h\"\n").await;
-            let rendered = e.diagnostic_string().replace(root.to_str().unwrap(), "");
+            let rendered = e.diagnostic_string();
 
             assert_eq!(
                 rendered,
@@ -2903,10 +2903,7 @@ mod tests {
         }
 
         async fn rendered_of(root: &TempLib, code: &str) -> String {
-            error_of(root, code)
-                .await
-                .diagnostic_string()
-                .replace(root.to_str().unwrap(), "")
+            error_of(root, code).await.diagnostic_string()
         }
 
         #[tokio::test]

@@ -62,7 +62,7 @@ impl GlobalState {
         let lpc_path = LpcPath::new_in_game(filename.as_ref(), "/", &*self.config.lib_dir);
         self.config.validate_in_game_path(&lpc_path, None)?;
 
-        self.initialize_process_from_code(&lpc_path, code)
+        self.initialize_process_from_code(lpc_path, code)
             .await
             .map(|t| t.context)
     }
