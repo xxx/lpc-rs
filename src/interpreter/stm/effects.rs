@@ -14,9 +14,9 @@
 //! carries its own send channel. Flushing never re-resolves a transactional
 //! cell, so an effect can never observe end-of-transaction state.
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::{io::AsyncWriteExt, sync::mpsc::UnboundedSender};
 
 use crate::{
     interpreter::{lpc_ref::LpcRef, process::Process, vm::global_state::GlobalState},
@@ -109,6 +109,20 @@ pub(crate) enum Effect {
         connection: Arc<Connection>,
         message: Option<String>,
     },
+
+    /// `write_file`'s append of `contents` to the file at `server`, once the
+    /// attempt commits; `in_game` names it in the log when the append fails.
+    #[allow(dead_code)]
+    AppendFile {
+        in_game: String,
+        server: PathBuf,
+        contents: String,
+    },
+
+    /// `rm`'s unlink of the file at `server`, once the attempt commits;
+    /// `in_game` names it in the log when the unlink fails.
+    #[allow(dead_code)]
+    RemoveFile { in_game: String, server: PathBuf },
 }
 
 impl Effect {
@@ -150,6 +164,36 @@ impl Effect {
                 connection,
                 message,
             } => global_state.release(&connection, message),
+            Self::AppendFile {
+                in_game,
+                server,
+                contents,
+            } => {
+                let appended = async {
+                    let mut file = tokio::fs::OpenOptions::new()
+                        .append(true)
+                        .create(true)
+                        .open(&server)
+                        .await?;
+                    file.write_all(contents.as_bytes()).await?;
+                    file.flush().await
+                }
+                .await;
+                if let Err(e) = appended {
+                    global_state
+                        .config
+                        .debug_log(format!("write_file: {in_game}: {e}"))
+                        .await;
+                }
+            }
+            Self::RemoveFile { in_game, server } => {
+                if let Err(e) = tokio::fs::remove_file(&server).await {
+                    global_state
+                        .config
+                        .debug_log(format!("rm: {in_game}: {e}"))
+                        .await;
+                }
+            }
         }
     }
 }
@@ -176,6 +220,8 @@ impl std::fmt::Debug for Effect {
             Self::CancelCallOut { id } => f.debug_tuple("CancelCallOut").field(id).finish(),
             Self::Exec { .. } => f.debug_tuple("Exec").finish(),
             Self::Disconnect { message, .. } => f.debug_tuple("Disconnect").field(message).finish(),
+            Self::AppendFile { in_game, .. } => f.debug_tuple("AppendFile").field(in_game).finish(),
+            Self::RemoveFile { in_game, .. } => f.debug_tuple("RemoveFile").field(in_game).finish(),
         }
     }
 }
@@ -184,6 +230,11 @@ impl std::fmt::Debug for Effect {
 mod tests {
     use super::*;
     use crate::telnet::ops::ConnectionOp;
+
+    fn global_state() -> GlobalState {
+        let (vm_tx, _vm_rx) = tokio::sync::mpsc::channel(16);
+        GlobalState::new(crate::test_support::test_config(), vm_tx)
+    }
 
     /// A recorded socket op must arrive on its own channel when the batch is
     /// flushed, and a second `Effect` recorded against a second channel must
@@ -207,8 +258,7 @@ mod tests {
             },
         ];
 
-        let (vm_tx, _vm_rx) = tokio::sync::mpsc::channel(16);
-        let global_state = GlobalState::new(crate::test_support::test_config(), vm_tx);
+        let global_state = global_state();
         flush_effects(&global_state, log).await;
 
         assert_eq!(rx_a.recv().await, Some(op_a));
@@ -222,8 +272,7 @@ mod tests {
         let connection = Arc::new(Connection::new(addr, tx));
         let body = Arc::new(Process::default());
 
-        let (vm_tx, _vm_rx) = tokio::sync::mpsc::channel(16);
-        let global_state = GlobalState::new(crate::test_support::test_config(), vm_tx);
+        let global_state = global_state();
         Effect::Exec {
             new_process: body.clone(),
             connection: connection.clone(),
@@ -233,5 +282,67 @@ mod tests {
 
         assert!(Arc::ptr_eq(&connection.body().unwrap(), &body));
         assert_eq!(rx.recv().await, Some(ConnectionOp::Attached));
+    }
+
+    #[tokio::test]
+    async fn append_file_creates_then_appends() {
+        let root = crate::test_support::TempLib::new("append-effect");
+        let server = root.join("out.txt");
+        let gs = global_state();
+        for contents in ["one\n", "two\n"] {
+            Effect::AppendFile {
+                in_game: "/out.txt".to_owned(),
+                server: server.clone(),
+                contents: contents.to_owned(),
+            }
+            .flush(&gs)
+            .await;
+        }
+        assert_eq!(std::fs::read_to_string(&server).unwrap(), "one\ntwo\n");
+    }
+
+    #[tokio::test]
+    async fn remove_file_unlinks() {
+        let root = crate::test_support::TempLib::new("remove-effect");
+        let server = root.join("gone.txt");
+        std::fs::write(&server, "x").unwrap();
+        Effect::RemoveFile {
+            in_game: "/gone.txt".to_owned(),
+            server: server.clone(),
+        }
+        .flush(&global_state())
+        .await;
+        assert!(!server.exists());
+    }
+
+    /// A commit-time failure has no caller to error into; it goes to the
+    /// debug log, naming the in-game path.
+    #[tokio::test]
+    async fn a_failed_file_effect_is_logged_not_raised() {
+        use lpc_rs_utils::{config::ConfigBuilder, debug_log::DebugLog};
+        use tokio::io::AsyncReadExt;
+
+        let root = crate::test_support::TempLib::new("failed-effect");
+        let (writer, mut reader) = tokio::io::duplex(1024);
+        let config = ConfigBuilder::default()
+            .lib_dir("./tests/fixtures/code")
+            .debug_log(DebugLog::new(writer))
+            .build()
+            .unwrap();
+        let (vm_tx, _vm_rx) = tokio::sync::mpsc::channel(16);
+        let gs = GlobalState::new(config, vm_tx);
+        Effect::RemoveFile {
+            in_game: "/missing.txt".to_owned(),
+            server: root.join("missing.txt"),
+        }
+        .flush(&gs)
+        .await;
+        let mut buf = vec![0u8; 256];
+        let n = tokio::time::timeout(std::time::Duration::from_secs(1), reader.read(&mut buf))
+            .await
+            .expect("the log line arrives")
+            .unwrap();
+        let logged = String::from_utf8_lossy(&buf[..n]);
+        assert!(logged.starts_with("rm: /missing.txt:"), "{logged}");
     }
 }
