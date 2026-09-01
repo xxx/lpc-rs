@@ -6,7 +6,7 @@ use itertools::Itertools;
 use lpc_rs_core::{
     ScopeId, call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType,
 };
-use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, span::Span};
+use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error, lpc_warning, span::Span};
 use lpc_rs_function_support::symbol::Symbol;
 use tracing::trace;
 use ustr::Ustr;
@@ -17,7 +17,7 @@ use crate::compiler::{
         call_node::{CallChain, CallNode},
         closure_node::ClosureNode,
         expression_node::ExpressionNode,
-        for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachNode},
+        for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode},
         function_def_node::{ARGV, FunctionDefNode},
         program_node::ProgramNode,
         ref_node::RefNode,
@@ -43,6 +43,20 @@ pub struct ScopeWalker {
 
     /// Every closure scope, for the capture layout at the end of the walk.
     closure_scopes: HashSet<ScopeId>,
+
+    /// Every local declared in the program, in declaration order.
+    locals: Vec<DeclaredLocal>,
+
+    /// The `(scope, name)` of every variable a reference resolved to.
+    referenced: HashSet<(ScopeId, Ustr)>,
+}
+
+/// A local variable's identity and declaration site.
+#[derive(Debug)]
+struct DeclaredLocal {
+    scope_id: ScopeId,
+    name: Ustr,
+    span: Option<Span>,
 }
 
 impl ScopeWalker {
@@ -52,6 +66,37 @@ impl ScopeWalker {
             context,
             closure_scope_stack: vec![],
             closure_scopes: HashSet::new(),
+            locals: vec![],
+            referenced: HashSet::new(),
+        }
+    }
+
+    /// The warning for a local named `node.name` when an enclosing scope or
+    /// a visible global already declares that name.
+    fn shadow_warning(&self, node: &VarInitNode) -> Option<LpcError> {
+        if node.global || node.name.starts_with('$') {
+            return None;
+        }
+        let is_local = self.context.scopes.lookup(&node.name).is_some();
+        let shadowed = self.context.lookup_var(node.name)?;
+        if !(shadowed.public() || is_local) {
+            return None;
+        }
+        let kind = if shadowed.is_global() {
+            "a global"
+        } else {
+            "an outer"
+        };
+        Some(
+            lpc_warning!(node.span, "`{}` shadows {} variable", node.name, kind)
+                .with_label("shadowed declaration here", shadowed.span),
+        )
+    }
+
+    /// Record that a reference to `name` resolved to `symbol`.
+    fn note_reference(referenced: &mut HashSet<(ScopeId, Ustr)>, symbol: &Symbol, name: Ustr) {
+        if let Some(scope_id) = symbol.scope_id {
+            referenced.insert((scope_id, name));
         }
     }
 
@@ -194,11 +239,11 @@ impl TreeWalker for ScopeWalker {
             }
         }
 
-        if_chain! {
-            if let Some(symbol) = self.context.lookup_var(&name);
-            if symbol.type_.matches_type(LpcType::Function(false));
-            if self.should_upvalue_symbol(symbol);
-            then {
+        if let Some(symbol) = self.context.lookup_var(&name)
+            && symbol.type_.matches_type(LpcType::Function(false))
+        {
+            Self::note_reference(&mut self.referenced, symbol, *name);
+            if self.should_upvalue_symbol(symbol) {
                 trace!("upvaluing called function var {}", name);
                 let symbol = self.context.lookup_var_mut(name).unwrap();
                 symbol.upvalue = true;
@@ -238,6 +283,7 @@ impl TreeWalker for ScopeWalker {
         if let Some(parameters) = &mut node.parameters {
             for param in parameters {
                 param.visit(self).await?;
+                self.referenced.insert((scope_id, param.name));
             }
         }
 
@@ -273,6 +319,16 @@ impl TreeWalker for ScopeWalker {
         self.insert_symbol(make_sym(FOREACH_INDEX));
         self.insert_symbol(make_sym(FOREACH_LENGTH));
 
+        match &node.initializer {
+            ForEachInit::Array(init) | ForEachInit::String(init) => {
+                self.referenced.insert((scope_id, init.name));
+            }
+            ForEachInit::Mapping { key, value } => {
+                self.referenced.insert((scope_id, key.name));
+                self.referenced.insert((scope_id, value.name));
+            }
+        }
+
         walk_foreach(self, node).await
     }
 
@@ -284,6 +340,7 @@ impl TreeWalker for ScopeWalker {
 
         for parameter in &mut node.parameters {
             parameter.visit(self).await?;
+            self.referenced.insert((scope_id, parameter.name));
         }
 
         if node.flags.ellipsis() {
@@ -304,6 +361,13 @@ impl TreeWalker for ScopeWalker {
 
         for expr in &mut node.body {
             expr.visit(self).await?;
+        }
+
+        for local in &self.locals {
+            if !self.referenced.contains(&(local.scope_id, local.name)) {
+                let w = lpc_warning!(local.span, "unused variable `{}`", local.name);
+                self.context.diagnostics.record(w);
+            }
         }
 
         self.context.scopes.layout_upvalues(&self.closure_scopes)?;
@@ -342,6 +406,7 @@ impl TreeWalker for ScopeWalker {
         };
 
         trace!("found symbol: {}", symbol);
+        Self::note_reference(&mut self.referenced, symbol, node.name);
 
         if let Some(e) = Self::visibility_error(node.name, symbol, is_local, node.span) {
             self.context.diagnostics.record(e);
@@ -373,6 +438,7 @@ impl TreeWalker for ScopeWalker {
             self.context.diagnostics.record(e);
             return Ok(());
         };
+        Self::note_reference(&mut self.referenced, symbol, node.name);
 
         if let Some(e) = Self::visibility_error(node.name, symbol, is_local, node.span) {
             self.context.diagnostics.record(e);
@@ -399,8 +465,23 @@ impl TreeWalker for ScopeWalker {
 
         trace!("Defining variable {}", &node.name);
 
-        if let Err(e) = check_var_redefinition(node, scope.unwrap()) {
-            self.context.diagnostics.record(e);
+        if !node.global
+            && let Some(scope_id) = scope.and_then(|s| s.id)
+        {
+            self.locals.push(DeclaredLocal {
+                scope_id,
+                name: node.name,
+                span: node.span,
+            });
+        }
+
+        match check_var_redefinition(node, scope.unwrap()) {
+            Err(e) => self.context.diagnostics.record(e),
+            Ok(()) => {
+                if let Some(w) = self.shadow_warning(node) {
+                    self.context.diagnostics.record(w);
+                }
+            }
         }
 
         // Inserted first, so a closure in the initializer can capture the variable.
@@ -427,11 +508,7 @@ impl Default for ScopeWalker {
         // Push a default global scope.
         context.scopes.push_new();
 
-        Self {
-            context,
-            closure_scope_stack: vec![],
-            closure_scopes: HashSet::new(),
-        }
+        Self::new(context)
     }
 }
 
@@ -623,7 +700,7 @@ mod tests {
 
             let _ = walker.visit_var_init(&mut node).await;
 
-            assert!(walker.context.diagnostics.errors().is_empty());
+            assert!(walker.context.diagnostics.is_clean());
         }
 
         #[tokio::test]
@@ -643,6 +720,135 @@ mod tests {
                     .lookup("foo")
                     .is_some()
             );
+        }
+    }
+
+    mod warnings {
+        use indoc::indoc;
+
+        use super::*;
+        use crate::test_support::CompileThrough;
+
+        async fn warnings(code: &str) -> Vec<String> {
+            let walker = ScopeWalker::compile_through(code).await.unwrap();
+            walker
+                .context
+                .diagnostics
+                .errors()
+                .iter()
+                .filter(|e| e.is_warning())
+                .map(|e| e.to_string())
+                .collect()
+        }
+
+        #[tokio::test]
+        async fn an_unused_local_warns_in_declaration_order() {
+            let code = indoc! { r#"
+                void f() {
+                    int a;
+                    int b = 1;
+                    { string c; }
+                    function g = (: int d; 1 :);
+                }
+            "# };
+            assert_eq!(
+                warnings(code).await,
+                [
+                    "unused variable `a`",
+                    "unused variable `b`",
+                    "unused variable `c`",
+                    "unused variable `g`",
+                    "unused variable `d`",
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn any_reference_counts() {
+            let code = indoc! { r#"
+                void inc(int ref n) { n++; }
+                mixed f() {
+                    int read;
+                    int assigned;
+                    int reffed;
+                    function called;
+                    int captured;
+                    if (read) assigned = 1;
+                    inc(ref reffed);
+                    called();
+                    return (: captured :);
+                }
+            "# };
+            let w = warnings(code).await;
+            assert!(w.is_empty(), "{w:?}");
+        }
+
+        #[tokio::test]
+        async fn parameters_globals_and_loop_variables_are_exempt() {
+            let code = indoc! { r#"
+                int g;
+                void f(int p) {
+                    foreach (i: ({ 1 })) {}
+                    foreach (k, v: ([ ])) {}
+                }
+                void h() { function c = (: $1 :); c(); }
+            "# };
+            let w = warnings(code).await;
+            assert!(w.is_empty(), "{w:?}");
+        }
+
+        #[tokio::test]
+        async fn a_local_that_shadows_warns_with_the_shadowed_site() {
+            let code = indoc! { r#"
+                int name;
+                void set_name(string name) { name = name; }
+                void f() { int x = 1; x++; { int x = 2; x++; } }
+            "# };
+            let walker = ScopeWalker::compile_through(code).await.unwrap();
+            let rendered: Vec<_> = walker
+                .context
+                .diagnostics
+                .errors()
+                .iter()
+                .filter(|e| e.is_warning())
+                .map(|e| e.diagnostic_string())
+                .collect();
+            assert_eq!(rendered.len(), 2, "{rendered:?}");
+            assert!(
+                rendered[0].contains("`name` shadows a global variable"),
+                "{}",
+                rendered[0]
+            );
+            assert!(
+                rendered[0].contains("shadowed declaration here"),
+                "{}",
+                rendered[0]
+            );
+            assert!(
+                rendered[1].contains("`x` shadows an outer variable"),
+                "{}",
+                rendered[1]
+            );
+        }
+
+        #[tokio::test]
+        async fn an_inherited_global_is_shadowed_only_when_visible() {
+            let code = r#"inherit "/parent"; void f(int b, int priv) { b++; priv++; }"#;
+            assert_eq!(warnings(code).await, ["`b` shadows a global variable"]);
+        }
+
+        #[tokio::test]
+        async fn a_same_scope_duplicate_is_the_redefinition_error_alone() {
+            let code = "void f() { int x; int x; x++; }";
+            let walker = ScopeWalker::compile_through(code).await.unwrap();
+            let messages: Vec<_> = walker
+                .context
+                .diagnostics
+                .errors()
+                .iter()
+                .map(|e| e.to_string())
+                .collect();
+            assert_eq!(messages, ["Redefinition of `x`"]);
         }
     }
 

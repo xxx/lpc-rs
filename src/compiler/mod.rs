@@ -677,5 +677,39 @@ mod tests {
             assert!(rendered[0].contains("/warns.c:2:1"), "{}", rendered[0]);
             assert!(rendered[1].contains("/warns.c:5:1"), "{}", rendered[1]);
         }
+
+        async fn warnings_of(code: &str) -> Vec<String> {
+            let compiler = Compiler::new(test_config());
+            let compiled = compiler.compile_string("/w.c", code).await.unwrap();
+            compiled
+                .warnings
+                .iter()
+                .map(|w| w.message().to_string())
+                .collect()
+        }
+
+        #[tokio::test]
+        async fn an_unused_local_is_a_warning() {
+            assert_eq!(
+                warnings_of("void f() { int unused; }").await,
+                ["unused variable `unused`"]
+            );
+        }
+
+        #[tokio::test]
+        async fn an_unreachable_statement_is_a_warning() {
+            assert_eq!(
+                warnings_of("void f() { return; f(); }").await,
+                ["unreachable statement"]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_shadowing_local_is_a_warning() {
+            assert_eq!(
+                warnings_of("int g; void f(int g) { g++; }").await,
+                ["`g` shadows a global variable"]
+            );
+        }
     }
 }

@@ -94,6 +94,29 @@ impl AstNodeTrait for AstNode {
     }
 }
 
+impl SpannedNode for AstNode {
+    /// The node's own span.
+    fn span(&self) -> Option<Span> {
+        match self {
+            AstNode::Block(_) | AstNode::Decl(_) | AstNode::Program(_) | AstNode::NoOp => None,
+            AstNode::Break(n) => n.span,
+            AstNode::Call(n) => n.span,
+            AstNode::Continue(n) => n.span,
+            AstNode::DoWhile(n) => n.span,
+            AstNode::Expression(e) => e.span(),
+            AstNode::For(n) => n.span,
+            AstNode::ForEach(n) => n.span,
+            AstNode::FunctionDef(n) => n.span,
+            AstNode::If(n) => n.span,
+            AstNode::LabeledStatement(n) => n.label.span,
+            AstNode::Return(n) => n.span,
+            AstNode::Switch(n) => n.span,
+            AstNode::VarInit(n) => n.span,
+            AstNode::While(n) => n.span,
+        }
+    }
+}
+
 impl Display for AstNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{self:?}")
