@@ -980,6 +980,24 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn a_later_private_does_not_hide_an_earlier_visible_global() {
+            for code in [
+                r#"inherit "/visible"; inherit "/hidden"; int f() { return shared; }"#,
+                r#"inherit "/hidden"; inherit "/visible"; int f() { return shared; }"#,
+            ] {
+                let walker = ScopeWalker::compile_through(code).await.unwrap();
+                let messages: Vec<_> = walker
+                    .context
+                    .diagnostics
+                    .errors()
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect();
+                assert!(messages.is_empty(), "{code}: {messages:?}");
+            }
+        }
+
+        #[tokio::test]
         async fn a_grandparents_global_is_reached_through_the_parent() {
             let code = r#"inherit "/parent"; int a;"#;
             let rendered = rendered(code).await;

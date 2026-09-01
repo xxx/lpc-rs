@@ -58,6 +58,12 @@ impl Symbol {
     pub fn public(&self) -> bool {
         self.flags.visibility() == Visibility::Public
     }
+
+    /// Whether inheriting programs can see this global.
+    #[inline]
+    pub fn visible_to_children(&self) -> bool {
+        self.flags.visibility() != Visibility::Private
+    }
 }
 
 impl Display for Symbol {
