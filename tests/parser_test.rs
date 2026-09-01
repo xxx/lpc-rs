@@ -557,7 +557,7 @@ async fn warning_on_prototype() {
 
     assert_eq!(
         &context.diagnostics.errors().first().unwrap().to_string(),
-        "prototypes are ignored in this flavor of LPC"
+        "function prototypes are ignored; the definition declares the function"
     );
 }
 

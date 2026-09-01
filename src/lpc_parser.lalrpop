@@ -191,7 +191,10 @@ Def: AstNode = {
         );
         let span = Span::join(left, r);
 
-        let warning = lpc_warning!(Some(span), "prototypes are ignored in this flavor of LPC");
+        let warning = lpc_warning!(
+            Some(span),
+            "function prototypes are ignored; the definition declares the function"
+        );
         context.diagnostics.record(warning);
         AstNode::NoOp
     },
