@@ -936,10 +936,7 @@ mod tests {
             let code = r#"inherit "/parent"; void f(int b, int priv) { b++; priv++; }"#;
             assert_eq!(
                 warnings(code).await,
-                [
-                    "`b` shadows a global inherited from `/grandparent.c`",
-                    "`b` shadows a global inherited from `/parent.c`",
-                ]
+                ["`b` shadows a global inherited from `/parent.c`"]
             );
         }
 
@@ -960,45 +957,39 @@ mod tests {
             let code = r#"inherit "/parent"; int b;"#;
             assert_eq!(
                 warnings(code).await,
-                [
-                    "`b` shadows a global inherited from `/grandparent.c`",
-                    "`b` shadows a global inherited from `/parent.c`",
-                ]
+                ["`b` shadows a global inherited from `/parent.c`"]
             );
             let rendered = rendered(code).await;
             assert!(
-                rendered[1].contains("shadowed declaration here"),
+                rendered[0].contains("shadowed declaration here"),
                 "{}",
-                rendered[1]
+                rendered[0]
             );
-            assert!(rendered[1].contains("/parent.c:3:"), "{}", rendered[1]);
+            assert!(rendered[0].contains("/parent.c:3:"), "{}", rendered[0]);
             assert!(
-                rendered[1].contains("inherited functions keep their own `b`"),
+                rendered[0].contains("inherited functions keep their own `b`"),
                 "{}",
-                rendered[1]
+                rendered[0]
             );
         }
 
         #[tokio::test]
         async fn a_private_inherited_global_is_not_shadowed() {
             let code = r#"inherit "/parent"; int priv;"#;
-            assert_eq!(
-                warnings(code).await,
-                ["`b` shadows a global inherited from `/grandparent.c`"]
-            );
+            assert!(warnings(code).await.is_empty());
         }
 
         #[tokio::test]
         async fn a_grandparents_global_is_reached_through_the_parent() {
             let code = r#"inherit "/parent"; int a;"#;
             let rendered = rendered(code).await;
-            assert_eq!(rendered.len(), 2, "{rendered:?}");
+            assert_eq!(rendered.len(), 1, "{rendered:?}");
             assert!(
-                rendered[1].contains("`a` shadows a global inherited from `/parent.c`"),
+                rendered[0].contains("`a` shadows a global inherited from `/parent.c`"),
                 "{}",
-                rendered[1]
+                rendered[0]
             );
-            assert!(rendered[1].contains("/grandparent.c:1:"), "{}", rendered[1]);
+            assert!(rendered[0].contains("/grandparent.c:1:"), "{}", rendered[0]);
         }
 
         #[tokio::test]

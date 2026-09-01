@@ -31,6 +31,7 @@ where
         .simul_efuns(get_simul_efuns(config, object_space))
         .build()?;
     let Compiled { program, warnings } = compile(compiler).await?;
+    let warnings = warnings.into_iter().flat_map(|w| w.warnings).collect();
     Ok((Arc::new(Process::new(program)), warnings))
 }
 
