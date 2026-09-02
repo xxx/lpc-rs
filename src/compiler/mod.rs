@@ -142,7 +142,8 @@ impl Compiler {
         self.compile_string(lpc_path, file_content).await
     }
 
-    /// Intended for in-game use to be able to compile a file with relative pathname handling
+    /// Compile the object an in-game path names: its `.c` source
+    /// ([`LpcPath::source_file`]), confined to the lib first.
     #[instrument(skip(self))]
     pub async fn compile_in_game_file(
         &self,
@@ -151,7 +152,7 @@ impl Compiler {
     ) -> Result<Compiled> {
         self.config.validate_in_game_path(path, span)?;
 
-        self.compile_file(path.clone()).await
+        self.compile_file(path.source_file()).await
     }
 
     /// Take a str and preprocess it into a vector of Span tuples, and also
@@ -460,6 +461,45 @@ mod tests {
                     .to_string()
                     .starts_with("attempt to access a file outside of lib_dir")
             );
+        }
+
+        /// The compiler reads exactly the object's `.c` source: a header is
+        /// never compiled as a program by naming it.
+        #[tokio::test]
+        async fn an_object_path_compiles_its_dot_c_source() {
+            use crate::test_support::TempLib;
+
+            let root = TempLib::new("source-file");
+            std::fs::write(root.join("x.h"), "this is not a program\n").unwrap();
+            std::fs::write(root.join("x.h.c"), "int header_named = 1;\n").unwrap();
+            std::fs::write(root.join("y.c"), "int y = 2;\n").unwrap();
+            let config: Arc<Config> = ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .build()
+                .unwrap()
+                .into();
+            let compiler = CompilerBuilder::default()
+                .config(config.clone())
+                .build()
+                .unwrap();
+            let lib = config.lib_dir.as_str();
+
+            for (given, expected) in [("/x.h", "/x.h.c"), ("/y", "/y.c"), ("/y.c", "/y.c")] {
+                let compiled = compiler
+                    .compile_in_game_file(&LpcPath::new_in_game(given, "/", lib), None)
+                    .await
+                    .unwrap_or_else(|e| panic!("{given}: {}", e.diagnostic_string()));
+                assert_eq!(
+                    compiled
+                        .program
+                        .filename
+                        .as_in_game(lib)
+                        .display()
+                        .to_string(),
+                    expected,
+                    "{given}"
+                );
+            }
         }
     }
 
