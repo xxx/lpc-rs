@@ -17,7 +17,7 @@ pub enum Callee<'a> {
 
 impl<'a> Callee<'a> {
     /// The prototype, wherever it was found.
-    pub fn prototype(&self) -> &'a FunctionPrototype {
+    pub fn prototype(self) -> &'a FunctionPrototype {
         match self {
             Self::Local(prototype) | Self::SimulEfun(prototype) | Self::Efun(prototype) => {
                 prototype

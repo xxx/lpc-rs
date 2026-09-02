@@ -22,7 +22,7 @@ that leads out of the lib fails before this apply.
 - `program` is the in-game path of the file that *defines* the calling code,
   extension included (`"/secure/master.c"`). An inherited function names the
   file that defines it, not the inheriting object's; a closure names the file
-  it was written in; a simul_efun names the simul_efun file; an efun fired
+  it was written in; a simul_efun names the file that defines it; an efun fired
   through a function pointer names the file that wrote the pointer. For an
   `#include`, the file containing the directive — a header, for a nested
   include. When nothing called the efun from LPC — an efun pointer fired

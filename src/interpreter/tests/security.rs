@@ -198,6 +198,50 @@ async fn a_simul_efun_reports_the_simul_efun_file() {
     );
 }
 
+/// A function the simul-efun file inherits runs in the simul-efun object
+/// but is defined by its base file, and `program` says so.
+#[tokio::test]
+async fn a_function_the_simul_efun_file_inherits_reports_its_own_file() {
+    let root = TempLib::new("prov-simul-base");
+    std::fs::create_dir_all(root.join("secure")).unwrap();
+    std::fs::write(
+        root.join("secure/se_base.c"),
+        "string sread(string p) { return read_file(p); }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("secure/simul_efuns.c"),
+        "inherit \"/secure/se_base\";\n",
+    )
+    .unwrap();
+    let config = ConfigBuilder::default()
+        .lib_dir(root.to_str().unwrap())
+        .simul_efun_file("/secure/simul_efuns")
+        .build()
+        .unwrap();
+    let vm = Vm::new(config);
+    vm.global_state
+        .initialize_simul_efuns()
+        .await
+        .expect("configured")
+        .expect("compiles");
+    let master = recording_master(&vm, &root).await;
+    run(
+        &vm,
+        "/user.c",
+        r#"string got; void create() { got = sread("/data.txt"); }"#,
+    )
+    .await;
+    assert_eq!(
+        committed_string(&vm, &master, SEEN_PROGRAM),
+        "/secure/se_base.c"
+    );
+    assert_eq!(
+        committed_string(&vm, &master, SEEN_CALLER),
+        "/secure/simul_efuns"
+    );
+}
+
 /// An efun pointer fired by `call_out` has no LPC frame under it.
 #[tokio::test]
 async fn an_efun_pointer_from_call_out_reports_zero() {

@@ -156,3 +156,59 @@ async fn a_simul_efun_shadows_an_efun() {
     .await;
     assert_eq!(got, "simul");
 }
+
+/// Inside the simul-efun file a call to a function of a file it inherits is
+/// a local call: the base's `previous_object()` is still the user.
+#[tokio::test]
+async fn a_simul_efun_calling_its_base_stays_local() {
+    let got = got_from_user(
+        "simul-base-local",
+        "/secure/simul_efuns",
+        &[
+            (
+                "secure/se_base.c",
+                "string inner() { return file_name(previous_object()); }\n",
+            ),
+            (
+                "secure/simul_efuns.c",
+                "inherit \"/secure/se_base\";\nstring outer() { return inner(); }\n",
+            ),
+        ],
+        "string got; void create() { got = outer(); }",
+    )
+    .await;
+    assert_eq!(got, "/user");
+}
+
+#[tokio::test]
+async fn a_function_the_simul_efun_file_inherits_sees_its_caller() {
+    let got = got_from_user(
+        "simul-inherits-caller",
+        "/secure/simul_efuns",
+        &[
+            (
+                "secure/se_base.c",
+                "string who() { return file_name(previous_object()); }\n",
+            ),
+            ("secure/simul_efuns.c", "inherit \"/secure/se_base\";\n"),
+        ],
+        "string got; void create() { got = who(); }",
+    )
+    .await;
+    assert_eq!(got, "/user");
+}
+
+/// `::me()` names the inherited copy, not the resident simul-efun object.
+#[tokio::test]
+async fn an_object_inheriting_the_simul_efun_file_may_call_the_parent_form() {
+    let simul = "string tag = \"simul\";\nstring me() { return tag; }\n";
+    let got = got_from_user(
+        "simul-inherited-parent-form",
+        "/secure/simul_efuns",
+        &[("secure/simul_efuns.c", simul)],
+        "inherit \"/secure/simul_efuns\";\n\
+         string got; void create() { tag = \"user\"; got = ::me(); }",
+    )
+    .await;
+    assert_eq!(got, "user");
+}

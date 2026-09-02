@@ -338,17 +338,16 @@ impl TreeWalker for SemanticCheckWalker {
 
             // `call_other`'s `ref` arguments were reported as the cross-object error above.
             if name.as_str() != CALL_OTHER {
+                let is_efun = matches!(callee, Callee::Efun(_));
                 for (index, arg) in node.arguments.iter().enumerate() {
                     let is_ref_arg = matches!(arg, ExpressionNode::Ref(_));
                     let wants_ref = prototype.is_ref_param(index);
                     if wants_ref && !is_ref_arg {
                         // An implicit efun lvalue accepts a bare variable.
-                        if matches!(callee, Callee::Efun(_))
-                            && matches!(arg, ExpressionNode::Var(_))
-                        {
+                        if is_efun && matches!(arg, ExpressionNode::Var(_)) {
                             continue;
                         }
-                        let e = if matches!(callee, Callee::Efun(_)) {
+                        let e = if is_efun {
                             LpcError::new(format!(
                                 "argument {} of `{}` must be a variable",
                                 index + 1,

@@ -28,16 +28,6 @@ pub enum FunctionKind {
     Closure,
 }
 
-impl Display for FunctionKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Local => write!(f, "local"),
-            Self::Efun => write!(f, "efun"),
-            Self::Closure => write!(f, "closure"),
-        }
-    }
-}
-
 /// A representation of a function prototype, used to allow forward references.
 #[derive(Debug, Clone, Eq, PartialEq, Builder)]
 #[builder(build_fn(error = "lpc_rs_errors::LpcError"))]
