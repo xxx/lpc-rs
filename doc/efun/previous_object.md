@@ -5,8 +5,9 @@
 Returns the object that called the current function through a door: `->`
 (a call to `this_object()` included, and each element of an array or
 mapping receiver), a function-pointer call, a simul efun, or the start of
-a task. A local call, own or inherited, is not a door: inside it
-`previous_object()` answers what it answered in the caller.
+a task. A local call, own or inherited, is not a door, a simul efun calling
+another function of its file included: inside it `previous_object()` answers
+what it answered in the caller.
 
 At the start of a task it is the object whose code started the task:
 `create()` sees the object that cloned, found or called it, a load or

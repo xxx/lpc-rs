@@ -144,5 +144,10 @@ Short for "simulated efun". These are functions that are defined in LPC, but are
 callable from anywhere, just like an efun. The driver can be configured at runtime
 to not include them, in which case there won't be any available.
 
-It should be noted that simul efuns act similar to the auto-inherit mechanism, but
-are _not_ inherited. They are simply available everywhere.
+A call by bare name resolves the object's own and inherited functions first,
+then the simul efuns, then the efuns, so a simul efun shadows an efun of the
+same name and an object's own function shadows a simul efun. A simul efun runs
+in the simul-efun object, with the caller as `previous_object()`; a call
+between two functions of the simul-efun file is a local call. An object need
+not inherit the file to call its functions; one that does inherits them like
+any parent's and runs its own copy.
