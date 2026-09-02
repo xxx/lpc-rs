@@ -38,7 +38,14 @@ pub(crate) const SEEN_PATH: u16 = 0;
 pub(crate) const SEEN_FUNC: u16 = 1;
 pub(crate) const SEEN_CALLER: u16 = 2;
 pub(crate) const SEEN_PROGRAM: u16 = 3;
+pub(crate) const INHERIT_PATH: u16 = 4;
+pub(crate) const INHERIT_FROM: u16 = 5;
+pub(crate) const INCLUDE_PATH: u16 = 6;
+pub(crate) const INCLUDE_CALLER: u16 = 7;
+pub(crate) const INCLUDE_FROM: u16 = 8;
 pub(crate) const LOADS: u16 = 9;
+pub(crate) const INHERITS: u16 = 10;
+pub(crate) const INCLUDES: u16 = 11;
 
 /// `code` at `root/rel`, directories made as needed.
 pub(crate) fn write(root: &TempLib, rel: &str, code: &str) {
@@ -412,5 +419,217 @@ mod paths {
         let e = committed_string(&vm, &a, 0);
         assert!(e.contains("Cannot read file `/missing.c`"), "{e}");
         assert!(!e.contains(vm.global_state.config.lib_dir.as_str()), "{e}");
+    }
+}
+
+mod provenance {
+    use super::*;
+
+    #[tokio::test]
+    async fn an_inherited_function_loads_under_the_parents_file() {
+        let root = TempLib::new("prov-inherit");
+        let vm = Vm::new(temp_lib_config(&root));
+        let master = recording_master(&vm, &root).await;
+        write(
+            &root,
+            "parent.c",
+            r#"void parent_load() { clone_object("/x"); }"#,
+        );
+        run(
+            &vm,
+            "/child.c",
+            "inherit \"/parent\";\nvoid create() { parent_load(); }\n",
+        )
+        .await;
+        assert_eq!(committed_string(&vm, &master, SEEN_PROGRAM), "/parent.c");
+        assert_eq!(committed_string(&vm, &master, SEEN_CALLER), "/child");
+    }
+
+    #[tokio::test]
+    async fn a_closure_loads_under_the_file_it_was_written_in() {
+        let root = TempLib::new("prov-closure");
+        let vm = Vm::new(temp_lib_config(&root));
+        let master = recording_master(&vm, &root).await;
+        run(
+            &vm,
+            "/a.c",
+            r#"function make() { return (: clone_object($1) :); }"#,
+        )
+        .await;
+        run(
+            &vm,
+            "/b.c",
+            r#"void create() { function f = find_object("/a")->make(); f("/x"); }"#,
+        )
+        .await;
+        assert_eq!(committed_string(&vm, &master, SEEN_PROGRAM), "/a.c");
+    }
+
+    /// An efun pointer fired by `call_out` has no LPC frame under it.
+    #[tokio::test]
+    async fn an_efun_pointer_from_call_out_reports_zero() {
+        let root = TempLib::new("prov-call-out-efun");
+        let vm = Vm::new(temp_lib_config(&root));
+        let master = recording_master(&vm, &root).await;
+        run(
+            &vm,
+            "/timer.c",
+            r#"void create() { call_out(&clone_object("/x"), 100); }"#,
+        )
+        .await;
+        let gs = vm.global_state.clone();
+        let id = gs.with_call_outs(|co| co.queue().iter().next().unwrap().1.id);
+        gs.prioritize_call_out(id).await.await.unwrap();
+        assert_eq!(
+            vm.global_state.committed_global(&master, SEEN_PROGRAM),
+            LpcRef::from(0)
+        );
+        assert_eq!(committed_string(&vm, &master, SEEN_CALLER), "/timer");
+    }
+}
+
+mod compile_time {
+    use super::*;
+
+    /// The `inherit` line sits in a header; the program being loaded is `from`.
+    #[tokio::test]
+    async fn an_inherit_is_asked_for_the_program_being_compiled() {
+        let root = TempLib::new("ct-inherit");
+        let vm = Vm::new(temp_lib_config(&root));
+        let master = recording_master(&vm, &root).await;
+        write(&root, "parent.c", "int p;\n");
+        write(&root, "hdr.h", "inherit \"/parent\";\n");
+        write(&root, "child.c", "#include \"/hdr.h\"\nint c;\n");
+        run(&vm, "/u.c", r#"void create() { clone_object("/child"); }"#).await;
+        assert_eq!(count(&vm, &master, INHERITS), 1);
+        assert_eq!(committed_string(&vm, &master, INHERIT_PATH), "/parent.c");
+        assert_eq!(committed_string(&vm, &master, INHERIT_FROM), "/child.c");
+    }
+
+    #[tokio::test]
+    async fn an_include_is_a_read_by_the_includer_with_no_caller() {
+        let root = TempLib::new("ct-include");
+        let vm = Vm::new(temp_lib_config(&root));
+        let master = recording_master(&vm, &root).await;
+        write(&root, "a.h", "#include \"b.h\"\n");
+        write(&root, "b.h", "#define B 1\n");
+        write(&root, "y.c", "#include \"/a.h\"\nint y = B;\n");
+        run(&vm, "/u.c", r#"void create() { clone_object("/y"); }"#).await;
+        assert_eq!(count(&vm, &master, INCLUDES), 2);
+        // The last question was b.h's, asked by a.h.
+        assert_eq!(committed_string(&vm, &master, INCLUDE_PATH), "/b.h");
+        assert_eq!(committed_string(&vm, &master, INCLUDE_FROM), "/a.h");
+        assert_eq!(
+            vm.global_state.committed_global(&master, INCLUDE_CALLER),
+            LpcRef::from(0)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_denied_inherit_fails_the_load_at_the_directive() {
+        let root = TempLib::new("ct-inherit-deny");
+        let vm = Vm::new(temp_lib_config(&root));
+        run(
+            &vm,
+            "/secure/master.c",
+            indoc! { r#"
+                int valid_load(string p, string f, object c, string g) { return 1; }
+                int valid_inherit(string path, string from) { return 0; }
+            "# },
+        )
+        .await;
+        write(&root, "parent.c", "int p;\n");
+        write(&root, "child.c", "inherit \"/parent\";\n");
+        let u = run(
+            &vm,
+            "/u.c",
+            r#"string e; void create() { e = catch(clone_object("/child")); }"#,
+        )
+        .await;
+        let e = committed_string(&vm, &u, 0);
+        assert!(
+            e.contains("inherit \"/parent.c\": permission denied"),
+            "{e}"
+        );
+        assert!(vm.global_state.object_space.lookup("/child").is_none());
+    }
+
+    #[tokio::test]
+    async fn a_denied_include_fails_the_load_at_the_directive() {
+        let root = TempLib::new("ct-include-deny");
+        let vm = Vm::new(temp_lib_config(&root));
+        run(
+            &vm,
+            "/secure/master.c",
+            indoc! { r#"
+                int valid_load(string p, string f, object c, string g) { return 1; }
+                int valid_read(string path, string func, object caller, string program) {
+                    return func != "include";
+                }
+            "# },
+        )
+        .await;
+        write(&root, "secret.h", "#define S 1\n");
+        write(&root, "child.c", "#include \"/secret.h\"\nint c = S;\n");
+        let u = run(
+            &vm,
+            "/u.c",
+            r#"string e; void create() { e = catch(clone_object("/child")); }"#,
+        )
+        .await;
+        let e = committed_string(&vm, &u, 0);
+        assert!(
+            e.contains("#include \"/secret.h\": permission denied"),
+            "{e}"
+        );
+        assert!(vm.global_state.object_space.lookup("/child").is_none());
+    }
+
+    /// The same program compiles ungated through the driver's own loader.
+    #[tokio::test]
+    async fn a_driver_compile_asks_nothing() {
+        let root = TempLib::new("ct-driver");
+        let vm = Vm::new(temp_lib_config(&root));
+        let master = recording_master(&vm, &root).await;
+        write(&root, "parent.c", "int p;\n");
+        write(&root, "h.h", "#define H 1\n");
+        run(
+            &vm,
+            "/child.c",
+            "inherit \"/parent\";\n#include \"/h.h\"\nint c = H;\n",
+        )
+        .await;
+        assert_eq!(count(&vm, &master, INHERITS), 0);
+        assert_eq!(count(&vm, &master, INCLUDES), 0);
+        assert_eq!(count(&vm, &master, LOADS), 0);
+    }
+}
+
+mod boot {
+    use lpc_rs_core::lpc_path::LpcPath;
+
+    use super::*;
+
+    /// The master compiles before any master exists — inherits and includes
+    /// and all — and after boot, everything it did not allow is refused.
+    #[tokio::test]
+    async fn a_master_that_inherits_and_includes_boots_ungated() {
+        let root = lib_with_x("boot-master");
+        write(&root, "secure/base.c", "int base;\n");
+        write(&root, "secure/defs.h", "#define D 1\n");
+        write(
+            &root,
+            "secure/master.c",
+            "inherit \"/secure/base\";\n#include \"/secure/defs.h\"\nint d = D;\n",
+        );
+        let vm = Vm::new(temp_lib_config(&root));
+        let lib_dir = vm.global_state.config.lib_dir.as_str();
+        vm.initialize_process_from_path(&LpcPath::new_in_game("/secure/master", "/", lib_dir))
+            .await
+            .unwrap_or_else(|e| panic!("{}", e.diagnostic_string()));
+        assert!(vm.global_state.object_space.master_object().is_some());
+
+        let err = message(&cloner_caught(&vm).await);
+        assert!(err.contains("clone_object: permission denied"), "{err}");
     }
 }
