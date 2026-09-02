@@ -6,6 +6,7 @@ pub mod call_stack;
 pub(crate) mod compile_gate;
 pub mod efun;
 pub mod function_type;
+pub(crate) mod json;
 
 pub mod lpc_array;
 pub mod lpc_float;

@@ -162,11 +162,11 @@ async fn the_whole_telnet_surface_over_a_real_socket() {
     )
     .await;
 
-    // send_gmcp rides out as a GMCP subnegotiation.
+    // send_gmcp rides out as a GMCP subnegotiation, its payload json_encoded.
     client.write_all(b"gmcp\r\n").await.unwrap();
     let out = read_until(&mut client, &[IAC, EOR_CMD]).await;
     let mut echo = vec![IAC, SB, GMCP];
-    echo.extend_from_slice(b"Smoke.Echo { \"who\": \"smoke\" }");
+    echo.extend_from_slice(br#"Smoke.Echo {"who":"smoke"}"#);
     echo.extend([IAC, SE]);
     assert!(contains(&out, &echo), "{out:?}");
 

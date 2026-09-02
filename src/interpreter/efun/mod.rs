@@ -24,6 +24,8 @@ pub(crate) mod get_dir;
 pub(crate) mod implode;
 pub(crate) mod input_to;
 pub(crate) mod interactive;
+pub(crate) mod json_decode;
+pub(crate) mod json_encode;
 pub(crate) mod living;
 pub(crate) mod move_object;
 pub(crate) mod notify_fail;
@@ -548,6 +550,16 @@ efuns! {
         arity: 2,
         args: [LpcType::String(false), LpcType::String(false)],
     },
+    json_encode => {
+        returns: LpcType::String(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    json_decode => {
+        returns: LpcType::Mixed(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -721,6 +733,8 @@ mod tests {
                 "read_file",
                 "rm",
                 "write_file",
+                "json_encode",
+                "json_decode",
             ]
         );
     }
