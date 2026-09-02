@@ -610,6 +610,8 @@ mod doors {
         .await;
         assert_eq!(committed_string(&vm, &a, 0), "/inst/17/d/room1");
         assert_eq!(committed_string(&vm, &master, SEEN_FUNC), "move_object");
+        assert_eq!(committed_string(&vm, &master, SEEN_CALLER), "/a");
+        assert_eq!(committed_string(&vm, &master, SEEN_PROGRAM), "/a.c");
     }
 
     #[tokio::test]
