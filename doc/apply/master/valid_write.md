@@ -11,9 +11,8 @@ The arguments are those of `valid_read`: `path` the canonical absolute
 in-game path; `func` the efun's name (`"write_file"`, `"rm"`); `caller` the
 object whose code called the efun; `program` the in-game path of the file
 that defines the calling code, extension included, or 0 when nothing called
-the efun from LPC. Until object loading is gated, `program` identifies code,
-not who loaded it: a privileged program that writes on a caller's behalf
-must not be inheritable by untrusted code.
+the efun from LPC. Who may inherit a privileged program is `valid_inherit`'s
+decision.
 
 The change is refused when the master does not define `valid_write`, so a
 master that never defines it has a read-only lib. The apply runs inside the

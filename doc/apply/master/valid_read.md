@@ -3,34 +3,33 @@
 `int valid_read(string path, string func, object caller, string program)`
 
 The driver applies `valid_read` in the master before every efun that reads
-the filesystem — `read_file`, `get_dir`. A non-zero return allows the read;
-zero refuses it, and the efun raises `<efun>: permission denied` in the
-caller. A path that leads out of the lib fails before this apply.
+the filesystem — `read_file`, `get_dir` — and before every `#include` a
+compile performs. A non-zero return allows the read; zero refuses it, and
+the efun raises `<efun>: permission denied` in the caller. A path that leads
+out of the lib fails before this apply.
 
 - `path` is the canonical absolute in-game path being read: leading `/`, no
   `.` or `..`, a relative argument already resolved against the caller's
   directory.
-- `func` is the efun's name (`"read_file"`), so one apply serves them
-  all. (`efun` itself is a reserved word: `efun::name()` calls the real
-  efun.)
+- `func` is the efun's name (`"read_file"`), or `"include"` for an
+  `#include`, so one apply serves them all. (`efun` itself is a reserved
+  word: `efun::name()` calls the real efun.)
 - `caller` is the object whose code called the efun — what `this_object()`
   names there; for an efun fired through a function pointer, the object that
-  wrote the pointer.
+  wrote the pointer. 0 for an `#include`: no object executes a compile.
 - `program` is the in-game path of the file that *defines* the calling code,
   extension included (`"/secure/master.c"`). An inherited function names the
   file that defines it, not the inheriting object's; a closure names the file
   it was written in; a simul_efun names the simul_efun file; an efun fired
-  through a function pointer names the file that wrote the pointer. When
-  nothing called the efun from LPC — an efun pointer fired straight from
-  `call_out` — `program` is 0.
+  through a function pointer names the file that wrote the pointer. For an
+  `#include`, the file containing the directive — a header, for a nested
+  include. When nothing called the efun from LPC — an efun pointer fired
+  straight from `call_out` — `program` is 0.
 
-`program` is what to build policy on: it says where the code came from, and no
-object can change it by asking another object to do the reading, nor by
-handing it a pointer or closure. What it cannot yet promise is where the code
-was *loaded*: until object loading is gated, any object may `inherit` a
-privileged program and call its functions under that program's name, so a
-program that reads or writes files on a caller's behalf must not be
-inheritable by untrusted code.
+`program` is what to build policy on: it says where the code came from, and
+no object can change it by asking another object to do the reading, nor by
+handing it a pointer or closure, nor by inheriting a privileged program —
+`valid_inherit` decides who may do that.
 
 The read is refused when the master does not define `valid_read`, so a master
 that never defines it has no file reads at all. The apply runs inside the
@@ -50,4 +49,4 @@ int valid_read(string path, string func, object caller, string program) {
 
 ### See also
 
-`valid_write`, `read_file`, `get_dir`, `valid_exec`
+`valid_write`, `read_file`, `get_dir`, `valid_exec`, `valid_load`, `valid_inherit`
