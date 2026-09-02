@@ -47,6 +47,10 @@ const SEEN_FUNC: u16 = 1;
 const SEEN_CALLER: u16 = 2;
 const SEEN_PROGRAM: u16 = 3;
 const ASKS: u16 = 4;
+const LOAD_PATH: u16 = 5;
+const LOAD_FUNC: u16 = 6;
+const LOAD_CALLER: u16 = 7;
+const LOAD_PROGRAM: u16 = 8;
 const LOADS: u16 = 9;
 
 /// `/d/room1.c`: counts its creates, and `f()` finds `room2` relative to
@@ -266,5 +270,187 @@ mod the_apply {
         .await;
         assert_eq!(vm.global_state.committed_global(&a, 0u16), LpcRef::from(0));
         assert_eq!(count(&vm, &master, ASKS), 0);
+    }
+}
+
+mod the_blueprint {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_non_resident_blueprint_is_loaded_for_the_requester() {
+        let (_root, vm, master) = instancing_lib("virt-attribution").await;
+        run(
+            &vm,
+            "/a.c",
+            r#"void create() { find_object("/inst/17/d/room1"); }"#,
+        )
+        .await;
+        assert_eq!(committed_string(&vm, &master, LOAD_PATH), "/d/room1.c");
+        assert_eq!(committed_string(&vm, &master, LOAD_FUNC), "find_object");
+        assert_eq!(committed_string(&vm, &master, LOAD_CALLER), "/a");
+        assert_eq!(committed_string(&vm, &master, LOAD_PROGRAM), "/a.c");
+        assert_eq!(count(&vm, &master, LOADS), 1);
+        let blueprint = resident(&vm, "/d/room1");
+        assert!(vm.global_state.is_initialized(&blueprint));
+        resident(&vm, "/inst/17/d/room1");
+    }
+
+    #[tokio::test]
+    async fn a_denied_blueprint_fails_with_nothing_inserted() {
+        let (_root, vm, master) = instancing_lib("virt-denied").await;
+        run(
+            &vm,
+            "/w.c",
+            r#"void create() { "/secure/master"->deny("/d/room1.c"); }"#,
+        )
+        .await;
+        let a = run(
+            &vm,
+            "/a.c",
+            r#"string e; void create() { e = catch(move_object("/inst/17/d/room1")); }"#,
+        )
+        .await;
+        let e = committed_string(&vm, &a, 0);
+        assert!(e.contains("move_object: permission denied"), "{e}");
+        assert!(vm.global_state.object_space.lookup("/d/room1").is_none());
+        assert!(
+            vm.global_state
+                .object_space
+                .lookup("/inst/17/d/room1")
+                .is_none()
+        );
+        assert_eq!(count(&vm, &master, ASKS), 1);
+    }
+
+    #[tokio::test]
+    async fn an_answer_naming_no_file_is_a_missing_file() {
+        let (_root, vm, master) = instancing_lib("virt-ghost").await;
+        let a = run(
+            &vm,
+            "/a.c",
+            r#"string e; void create() { e = catch(move_object("/inst/17/ghost")); }"#,
+        )
+        .await;
+        let e = committed_string(&vm, &a, 0);
+        assert!(e.contains("Cannot read file `/ghost.c`"), "{e}");
+        assert_eq!(
+            count(&vm, &master, ASKS),
+            1,
+            "the answer is not put back to compile_object"
+        );
+        assert!(
+            vm.global_state
+                .object_space
+                .lookup("/inst/17/ghost")
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn an_escaping_answer_is_refused_without_a_server_path() {
+        let root = TempLib::new("virt-escape");
+        let vm = Vm::new(temp_lib_config(&root));
+        run(
+            &vm,
+            "/secure/master.c",
+            indoc! { r#"
+                int valid_load(string p, string f, object c, mixed g) { return 1; }
+                mixed compile_object(string p, string f, object c, mixed g) {
+                    return "/../../../../../../../../etc/passwd";
+                }
+            "# },
+        )
+        .await;
+        let a = run(
+            &vm,
+            "/a.c",
+            r#"string e; void create() { e = catch(move_object("/inst/1/x")); }"#,
+        )
+        .await;
+        let e = committed_string(&vm, &a, 0);
+        assert!(
+            e.contains("compile_object: `/../../../../../../../../etc/passwd` is not a valid path"),
+            "{e}"
+        );
+        assert!(
+            !e.contains(vm.global_state.config.lib_dir.as_str()),
+            "server path leaked: {e}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_no_clone_blueprint_is_refused() {
+        let (root, vm, _master) = instancing_lib("virt-no-clone").await;
+        write(&root, "d/locked.c", "#pragma no_clone\nint r;\n");
+        let a = run(
+            &vm,
+            "/a.c",
+            r#"string e; void create() { e = catch(move_object("/inst/1/d/locked")); }"#,
+        )
+        .await;
+        let e = committed_string(&vm, &a, 0);
+        assert!(
+            e.contains("`#pragma no_clone` enabled, and so cannot be instantiated"),
+            "{e}"
+        );
+        assert!(
+            vm.global_state
+                .object_space
+                .lookup("/inst/1/d/locked")
+                .is_none()
+        );
+    }
+
+    /// The instance's `create()` runs on its own globals; the blueprint's
+    /// stay its own.
+    #[tokio::test]
+    async fn the_blueprints_globals_are_its_own() {
+        let (_root, vm, _master) = instancing_lib("virt-globals").await;
+        run(
+            &vm,
+            "/a.c",
+            r#"void create() { find_object("/inst/17/d/room1"); find_object("/inst/18/d/room1"); }"#,
+        )
+        .await;
+        let blueprint = resident(&vm, "/d/room1");
+        let seventeen = resident(&vm, "/inst/17/d/room1");
+        let eighteen = resident(&vm, "/inst/18/d/room1");
+        for ob in [&blueprint, &seventeen, &eighteen] {
+            assert_eq!(
+                vm.global_state.committed_global(ob, 0u16),
+                LpcRef::from(1),
+                "{ob}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_throwing_create_leaves_the_instance_absent() {
+        let (root, vm, _master) = instancing_lib("virt-bad-create").await;
+        write(
+            &root,
+            "d/bad.c",
+            indoc! { r#"
+                void create() {
+                    string s;
+                    if (sscanf(file_name(this_object()), "/inst/%s", s) == 1) throw("boom");
+                }
+            "# },
+        );
+        let a = run(
+            &vm,
+            "/a.c",
+            r#"string e; void create() { e = catch(move_object("/inst/1/d/bad")); }"#,
+        )
+        .await;
+        let e = committed_string(&vm, &a, 0);
+        assert!(e.contains("boom"), "{e}");
+        resident(&vm, "/d/bad");
+        assert!(
+            vm.global_state
+                .object_space
+                .lookup("/inst/1/d/bad")
+                .is_none()
+        );
     }
 }

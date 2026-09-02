@@ -72,7 +72,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// Find or load the object `arg` names, resolved against the caller's
     /// directory. Loading is transactional: the master's `valid_load` is
     /// asked, a new object gets a cell write and deferred physical insert,
-    /// and its initializer runs in a sub-task that joins this transaction.
+    /// and its initializer runs in a sub-task that joins this transaction; a
+    /// throwing initializer undoes the insert instead of leaving it resident.
     pub async fn load_object(&self, arg: &str) -> Result<Arc<Process>> {
         let func = self.frame().function.name().to_string();
         let path = self
@@ -95,9 +96,10 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             .map_err(|e| self.loaded_from_here(e))?;
 
         self.insert_process_transactional(&process);
-        self.init_process_transactional(&process)
-            .await
-            .map_err(|e| self.loaded_from_here(e))?;
+        if let Err(e) = self.init_process_transactional(&process).await {
+            self.remove_process(process.clone());
+            return Err(self.loaded_from_here(e));
+        }
 
         Ok(process)
     }
