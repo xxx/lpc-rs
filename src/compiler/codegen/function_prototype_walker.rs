@@ -137,8 +137,8 @@ impl TreeWalker for FunctionPrototypeWalker {
             .context
             .lookup_function_complete(node.name, &CallNamespace::default());
 
-        if let Some(function_like) = proto_opt {
-            let prototype = function_like.as_ref();
+        if let Some(callee) = proto_opt {
+            let prototype = callee.as_ref();
             // If we find another prototype with this name, it's not ours.
             if prototype.flags.nomask() {
                 let e = LpcError::new(format!(

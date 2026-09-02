@@ -308,8 +308,8 @@ impl TreeWalker for SemanticCheckWalker {
 
         let mut errors: Vec<LpcError> = vec![];
 
-        if let Some(function_like) = proto_opt {
-            let prototype = function_like.as_ref();
+        if let Some(callee) = proto_opt {
+            let prototype = callee.as_ref();
             if prototype.flags.private()
                 && !self
                     .context
@@ -554,8 +554,8 @@ impl TreeWalker for SemanticCheckWalker {
             .context
             .lookup_function_complete(node.name, &CallNamespace::default());
 
-        if let Some(function_like) = proto_opt {
-            let prototype = function_like.as_ref();
+        if let Some(callee) = proto_opt {
+            let prototype = callee.as_ref();
             if prototype.flags.private()
                 && !self
                     .context
