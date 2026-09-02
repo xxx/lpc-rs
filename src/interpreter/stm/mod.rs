@@ -506,6 +506,21 @@ pub(crate) fn txn_insert_process(
     });
 }
 
+/// Undo a [`txn_insert_process`] on the same `process`: drops its cell and
+/// records the matching removal, so for the rest of this attempt it reads as
+/// removed rather than never created.
+pub(crate) fn txn_undo_insert(txn: &TxnHandle, object_space: &ObjectSpace, process: &Arc<Process>) {
+    let key = object_space.process_key(process);
+    let var_id = *process.cell.get_or_init(|| object_space.cell_id(&key));
+    txn.with(|t| {
+        t.drop_var(var_id);
+        t.record_effect(Effect::RemoveObject {
+            key,
+            process: process.clone(),
+        });
+    });
+}
+
 /// Resolve `ptr` for a call started outside any task, in its own short-lived
 /// transaction: a string receiver not yet loaded is asked of `valid_load`
 /// for the pointer's writer, compiled and inserted, committed (with the

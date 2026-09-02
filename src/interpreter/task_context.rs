@@ -20,7 +20,9 @@ use crate::{
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
-        stm::{CallOutSchedule, TxnHandle, VarId, txn_find_object, txn_insert_process},
+        stm::{
+            CallOutSchedule, TxnHandle, VarId, txn_find_object, txn_insert_process, txn_undo_insert,
+        },
         task::Task,
         vm::{global_state::GlobalState, vm_op::VmOp},
     },
@@ -300,11 +302,7 @@ impl TaskContext {
             ))),
             ObjectLookup::NotCreated => {
                 let process = self.compile_file_process(path, loader).await?;
-                self.insert_process_transactional(&process);
-                Box::pin(Task::<MAX_CALL_STACK_SIZE>::initialize_process(
-                    self.nested(process.clone())?,
-                ))
-                .await?;
+                self.insert_and_initialize(&process).await?;
                 Ok(process)
             }
         }
@@ -357,6 +355,23 @@ impl TaskContext {
     /// effect is what places it in the physical map at commit.
     pub fn insert_process_transactional(&self, process: &Arc<Process>) {
         txn_insert_process(self.txn(), self.object_space(), process)
+    }
+
+    /// The one insert-and-initialize door every load site shares: insert
+    /// `process` transactionally, then run its initializer in a nested task
+    /// riding this attempt. A throwing initializer undoes the insert and its
+    /// error returns unchanged, so nothing surfaces under the object's key.
+    pub async fn insert_and_initialize(&self, process: &Arc<Process>) -> Result<()> {
+        self.insert_process_transactional(process);
+        if let Err(e) = Box::pin(Task::<MAX_CALL_STACK_SIZE>::initialize_process(
+            self.nested(process.clone())?,
+        ))
+        .await
+        {
+            txn_undo_insert(self.txn(), self.object_space(), process);
+            return Err(e);
+        }
+        Ok(())
     }
 
     /// The one call-out interface: schedule a call out transactionally. The

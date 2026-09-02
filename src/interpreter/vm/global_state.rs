@@ -472,9 +472,9 @@ mod tests {
         assert!(Arc::ptr_eq(&physical, &fresh));
     }
 
-    /// A true miss compiles the file, commits the cell, and flushes the
-    /// physical insert, so the receiver is usable (and not pre-initialized)
-    /// when this returns.
+    /// A true miss compiles the file, initializes it in a nested task riding
+    /// the same attempt, and commits the cell plus the physical insert, so
+    /// the receiver is usable and already initialized when this returns.
     #[tokio::test]
     async fn string_receiver_miss_creates_transactionally() {
         let gs = state_for_receiver();
@@ -496,8 +496,8 @@ mod tests {
             "created receiver's cell must be committed"
         );
         assert!(
-            !gs.is_initialized(&got),
-            "a create-on-miss leaves the receiver uninitialized"
+            gs.is_initialized(&got),
+            "a create-on-miss initializes the receiver in the same attempt"
         );
     }
 

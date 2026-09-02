@@ -40,16 +40,20 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         }
     }
 
-    let new_prog = prototype.program.clone();
-    let clone_process = context.insert_clone(new_prog);
-
-    debug_assert!(clone_process.is_clone(), "new_clone must be a clone");
-
-    // The message only; `TaskContext::nested` refuses at the same bound.
+    // The message only; `TaskContext::nested` refuses at the same bound —
+    // checked before creating anything, so a refusal here leaves nothing to
+    // roll back.
     if context.chain_count() >= MAX_TASK_CHAIN {
         return Err(context.runtime_error("infinite clone recursion detected"));
     }
-    context.init_process_transactional(&clone_process).await?;
+
+    let new_prog = prototype.program.clone();
+    let clone_process = context.object_space().create_clone_process(new_prog);
+    debug_assert!(clone_process.is_clone(), "new_clone must be a clone");
+    context
+        .task_context()
+        .insert_and_initialize(&clone_process)
+        .await?;
 
     let result = LpcRef::from(Arc::downgrade(&clone_process));
     context.return_efun_result(result);
