@@ -434,7 +434,7 @@ impl TaskContext {
                     PathBuf::from(format!("/{}", x.display()))
                 }
             }
-            Err(_e) => current_cwd.into_owned(),
+            Err(_e) => current_cwd,
         }
     }
 
