@@ -15,6 +15,11 @@ If `seconds_repeat` is 0 or negative, the function will only be called once.
 When `seconds_delay` or `seconds_repeat` are floating point numbers, they will be
 accurate to millisecond precision.
 
+A firing that cannot start, because the receiver could not be loaded or has no
+such function, removes the call out, repeating or not; a firing that ran and
+threw leaves a repeating call out repeating. Either error goes to the master's
+`error_handler`.
+
 Because call outs are executed outside the user's REPL, `this_player()` will return
 0 when called from within a call out. If you need access to the player, you can either
 freeze it with a partial application, or capture it in a closure.

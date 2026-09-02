@@ -11,6 +11,9 @@ if `no_echo` is set to 1, the input will not be echoed to the command giver.
 
 If the command giver is not interactive, the function will not be called.
 
+When the function's receiver cannot be loaded, the error goes to the master's
+`error_handler` and the command giver sees `Canceled.`
+
 This function returns 1 if the command giver is interactive, and the handler
 was successfully set up, otherwise 0.
 

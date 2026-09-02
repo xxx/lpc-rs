@@ -19,7 +19,7 @@ use crate::{
             self, CommitProtocol, CommittedReader, Committer, CommitterStats, GcPassReply,
             Snapshot, WorldRoot, gc_pass, resolve_pointer_call,
         },
-        task::{Task, apply_function::apply_runtime_error, task_template::TaskTemplate},
+        task::{Task, apply_function::report_runtime_error, task_template::TaskTemplate},
         task_context::TaskContext,
         vm::vm_op::VmOp,
     },
@@ -185,12 +185,7 @@ impl GlobalState {
             let ctx = template.into_task_context(process.clone());
             if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_process(ctx).await {
                 let template = TaskTemplate::from(self.clone());
-                if !matches!(
-                    apply_runtime_error(&e, Some(process.clone()), template).await,
-                    Some(Ok(_))
-                ) {
-                    self.config.debug_log(e.diagnostic_string()).await;
-                }
+                report_runtime_error(&e, Some(process.clone()), template).await;
                 return Ok(None);
             }
         }

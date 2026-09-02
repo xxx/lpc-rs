@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::{LpcError, lpc_error};
-use tracing::{debug, error, instrument};
+use tracing::{debug, instrument};
 
 use crate::{
     interpreter::{
@@ -11,7 +11,7 @@ use crate::{
         lpc_string::LpcString,
         process::Process,
         task::{
-            apply_function::{apply_function_by_name, apply_runtime_error},
+            apply_function::{apply_function_by_name, report_runtime_error},
             task_template::TaskTemplate,
         },
         vm::Vm,
@@ -38,7 +38,7 @@ impl Vm {
             debug!("initiating login for {}", connection.address);
 
             // Abort the login; no object to blame means the master object
-            // itself is bad, so `runtime_error` is not applied.
+            // itself is bad, so `error_handler` is not applied.
             let fail = async |error: LpcError, object: Option<Arc<Process>>| {
                 global_state
                     .detach(&connection, Some(error.to_string()))
@@ -46,15 +46,7 @@ impl Vm {
 
                 if object.is_some() {
                     let template = TaskTemplate::from(global_state.clone());
-                    match apply_runtime_error(&error, object, template).await {
-                        Some(Ok(_)) => {}
-                        None => {
-                            error!("runtime_error() is not defined in the master object.");
-                        }
-                        Some(Err(e)) => {
-                            error!("Error applying runtime error: {}", e.diagnostic_string());
-                        }
-                    }
+                    report_runtime_error(&error, object, template).await;
                 }
             };
 

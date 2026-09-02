@@ -28,7 +28,7 @@ use crate::{
         task::{
             apply_function::{
                 apply_function, apply_function_by_name, apply_function_in_master,
-                apply_runtime_error,
+                report_runtime_error,
             },
             task_template::TaskTemplate,
         },
@@ -382,8 +382,8 @@ impl Telnet {
     }
 
     /// Apply `name` on `body` as `this_player`; the value it returned, or
-    /// `None` when `body` does not define it or it errored (an error goes
-    /// to `error_handler`).
+    /// `None` when `body` does not define it or it errored (the error is
+    /// reported).
     async fn apply_on(
         body: Arc<Process>,
         name: &str,
@@ -398,7 +398,7 @@ impl Telnet {
         {
             Some(Ok(value)) => Some(value),
             Some(Err(e)) => {
-                apply_runtime_error(&e, Some(body), template).await;
+                report_runtime_error(&e, Some(body), template).await;
                 None
             }
             None => None,
@@ -432,7 +432,7 @@ impl Telnet {
                 let template = template.clone();
                 template.set_this_player(Some(proc.clone()));
                 if let Err(e) = run_command_line(&template, proc, line).await {
-                    apply_runtime_error(&e, connection.body(), template.clone()).await;
+                    report_runtime_error(&e, connection.body(), template.clone()).await;
                 }
                 Self::request_prompt(connection);
             }
@@ -667,7 +667,8 @@ impl Telnet {
         } = match prepared {
             Ok(Some(prepared)) => prepared,
             Ok(None) => return,
-            Err(_) => {
+            Err(e) => {
+                report_runtime_error(&e, connection.body(), template.clone()).await;
                 session.send(Op::Text("Canceled.\n"));
                 return;
             }
@@ -678,15 +679,8 @@ impl Telnet {
         let result = apply_function(function, &args, context, Some(max_execution_time)).await;
 
         if let Err(e) = result {
-            let Some(Ok(_)) = apply_runtime_error(&e, Some(process), template.clone()).await else {
-                template
-                    .global_state
-                    .config
-                    .debug_log(e.diagnostic_string())
-                    .await;
-                return;
-            };
-        };
+            report_runtime_error(&e, Some(process), template.clone()).await;
+        }
     }
 
     /// Stops the telnet server. This will disable new connections, but will _not_
@@ -788,6 +782,76 @@ mod tests {
             vm.global_state.committed_global(&proc, 0u16),
             LpcRef::from(165)
         );
+    }
+
+    /// A receiver `input_to` cannot call is the master's to hear about.
+    mod reporting {
+        use bytes::BytesMut;
+
+        use super::*;
+        use crate::test_support::{TempLib, committed_string, connect, temp_lib_config};
+
+        #[tokio::test]
+        async fn a_refused_receiver_is_reported_and_canceled() {
+            let root = TempLib::new("input-to-refused");
+            std::fs::write(root.join("refused.c"), "void f(string s) {}\n").unwrap();
+            let vm = Vm::new(temp_lib_config(&root));
+            let master = vm
+                .global_state
+                .initialize_process_from_code(
+                    "/secure/master.c",
+                    r#"
+                    string error; mixed blamed;
+                    int valid_load(string path, string func, object caller, mixed program) {
+                        return path != "/refused.c";
+                    }
+                    void error_handler(mapping e) { error = e["error"]; blamed = e["object"]; }
+                "#,
+                )
+                .await
+                .unwrap()
+                .context
+                .process;
+            let body = vm
+                .global_state
+                .initialize_process_from_code("/body.c", "void create() {}")
+                .await
+                .unwrap()
+                .context
+                .process;
+            let connected = connect(&vm, &body).await;
+            let ptr = FunctionPtrBuilder::default()
+                .owner(Arc::downgrade(&body))
+                .address(FunctionAddress::Dynamic("f".into()))
+                .partial_args(thin_vec![Some("/refused".into())])
+                .build()
+                .unwrap();
+            let input_to = InputTo {
+                ptr: Arc::new(ptr),
+                no_echo: false,
+            };
+            let mut session = Session::new();
+
+            Telnet::resolve_input_to(
+                &input_to,
+                "hello",
+                &mut session,
+                &connected.connection,
+                &TaskTemplate::from(vm.global_state.clone()),
+            )
+            .await;
+
+            let error = committed_string(&vm, &master, 0);
+            assert!(error.contains("permission denied"), "{error}");
+            assert_eq!(
+                vm.global_state.committed_global(&master, 1u16),
+                LpcRef::from(Arc::downgrade(&body)),
+                "blamed on the player"
+            );
+            let mut out = BytesMut::new();
+            session.drain_output(&mut out);
+            assert!(String::from_utf8_lossy(&out).contains("Canceled."));
+        }
     }
 
     mod test_string_receivers {
