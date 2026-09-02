@@ -7,11 +7,14 @@ use std::sync::Arc;
 use indoc::indoc;
 use lpc_rs_utils::config::ConfigBuilder;
 
-use super::{run, s};
+use super::{fails, loading::write, run, run_with, s};
 use crate::{
-    interpreter::{CommittedReader, lpc_ref::LpcRef},
+    interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
     test_config_builder,
-    test_support::run_prog_with_config,
+    test_support::{
+        PERMISSIVE_MASTER, TempLib, committed_string, run_prog_with_config, temp_lib_config,
+        test_config,
+    },
 };
 
 /// `/x.c`: answers who called it, directly and through a local call.
@@ -165,4 +168,299 @@ async fn the_driver_entry_has_no_previous_object() {
     )
     .await;
     assert_eq!(r, vec![LpcRef::from(0)]);
+}
+
+/// What a task started by another object's code is entered with.
+mod entries {
+    use super::*;
+
+    #[tokio::test]
+    async fn create_through_a_call_other_miss_sees_the_caller() {
+        let root = TempLib::new("previous-object-miss");
+        write(&root, "x.c", MADE.1);
+        let r = run_with(
+            temp_lib_config(&root),
+            PERMISSIVE_MASTER,
+            &[],
+            r#"mixed *create() { return ({ "/x"->who_made() }); }"#,
+        )
+        .await;
+        assert_eq!(r, vec![s("/main")]);
+    }
+
+    #[tokio::test]
+    async fn create_through_find_object_sees_the_finder() {
+        let root = TempLib::new("previous-object-find");
+        write(&root, "x.c", MADE.1);
+        let r = run_with(
+            temp_lib_config(&root),
+            PERMISSIVE_MASTER,
+            &[],
+            r#"mixed *create() { return ({ find_object("/x")->who_made() }); }"#,
+        )
+        .await;
+        assert_eq!(r, vec![s("/main")]);
+    }
+
+    /// The chain is the executing frame's, not the task entry's.
+    #[tokio::test]
+    async fn a_nested_task_sees_the_call_other_callee_not_the_entry() {
+        let r = run(
+            "",
+            &[
+                ("/y.c", MADE.1),
+                (
+                    "/x.c",
+                    r#"string make() { return clone_object("/y")->who_made(); }"#,
+                ),
+            ],
+            r#"mixed *create() { return ({ "/x"->make() }); }"#,
+        )
+        .await;
+        assert_eq!(r, vec![s("/x")]);
+    }
+
+    #[tokio::test]
+    async fn a_master_apply_sees_the_asking_object() {
+        let root = TempLib::new("previous-object-master");
+        write(&root, "x.c", "int x;\n");
+        let master = indoc! { r#"
+            string asker;
+            int valid_load(string p, string f, object c, string g) {
+                asker = file_name(previous_object());
+                return 1;
+            }
+            string who_asked() { return asker; }
+        "# };
+        let r = run_with(
+            temp_lib_config(&root),
+            master,
+            &[],
+            r#"mixed *create() { clone_object("/x"); return ({ "/secure/master"->who_asked() }); }"#,
+        )
+        .await;
+        assert_eq!(r, vec![s("/main")]);
+    }
+
+    #[tokio::test]
+    async fn compile_object_and_the_instance_see_the_requester() {
+        let master = indoc! { r#"
+            string asker;
+            string compile_object(string path, string func, object caller, string program) {
+                asker = file_name(previous_object());
+                return "/x";
+            }
+            string who_asked() { return asker; }
+        "# };
+        let r = run(
+            master,
+            &[MADE],
+            indoc! { r#"
+                mixed *create() {
+                    string made = find_object("/inst/1/x")->who_made();
+                    return ({ made, "/secure/master"->who_asked() });
+                }
+            "# },
+        )
+        .await;
+        assert_eq!(r, vec![s("/main"), s("/main")]);
+    }
+
+    const LISTENER: (&str, &str) = (
+        "/p.c",
+        indoc! { r#"
+            string from;
+            void catch_tell(string m) { from = file_name(previous_object()); }
+            string who() { return from; }
+        "# },
+    );
+
+    #[tokio::test]
+    async fn catch_tell_sees_the_teller() {
+        let r = run(
+            "",
+            &[LISTENER],
+            indoc! { r#"
+                mixed *create() {
+                    object p = clone_object("/p");
+                    tell_object(p, "hi");
+                    string told = p->who();
+                    set_this_player(p);
+                    write("hi");
+                    return ({ told, p->who() });
+                }
+            "# },
+        )
+        .await;
+        assert_eq!(r, vec![s("/main"), s("/main")]);
+    }
+
+    #[tokio::test]
+    async fn a_call_out_sees_its_scheduler() {
+        let vm = Vm::new(test_config());
+        let w = vm
+            .initialize_process_from_code(
+                "/w.c",
+                indoc! { r#"
+                    string seen;
+                    void create() {
+                        call_out((: seen = previous_object() ? file_name(previous_object()) : "none" :), 100);
+                    }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let gs = vm.global_state.clone();
+        let id = gs.with_call_outs(|co| co.queue().iter().next().unwrap().1.id);
+        gs.prioritize_call_out(id).await.await.unwrap();
+        assert_eq!(committed_string(&vm, &w, 0), "/w");
+    }
+
+    #[tokio::test]
+    async fn a_command_handler_sees_the_actor() {
+        let vm = Vm::new(test_config());
+        let player = vm
+            .initialize_process_from_code(
+                "/player.c",
+                indoc! { r#"
+                    string seen;
+                    void create() {
+                        set_this_player(this_object());
+                        enable_commands();
+                        add_action("do_look", "look");
+                        command("look");
+                    }
+                    int do_look(string a) { seen = file_name(previous_object()); return 1; }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(committed_string(&vm, &player, 0), "/player");
+    }
+
+    #[tokio::test]
+    async fn a_destructed_previous_object_is_zero() {
+        let r = run(
+            "",
+            &[
+                ("/a.c", r#"mixed go() { return "/x"->kill_and_ask(); }"#),
+                (
+                    "/x.c",
+                    r#"mixed kill_and_ask() { destruct(previous_object()); return previous_object(); }"#,
+                ),
+            ],
+            r#"mixed *create() { object a = clone_object("/a"); return ({ a->go() }); }"#,
+        )
+        .await;
+        assert_eq!(r, vec![LpcRef::from(0)]);
+    }
+}
+
+/// `previous_object(n)`: `n` steps back, `-1` the whole chain.
+mod steps {
+    use super::*;
+
+    const A: (&str, &str) = ("/a.c", r#"mixed *chain() { return "/b"->chain(); }"#);
+    const B: (&str, &str) = ("/b.c", r#"mixed *chain() { return "/c"->chain(); }"#);
+
+    #[tokio::test]
+    async fn a_step_counts_back_through_the_chain() {
+        let c = (
+            "/c.c",
+            indoc! { r#"
+                mixed *chain() {
+                    return ({
+                        file_name(previous_object(0)),
+                        file_name(previous_object(1)),
+                        file_name(previous_object(2)),
+                        previous_object(3),
+                    });
+                }
+            "# },
+        );
+        let r = run(
+            "",
+            &[A, B, c],
+            r#"mixed *create() { return "/a"->chain(); }"#,
+        )
+        .await;
+        assert_eq!(r, vec![s("/b"), s("/a"), s("/main"), LpcRef::from(0)]);
+    }
+
+    #[tokio::test]
+    async fn minus_one_is_the_whole_chain() {
+        let c = (
+            "/c.c",
+            indoc! { r#"
+                mixed *chain() {
+                    object *all = previous_object(-1);
+                    return ({ sizeof(all), file_name(all[0]), file_name(all[1]), file_name(all[2]) });
+                }
+            "# },
+        );
+        let r = run(
+            "",
+            &[A, B, c],
+            r#"mixed *create() { return "/a"->chain(); }"#,
+        )
+        .await;
+        assert_eq!(r, vec![LpcRef::from(3), s("/b"), s("/a"), s("/main")]);
+    }
+
+    #[tokio::test]
+    async fn the_chain_crosses_a_task_entry() {
+        let y = (
+            "/y.c",
+            indoc! { r#"
+                string seen = "";
+                void create() {
+                    object *all = previous_object(-1);
+                    for (int i = 0; i < sizeof(all); i++) seen += file_name(all[i]) + " ";
+                }
+                string who() { return seen; }
+            "# },
+        );
+        let r = run(
+            "",
+            &[
+                y,
+                (
+                    "/x.c",
+                    r#"string make() { return clone_object("/y")->who(); }"#,
+                ),
+            ],
+            r#"mixed *create() { return ({ "/x"->make() }); }"#,
+        )
+        .await;
+        assert_eq!(r, vec![s("/x /main ")]);
+    }
+
+    #[tokio::test]
+    async fn the_drivers_chain_is_empty() {
+        let r = run(
+            "",
+            &[],
+            r#"mixed *create() { return ({ sizeof(previous_object(-1)), previous_object(1) }); }"#,
+        )
+        .await;
+        assert_eq!(r, vec![LpcRef::from(0), LpcRef::from(0)]);
+    }
+
+    #[tokio::test]
+    async fn another_negative_step_is_an_error() {
+        let err = fails(
+            "",
+            &[],
+            r#"mixed *create() { previous_object(-2); return ({}); }"#,
+        )
+        .await;
+        assert!(
+            err.contains("previous_object: expected a step back or -1, got -2"),
+            "{err}"
+        );
+    }
 }

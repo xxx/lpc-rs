@@ -2,4 +2,8 @@
 
 `object this_object()`
 
-Returns the object that called the function.
+Returns the object whose code is running.
+
+### See Also
+
+`previous_object`

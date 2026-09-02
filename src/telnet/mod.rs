@@ -784,6 +784,49 @@ mod tests {
         );
     }
 
+    /// The callback is entered for the pointer's owner.
+    #[tokio::test]
+    async fn an_input_to_callback_sees_its_owner() {
+        let vm = Vm::new(test_config());
+        let proc = vm
+            .initialize_process_from_code(
+                "/foo/asker.c",
+                "string seen; void heard(string s) { seen = file_name(previous_object()); }",
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let func = proc.program.lookup_function("heard").unwrap().clone();
+        let ptr = FunctionPtrBuilder::default()
+            .owner(Arc::downgrade(&proc))
+            .address(FunctionAddress::Local(Arc::downgrade(&proc), func))
+            .build()
+            .unwrap();
+        let (connection_tx, _connection_rx) = mpsc::unbounded_channel();
+        let mut session = Session::new();
+        let addr = "127.0.0.1:12344".to_socket_addrs().unwrap().next().unwrap();
+        let connection = Connection::new(addr, connection_tx);
+        let input_to = InputTo {
+            ptr: Arc::new(ptr),
+            no_echo: false,
+        };
+
+        Telnet::resolve_input_to(
+            &input_to,
+            "hello",
+            &mut session,
+            &connection,
+            &TaskTemplate::from(vm.global_state.clone()),
+        )
+        .await;
+
+        assert_eq!(
+            vm.global_state.committed_global(&proc, 0u16),
+            LpcRef::from("/foo/asker")
+        );
+    }
+
     /// A receiver `input_to` cannot call is the master's to hear about.
     mod reporting {
         use bytes::BytesMut;

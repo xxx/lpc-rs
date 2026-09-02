@@ -562,7 +562,9 @@ efuns! {
         args: [LpcType::String(false)],
     },
     previous_object => {
-        returns: LpcType::Object(false),
+        returns: LpcType::Object(false) | LpcType::Object(true),
+        arity: (1, 1),
+        args: [LpcType::Int(false)],
     },
 }
 
