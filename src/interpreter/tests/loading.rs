@@ -468,6 +468,34 @@ mod paths {
         assert!(e.contains("Cannot read file `/missing.c`"), "{e}");
         assert!(!e.contains(vm.global_state.config.lib_dir.as_str()), "{e}");
     }
+
+    /// A relative path is the executing object's, even when that object was
+    /// reached by `->` from a caller in another directory.
+    #[tokio::test]
+    async fn a_relative_path_is_the_executing_objects_not_the_entrys() {
+        let root = TempLib::new("path-frame-cwd");
+        let vm = Vm::new(temp_lib_config(&root));
+        recording_master(&vm, &root).await;
+        write(
+            &root,
+            "d/room1.c",
+            r#"object f() { return find_object("room2"); }"#,
+        );
+        write(&root, "d/room2.c", "int r;\n");
+        let a = run(
+            &vm,
+            "/a.c",
+            indoc! { r#"
+                string got;
+                void create() {
+                    object o = "/d/room1"->f();
+                    got = o ? file_name(o) : "nothing";
+                }
+            "# },
+        )
+        .await;
+        assert_eq!(committed_string(&vm, &a, 0), "/d/room2");
+    }
 }
 
 mod provenance {
