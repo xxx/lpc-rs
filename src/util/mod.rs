@@ -8,8 +8,8 @@ use crate::interpreter::{object_space::ObjectSpace, process::Process};
 
 /// The resident simul-efun object, if one is configured and loaded.
 pub fn get_simul_efuns(config: &Config, object_space: &ObjectSpace) -> Option<Arc<Process>> {
-    let source = config.simul_efun_source()?.to_string();
-    object_space.lookup(source.strip_suffix(".c").unwrap_or(&source))
+    let source = config.simul_efun_source()?;
+    object_space.lookup(object_space.path_key(source.as_ref()))
 }
 
 #[cfg(test)]

@@ -192,6 +192,10 @@ async fn a_simul_efun_reports_the_simul_efun_file() {
         committed_string(&vm, &master, SEEN_PROGRAM),
         "/secure/simul_efuns.c"
     );
+    assert_eq!(
+        committed_string(&vm, &master, SEEN_CALLER),
+        "/secure/simul_efuns"
+    );
 }
 
 /// An efun pointer fired by `call_out` has no LPC frame under it.

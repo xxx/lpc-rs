@@ -255,7 +255,7 @@ impl Compiler {
         // inject the auto-inherit if it's to be used.
         if let Some(dir) = &self.config.auto_inherit_file {
             let lpc_dir = LpcPath::new_in_game(dir.as_str(), "/", &*self.config.lib_dir);
-            if lpc_dir != lpc_path {
+            if lpc_dir.source_file() != lpc_path.source_file() {
                 let node = InheritNode {
                     path: ustr(dir),
                     namespace: None,
@@ -570,6 +570,7 @@ mod tests {
     }
 
     mod test_compile_string {
+        use lpc_rs_function_support::function_prototype::FunctionKind;
         use lpc_rs_utils::config::ConfigBuilder;
 
         use super::*;
@@ -681,6 +682,55 @@ mod tests {
             // assert!(prog.functions.keys().)
             // assert_eq!(prog.inherits.len(), 2);
             // assert_eq!(prog.inherits[0].filename.to_str().unwrap(), "/std/auto.c");
+        }
+
+        /// The auto-inherit file is the one object that must not inherit itself.
+        #[tokio::test]
+        async fn the_auto_inherit_file_may_be_configured_without_its_extension() {
+            let config: Arc<Config> = ConfigBuilder::default()
+                .lib_dir("tests/fixtures/code")
+                .auto_inherit_file("/std/auto")
+                .build()
+                .unwrap()
+                .into();
+            let auto = LpcPath::new_in_game("/std/auto", "/", &*config.lib_dir);
+            let compiler = CompilerBuilder::default().config(config).build().unwrap();
+            compiler
+                .compile_in_game_file(&auto, None)
+                .await
+                .expect("does not inherit itself");
+        }
+
+        /// The kind of `me()` when `path` is compiled with the simul-efun file
+        /// configured as `secure/simul_efuns.c`.
+        async fn kind_of_me(path: &str) -> FunctionKind {
+            let config: Arc<Config> = ConfigBuilder::default()
+                .lib_dir("tests/fixtures/code")
+                .simul_efun_file("secure/simul_efuns.c")
+                .build()
+                .unwrap()
+                .into();
+            let compiler = CompilerBuilder::default().config(config).build().unwrap();
+            let program = compiler
+                .compile_string(path, "int me() { return 1; }")
+                .await
+                .unwrap()
+                .program;
+            program.lookup_function("me").unwrap().prototype.kind
+        }
+
+        #[tokio::test]
+        async fn the_simul_efun_file_defines_simul_efuns() {
+            let kind = kind_of_me("/secure/simul_efuns.c").await;
+            assert_eq!(kind, FunctionKind::SimulEfun);
+        }
+
+        /// Matched by its whole path: a file that merely ends the same way is
+        /// an ordinary object.
+        #[tokio::test]
+        async fn a_file_ending_like_the_simul_efun_file_is_not_it() {
+            let kind = kind_of_me("/home/wiz/secure/simul_efuns.c").await;
+            assert_eq!(kind, FunctionKind::Local);
         }
 
         #[tokio::test]

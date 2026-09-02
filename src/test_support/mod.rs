@@ -153,11 +153,7 @@ async fn compile_simul_efuns(config: &Arc<Config>) -> Program {
         .config(config.clone())
         .build()
         .unwrap();
-    let path = LpcPath::new_in_game(
-        config.simul_efun_file.unwrap().as_str(),
-        "/",
-        &*config.lib_dir,
-    );
+    let path = config.simul_efun_source().unwrap();
     compiler
         .compile_in_game_file(&path, None)
         .await
