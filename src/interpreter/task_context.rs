@@ -11,16 +11,17 @@ use lpc_rs_utils::config::Config;
 use thin_vec::ThinVec;
 use tokio::sync::mpsc::Sender;
 
-use crate::compile_time_config::MAX_TASK_CHAIN;
+use crate::compile_time_config::{MAX_CALL_STACK_SIZE, MAX_TASK_CHAIN};
 use crate::{
     interpreter::{
-        VALID_LOAD,
-        apply::{report_warnings, valid_apply},
+        COMPILE_OBJECT, VALID_LOAD,
+        apply::{master_apply, report_warnings, valid_apply},
         compile_gate::MasterGate,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
         stm::{CallOutSchedule, TxnHandle, VarId, txn_find_object, txn_insert_process},
+        task::Task,
         vm::{global_state::GlobalState, vm_op::VmOp},
     },
     util::{get_simul_efuns, process_builder::compile_process_from_path},
@@ -131,14 +132,14 @@ pub(crate) fn confine_object_path(
     Ok(path)
 }
 
-/// A struct to carry context during the evaluation of a single [`Task`](crate::interpreter::task::Task).
+/// A struct to carry context during the evaluation of a single [`Task`].
 #[derive(Debug)]
 pub struct TaskContext {
     /// The [`GlobalState`] from the [`Vm`](crate::interpreter::vm::Vm).
     pub global_state: Arc<GlobalState>,
 
     /// The [`Process`] that owns the function being
-    /// called in this [`Task`](crate::interpreter::task::Task).
+    /// called in this [`Task`].
     // TODO: this is not accurate in the case of some call_others, or function ptr calls,
     //       The process in the call frame is more accurate, and this probably should be removed.
     pub process: Arc<Process>,
@@ -236,11 +237,32 @@ impl TaskContext {
         confine_object_path(self.config(), arg, cwd, func)
     }
 
-    /// The one LPC-triggered compile. `path` is confined already; its source,
-    /// `<key>.c`, is what `valid_load` hears and what is compiled, with the
-    /// master's compile-time gate installed. Not inserted; the compile's
-    /// warnings go to `warning_handler`.
+    /// The one LPC-triggered compile. `path` is confined already. When its
+    /// source, `<key>.c`, exists it is compiled after `valid_load` hears it;
+    /// a path with no source is put to the master's `compile_object` instead
+    /// and becomes the answered blueprint's program under `path`. Either
+    /// way the result is not inserted; a clone-suffixed path is never
+    /// virtual.
     pub async fn compile_process(&self, path: &LpcPath, loader: &Loader) -> Result<Arc<Process>> {
+        if path.is_clone() || self.source_exists(path).await {
+            return self.compile_file_process(path, loader).await;
+        }
+        self.instantiate_virtual(path, loader).await
+    }
+
+    /// Whether `path`'s source is a regular file in the lib.
+    async fn source_exists(&self, path: &LpcPath) -> bool {
+        let source = path.source_file();
+        tokio::fs::metadata(source.as_server(self.config().lib_dir.as_str()))
+            .await
+            .is_ok_and(|m| m.is_file())
+    }
+
+    /// Compile `path`'s source, `<key>.c`, after `valid_load` hears it, with
+    /// the master's compile-time gate installed. Not inserted; the compile's
+    /// warnings go to `warning_handler`. A missing source is the compiler's
+    /// `Cannot read file` error.
+    async fn compile_file_process(&self, path: &LpcPath, loader: &Loader) -> Result<Arc<Process>> {
         let source = path
             .source_file()
             .as_in_game(self.config().lib_dir.as_str())
@@ -263,6 +285,70 @@ impl TaskContext {
             compile_process_from_path(self.object_space(), path, Some(gate)).await?;
         report_warnings(self, &process.program.filename, warnings).await?;
         Ok(process)
+    }
+
+    /// `path` resident, else its file compiled for `loader`, inserted and
+    /// initialized in a nested task. Never `compile_object`: one level of
+    /// indirection only.
+    async fn load_file_process(&self, path: &LpcPath, loader: &Loader) -> Result<Arc<Process>> {
+        match self.find_object(path) {
+            ObjectLookup::Found(process) => Ok(process),
+            ObjectLookup::Removed => Err(LpcError::runtime(format!(
+                "{}: `{}` was destructed in this task",
+                COMPILE_OBJECT,
+                AsRef::<str>::as_ref(path)
+            ))),
+            ObjectLookup::NotCreated => {
+                let process = self.compile_file_process(path, loader).await?;
+                self.insert_process_transactional(&process);
+                Box::pin(Task::<MAX_CALL_STACK_SIZE>::initialize_process(
+                    self.nested(process.clone())?,
+                ))
+                .await?;
+                Ok(process)
+            }
+        }
+    }
+
+    /// A path with no source: the master's `compile_object` names a
+    /// blueprint, and the result is that blueprint's program under `path`.
+    /// The answer is a name, not a permission — the blueprint is loaded for
+    /// `loader`, so `valid_load` still hears the requester. A declined ask
+    /// fails as the missing file it is.
+    async fn instantiate_virtual(&self, path: &LpcPath, loader: &Loader) -> Result<Arc<Process>> {
+        let key = self.object_space().path_key(AsRef::<str>::as_ref(path));
+        let args = [
+            LpcRef::from(key.as_str()),
+            LpcRef::from(loader.func.as_str()),
+            LpcRef::from(Arc::downgrade(&loader.caller)),
+            loader.program.clone(),
+        ];
+        let Some(answer) = master_apply(self, COMPILE_OBJECT, &args).await? else {
+            return self.compile_file_process(path, loader).await;
+        };
+        let blueprint = match answer.as_str() {
+            Some(name) => name.to_owned(),
+            None if !answer.is_truthy(self.txn()) => {
+                return self.compile_file_process(path, loader).await;
+            }
+            None => {
+                return Err(LpcError::runtime(format!(
+                    "{COMPILE_OBJECT}: expected a path, got {answer}"
+                )));
+            }
+        };
+        let blueprint = confine_object_path(self.config(), &blueprint, "/", COMPILE_OBJECT)?;
+        let blueprint = self.load_file_process(&blueprint, loader).await?;
+        if blueprint.program.pragmas.no_clone() {
+            return Err(LpcError::runtime(format!(
+                "{COMPILE_OBJECT}: {} has `#pragma no_clone` enabled, and so cannot be instantiated",
+                blueprint.program.filename
+            )));
+        }
+        Ok(Arc::new(Process::new_virtual(
+            blueprint.program.clone(),
+            key,
+        )))
     }
 
     /// Insert an object transactionally: write its cell and record a deferred

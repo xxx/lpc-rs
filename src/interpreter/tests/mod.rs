@@ -8,6 +8,7 @@ mod parse_string;
 mod parser;
 mod references;
 mod security;
+mod virtual_objects;
 
 use lpc_rs_utils::config::Config;
 

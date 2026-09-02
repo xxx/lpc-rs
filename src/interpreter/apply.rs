@@ -82,18 +82,28 @@ pub(crate) async fn apply_pointer(
     .map(Some)
 }
 
+/// `name(args)` on the master, joining `ctx`'s transaction; `None` without
+/// a master or without the apply. The apply's error is the caller's.
+pub(crate) async fn master_apply(
+    ctx: &TaskContext,
+    name: &str,
+    args: &[LpcRef],
+) -> Result<Option<LpcRef>> {
+    let Some(master) = ctx.object_space().master_object() else {
+        return Ok(None);
+    };
+    let Some(function) = master.program.unmangled_functions.get(name).cloned() else {
+        return Ok(None);
+    };
+    apply_nested(ctx, &master, function, args).await.map(Some)
+}
+
 /// The master's verdict on `name(args)`: truthiness of what it returns;
 /// `false` without a master or without the apply; the apply's error is the
 /// caller's.
 pub(crate) async fn valid_apply(ctx: &TaskContext, name: &str, args: &[LpcRef]) -> Result<bool> {
-    let Some(master) = ctx.object_space().master_object() else {
-        return Ok(false);
-    };
-    let Some(function) = master.program.unmangled_functions.get(name).cloned() else {
-        return Ok(false);
-    };
-    let verdict = apply_nested(ctx, &master, function, args).await?;
-    Ok(verdict.is_truthy(ctx.txn()))
+    let verdict = master_apply(ctx, name, args).await?;
+    Ok(verdict.is_some_and(|v| v.is_truthy(ctx.txn())))
 }
 
 /// `message` to `target`: through `catch_tell` — applied with `this_player`
