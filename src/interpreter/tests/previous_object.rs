@@ -2,18 +2,13 @@
 //! a door — `->`, a function pointer, a simul efun, or a task entry — with
 //! local calls transparent, and the chain behind it.
 
-use std::sync::Arc;
-
 use indoc::indoc;
-use lpc_rs_utils::config::ConfigBuilder;
 
 use super::{fails, loading::write, run, run_with, s};
 use crate::{
     interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
-    test_config_builder,
     test_support::{
-        PERMISSIVE_MASTER, TempLib, committed_string, run_prog_with_config, temp_lib_config,
-        test_config,
+        PERMISSIVE_MASTER, TempLib, committed_string, run_prog, temp_lib_config, test_config,
     },
 };
 
@@ -150,19 +145,10 @@ async fn an_efun_pointer_fired_elsewhere_sees_the_firer() {
     assert_eq!(r, vec![s("/b"), s("/main")]);
 }
 
-/// `run_prog` seats the simul efuns; naming the file with its `.c` is what
-/// makes the compiler emit the simul-efun call rather than a local one.
 #[tokio::test]
 async fn a_simul_efun_sees_its_caller() {
-    let config = test_config_builder!()
-        .simul_efun_file("/secure/simul_efuns.c")
-        .build()
-        .unwrap();
-    let task = run_prog_with_config(
-        r#"string seen; void create() { seen = file_name(simul_previous()); }"#,
-        Arc::new(config),
-    )
-    .await;
+    let task =
+        run_prog(r#"string seen; void create() { seen = file_name(simul_previous()); }"#).await;
     let process = task.context.process.clone();
     assert_eq!(
         task.context.global_state.committed_global(&process, 0u16),

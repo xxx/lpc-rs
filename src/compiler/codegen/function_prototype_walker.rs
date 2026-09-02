@@ -37,14 +37,14 @@ impl FunctionPrototypeWalker {
         }
     }
 
-    /// Am I walking the simul efuns? Used in codegen.
+    /// Am I walking the simul efuns? Their functions are `SimulEfun`-kind, so
+    /// callers compile to `CallSimulEfun`.
     #[inline]
     fn is_simul_efuns(&self) -> bool {
-        let Some(simul_efun_file) = &self.context.config.simul_efun_file else {
-            return false;
-        };
-
-        self.context.filename.ends_with(simul_efun_file.as_str())
+        let config = &self.context.config;
+        config
+            .simul_efun_source()
+            .is_some_and(|source| *self.context.filename.as_in_game(&*config.lib_dir) == *source)
     }
 }
 

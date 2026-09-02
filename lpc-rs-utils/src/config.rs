@@ -62,6 +62,7 @@ pub struct Config {
     #[builder(setter(into), default = "DEFAULT_GC_INTERVAL")]
     pub gc_interval: u64,
 
+    /// The simul-efun file, as an in-game path with or without its `.c`.
     #[builder(setter(into, strip_option), default = "None")]
     pub simul_efun_file: Option<Ustr>,
 
@@ -228,6 +229,15 @@ impl ConfigBuilder {
 }
 
 impl Config {
+    /// The source file of the configured simul efuns as one canonical
+    /// in-game path — `/secure/simul_efuns`, `/secure/simul_efuns.c` and
+    /// `secure/simul_efuns` all name `/secure/simul_efuns.c` — or `None`
+    /// when no file is configured.
+    pub fn simul_efun_source(&self) -> Option<LpcPath> {
+        let file = self.simul_efun_file.as_ref()?;
+        Some(LpcPath::new_in_game(file.as_str(), "/", &*self.lib_dir).source_file())
+    }
+
     /// Validate the passed-in path, and return a canonical, absolute on-server version of it
     pub fn validate_in_game_path<'a>(
         &self,
@@ -304,6 +314,30 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn simul_efun_source_is_the_source_file_however_the_config_spells_it() {
+        for spelling in [
+            "/secure/simul_efuns",
+            "/secure/simul_efuns.c",
+            "secure/simul_efuns",
+        ] {
+            let config = ConfigBuilder::default()
+                .simul_efun_file(spelling)
+                .build()
+                .unwrap();
+            assert_eq!(
+                config.simul_efun_source().unwrap().to_string(),
+                "/secure/simul_efuns.c",
+                "{spelling}"
+            );
+        }
+    }
+
+    #[test]
+    fn simul_efun_source_is_none_when_no_file_is_configured() {
+        assert!(Config::default().simul_efun_source().is_none());
+    }
 
     #[test]
     fn gc_interval_defaults_to_five_minutes() {

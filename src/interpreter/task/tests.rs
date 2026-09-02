@@ -448,7 +448,6 @@ mod test_instructions {
 
         #[tokio::test]
         async fn calls_correct_function_with_simul_efuns() {
-            // this is deprecated behavior that emits a warning, but probably won't ever be removed completely.
             let code = indoc! { r##"
                     string this_one = simul_efun("marf");
                 "##};
