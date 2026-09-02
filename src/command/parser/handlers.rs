@@ -9,7 +9,10 @@ use super::{Verdict, attempt::Target};
 use crate::{
     command::frontend::parser::ParserRule,
     interpreter::{
-        apply::apply_on, lpc_int::LpcInt, lpc_ref::LpcRef, process::Process,
+        apply::{apply_on, as_actor},
+        lpc_int::LpcInt,
+        lpc_ref::LpcRef,
+        process::Process,
         task_context::TaskContext,
     },
 };
@@ -113,7 +116,7 @@ pub(crate) async fn call(
     } else {
         return Ok(Reply::Absent);
     };
-    let result = apply_on(ctx, target, actor, function, &args).await?;
+    let result = apply_on(ctx, as_actor(ctx, actor), target, actor, function, &args).await?;
     Ok(Reply::from(&result))
 }
 

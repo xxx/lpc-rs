@@ -16,7 +16,7 @@ use crate::interpreter::{
     function_type::function_address::FunctionAddress,
     lpc_ref::{LpcRef, NULL},
     process::Process,
-    task_context::{Loader, ObjectLookup, TaskContext},
+    task_context::{Caller, Callers, Loader, ObjectLookup, TaskContext},
 };
 
 /// A pointer resolved for one call: the receiver, the function, its arguments.
@@ -129,9 +129,10 @@ impl FunctionPtr {
         }
     }
 
-    /// The identity a load this pointer triggers runs under: its owner, and
-    /// the file that wrote it (`0` when it has none).
-    pub(crate) fn loader(&self, lib_dir: &str) -> Result<Loader> {
+    /// The identity a load this pointer triggers runs under: its owner in
+    /// front of `callers`, the chain where it fired, and the file that wrote
+    /// it (`0` when it has none).
+    pub(crate) fn loader(&self, lib_dir: &str, callers: Callers) -> Result<Loader> {
         let Some(owner) = self.owner.upgrade() else {
             return Err(LpcError::runtime(format!(
                 "attempted to call a function pointer whose owner is destructed: {}",
@@ -143,20 +144,22 @@ impl FunctionPtr {
         });
         Ok(Loader {
             func: "call_other".to_string(),
-            caller: owner,
+            callers: Caller::link(owner, callers),
             program,
         })
     }
 
     /// Resolve this pointer for a call with `passed` arguments: the receiver
     /// (a dynamic receiver is the first bound argument, created on a miss
-    /// through `ctx`), the function, and the bound arguments.
+    /// through `ctx` for the owner standing in `callers`), the function, and
+    /// the bound arguments.
     /// `Ok(None)`: a dynamic receiver has no function by this name, so the
     /// call yields `0` as `call_other` would.
     pub async fn prepare_call(
         &self,
         passed: &[LpcRef],
         ctx: &TaskContext,
+        callers: Callers,
     ) -> Result<Option<ResolvedCall>> {
         let txn = ctx.txn();
         let mut args = self.bound_args(passed);
@@ -199,9 +202,9 @@ impl FunctionPtr {
                                 )));
                             }
                             ObjectLookup::NotCreated => {
-                                let loader = self.loader(ctx.config().lib_dir.as_str())?;
+                                let loader = self.loader(ctx.config().lib_dir.as_str(), callers)?;
                                 let process = ctx.compile_process(&path, &loader).await?;
-                                ctx.insert_and_initialize(&process).await?;
+                                ctx.insert_and_initialize(loader.chain(), &process).await?;
                                 process
                             }
                         }

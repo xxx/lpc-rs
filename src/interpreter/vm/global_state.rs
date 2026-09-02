@@ -20,7 +20,7 @@ use crate::{
             Snapshot, WorldRoot, gc_pass, resolve_pointer_call,
         },
         task::{Task, apply_function::report_runtime_error, task_template::TaskTemplate},
-        task_context::TaskContext,
+        task_context::{Caller, TaskContext},
         vm::vm_op::VmOp,
     },
 };
@@ -173,16 +173,19 @@ impl GlobalState {
             ));
         };
         let Some(resolved) =
-            resolve_pointer_call(self, ptr, passed, seat, this_player.clone()).await?
+            resolve_pointer_call(self, ptr, passed, seat.clone(), this_player.clone()).await?
         else {
             return Ok(None);
         };
 
+        // The driver fires the pointer for its owner: that is who called.
+        let callers = Some(Caller::link(seat, None));
         let process = &resolved.process;
         if !self.is_initialized(process) {
             let template = TaskTemplate::from(self.clone());
             template.set_this_player(this_player.clone());
-            let ctx = template.into_task_context(process.clone());
+            let mut ctx = template.into_task_context(process.clone());
+            ctx.callers = callers.clone();
             if let Err(e) = Task::<MAX_CALL_STACK_SIZE>::initialize_process(ctx).await {
                 let template = TaskTemplate::from(self.clone());
                 report_runtime_error(&e, Some(process.clone()), template).await;
@@ -193,8 +196,10 @@ impl GlobalState {
         let mut template = TaskTemplate::from(self.clone());
         template.set_this_player(this_player);
         template.upvalue_ptrs = Some(ptr.upvalue_ptrs.clone());
+        let mut context = template.into_task_context(process.clone());
+        context.callers = callers;
         Ok(Some(PreparedCall {
-            context: template.into_task_context(process.clone()),
+            context,
             function: resolved.function,
             args: resolved.args,
         }))

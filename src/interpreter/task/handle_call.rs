@@ -199,9 +199,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        let new_frame = self
+        let mut new_frame = self
             .prepare_new_call_frame(simul_efuns.clone(), func)
             .await?;
+        new_frame.external = true;
 
         self.stack.push(new_frame)?;
 

@@ -119,6 +119,11 @@ pub struct CallFrame {
     /// pointer, which is the code the efun acts for.
     #[builder(default)]
     pub origin: Option<Arc<LpcPath>>,
+
+    /// Entered through a door — `->`, a pointer call, a simul efun — rather
+    /// than a local call: the frame below is what `previous_object` names.
+    #[builder(default)]
+    pub external: bool,
 }
 
 impl CallFrame {
@@ -187,6 +192,7 @@ impl CallFrame {
             ref_cells: ThinVec::new(),
             pending: None,
             origin: None,
+            external: false,
         };
 
         instance.populate_upvalues();

@@ -15,7 +15,7 @@ use crate::interpreter::{
     object_space::ObjectSpace,
     process::Process,
     stm::{Effect, TxnHandle},
-    task_context::{Loader, ObjectLookup, TaskContext},
+    task_context::{Caller, Loader, ObjectLookup, TaskContext},
 };
 
 /// A structure to hold various pieces of interpreter state, to be passed to
@@ -84,7 +84,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
         let loader = Loader {
             func,
-            caller: self.process().clone(),
+            callers: self.callers(),
             program: self.calling_program(),
         };
         let process = self
@@ -94,7 +94,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             .map_err(|e| self.loaded_from_here(e))?;
 
         self.task_context
-            .insert_and_initialize(&process)
+            .insert_and_initialize(loader.chain(), &process)
             .await
             .map_err(|e| self.loaded_from_here(e))?;
 
@@ -307,6 +307,21 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     #[inline]
     pub fn task_context(&self) -> &TaskContext {
         self.task_context
+    }
+
+    /// The objects that called through a door to reach the code running this
+    /// efun, innermost first: the stack's crossers, then the task's chain.
+    pub fn previous_objects(&self) -> impl Iterator<Item = &Arc<Process>> {
+        self.stack
+            .door_crossers(self.stack.len() - 1)
+            .chain(Caller::objects(&self.task_context.callers))
+    }
+
+    /// The chain a task this efun starts is entered with: the object running
+    /// it, and what `previous_object` answers there.
+    pub fn callers(&self) -> Arc<Caller> {
+        self.stack
+            .callers(self.stack.len() - 1, self.task_context.callers.clone())
     }
 
     /// Get a reference to the [`Process`] that contains the call to this efun

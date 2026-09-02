@@ -17,7 +17,16 @@ pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     };
 
     let received = match proc {
-        Some(proc) => deliver(context.task_context(), &proc, None, &msg).await?,
+        Some(proc) => {
+            deliver(
+                context.task_context(),
+                Some(context.callers()),
+                &proc,
+                None,
+                &msg,
+            )
+            .await?
+        }
         None => {
             context.record_effect(Effect::DebugLog(msg));
             false

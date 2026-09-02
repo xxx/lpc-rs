@@ -10,40 +10,54 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::{
     interpreter::{
-        CATCH_TELL, WARNING_HANDLER, function_type::function_ptr::FunctionPtr,
-        lpc_mapping::LpcMapping, lpc_ref::LpcRef, lpc_string::LpcString, process::Process,
-        stm::Effect, task::apply_function::apply_function, task_context::TaskContext,
+        CATCH_TELL, WARNING_HANDLER,
+        function_type::function_ptr::FunctionPtr,
+        lpc_mapping::LpcMapping,
+        lpc_ref::LpcRef,
+        lpc_string::LpcString,
+        process::Process,
+        stm::Effect,
+        task::apply_function::apply_function,
+        task_context::{Caller, Callers, TaskContext},
     },
     telnet::ops::ConnectionOp,
 };
 
-/// Apply `function` on `target`, joining `ctx`'s transaction; `this_player`
-/// is whatever it was.
+/// The chain a handler the driver runs for `actor` is entered with: the
+/// actor in front of `ctx`'s own.
+pub(crate) fn as_actor(ctx: &TaskContext, actor: &Arc<Process>) -> Callers {
+    Some(Caller::link(actor.clone(), ctx.callers.clone()))
+}
+
+/// Apply `function` on `target`, entered through `callers`, joining `ctx`'s
+/// transaction; `this_player` is whatever it was.
 pub(crate) async fn apply_nested(
     ctx: &TaskContext,
+    callers: Callers,
     target: &Arc<Process>,
     function: Arc<ProgramFunction>,
     args: &[LpcRef],
 ) -> Result<LpcRef> {
-    timed(ctx, ctx.nested(target.clone())?, function, args).await
+    timed(ctx, ctx.nested(callers, target.clone())?, function, args).await
 }
 
-/// Apply `function` on `target` with `this_player` set, joining `ctx`'s
-/// transaction.
+/// Apply `function` on `target` with `this_player` set, entered through
+/// `callers`, joining `ctx`'s transaction.
 pub(crate) async fn apply_on(
     ctx: &TaskContext,
+    callers: Callers,
     target: &Arc<Process>,
     this_player: &Arc<Process>,
     function: Arc<ProgramFunction>,
     args: &[LpcRef],
 ) -> Result<LpcRef> {
-    let nested = ctx.nested(target.clone())?;
+    let nested = ctx.nested(callers, target.clone())?;
     nested.this_player.store(Some(this_player.clone()));
     timed(ctx, nested, function, args).await
 }
 
-/// `target->name(args)` as `apply_on`; `None` when `target` does not define
-/// `name`.
+/// `target->name(args)` as `apply_on`, with `this_player` as the caller;
+/// `None` when `target` does not define `name`.
 pub(crate) async fn apply_hook(
     ctx: &TaskContext,
     target: &Arc<Process>,
@@ -54,22 +68,30 @@ pub(crate) async fn apply_hook(
     let Some(function) = target.program.unmangled_functions.get(name).cloned() else {
         return Ok(None);
     };
-    apply_on(ctx, target, this_player, function, args)
-        .await
-        .map(Some)
+    apply_on(
+        ctx,
+        as_actor(ctx, this_player),
+        target,
+        this_player,
+        function,
+        args,
+    )
+    .await
+    .map(Some)
 }
 
-/// Fire `pointer` as `actor` (`this_player` too) with `args`; `None` when
-/// the pointer no longer resolves.
+/// Fire `pointer` as `actor` (`this_player` and the caller too) with `args`;
+/// `None` when the pointer no longer resolves.
 pub(crate) async fn apply_pointer(
     ctx: &TaskContext,
     actor: &Arc<Process>,
     pointer: &FunctionPtr,
     args: &[LpcRef],
 ) -> Result<Option<LpcRef>> {
-    let handler_ctx = ctx.nested(actor.clone())?;
+    let callers = as_actor(ctx, actor);
+    let handler_ctx = ctx.nested(callers.clone(), actor.clone())?;
     handler_ctx.this_player.store(Some(actor.clone()));
-    let Some(resolved) = pointer.prepare_call(args, &handler_ctx).await? else {
+    let Some(resolved) = pointer.prepare_call(args, &handler_ctx, callers).await? else {
         return Ok(None);
     };
     timed(
@@ -82,10 +104,12 @@ pub(crate) async fn apply_pointer(
     .map(Some)
 }
 
-/// `name(args)` on the master, joining `ctx`'s transaction; `None` without
-/// a master or without the apply. The apply's error is the caller's.
+/// `name(args)` on the master, entered through `callers`, joining `ctx`'s
+/// transaction; `None` without a master or without the apply. The apply's
+/// error is the caller's.
 pub(crate) async fn master_apply(
     ctx: &TaskContext,
+    callers: Callers,
     name: &str,
     args: &[LpcRef],
 ) -> Result<Option<LpcRef>> {
@@ -95,23 +119,31 @@ pub(crate) async fn master_apply(
     let Some(function) = master.program.unmangled_functions.get(name).cloned() else {
         return Ok(None);
     };
-    apply_nested(ctx, &master, function, args).await.map(Some)
+    apply_nested(ctx, callers, &master, function, args)
+        .await
+        .map(Some)
 }
 
 /// The master's verdict on `name(args)`: truthiness of what it returns;
 /// `false` without a master or without the apply; the apply's error is the
 /// caller's.
-pub(crate) async fn valid_apply(ctx: &TaskContext, name: &str, args: &[LpcRef]) -> Result<bool> {
-    let verdict = master_apply(ctx, name, args).await?;
+pub(crate) async fn valid_apply(
+    ctx: &TaskContext,
+    callers: Callers,
+    name: &str,
+    args: &[LpcRef],
+) -> Result<bool> {
+    let verdict = master_apply(ctx, callers, name, args).await?;
     Ok(verdict.is_some_and(|v| v.is_truthy(ctx.txn())))
 }
 
-/// `message` to `target`: through `catch_tell` — applied with `this_player`
-/// set when one is given — else its connection, else the debug log, as
-/// effects; a destructed target is the log. Whether it was received; the
-/// log is not.
+/// `message` to `target`: through `catch_tell` — entered through `callers`,
+/// applied with `this_player` set when one is given — else its connection,
+/// else the debug log, as effects; a destructed target is the log. Whether
+/// it was received; the log is not.
 pub(crate) async fn deliver(
     ctx: &TaskContext,
+    callers: Callers,
     target: &Arc<Process>,
     this_player: Option<&Arc<Process>>,
     message: &str,
@@ -124,8 +156,8 @@ pub(crate) async fn deliver(
     if let Some(function) = target.program.unmangled_functions.get(CATCH_TELL).cloned() {
         let args = [LpcString::from(message).into()];
         match this_player {
-            Some(player) => apply_on(ctx, target, player, function, &args).await?,
-            None => apply_nested(ctx, target, function, &args).await?,
+            Some(player) => apply_on(ctx, callers, target, player, function, &args).await?,
+            None => apply_nested(ctx, callers, target, function, &args).await?,
         };
         return Ok(true);
     }
@@ -145,10 +177,11 @@ pub(crate) async fn deliver(
 }
 
 /// Each of `warnings`, raised compiling `file`, to the master's
-/// `warning_handler`, nested in `ctx`'s transaction; without the apply, to
-/// the debug log as effects.
+/// `warning_handler`, entered through `callers`, nested in `ctx`'s
+/// transaction; without the apply, to the debug log as effects.
 pub(crate) async fn report_warnings(
     ctx: &TaskContext,
+    callers: Callers,
     file: &LpcPath,
     warnings: Vec<LpcError>,
 ) -> Result<()> {
@@ -167,7 +200,7 @@ pub(crate) async fn report_warnings(
             continue;
         };
         let mapping = warning_mapping(ctx, file, &warning);
-        apply_nested(ctx, master, function.clone(), &[mapping]).await?;
+        apply_nested(ctx, callers.clone(), master, function.clone(), &[mapping]).await?;
     }
     Ok(())
 }

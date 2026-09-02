@@ -61,7 +61,7 @@ pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> 
     let has_preposition_slot = array_lists.iter().any(Option::is_some);
     // The resolver's borrow of the task context must end before `context` writes the registers.
     let (found, in_force) = {
-        let vocabulary = LpcVocabulary::new(context.task_context(), scope);
+        let vocabulary = LpcVocabulary::new(context.task_context(), Some(context.callers()), scope);
         let mut resolver = Resolver::new(vocabulary, callers_list);
         // Boxed to stay out of `call_efun`'s unboxed future union, which every
         // efun call pays for.

@@ -22,7 +22,16 @@ pub(crate) async fn tell_this_player<const N: usize>(
     msg: &str,
 ) -> Result<bool> {
     match context.this_player().load_full() {
-        Some(player) => deliver(context.task_context(), &player, None, msg).await,
+        Some(player) => {
+            deliver(
+                context.task_context(),
+                Some(context.callers()),
+                &player,
+                None,
+                msg,
+            )
+            .await
+        }
         None => {
             context.record_effect(Effect::DebugLog(msg.to_owned()));
             Ok(false)

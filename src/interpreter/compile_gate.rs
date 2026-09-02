@@ -9,7 +9,10 @@ use lpc_rs_errors::Result;
 use crate::{
     compiler::compile_gate::CompileGate,
     interpreter::{
-        VALID_INHERIT, VALID_READ, apply::valid_apply, lpc_ref::LpcRef, task_context::TaskContext,
+        VALID_INHERIT, VALID_READ,
+        apply::valid_apply,
+        lpc_ref::LpcRef,
+        task_context::{Callers, TaskContext},
     },
 };
 
@@ -18,16 +21,21 @@ use crate::{
 #[derive(Debug)]
 pub(crate) struct MasterGate {
     ctx: TaskContext,
+    /// The chain the asking code stood in.
+    callers: Callers,
 }
 
 impl MasterGate {
-    /// The gate for compiles `ctx` triggers.
+    /// The gate for compiles `ctx` triggers through `callers`.
     #[expect(
         clippy::new_ret_no_self,
         reason = "callers only ever want the trait object"
     )]
-    pub(crate) fn new(ctx: &TaskContext) -> Arc<dyn CompileGate> {
-        Arc::new(Self { ctx: ctx.clone() })
+    pub(crate) fn new(ctx: &TaskContext, callers: Callers) -> Arc<dyn CompileGate> {
+        Arc::new(Self {
+            ctx: ctx.clone(),
+            callers,
+        })
     }
 }
 
@@ -36,6 +44,7 @@ impl CompileGate for MasterGate {
     async fn inherit(&self, path: &str, from: &str) -> Result<bool> {
         valid_apply(
             &self.ctx,
+            self.callers.clone(),
             VALID_INHERIT,
             &[LpcRef::from(path), LpcRef::from(from)],
         )
@@ -45,6 +54,7 @@ impl CompileGate for MasterGate {
     async fn include(&self, path: &str, from: &str) -> Result<bool> {
         valid_apply(
             &self.ctx,
+            self.callers.clone(),
             VALID_READ,
             &[
                 LpcRef::from(path),
@@ -104,7 +114,7 @@ mod tests {
             .context
             .process;
         let ctx = seated(&vm).await;
-        let gate = MasterGate::new(&ctx);
+        let gate = MasterGate::new(&ctx, None);
         assert!(gate.inherit("/parent.c", "/child.c").await.unwrap());
         assert_eq!(committed_string(&vm, &master, 0), "/parent.c");
         assert_eq!(committed_string(&vm, &master, 1), "/child.c");
@@ -122,7 +132,7 @@ mod tests {
             .context
             .process;
         let ctx = seated(&vm).await;
-        let gate = MasterGate::new(&ctx);
+        let gate = MasterGate::new(&ctx, None);
         assert!(!gate.include("/secret.h", "/a.h").await.unwrap());
         assert_eq!(committed_string(&vm, &master, 2), "/secret.h");
         assert_eq!(committed_string(&vm, &master, 3), "include");
@@ -138,7 +148,7 @@ mod tests {
         let root = TempLib::new("master-gate-none");
         let vm = Vm::new(temp_lib_config(&root));
         let ctx = seated(&vm).await;
-        let gate = MasterGate::new(&ctx);
+        let gate = MasterGate::new(&ctx, None);
         assert!(!gate.inherit("/parent.c", "/child.c").await.unwrap());
         assert!(!gate.include("/h.h", "/child.c").await.unwrap());
     }

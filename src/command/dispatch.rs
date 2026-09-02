@@ -9,7 +9,7 @@ use crate::{
     command::trial,
     interpreter::{
         COMMAND_NOT_FOUND, PROCESS_INPUT,
-        apply::{apply_hook, apply_pointer, deliver},
+        apply::{apply_hook, apply_pointer, as_actor, deliver},
         function_type::function_ptr::FunctionPtr,
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
@@ -69,7 +69,7 @@ pub(crate) async fn dispatch_from_connection(
         return Ok(Outcome::Handled);
     }
     let message = default_message(ctx, &actor);
-    deliver(ctx, &actor, Some(&actor), &message).await?;
+    deliver(ctx, as_actor(ctx, &actor), &actor, Some(&actor), &message).await?;
     Ok(Outcome::Unhandled)
 }
 
@@ -105,7 +105,7 @@ async fn fallback(ctx: &TaskContext, actor: &Arc<Process>, line: &str) -> Result
         None => master_message(ctx, actor, line).await?,
     };
     if let Some(message) = message {
-        deliver(ctx, actor, Some(actor), &message).await?;
+        deliver(ctx, as_actor(ctx, actor), actor, Some(actor), &message).await?;
     }
     Ok(())
 }

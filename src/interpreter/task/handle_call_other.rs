@@ -62,7 +62,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 } else {
                     debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
                     // The callee returns through `pop_frame!`'s `copy_result`.
-                    let frame = self.prepare_new_call_frame(receiver, function).await?;
+                    let mut frame = self.prepare_new_call_frame(receiver, function).await?;
+                    frame.external = true;
                     self.stack.push(frame)?;
                     return Ok(());
                 }
@@ -231,15 +232,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         for (i, arg) in args.into_iter().enumerate() {
             frame.push_arg(&self.context.txn, i, arg)?;
         }
+        frame.external = true;
         Ok(Some(frame))
     }
 
     /// The identity a `->` from the current frame loads under.
     fn loader(&self) -> Result<Loader> {
-        let frame = self.stack.current_frame()?;
         Ok(Loader {
             func: "call_other".to_string(),
-            caller: frame.process.clone(),
+            callers: self.callers()?,
             program: self
                 .stack
                 .calling_program(self.context.config().lib_dir.as_str()),
@@ -257,15 +258,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ) -> Result<Option<Arc<Process>>>
     where
         T: AsRef<str>,
-        L: FnOnce() -> Result<Loader>,
+        L: Fn() -> Result<Loader>,
     {
-        let (process, just_created) = match receiver_ref {
+        let (process, created_by) = match receiver_ref {
             LpcRef::String(_) => {
                 let path = receiver_ref
                     .with_string(|s| context.object_path(s.to_str(), "/", "call_other"))??;
 
                 match context.find_object(&path) {
-                    ObjectLookup::Found(proc) => (proc, false),
+                    ObjectLookup::Found(proc) => (proc, None),
                     // A destructed object: don't create (that would resurrect
                     // it); the call below short-circuits.
                     ObjectLookup::Removed => return Ok(None),
@@ -273,12 +274,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     ObjectLookup::NotCreated => {
                         let loader = loader()?;
                         let process = context.compile_process(&path, &loader).await?;
-                        (process, true)
+                        (process, Some(loader))
                     }
                 }
             }
             LpcRef::Object(_) => match receiver_ref.live_object(context.txn()) {
-                Some(proc) => (proc, false),
+                Some(proc) => (proc, None),
                 None => return Ok(None),
             },
             _ => return Ok(None),
@@ -288,12 +289,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // of whether the function exists or not, because this is a primary way of
         // initializing objects. If you've ever seen a call_other to some knowingly
         // undefined function in old lib code, this is why.
-        let result = if just_created {
+        let result = if let Some(loader) = created_by {
             // This call created it, so a throwing initializer undoes the insert.
-            context.insert_and_initialize(&process).await?;
+            context
+                .insert_and_initialize(loader.chain(), &process)
+                .await?;
             process
         } else if !process.is_initialized(context.txn()) {
-            Self::initialize_process(context.nested(process)?)
+            Self::initialize_process(context.nested(loader()?.chain(), process)?)
                 .await?
                 .context
                 .process
