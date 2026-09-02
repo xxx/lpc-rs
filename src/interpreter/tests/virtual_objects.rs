@@ -542,4 +542,45 @@ mod rollback {
             .collect();
         assert!(!keys.iter().any(|k| k.starts_with("/d/worse#")), "{keys:?}");
     }
+
+    /// A corridor of rooms whose `create()` loads the next, deep enough to
+    /// cross `MAX_TASK_CHAIN`: the refusal must not leave the over-the-limit
+    /// room inserted (the regression `insert_and_initialize` fixed).
+    #[tokio::test]
+    async fn a_load_past_the_chain_depth_leaves_the_refused_room_absent() {
+        use crate::compile_time_config::MAX_TASK_CHAIN;
+
+        let (root, vm, _master) = instancing_lib("virt-chain-depth").await;
+        let depth = MAX_TASK_CHAIN as usize;
+        for i in 1..=depth {
+            write(
+                &root,
+                &format!("d/r{i}.c"),
+                &format!("void create() {{ move_object(\"/d/r{}\"); }}\n", i + 1),
+            );
+        }
+        write(&root, &format!("d/r{}.c", depth + 1), "void create() {}\n");
+        let a = run(
+            &vm,
+            "/a.c",
+            r#"string e; void create() { e = catch(move_object("/d/r1")); }"#,
+        )
+        .await;
+        let e = committed_string(&vm, &a, 0);
+        assert!(
+            e.contains(&format!("nested task depth of {MAX_TASK_CHAIN} exceeded")),
+            "{e}"
+        );
+        // No room catches the load it makes, so the refusal unwinds every
+        // level's own insert, not only the over-the-limit one.
+        for i in 1..=depth + 1 {
+            assert!(
+                vm.global_state
+                    .object_space
+                    .lookup(format!("/d/r{i}"))
+                    .is_none(),
+                "/d/r{i} must not be left resident"
+            );
+        }
+    }
 }

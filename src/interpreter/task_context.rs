@@ -359,15 +359,15 @@ impl TaskContext {
 
     /// The one insert-and-initialize door every load site shares: insert
     /// `process` transactionally, then run its initializer in a nested task
-    /// riding this attempt. A throwing initializer undoes the insert and its
-    /// error returns unchanged, so nothing surfaces under the object's key.
+    /// riding this attempt. Any failure — a refused nested task or a
+    /// throwing initializer — leaves nothing under the object's key, and the
+    /// error returns unchanged.
     pub async fn insert_and_initialize(&self, process: &Arc<Process>) -> Result<()> {
+        // `nested` is resolved before the insert: a depth refusal here must
+        // not leave an inserted, never-initialized object behind.
+        let nested = self.nested(process.clone())?;
         self.insert_process_transactional(process);
-        if let Err(e) = Box::pin(Task::<MAX_CALL_STACK_SIZE>::initialize_process(
-            self.nested(process.clone())?,
-        ))
-        .await
-        {
+        if let Err(e) = Box::pin(Task::<MAX_CALL_STACK_SIZE>::initialize_process(nested)).await {
             txn_undo_insert(self.txn(), self.object_space(), process);
             return Err(e);
         }
