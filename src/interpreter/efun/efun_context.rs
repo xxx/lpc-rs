@@ -11,13 +11,13 @@ use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,
     lpc_array::LpcArray,
-    lpc_ref::{LpcRef, NULL},
+    lpc_ref::LpcRef,
     object_space::ObjectSpace,
     process::Process,
     program::Program,
     stm::{Effect, TxnHandle},
     task::Task,
-    task_context::{ObjectLookup, TaskContext},
+    task_context::{Loader, ObjectLookup, TaskContext},
 };
 
 /// A structure to hold various pieces of interpreter state, to be passed to
@@ -72,17 +72,28 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
     }
 
-    /// Find or initialize an object by path.
-    /// Transactional: a new object gets a cell write and deferred physical
-    /// insert, and its initializer runs in a sub-task that joins this
-    /// transaction's commit.
-    pub async fn load_object(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        if let ObjectLookup::Found(proc) = self.find_object(path) {
+    /// Find or load the object `arg` names, resolved against the caller's
+    /// directory. Loading is transactional: the master's `valid_load` is
+    /// asked, a new object gets a cell write and deferred physical insert,
+    /// and its initializer runs in a sub-task that joins this transaction.
+    pub async fn load_object(&self, arg: &str) -> Result<Arc<Process>> {
+        let func = self.frame().function.name().to_string();
+        let path = self
+            .task_context
+            .object_path(arg, self.in_game_cwd(), &func)
+            .map_err(|e| e.with_span(self.call_site_span()))?;
+        if let ObjectLookup::Found(proc) = self.find_object(&path) {
             return Ok(proc);
         }
 
+        let loader = Loader {
+            func,
+            caller: self.process().clone(),
+            program: self.calling_program(),
+        };
         let process = self
-            .compile_process(path)
+            .task_context
+            .compile_process(&path, &loader)
             .await
             .map_err(|e| self.loaded_from_here(e))?;
 
@@ -246,14 +257,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.task_context.find_object(path)
     }
 
-    /// Create a [`Process`] from `path`, compiling the file but *without*
-    /// inserting it physically. The transactional caller performs the (cell +
-    /// deferred-physical) insert, so the object is not physically visible
-    /// until its transaction commits.
-    pub async fn compile_process(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        self.task_context.compile_process(path).await
-    }
-
     /// Insert an object transactionally (cell write + deferred physical
     /// insert). Delegates to [`TaskContext::insert_process_transactional`].
     pub(crate) fn insert_process_transactional(&self, process: &Arc<Process>) {
@@ -341,17 +344,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// extension (`/secure/master.c`); `NULL` when there is none (an efun
     /// pointer fired as a task's entry).
     pub(crate) fn calling_program(&self) -> LpcRef {
-        let lib_dir = self.config().lib_dir.as_str();
-        let render = |path: &LpcPath| LpcRef::from(path.as_in_game(lib_dir).display().to_string());
-        for frame in self.stack.iter().rev() {
-            if !frame.function.prototype.is_efun() {
-                return render(&frame.function.prototype.filename);
-            }
-            if let Some(origin) = &frame.origin {
-                return render(origin);
-            }
-        }
-        NULL
+        self.stack.calling_program(self.config().lib_dir.as_str())
     }
 
     /// Get a reference to `this_player` from the context
@@ -436,6 +429,7 @@ mod tests {
     #[tokio::test]
     async fn destruct_and_recreate_cycles_yield_fresh_objects() {
         let (task_context, mut stack) = efun_context();
+        crate::test_support::permissive_master(&task_context.global_state.object_space).await;
         let ctx = EfunContext::new(&mut stack, &task_context);
 
         let path = LpcPath::new_in_game(
@@ -446,7 +440,7 @@ mod tests {
 
         // Baseline: create once, and a second find (no destruct in between)
         // returns the same object.
-        let p1 = ctx.load_object(&path).await.expect("first create");
+        let p1 = ctx.load_object("/example").await.expect("first create");
         let ObjectLookup::Found(p1b) = ctx.find_object(&path) else {
             panic!("second find, no destruct, should be Found");
         };
@@ -460,7 +454,7 @@ mod tests {
         // still hold `p1` (the effects haven't landed).
         ctx.remove_process(p1.clone());
         let p2 = ctx
-            .load_object(&path)
+            .load_object("/example")
             .await
             .expect("re-create after destruct");
         assert!(
@@ -470,7 +464,7 @@ mod tests {
 
         // Cycle 2: the same sequence again; all three identities distinct.
         ctx.remove_process(p2.clone());
-        let p3 = ctx.load_object(&path).await.expect("second re-create");
+        let p3 = ctx.load_object("/example").await.expect("second re-create");
         assert!(
             !Arc::ptr_eq(&p2, &p3) && !Arc::ptr_eq(&p1, &p3),
             "second re-create must be a fresh object, distinct from both predecessors"

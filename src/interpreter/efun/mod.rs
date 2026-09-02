@@ -570,10 +570,7 @@ async fn arg_or_this_object<const N: usize>(
 ) -> Result<Option<Arc<Process>>> {
     Ok(match arg_ref {
         LpcRef::Int(LpcInt(0)) => Some(context.frame().process.clone()),
-        LpcRef::String(path) => {
-            let path = context.in_game_path(path.to_str());
-            Some(context.load_object(&path).await?)
-        }
+        LpcRef::String(path) => Some(context.load_object(path.to_str()).await?),
         _ => arg_ref.live_object(context.txn()),
     })
 }

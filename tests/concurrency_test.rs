@@ -13,13 +13,15 @@ use lpc_rs_errors::Result;
 use lpc_rs_utils::config::Config;
 use tokio::{sync::Barrier, task::JoinSet};
 
-use crate::support::test_config_builder;
+use crate::support::{permissive_master, test_config_builder};
 
 #[allow(dead_code)]
 mod support;
 
 pub async fn boot_vm(config: Config) -> Vm {
-    Vm::new(config)
+    let vm = Vm::new(config);
+    permissive_master(&vm.global_state.object_space).await;
+    vm
 }
 
 pub fn race_config() -> Config {

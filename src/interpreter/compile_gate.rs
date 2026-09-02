@@ -22,7 +22,6 @@ pub(crate) struct MasterGate {
 
 impl MasterGate {
     /// The gate for compiles `ctx` triggers.
-    #[cfg_attr(not(test), expect(dead_code))]
     #[expect(
         clippy::new_ret_no_self,
         reason = "callers only ever want the trait object"

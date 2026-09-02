@@ -1,7 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use itertools::Itertools;
-use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, register::RegisterVariant};
+use lpc_rs_core::{RegisterSize, register::RegisterVariant};
 use lpc_rs_errors::Result;
 use tracing::{instrument, trace};
 
@@ -13,7 +13,7 @@ use crate::interpreter::{
     process::Process,
     stm::VarId,
     task::{Arg, Task, get_location},
-    task_context::{ObjectLookup, TaskContext},
+    task_context::{Loader, ObjectLookup, TaskContext},
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
@@ -41,9 +41,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let result = match &receiver_ref {
             LpcRef::String(_) | LpcRef::Object(_) => {
-                let resolved =
-                    Self::resolve_call_other_receiver(&receiver_ref, &function_name, &self.context)
-                        .await?;
+                let loader = self.loader()?;
+                let resolved = Self::resolve_call_other_receiver(
+                    &receiver_ref,
+                    &function_name,
+                    &self.context,
+                    &loader,
+                )
+                .await?;
                 let Some(receiver) = resolved else {
                     self.stack.current_frame_mut()?.registers[0] = NULL;
                     return Ok(());
@@ -192,8 +197,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         receiver: &LpcRef,
         name: &str,
     ) -> Result<Option<CallFrame>> {
+        let loader = self.loader()?;
         let Some(process) =
-            Self::resolve_call_other_receiver(receiver, name, &self.context).await?
+            Self::resolve_call_other_receiver(receiver, name, &self.context, &loader).await?
         else {
             return Ok(None);
         };
@@ -229,18 +235,32 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(Some(frame))
     }
 
+    /// The identity a `->` from the current frame loads under.
+    fn loader(&self) -> Result<Loader> {
+        let frame = self.stack.current_frame()?;
+        Ok(Loader {
+            func: "call_other".to_string(),
+            caller: frame.process.clone(),
+            program: self
+                .stack
+                .calling_program(self.context.config().lib_dir.as_str()),
+        })
+    }
+
     #[instrument(level = "debug", skip_all)]
     async fn resolve_call_other_receiver<T>(
         receiver_ref: &LpcRef,
         name: T,
         context: &TaskContext,
+        loader: &Loader,
     ) -> Result<Option<Arc<Process>>>
     where
         T: AsRef<str>,
     {
         let process = match receiver_ref {
             LpcRef::String(_) => {
-                let path = receiver_ref.with_string(|s| LpcPath::InGame(PathBuf::from(s)))?;
+                let path = receiver_ref
+                    .with_string(|s| context.object_path(s.to_str(), "/", "call_other"))??;
 
                 match context.find_object(&path) {
                     ObjectLookup::Found(proc) => proc,
@@ -249,7 +269,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     ObjectLookup::Removed => return Ok(None),
                     // NotCreated: create-on-miss, transactionally.
                     ObjectLookup::NotCreated => {
-                        let process = context.compile_process(&path).await?;
+                        let process = context.compile_process(&path, loader).await?;
                         context.insert_process_transactional(&process);
                         process
                     }

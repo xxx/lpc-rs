@@ -512,7 +512,10 @@ mod test_instructions {
         use claims::assert_ok;
 
         use super::*;
-        use crate::{interpreter::vm::Vm, test_support::test_config};
+        use crate::{
+            interpreter::vm::Vm,
+            test_support::{permissive_master, test_config},
+        };
 
         #[tokio::test]
         async fn stores_the_value() {
@@ -692,6 +695,7 @@ mod test_instructions {
                 "##};
 
             let vm = Vm::new(test_config());
+            permissive_master(&vm.global_state.object_space).await;
             let task = vm
                 .initialize_process_from_code("doody.c", code)
                 .await

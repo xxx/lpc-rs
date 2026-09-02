@@ -223,7 +223,7 @@ mod tests {
             stm::{GcRefused, start_txn},
             task::apply_function::apply_function_by_name,
         },
-        test_support::test_config,
+        test_support::{permissive_master, test_config},
     };
 
     /// Closures held only by another object's committed global keep their
@@ -302,6 +302,7 @@ mod tests {
     #[tokio::test]
     async fn gc_reclaims_a_destructed_objects_globals() {
         let vm = Vm::new(test_config());
+        permissive_master(&vm.global_state.object_space).await;
         let code = indoc! { r#"
             void create() {
                 object o = clone_object("/ptr_target");
@@ -485,6 +486,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_destruct_cycles_one_transaction() {
         let vm = Vm::new(test_config());
+        permissive_master(&vm.global_state.object_space).await;
 
         let code = indoc! { r##"
             mixed *create() {

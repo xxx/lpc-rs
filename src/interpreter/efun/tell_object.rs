@@ -11,8 +11,7 @@ pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         .with_string(|s| s.to_string())?;
     let ob_ref = context.resolve_local_register(1 as RegisterSize);
     let proc = if let Some(path) = ob_ref.as_str() {
-        let path = context.in_game_path(path);
-        Some(context.load_object(&path).await?)
+        Some(context.load_object(path).await?)
     } else {
         ob_ref.live_object(context.txn())
     };

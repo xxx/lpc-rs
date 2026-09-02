@@ -25,7 +25,7 @@ mod tests {
 
     use crate::{
         interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
-        test_support::test_config,
+        test_support::{permissive_master, test_config},
     };
 
     #[tokio::test]
@@ -72,6 +72,7 @@ mod tests {
         "# };
 
         let vm = Vm::new(test_config());
+        permissive_master(&vm.global_state.object_space).await;
         let error = vm
             .initialize_process_from_code("/master.c", master)
             .await

@@ -30,7 +30,7 @@ pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
             );
         }
         LpcRef::String(_) => {
-            let path = arg_ref.with_string(|string| context.in_game_path(string.to_str()))?;
+            let path = arg_ref.with_string(|s| s.to_string())?;
 
             context.load_object(&path).await?
         }

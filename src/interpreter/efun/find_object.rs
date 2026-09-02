@@ -13,13 +13,10 @@ use crate::interpreter::{
 pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let lpc_ref = context.resolve_local_register(1 as RegisterSize);
     let result = match lpc_ref.as_str() {
-        Some(path) => {
-            let path = context.in_game_path(path);
-            match context.load_object(&path).await {
-                Ok(proc) => LpcRef::from(Arc::downgrade(&proc)),
-                Err(_) => NULL,
-            }
-        }
+        Some(path) => match context.load_object(path).await {
+            Ok(proc) => LpcRef::from(Arc::downgrade(&proc)),
+            Err(_) => NULL,
+        },
         None => NULL,
     };
 
@@ -46,7 +43,7 @@ mod tests {
             task_context::TaskContext,
             vm::{Vm, global_state::GlobalState, vm_op::VmOp},
         },
-        test_support::{compile_prog, test_config},
+        test_support::{compile_prog, permissive_master, test_config},
     };
 
     fn task_context_fixture(
@@ -123,6 +120,7 @@ mod tests {
         "# };
 
         let vm = Vm::new(test_config());
+        permissive_master(&vm.global_state.object_space).await;
 
         let master_proc = vm
             .initialize_process_from_code("/master.c", master)
@@ -158,6 +156,7 @@ mod tests {
         let (program, config, _) = compile_prog(code).await;
         let func = program.initializer.clone().expect("no init found?");
         let context = task_context_fixture(program, config, tx);
+        permissive_master(context.object_space()).await;
 
         let mut task = Task::<10>::new(context.clone());
         task.timed_eval(func.clone(), &[], 500)
