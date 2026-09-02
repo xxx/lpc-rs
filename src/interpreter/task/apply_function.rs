@@ -176,6 +176,30 @@ pub async fn apply_runtime_error(
     Some(apply_function_seeded(error_handler, args, ctx, Some(300)).await)
 }
 
+/// Report an uncaught runtime `error` in `proc` to the master's
+/// `error_handler`, or to the debug log when the master has none or the
+/// handler itself throws.
+pub async fn report_runtime_error(
+    error: &LpcError,
+    proc: Option<Arc<Process>>,
+    template: TaskTemplate,
+) {
+    let config = template.global_state.config.clone();
+    match apply_runtime_error(error, proc, template).await {
+        Some(Ok(_)) => {}
+        None => config.debug_log(error.diagnostic_string()).await,
+        Some(Err(handler_error)) => {
+            config.debug_log(error.diagnostic_string()).await;
+            config
+                .debug_log(format!(
+                    "error_handler failed: {}",
+                    handler_error.diagnostic_string()
+                ))
+                .await;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
