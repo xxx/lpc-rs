@@ -270,6 +270,54 @@ mod doors {
         assert_eq!(committed_string(&vm, &master, SEEN_PROGRAM), "/w.c");
     }
 
+    /// `call_out(papplyv(&->f(), ({ "/x" })), ...)` resolves its receiver before any task runs;
+    /// the load still answers to the pointer's writer.
+    #[tokio::test]
+    async fn a_pointer_fired_from_call_out_loads_for_its_writer() {
+        let root = TempLib::new("door-pointer-call-out");
+        let vm = Vm::new(temp_lib_config(&root));
+        let master = recording_master(&vm, &root).await;
+        run(
+            &vm,
+            "/w.c",
+            r#"void create() { call_out(papplyv(&->f(), ({ "/x" })), 100); }"#,
+        )
+        .await;
+        let gs = vm.global_state.clone();
+        let id = gs.with_call_outs(|co| co.queue().iter().next().unwrap().1.id);
+        gs.prioritize_call_out(id).await.await.unwrap();
+        assert_eq!(committed_string(&vm, &master, SEEN_PATH), "/x.c");
+        assert_eq!(committed_string(&vm, &master, SEEN_FUNC), "call_other");
+        assert_eq!(committed_string(&vm, &master, SEEN_CALLER), "/w");
+        assert_eq!(committed_string(&vm, &master, SEEN_PROGRAM), "/w.c");
+        assert!(vm.global_state.object_space.lookup("/x").is_some());
+    }
+
+    #[tokio::test]
+    async fn a_refused_call_out_receiver_stays_unloaded() {
+        let root = lib_with_x("door-pointer-call-out-deny");
+        let vm = Vm::new(temp_lib_config(&root));
+        run(
+            &vm,
+            "/secure/master.c",
+            r#"int valid_load(string p, string f, object c, string g) { return 0; }"#,
+        )
+        .await;
+        run(
+            &vm,
+            "/w.c",
+            r#"void create() { call_out(papplyv(&->f(), ({ "/x" })), 100); }"#,
+        )
+        .await;
+        let gs = vm.global_state.clone();
+        let id = gs.with_call_outs(|co| co.queue().iter().next().unwrap().1.id);
+        let outcome = gs.prioritize_call_out(id).await.await;
+        assert!(vm.global_state.object_space.lookup("/x").is_none());
+        // Whether the firing reports the refusal as an error or logs it is the
+        // call-out path's business.
+        let _ = outcome;
+    }
+
     #[tokio::test]
     async fn a_resident_prototype_is_cloned_without_asking() {
         let root = TempLib::new("door-resident");

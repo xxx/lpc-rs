@@ -13,11 +13,16 @@ use parking_lot::RwLock;
 use crate::{
     command::registry::RuleList,
     interpreter::{
-        lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, object_space::ObjectSpace,
-        process::Process, task_context::ObjectLookup, vm::global_state::GlobalState,
+        lpc_array::LpcArray,
+        lpc_mapping::LpcMapping,
+        lpc_ref::LpcRef,
+        object_space::ObjectSpace,
+        process::Process,
+        task::task_template::TaskTemplate,
+        task_context::{Loader, ObjectLookup},
+        vm::global_state::GlobalState,
     },
     telnet::connection::Connection,
-    util::process_builder::compile_process_from_path,
 };
 
 mod backoff;
@@ -492,16 +497,19 @@ pub(crate) fn txn_insert_process(
 }
 
 /// Resolve an object path in its own short-lived transaction: find, or on a
-/// miss compile and insert, committed (with the physical insert flushed)
-/// before this returns. A rejected commit means a concurrent writer to the
-/// same cell committed first; the next round finds the winner.
+/// miss ask `valid_load` for `loader`, compile and insert, committed (with the
+/// physical insert flushed) before this returns. A rejected commit means a
+/// concurrent writer to the same cell committed first; the next round finds
+/// the winner.
 pub(crate) async fn resolve_or_create_object(
-    gs: &GlobalState,
+    gs: &Arc<GlobalState>,
     path: &LpcPath,
+    loader: &Loader,
 ) -> Result<Arc<Process>> {
     let mut body = ResolveObjectBody {
         gs,
         path,
+        loader,
         txn: None,
         process: None,
     };
@@ -519,10 +527,11 @@ pub(crate) async fn resolve_or_create_object(
 }
 
 /// One attempt of [`resolve_or_create_object`]: a find hit has nothing to
-/// commit; a miss compiles, inserts, and commits.
+/// commit; a miss asks `valid_load`, compiles, inserts, and commits.
 struct ResolveObjectBody<'a> {
-    gs: &'a GlobalState,
+    gs: &'a Arc<GlobalState>,
     path: &'a LpcPath,
+    loader: &'a Loader,
     txn: Option<TxnHandle>,
     process: Option<Arc<Process>>,
 }
@@ -542,10 +551,14 @@ impl AttemptBody for ResolveObjectBody<'_> {
             return Ok(None);
         }
 
-        let (process, warnings) = compile_process_from_path(object_space, self.path, None).await?;
-        for warning in warnings {
-            txn.with(|t| t.record_effect(Effect::DebugLog(warning.diagnostic_string())));
-        }
+        // The verdict and the create commit together: the apply joins this
+        // attempt's transaction.
+        let ctx = {
+            let mut template = TaskTemplate::from(self.gs.clone());
+            template.txn = txn.clone();
+            template.into_task_context(self.loader.caller.clone())
+        };
+        let process = ctx.compile_process(self.path, self.loader).await?;
         txn_insert_process(&txn, object_space, &process);
         self.process = Some(process);
         self.txn = Some(txn);

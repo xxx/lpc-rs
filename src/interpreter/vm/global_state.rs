@@ -1,6 +1,5 @@
-use std::{path::PathBuf, sync::Arc, thread::JoinHandle, time::Duration};
+use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
-use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{Result, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
@@ -21,7 +20,7 @@ use crate::{
             Snapshot, WorldRoot, gc_pass, resolve_or_create_object,
         },
         task::{Task, apply_function::apply_runtime_error, task_template::TaskTemplate},
-        task_context::TaskContext,
+        task_context::{TaskContext, confine_object_path},
         vm::vm_op::VmOp,
     },
 };
@@ -214,18 +213,16 @@ impl GlobalState {
         }))
     }
 
-    /// Resolve the receiver of a dynamic function pointer whose first partial
-    /// argument is an object path as a string (`call_out` / `input_to` targets).
-    ///
-    /// Runs the cell-first find + create-on-miss in its own short-lived
-    /// transaction (committed before this returns). A committed-but-unflushed
-    /// destruct is an error, not a resurrection.
+    /// Resolve `ptr`'s receiver for a call started outside any task
+    /// (`call_out`, `input_to`), through `valid_load` for the pointer's writer.
+    /// A create-on-miss goes through the committer, and a destruct in the
+    /// committed-unflushed window is an error instead of a resurrection.
     ///
     /// Returns `Ok(None)` when `ptr` is not a dynamic string receiver (a
     /// different address kind, or a missing / non-string first partial arg);
     /// the caller falls through to [`FunctionPtr::prepare_call`].
     pub async fn resolve_dynamic_string_receiver(
-        &self,
+        self: &Arc<Self>,
         ptr: &FunctionPtr,
     ) -> Result<Option<Arc<Process>>> {
         let FunctionAddress::Dynamic(_) = &ptr.address else {
@@ -237,9 +234,10 @@ impl GlobalState {
         let LpcRef::String(_) = &first else {
             return Ok(None);
         };
-        let path_buf = first.with_string(|s| PathBuf::from(s.to_str()))?;
-        let path = LpcPath::InGame(path_buf);
-        Ok(Some(resolve_or_create_object(self, &path).await?))
+        let path = first
+            .with_string(|s| confine_object_path(&self.config, s.to_str(), "/", "call_other"))??;
+        let loader = ptr.loader(self.config.lib_dir.as_str())?;
+        Ok(Some(resolve_or_create_object(self, &path, &loader).await?))
     }
 
     /// One GC pass, atomic on the committer: mark the world from the live
@@ -343,7 +341,7 @@ mod tests {
                 CommittedReader, Transaction, TxnHandle, commit_changeset, flush_effects, start_txn,
             },
         },
-        test_support::test_config,
+        test_support::{permissive_master, test_config},
         util::process_builder::{compile_process_from_code, process_insert_and_initialize_program},
     };
     use lpc_rs_core::lpc_path::LpcPath;
@@ -372,10 +370,11 @@ mod tests {
         Arc::new(GlobalState::new(test_config(), tx))
     }
 
-    /// A `FunctionPtr` whose dynamic receiver is the string at `path`.
-    fn string_receiver_ptr(path: &str) -> FunctionPtr {
+    /// A `&->foo(path)` pointer owned by `owner`.
+    fn string_receiver_ptr(path: &str, owner: &Arc<Process>) -> FunctionPtr {
         FunctionPtrBuilder::default()
             .address(FunctionAddress::Dynamic(ustr("foo")))
+            .owner(Arc::downgrade(owner))
             .partial_args(thin_vec![Some(LpcRef::String(Arc::new(
                 path.to_string().into()
             )))])
@@ -415,6 +414,7 @@ mod tests {
     #[tokio::test]
     async fn string_receiver_finds_committed() {
         let gs = state_for_receiver();
+        let master = permissive_master(&gs.object_space).await;
         let process = Arc::new(Process::new(
             crate::interpreter::program::ProgramBuilder::default()
                 .filename(LpcPath::InGame(std::path::PathBuf::from(
@@ -426,7 +426,7 @@ mod tests {
         commit_object_cell(&gs, process.clone()).await.unwrap();
 
         let got = gs
-            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver"))
+            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver", &master))
             .await
             .unwrap()
             .expect("a committed string receiver should resolve");
@@ -441,6 +441,7 @@ mod tests {
     #[tokio::test]
     async fn string_receiver_finds_physical_only() {
         let gs = state_for_receiver();
+        let master = permissive_master(&gs.object_space).await;
         let process = Arc::new(Process::new(
             crate::interpreter::program::ProgramBuilder::default()
                 .filename(LpcPath::InGame(std::path::PathBuf::from(
@@ -452,7 +453,7 @@ mod tests {
         ObjectSpace::insert_process_physical(&gs.object_space, process.clone());
 
         let got = gs
-            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver"))
+            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver", &master))
             .await
             .unwrap()
             .expect("a physical-only string receiver should resolve");
@@ -468,6 +469,7 @@ mod tests {
     #[tokio::test]
     async fn string_receiver_unflushed_destruct_creates_fresh() {
         let gs = state_for_receiver();
+        let master = permissive_master(&gs.object_space).await;
         let process = Arc::new(Process::new(
             crate::interpreter::program::ProgramBuilder::default()
                 .filename(LpcPath::InGame(std::path::PathBuf::from(
@@ -503,7 +505,7 @@ mod tests {
         );
 
         let fresh = gs
-            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver"))
+            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver", &master))
             .await
             .unwrap()
             .expect("a destructed path is a miss");
@@ -523,9 +525,10 @@ mod tests {
     #[tokio::test]
     async fn string_receiver_miss_creates_transactionally() {
         let gs = state_for_receiver();
+        let master = permissive_master(&gs.object_space).await;
 
         let got = gs
-            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver"))
+            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver", &master))
             .await
             .unwrap()
             .expect("a miss should create the receiver");
@@ -555,8 +558,9 @@ mod tests {
     #[tokio::test]
     async fn string_receiver_concurrent_creates_converge() {
         let gs = state_for_receiver();
+        let master = permissive_master(&gs.object_space).await;
 
-        let ptr = string_receiver_ptr("/dynamic_receiver");
+        let ptr = string_receiver_ptr("/dynamic_receiver", &master);
         let (ra, rb) = tokio::join!(
             gs.resolve_dynamic_string_receiver(&ptr),
             gs.resolve_dynamic_string_receiver(&ptr)
@@ -590,9 +594,10 @@ mod tests {
     async fn string_receiver_create_survives_a_rejected_commit() {
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
         let gs = Arc::new(GlobalState::new_rejecting(Arc::new(test_config()), tx, 1));
+        let master = permissive_master(&gs.object_space).await;
 
         let got = gs
-            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver"))
+            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver", &master))
             .await
             .unwrap()
             .expect("a miss should create the receiver");
@@ -615,7 +620,8 @@ mod tests {
     #[tokio::test]
     async fn string_receiver_find_hit_commits_nothing() {
         let gs = state_for_receiver();
-        let ptr = string_receiver_ptr("/dynamic_receiver");
+        let master = permissive_master(&gs.object_space).await;
+        let ptr = string_receiver_ptr("/dynamic_receiver", &master);
 
         let created = gs
             .resolve_dynamic_string_receiver(&ptr)
