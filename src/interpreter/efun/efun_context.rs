@@ -46,9 +46,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     delegate! {
         to self.task_context {
-            /// Get the in-game directory of the current process
-            pub fn in_game_cwd(&self) -> PathBuf;
-
             /// Get pointer to the current [`Config`] that's in-use
             pub fn config(&self) -> &Arc<Config>;
 
@@ -128,6 +125,12 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     #[inline]
     pub fn frame(&self) -> &CallFrame {
         self.stack.last().unwrap()
+    }
+
+    /// The in-game directory of the object executing this efun — the frame's,
+    /// not the task entry's, so a room reached by `->` resolves its own exits.
+    pub fn in_game_cwd(&self) -> PathBuf {
+        self.task_context.in_game_cwd_of(&self.frame().process)
     }
 
     /// Place the passed `result` into the correct location to return from an efun.

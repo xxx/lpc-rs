@@ -419,10 +419,10 @@ impl TaskContext {
         }
     }
 
-    /// Get the in-game directory of the current process.
-    /// This assumes an already-dedotted path
-    pub fn in_game_cwd(&self) -> PathBuf {
-        let current_cwd = self.process.program.cwd();
+    /// The in-game directory of `process`'s name (lib root stripped): what
+    /// its relative object paths resolve against.
+    pub fn in_game_cwd_of(&self, process: &Process) -> PathBuf {
+        let current_cwd = process.cwd();
 
         match current_cwd.strip_prefix(&*self.config().lib_dir) {
             Ok(x) => {
@@ -436,6 +436,11 @@ impl TaskContext {
             }
             Err(_e) => current_cwd,
         }
+    }
+
+    /// [`in_game_cwd_of`](Self::in_game_cwd_of) the task's entry object.
+    pub fn in_game_cwd(&self) -> PathBuf {
+        self.in_game_cwd_of(&self.process)
     }
 
     /// Update the context's `result` with the passed [`LpcRef`]
