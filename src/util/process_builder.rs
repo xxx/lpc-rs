@@ -5,7 +5,7 @@ use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
 
 use crate::{
-    compiler::{Compiled, Compiler, CompilerBuilder},
+    compiler::{Compiled, Compiler, CompilerBuilder, compile_gate::CompileGate},
     interpreter::{
         object_space::ObjectSpace,
         process::Process,
@@ -15,10 +15,12 @@ use crate::{
 };
 
 /// The one compile core: `compile` runs in a [`Compiler`] configured from
-/// `object_space` and yields a [`Program`](crate::interpreter::program::Program)
-/// wrapped in a fresh, un-inserted [`Process`], with the compile's warnings.
+/// `object_space`, with `gate` installed, and yields a
+/// [`Program`](crate::interpreter::program::Program) wrapped in a fresh,
+/// un-inserted [`Process`], with the compile's warnings.
 async fn compile_to_process<F, Fut>(
     object_space: &ObjectSpace,
+    gate: Option<Arc<dyn CompileGate>>,
     compile: F,
 ) -> Result<(Arc<Process>, Vec<LpcError>)>
 where
@@ -29,6 +31,7 @@ where
     let compiler = CompilerBuilder::default()
         .config(config.clone())
         .simul_efuns(get_simul_efuns(config, object_space))
+        .gate(gate)
         .build()?;
     let Compiled { program, warnings } = compile(compiler).await?;
     let warnings = warnings.into_iter().flat_map(|w| w.warnings).collect();
@@ -44,30 +47,33 @@ pub(crate) async fn log_warnings(config: &Config, warnings: Vec<LpcError>) {
 }
 
 /// Compile the in-game file at `path` into an un-inserted [`Process`] (no
-/// placement), in `object_space`'s compiler, with the compile's warnings.
+/// placement), in `object_space`'s compiler with `gate` installed, with the
+/// compile's warnings.
 pub(crate) async fn compile_process_from_path(
     object_space: &ObjectSpace,
     path: &LpcPath,
+    gate: Option<Arc<dyn CompileGate>>,
 ) -> Result<(Arc<Process>, Vec<LpcError>)> {
-    compile_to_process(object_space, |compiler| async move {
+    compile_to_process(object_space, gate, |compiler| async move {
         compiler.compile_in_game_file(path, None).await
     })
     .await
 }
 
 /// Compile `code` (masquerading as `filename`) into an un-inserted
-/// [`Process`] (no placement), in `object_space`'s compiler, with the
-/// compile's warnings.
+/// [`Process`] (no placement), in `object_space`'s compiler with `gate`
+/// installed, with the compile's warnings.
 pub(crate) async fn compile_process_from_code<P, S>(
     object_space: &ObjectSpace,
     filename: P,
     code: S,
+    gate: Option<Arc<dyn CompileGate>>,
 ) -> Result<(Arc<Process>, Vec<LpcError>)>
 where
     P: Into<LpcPath> + Send + Sync,
     S: AsRef<str> + Send + Sync,
 {
-    compile_to_process(object_space, |compiler| async move {
+    compile_to_process(object_space, gate, |compiler| async move {
         compiler.compile_string(filename, code).await
     })
     .await

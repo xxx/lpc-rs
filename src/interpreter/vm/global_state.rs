@@ -690,6 +690,7 @@ mod tests {
             &gs.object_space,
             "/target.c",
             "int i = 123; int get() { return i; }",
+            None,
         )
         .await
         .unwrap();
@@ -700,6 +701,7 @@ mod tests {
             &gs.object_space,
             "/caller.c",
             r#"int r = "/target"->get();"#,
+            None,
         )
         .await
         .unwrap();

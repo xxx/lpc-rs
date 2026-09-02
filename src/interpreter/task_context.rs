@@ -203,7 +203,8 @@ impl TaskContext {
     /// object is not visible until placed. The compile's warnings go to the
     /// master's `warning_handler` first.
     pub async fn compile_process(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        let (process, warnings) = compile_process_from_path(self.object_space(), path).await?;
+        let (process, warnings) =
+            compile_process_from_path(self.object_space(), path, None).await?;
         report_warnings(self, &process.program.filename, warnings).await?;
         Ok(process)
     }
