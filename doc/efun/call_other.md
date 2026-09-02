@@ -22,6 +22,11 @@ shape of the return value:
 * Array of strings - calls on all objects with the file names in the array, and 
   returns an array with all the results
 
+A string receiver that names an object not yet loaded compiles it first,
+which asks the master's `valid_load` with `func` `"call_other"`; a refusal
+is the runtime error `call_other: permission denied`. Receivers are absolute
+object names: `"foo"->f()` is `/foo`.
+
 This function is the only way to call functions in other objects.
 
 ### Examples
