@@ -18,7 +18,7 @@ async fn load_prototype<const N: usize>(
         return Err(context.runtime_error(format!("Cannot clone a clone: {}", full_path)));
     }
 
-    context.load_object(&full_path).await
+    context.load_object(path).await
 }
 
 /// `clone_object`, the efun for creating new object instances.
@@ -261,6 +261,7 @@ mod tests {
         "# };
 
         let vm = Vm::new(test_config());
+        permissive_master(&vm.global_state.object_space).await;
         vm.initialize_process_from_code("cloner.c", cloner)
             .await
             .unwrap();
@@ -286,6 +287,7 @@ mod tests {
         "# };
 
         let vm = Vm::new(test_config());
+        permissive_master(&vm.global_state.object_space).await;
         let caller_proc = vm
             .initialize_process_from_code("caller.c", caller)
             .await

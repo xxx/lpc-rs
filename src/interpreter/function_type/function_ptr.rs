@@ -1,6 +1,5 @@
 use std::{
     fmt::{Display, Formatter},
-    path::PathBuf,
     sync::{Arc, Weak},
 };
 
@@ -17,7 +16,7 @@ use crate::interpreter::{
     function_type::function_address::FunctionAddress,
     lpc_ref::{LpcRef, NULL},
     process::Process,
-    task_context::{ObjectLookup, TaskContext},
+    task_context::{Loader, ObjectLookup, TaskContext},
 };
 
 /// A pointer resolved for one call: the receiver, the function, its arguments.
@@ -129,6 +128,25 @@ impl FunctionPtr {
         }
     }
 
+    /// The identity a load this pointer triggers runs under: its owner, and
+    /// the file that wrote it (`0` when it has none).
+    pub(crate) fn loader(&self, lib_dir: &str) -> Result<Loader> {
+        let Some(owner) = self.owner.upgrade() else {
+            return Err(LpcError::runtime(format!(
+                "attempted to call a function pointer whose owner is destructed: {}",
+                self
+            )));
+        };
+        let program = self.origin.as_ref().map_or(NULL, |origin| {
+            LpcRef::from(origin.as_in_game(lib_dir).display().to_string())
+        });
+        Ok(Loader {
+            func: "call_other".to_string(),
+            caller: owner,
+            program,
+        })
+    }
+
     /// Resolve this pointer for a call with `passed` arguments: the receiver
     /// (a dynamic receiver is the first bound argument, created on a miss
     /// through `ctx`), the function, and the bound arguments.
@@ -169,7 +187,8 @@ impl FunctionPtr {
                         process
                     }
                     LpcRef::String(_) => {
-                        let path = receiver.with_string(|s| LpcPath::InGame(PathBuf::from(s)))?;
+                        let path = receiver
+                            .with_string(|s| ctx.object_path(s.to_str(), "/", "call_other"))??;
                         match ctx.find_object(&path) {
                             ObjectLookup::Found(process) => process,
                             ObjectLookup::Removed => {
@@ -179,7 +198,8 @@ impl FunctionPtr {
                                 )));
                             }
                             ObjectLookup::NotCreated => {
-                                let process = ctx.compile_process(&path).await?;
+                                let loader = self.loader(ctx.config().lib_dir.as_str())?;
+                                let process = ctx.compile_process(&path, &loader).await?;
                                 ctx.insert_process_transactional(&process);
                                 process
                             }

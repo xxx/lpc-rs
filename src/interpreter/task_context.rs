@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use arc_swap::ArcSwapAny;
 use chrono::Duration;
@@ -11,7 +14,9 @@ use tokio::sync::mpsc::Sender;
 use crate::compile_time_config::MAX_TASK_CHAIN;
 use crate::{
     interpreter::{
-        apply::report_warnings,
+        VALID_LOAD,
+        apply::{report_warnings, valid_apply},
+        compile_gate::MasterGate,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
@@ -96,6 +101,34 @@ pub enum ObjectLookup {
     Removed,
     /// No cell exists.
     NotCreated,
+}
+
+/// Who asks the master for a load: the efun or opcode, the object executing
+/// it, and the defining file of its code (`0` when there is none).
+#[derive(Debug, Clone)]
+pub struct Loader {
+    /// The efun's name, or `"call_other"` for `->`.
+    pub func: String,
+    /// The object executing the load.
+    pub caller: Arc<Process>,
+    /// The defining file of the calling code, or `0`.
+    pub program: LpcRef,
+}
+
+/// `arg` as an object path for `func`: resolved against `cwd` and confined
+/// to the lib. An escape is `` <func>: `<arg>` is not a valid path ``, span-less;
+/// the door adds its span.
+pub(crate) fn confine_object_path(
+    config: &Config,
+    arg: &str,
+    cwd: impl AsRef<Path>,
+    func: &str,
+) -> Result<LpcPath> {
+    let path = LpcPath::new_in_game(arg, cwd, &*config.lib_dir);
+    config
+        .validate_in_game_path(&path, None)
+        .map_err(|_| LpcError::runtime(format!("{func}: `{arg}` is not a valid path")))?;
+    Ok(path)
 }
 
 /// A struct to carry context during the evaluation of a single [`Task`](crate::interpreter::task::Task).
@@ -198,13 +231,36 @@ impl TaskContext {
         txn_find_object(self.txn(), self.object_space(), path)
     }
 
-    /// Compile the file at `path` into a [`Process`], without inserting it;
-    /// the caller performs the insert (and any initialization), so the
-    /// object is not visible until placed. The compile's warnings go to the
-    /// master's `warning_handler` first.
-    pub async fn compile_process(&self, path: &LpcPath) -> Result<Arc<Process>> {
+    /// `confine_object_path` under this context's config.
+    pub fn object_path(&self, arg: &str, cwd: impl AsRef<Path>, func: &str) -> Result<LpcPath> {
+        confine_object_path(self.config(), arg, cwd, func)
+    }
+
+    /// The one LPC-triggered compile. `path` is confined already; its source,
+    /// `<key>.c`, is what `valid_load` hears and what is compiled, with the
+    /// master's compile-time gate installed. Not inserted; the compile's
+    /// warnings go to `warning_handler`.
+    pub async fn compile_process(&self, path: &LpcPath, loader: &Loader) -> Result<Arc<Process>> {
+        let source = path
+            .source_file()
+            .as_in_game(self.config().lib_dir.as_str())
+            .display()
+            .to_string();
+        let args = [
+            LpcRef::from(source),
+            LpcRef::from(loader.func.as_str()),
+            LpcRef::from(Arc::downgrade(&loader.caller)),
+            loader.program.clone(),
+        ];
+        if !valid_apply(self, VALID_LOAD, &args).await? {
+            return Err(LpcError::runtime(format!(
+                "{}: permission denied",
+                loader.func
+            )));
+        }
+        let gate = MasterGate::new(self);
         let (process, warnings) =
-            compile_process_from_path(self.object_space(), path, None).await?;
+            compile_process_from_path(self.object_space(), path, Some(gate)).await?;
         report_warnings(self, &process.program.filename, warnings).await?;
         Ok(process)
     }

@@ -4,6 +4,7 @@ use lpc_rs::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     compiler::CompilerBuilder,
     interpreter::{
+        object_space::ObjectSpace,
         process::Process,
         program::Program,
         task::{Task, task_template::TaskTemplate},
@@ -25,6 +26,23 @@ macro_rules! assert_regex {
             $regex
         )
     };
+}
+
+/// A master that allows every load, inherit and read: what these tests'
+/// programs load under.
+pub const PERMISSIVE_MASTER: &str = "\
+int valid_load(string path, string func, object caller, string program) { return 1; }
+int valid_inherit(string path, string from) { return 1; }
+int valid_read(string path, string func, object caller, string program) { return 1; }
+";
+
+/// Physically insert [`PERMISSIVE_MASTER`] at the configured master path.
+/// It has no state, so it needs no initializer.
+pub async fn permissive_master(object_space: &ObjectSpace) -> Arc<Process> {
+    object_space
+        .create_process_from_code("/secure/master.c", PERMISSIVE_MASTER)
+        .await
+        .expect("the permissive master compiles")
 }
 
 pub fn test_config_builder() -> ConfigBuilder {

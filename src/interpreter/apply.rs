@@ -205,7 +205,7 @@ mod tests {
     use crate::{
         compile_time_config::MAX_TASK_CHAIN,
         interpreter::{CommittedReader, vm::Vm},
-        test_support::test_config,
+        test_support::{PERMISSIVE_MASTER, test_config},
     };
 
     /// A `catch_tell` that writes back nests until the budget refuses it.
@@ -260,22 +260,25 @@ mod tests {
         let master = vm
             .initialize_process_from_code(
                 "/secure/master.c",
-                indoc! { r#"
-                    int count;
-                    string message;
-                    string location;
-                    string file;
-                    string diagnostic;
-                    string who;
-                    void warning_handler(mapping w) {
-                        count++;
-                        message = w["message"];
-                        location = w["location"];
-                        file = w["file"];
-                        diagnostic = w["diagnostic"];
-                        who = file_name(this_player());
-                    }
-                "# },
+                format!(
+                    "{}{PERMISSIVE_MASTER}",
+                    indoc! { r#"
+                        int count;
+                        string message;
+                        string location;
+                        string file;
+                        string diagnostic;
+                        string who;
+                        void warning_handler(mapping w) {
+                            count++;
+                            message = w["message"];
+                            location = w["location"];
+                            file = w["file"];
+                            diagnostic = w["diagnostic"];
+                            who = file_name(this_player());
+                        }
+                    "# },
+                ),
             )
             .await
             .unwrap()
@@ -314,9 +317,12 @@ mod tests {
     #[tokio::test]
     async fn a_master_without_the_apply_still_loads() {
         let vm = Vm::new(test_config());
-        vm.initialize_process_from_code("/secure/master.c", "void create() {}")
-            .await
-            .unwrap();
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            format!("void create() {{}}\n{PERMISSIVE_MASTER}"),
+        )
+        .await
+        .unwrap();
         let loader = vm
             .initialize_process_from_code(
                 "/loader.c",
@@ -337,7 +343,10 @@ mod tests {
         let vm = Vm::new(test_config());
         vm.initialize_process_from_code(
             "/secure/master.c",
-            r#"void warning_handler(mapping w) { throw("no warnings allowed"); }"#,
+            format!(
+                r#"void warning_handler(mapping w) {{ throw("no warnings allowed"); }}
+{PERMISSIVE_MASTER}"#
+            ),
         )
         .await
         .unwrap();

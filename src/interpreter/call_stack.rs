@@ -1,9 +1,13 @@
 use std::ops::{Index, IndexMut, RangeFrom};
 
 use delegate::delegate;
+use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result, lpc_error};
 
-use crate::interpreter::{call_frame::CallFrame, lpc_ref::LpcRef};
+use crate::interpreter::{
+    call_frame::CallFrame,
+    lpc_ref::{LpcRef, NULL},
+};
 
 /// A starting capacity well under `STACKSIZE`; most tasks never push deep
 /// enough to grow it.
@@ -108,6 +112,23 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
             Some(frame) => frame.runtime_bug(msg),
             None => LpcError::runtime_bug(msg),
         }
+    }
+
+    /// The defining file of the calling code: the topmost frame that is not
+    /// an efun's, or the origin an efun frame carries — as an in-game path
+    /// with its extension (`/secure/master.c`); `NULL` when there is neither
+    /// (an efun pointer fired as a task's entry).
+    pub fn calling_program(&self, lib_dir: &str) -> LpcRef {
+        let render = |path: &LpcPath| LpcRef::from(path.as_in_game(lib_dir).display().to_string());
+        for frame in self.iter().rev() {
+            if !frame.function.prototype.is_efun() {
+                return render(&frame.function.prototype.filename);
+            }
+            if let Some(origin) = &frame.origin {
+                return render(origin);
+            }
+        }
+        NULL
     }
 
     /// Get the stack trace information for the stack
