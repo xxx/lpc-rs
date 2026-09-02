@@ -111,12 +111,12 @@ pub async fn allow_exec(vm: &Vm) -> Arc<Process> {
         .process
 }
 
-/// A master that allows every load, inherit and read: what `run_prog`'s
+/// A master that allows every load, inherit and include: what `run_prog`'s
 /// programs load under.
 pub const PERMISSIVE_MASTER: &str = "\
 int valid_load(string path, string func, object caller, string program) { return 1; }
 int valid_inherit(string path, string from) { return 1; }
-int valid_read(string path, string func, object caller, string program) { return 1; }
+int valid_read(string path, string func, object caller, string program) { return func == \"include\"; }
 ";
 
 /// [`PERMISSIVE_MASTER`] at the default master path, inserted without an

@@ -250,6 +250,28 @@ mod doors {
         assert!(vm.global_state.object_space.lookup("/x").is_none());
     }
 
+    /// An error out of `valid_load` is a failed load, which `find_object`
+    /// reports as `0`.
+    #[tokio::test]
+    async fn find_objects_throwing_valid_load_is_zero() {
+        let root = lib_with_x("door-find-throw");
+        let vm = Vm::new(temp_lib_config(&root));
+        run(
+            &vm,
+            "/secure/master.c",
+            r#"int valid_load(string p, string f, object c, string g) { throw("not today"); }"#,
+        )
+        .await;
+        let a = run(
+            &vm,
+            "/a.c",
+            r#"mixed got; void create() { got = find_object("/x"); }"#,
+        )
+        .await;
+        assert_eq!(vm.global_state.committed_global(&a, 0u16), LpcRef::from(0));
+        assert!(vm.global_state.object_space.lookup("/x").is_none());
+    }
+
     /// A pointer holding `/x` as its receiver, fired inside a task, loads
     /// for the code that wrote it.
     #[tokio::test]
@@ -338,19 +360,25 @@ mod doors {
 mod paths {
     use super::*;
 
+    /// The `/x.c` case asks nothing: it shares the resident object's key.
     #[tokio::test]
     async fn the_master_hears_the_dot_c_source() {
         let root = TempLib::new("path-source");
         let vm = Vm::new(temp_lib_config(&root));
         let master = recording_master(&vm, &root).await;
         write(&root, "x.h.c", "int hc;\n");
-        for (i, (arg, expected)) in [("/x", "/x.c"), ("/x.c", "/x.c"), ("/x.h", "/x.h.c")]
-            .into_iter()
-            .enumerate()
+        for (i, (arg, expected, loads)) in [
+            ("/x", "/x.c", 1),
+            ("/x.c", "/x.c", 1),
+            ("/x.h", "/x.h.c", 2),
+        ]
+        .into_iter()
+        .enumerate()
         {
             let code = format!(r#"void create() {{ find_object("{arg}"); }}"#);
             run(&vm, &format!("/probe{i}.c"), &code).await;
             assert_eq!(committed_string(&vm, &master, SEEN_PATH), expected, "{arg}");
+            assert_eq!(count(&vm, &master, LOADS), loads, "{arg}");
         }
     }
 
