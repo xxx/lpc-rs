@@ -28,12 +28,13 @@ macro_rules! assert_regex {
     };
 }
 
-/// A master that allows every load, inherit and read: what these tests'
-/// programs load under.
+/// A master that allows every load, inherit and include: what these tests'
+/// programs load under. A copy of `src/test_support::PERMISSIVE_MASTER`,
+/// which an integration binary cannot import.
 pub const PERMISSIVE_MASTER: &str = "\
 int valid_load(string path, string func, object caller, string program) { return 1; }
 int valid_inherit(string path, string from) { return 1; }
-int valid_read(string path, string func, object caller, string program) { return 1; }
+int valid_read(string path, string func, object caller, string program) { return func == \"include\"; }
 ";
 
 /// [`PERMISSIVE_MASTER`] at the default master path, inserted without an
