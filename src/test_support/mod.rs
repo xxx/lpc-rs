@@ -119,8 +119,8 @@ int valid_inherit(string path, string from) { return 1; }
 int valid_read(string path, string func, object caller, string program) { return 1; }
 ";
 
-/// Physically insert [`PERMISSIVE_MASTER`] at the configured master path.
-/// It has no state, so it needs no initializer.
+/// [`PERMISSIVE_MASTER`] at the default master path, inserted without an
+/// initializer — it has no state.
 pub async fn permissive_master(object_space: &ObjectSpace) -> Arc<Process> {
     object_space
         .create_process_from_code("/secure/master.c", PERMISSIVE_MASTER)

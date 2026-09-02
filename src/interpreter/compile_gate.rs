@@ -70,10 +70,9 @@ mod tests {
         test_support::{TempLib, committed_string, temp_lib_config},
     };
 
-    /// A fresh top-level context seated in `/seat`: its transaction is not
-    /// joinable, so a nested apply opens and commits its own attempt. (A
-    /// finished task's context would join its dead transaction and the
-    /// master's writes would never commit.)
+    /// A fresh top-level context in `/seat`, whose non-joinable transaction
+    /// makes each nested apply commit on its own — a finished task's context
+    /// would join its dead transaction and never commit the master's writes.
     async fn seated(vm: &Vm) -> TaskContext {
         let seat: Arc<Process> = vm
             .create_process_from_code("/seat.c", "")

@@ -246,8 +246,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         })
     }
 
-    /// `loader` is a closure so a `->` that resolves to a resident object
-    /// allocates nothing: it is called only on the create-on-miss path.
+    /// `loader` runs only on a create miss — a `->` to a resident object
+    /// must allocate nothing.
     #[instrument(level = "debug", skip_all)]
     async fn resolve_call_other_receiver<T, L>(
         receiver_ref: &LpcRef,

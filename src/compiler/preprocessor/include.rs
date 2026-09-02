@@ -102,9 +102,8 @@ impl IncludeWalk {
         gate: Option<&dyn CompileGate>,
     ) -> Result<Option<Opened>> {
         let configured = matches!(source, IncludeSource::Configured(_));
-        // Captured before `resolve` consumes `source`: an out-of-root
-        // path collapses to an empty in-game form, so the directive's
-        // own text is what the error can still name.
+        // An out-of-root path collapses to an empty in-game form, so the
+        // error names the directive's own text.
         let text = match &source {
             IncludeSource::System { path } | IncludeSource::Local { path } => (*path).to_string(),
             IncludeSource::Configured(path) => path.to_string(),
