@@ -220,7 +220,6 @@ mod gate_tests {
     #[tokio::test]
     async fn a_denied_include_is_a_compile_error_at_the_directive() {
         let root = TempLib::new("gate-include-deny");
-        write(&root, "secret.h", "this would not parse\n");
         write(&root, "child.c", "#include \"/secret.h\"\n");
         let (result, _) = compile_under(config_at(&root), RecordingGate::denying()).await;
         let e = result.map(|_| ()).unwrap_err();
@@ -239,9 +238,10 @@ mod gate_tests {
         );
         let (result, gate) = compile_under(config_at(&root), RecordingGate::allowing()).await;
         let e = result.map(|_| ()).unwrap_err().to_string();
-        assert!(
-            e.starts_with("attempt to access a file outside of lib_dir"),
-            "{e}"
+        assert_eq!(
+            e,
+            "attempt to inherit a file outside the root: \
+             `/../../../../../../../../etc/passwd`"
         );
         assert!(gate.inherits().is_empty());
     }

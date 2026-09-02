@@ -104,7 +104,7 @@ impl IncludeWalk {
         let configured = matches!(source, IncludeSource::Configured(_));
         // An out-of-root path collapses to an empty in-game form, so the
         // error names the directive's own text.
-        let text = match &source {
+        let directive_text = match &source {
             IncludeSource::System { path } | IncludeSource::Local { path } => (*path).to_string(),
             IncludeSource::Configured(path) => path.to_string(),
         };
@@ -117,7 +117,7 @@ impl IncludeWalk {
             return Err(lpc_error!(
                 span,
                 "attempt to include a file outside the root: `{}`",
-                text
+                directive_text
             ));
         }
 

@@ -120,36 +120,47 @@ impl TreeWalker for InheritanceWalker {
             LpcPath::new_in_game(&*node.path, cwd, self.context.config.lib_dir.as_str());
 
         let lib_dir = self.context.config.lib_dir.as_str();
+        // An out-of-root path collapses to an empty in-game form, so the
+        // error names the directive's own text.
         self.context
             .config
-            .validate_in_game_path(&full_path, node.span)?;
-        let configured = self
-            .context
-            .config
-            .auto_inherit_file
-            .map(|auto| {
-                LpcPath::new_in_game(auto.as_str(), "/", lib_dir).source_file()
-                    == full_path.source_file()
-            })
-            .unwrap_or(false);
-        if let (Some(gate), false) = (&self.context.gate, configured) {
-            let parent = full_path
-                .source_file()
-                .as_in_game(lib_dir)
-                .display()
-                .to_string();
-            let child = self
-                .context
-                .filename
-                .as_in_game(lib_dir)
-                .display()
-                .to_string();
-            if !gate.inherit(&parent, &child).await? {
-                return Err(lpc_error!(
+            .validate_in_game_path(&full_path, node.span)
+            .map_err(|_| {
+                lpc_error!(
                     node.span,
-                    "inherit \"{}\": permission denied",
-                    parent
-                ));
+                    "attempt to inherit a file outside the root: `{}`",
+                    node.path
+                )
+            })?;
+        if let Some(gate) = &self.context.gate {
+            let configured = self
+                .context
+                .config
+                .auto_inherit_file
+                .map(|auto| {
+                    LpcPath::new_in_game(auto.as_str(), "/", lib_dir).source_file()
+                        == full_path.source_file()
+                })
+                .unwrap_or(false);
+            if !configured {
+                let parent = full_path
+                    .source_file()
+                    .as_in_game(lib_dir)
+                    .display()
+                    .to_string();
+                let child = self
+                    .context
+                    .filename
+                    .as_in_game(lib_dir)
+                    .display()
+                    .to_string();
+                if !gate.inherit(&parent, &child).await? {
+                    return Err(lpc_error!(
+                        node.span,
+                        "inherit \"{}\": permission denied",
+                        parent
+                    ));
+                }
             }
         }
 
