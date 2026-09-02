@@ -54,9 +54,9 @@ mod tests {
 
         assert!(space.contains(&"/clone_target".to_owned()));
         assert!(!space.contains(&"/clone_target#0".to_owned()));
-        // This file, the clone's prototype and the simul-efun object
-        // `run_prog` inserts.
-        assert_eq!(result.context.object_space().len(), 3);
+        // This file, the clone's prototype, and the simul-efun object and
+        // permissive master `run_prog` inserts.
+        assert_eq!(result.context.object_space().len(), 4);
     }
 
     #[tokio::test]

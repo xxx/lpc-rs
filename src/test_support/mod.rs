@@ -111,6 +111,23 @@ pub async fn allow_exec(vm: &Vm) -> Arc<Process> {
         .process
 }
 
+/// A master that allows every load, inherit and read: what `run_prog`'s
+/// programs load under.
+pub const PERMISSIVE_MASTER: &str = "\
+int valid_load(string path, string func, object caller, string program) { return 1; }
+int valid_inherit(string path, string from) { return 1; }
+int valid_read(string path, string func, object caller, string program) { return 1; }
+";
+
+/// Physically insert [`PERMISSIVE_MASTER`] at the configured master path.
+/// It has no state, so it needs no initializer.
+pub async fn permissive_master(object_space: &ObjectSpace) -> Arc<Process> {
+    object_space
+        .create_process_from_code("/secure/master.c", PERMISSIVE_MASTER)
+        .await
+        .expect("the permissive master compiles")
+}
+
 pub fn test_config() -> Config {
     test_config_builder!().build().unwrap()
 }
@@ -211,6 +228,7 @@ async fn run_prog_core(
     let (tx, rx) = tokio::sync::mpsc::channel(128);
     let global_state = GlobalState::new(config, tx);
     ObjectSpace::insert_process_physical(&global_state.object_space, se_proc);
+    permissive_master(&global_state.object_space).await;
 
     initialize_program(program, global_state)
         .await
