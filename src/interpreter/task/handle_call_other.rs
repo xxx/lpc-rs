@@ -247,8 +247,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         })
     }
 
-    /// `loader` runs only on a create miss — a `->` to a resident object
-    /// must allocate nothing.
+    /// `loader` runs only for a receiver to create or initialize — a `->` to
+    /// a resident, initialized object must allocate nothing.
     #[instrument(level = "debug", skip_all)]
     async fn resolve_call_other_receiver<T, L>(
         receiver_ref: &LpcRef,

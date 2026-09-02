@@ -139,7 +139,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     /// The objects that crossed a door to reach the frame at `index`,
     /// innermost first: beneath each external frame at or below it is the
     /// frame that called through. Ends at the entry frame; the task's
-    /// context knows what lies beyond it.
+    /// context has the rest.
     pub fn door_crossers(&self, index: usize) -> impl Iterator<Item = &Arc<Process>> {
         self.stack[..=index]
             .iter()
