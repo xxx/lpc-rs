@@ -10,7 +10,8 @@ that names an object not yet loaded. A non-zero return allows the compile;
 zero refuses it, and the efun raises `<func>: permission denied` in the
 caller (`find_object` returns 0). A path that leads out of the lib fails
 before this apply. An object that is already resident is found, not loaded,
-and nothing is asked; cloning a resident prototype is not a load.
+and nothing is asked; cloning a resident prototype is not a load. A path
+that names no source file is not asked here; it is put to `compile_object`.
 
 - `path` is the source file about to be compiled: the object's canonical
   in-game name with `.c` appended (`clone_object("/std/sword")` and

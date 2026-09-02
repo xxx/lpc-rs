@@ -24,7 +24,8 @@ shape of the return value:
 
 A string receiver that names an object not yet loaded compiles it first,
 which asks the master's `valid_load` with `func` `"call_other"`; a refusal
-is the runtime error `call_other: permission denied`. Receivers are absolute
+is the runtime error `call_other: permission denied`. A path with no source
+file is put to the master's `compile_object`. Receivers are absolute
 object names: `"foo"->f()` is `/foo`.
 
 This function is the only way to call functions in other objects.
