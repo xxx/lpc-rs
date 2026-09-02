@@ -1,4 +1,7 @@
-use std::ops::{Index, IndexMut, RangeFrom};
+use std::{
+    ops::{Index, IndexMut, RangeFrom},
+    sync::Arc,
+};
 
 use delegate::delegate;
 use lpc_rs_core::lpc_path::LpcPath;
@@ -7,6 +10,8 @@ use lpc_rs_errors::{LpcError, Result, lpc_error};
 use crate::interpreter::{
     call_frame::CallFrame,
     lpc_ref::{LpcRef, NULL},
+    process::Process,
+    task_context::{Caller, Callers},
 };
 
 /// A starting capacity well under `STACKSIZE`; most tasks never push deep
@@ -129,6 +134,30 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
             }
         }
         NULL
+    }
+
+    /// The objects that crossed a door to reach the frame at `index`,
+    /// innermost first: beneath each external frame at or below it is the
+    /// frame that called through. Ends at the entry frame; the task's
+    /// context knows what lies beyond it.
+    pub fn door_crossers(&self, index: usize) -> impl Iterator<Item = &Arc<Process>> {
+        self.stack[..=index]
+            .iter()
+            .enumerate()
+            .rev()
+            .filter(|(_, frame)| frame.external)
+            .filter_map(|(i, _)| Some(&self.stack[i.checked_sub(1)?].process))
+    }
+
+    /// The chain a task started by the code in the frame at `index` is
+    /// entered with: that frame's object, the door crossers beneath it,
+    /// then `tail` — this task's own chain.
+    pub fn callers(&self, index: usize, tail: Callers) -> Arc<Caller> {
+        let crossers: Vec<&Arc<Process>> = self.door_crossers(index).collect();
+        let rest = crossers.into_iter().rev().fold(tail, |rest, object| {
+            Some(Caller::link(object.clone(), rest))
+        });
+        Caller::link(self.stack[index].process.clone(), rest)
     }
 
     /// Get the stack trace information for the stack

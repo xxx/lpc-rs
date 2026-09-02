@@ -15,7 +15,7 @@ use crate::{
         lpc_string::LpcString,
         process::Process,
         task::{Task, task_template::TaskTemplate},
-        task_context::TaskContext,
+        task_context::{Caller, TaskContext},
     },
 };
 
@@ -147,7 +147,8 @@ pub async fn apply_runtime_error(
         .unmangled_functions
         .get(ERROR_HANDLER)?
         .clone();
-    let ctx = template.into_task_context(master);
+    let mut ctx = template.into_task_context(master);
+    ctx.callers = proc.clone().map(|erring| Caller::link(erring, None));
 
     mapping.insert(
         LpcString::from("error").into(),

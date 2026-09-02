@@ -9,13 +9,20 @@ use super::{Defaults, Lexicon, Lists, Vocabulary};
 use crate::interpreter::{
     ID, PARSE_COMMAND_ADJECTIV_ID_LIST, PARSE_COMMAND_ALL_WORD, PARSE_COMMAND_ID_LIST,
     PARSE_COMMAND_NUMERAL, PARSE_COMMAND_PLURAL_ID_LIST, PARSE_COMMAND_PLURALIZE,
-    PARSE_COMMAND_PREPOS_LIST, apply::apply_nested, lpc_array::LpcArray, lpc_int::LpcInt,
-    lpc_ref::LpcRef, process::Process, task_context::TaskContext,
+    PARSE_COMMAND_PREPOS_LIST,
+    apply::apply_nested,
+    lpc_array::LpcArray,
+    lpc_int::LpcInt,
+    lpc_ref::LpcRef,
+    process::Process,
+    task_context::{Callers, TaskContext},
 };
 
 /// A scope of objects asked through applies in `ctx`'s transaction.
 pub struct LpcVocabulary<'a> {
     ctx: &'a TaskContext,
+    /// The chain the applies are entered through: whoever is parsing.
+    callers: Callers,
     scope: Vec<Arc<Process>>,
     /// Extra ids per candidate (the parser package's nicknames).
     extras: Vec<Vec<String>>,
@@ -25,12 +32,13 @@ pub struct LpcVocabulary<'a> {
 }
 
 impl<'a> LpcVocabulary<'a> {
-    /// Over `scope`, in the order `%o` prefers.
-    pub fn new(ctx: &'a TaskContext, scope: Vec<Arc<Process>>) -> Self {
+    /// Over `scope`, in the order `%o` prefers, asked through `callers`.
+    pub fn new(ctx: &'a TaskContext, callers: Callers, scope: Vec<Arc<Process>>) -> Self {
         let extras = vec![Vec::new(); scope.len()];
         let remote_from = scope.len();
         LpcVocabulary {
             ctx,
+            callers,
             scope,
             extras,
             remote_from,
@@ -42,6 +50,7 @@ impl<'a> LpcVocabulary<'a> {
     /// `remote_from` are remote.
     pub fn with_extras(
         ctx: &'a TaskContext,
+        callers: Callers,
         scope: Vec<Arc<Process>>,
         extras: Vec<Vec<String>>,
         remote_from: usize,
@@ -49,6 +58,7 @@ impl<'a> LpcVocabulary<'a> {
         debug_assert_eq!(extras.len(), scope.len());
         LpcVocabulary {
             ctx,
+            callers,
             scope,
             extras,
             remote_from,
@@ -76,7 +86,7 @@ impl<'a> LpcVocabulary<'a> {
         let Some(function) = target.program.unmangled_functions.get(name).cloned() else {
             return Ok(None);
         };
-        apply_nested(self.ctx, target, function, args)
+        apply_nested(self.ctx, self.callers.clone(), target, function, args)
             .await
             .map(Some)
     }

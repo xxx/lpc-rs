@@ -42,7 +42,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             process,
             function,
             args,
-        } = match ptr.prepare_call(&passed, &self.context).await {
+        } = match ptr
+            .prepare_call(&passed, &self.context, Some(self.callers()?))
+            .await
+        {
             Ok(Some(prepared)) => prepared,
             Ok(None) => {
                 self.stack.current_frame_mut()?.registers[0] = NULL;
@@ -52,7 +55,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         };
 
         if !process.is_initialized(&self.context.txn) {
-            Self::initialize_process(self.context.nested(process.clone())?).await?;
+            let callers = Some(self.callers()?);
+            Self::initialize_process(self.context.nested(callers, process.clone())?).await?;
         }
 
         let prototype = &function.prototype;
@@ -75,6 +79,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             new_frame.push_arg(&self.context.txn, i, arg)?;
         }
         new_frame.origin = ptr.origin.clone();
+        new_frame.external = true;
 
         self.stack.push(new_frame)?;
 

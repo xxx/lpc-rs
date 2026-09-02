@@ -44,7 +44,7 @@ use crate::interpreter::{
         AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, TxnHandle, VarId,
         commit_changeset, flush_effects, run_attempts, start_txn,
     },
-    task_context::TaskContext,
+    task_context::{Caller, TaskContext},
 };
 
 #[macro_export]
@@ -217,6 +217,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             #[cfg(test)]
             snapshots: thin_vec![],
         }
+    }
+
+    /// The chain a task started by the current frame's code is entered with.
+    pub(crate) fn callers(&self) -> Result<Arc<Caller>> {
+        let Some(top) = self.stack.len().checked_sub(1) else {
+            return Err(self.runtime_bug("callers of an empty stack"));
+        };
+        Ok(self.stack.callers(top, self.context.callers.clone()))
     }
 
     /// Rebuild the task to a blank slate for a retry re-run

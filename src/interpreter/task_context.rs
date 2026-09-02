@@ -106,16 +106,56 @@ pub enum ObjectLookup {
     NotCreated,
 }
 
+/// One object that called through a door on the way to a task, and what
+/// `previous_object` answered where it stood; innermost first. Immutable,
+/// so a nested task shares its parent's tail.
+#[derive(Debug)]
+pub struct Caller {
+    /// The object that called through.
+    pub object: Arc<Process>,
+    /// The chain behind it.
+    pub rest: Callers,
+}
+
+/// A chain of [`Caller`]s; `None` where the driver stood.
+pub type Callers = Option<Arc<Caller>>;
+
+impl Caller {
+    /// `object` in front of `rest`.
+    pub fn link(object: Arc<Process>, rest: Callers) -> Arc<Self> {
+        Arc::new(Self { object, rest })
+    }
+
+    /// The objects of `chain`, innermost first.
+    pub fn objects(chain: &Callers) -> impl Iterator<Item = &Arc<Process>> {
+        std::iter::successors(chain.as_deref(), |caller| caller.rest.as_deref())
+            .map(|caller| &caller.object)
+    }
+}
+
 /// Who asks the master for a load: the efun or opcode, the object executing
-/// it, and the defining file of its code (`0` when there is none).
+/// it (with the chain behind it), and the defining file of its code (`0`
+/// when there is none).
 #[derive(Debug, Clone)]
 pub struct Loader {
     /// The efun's name, or `"call_other"` for `->`.
     pub func: String,
-    /// The object executing the load.
-    pub caller: Arc<Process>,
+    /// The object executing the load, and the chain behind it.
+    pub callers: Arc<Caller>,
     /// The defining file of the calling code, or `0`.
     pub program: LpcRef,
+}
+
+impl Loader {
+    /// The object executing the load.
+    pub fn caller(&self) -> &Arc<Process> {
+        &self.callers.object
+    }
+
+    /// The chain a task the load starts is entered with.
+    pub fn chain(&self) -> Callers {
+        Some(self.callers.clone())
+    }
 }
 
 /// `arg` as an object path for `func`: resolved against `cwd` and confined
@@ -171,6 +211,11 @@ pub struct TaskContext {
     /// Commands in progress, innermost last; shared by every clone of this
     /// context so a handler's `query_verb()` sees the dispatch that called it.
     pub(crate) command: Arc<parking_lot::Mutex<Vec<CommandState>>>,
+
+    /// The objects that called through doors to reach this task, innermost
+    /// first: what `previous_object` answers past the entry frame. `None`
+    /// where the driver stood.
+    pub callers: Callers,
 }
 
 impl TaskContext {
@@ -195,6 +240,7 @@ impl TaskContext {
             chain_count: 0,
             txn: TxnHandle::default(),
             command: Arc::default(),
+            callers: None,
         }
     }
 
@@ -208,9 +254,10 @@ impl TaskContext {
         self
     }
 
-    /// The context for a task nested under this one in `process`, one level
-    /// deeper in the chain; an error past `MAX_TASK_CHAIN`.
-    pub fn nested<P>(&self, process: P) -> Result<Self>
+    /// The context for a task nested under this one in `process`, entered
+    /// through `callers`, one level deeper in the chain; an error past
+    /// `MAX_TASK_CHAIN`.
+    pub fn nested<P>(&self, callers: Callers, process: P) -> Result<Self>
     where
         P: Into<Arc<Process>>,
     {
@@ -221,6 +268,7 @@ impl TaskContext {
         }
         let mut nested = self.clone().with_process(process);
         nested.chain_count = self.chain_count + 1;
+        nested.callers = callers;
         Ok(nested)
     }
 
@@ -273,19 +321,19 @@ impl TaskContext {
         let args = [
             LpcRef::from(source),
             LpcRef::from(loader.func.as_str()),
-            LpcRef::from(Arc::downgrade(&loader.caller)),
+            LpcRef::from(Arc::downgrade(loader.caller())),
             loader.program.clone(),
         ];
-        if !valid_apply(self, VALID_LOAD, &args).await? {
+        if !valid_apply(self, loader.chain(), VALID_LOAD, &args).await? {
             return Err(LpcError::runtime(format!(
                 "{}: permission denied",
                 loader.func
             )));
         }
-        let gate = MasterGate::new(self);
+        let gate = MasterGate::new(self, loader.chain());
         let (process, warnings) =
             compile_process_from_path(self.object_space(), path, Some(gate)).await?;
-        report_warnings(self, &process.program.filename, warnings).await?;
+        report_warnings(self, loader.chain(), &process.program.filename, warnings).await?;
         Ok(process)
     }
 
@@ -302,7 +350,7 @@ impl TaskContext {
             ))),
             ObjectLookup::NotCreated => {
                 let process = self.compile_file_process(path, loader).await?;
-                self.insert_and_initialize(&process).await?;
+                self.insert_and_initialize(loader.chain(), &process).await?;
                 Ok(process)
             }
         }
@@ -318,10 +366,10 @@ impl TaskContext {
         let args = [
             LpcRef::from(key.as_str()),
             LpcRef::from(loader.func.as_str()),
-            LpcRef::from(Arc::downgrade(&loader.caller)),
+            LpcRef::from(Arc::downgrade(loader.caller())),
             loader.program.clone(),
         ];
-        let Some(answer) = master_apply(self, COMPILE_OBJECT, &args).await? else {
+        let Some(answer) = master_apply(self, loader.chain(), COMPILE_OBJECT, &args).await? else {
             return self.compile_file_process(path, loader).await;
         };
         let blueprint = match answer.as_str() {
@@ -359,13 +407,17 @@ impl TaskContext {
 
     /// The one insert-and-initialize door every load site shares: insert
     /// `process` transactionally, then run its initializer in a nested task
-    /// riding this attempt. Any failure — a refused nested task or a
-    /// throwing initializer — leaves nothing under the object's key, and the
-    /// error returns unchanged.
-    pub async fn insert_and_initialize(&self, process: &Arc<Process>) -> Result<()> {
+    /// riding this attempt, entered through `callers`. Any failure — a
+    /// refused nested task or a throwing initializer — leaves nothing under
+    /// the object's key, and the error returns unchanged.
+    pub async fn insert_and_initialize(
+        &self,
+        callers: Callers,
+        process: &Arc<Process>,
+    ) -> Result<()> {
         // `nested` is resolved before the insert: a depth refusal here must
         // not leave an inserted, never-initialized object behind.
-        let nested = self.nested(process.clone())?;
+        let nested = self.nested(callers, process.clone())?;
         self.insert_process_transactional(process);
         if let Err(e) = Box::pin(Task::<MAX_CALL_STACK_SIZE>::initialize_process(nested)).await {
             txn_undo_insert(self.txn(), self.object_space(), process);
@@ -628,6 +680,7 @@ impl Clone for TaskContext {
             // Cloning the handle shares the in-flight transaction.
             txn: self.txn.clone(),
             command: self.command.clone(),
+            callers: self.callers.clone(),
         }
     }
 }

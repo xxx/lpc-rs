@@ -47,7 +47,14 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
                 LpcRef::from(Arc::downgrade(&new_ob)),
                 LpcRef::from(Arc::downgrade(&old_ob)),
             ];
-            if !valid_apply(context.task_context(), VALID_EXEC, &args).await? {
+            if !valid_apply(
+                context.task_context(),
+                Some(context.callers()),
+                VALID_EXEC,
+                &args,
+            )
+            .await?
+            {
                 context.return_efun_result(NULL);
                 return Ok(());
             }

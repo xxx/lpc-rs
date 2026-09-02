@@ -6,6 +6,7 @@ mod loading;
 mod parse_command;
 mod parse_string;
 mod parser;
+mod previous_object;
 mod references;
 mod security;
 mod virtual_objects;

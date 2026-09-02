@@ -18,7 +18,7 @@ use crate::{
     },
     compile_time_config::MAX_COMMAND_DEPTH,
     interpreter::{
-        apply::{apply_pointer, deliver},
+        apply::{apply_pointer, as_actor, deliver},
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         process::Process,
@@ -98,7 +98,10 @@ pub(crate) async fn run(
         .collect();
     candidates.sort_by_key(|rule| std::cmp::Reverse(rule.id));
 
-    let mut resolver = Resolver::new(LpcVocabulary::new(ctx, scope.members()), None);
+    let mut resolver = Resolver::new(
+        LpcVocabulary::new(ctx, as_actor(ctx, actor), scope.members()),
+        None,
+    );
     // Boxed to stay out of `call_efun`'s unboxed future union, which every
     // efun call pays for — `command` calls `dispatch` unboxed.
     if Box::pin(try_rules(
@@ -173,7 +176,7 @@ async fn try_rules(
                 match Box::pin(parser::run(ctx, actor, &owner, parser, rest, None, &[])).await? {
                     Verdict::Handled => return Ok(true),
                     Verdict::Message(message) => {
-                        deliver(ctx, actor, Some(actor), &message).await?;
+                        deliver(ctx, as_actor(ctx, actor), actor, Some(actor), &message).await?;
                         return Ok(true);
                     }
                     Verdict::NoParse | Verdict::Refused | Verdict::Unresolved => continue,

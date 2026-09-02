@@ -59,6 +59,7 @@ impl TaskTemplate {
             // this context joins it.
             txn: self.txn,
             command: Arc::default(),
+            callers: None,
         }
     }
 }

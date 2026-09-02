@@ -40,6 +40,7 @@ pub(crate) mod parse_refresh;
 pub(crate) mod parse_remove;
 pub(crate) mod parse_sentence;
 pub(crate) mod parse_string;
+pub(crate) mod previous_object;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
 pub(crate) mod query_command;
@@ -560,6 +561,9 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false)],
     },
+    previous_object => {
+        returns: LpcType::Object(false),
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -735,6 +739,7 @@ mod tests {
                 "write_file",
                 "json_encode",
                 "json_decode",
+                "previous_object",
             ]
         );
     }

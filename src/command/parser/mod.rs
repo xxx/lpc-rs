@@ -18,7 +18,10 @@ use crate::{
         scope::{self, Candidate},
     },
     interpreter::{
-        PARSER_ERROR_MESSAGE, apply::apply_on, lpc_ref::LpcRef, process::Process,
+        PARSER_ERROR_MESSAGE,
+        apply::{apply_on, as_actor},
+        lpc_ref::LpcRef,
+        process::Process,
         task_context::TaskContext,
     },
 };
@@ -98,7 +101,8 @@ pub(crate) async fn run(
                 .collect()
         })
         .collect();
-    let vocabulary = LpcVocabulary::with_extras(ctx, objects, extras, remote_from);
+    let vocabulary =
+        LpcVocabulary::with_extras(ctx, as_actor(ctx, actor), objects, extras, remote_from);
     let resolver = Resolver::new(vocabulary, None);
     let mut ask = Lpc::new(ctx, actor, owner, rule, &all, resolver);
 
@@ -160,7 +164,7 @@ async fn report(
         arg,
         LpcRef::from(i64::from(failure.flag)),
     ];
-    match apply_on(ctx, &master, actor, function, &args).await? {
+    match apply_on(ctx, as_actor(ctx, actor), &master, actor, function, &args).await? {
         LpcRef::String(message) => Ok(Verdict::Message(message.to_string())),
         _ => Ok(silent),
     }
