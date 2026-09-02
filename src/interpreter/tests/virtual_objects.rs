@@ -394,6 +394,10 @@ mod the_blueprint {
             "{e}"
         );
         assert!(
+            !e.contains(vm.global_state.config.lib_dir.as_str()),
+            "server path leaked: {e}"
+        );
+        assert!(
             vm.global_state
                 .object_space
                 .lookup("/inst/1/d/locked")
@@ -452,5 +456,90 @@ mod the_blueprint {
                 .lookup("/inst/1/d/bad")
                 .is_none()
         );
+    }
+}
+
+mod rollback {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_throwing_create_through_call_other_leaves_the_instance_absent() {
+        let (root, vm, _master) = instancing_lib("virt-bad-create-arrow").await;
+        write(
+            &root,
+            "d/bad.c",
+            indoc! { r#"
+                void create() {
+                    string s;
+                    if (sscanf(file_name(this_object()), "/inst/%s", s) == 1) throw("boom");
+                }
+                void f() {}
+            "# },
+        );
+        let a = run(
+            &vm,
+            "/a.c",
+            r#"string e; void create() { e = catch("/inst/1/d/bad"->f()); }"#,
+        )
+        .await;
+        let e = committed_string(&vm, &a, 0);
+        assert!(e.contains("boom"), "{e}");
+        assert!(
+            vm.global_state
+                .object_space
+                .lookup("/inst/1/d/bad")
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_throwing_blueprints_create_leaves_both_absent() {
+        let (root, vm, _master) = instancing_lib("virt-bad-blueprint").await;
+        write(&root, "d/worse.c", "void create() { throw(\"boom\"); }\n");
+        let a = run(
+            &vm,
+            "/a.c",
+            r#"string e; void create() { e = catch(move_object("/inst/1/d/worse")); }"#,
+        )
+        .await;
+        let e = committed_string(&vm, &a, 0);
+        assert!(e.contains("boom"), "{e}");
+        assert!(vm.global_state.object_space.lookup("/d/worse").is_none());
+        assert!(
+            vm.global_state
+                .object_space
+                .lookup("/inst/1/d/worse")
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_throwing_clones_create_leaves_no_clone_resident() {
+        let (root, vm, _master) = instancing_lib("virt-bad-clone").await;
+        write(
+            &root,
+            "d/worse.c",
+            indoc! { r#"
+                string pre; string post;
+                void create() {
+                    if (sscanf(file_name(this_object()), "%s#%s", pre, post) == 2) throw("boom");
+                }
+            "# },
+        );
+        let a = run(
+            &vm,
+            "/a.c",
+            r#"string e; void create() { e = catch(clone_object("/d/worse")); }"#,
+        )
+        .await;
+        let e = committed_string(&vm, &a, 0);
+        assert!(e.contains("boom"), "{e}");
+        let keys: Vec<String> = vm
+            .global_state
+            .object_space
+            .iter()
+            .map(|x| x.key().to_owned())
+            .collect();
+        assert!(!keys.iter().any(|k| k.starts_with("/d/worse#")), "{keys:?}");
     }
 }

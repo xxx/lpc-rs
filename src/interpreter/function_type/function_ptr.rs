@@ -201,7 +201,7 @@ impl FunctionPtr {
                             ObjectLookup::NotCreated => {
                                 let loader = self.loader(ctx.config().lib_dir.as_str())?;
                                 let process = ctx.compile_process(&path, &loader).await?;
-                                ctx.insert_process_transactional(&process);
+                                ctx.insert_and_initialize(&process).await?;
                                 process
                             }
                         }

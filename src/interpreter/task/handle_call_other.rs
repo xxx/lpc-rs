@@ -259,13 +259,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         T: AsRef<str>,
         L: FnOnce() -> Result<Loader>,
     {
-        let process = match receiver_ref {
+        let (process, just_created) = match receiver_ref {
             LpcRef::String(_) => {
                 let path = receiver_ref
                     .with_string(|s| context.object_path(s.to_str(), "/", "call_other"))??;
 
                 match context.find_object(&path) {
-                    ObjectLookup::Found(proc) => proc,
+                    ObjectLookup::Found(proc) => (proc, false),
                     // A destructed object: don't create (that would resurrect
                     // it); the call below short-circuits.
                     ObjectLookup::Removed => return Ok(None),
@@ -273,13 +273,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     ObjectLookup::NotCreated => {
                         let loader = loader()?;
                         let process = context.compile_process(&path, &loader).await?;
-                        context.insert_process_transactional(&process);
-                        process
+                        (process, true)
                     }
                 }
             }
             LpcRef::Object(_) => match receiver_ref.live_object(context.txn()) {
-                Some(proc) => proc,
+                Some(proc) => (proc, false),
                 None => return Ok(None),
             },
             _ => return Ok(None),
@@ -289,7 +288,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // of whether the function exists or not, because this is a primary way of
         // initializing objects. If you've ever seen a call_other to some knowingly
         // undefined function in old lib code, this is why.
-        let result = if !process.is_initialized(context.txn()) {
+        let result = if just_created {
+            // This call created it, so a throwing initializer undoes the insert.
+            context.insert_and_initialize(&process).await?;
+            process
+        } else if !process.is_initialized(context.txn()) {
             Self::initialize_process(context.nested(process)?)
                 .await?
                 .context

@@ -14,9 +14,7 @@ use crate::interpreter::{
     lpc_ref::LpcRef,
     object_space::ObjectSpace,
     process::Process,
-    program::Program,
     stm::{Effect, TxnHandle},
-    task::Task,
     task_context::{Loader, ObjectLookup, TaskContext},
 };
 
@@ -95,11 +93,10 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             .await
             .map_err(|e| self.loaded_from_here(e))?;
 
-        self.insert_process_transactional(&process);
-        if let Err(e) = self.init_process_transactional(&process).await {
-            self.remove_process(process.clone());
-            return Err(self.loaded_from_here(e));
-        }
+        self.task_context
+            .insert_and_initialize(&process)
+            .await
+            .map_err(|e| self.loaded_from_here(e))?;
 
         Ok(process)
     }
@@ -260,31 +257,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// [`TaskContext::find_object`]; does not initialize or create.
     pub fn find_object(&self, path: &LpcPath) -> ObjectLookup {
         self.task_context.find_object(path)
-    }
-
-    /// Insert an object transactionally (cell write + deferred physical
-    /// insert). Delegates to [`TaskContext::insert_process_transactional`].
-    pub(crate) fn insert_process_transactional(&self, process: &Arc<Process>) {
-        self.task_context.insert_process_transactional(process);
-    }
-
-    /// Initialize a newly created object in a sub-task that joins this
-    /// transaction's commit. Insert (transactional) happens *before* init, to
-    /// prevent infinite loops, and the sub-task's writes ride this
-    /// transaction's single commit.
-    pub async fn init_process_transactional(&self, process: &Arc<Process>) -> Result<()> {
-        Task::<N>::initialize_process(self.task_context.nested(process.clone())?).await?;
-
-        Ok(())
-    }
-
-    /// Convert the passed [`Program`] into a clone [`Process`], write its
-    /// cell, and record a deferred physical insert. The clone is usable
-    /// immediately (via the cell) but physically visible only after commit.
-    pub fn insert_clone(&self, program: Arc<Program>) -> Arc<Process> {
-        let process = self.object_space().create_clone_process(program);
-        self.insert_process_transactional(&process);
-        process
     }
 
     /// Remove the passed [`Process`] from the object space, transactionally:
