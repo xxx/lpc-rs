@@ -493,32 +493,32 @@ mod tests {
             );
         }
 
-        /// The confinement error carries no expanded server path either.
-        ///
-        /// `LpcPath::new_server` absolutizes eagerly, so the path this
-        /// prints is already environment-dependent; the check that
-        /// matters is that the redundant expanded/`lib_dir` clauses are
-        /// gone, which is what the two assertions below pin down.
+        /// An escape's message carries neither the expanded server path nor the lib root.
         #[tokio::test]
-        async fn an_escape_is_named_without_the_server_path() {
+        async fn a_confinement_error_names_no_server_path() {
+            use crate::test_support::TempLib;
+
+            let root = TempLib::new("confinement-escape");
             let config: Arc<Config> = ConfigBuilder::default()
-                .lib_dir("tests")
+                .lib_dir(root.to_str().unwrap())
                 .build()
                 .unwrap()
                 .into();
-            let path = LpcPath::new_server("../../secure.c");
-            let e = config
+            let path =
+                LpcPath::new_in_game("/../../../../../../../../etc/passwd", "/", &*config.lib_dir);
+            let msg = config
                 .validate_in_game_path(&path, None)
                 .unwrap_err()
                 .to_string();
-            assert_eq!(
-                e,
-                format!("attempt to access a file outside of lib_dir: `{path}`")
-            );
-            assert!(!e.contains("expanded to"), "{e}");
             assert!(
-                !e.contains(config.lib_dir.as_str()),
-                "server path leaked: {e}"
+                msg.starts_with("attempt to access a file outside of lib_dir: `"),
+                "{msg}"
+            );
+            assert!(!msg.contains("expanded to"), "{msg}");
+            assert!(!msg.contains("(lib_dir: `"), "{msg}");
+            assert!(
+                !msg.contains(root.to_str().unwrap()),
+                "server path leaked: {msg}"
             );
         }
 
