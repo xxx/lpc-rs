@@ -220,11 +220,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// The chain a task started by the current frame's code is entered with.
-    pub(crate) fn callers(&self) -> Result<Arc<Caller>> {
+    pub(crate) fn chain(&self) -> Result<Arc<Caller>> {
         let Some(top) = self.stack.len().checked_sub(1) else {
-            return Err(self.runtime_bug("callers of an empty stack"));
+            return Err(self.runtime_bug("the chain of an empty stack"));
         };
-        Ok(self.stack.callers(top, self.context.callers.clone()))
+        Ok(self.stack.chain(top, self.context.callers.clone()))
     }
 
     /// Rebuild the task to a blank slate for a retry re-run

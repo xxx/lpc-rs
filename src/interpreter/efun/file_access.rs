@@ -46,14 +46,7 @@ pub(crate) async fn authorize<const N: usize>(
         LpcRef::from(Arc::downgrade(context.process())),
         context.calling_program(),
     ];
-    if !valid_apply(
-        context.task_context(),
-        Some(context.callers()),
-        apply,
-        &args,
-    )
-    .await?
-    {
+    if !valid_apply(context.task_context(), Some(context.chain()), apply, &args).await? {
         return Err(context.runtime_error(format!("{efun}: permission denied")));
     }
     Ok(FileAccess { in_game, server })

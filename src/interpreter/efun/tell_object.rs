@@ -20,7 +20,7 @@ pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         Some(proc) => {
             deliver(
                 context.task_context(),
-                Some(context.callers()),
+                || Some(context.chain()),
                 &proc,
                 None,
                 &msg,

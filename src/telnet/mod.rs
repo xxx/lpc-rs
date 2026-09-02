@@ -784,13 +784,20 @@ mod tests {
         );
     }
 
-    /// The callback is entered for the pointer's owner.
+    /// The callback is entered for the pointer's owner; the receiver is
+    /// another object, so the owner is told apart from it.
     #[tokio::test]
     async fn an_input_to_callback_sees_its_owner() {
         let vm = Vm::new(test_config());
+        let owner = vm
+            .initialize_process_from_code("/foo/asker.c", "void create() {}")
+            .await
+            .unwrap()
+            .context
+            .process;
         let proc = vm
             .initialize_process_from_code(
-                "/foo/asker.c",
+                "/foo/hearer.c",
                 "string seen; void heard(string s) { seen = file_name(previous_object()); }",
             )
             .await
@@ -799,7 +806,7 @@ mod tests {
             .process;
         let func = proc.program.lookup_function("heard").unwrap().clone();
         let ptr = FunctionPtrBuilder::default()
-            .owner(Arc::downgrade(&proc))
+            .owner(Arc::downgrade(&owner))
             .address(FunctionAddress::Local(Arc::downgrade(&proc), func))
             .build()
             .unwrap();

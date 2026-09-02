@@ -56,10 +56,11 @@ pub(crate) async fn apply_on(
     timed(ctx, nested, function, args).await
 }
 
-/// `target->name(args)` as `apply_on`, with `this_player` as the caller;
-/// `None` when `target` does not define `name`.
+/// `target->name(args)` as `apply_on`, entered through `callers`; `None`
+/// when `target` does not define `name`.
 pub(crate) async fn apply_hook(
     ctx: &TaskContext,
+    callers: Callers,
     target: &Arc<Process>,
     this_player: &Arc<Process>,
     name: &str,
@@ -68,16 +69,9 @@ pub(crate) async fn apply_hook(
     let Some(function) = target.program.unmangled_functions.get(name).cloned() else {
         return Ok(None);
     };
-    apply_on(
-        ctx,
-        as_actor(ctx, this_player),
-        target,
-        this_player,
-        function,
-        args,
-    )
-    .await
-    .map(Some)
+    apply_on(ctx, callers, target, this_player, function, args)
+        .await
+        .map(Some)
 }
 
 /// Fire `pointer` as `actor` (`this_player` and the caller too) with `args`;
@@ -91,7 +85,10 @@ pub(crate) async fn apply_pointer(
     let callers = as_actor(ctx, actor);
     let handler_ctx = ctx.nested(callers.clone(), actor.clone())?;
     handler_ctx.this_player.store(Some(actor.clone()));
-    let Some(resolved) = pointer.prepare_call(args, &handler_ctx, callers).await? else {
+    let Some(resolved) = pointer
+        .prepare_call(args, &handler_ctx, || Ok(callers))
+        .await?
+    else {
         return Ok(None);
     };
     timed(
@@ -137,13 +134,13 @@ pub(crate) async fn valid_apply(
     Ok(verdict.is_some_and(|v| v.is_truthy(ctx.txn())))
 }
 
-/// `message` to `target`: through `catch_tell` — entered through `callers`,
-/// applied with `this_player` set when one is given — else its connection,
-/// else the debug log, as effects; a destructed target is the log. Whether
-/// it was received; the log is not.
+/// `message` to `target`: through `catch_tell` — entered through the chain
+/// `callers` yields, applied with `this_player` set when one is given — else
+/// its connection, else the debug log, as effects; a destructed target is
+/// the log. Whether it was received; the log is not.
 pub(crate) async fn deliver(
     ctx: &TaskContext,
-    callers: Callers,
+    callers: impl FnOnce() -> Callers,
     target: &Arc<Process>,
     this_player: Option<&Arc<Process>>,
     message: &str,
@@ -155,6 +152,7 @@ pub(crate) async fn deliver(
     }
     if let Some(function) = target.program.unmangled_functions.get(CATCH_TELL).cloned() {
         let args = [LpcString::from(message).into()];
+        let callers = callers();
         match this_player {
             Some(player) => apply_on(ctx, callers, target, player, function, &args).await?,
             None => apply_nested(ctx, callers, target, function, &args).await?,

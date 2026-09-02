@@ -12,7 +12,7 @@ use crate::{
         apply::apply_hook,
         process::Process,
         stm::{MergeOp, TxnHandle},
-        task_context::TaskContext,
+        task_context::{Caller, Callers, TaskContext},
     },
 };
 
@@ -82,6 +82,7 @@ fn forget(txn: &TxnHandle, object: &Arc<Process>, livings: &[Arc<Process>]) {
 /// `livings` cell, a living one the whole inventory.
 pub(crate) async fn after_move(
     ctx: &TaskContext,
+    callers: Callers,
     mover: &Arc<Process>,
     new_env: &Arc<Process>,
 ) -> Result<()> {
@@ -98,31 +99,34 @@ pub(crate) async fn after_move(
             .iter()
             .filter(|ob| ob.commands_enabled(txn))
             .collect();
-        fire_init(ctx, new_env, mover).await?;
+        fire_init(ctx, &callers, new_env, mover).await?;
         for ob in &others {
-            fire_init(ctx, ob, mover).await?;
+            fire_init(ctx, &callers, ob, mover).await?;
         }
         for living in &livings {
-            fire_init(ctx, mover, living).await?;
+            fire_init(ctx, &callers, mover, living).await?;
         }
     } else {
         for living in Process::livings_of(txn, new_env) {
-            fire_init(ctx, mover, &living).await?;
+            fire_init(ctx, &callers, mover, &living).await?;
         }
     }
     if env_is_living {
-        fire_init(ctx, mover, new_env).await?;
+        fire_init(ctx, &callers, mover, new_env).await?;
     }
     Ok(())
 }
 
-/// `target->init()` with `this_player` set, if the target defines it.
+/// `target->init()` with `this_player` set, entered for that living in
+/// front of `callers`, if the target defines it.
 pub(crate) async fn fire_init(
     ctx: &TaskContext,
+    callers: &Callers,
     target: &Arc<Process>,
     this_player: &Arc<Process>,
 ) -> Result<()> {
-    apply_hook(ctx, target, this_player, INIT, &[])
+    let chain = Some(Caller::link(this_player.clone(), callers.clone()));
+    apply_hook(ctx, chain, target, this_player, INIT, &[])
         .await
         .map(|_| ())
 }

@@ -13,6 +13,9 @@ where `add_action` and `add_rule` register the commands that object offers.
 An `init` that raises a runtime error aborts the move and the task that caused
 it, as any runtime error does: nothing it wrote is committed.
 
+In `init`, `previous_object()` is that living, and the chain behind it is
+where `move_object` was called.
+
 ### See also
 
-`add_action`, `add_rule`, `move_object`
+`add_action`, `add_rule`, `move_object`, `previous_object`

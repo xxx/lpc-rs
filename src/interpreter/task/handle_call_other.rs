@@ -240,7 +240,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     fn loader(&self) -> Result<Loader> {
         Ok(Loader {
             func: "call_other".to_string(),
-            callers: self.callers()?,
+            chain: self.chain()?,
             program: self
                 .stack
                 .calling_program(self.context.config().lib_dir.as_str()),
@@ -292,11 +292,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let result = if let Some(loader) = created_by {
             // This call created it, so a throwing initializer undoes the insert.
             context
-                .insert_and_initialize(loader.chain(), &process)
+                .insert_and_initialize(loader.callers(), &process)
                 .await?;
             process
         } else if !process.is_initialized(context.txn()) {
-            Self::initialize_process(context.nested(loader()?.chain(), process)?)
+            Self::initialize_process(context.nested(loader()?.callers(), process)?)
                 .await?
                 .context
                 .process

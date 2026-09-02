@@ -69,7 +69,14 @@ pub(crate) async fn dispatch_from_connection(
         return Ok(Outcome::Handled);
     }
     let message = default_message(ctx, &actor);
-    deliver(ctx, as_actor(ctx, &actor), &actor, Some(&actor), &message).await?;
+    deliver(
+        ctx,
+        || as_actor(ctx, &actor),
+        &actor,
+        Some(&actor),
+        &message,
+    )
+    .await?;
     Ok(Outcome::Unhandled)
 }
 
@@ -79,6 +86,7 @@ async fn pre_hook(ctx: &TaskContext, actor: &Arc<Process>, line: &str) -> Result
     Ok(
         match apply_hook(
             ctx,
+            as_actor(ctx, actor),
             actor,
             actor,
             PROCESS_INPUT,
@@ -105,7 +113,7 @@ async fn fallback(ctx: &TaskContext, actor: &Arc<Process>, line: &str) -> Result
         None => master_message(ctx, actor, line).await?,
     };
     if let Some(message) = message {
-        deliver(ctx, as_actor(ctx, actor), actor, Some(actor), &message).await?;
+        deliver(ctx, || as_actor(ctx, actor), actor, Some(actor), &message).await?;
     }
     Ok(())
 }
@@ -141,7 +149,16 @@ async fn master_message(
         LpcString::from(line).into(),
     ];
     Ok(
-        match apply_hook(ctx, &master, actor, COMMAND_NOT_FOUND, &args).await? {
+        match apply_hook(
+            ctx,
+            as_actor(ctx, actor),
+            &master,
+            actor,
+            COMMAND_NOT_FOUND,
+            &args,
+        )
+        .await?
+        {
             None => Some(default_message(ctx, actor)),
             Some(LpcRef::String(message)) => Some(message.to_string()),
             Some(_) => None,

@@ -49,7 +49,7 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
             ];
             if !valid_apply(
                 context.task_context(),
-                Some(context.callers()),
+                Some(context.chain()),
                 VALID_EXEC,
                 &args,
             )
