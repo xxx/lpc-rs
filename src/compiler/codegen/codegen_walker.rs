@@ -2436,8 +2436,8 @@ mod tests {
         let mut walker = CodegenWalker::default();
         walker.setup_init();
 
-        // Planted with the default kind: the instruction follows from where
-        // the name is found, not from the kind.
+        // Both functions below are planted with the default kind: the
+        // instruction follows from where the name is found, not from the kind.
         let path = LpcPath::new_in_game("/secure/simul_efuns", "/", LIB_DIR);
         let mut prog = Program::new(path);
         prog.functions.insert(

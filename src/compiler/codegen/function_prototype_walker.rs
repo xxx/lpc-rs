@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use lpc_rs_core::{
-    RegisterSize, call_namespace::CallNamespace, function_arity::FunctionArity, lpc_path::LpcPath,
-    lpc_type::LpcType,
+    RegisterSize, call_namespace::CallNamespace, function_arity::FunctionArity, lpc_type::LpcType,
 };
 use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototypeBuilder};
@@ -26,31 +25,16 @@ pub struct FunctionPrototypeWalker {
 
     /// The highest `$N` referenced in the closure being walked.
     max_closure_arg_reference: RegisterSize,
-
-    /// The simul-efun source file the config names, resolved once per walk.
-    simul_efun_source: Option<LpcPath>,
 }
 
 impl FunctionPrototypeWalker {
     /// Create a new instance
     #[inline]
     pub fn new(context: CompilationContext) -> Self {
-        let simul_efun_source = context.config.simul_efun_source();
         Self {
             context,
             max_closure_arg_reference: 0,
-            simul_efun_source,
         }
-    }
-
-    /// Am I walking the simul efuns? Their functions are `SimulEfun`-kind, so
-    /// callers compile to `CallSimulEfun`.
-    #[inline]
-    fn is_simul_efuns(&self) -> bool {
-        let lib_dir = &*self.context.config.lib_dir;
-        self.simul_efun_source
-            .as_ref()
-            .is_some_and(|source| *self.context.filename.as_in_game(lib_dir) == **source)
     }
 }
 
@@ -157,12 +141,6 @@ impl TreeWalker for FunctionPrototypeWalker {
         let num_default_args =
             RegisterSize::try_from(node.parameters.iter().filter(|p| p.value.is_some()).count())?;
 
-        let kind = if self.is_simul_efuns() {
-            FunctionKind::SimulEfun
-        } else {
-            FunctionKind::Local
-        };
-
         let arg_types = node
             .parameters
             .iter()
@@ -174,7 +152,6 @@ impl TreeWalker for FunctionPrototypeWalker {
                 .name(node.name.to_owned())
                 .filename(self.context.filename.clone())
                 .return_type(node.return_type)
-                .kind(kind)
                 .arity(FunctionArity {
                     num_args,
                     num_default_args,

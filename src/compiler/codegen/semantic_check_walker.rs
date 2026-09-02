@@ -34,6 +34,7 @@ use crate::{
             var_node::VarNode,
             while_node::WhileNode,
         },
+        callee::Callee,
         codegen::tree_walker::{
             ContextHolder, Pass, TreeWalker, walk_assignment, walk_binary_op, walk_block,
             walk_closure, walk_do_while, walk_for, walk_foreach, walk_function_def,
@@ -342,10 +343,12 @@ impl TreeWalker for SemanticCheckWalker {
                     let wants_ref = prototype.is_ref_param(index);
                     if wants_ref && !is_ref_arg {
                         // An implicit efun lvalue accepts a bare variable.
-                        if prototype.is_efun() && matches!(arg, ExpressionNode::Var(_)) {
+                        if matches!(callee, Callee::Efun(_))
+                            && matches!(arg, ExpressionNode::Var(_))
+                        {
                             continue;
                         }
-                        let e = if prototype.is_efun() {
+                        let e = if matches!(callee, Callee::Efun(_)) {
                             LpcError::new(format!(
                                 "argument {} of `{}` must be a variable",
                                 index + 1,

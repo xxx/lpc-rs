@@ -180,31 +180,6 @@ impl CompilationContext {
         }
     }
 
-    /// Do I, or one of my parents, contain a function with this name?
-    pub fn contains_function(&self, name: &str, namespace: &CallNamespace) -> bool {
-        let find_in_inherit = || {
-            self.inherits
-                .iter()
-                .rev()
-                .any(|p| p.contains_function(name))
-        };
-
-        match namespace {
-            CallNamespace::Local => {
-                self.function_prototypes.contains_key(name) || find_in_inherit()
-            }
-            CallNamespace::Parent => find_in_inherit(),
-            CallNamespace::Named(ns) => match ns.as_str() {
-                EFUN => EFUN_PROTOTYPES.contains_key(name),
-                ns => self
-                    .inherit_names
-                    .get(ns)
-                    .and_then(|i| self.inherits.get(*i).map(|p| p.contains_function(name)))
-                    .unwrap_or(false),
-            },
-        }
-    }
-
     /// Whether a call by name resolves anywhere I may reach.
     pub fn contains_function_complete(&self, name: &str, namespace: &CallNamespace) -> bool {
         self.lookup_function_complete(name, namespace).is_some()
@@ -510,24 +485,6 @@ mod tests {
         );
 
         assert_eq!(
-            // efun
-            context
-                .lookup_function_complete("dump", &CallNamespace::Local)
-                .unwrap()
-                .prototype(),
-            EFUN_PROTOTYPES.get("dump").unwrap()
-        );
-
-        assert_eq!(
-            // simul efun
-            context
-                .lookup_function_complete("simul_efun", &CallNamespace::Local)
-                .unwrap()
-                .prototype(),
-            &simul_efun.prototype
-        );
-
-        assert_eq!(
             context.lookup_function_complete("dump", &CallNamespace::Local),
             Some(Callee::Efun(EFUN_PROTOTYPES.get("dump").unwrap()))
         );
@@ -554,85 +511,6 @@ mod tests {
             // not through parent
             context.lookup_function_complete("simul_efun", &CallNamespace::Parent),
             None
-        );
-
-        // contains_function
-
-        assert_eq!(
-            // gets from the inherited parent
-            context.contains_function("hello_friends", &CallNamespace::Local),
-            true
-        );
-
-        assert_eq!(
-            // gets the local version
-            context.contains_function("foo", &CallNamespace::Local),
-            true
-        );
-
-        assert_eq!(
-            // gets the parent version
-            context.contains_function("foo", &CallNamespace::Parent),
-            true
-        );
-
-        assert_eq!(
-            // gets the more local overridden version
-            context.contains_function("this_object", &CallNamespace::Local),
-            true
-        );
-
-        assert_eq!(
-            // efun namespace
-            context.contains_function("this_object", &CallNamespace::Named("efun".into())),
-            true
-        );
-
-        assert_eq!(
-            // specifically-named namespace
-            context.contains_function("foo", &CallNamespace::Named("my_named_inherit".into())),
-            true
-        );
-
-        assert_eq!(
-            // cannot get to efuns through non `efun` namespaces
-            context.contains_function("dump", &CallNamespace::Named("my_named_inherit".into())),
-            false
-        );
-
-        assert_eq!(
-            // unknown namespace
-            context.contains_function("this_object", &CallNamespace::Named("blargh".into())),
-            false
-        );
-
-        assert_eq!(
-            // not defined
-            context.contains_function("bar", &CallNamespace::Local),
-            false
-        );
-
-        assert_eq!(
-            // efun
-            context.contains_function("dump", &CallNamespace::Local),
-            false
-        );
-
-        assert_eq!(
-            // efun
-            context.contains_function("simul_efun", &CallNamespace::Local),
-            false
-        );
-
-        assert_eq!(
-            // not through parent
-            context.contains_function("dump", &CallNamespace::Parent),
-            false
-        );
-
-        assert_eq!(
-            context.contains_function("simul_efun", &CallNamespace::Parent),
-            false
         );
 
         // contains_function_complete
