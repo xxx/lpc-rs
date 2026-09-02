@@ -178,7 +178,7 @@ impl GlobalState {
             return Ok(None);
         };
 
-        // The driver fires the pointer for its owner: that is who called.
+        // A pointer the driver fires is called by its owner.
         let callers = Some(Caller::link(seat, None));
         let process = &resolved.process;
         if !self.is_initialized(process) {
