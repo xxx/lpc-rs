@@ -51,6 +51,7 @@ phf = { version = "0.14.0", features = ["macros"] }
 readonly = "0.2.3"
 regex = "1"
 regex-automata = "0.4"
+serde_json = { version = "1", features = ["preserve_order"] }
 stable-vec = "0.4.0"
 thin-vec = "0.2.12"
 tokio = { version = "1", features = ["io-std", "io-util", "sync", "fs", "tracing", "rt-multi-thread", "signal", "parking_lot", "net", "time", "macros"] }

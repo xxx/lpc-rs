@@ -5,7 +5,8 @@
 The driver applies `gmcp` in the object bound to a connection whenever the
 client sends a GMCP message. `package` is the message name (`Core.Hello`,
 `Char.Login`, …); `payload` is whatever followed it, usually JSON, as text —
-empty when the message was the name alone.
+empty when the message was the name alone. `json_decode` turns it into a
+value.
 
 Messages arrive whether or not an `input_to` is pending. They are dropped only
 until the master's `connect()` has returned an object; from then on —
@@ -20,4 +21,4 @@ this one took it.
 
 ### See also
 
-`send_gmcp`, `query_connection`
+`json_decode`, `send_gmcp`, `query_connection`

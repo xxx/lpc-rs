@@ -63,7 +63,7 @@ private int do_stats(string arg) {
 }
 
 private int do_gmcp(string arg) {
-    send_gmcp(this_player(), "Smoke.Echo", "{ \"who\": \"" + name + "\" }");
+    send_gmcp(this_player(), "Smoke.Echo", json_encode(([ "who": name ])));
     write("gmcp sent.\n");
     return 1;
 }
