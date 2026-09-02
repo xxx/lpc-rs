@@ -67,6 +67,21 @@ impl LpcPath {
         }
     }
 
+    /// The source file of the object this path names: one trailing `.c`
+    /// stripped, then `.c` appended — the inverse of the object key, so
+    /// `/x`, `/x.c` and `/x.h` give `/x.c`, `/x.c` and `/x.h.c`.
+    pub fn source_file(&self) -> LpcPath {
+        fn with_c(path: &Path) -> PathBuf {
+            let text = path.to_string_lossy();
+            let stem = text.strip_suffix(".c").unwrap_or(&text);
+            PathBuf::from(format!("{stem}.c"))
+        }
+        match self {
+            LpcPath::Server(x) => LpcPath::Server(with_c(x)),
+            LpcPath::InGame(x) => LpcPath::InGame(with_c(x)),
+        }
+    }
+
     /// Return the full, absolute on-server path for a file
     ///
     /// # Arguments
@@ -350,6 +365,26 @@ mod tests {
                 .as_os_str(),
             ""
         );
+    }
+
+    #[test]
+    fn source_file_is_the_object_key_plus_dot_c() {
+        for (given, expected) in [
+            ("/x", "/x.c"),
+            ("/x.c", "/x.c"),
+            ("/include/x.h", "/include/x.h.c"),
+            ("/std/sword#3", "/std/sword#3.c"),
+            ("/d/foo.bar/baz", "/d/foo.bar/baz.c"),
+        ] {
+            let in_game = LpcPath::InGame(PathBuf::from(given)).source_file();
+            assert_eq!(in_game, LpcPath::InGame(PathBuf::from(expected)), "{given}");
+            let server = LpcPath::Server(PathBuf::from(format!("/lib{given}"))).source_file();
+            assert_eq!(
+                server,
+                LpcPath::Server(PathBuf::from(format!("/lib{expected}"))),
+                "{given}"
+            );
+        }
     }
 
     #[test]
