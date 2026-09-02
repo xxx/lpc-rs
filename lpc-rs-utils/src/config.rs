@@ -24,6 +24,8 @@ pub struct Config {
     #[builder(setter(into, strip_option), default = "None")]
     pub auto_include_file: Option<Ustr>,
 
+    /// The file every object inherits first, as an in-game path with or
+    /// without its `.c`.
     #[builder(setter(into, strip_option), default = "None")]
     pub auto_inherit_file: Option<Ustr>,
 

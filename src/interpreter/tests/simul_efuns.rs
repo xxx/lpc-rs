@@ -1,5 +1,5 @@
-//! The simul-efun file: named in the config with or without its `.c`, its
-//! functions run in the simul-efun object rather than in the caller.
+//! The simul-efun file: named in the config with or without its `.c`, the
+//! functions it defines run in the simul-efun object rather than in the caller.
 
 use lpc_rs_utils::config::ConfigBuilder;
 

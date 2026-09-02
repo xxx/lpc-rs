@@ -29,8 +29,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             if let Some(func) = function {
                 func.clone()
             } else {
-                // The compiler emits CallEfun and CallSimulEfun for these, so
-                // this fallback should be unreachable.
+                // A function the simul-efun file inherits lands here: its
+                // prototype is `Local`-kind, so callers emit `Call`, and it
+                // runs in the caller.
                 warn!(
                     at = %current_frame.to_stack_trace_format(),
                     "call to unknown local function `{name}`, trying simul_efuns and efuns"
