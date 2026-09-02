@@ -539,11 +539,6 @@ impl TaskContext {
         }
     }
 
-    /// [`in_game_cwd_of`](Self::in_game_cwd_of) the task's entry object.
-    pub fn in_game_cwd(&self) -> PathBuf {
-        self.in_game_cwd_of(&self.process)
-    }
-
     /// Update the context's `result` with the passed [`LpcRef`]
     #[inline]
     pub fn set_result(&self, new_result: LpcRef) -> Result<()> {
@@ -680,11 +675,7 @@ mod tests {
     }
 
     #[test]
-    fn test_in_game_cwd() {
-        // let config = ConfigBuilder::default()
-        //     .lib_dir("./tests/fixtures/code/")
-        //     .build()
-        //     .unwrap();
+    fn test_in_game_cwd_of() {
         let config = test_config();
         let program = ProgramBuilder::default()
             .filename(LpcPath::new_server("./tests/fixtures/code/foo/bar/baz.c"))
@@ -695,6 +686,9 @@ mod tests {
         let global_state = GlobalState::new(config, tx);
         let context = TaskContext::new(Arc::new(global_state), process, None);
 
-        assert_eq!(context.in_game_cwd().to_str().unwrap(), "/foo/bar");
+        assert_eq!(
+            context.in_game_cwd_of(&context.process).to_str().unwrap(),
+            "/foo/bar"
+        );
     }
 }

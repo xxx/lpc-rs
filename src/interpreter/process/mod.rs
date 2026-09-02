@@ -112,8 +112,8 @@ pub struct Process {
     pub position: ProcessPosition,
 }
 
-/// A `Process` with an empty `Program`: no globals, no clone id, no
-/// connection, default flags and position. Test fixtures use this.
+/// A `Process` with an empty `Program`: no globals, an `ObjectName::File`
+/// name, no connection, default flags and position. Test fixtures use this.
 impl Default for Process {
     fn default() -> Self {
         Self {

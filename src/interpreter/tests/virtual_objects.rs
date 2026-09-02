@@ -154,6 +154,8 @@ mod the_apply {
         let e = committed_string(&vm, &a, 0);
         assert!(e.contains("Cannot read file `/nowhere.c`"), "{e}");
         assert_eq!(count(&vm, &master, ASKS), 1);
+        assert_eq!(count(&vm, &master, LOADS), 1);
+        assert_eq!(committed_string(&vm, &master, LOAD_PATH), "/nowhere.c");
         assert!(vm.global_state.object_space.lookup("/nowhere").is_none());
     }
 
@@ -161,10 +163,10 @@ mod the_apply {
     async fn a_master_without_compile_object_fails_as_a_missing_file() {
         let root = TempLib::new("virt-undefined");
         let vm = Vm::new(temp_lib_config(&root));
-        run(
+        let master = run(
             &vm,
             "/secure/master.c",
-            r#"int valid_load(string p, string f, object c, mixed g) { return 1; }"#,
+            r#"string p; int valid_load(string path, string f, object c, mixed g) { p = path; return 1; }"#,
         )
         .await;
         let a = run(
@@ -175,6 +177,7 @@ mod the_apply {
         .await;
         let e = committed_string(&vm, &a, 0);
         assert!(e.contains("Cannot read file `/inst/1/d/room1.c`"), "{e}");
+        assert_eq!(committed_string(&vm, &master, 0), "/inst/1/d/room1.c");
     }
 
     /// With no master at all, a fileless path fails as every load does.
@@ -652,6 +655,36 @@ mod doors {
         .await;
         let name = committed_string(&vm, &a, 0);
         assert!(name.starts_with("/d/room1#"), "{name}");
+    }
+
+    /// `find_object`, `->`, and `move_object` reaching one virtual path in
+    /// the same `create()` share one materialization (spec R7: each door
+    /// reaches the same object afterwards).
+    #[tokio::test]
+    async fn every_door_reaches_the_same_object() {
+        let (_root, vm, master) = instancing_lib("virt-door-identity").await;
+        let a = run(
+            &vm,
+            "/a.c",
+            indoc! { r#"
+                string found; string env;
+                void create() {
+                    found = file_name(find_object("/inst/17/d/room1"));
+                    "/inst/17/d/room1"->rd();
+                    move_object("/inst/17/d/room1");
+                    env = file_name(environment(this_object()));
+                }
+            "# },
+        )
+        .await;
+        assert_eq!(committed_string(&vm, &a, 0), "/inst/17/d/room1");
+        assert_eq!(committed_string(&vm, &a, 1), "/inst/17/d/room1");
+        assert_eq!(
+            count(&vm, &master, ASKS),
+            1,
+            "one materialization served every door"
+        );
+        resident(&vm, "/inst/17/d/room1");
     }
 
     /// Two tasks materializing one path get the one object.
