@@ -76,7 +76,7 @@ mod tests {
             task_context::TaskContext,
             vm::{Vm, global_state::GlobalState, vm_op::VmOp},
         },
-        test_support::{compile_prog, test_config},
+        test_support::{compile_prog, permissive_master, test_config},
     };
 
     /// Committed global values by name, read through the committer.
@@ -96,15 +96,16 @@ mod tests {
             .collect()
     }
 
-    fn task_context_fixture(
+    async fn task_context_fixture(
         program: Program,
         config: Arc<Config>,
         tx: tokio::sync::mpsc::Sender<VmOp>,
     ) -> TaskContext {
         let process = Process::new(program);
-        let global_state = GlobalState::new(config, tx);
+        let global_state = Arc::new(GlobalState::new(config, tx));
+        permissive_master(&global_state.object_space).await;
 
-        TaskContext::new(Arc::new(global_state), process, None)
+        TaskContext::new(global_state, process, None)
     }
 
     #[tokio::test]
@@ -117,7 +118,7 @@ mod tests {
 
         let (program, config, _) = compile_prog(prog).await;
         let func = program.initializer.clone().expect("no init found?");
-        let context = task_context_fixture(program, config, tx);
+        let context = task_context_fixture(program, config, tx).await;
 
         let mut task = Task::<10>::new(context.clone());
         task.timed_eval(func.clone(), &[], 300)
@@ -129,8 +130,8 @@ mod tests {
             .await
             .expect("second task failed");
 
-        // procs are /example, /example#0, /example#1
-        assert_eq!(task.context.object_space().len(), 3);
+        // procs are the master, /example, /example#0, /example#1
+        assert_eq!(task.context.object_space().len(), 4);
     }
 
     #[tokio::test]
@@ -143,7 +144,7 @@ mod tests {
         let func = program.initializer.clone().expect("no init found?");
         let (tx, _rx) = tokio::sync::mpsc::channel(128);
 
-        let context = task_context_fixture(program, config, tx);
+        let context = task_context_fixture(program, config, tx).await;
         let mut task = Task::<10>::new(context);
 
         let result = task.timed_eval(func, &[], 300).await;
