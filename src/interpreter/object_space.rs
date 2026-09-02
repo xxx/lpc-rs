@@ -93,7 +93,7 @@ impl ObjectSpace {
     /// cell, no initialization). Bootstrap only; in-game creation goes through
     /// `insert_process_transactional`.
     pub async fn create_process_from_path(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        let (process, warnings) = compile_process_from_path(self, path).await?;
+        let (process, warnings) = compile_process_from_path(self, path, None).await?;
         log_warnings(&self.config, warnings).await;
         Self::insert_process_physical(self, process.clone());
         Ok(process)
@@ -106,7 +106,7 @@ impl ObjectSpace {
         P: Into<LpcPath> + Send + Sync,
         S: AsRef<str> + Send + Sync,
     {
-        let (process, warnings) = compile_process_from_code(self, filename, code).await?;
+        let (process, warnings) = compile_process_from_code(self, filename, code, None).await?;
         log_warnings(&self.config, warnings).await;
         Self::insert_process_physical(self, process.clone());
         Ok(process)

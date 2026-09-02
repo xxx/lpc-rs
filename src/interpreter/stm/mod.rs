@@ -542,7 +542,7 @@ impl AttemptBody for ResolveObjectBody<'_> {
             return Ok(None);
         }
 
-        let (process, warnings) = compile_process_from_path(object_space, self.path).await?;
+        let (process, warnings) = compile_process_from_path(object_space, self.path, None).await?;
         for warning in warnings {
             txn.with(|t| t.record_effect(Effect::DebugLog(warning.diagnostic_string())));
         }

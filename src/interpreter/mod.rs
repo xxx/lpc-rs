@@ -3,6 +3,7 @@ pub mod bank;
 pub mod call_frame;
 pub mod call_outs;
 pub mod call_stack;
+pub mod compile_gate;
 pub mod efun;
 pub mod function_type;
 
@@ -41,6 +42,10 @@ pub const VALID_EXEC: &str = "valid_exec";
 pub const VALID_READ: &str = "valid_read";
 /// Master apply: whether the calling code may write a lib file (`doc/apply/master/valid_write.md`).
 pub const VALID_WRITE: &str = "valid_write";
+/// Master apply: whether the calling code may compile a file into an object (`doc/apply/master/valid_load.md`).
+pub const VALID_LOAD: &str = "valid_load";
+/// Master apply: whether a program being compiled may inherit another (`doc/apply/master/valid_inherit.md`).
+pub const VALID_INHERIT: &str = "valid_inherit";
 /// Master apply: returns the object a new connection becomes (`doc/apply/master/connect.md`).
 pub const CONNECT: &str = "connect";
 /// Master apply: receives each uncaught runtime error (`doc/apply/master/error_handler.md`).

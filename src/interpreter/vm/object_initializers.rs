@@ -73,7 +73,7 @@ impl GlobalState {
         self: &Arc<Self>,
         path: &LpcPath,
     ) -> Result<task::Task<MAX_CALL_STACK_SIZE>> {
-        let (process, warnings) = compile_process_from_path(&self.object_space, path).await?;
+        let (process, warnings) = compile_process_from_path(&self.object_space, path, None).await?;
         log_warnings(&self.config, warnings).await;
         process_insert_and_initialize_program(process, TaskTemplate::from(self.clone())).await
     }
@@ -90,7 +90,7 @@ impl GlobalState {
         S: AsRef<str> + Send + Sync,
     {
         let (process, warnings) =
-            compile_process_from_code(&self.object_space, filename, code).await?;
+            compile_process_from_code(&self.object_space, filename, code, None).await?;
         log_warnings(&self.config, warnings).await;
         process_insert_and_initialize_program(process, TaskTemplate::from(self.clone())).await
     }
