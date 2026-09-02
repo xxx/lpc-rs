@@ -20,6 +20,7 @@ use crate::interpreter::{
 };
 
 /// A pointer resolved for one call: the receiver, the function, its arguments.
+#[derive(Debug)]
 pub struct ResolvedCall {
     pub process: Arc<Process>,
     pub function: Arc<ProgramFunction>,

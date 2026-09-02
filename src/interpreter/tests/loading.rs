@@ -322,6 +322,27 @@ mod doors {
         assert!(vm.global_state.object_space.lookup("/x").is_some());
     }
 
+    /// The object the resolve committed is the one the firing runs in.
+    #[tokio::test]
+    async fn a_call_out_receiver_is_loaded_once_and_run_in() {
+        let root = TempLib::new("door-pointer-call-out-once");
+        let vm = Vm::new(temp_lib_config(&root));
+        let master = recording_master(&vm, &root).await;
+        write(&root, "x.c", "int x = 1;\nvoid f() { x = 2; }\n");
+        run(
+            &vm,
+            "/w.c",
+            r#"void create() { call_out(papplyv(&->f(), ({ "/x" })), 100); }"#,
+        )
+        .await;
+        let gs = vm.global_state.clone();
+        let id = gs.with_call_outs(|co| co.queue().iter().next().unwrap().1.id);
+        gs.prioritize_call_out(id).await.await.unwrap();
+        assert_eq!(count(&vm, &master, LOADS), 1);
+        let x = vm.global_state.object_space.lookup("/x").unwrap();
+        assert_eq!(vm.global_state.committed_global(&x, 0u16), LpcRef::from(2));
+    }
+
     #[tokio::test]
     async fn a_refused_call_out_receiver_stays_unloaded() {
         let root = lib_with_x("door-pointer-call-out-deny");

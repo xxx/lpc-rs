@@ -196,6 +196,11 @@ impl Changeset {
         self.version
     }
 
+    /// Whether this attempt writes, merges, or removes anything.
+    pub(crate) fn has_changes(&self) -> bool {
+        !(self.writes.is_empty() && self.merges.is_empty() && self.removals.is_empty())
+    }
+
     /// The vars this attempt changes in any way, for conflict bookkeeping:
     /// writes, merges, and removals. All count against the read-write
     /// conflict rule (a concurrent reader of a removed or merged var
