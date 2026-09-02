@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::compiler::{ProgramWarnings, diagnostics::Diagnostics};
+use crate::compiler::{ProgramWarnings, compile_gate::CompileGate, diagnostics::Diagnostics};
 use derive_builder::Builder;
 use indexmap::IndexMap;
 use lpc_rs_core::{
@@ -79,6 +79,9 @@ pub struct CompilationContext {
 
     /// Pointer to the simul efuns
     pub simul_efuns: Option<Arc<Process>>,
+
+    /// The master's say over inherits and includes; `None` reads freely.
+    pub gate: Option<Arc<dyn CompileGate>>,
 
     /// The count of closures that have been defined, so we can give them unique
     /// names.
@@ -291,6 +294,7 @@ impl Default for CompilationContext {
             layout: vec![],
             inherited_warnings: vec![],
             simul_efuns: None,
+            gate: None,
             closure_count: 0,
         }
     }
