@@ -122,7 +122,7 @@ impl Compiler {
                         if matches!(absolute.extension().and_then(OsStr::to_str), Some("c")) {
                             return Err(lpc_error!(
                                 "Cannot read file `{}`: {}",
-                                absolute.display(),
+                                lpc_path.as_in_game(&*self.config.lib_dir).display(),
                                 e
                             ));
                         }
@@ -132,7 +132,7 @@ impl Compiler {
                     }
                     _ => Err(lpc_error!(
                         "Cannot read file `{}`: {}",
-                        absolute.display(),
+                        lpc_path.as_in_game(&*self.config.lib_dir).display(),
                         e
                     )),
                 };
@@ -460,6 +460,65 @@ mod tests {
                     .unwrap_err()
                     .to_string()
                     .starts_with("attempt to access a file outside of lib_dir")
+            );
+        }
+
+        /// A missing object names its in-game source, never the server path.
+        #[tokio::test]
+        async fn a_missing_file_is_named_in_game() {
+            use crate::test_support::TempLib;
+
+            let root = TempLib::new("missing-in-game");
+            let config: Arc<Config> = ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .build()
+                .unwrap()
+                .into();
+            let compiler = CompilerBuilder::default()
+                .config(config.clone())
+                .build()
+                .unwrap();
+            let e = compiler
+                .compile_in_game_file(
+                    &LpcPath::new_in_game("/missing", "/", &*config.lib_dir),
+                    None,
+                )
+                .await
+                .unwrap_err()
+                .to_string();
+            assert!(e.starts_with("Cannot read file `/missing.c`"), "{e}");
+            assert!(
+                !e.contains(config.lib_dir.as_str()),
+                "server path leaked: {e}"
+            );
+        }
+
+        /// The confinement error carries no expanded server path either.
+        ///
+        /// `LpcPath::new_server` absolutizes eagerly, so the path this
+        /// prints is already environment-dependent; the check that
+        /// matters is that the redundant expanded/`lib_dir` clauses are
+        /// gone, which is what the two assertions below pin down.
+        #[tokio::test]
+        async fn an_escape_is_named_without_the_server_path() {
+            let config: Arc<Config> = ConfigBuilder::default()
+                .lib_dir("tests")
+                .build()
+                .unwrap()
+                .into();
+            let path = LpcPath::new_server("../../secure.c");
+            let e = config
+                .validate_in_game_path(&path, None)
+                .unwrap_err()
+                .to_string();
+            assert_eq!(
+                e,
+                format!("attempt to access a file outside of lib_dir: `{path}`")
+            );
+            assert!(!e.contains("expanded to"), "{e}");
+            assert!(
+                !e.contains(config.lib_dir.as_str()),
+                "server path leaked: {e}"
             );
         }
 
