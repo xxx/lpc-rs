@@ -13,13 +13,14 @@ use parking_lot::RwLock;
 use crate::{
     command::registry::RuleList,
     interpreter::{
+        function_type::function_ptr::{FunctionPtr, ResolvedCall},
         lpc_array::LpcArray,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
         task::task_template::TaskTemplate,
-        task_context::{Loader, ObjectLookup},
+        task_context::ObjectLookup,
         vm::global_state::GlobalState,
     },
     telnet::connection::Connection,
@@ -209,6 +210,15 @@ impl Transaction {
     /// back from the world or the physical map until a re-write cancels it.
     pub(crate) fn is_removed(&self, var_id: VarId) -> bool {
         self.changeset.is_removed(var_id)
+    }
+
+    /// Whether committing this attempt would change nothing: no writes,
+    /// merges, removals, effects, or call-out records.
+    pub(crate) fn is_clean(&self) -> bool {
+        !self.changeset.has_changes()
+            && self.effects.is_empty()
+            && self.pending_call_outs.is_empty()
+            && self.cancelled_call_outs.is_empty()
     }
 
     /// Mint a fresh array cell: a new `VarId` with its contents written into
@@ -496,22 +506,27 @@ pub(crate) fn txn_insert_process(
     });
 }
 
-/// Resolve an object path in its own short-lived transaction: find, or on a
-/// miss ask `valid_load` for `loader`, compile and insert, committed (with the
-/// physical insert flushed) before this returns. A rejected commit means a
-/// concurrent writer to the same cell committed first; the next round finds
-/// the winner.
-pub(crate) async fn resolve_or_create_object(
+/// Resolve `ptr` for a call started outside any task, in its own short-lived
+/// transaction: a string receiver not yet loaded is asked of `valid_load`
+/// for the pointer's writer, compiled and inserted, committed (with the
+/// physical insert flushed) before this returns; a resolution that changed
+/// nothing commits nothing. `seat` is the object the resolution runs in
+/// until the receiver is known.
+pub(crate) async fn resolve_pointer_call(
     gs: &Arc<GlobalState>,
-    path: &LpcPath,
-    loader: &Loader,
-) -> Result<Arc<Process>> {
-    let mut body = ResolveObjectBody {
+    ptr: &FunctionPtr,
+    passed: &[LpcRef],
+    seat: Arc<Process>,
+    this_player: Option<Arc<Process>>,
+) -> Result<Option<ResolvedCall>> {
+    let mut body = ResolvePointerCallBody {
         gs,
-        path,
-        loader,
+        ptr,
+        passed,
+        seat,
+        this_player,
         txn: None,
-        process: None,
+        resolved: None,
     };
     let (res, _) = run_attempts(
         &gs.committer_tx,
@@ -521,46 +536,42 @@ pub(crate) async fn resolve_or_create_object(
     )
     .await;
     res?;
-    Ok(body
-        .process
-        .expect("a committed or found attempt leaves the process"))
+    Ok(body.resolved)
 }
 
-/// One attempt of [`resolve_or_create_object`]: a find hit has nothing to
-/// commit; a miss asks `valid_load`, compiles, inserts, and commits.
-struct ResolveObjectBody<'a> {
+/// One attempt of [`resolve_pointer_call`]: [`FunctionPtr::prepare_call`]
+/// in a live transaction, committed only when it changed something.
+struct ResolvePointerCallBody<'a> {
     gs: &'a Arc<GlobalState>,
-    path: &'a LpcPath,
-    loader: &'a Loader,
+    ptr: &'a FunctionPtr,
+    passed: &'a [LpcRef],
+    seat: Arc<Process>,
+    this_player: Option<Arc<Process>>,
     txn: Option<TxnHandle>,
-    process: Option<Arc<Process>>,
+    resolved: Option<ResolvedCall>,
 }
 
 #[async_trait::async_trait]
-impl AttemptBody for ResolveObjectBody<'_> {
+impl AttemptBody for ResolvePointerCallBody<'_> {
     async fn begin_attempt(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
     ) -> Result<Option<LiveSnapshot>> {
-        let object_space = self.gs.object_space.as_ref();
         let live = start_txn(tx).await?;
         let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
-
-        if let ObjectLookup::Found(process) = txn_find_object(&txn, object_space, self.path) {
-            self.process = Some(process);
-            return Ok(None);
-        }
 
         // The verdict and the create commit together: the apply joins this
         // attempt's transaction.
         let ctx = {
             let mut template = TaskTemplate::from(self.gs.clone());
             template.txn = txn.clone();
-            template.into_task_context(self.loader.caller.clone())
+            template.set_this_player(self.this_player.clone());
+            template.into_task_context(self.seat.clone())
         };
-        let process = ctx.compile_process(self.path, self.loader).await?;
-        txn_insert_process(&txn, object_space, &process);
-        self.process = Some(process);
+        self.resolved = self.ptr.prepare_call(self.passed, &ctx).await?;
+        if txn.with(|t| t.is_clean()) {
+            return Ok(None);
+        }
         self.txn = Some(txn);
         Ok(Some(live))
     }

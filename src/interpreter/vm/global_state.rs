@@ -17,10 +17,10 @@ use crate::{
         process::Process,
         stm::{
             self, CommitProtocol, CommittedReader, Committer, CommitterStats, GcPassReply,
-            Snapshot, WorldRoot, gc_pass, resolve_or_create_object,
+            Snapshot, WorldRoot, gc_pass, resolve_pointer_call,
         },
         task::{Task, apply_function::apply_runtime_error, task_template::TaskTemplate},
-        task_context::{TaskContext, confine_object_path},
+        task_context::TaskContext,
         vm::vm_op::VmOp,
     },
 };
@@ -161,11 +161,6 @@ impl GlobalState {
         passed: &[LpcRef],
         this_player: Option<Arc<Process>>,
     ) -> Result<Option<PreparedCall>> {
-        // The transactional seam: a create-on-miss goes through the
-        // committer, and a destruct in the committed-unflushed window is an
-        // error instead of a resurrection.
-        self.resolve_dynamic_string_receiver(ptr).await?;
-
         // The context only needs a live object to sit in until the receiver is known.
         let seat = ptr.owner.upgrade().or_else(|| match &ptr.address {
             FunctionAddress::Local(receiver, _) => receiver.upgrade(),
@@ -177,11 +172,8 @@ impl GlobalState {
                 ptr
             ));
         };
-        let template = TaskTemplate::from(self.clone());
-        template.set_this_player(this_player.clone());
-        let Some(resolved) = ptr
-            .prepare_call(passed, &template.into_task_context(seat))
-            .await?
+        let Some(resolved) =
+            resolve_pointer_call(self, ptr, passed, seat, this_player.clone()).await?
         else {
             return Ok(None);
         };
@@ -211,34 +203,6 @@ impl GlobalState {
             function: resolved.function,
             args: resolved.args,
         }))
-    }
-
-    /// Resolve `ptr`'s receiver for a call started outside any task
-    /// (`call_out`, `input_to`), through `valid_load` for the pointer's writer.
-    /// A create-on-miss goes through the committer, and a destruct in the
-    /// committed-unflushed window reads as a miss, so a fresh object is
-    /// created rather than the destructed one handed back.
-    ///
-    /// Returns `Ok(None)` when `ptr` is not a dynamic string receiver (a
-    /// different address kind, or a missing / non-string first partial arg);
-    /// the caller falls through to [`FunctionPtr::prepare_call`].
-    pub async fn resolve_dynamic_string_receiver(
-        self: &Arc<Self>,
-        ptr: &FunctionPtr,
-    ) -> Result<Option<Arc<Process>>> {
-        let FunctionAddress::Dynamic(_) = &ptr.address else {
-            return Ok(None);
-        };
-        let Some(first) = ptr.partial_args().first().cloned().flatten() else {
-            return Ok(None);
-        };
-        let LpcRef::String(_) = &first else {
-            return Ok(None);
-        };
-        let path = first
-            .with_string(|s| confine_object_path(&self.config, s.to_str(), "/", "call_other"))??;
-        let loader = ptr.loader(self.config.lib_dir.as_str())?;
-        Ok(Some(resolve_or_create_object(self, &path, &loader).await?))
     }
 
     /// One GC pass, atomic on the committer: mark the world from the live
@@ -334,18 +298,21 @@ mod tests {
     use super::*;
     use crate::{
         interpreter::{
-            function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
+            function_type::{
+                function_address::FunctionAddress,
+                function_ptr::{FunctionPtrBuilder, ResolvedCall},
+            },
             lpc_ref::LpcRef,
             object_space::ObjectSpace,
             process::Process,
             stm::{
-                CommittedReader, Transaction, TxnHandle, commit_changeset, flush_effects, start_txn,
+                CommittedReader, Transaction, TxnHandle, commit_changeset, flush_effects,
+                resolve_pointer_call, start_txn,
             },
         },
         test_support::{permissive_master, test_config},
         util::process_builder::{compile_process_from_code, process_insert_and_initialize_program},
     };
-    use lpc_rs_core::lpc_path::LpcPath;
     use thin_vec::thin_vec;
     use ustr::ustr;
 
@@ -383,17 +350,40 @@ mod tests {
             .unwrap()
     }
 
+    /// `ptr` resolved for a call with no arguments, seated in its owner.
+    async fn resolve(gs: &Arc<GlobalState>, ptr: &FunctionPtr) -> Result<Option<ResolvedCall>> {
+        let seat = ptr.owner.upgrade().expect("a live owner");
+        resolve_pointer_call(gs, ptr, &[], seat, None).await
+    }
+
+    /// The receiver `ptr` resolves to.
+    async fn receiver_of(gs: &Arc<GlobalState>, ptr: &FunctionPtr) -> Arc<Process> {
+        resolve(gs, ptr)
+            .await
+            .unwrap()
+            .expect("a receiver defining `foo`")
+            .process
+    }
+
+    /// A `/dynamic_receiver` process defining `foo`, in no map and no cell.
+    async fn receiver_process(gs: &GlobalState) -> Arc<Process> {
+        compile_process_from_code(
+            &gs.object_space,
+            "/dynamic_receiver.c",
+            "void foo() {}",
+            None,
+        )
+        .await
+        .unwrap()
+        .0
+    }
+
     /// Commit one object cell through the committer protocol, so the cell is
-    /// visible to a later `resolve_or_create_object`. (A raw
-    /// `Changeset::new(Version::new())` would be rejected: it is seeded at a
-    /// version ahead of the committer's current one.)
-    async fn commit_object_cell(
-        gs: &GlobalState,
-        process: Arc<Process>,
-    ) -> std::result::Result<(), lpc_rs_errors::LpcError> {
-        let key = gs
-            .object_space
-            .path_key(LpcPath::InGame(std::path::PathBuf::from("/dynamic_receiver")).as_ref());
+    /// visible to a later resolve. (A raw `Changeset::new(Version::new())`
+    /// would be rejected: it is seeded at a version ahead of the committer's
+    /// current one.)
+    async fn commit_object_cell(gs: &GlobalState, process: Arc<Process>) -> Result<()> {
+        let key = gs.object_space.path_key("/dynamic_receiver");
         let cell_id = gs.object_space.cell_id(&key);
         let mut live = start_txn(&gs.committer_tx).await?;
         let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
@@ -416,21 +406,10 @@ mod tests {
     async fn string_receiver_finds_committed() {
         let gs = state_for_receiver();
         let master = permissive_master(&gs.object_space).await;
-        let process = Arc::new(Process::new(
-            crate::interpreter::program::ProgramBuilder::default()
-                .filename(LpcPath::InGame(std::path::PathBuf::from(
-                    "/dynamic_receiver",
-                )))
-                .build()
-                .unwrap(),
-        ));
+        let process = receiver_process(&gs).await;
         commit_object_cell(&gs, process.clone()).await.unwrap();
 
-        let got = gs
-            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver", &master))
-            .await
-            .unwrap()
-            .expect("a committed string receiver should resolve");
+        let got = receiver_of(&gs, &string_receiver_ptr("/dynamic_receiver", &master)).await;
         assert!(
             Arc::ptr_eq(&got, &process),
             "should hand back the committed process"
@@ -443,21 +422,10 @@ mod tests {
     async fn string_receiver_finds_physical_only() {
         let gs = state_for_receiver();
         let master = permissive_master(&gs.object_space).await;
-        let process = Arc::new(Process::new(
-            crate::interpreter::program::ProgramBuilder::default()
-                .filename(LpcPath::InGame(std::path::PathBuf::from(
-                    "/dynamic_receiver",
-                )))
-                .build()
-                .unwrap(),
-        ));
+        let process = receiver_process(&gs).await;
         ObjectSpace::insert_process_physical(&gs.object_space, process.clone());
 
-        let got = gs
-            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver", &master))
-            .await
-            .unwrap()
-            .expect("a physical-only string receiver should resolve");
+        let got = receiver_of(&gs, &string_receiver_ptr("/dynamic_receiver", &master)).await;
         assert!(
             Arc::ptr_eq(&got, &process),
             "should hand back the physical process"
@@ -471,14 +439,7 @@ mod tests {
     async fn string_receiver_unflushed_destruct_creates_fresh() {
         let gs = state_for_receiver();
         let master = permissive_master(&gs.object_space).await;
-        let process = Arc::new(Process::new(
-            crate::interpreter::program::ProgramBuilder::default()
-                .filename(LpcPath::InGame(std::path::PathBuf::from(
-                    "/dynamic_receiver",
-                )))
-                .build()
-                .unwrap(),
-        ));
+        let process = receiver_process(&gs).await;
         let key = gs.object_space.path_key("/dynamic_receiver");
         let cell_id = gs.object_space.cell_id(&key);
 
@@ -505,11 +466,7 @@ mod tests {
             "physical entry still present"
         );
 
-        let fresh = gs
-            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver", &master))
-            .await
-            .unwrap()
-            .expect("a destructed path is a miss");
+        let fresh = receiver_of(&gs, &string_receiver_ptr("/dynamic_receiver", &master)).await;
         assert!(
             !Arc::ptr_eq(&fresh, &process),
             "the destructed object must not be handed out"
@@ -528,11 +485,7 @@ mod tests {
         let gs = state_for_receiver();
         let master = permissive_master(&gs.object_space).await;
 
-        let got = gs
-            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver", &master))
-            .await
-            .unwrap()
-            .expect("a miss should create the receiver");
+        let got = receiver_of(&gs, &string_receiver_ptr("/dynamic_receiver", &master)).await;
 
         let key = gs.object_space.process_key(&got);
         assert!(
@@ -562,12 +515,15 @@ mod tests {
         let master = permissive_master(&gs.object_space).await;
 
         let ptr = string_receiver_ptr("/dynamic_receiver", &master);
-        let (ra, rb) = tokio::join!(
-            gs.resolve_dynamic_string_receiver(&ptr),
-            gs.resolve_dynamic_string_receiver(&ptr)
-        );
-        let a = ra.unwrap().expect("concurrent create A should succeed");
-        let b = rb.unwrap().expect("concurrent create B should succeed");
+        let (ra, rb) = tokio::join!(resolve(&gs, &ptr), resolve(&gs, &ptr));
+        let a = ra
+            .unwrap()
+            .expect("concurrent create A should succeed")
+            .process;
+        let b = rb
+            .unwrap()
+            .expect("concurrent create B should succeed")
+            .process;
 
         let key = gs.object_space.process_key(&a);
         assert_eq!(
@@ -597,11 +553,7 @@ mod tests {
         let gs = Arc::new(GlobalState::new_rejecting(Arc::new(test_config()), tx, 1));
         let master = permissive_master(&gs.object_space).await;
 
-        let got = gs
-            .resolve_dynamic_string_receiver(&string_receiver_ptr("/dynamic_receiver", &master))
-            .await
-            .unwrap()
-            .expect("a miss should create the receiver");
+        let got = receiver_of(&gs, &string_receiver_ptr("/dynamic_receiver", &master)).await;
 
         let key = gs.object_space.process_key(&got);
         let cell_id = gs.object_space.get_cell_id(&key).expect("cell must exist");
@@ -624,66 +576,60 @@ mod tests {
         let master = permissive_master(&gs.object_space).await;
         let ptr = string_receiver_ptr("/dynamic_receiver", &master);
 
-        let created = gs
-            .resolve_dynamic_string_receiver(&ptr)
-            .await
-            .unwrap()
-            .unwrap();
+        let created = receiver_of(&gs, &ptr).await;
         assert_eq!(gs.committer_stats().await.unwrap().commits, 1);
 
-        let found = gs
-            .resolve_dynamic_string_receiver(&ptr)
-            .await
-            .unwrap()
-            .unwrap();
+        let found = receiver_of(&gs, &ptr).await;
         assert!(Arc::ptr_eq(&created, &found));
         assert_eq!(gs.committer_stats().await.unwrap().commits, 1);
     }
 
-    /// A non-dynamic address, a missing first partial arg, or a non-string
-    /// first arg all return `Ok(None)`: the caller falls through to `triple`.
+    /// A receiver that is not a path resolves in place and commits nothing:
+    /// an efun pointer runs in its owner, an object receiver is looked up
+    /// as it is, and `&->foo()` with no receiver at all is an error.
     #[tokio::test]
-    async fn string_receiver_non_dynamic_or_non_string_returns_none() {
+    async fn a_non_path_receiver_commits_nothing() {
         let gs = state_for_receiver();
+        let master = permissive_master(&gs.object_space).await;
+        let before = gs.committer_stats().await.unwrap().commits;
 
         let efun = FunctionPtrBuilder::default()
+            .owner(Arc::downgrade(&master))
             .address(FunctionAddress::Efun(ustr("find_object")))
             .build()
             .unwrap();
+        let resolved = resolve(&gs, &efun)
+            .await
+            .unwrap()
+            .expect("an efun resolves");
+        assert!(Arc::ptr_eq(&resolved.process, &master));
+
+        let obj_arg = FunctionPtrBuilder::default()
+            .owner(Arc::downgrade(&master))
+            .address(FunctionAddress::Dynamic(ustr("foo")))
+            .partial_args(thin_vec![Some(LpcRef::Object(Arc::downgrade(&master)))])
+            .build()
+            .unwrap();
         assert!(
-            gs.resolve_dynamic_string_receiver(&efun)
-                .await
-                .unwrap()
-                .is_none()
+            resolve(&gs, &obj_arg).await.unwrap().is_none(),
+            "the master defines no `foo`"
         );
 
         let no_args = FunctionPtrBuilder::default()
+            .owner(Arc::downgrade(&master))
             .address(FunctionAddress::Dynamic(ustr("foo")))
             .build()
             .unwrap();
+        let err = resolve(&gs, &no_args)
+            .await
+            .unwrap_err()
+            .diagnostic_string();
         assert!(
-            gs.resolve_dynamic_string_receiver(&no_args)
-                .await
-                .unwrap()
-                .is_none()
+            err.contains("needs an object or path as its receiver"),
+            "{err}"
         );
 
-        let dummy = Arc::new(Process::new(
-            crate::interpreter::program::ProgramBuilder::default()
-                .build()
-                .unwrap(),
-        ));
-        let obj_arg = FunctionPtrBuilder::default()
-            .address(FunctionAddress::Dynamic(ustr("foo")))
-            .partial_args(thin_vec![Some(LpcRef::Object(Arc::downgrade(&dummy)))])
-            .build()
-            .unwrap();
-        assert!(
-            gs.resolve_dynamic_string_receiver(&obj_arg)
-                .await
-                .unwrap()
-                .is_none()
-        );
+        assert_eq!(gs.committer_stats().await.unwrap().commits, before);
     }
 
     /// A rejected parent attempt that lazily initialized a callee re-runs

@@ -35,13 +35,10 @@ Once compiled, the new program's own `inherit`s and `#include`s are put to
 loader: the loader's permission ends at the load.
 
 The apply runs inside the loading task: `this_object` is the master, and an
-error thrown here is the caller's error. For a `call_out` pointer it runs in
-the attempt that resolves the receiver, before the call-out's own task. A
-receiver that has to be compiled is currently asked about twice, once there
-and once more as the task starts (a driver defect tracked for the next
-release); write `valid_load` so a second identical question gets the same
-answer. Like every load in a retried transaction, the ask also comes again
-when the attempt it ran in is rejected and re-run.
+error thrown here is the caller's error. For a `call_out` or `input_to`
+pointer it runs in the attempt that resolves the receiver, before the
+callback's own task. Like every load in a retried transaction, the ask comes
+again when the attempt it ran in is rejected and re-run.
 
 ### Examples
 
