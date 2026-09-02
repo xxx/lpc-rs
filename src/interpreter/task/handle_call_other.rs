@@ -41,12 +41,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let result = match &receiver_ref {
             LpcRef::String(_) | LpcRef::Object(_) => {
-                let loader = self.loader()?;
                 let resolved = Self::resolve_call_other_receiver(
                     &receiver_ref,
                     &function_name,
                     &self.context,
-                    &loader,
+                    || self.loader(),
                 )
                 .await?;
                 let Some(receiver) = resolved else {
@@ -197,9 +196,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         receiver: &LpcRef,
         name: &str,
     ) -> Result<Option<CallFrame>> {
-        let loader = self.loader()?;
         let Some(process) =
-            Self::resolve_call_other_receiver(receiver, name, &self.context, &loader).await?
+            Self::resolve_call_other_receiver(receiver, name, &self.context, || self.loader())
+                .await?
         else {
             return Ok(None);
         };
@@ -247,15 +246,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         })
     }
 
+    /// `loader` is a closure so a `->` that resolves to a resident object
+    /// allocates nothing: it is called only on the create-on-miss path.
     #[instrument(level = "debug", skip_all)]
-    async fn resolve_call_other_receiver<T>(
+    async fn resolve_call_other_receiver<T, L>(
         receiver_ref: &LpcRef,
         name: T,
         context: &TaskContext,
-        loader: &Loader,
+        loader: L,
     ) -> Result<Option<Arc<Process>>>
     where
         T: AsRef<str>,
+        L: FnOnce() -> Result<Loader>,
     {
         let process = match receiver_ref {
             LpcRef::String(_) => {
@@ -269,7 +271,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     ObjectLookup::Removed => return Ok(None),
                     // NotCreated: create-on-miss, transactionally.
                     ObjectLookup::NotCreated => {
-                        let process = context.compile_process(&path, loader).await?;
+                        let loader = loader()?;
+                        let process = context.compile_process(&path, &loader).await?;
                         context.insert_process_transactional(&process);
                         process
                     }
