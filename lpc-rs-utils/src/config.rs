@@ -239,10 +239,8 @@ impl Config {
         if path.as_os_str().is_empty() || !true_path.starts_with(self.lib_dir.as_str()) {
             return Err(lpc_error!(
                 span,
-                "attempt to access a file outside of lib_dir: `{}` (expanded to `{}`) (lib_dir: `{}`)",
-                path,
-                true_path.display(),
-                &self.lib_dir
+                "attempt to access a file outside of lib_dir: `{}`",
+                path
             ));
         }
 

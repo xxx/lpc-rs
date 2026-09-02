@@ -97,6 +97,14 @@ impl IncludeWalk {
         span: Option<Span>,
         config: &Config,
     ) -> Result<Option<Opened>> {
+        // Captured before `resolve` consumes `source`: an out-of-root
+        // path collapses to an empty in-game form, so the directive's
+        // own text is what the error can still name.
+        let text = match &source {
+            IncludeSource::System { path } | IncludeSource::Local { path } => (*path).to_string(),
+            IncludeSource::Configured(path) => path.to_string(),
+        };
+
         let lib_dir = config.lib_dir.as_str();
         let path = self.resolve(source, config).await;
         let canon = path.as_server(lib_dir).into_owned();
@@ -104,10 +112,8 @@ impl IncludeWalk {
         if !path.is_within_root(lib_dir) {
             return Err(lpc_error!(
                 span,
-                "attempt to include a file outside the root: `{}` (expanded to `{}`) (lib_dir: `{}`)",
-                path,
-                canon.display(),
-                lib_dir
+                "attempt to include a file outside the root: `{}`",
+                text
             ));
         }
 
@@ -135,10 +141,8 @@ impl IncludeWalk {
                 if is_dir {
                     return Err(lpc_error!(
                         span,
-                        "attempt to include a directory: `{}` (expanded to `{}`) (lib_dir: `{}`)",
-                        path,
-                        canon.display(),
-                        lib_dir
+                        "attempt to include a directory: `{}`",
+                        path
                     ));
                 }
                 let text = match read_lpc_file(&canon).await {

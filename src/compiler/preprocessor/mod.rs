@@ -3070,9 +3070,27 @@ mod tests {
             let e = error_of(&root, "#include \"subdir\"\n").await;
             let rendered = e.to_string().replace(root.to_str().unwrap(), "");
 
+            assert_eq!(rendered, "attempt to include a directory: `/subdir`");
+        }
+
+        #[tokio::test]
+        async fn an_include_outside_the_root_names_the_directive_text() {
+            let root = TempLib::new("include-outside");
+
+            let e = error_of(
+                &root,
+                "#include \"/../../../../../../../../etc/passwd.h\"\n",
+            )
+            .await;
+            let msg = e.to_string();
+
             assert_eq!(
-                rendered,
-                "attempt to include a directory: `/subdir` (expanded to `/subdir`) (lib_dir: ``)"
+                msg,
+                "attempt to include a file outside the root: `/../../../../../../../../etc/passwd.h`"
+            );
+            assert!(
+                !msg.contains(root.to_str().unwrap()),
+                "server path leaked: {msg}"
             );
         }
     }
