@@ -45,6 +45,8 @@ pub const VALID_READ: &str = "valid_read";
 pub const VALID_WRITE: &str = "valid_write";
 /// Master apply: whether the calling code may compile a file into an object (`doc/apply/master/valid_load.md`).
 pub const VALID_LOAD: &str = "valid_load";
+/// Master apply: names the blueprint for a path that has no source file (`doc/apply/master/compile_object.md`).
+pub const COMPILE_OBJECT: &str = "compile_object";
 /// Master apply: whether a program being compiled may inherit another (`doc/apply/master/valid_inherit.md`).
 pub const VALID_INHERIT: &str = "valid_inherit";
 /// Master apply: returns the object a new connection becomes (`doc/apply/master/connect.md`).
