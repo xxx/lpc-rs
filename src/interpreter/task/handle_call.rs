@@ -4,7 +4,7 @@ use if_chain::if_chain;
 use lpc_rs_core::{RegisterSize, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
-use tracing::{instrument, trace, warn};
+use tracing::{instrument, trace};
 use ustr::Ustr;
 
 use crate::interpreter::stm::VarId;
@@ -24,31 +24,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub(crate) async fn handle_call(&mut self, name: Ustr) -> lpc_rs_errors::Result<()> {
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
-        let func = {
-            let function = process.program.lookup_function(name);
-            if let Some(func) = function {
-                func.clone()
-            } else {
-                // A function the simul-efun file inherits lands here: its
-                // prototype is `Local`-kind, so callers emit `Call`, and it
-                // runs in the caller.
-                warn!(
-                    at = %current_frame.to_stack_trace_format(),
-                    "call to unknown local function `{name}`, trying simul_efuns and efuns"
-                );
-
-                if_chain! {
-                    // See if there is a simul efun with this name
-                    if let Some(se) = self.context.simul_efuns();
-                    if let Some(func) = se.program.lookup_function(name);
-                    then {
-                        func.clone()
-                    } else {
-                        let msg = format!("Call to unknown function `{name}`");
-                        return Err(self.runtime_error(msg));
-                    }
-                }
-            }
+        // Codegen emits `Call` only for a name of this program; a miss is a bug.
+        let Some(func) = process.program.lookup_function(name).cloned() else {
+            return Err(self
+                .stack
+                .runtime_bug(format!("call to unknown local function `{name}`")));
         };
 
         let new_frame = self.prepare_new_call_frame(process, func).await?;

@@ -780,6 +780,39 @@ mod test_instructions {
             );
         }
 
+        /// Codegen emits `Call` only for a name of the running program, so a
+        /// miss is the driver's bug, never a simul-efun lookup.
+        #[tokio::test]
+        async fn a_call_missing_from_the_program_is_a_bug() {
+            use crate::{
+                compile_time_config::MAX_CALL_STACK_SIZE,
+                interpreter::{
+                    call_frame::CallFrame, object_space::ObjectSpace,
+                    task::task_template::TaskTemplate,
+                },
+                test_support::compile_prog,
+            };
+            use thin_vec::ThinVec;
+
+            let (program, config, _se_proc) = compile_prog("void create() { int x = 1; }").await;
+            let (tx, _rx) = tokio::sync::mpsc::channel(128);
+            let global_state = GlobalState::new(config, tx);
+            let process = Arc::new(Process::new(program));
+            ObjectSpace::insert_process_physical(&global_state.object_space, process.clone());
+            let context = TaskTemplate::from(global_state).into_task_context(process.clone());
+            let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context);
+            let create = process.program.lookup_function("create").unwrap().clone();
+            let frame = CallFrame::new(process.clone(), create, 0, None::<ThinVec<VarId>>);
+            task.stack.push(frame).unwrap();
+
+            let e = task.handle_call(ustr("nope")).await.unwrap_err();
+            assert!(e.is_bug(), "{e}");
+            assert_eq!(
+                e.to_string(),
+                "runtime bug: call to unknown local function `nope`"
+            );
+        }
+
         #[tokio::test]
         async fn a_positional_arg_follows_a_captured_parameter() {
             let code = indoc! { r##"
