@@ -52,6 +52,8 @@ const LOAD_FUNC: u16 = 6;
 const LOAD_CALLER: u16 = 7;
 const LOAD_PROGRAM: u16 = 8;
 const LOADS: u16 = 9;
+const READ_PROGRAM: u16 = 10;
+const READ_CALLER: u16 = 11;
 
 /// `/d/room1.c`: counts its creates, and `f()` finds `room2` relative to
 /// itself; `/d/room2.c`.
@@ -582,5 +584,152 @@ mod rollback {
                 "/d/r{i} must not be left resident"
             );
         }
+    }
+}
+
+mod doors {
+    use super::*;
+
+    #[tokio::test]
+    async fn move_object_materializes_a_virtual_room() {
+        let (_root, vm, master) = instancing_lib("virt-door-move").await;
+        let a = run(
+            &vm,
+            "/a.c",
+            indoc! { r#"
+                string env;
+                void create() {
+                    move_object("/inst/17/d/room1");
+                    env = file_name(environment(this_object()));
+                }
+            "# },
+        )
+        .await;
+        assert_eq!(committed_string(&vm, &a, 0), "/inst/17/d/room1");
+        assert_eq!(committed_string(&vm, &master, SEEN_FUNC), "move_object");
+    }
+
+    #[tokio::test]
+    async fn a_string_receiver_materializes_a_virtual_room() {
+        let (_root, vm, master) = instancing_lib("virt-door-arrow").await;
+        // `rd()`, not `f()`: `f()` would load `room2` and overwrite `seen_*`.
+        run(
+            &vm,
+            "/a.c",
+            r#"void create() { "/inst/17/d/room1"->rd(); }"#,
+        )
+        .await;
+        resident(&vm, "/inst/17/d/room1");
+        assert_eq!(committed_string(&vm, &master, SEEN_FUNC), "call_other");
+        assert_eq!(committed_string(&vm, &master, SEEN_CALLER), "/a");
+    }
+
+    #[tokio::test]
+    async fn a_call_out_receiver_materializes_a_virtual_room() {
+        let (_root, vm, master) = instancing_lib("virt-door-call-out").await;
+        run(
+            &vm,
+            "/w.c",
+            r#"void create() { call_out(papplyv(&->rd(), ({ "/inst/17/d/room1" })), 100); }"#,
+        )
+        .await;
+        let gs = vm.global_state.clone();
+        let id = gs.with_call_outs(|co| co.queue().iter().next().unwrap().1.id);
+        gs.prioritize_call_out(id).await.await.unwrap();
+        resident(&vm, "/inst/17/d/room1");
+        assert_eq!(committed_string(&vm, &master, SEEN_CALLER), "/w");
+        assert_eq!(committed_string(&vm, &master, SEEN_FUNC), "call_other");
+    }
+
+    #[tokio::test]
+    async fn cloning_a_virtual_path_clones_the_blueprint() {
+        let (_root, vm, _master) = instancing_lib("virt-clone").await;
+        let a = run(
+            &vm,
+            "/a.c",
+            r#"string name; void create() { name = file_name(clone_object("/inst/17/d/room1")); }"#,
+        )
+        .await;
+        let name = committed_string(&vm, &a, 0);
+        assert!(name.starts_with("/d/room1#"), "{name}");
+    }
+
+    /// Two tasks materializing one path get the one object.
+    #[tokio::test]
+    async fn concurrent_materializations_converge() {
+        use crate::interpreter::task::{
+            apply_function::apply_function_by_name, task_template::TaskTemplate,
+        };
+
+        let (_root, vm, master) = instancing_lib("virt-concurrent").await;
+        let a = run(
+            &vm,
+            "/a.c",
+            indoc! { r#"
+                void create() { find_object("/d/room1"); }
+                object go() { return find_object("/inst/17/d/room1"); }
+            "# },
+        )
+        .await;
+        let template = TaskTemplate::from(vm.global_state.clone());
+        let (x, y) = tokio::join!(
+            apply_function_by_name("go", &[], a.clone(), template.clone(), Some(1_000)),
+            apply_function_by_name("go", &[], a.clone(), template.clone(), Some(1_000)),
+        );
+        let object = |r: Option<Result<LpcRef, lpc_rs_errors::LpcError>>| match r.unwrap().unwrap()
+        {
+            LpcRef::Object(weak) => weak.upgrade().expect("a live object"),
+            other => panic!("an object, got {other:?}"),
+        };
+        let (x, y) = (object(x), object(y));
+        assert!(Arc::ptr_eq(&x, &y));
+        assert!(Arc::ptr_eq(&x, &resident(&vm, "/inst/17/d/room1")));
+        assert!(count(&vm, &master, ASKS) >= 1);
+    }
+}
+
+mod in_the_instance {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_relative_path_stays_in_the_instance() {
+        let (_root, vm, _master) = instancing_lib("virt-relative").await;
+        let a = run(
+            &vm,
+            "/a.c",
+            indoc! { r#"
+                string from_instance; string from_blueprint;
+                void create() {
+                    from_instance = file_name("/inst/17/d/room1"->f());
+                    from_blueprint = file_name("/d/room1"->f());
+                }
+            "# },
+        )
+        .await;
+        assert_eq!(committed_string(&vm, &a, 0), "/inst/17/d/room2");
+        assert_eq!(committed_string(&vm, &a, 1), "/d/room2");
+        let two = resident(&vm, "/inst/17/d/room2");
+        assert!(Arc::ptr_eq(
+            &two.program,
+            &resident(&vm, "/d/room2").program
+        ));
+    }
+
+    /// Authority follows code: a read from instance code is the
+    /// blueprint's file, by the virtual object.
+    #[tokio::test]
+    async fn code_in_an_instance_reports_the_blueprints_file() {
+        let (_root, vm, master) = instancing_lib("virt-provenance").await;
+        run(
+            &vm,
+            "/a.c",
+            r#"void create() { "/inst/17/d/room1"->rd(); }"#,
+        )
+        .await;
+        assert_eq!(committed_string(&vm, &master, READ_PROGRAM), "/d/room1.c");
+        assert_eq!(
+            committed_string(&vm, &master, READ_CALLER),
+            "/inst/17/d/room1"
+        );
     }
 }
