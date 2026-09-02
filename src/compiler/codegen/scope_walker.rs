@@ -313,8 +313,8 @@ impl TreeWalker for ScopeWalker {
         // its bare-variable argument the same way an explicit `ref` does.
         if receiver.is_none() {
             let mut to_mark: Vec<Ustr> = Vec::new();
-            if let Some(function_like) = self.context.lookup_function_complete(*name, namespace) {
-                let prototype = function_like.as_ref();
+            if let Some(callee) = self.context.lookup_function_complete(*name, namespace) {
+                let prototype = callee.as_ref();
                 for (index, argument) in node.arguments.iter().enumerate() {
                     if prototype.is_ref_param(index)
                         && let ExpressionNode::Var(var) = argument

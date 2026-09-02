@@ -344,9 +344,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
 
                     Ok(context
                         .lookup_function_complete(name.as_str(), namespace)
-                        .map_or(LpcType::Mixed(false), |function_like| {
-                            function_like.as_ref().return_type
-                        }))
+                        .map_or(LpcType::Mixed(false), |callee| callee.as_ref().return_type))
                 }
                 CallChain::Node(_) => Ok(LpcType::Mixed(false)),
             }

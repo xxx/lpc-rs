@@ -1,14 +1,15 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::compiler::{ProgramWarnings, compile_gate::CompileGate, diagnostics::Diagnostics};
+use crate::compiler::{
+    ProgramWarnings, callee::Callee, compile_gate::CompileGate, diagnostics::Diagnostics,
+};
 use derive_builder::Builder;
 use indexmap::IndexMap;
 use lpc_rs_core::{
     EFUN, RegisterSize, call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags,
 };
 use lpc_rs_function_support::{
-    function_like::FunctionLike, function_prototype::FunctionPrototype,
-    program_function::ProgramFunction, symbol::Symbol,
+    function_prototype::FunctionPrototype, program_function::ProgramFunction, symbol::Symbol,
 };
 use lpc_rs_utils::config::Config;
 use ustr::Ustr;
@@ -132,40 +133,41 @@ impl CompilationContext {
         }
     }
 
-    /// Look-up a function locally, and fall back to checking the efuns if a
-    /// function with the passed name isn't found either locally or in
-    /// inherited-from parents.
+    /// Resolve a call by name the way a call site does: own and inherited
+    /// functions, then — for a bare name only — the simul efuns, then the
+    /// efuns.
     pub fn lookup_function_complete<T>(
         &self,
         name: T,
         namespace: &CallNamespace,
-    ) -> Option<FunctionLike<'_>>
+    ) -> Option<Callee<'_>>
     where
         T: AsRef<str>,
     {
         if !self.valid_namespace(namespace) {
             return None;
         }
+        let name = name.as_ref();
 
-        let nm = name.as_ref();
-        // This ugly nest looks locally, then up to inherits, then simul efuns, then
-        // efuns
-        self.lookup_function(nm, namespace)
-            .map(FunctionLike::from)
-            .or_else(|| {
-                if namespace == &CallNamespace::Local {
-                    self.simul_efuns
-                        .as_ref()
-                        .and_then(|rc| {
-                            rc.program
-                                .lookup_function(nm)
-                                .map(|f| FunctionLike::from(f.clone()))
-                        })
-                        .or_else(|| EFUN_PROTOTYPES.get(nm).map(FunctionLike::from))
-                } else {
-                    None
-                }
-            })
+        if let CallNamespace::Named(ns) = namespace
+            && ns.as_str() == EFUN
+        {
+            return EFUN_PROTOTYPES.get(name).map(Callee::Efun);
+        }
+        if let Some(prototype) = self.lookup_function(name, namespace) {
+            return Some(Callee::Local(prototype));
+        }
+        if namespace != &CallNamespace::Local {
+            return None;
+        }
+        if let Some(function) = self
+            .simul_efuns
+            .as_ref()
+            .and_then(|simul_efuns| simul_efuns.program.lookup_function(name))
+        {
+            return Some(Callee::SimulEfun(&function.prototype));
+        }
+        EFUN_PROTOTYPES.get(name).map(Callee::Efun)
     }
 
     fn valid_namespace(&self, ns: &CallNamespace) -> bool {
@@ -203,28 +205,9 @@ impl CompilationContext {
         }
     }
 
-    /// Convenience function to check if a function is available anywhere that
-    /// I am allowed access.
+    /// Whether a call by name resolves anywhere I may reach.
     pub fn contains_function_complete(&self, name: &str, namespace: &CallNamespace) -> bool {
-        if !self.valid_namespace(namespace) {
-            return false;
-        }
-
-        if self.contains_function(name, namespace) {
-            return true;
-        }
-
-        if namespace == &CallNamespace::Local {
-            return self
-                .simul_efuns
-                .as_ref()
-                .map(|rc| rc.program.contains_function(name))
-                .unwrap_or(false)
-                || EFUN_PROTOTYPES.contains_key(name);
-            // return EFUN_PROTOTYPES.contains_key(name);
-        }
-
-        false
+        self.lookup_function_complete(name, namespace).is_some()
     }
 
     /// Look-up a variable by name, then check inherited parents if not found
@@ -306,6 +289,7 @@ mod tests {
     use lpc_rs_function_support::{
         function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunction,
     };
+    use ustr::ustr;
 
     use super::*;
 
@@ -535,13 +519,30 @@ mod tests {
         );
 
         assert_eq!(
-            // efun
+            // simul efun
             context
                 .lookup_function_complete("simul_efun", &CallNamespace::Local)
                 .unwrap()
                 .prototype(),
             &simul_efun.prototype
         );
+
+        assert_eq!(
+            context.lookup_function_complete("dump", &CallNamespace::Local),
+            Some(Callee::Efun(EFUN_PROTOTYPES.get("dump").unwrap()))
+        );
+        assert_eq!(
+            context.lookup_function_complete("dump", &CallNamespace::Named(ustr(EFUN))),
+            Some(Callee::Efun(EFUN_PROTOTYPES.get("dump").unwrap()))
+        );
+        assert_eq!(
+            context.lookup_function_complete("simul_efun", &CallNamespace::Local),
+            Some(Callee::SimulEfun(&simul_efun.prototype))
+        );
+        assert!(matches!(
+            context.lookup_function_complete("foo", &CallNamespace::Local),
+            Some(Callee::Local(_))
+        ));
 
         assert_eq!(
             // not through parent

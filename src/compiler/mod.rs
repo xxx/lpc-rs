@@ -32,6 +32,7 @@ use crate::{
 };
 
 pub mod ast;
+pub mod callee;
 pub mod codegen;
 pub mod compilation_context;
 pub mod compile_gate;

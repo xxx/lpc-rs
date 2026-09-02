@@ -65,6 +65,7 @@ use crate::{
             var_node::VarNode,
             while_node::WhileNode,
         },
+        callee::Callee,
         codegen::{tree_walker, tree_walker::ContextHolder},
         compilation_context::CompilationContext,
         diagnostics::Diagnostics,
@@ -1229,19 +1230,21 @@ impl TreeWalker for CodegenWalker {
                             ));
                         };
 
-                        match func.prototype().kind {
-                            FunctionKind::Local => Instruction::Call(ustr(&func.mangle())),
-                            FunctionKind::Efun => {
+                        match func {
+                            Callee::Local(prototype) => {
+                                if prototype.kind == FunctionKind::Closure {
+                                    return Err(lpc_bug!(
+                                        node.span,
+                                        "closure `{}` called by name",
+                                        name
+                                    ));
+                                }
+                                Instruction::Call(ustr(&prototype.mangle()))
+                            }
+                            Callee::SimulEfun(_) => Instruction::CallSimulEfun(*name),
+                            Callee::Efun(_) => {
                                 let idx = EFUN_PROTOTYPES.get_index_of(name.as_str()).unwrap();
                                 Instruction::CallEfun(u8::try_from(idx)?)
-                            }
-                            FunctionKind::SimulEfun => Instruction::CallSimulEfun(*name),
-                            FunctionKind::Closure => {
-                                return Err(lpc_bug!(
-                                    node.span,
-                                    "closure `{}` called by name",
-                                    name
-                                ));
                             }
                         }
                     }
@@ -1767,28 +1770,20 @@ impl TreeWalker for CodegenWalker {
                 // `&` used as the receiver
                 FunctionPtrReceiver::Dynamic => FunctionReceiver::Dynamic,
             }
-        } else if self
-            .context
-            .contains_function(node.name.as_str(), &CallNamespace::Local)
-        {
-            // A local / inherited function
-            FunctionReceiver::Local
         } else {
-            if_chain! {
-                if let Some(simul_efuns) = &self.context.simul_efuns;
-                if simul_efuns.program.contains_function(node.name.as_str());
-                then {
-                    FunctionReceiver::SimulEfun
-                } else {
-                    if EFUN_PROTOTYPES.contains_key(node.name.as_str()) {
-                        FunctionReceiver::Efun
-                    } else {
-                        return Err(lpc_error!(
-                            node.span,
-                            "unknown call in function pointer: `{}`",
-                            node.name
-                        ));
-                    }
+            match self
+                .context
+                .lookup_function_complete(node.name, &CallNamespace::Local)
+            {
+                Some(Callee::Local(_)) => FunctionReceiver::Local,
+                Some(Callee::SimulEfun(_)) => FunctionReceiver::SimulEfun,
+                Some(Callee::Efun(_)) => FunctionReceiver::Efun,
+                None => {
+                    return Err(lpc_error!(
+                        node.span,
+                        "unknown call in function pointer: `{}`",
+                        node.name
+                    ));
                 }
             }
         };
@@ -2441,6 +2436,8 @@ mod tests {
         let mut walker = CodegenWalker::default();
         walker.setup_init();
 
+        // Planted with the default kind: the instruction follows from where
+        // the name is found, not from the kind.
         let path = LpcPath::new_in_game("/secure/simul_efuns", "/", LIB_DIR);
         let mut prog = Program::new(path);
         prog.functions.insert(
@@ -2450,21 +2447,6 @@ mod tests {
                     .name("simul_efun")
                     .filename(Arc::new("/secure/simul_efuns".into()))
                     .return_type(LpcType::Void)
-                    .kind(FunctionKind::SimulEfun)
-                    .build()
-                    .unwrap(),
-                0,
-            )
-            .into(),
-        );
-        prog.functions.insert(
-            "local_function".into(),
-            ProgramFunction::new(
-                FunctionPrototypeBuilder::default()
-                    .name("local_function")
-                    .filename(Arc::new("/test/local.c".into()))
-                    .return_type(LpcType::Void)
-                    .kind(FunctionKind::Local)
                     .build()
                     .unwrap(),
                 0,
@@ -2473,6 +2455,16 @@ mod tests {
         );
         let process = Process::new(prog);
         walker.context.simul_efuns = Some(process.into());
+
+        walker.context.function_prototypes.insert(
+            "local_function".into(),
+            FunctionPrototypeBuilder::default()
+                .name("local_function")
+                .filename(Arc::new("/test/local.c".into()))
+                .return_type(LpcType::Void)
+                .build()
+                .unwrap(),
+        );
 
         walker
     }
