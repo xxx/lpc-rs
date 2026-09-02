@@ -119,10 +119,45 @@ impl TreeWalker for InheritanceWalker {
         let full_path =
             LpcPath::new_in_game(&*node.path, cwd, self.context.config.lib_dir.as_str());
 
+        let lib_dir = self.context.config.lib_dir.as_str();
+        self.context
+            .config
+            .validate_in_game_path(&full_path, node.span)?;
+        let configured = self
+            .context
+            .config
+            .auto_inherit_file
+            .map(|auto| {
+                LpcPath::new_in_game(auto.as_str(), "/", lib_dir).source_file()
+                    == full_path.source_file()
+            })
+            .unwrap_or(false);
+        if let (Some(gate), false) = (&self.context.gate, configured) {
+            let parent = full_path
+                .source_file()
+                .as_in_game(lib_dir)
+                .display()
+                .to_string();
+            let child = self
+                .context
+                .filename
+                .as_in_game(lib_dir)
+                .display()
+                .to_string();
+            if !gate.inherit(&parent, &child).await? {
+                return Err(lpc_error!(
+                    node.span,
+                    "inherit \"{}\": permission denied",
+                    parent
+                ));
+            }
+        }
+
         let depth = self.context.inherit_depth;
         let compiler = CompilerBuilder::default()
             .config(self.context.config.clone())
             .inherit_depth(depth + 1)
+            .gate(self.context.gate.clone())
             .build()?;
 
         match compiler.compile_in_game_file(&full_path, node.span).await {

@@ -15,6 +15,8 @@ use lpc_rs_errors::{
 use lpc_rs_utils::{config::Config, read_lpc_file};
 use tracing::instrument;
 
+use crate::compiler::compile_gate::CompileGate;
+
 /// Deepest `#include` nesting allowed, the root file included.
 pub(super) const MAX_INCLUDE_DEPTH: usize = 64;
 
@@ -89,14 +91,17 @@ impl IncludeWalk {
 
     /// Resolve and open one include, pushing its frame. `Ok(None)` is
     /// the `#pragma once` skip; the caller scans `Some` and then
-    /// [`close`](Self::close)s.
-    #[instrument(skip(self, config))]
+    /// [`close`](Self::close)s. `gate` is asked for every directive but a
+    /// configured one, before anything is read.
+    #[instrument(skip(self, config, gate))]
     pub async fn open(
         &mut self,
         source: IncludeSource<'_>,
         span: Option<Span>,
         config: &Config,
+        gate: Option<&dyn CompileGate>,
     ) -> Result<Option<Opened>> {
+        let configured = matches!(source, IncludeSource::Configured(_));
         // Captured before `resolve` consumes `source`: an out-of-root
         // path collapses to an empty in-game form, so the directive's
         // own text is what the error can still name.
@@ -115,6 +120,18 @@ impl IncludeWalk {
                 "attempt to include a file outside the root: `{}`",
                 text
             ));
+        }
+
+        if let (Some(gate), false) = (gate, configured) {
+            let in_game = path.as_in_game(lib_dir).display().to_string();
+            let from = self.current_in_game(config);
+            if !gate.include(&in_game, &from).await? {
+                return Err(lpc_error!(
+                    span,
+                    "#include \"{}\": permission denied",
+                    in_game
+                ));
+            }
         }
 
         // Before the cycle check: a once-marked file on the active
@@ -226,6 +243,20 @@ impl IncludeWalk {
             .unwrap_or_else(|| PathBuf::from("/"))
     }
 
+    /// The including file — the active frame — as an in-game path.
+    fn current_in_game(&self, config: &Config) -> String {
+        self.stack
+            .last()
+            .map(|frame| {
+                frame
+                    .path
+                    .as_in_game(config.lib_dir.as_str())
+                    .display()
+                    .to_string()
+            })
+            .unwrap_or_else(|| "/".to_string())
+    }
+
     /// The cycle diagnostic; `scan_include` adds the chain labels.
     fn cycle_error(&self, path: &LpcPath, span: Option<Span>) -> LpcError {
         lpc_error!(
@@ -276,13 +307,13 @@ mod tests {
         let mut walk = rooted(&config);
 
         let first = walk
-            .open(IncludeSource::Local { path: "a.h" }, None, &config)
+            .open(IncludeSource::Local { path: "a.h" }, None, &config, None)
             .await
             .unwrap()
             .expect("not once-marked");
         walk.close();
         let second = walk
-            .open(IncludeSource::Local { path: "a.h" }, None, &config)
+            .open(IncludeSource::Local { path: "a.h" }, None, &config, None)
             .await
             .unwrap()
             .expect("not once-marked");
@@ -298,11 +329,11 @@ mod tests {
         let config = config_at(&root);
         let mut walk = rooted(&config);
 
-        walk.open(IncludeSource::Local { path: "a.h" }, None, &config)
+        walk.open(IncludeSource::Local { path: "a.h" }, None, &config, None)
             .await
             .unwrap();
         let e = walk
-            .open(IncludeSource::Local { path: "a.h" }, None, &config)
+            .open(IncludeSource::Local { path: "a.h" }, None, &config, None)
             .await
             .unwrap_err();
 
@@ -318,14 +349,14 @@ mod tests {
         let config = config_at(&root);
         let mut walk = rooted(&config);
 
-        walk.open(IncludeSource::Local { path: "o.h" }, None, &config)
+        walk.open(IncludeSource::Local { path: "o.h" }, None, &config, None)
             .await
             .unwrap();
         walk.mark_once();
         walk.close();
 
         let reopened = walk
-            .open(IncludeSource::Local { path: "o.h" }, None, &config)
+            .open(IncludeSource::Local { path: "o.h" }, None, &config, None)
             .await
             .unwrap();
         assert!(reopened.is_none());
@@ -341,7 +372,7 @@ mod tests {
         walk.mark_once();
 
         let reopened = walk
-            .open(IncludeSource::Local { path: "main.c" }, None, &config)
+            .open(IncludeSource::Local { path: "main.c" }, None, &config, None)
             .await
             .unwrap();
         assert!(reopened.is_none());
@@ -360,7 +391,7 @@ mod tests {
         let err = loop {
             let path = format!("h{opened}.h");
             match walk
-                .open(IncludeSource::Local { path: &path }, None, &config)
+                .open(IncludeSource::Local { path: &path }, None, &config, None)
                 .await
             {
                 Ok(Some(_)) => opened += 1,
@@ -381,7 +412,7 @@ mod tests {
         let config = config_at(&root);
         let mut walk = rooted(&config);
         let opened = walk
-            .open(IncludeSource::Local { path: "a.h" }, None, &config)
+            .open(IncludeSource::Local { path: "a.h" }, None, &config, None)
             .await
             .unwrap()
             .unwrap();
@@ -407,7 +438,7 @@ mod tests {
         let mut walk = rooted(&config);
         assert_eq!(walk.stack.len(), 1, "open_root leaves the root frame");
 
-        walk.open(IncludeSource::Local { path: "a.h" }, None, &config)
+        walk.open(IncludeSource::Local { path: "a.h" }, None, &config, None)
             .await
             .unwrap();
         assert_eq!(walk.stack.len(), 2, "open pushes the included frame");

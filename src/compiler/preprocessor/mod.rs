@@ -440,7 +440,12 @@ impl Preprocessor {
         output: &mut Vec<Token>,
     ) -> Result<()> {
         let config = self.context.config.clone();
-        let Some(opened) = self.includes.open(source, span, &config).await? else {
+        let gate = self.context.gate.clone();
+        let Some(opened) = self
+            .includes
+            .open(source, span, &config, gate.as_deref())
+            .await?
+        else {
             return Ok(());
         };
 

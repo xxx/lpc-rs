@@ -11,6 +11,7 @@ use codegen::{
     tree_walker::{ContextHolder, Pass, apply},
 };
 use compilation_context::CompilationContext;
+use compile_gate::CompileGate;
 use derive_builder::Builder;
 use educe::Educe;
 use lexer::{Token, TokenTriples};
@@ -33,6 +34,7 @@ use crate::{
 pub mod ast;
 pub mod codegen;
 pub mod compilation_context;
+pub mod compile_gate;
 pub mod diagnostics;
 pub mod lexer;
 pub mod parser;
@@ -54,6 +56,10 @@ pub struct Compiler {
     /// Pointer to the simul_efuns to be used for this compilation
     #[builder(default)]
     simul_efuns: Option<Arc<Process>>,
+
+    /// The master's say over inherits and includes; `None` reads freely.
+    #[builder(default)]
+    gate: Option<Arc<dyn CompileGate>>,
 }
 
 /// One program's own compile warnings.
@@ -200,6 +206,7 @@ impl Compiler {
             .config(self.config.clone())
             .inherit_depth(self.inherit_depth)
             .simul_efuns(self.simul_efuns.clone())
+            .gate(self.gate.clone())
             .build()?;
 
         let mut preprocessor = Preprocessor::new(context);
