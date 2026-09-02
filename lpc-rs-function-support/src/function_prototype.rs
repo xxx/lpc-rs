@@ -16,14 +16,10 @@ use lpc_rs_errors::span::Span;
 /// Kinds of functions. Used for codegen.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
 pub enum FunctionKind {
-    /// A plain old normal LPC function, defined in a plain old normal LPC object.
+    /// A function with an LPC body, reached by name; the simul-efun file's
+    /// functions carry it like any other file's.
     #[default]
     Local,
-
-    /// A simulated efun, which is a plain old normal LPC function,
-    /// defined in a very unique and special LPC object, which
-    /// allows to be called as if it were an efun.
-    SimulEfun,
 
     /// An efun. These are implemented in Rust, and can be called from anywhere.
     Efun,
@@ -36,7 +32,6 @@ impl Display for FunctionKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Local => write!(f, "local"),
-            Self::SimulEfun => write!(f, "simul_efun"),
             Self::Efun => write!(f, "efun"),
             Self::Closure => write!(f, "closure"),
         }
