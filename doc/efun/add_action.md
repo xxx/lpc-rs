@@ -9,7 +9,8 @@ calling object (any visibility); a function pointer must have its receiver
 bound, as `call_out` requires. An array registers one rule per verb.
 
 Rules are tried most recently registered first; a handler returning 0 passes
-the line to the next rule, and any other return handles it.
+the line to the next rule, and any other return handles it. In the handler,
+`previous_object()` is the player.
 
 `flag` selects how the verb matches the first word: `0` — the word equals the
 verb; `1` / `AA_SHORT` — the word starts with the verb, `query_verb()` reports

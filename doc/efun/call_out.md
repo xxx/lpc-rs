@@ -22,7 +22,9 @@ threw leaves a repeating call out repeating. Either error goes to the master's
 
 Because call outs are executed outside the user's REPL, `this_player()` will return
 0 when called from within a call out. If you need access to the player, you can either
-freeze it with a partial application, or capture it in a closure.
+freeze it with a partial application, or capture it in a closure. `previous_object()`
+in the called function is the object that owns the function pointer: the one that
+called `call_out`.
 
 ### Examples
 
@@ -61,4 +63,4 @@ are what you expect!
 
 ### See Also
 
-`remove_call_out`, `query_call_out`, `query_call_outs`
+`remove_call_out`, `query_call_out`, `query_call_outs`, `previous_object`

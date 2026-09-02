@@ -28,7 +28,9 @@ is the runtime error `call_other: permission denied`. A path with no source
 file is put to the master's `compile_object`. Receivers are absolute
 object names: `"foo"->f()` is `/foo`.
 
-This function is the only way to call functions in other objects.
+This function is the only way to call functions in other objects. Inside the
+called function, `previous_object()` is the caller, even when the receiver is
+`this_object()`.
 
 ### Examples
 
@@ -47,3 +49,7 @@ object *foo = ({
 
 int *results = call_other(foo, "add_two", 4, 6);
 ```
+
+### See Also
+
+`previous_object`
