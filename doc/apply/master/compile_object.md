@@ -10,8 +10,9 @@ path. A string return names the blueprint whose
 program the driver runs under `path`; the result is a *virtual object*: its
 `file_name` is `path`, it is not a clone, and it holds its own globals.
 A path with no source file is put here *before* `valid_load`: when the
-answer names a blueprint, `valid_load` hears the blueprint's source, not
-this path. When the answer declines, or the apply is undefined, the load
+answer names a blueprint that is not yet resident, `valid_load` hears the
+blueprint's source, not this path, and a resident blueprint asks nothing.
+When the answer declines, or the apply is undefined, the load
 proceeds as an ordinary compile of the missing file: `valid_load` is asked
 for `<path>.c` and, if it allows, the compile fails to read it. A path
 ending in `#<n>` is never put here.
