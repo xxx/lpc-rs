@@ -4,8 +4,9 @@
 
 The driver applies `compile_object` in the master when a load names a path
 that has no source file: `find_object`, `move_object`, `tell_object`,
-`clone_object`, a string receiver of `->`, or a `&->f()` pointer whose
-receiver argument is a path. A string return names the blueprint whose
+`clone_object`, a string receiver of `->`, a `&->f()` pointer whose
+receiver argument is a path, and any other efun that takes an object by
+path. A string return names the blueprint whose
 program the driver runs under `path`; the result is a *virtual object*: its
 `file_name` is `path`, it is not a clone, and it holds its own globals.
 A path with no source file is put here *before* `valid_load`: when the
@@ -39,7 +40,10 @@ The apply runs inside the loading task: `this_object` is the master, and an
 error thrown here is the caller's error. It runs in the loading attempt's
 transaction, so a write it makes (registering the object with an instance
 daemon) rolls back with a rejected attempt and is made again on the re-run.
-Two tasks materializing one path get one object.
+Because this apply runs before the blueprint's `valid_load`, a registration
+made here survives a denial the caller catches; check the caller's
+permission first, or register lazily. Two tasks materializing one path get
+one object.
 
 Relative object paths resolve against the executing object's own
 directory, so a room written with `find_object("room2")` reaches

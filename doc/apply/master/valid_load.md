@@ -5,16 +5,18 @@
 The driver applies `valid_load` in the master before it compiles a file into
 an object on LPC's behalf: `clone_object` of a prototype that is not
 resident, and a string receiver — `"/x"->f()`, a `&->f()` pointer whose
-receiver argument is a path, `move_object`, `tell_object`, `find_object` —
-that names an object not yet loaded. A non-zero return allows the compile;
+receiver argument is a path, `move_object`, `tell_object`, `find_object`, or
+any other efun that takes an object by path — that names an object not yet
+loaded. A non-zero return allows the compile;
 zero refuses it, and the efun raises `<func>: permission denied` in the
 caller (`find_object` returns 0). A path that leads out of the lib fails
 before this apply. An object that is already resident is found, not loaded,
 and nothing is asked; cloning a resident prototype is not a load. A path
-that names no source file is put to `compile_object` first; if that names
-a blueprint, this apply hears the blueprint's source instead, and if it
-declines, or the master defines no `compile_object`, this apply is asked
-for the missing source as for any other load.
+that names no source file is put to `compile_object` first; if that names a
+blueprint not yet resident, this apply hears the blueprint's source instead
+(a resident blueprint asks nothing). If it declines, or the master defines
+no `compile_object`, this apply is asked for the missing source as for any
+other load.
 
 - `path` is the source file about to be compiled: the object's canonical
   in-game name with `.c` appended (`clone_object("/std/sword")` and
