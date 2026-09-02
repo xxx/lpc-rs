@@ -5,8 +5,10 @@
 The driver applies `valid_read` in the master before every efun that reads
 the filesystem — `read_file`, `get_dir` — and before every `#include` a
 compile performs. A non-zero return allows the read; zero refuses it, and
-the efun raises `<efun>: permission denied` in the caller. A path that leads
-out of the lib fails before this apply.
+the efun raises `<efun>: permission denied` in the caller. A refused
+`#include` instead fails the compile with `#include "<path>": permission
+denied` at the directive, and the object being loaded is not created. A path
+that leads out of the lib fails before this apply.
 
 - `path` is the canonical absolute in-game path being read: leading `/`, no
   `.` or `..`, a relative argument already resolved against the caller's
