@@ -583,7 +583,10 @@ impl AttemptBody for ResolvePointerCallBody<'_> {
             template.set_this_player(self.this_player.clone());
             template.into_task_context(self.seat.clone())
         };
-        self.resolved = self.ptr.prepare_call(self.passed, &ctx, None).await?;
+        self.resolved = self
+            .ptr
+            .prepare_call(self.passed, &ctx, || Ok(None))
+            .await?;
         if txn.with(|t| t.is_clean()) {
             return Ok(None);
         }

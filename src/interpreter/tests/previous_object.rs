@@ -70,6 +70,22 @@ async fn each_collection_element_sees_the_caller() {
 }
 
 #[tokio::test]
+async fn each_mapping_value_sees_the_caller() {
+    let r = run(
+        "",
+        &[X],
+        indoc! { r#"
+            mixed *create() {
+                mapping m = ([ "a": "/x", "b": "/x" ])->who();
+                return ({ m["a"], m["b"] });
+            }
+        "# },
+    )
+    .await;
+    assert_eq!(r, vec![s("/main"), s("/main")]);
+}
+
+#[tokio::test]
 async fn the_caller_is_unchanged_after_its_own_call_other() {
     let r = run(
         "",
@@ -116,6 +132,22 @@ async fn a_pointer_to_another_objects_function_sees_the_firer() {
     )
     .await;
     assert_eq!(r, vec![s("/main")]);
+}
+
+/// An efun pointer runs as its owner: the firer is its previous object,
+/// then the firer's chain.
+#[tokio::test]
+async fn an_efun_pointer_fired_elsewhere_sees_the_firer() {
+    let r = run(
+        "",
+        &[(
+            "/b.c",
+            r#"mixed *fire(function a, function b) { return ({ file_name(a()), file_name(b()) }); }"#,
+        )],
+        r#"mixed *create() { return "/b"->fire(&previous_object(), &previous_object(1)); }"#,
+    )
+    .await;
+    assert_eq!(r, vec![s("/b"), s("/main")]);
 }
 
 /// `run_prog` seats the simul efuns; naming the file with its `.c` is what
@@ -169,6 +201,26 @@ async fn the_driver_entry_has_no_previous_object() {
     .await;
     assert_eq!(r, vec![LpcRef::from(0)]);
 }
+
+/// Records the whole chain as `create()` saw it, file names joined by spaces.
+const CHAIN_ON_CREATE: &str = indoc! { r#"
+    string seen = "";
+    void create() {
+        object *all = previous_object(-1);
+        for (int i = 0; i < sizeof(all); i++) seen += file_name(all[i]) + " ";
+    }
+    string seen() { return seen; }
+"# };
+
+/// Records the whole chain as `init()` saw it, file names joined by spaces.
+const CHAIN_ON_INIT: &str = indoc! { r#"
+    string seen = "";
+    void init() {
+        object *all = previous_object(-1);
+        for (int i = 0; i < sizeof(all); i++) seen += file_name(all[i]) + " ";
+    }
+    string seen() { return seen; }
+"# };
 
 /// What a task started by another object's code is entered with.
 mod entries {
@@ -295,51 +347,97 @@ mod entries {
         assert_eq!(r, vec![s("/main"), s("/main")]);
     }
 
+    /// The receiver is another object, so the owner is told apart from it.
     #[tokio::test]
     async fn a_call_out_sees_its_scheduler() {
         let vm = Vm::new(test_config());
-        let w = vm
+        let y = vm
             .initialize_process_from_code(
-                "/w.c",
-                indoc! { r#"
-                    string seen;
-                    void create() {
-                        call_out((: seen = previous_object() ? file_name(previous_object()) : "none" :), 100);
-                    }
-                "# },
+                "/y.c",
+                r#"string seen; void note() { seen = file_name(previous_object()); }"#,
             )
             .await
             .unwrap()
             .context
             .process;
+        vm.initialize_process_from_code(
+            "/w.c",
+            r#"void create() { call_out(papplyv(&->note(), ({ "/y" })), 100); }"#,
+        )
+        .await
+        .unwrap();
         let gs = vm.global_state.clone();
         let id = gs.with_call_outs(|co| co.queue().iter().next().unwrap().1.id);
         gs.prioritize_call_out(id).await.await.unwrap();
-        assert_eq!(committed_string(&vm, &w, 0), "/w");
+        assert_eq!(committed_string(&vm, &y, 0), "/w");
     }
 
+    /// The handler lives in the room, so the actor is told apart from it.
     #[tokio::test]
     async fn a_command_handler_sees_the_actor() {
-        let vm = Vm::new(test_config());
-        let player = vm
-            .initialize_process_from_code(
-                "/player.c",
+        let r = run(
+            "",
+            &[(
+                "/room.c",
                 indoc! { r#"
                     string seen;
-                    void create() {
-                        set_this_player(this_object());
-                        enable_commands();
-                        add_action("do_look", "look");
-                        command("look");
-                    }
+                    void init() { add_action("do_look", "look"); }
                     int do_look(string a) { seen = file_name(previous_object()); return 1; }
+                    string who() { return seen; }
                 "# },
-            )
-            .await
-            .unwrap()
-            .context
-            .process;
-        assert_eq!(committed_string(&vm, &player, 0), "/player");
+            )],
+            indoc! { r#"
+                mixed *create() {
+                    set_this_player(this_object());
+                    enable_commands();
+                    move_object("/room");
+                    command("look");
+                    return ({ "/room"->who() });
+                }
+            "# },
+        )
+        .await;
+        assert_eq!(r, vec![s("/main")]);
+    }
+
+    /// `init` is entered for the living, in front of the chain where
+    /// `move_object` was called.
+    #[tokio::test]
+    async fn init_sees_the_living_then_the_mover_chain() {
+        let r = run(
+            "",
+            &[
+                ("/room.c", CHAIN_ON_INIT),
+                (
+                    "/a.c",
+                    r#"string go() { enable_commands(); move_object("/room"); return "/room"->seen(); }"#,
+                ),
+            ],
+            r#"mixed *create() { return ({ "/a"->go() }); }"#,
+        )
+        .await;
+        assert_eq!(r, vec![s("/a /a /main ")]);
+    }
+
+    /// An object a pointer call creates is entered for the pointer's owner,
+    /// then the firer — the owner twice when it fired its own pointer.
+    #[tokio::test]
+    async fn a_pointer_receiver_miss_sees_the_owner_then_the_firer() {
+        let root = TempLib::new("previous-object-pointer-miss");
+        write(&root, "x.c", CHAIN_ON_CREATE);
+        let r = run_with(
+            temp_lib_config(&root),
+            PERMISSIVE_MASTER,
+            &[],
+            indoc! { r#"
+                mixed *create() {
+                    function f = papplyv(&->seen(), ({ "/x" }));
+                    return ({ f() });
+                }
+            "# },
+        )
+        .await;
+        assert_eq!(r, vec![s("/main /main ")]);
     }
 
     #[tokio::test]
@@ -347,16 +445,30 @@ mod entries {
         let r = run(
             "",
             &[
-                ("/a.c", r#"mixed go() { return "/x"->kill_and_ask(); }"#),
+                ("/a.c", r#"mixed *go() { return "/x"->kill_and_ask(); }"#),
                 (
                     "/x.c",
-                    r#"mixed kill_and_ask() { destruct(previous_object()); return previous_object(); }"#,
+                    indoc! { r#"
+                        mixed *kill_and_ask() {
+                            destruct(previous_object());
+                            object *all = previous_object(-1);
+                            return ({ previous_object(), sizeof(all), all[0], file_name(all[1]) });
+                        }
+                    "# },
                 ),
             ],
-            r#"mixed *create() { object a = clone_object("/a"); return ({ a->go() }); }"#,
+            r#"mixed *create() { object a = clone_object("/a"); return a->go(); }"#,
         )
         .await;
-        assert_eq!(r, vec![LpcRef::from(0)]);
+        assert_eq!(
+            r,
+            vec![
+                LpcRef::from(0),
+                LpcRef::from(2),
+                LpcRef::from(0),
+                s("/main")
+            ]
+        );
     }
 }
 
@@ -413,24 +525,13 @@ mod steps {
 
     #[tokio::test]
     async fn the_chain_crosses_a_task_entry() {
-        let y = (
-            "/y.c",
-            indoc! { r#"
-                string seen = "";
-                void create() {
-                    object *all = previous_object(-1);
-                    for (int i = 0; i < sizeof(all); i++) seen += file_name(all[i]) + " ";
-                }
-                string who() { return seen; }
-            "# },
-        );
         let r = run(
             "",
             &[
-                y,
+                ("/y.c", CHAIN_ON_CREATE),
                 (
                     "/x.c",
-                    r#"string make() { return clone_object("/y")->who(); }"#,
+                    r#"string make() { return clone_object("/y")->seen(); }"#,
                 ),
             ],
             r#"mixed *create() { return ({ "/x"->make() }); }"#,

@@ -152,7 +152,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     /// The chain a task started by the code in the frame at `index` is
     /// entered with: that frame's object, the door crossers beneath it,
     /// then `tail` — this task's own chain.
-    pub fn callers(&self, index: usize, tail: Callers) -> Arc<Caller> {
+    pub fn chain(&self, index: usize, tail: Callers) -> Arc<Caller> {
         let crossers: Vec<&Arc<Process>> = self.door_crossers(index).collect();
         let rest = crossers.into_iter().rev().fold(tail, |rest, object| {
             Some(Caller::link(object.clone(), rest))

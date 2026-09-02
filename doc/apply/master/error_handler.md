@@ -37,6 +37,9 @@ the pointer.
 A compile that fails carries its warnings inside the error's diagnostic; a
 compile that succeeds hands its warnings to `warning_handler` instead.
 
+In `error_handler`, `previous_object()` is `error["object"]`, with nothing
+behind it; 0 when there is no object.
+
 ### See also
 
-`warning_handler`
+`warning_handler`, `previous_object`

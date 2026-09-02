@@ -144,22 +144,22 @@ impl FunctionPtr {
         });
         Ok(Loader {
             func: "call_other".to_string(),
-            callers: Caller::link(owner, callers),
+            chain: Caller::link(owner, callers),
             program,
         })
     }
 
     /// Resolve this pointer for a call with `passed` arguments: the receiver
     /// (a dynamic receiver is the first bound argument, created on a miss
-    /// through `ctx` for the owner standing in `callers`), the function, and
-    /// the bound arguments.
+    /// through `ctx` for the owner standing in the chain `callers` yields),
+    /// the function, and the bound arguments.
     /// `Ok(None)`: a dynamic receiver has no function by this name, so the
     /// call yields `0` as `call_other` would.
     pub async fn prepare_call(
         &self,
         passed: &[LpcRef],
         ctx: &TaskContext,
-        callers: Callers,
+        callers: impl FnOnce() -> Result<Callers>,
     ) -> Result<Option<ResolvedCall>> {
         let txn = ctx.txn();
         let mut args = self.bound_args(passed);
@@ -202,9 +202,11 @@ impl FunctionPtr {
                                 )));
                             }
                             ObjectLookup::NotCreated => {
-                                let loader = self.loader(ctx.config().lib_dir.as_str(), callers)?;
+                                let loader =
+                                    self.loader(ctx.config().lib_dir.as_str(), callers()?)?;
                                 let process = ctx.compile_process(&path, &loader).await?;
-                                ctx.insert_and_initialize(loader.chain(), &process).await?;
+                                ctx.insert_and_initialize(loader.callers(), &process)
+                                    .await?;
                                 process
                             }
                         }

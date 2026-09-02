@@ -43,7 +43,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             function,
             args,
         } = match ptr
-            .prepare_call(&passed, &self.context, Some(self.callers()?))
+            .prepare_call(&passed, &self.context, || self.chain().map(Some))
             .await
         {
             Ok(Some(prepared)) => prepared,
@@ -55,7 +55,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         };
 
         if !process.is_initialized(&self.context.txn) {
-            let callers = Some(self.callers()?);
+            let callers = Some(self.chain()?);
             Self::initialize_process(self.context.nested(callers, process.clone())?).await?;
         }
 

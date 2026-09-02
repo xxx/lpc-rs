@@ -59,7 +59,7 @@ pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     before_move(ctx.txn(), &this_object, &destination);
     Process::move_to(ctx.txn(), &this_object, &destination)
         .map_err(|e| context.runtime_error(format!("move_object: {this_object} {e}")))?;
-    after_move(ctx, &this_object, &destination).await?;
+    after_move(ctx, Some(context.chain()), &this_object, &destination).await?;
 
     Ok(())
 }

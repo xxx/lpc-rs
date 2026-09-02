@@ -52,7 +52,7 @@ pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     debug_assert!(clone_process.is_clone(), "new_clone must be a clone");
     context
         .task_context()
-        .insert_and_initialize(Some(context.callers()), &clone_process)
+        .insert_and_initialize(Some(context.chain()), &clone_process)
         .await?;
 
     let result = LpcRef::from(Arc::downgrade(&clone_process));

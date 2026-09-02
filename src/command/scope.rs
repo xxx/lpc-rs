@@ -7,8 +7,12 @@ use std::sync::{Arc, Weak};
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
-    INVENTORY_ACCESSIBLE, INVENTORY_VISIBLE, PARSE_COMMAND_USERS, apply::apply_hook,
-    lpc_ref::LpcRef, process::Process, stm::TxnHandle, task_context::TaskContext,
+    INVENTORY_ACCESSIBLE, INVENTORY_VISIBLE, PARSE_COMMAND_USERS,
+    apply::{apply_hook, as_actor},
+    lpc_ref::LpcRef,
+    process::Process,
+    stm::TxnHandle,
+    task_context::TaskContext,
 };
 
 /// The objects whose rules a living may use, as weak references.
@@ -127,7 +131,16 @@ pub(crate) async fn users(ctx: &TaskContext, actor: &Arc<Process>) -> Result<Vec
     let Some(master) = ctx.object_space().master_object() else {
         return Ok(Vec::new());
     };
-    let Some(value) = apply_hook(ctx, &master, actor, PARSE_COMMAND_USERS, &[]).await? else {
+    let Some(value) = apply_hook(
+        ctx,
+        as_actor(ctx, actor),
+        &master,
+        actor,
+        PARSE_COMMAND_USERS,
+        &[],
+    )
+    .await?
+    else {
         return Ok(Vec::new());
     };
     match &value {
@@ -149,7 +162,7 @@ async fn truthy(
     target: &Arc<Process>,
     name: &str,
 ) -> Result<bool> {
-    let Some(value) = apply_hook(ctx, target, actor, name, &[]).await? else {
+    let Some(value) = apply_hook(ctx, as_actor(ctx, actor), target, actor, name, &[]).await? else {
         return Ok(true);
     };
     Ok(value.is_truthy(ctx.txn()))

@@ -84,7 +84,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
         let loader = Loader {
             func,
-            callers: self.callers(),
+            chain: self.chain(),
             program: self.calling_program(),
         };
         let process = self
@@ -94,7 +94,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             .map_err(|e| self.loaded_from_here(e))?;
 
         self.task_context
-            .insert_and_initialize(loader.chain(), &process)
+            .insert_and_initialize(loader.callers(), &process)
             .await
             .map_err(|e| self.loaded_from_here(e))?;
 
@@ -319,9 +319,9 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// The chain a task this efun starts is entered with: the object running
     /// it, and what `previous_object` answers there.
-    pub fn callers(&self) -> Arc<Caller> {
+    pub fn chain(&self) -> Arc<Caller> {
         self.stack
-            .callers(self.stack.len() - 1, self.task_context.callers.clone())
+            .chain(self.stack.len() - 1, self.task_context.callers.clone())
     }
 
     /// Get a reference to the [`Process`] that contains the call to this efun

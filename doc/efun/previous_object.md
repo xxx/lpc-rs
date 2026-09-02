@@ -9,12 +9,21 @@ a task. A local call, own or inherited, is not a door: inside it
 `previous_object()` answers what it answered in the caller.
 
 At the start of a task it is the object whose code started the task:
-`create()` sees the object that cloned, found or called it, a master apply
-sees the object whose efun asked, `catch_tell` sees the object that wrote
-or told, and a virtual object's `create()` sees the original requester. A
-`call_out` or `input_to` callback sees the pointer's owner, a command
-handler sees the actor, and a task the driver starts on its own (boot,
-login, a connection event) sees 0. A destructed previous object is 0.
+`create()` sees the object that cloned, found or called it, a load or
+compile apply (`valid_load`, `compile_object`, `warning_handler`) and a
+file apply (`valid_read`, `valid_write`) see the object whose efun asked,
+`catch_tell` sees the object that wrote or told, and a virtual object's
+`create()` sees the original requester. `error_handler` sees the erring
+object, alone. A `call_out` or `input_to` callback sees the pointer's
+owner, a command handler (and `process_input`, `command_not_found`, a
+parser rule's handler) sees the actor, `init` sees the living that moved,
+and a task the driver starts on its own (boot, login, a connection event)
+sees 0. A destructed previous object is 0.
+
+A pointer runs as its owner. Firing one is a door, so an efun pointer such
+as `&previous_object()` answers the object that fired it; an object a
+pointer call creates sees the owner, then the firer — the owner twice when
+it fired its own pointer, as a `->` to `this_object()` doubles too.
 
 `step` counts back: `previous_object(1)` is what `previous_object()`
 answered in the previous object, and so on across task starts; past the

@@ -60,7 +60,7 @@ pub async fn parse_string<const N: usize>(context: &mut EfunContext<'_, N>) -> R
     // efun call pays for.
     let outcome = Box::pin(first_surviving(
         context.task_context(),
-        Some(context.callers()),
+        Some(context.chain()),
         &this,
         &compiled,
         input,

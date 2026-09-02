@@ -25,7 +25,7 @@ pub(crate) async fn tell_this_player<const N: usize>(
         Some(player) => {
             deliver(
                 context.task_context(),
-                Some(context.callers()),
+                || Some(context.chain()),
                 &player,
                 None,
                 msg,

@@ -141,7 +141,7 @@ pub struct Loader {
     /// The efun's name, or `"call_other"` for `->`.
     pub func: String,
     /// The object executing the load, and the chain behind it.
-    pub callers: Arc<Caller>,
+    pub chain: Arc<Caller>,
     /// The defining file of the calling code, or `0`.
     pub program: LpcRef,
 }
@@ -149,12 +149,12 @@ pub struct Loader {
 impl Loader {
     /// The object executing the load.
     pub fn caller(&self) -> &Arc<Process> {
-        &self.callers.object
+        &self.chain.object
     }
 
     /// The chain a task the load starts is entered with.
-    pub fn chain(&self) -> Callers {
-        Some(self.callers.clone())
+    pub fn callers(&self) -> Callers {
+        Some(self.chain.clone())
     }
 }
 
@@ -324,16 +324,16 @@ impl TaskContext {
             LpcRef::from(Arc::downgrade(loader.caller())),
             loader.program.clone(),
         ];
-        if !valid_apply(self, loader.chain(), VALID_LOAD, &args).await? {
+        if !valid_apply(self, loader.callers(), VALID_LOAD, &args).await? {
             return Err(LpcError::runtime(format!(
                 "{}: permission denied",
                 loader.func
             )));
         }
-        let gate = MasterGate::new(self, loader.chain());
+        let gate = MasterGate::new(self, loader.callers());
         let (process, warnings) =
             compile_process_from_path(self.object_space(), path, Some(gate)).await?;
-        report_warnings(self, loader.chain(), &process.program.filename, warnings).await?;
+        report_warnings(self, loader.callers(), &process.program.filename, warnings).await?;
         Ok(process)
     }
 
@@ -350,7 +350,8 @@ impl TaskContext {
             ))),
             ObjectLookup::NotCreated => {
                 let process = self.compile_file_process(path, loader).await?;
-                self.insert_and_initialize(loader.chain(), &process).await?;
+                self.insert_and_initialize(loader.callers(), &process)
+                    .await?;
                 Ok(process)
             }
         }
@@ -369,7 +370,8 @@ impl TaskContext {
             LpcRef::from(Arc::downgrade(loader.caller())),
             loader.program.clone(),
         ];
-        let Some(answer) = master_apply(self, loader.chain(), COMPILE_OBJECT, &args).await? else {
+        let Some(answer) = master_apply(self, loader.callers(), COMPILE_OBJECT, &args).await?
+        else {
             return self.compile_file_process(path, loader).await;
         };
         let blueprint = match answer.as_str() {
