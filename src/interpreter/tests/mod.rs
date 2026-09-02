@@ -9,6 +9,7 @@ mod parser;
 mod previous_object;
 mod references;
 mod security;
+mod simul_efuns;
 mod virtual_objects;
 
 use lpc_rs_utils::config::Config;

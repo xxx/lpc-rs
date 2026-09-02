@@ -6,11 +6,10 @@ use lpc_rs_utils::config::Config;
 
 use crate::interpreter::{object_space::ObjectSpace, process::Process};
 
+/// The resident simul-efun object, if one is configured and loaded.
 pub fn get_simul_efuns(config: &Config, object_space: &ObjectSpace) -> Option<Arc<Process>> {
-    config.simul_efun_file.as_deref().and_then(|f| {
-        let file = f.strip_suffix(".c").unwrap_or(f);
-        object_space.lookup(file)
-    })
+    let source = config.simul_efun_source()?.to_string();
+    object_space.lookup(source.strip_suffix(".c").unwrap_or(&source))
 }
 
 #[cfg(test)]

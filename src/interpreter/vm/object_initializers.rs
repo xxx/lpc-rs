@@ -26,9 +26,7 @@ impl GlobalState {
     /// * `Some(Err(LpcError))` - If there was an error loading the simul_efun file
     /// * `None` - If there is no simul_efun file configured
     pub async fn initialize_simul_efuns(&self) -> Option<Result<()>> {
-        let path = self.config.simul_efun_file.as_ref()?;
-
-        let simul_efun_path = LpcPath::new_in_game(path.as_str(), "/", &*self.config.lib_dir);
+        let simul_efun_path = self.config.simul_efun_source()?;
         Some(
             self.object_space
                 .create_process_from_path(&simul_efun_path)
