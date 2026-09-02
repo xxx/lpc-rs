@@ -401,8 +401,9 @@ mod tests {
     // re-create must yield a distinct process identity (no resurrection from
     // either source), and a find with no intervening destruct returns the
     // same identity again. Object identity is only observable in Rust
-    // (LPC `==` compares the weak handles, not the processes; a prototype
-    // has no clone id to compare), so this asserts `Arc` identity.
+    // (LPC `==` compares the weak handles, not the processes; a prototype's
+    // `ObjectName` carries nothing to compare), so this asserts `Arc`
+    // identity.
     #[tokio::test]
     async fn destruct_and_recreate_cycles_yield_fresh_objects() {
         let (task_context, mut stack) = efun_context();
@@ -411,7 +412,7 @@ mod tests {
 
         let path = LpcPath::new_in_game(
             "/example",
-            task_context.in_game_cwd(),
+            task_context.in_game_cwd_of(&task_context.process),
             &*test_config().lib_dir,
         );
 
