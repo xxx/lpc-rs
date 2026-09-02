@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     collections::HashMap,
     fmt::{Display, Formatter},
     path::{Path, PathBuf},
@@ -18,6 +17,22 @@ use lpc_rs_core::{
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use path_dedot::*;
 use ustr::Ustr;
+
+/// The in-game directory of `path`: its parent with `.`/`..` folded, rooted
+/// at `/`.
+pub(crate) fn in_game_dir(path: &Path) -> PathBuf {
+    match path.parent() {
+        None => PathBuf::from("/"),
+        Some(dir) => {
+            let dedotted = dir.parse_dot_from("/");
+            if dir.is_absolute() {
+                dedotted.into_owned()
+            } else {
+                PathBuf::from("/").join(dedotted)
+            }
+        }
+    }
+}
 
 /// One program's block of global slots within a program that holds it.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -69,7 +84,7 @@ pub struct Program {
     pub pragmas: PragmaFlags,
 }
 
-impl<'a> Program {
+impl Program {
     pub fn new<T>(filename: T) -> Self
     where
         T: Into<LpcPath>,
@@ -105,19 +120,8 @@ impl<'a> Program {
     }
 
     /// Get the in-game directory of this program. Used for clone_object, etc.
-    pub fn cwd(&'a self) -> Cow<'a, Path> {
-        match self.filename.parent() {
-            None => Cow::Owned(PathBuf::from("/")),
-            Some(path) => {
-                let dedotted = path.parse_dot_from("/");
-
-                if path.is_absolute() {
-                    dedotted
-                } else {
-                    Cow::Owned(PathBuf::from("/").join(dedotted))
-                }
-            }
-        }
+    pub fn cwd(&self) -> PathBuf {
+        in_game_dir(self.filename.as_ref())
     }
 
     /// Move each block of `layout` to the slot in `targets` at the same

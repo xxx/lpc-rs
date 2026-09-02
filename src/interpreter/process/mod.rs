@@ -4,6 +4,7 @@ use std::{
     borrow::Cow,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
+    path::{Path, PathBuf},
     sync::{Arc, OnceLock},
 };
 
@@ -15,7 +16,7 @@ use crate::{
         lpc_array::LpcArray,
         lpc_ref::LpcRef,
         process::util::AllEnvironment,
-        program::Program,
+        program::{Program, in_game_dir},
         stm::{MergeOp, SVar, Transaction, TxnHandle, VarId, WorldValue},
     },
     telnet::connection::Connection,
@@ -51,6 +52,18 @@ impl Default for ProcessPosition {
     }
 }
 
+/// How a process is named: what `file_name` answers and the object space
+/// keys on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ObjectName {
+    /// The object of a source file: the program's filename, `.c` stripped.
+    File,
+    /// `clone_object`'s product: the program's filename plus `#<id>`.
+    Clone(usize),
+    /// `compile_object`'s product: the requested path, an object key.
+    Virtual(String),
+}
+
 /// A wrapper type to allow the VM to keep the immutable `program` and its
 /// mutable runtime pieces together.
 #[derive(Debug)]
@@ -63,9 +76,8 @@ pub struct Process {
     /// the committer's world.
     globals: Box<[SVar<LpcRef>]>,
 
-    /// What is the clone ID of this process? If `None`, this is a master
-    /// object.
-    clone_id: Option<usize>,
+    /// How this process is named.
+    name: ObjectName,
 
     /// The player [`Connection`] that this [`Process`] is associated with, if any.
     /// A transactional cell: an `exec` or login writes the cell in its own
@@ -107,7 +119,7 @@ impl Default for Process {
         Self {
             program: Arc::default(),
             globals: Vec::new().into_boxed_slice(),
-            clone_id: None,
+            name: ObjectName::File,
             connection: SVar::new(),
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
@@ -120,21 +132,16 @@ impl Default for Process {
 }
 
 impl Process {
-    /// Create a new [`Process`] from the passed [`Program`].
-    pub fn new<T>(prog: T) -> Self
-    where
-        T: Into<Arc<Program>>,
-    {
-        let program = prog.into();
+    /// Shared constructor body for `new`, `new_clone` and `new_virtual`.
+    fn with_name(program: Arc<Program>, name: ObjectName) -> Self {
         let num_globals = program.num_globals;
-
         Self {
             program,
             globals: (0..num_globals as usize)
                 .map(|_| SVar::new())
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
-            clone_id: None,
+            name,
             connection: SVar::new(),
             initialized: SVar::new(),
             commands_enabled: SVar::new(),
@@ -145,26 +152,24 @@ impl Process {
         }
     }
 
+    /// Create a new [`Process`] from the passed [`Program`].
+    pub fn new<T>(prog: T) -> Self
+    where
+        T: Into<Arc<Program>>,
+    {
+        Self::with_name(prog.into(), ObjectName::File)
+    }
+
     /// Create a new [`Process`] from the passed [`Program`], with the passed
     /// clone ID.
     pub fn new_clone(program: Arc<Program>, clone_id: usize) -> Self {
-        let num_globals = program.num_globals;
+        Self::with_name(program, ObjectName::Clone(clone_id))
+    }
 
-        Self {
-            program,
-            globals: (0..num_globals as usize)
-                .map(|_| SVar::new())
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
-            clone_id: Some(clone_id),
-            connection: SVar::new(),
-            initialized: SVar::new(),
-            commands_enabled: SVar::new(),
-            rules: SVar::new(),
-            parser_ready: OnceLock::new(),
-            cell: OnceLock::new(),
-            position: Default::default(),
-        }
+    /// `program`'s code under `name`, an object key such as
+    /// `/inst/17/d/room1`: what `compile_object` produces.
+    pub fn new_virtual(program: Arc<Program>, name: String) -> Self {
+        Self::with_name(program, ObjectName::Virtual(name))
     }
 
     /// Returns an iterator over all of `object`'s environments, starting with
@@ -376,7 +381,7 @@ impl Process {
 
     /// Whether this process was made by `clone_object`.
     pub fn is_clone(&self) -> bool {
-        self.clone_id.is_some()
+        matches!(self.name, ObjectName::Clone(_))
     }
 
     /// Whether `enable_commands()` is in effect, as seen through `txn`.
@@ -418,10 +423,18 @@ impl Process {
     pub fn filename(&self) -> Cow<'_, str> {
         let filename: &str = (*self.program.filename).as_ref();
         let name = filename.strip_suffix(".c").unwrap_or(filename);
-        match self.clone_id {
-            Some(x) => Cow::Owned(format!("{name}#{x}")),
-            None => Cow::Borrowed(name),
+        match &self.name {
+            ObjectName::File => Cow::Borrowed(name),
+            ObjectName::Clone(id) => Cow::Owned(format!("{name}#{id}")),
+            ObjectName::Virtual(path) => Cow::Borrowed(path),
         }
+    }
+
+    /// The in-game directory of this object's name: what its relative object
+    /// paths resolve against. A clone's is its program's; a virtual object's
+    /// is the directory it was requested under.
+    pub fn cwd(&self) -> PathBuf {
+        in_game_dir(Path::new(&*self.filename()))
     }
 
     /// Get the filename with the passed prefix stripped off, defaulting to the
@@ -438,7 +451,6 @@ impl PartialEq for Process {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.filename() == other.filename()
-        // Arc::ptr_eq(&self.program, &other.program) && self.clone_id == other.clone_id
     }
 }
 
@@ -500,6 +512,48 @@ mod tests {
         assert_eq!(proc.localized_filename("/foo"), "/bar/baz");
 
         assert_eq!(proc.localized_filename("/alksdjf"), "/foo/bar/baz");
+    }
+
+    fn program_at(filename: &str) -> Program {
+        Program {
+            filename: Arc::new(filename.into()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_virtual_object_is_named_as_requested() {
+        let program: Arc<Program> = program_at("/d/room1.c").into();
+        let proc = Process::new_virtual(program.clone(), "/inst/17/d/room1".to_owned());
+        assert_eq!(proc.filename(), "/inst/17/d/room1");
+        assert!(!proc.is_clone());
+        assert!(Arc::ptr_eq(&proc.program, &program));
+    }
+
+    #[test]
+    fn a_clones_directory_is_its_programs() {
+        let proc = Process::new_clone(program_at("/d/room1.c").into(), 7);
+        assert_eq!(proc.filename(), "/d/room1#7");
+        assert!(proc.is_clone());
+        assert_eq!(proc.cwd().to_str().unwrap(), "/d");
+    }
+
+    #[test]
+    fn a_virtual_objects_directory_is_where_it_was_requested() {
+        let proc = Process::new_virtual(
+            program_at("/d/room1.c").into(),
+            "/inst/17/d/room1".to_owned(),
+        );
+        assert_eq!(proc.cwd().to_str().unwrap(), "/inst/17/d");
+    }
+
+    #[test]
+    fn a_root_objects_directory_is_the_root() {
+        assert_eq!(
+            Process::new(program_at("/x.c")).cwd().to_str().unwrap(),
+            "/"
+        );
+        assert_eq!(Process::new(program_at("x.c")).cwd().to_str().unwrap(), "/");
     }
 
     #[tokio::test]
