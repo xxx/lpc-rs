@@ -216,7 +216,8 @@ impl GlobalState {
     /// Resolve `ptr`'s receiver for a call started outside any task
     /// (`call_out`, `input_to`), through `valid_load` for the pointer's writer.
     /// A create-on-miss goes through the committer, and a destruct in the
-    /// committed-unflushed window is an error instead of a resurrection.
+    /// committed-unflushed window reads as a miss, so a fresh object is
+    /// created rather than the destructed one handed back.
     ///
     /// Returns `Ok(None)` when `ptr` is not a dynamic string receiver (a
     /// different address kind, or a missing / non-string first partial arg);

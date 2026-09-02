@@ -320,8 +320,7 @@ mod doors {
         let id = gs.with_call_outs(|co| co.queue().iter().next().unwrap().1.id);
         let outcome = gs.prioritize_call_out(id).await.await;
         assert!(vm.global_state.object_space.lookup("/x").is_none());
-        // Whether the firing reports the refusal as an error or logs it is the
-        // call-out path's business.
+        // How the firing reports a refusal is the call-out path's business.
         let _ = outcome;
     }
 
