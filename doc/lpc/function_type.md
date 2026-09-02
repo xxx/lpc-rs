@@ -11,20 +11,20 @@ we're calling it a `function` (even if it's a procedure... don't be pedantic).
 
 Breaking it down by syntax, functions can take the following forms:
 
-* `function_name` - A reference to a static function defined in the same file,
-  a simul_efun, or an efun (checked in that order). This is a shorthand form
-  of the next variant.
+* `function_name` - A reference to a function of this program (own or
+  inherited), a simul_efun, or an efun (checked in that order). This is a
+  shorthand form of the next variant.
 
 * `&function_name()` - This is equivalent to the above. No arguments are put into
   place in the declaration, but you can still call the function with arguments.
 
-* `&function_name(arg1, arg2)` - This is a reference to a static function
-  defined in the same file, a simul_efun, or an efun (checked in that order).
+* `&function_name(arg1, arg2)` - This is a reference to a function of this
+  program (own or inherited), a simul_efun, or an efun (checked in that order).
   The arguments are put into place in the declaration, and you can call the function
   with additional arguments, or without, and the arguments will be filled in from the declaration.
 
-* `&function_name(arg1,,arg3)` - This is a reference to a static function
-  defined in the same file, a simul_efun, or an efun (checked in that order).
+* `&function_name(arg1,,arg3)` - This is a reference to a function of this
+  program (own or inherited), a simul_efun, or an efun (checked in that order).
   Some arguments are put into place in the declaration, while holes are left for spots for
   arguments that are filled when you call the pointer.
   In the example `f = &function_name(arg1,,arg3); f("foo");`, `foo` will be put into
