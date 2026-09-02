@@ -11,7 +11,10 @@ zero refuses it, and the efun raises `<func>: permission denied` in the
 caller (`find_object` returns 0). A path that leads out of the lib fails
 before this apply. An object that is already resident is found, not loaded,
 and nothing is asked; cloning a resident prototype is not a load. A path
-that names no source file is not asked here; it is put to `compile_object`.
+that names no source file is put to `compile_object` first; if that names
+a blueprint, this apply hears the blueprint's source instead, and if it
+declines, or the master defines no `compile_object`, this apply is asked
+for the missing source as for any other load.
 
 - `path` is the source file about to be compiled: the object's canonical
   in-game name with `.c` appended (`clone_object("/std/sword")` and

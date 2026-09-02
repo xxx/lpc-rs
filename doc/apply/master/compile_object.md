@@ -8,9 +8,12 @@ that has no source file: `find_object`, `move_object`, `tell_object`,
 receiver argument is a path. A string return names the blueprint whose
 program the driver runs under `path`; the result is a *virtual object*: its
 `file_name` is `path`, it is not a clone, and it holds its own globals.
-Returning `0` declines, and the load fails as any missing file does. A
-path with no source file is not put to `valid_load`; a path ending in
-`#<n>` is never put here.
+A path with no source file is put here *before* `valid_load`: when the
+answer names a blueprint, `valid_load` hears the blueprint's source, not
+this path. When the answer declines, or the apply is undefined, the load
+proceeds as an ordinary compile of the missing file: `valid_load` is asked
+for `<path>.c` and, if it allows, the compile fails to read it. A path
+ending in `#<n>` is never put here.
 
 - `path` is the object name requested, as `file_name` will answer it:
   leading `/`, no `.c` (`find_object("/inst/17/d/room1")` and
