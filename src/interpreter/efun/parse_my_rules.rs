@@ -9,7 +9,7 @@ use crate::{
 
 /// `parse_my_rules()`: `this_object()`'s rules, in registration order, each
 /// as `"{verb} {rule}"`.
-pub async fn parse_my_rules<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn parse_my_rules<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let this = context.frame().process.clone();
     let entries: Vec<LpcRef> = VerbRules::new(context.task_context())
         .owned_by(&this)

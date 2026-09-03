@@ -6,7 +6,7 @@ use crate::interpreter::{
 };
 
 /// `papplyv`, an efun to partially apply a function to arguments taken from an array
-pub async fn papplyv<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn papplyv<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let LpcRef::Function(func) = context.resolve_local_register(1 as RegisterSize) else {
         return Err(context.runtime_error("non-function argument sent to `papplyv`"));
     };

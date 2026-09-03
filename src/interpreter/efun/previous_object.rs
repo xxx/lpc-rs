@@ -13,7 +13,7 @@ use crate::interpreter::{
 /// function through a door — `->`, a pointer, a simul efun, or a task
 /// entry — `0` when the driver did, or it is destructed. A step `n` names
 /// the `n`th caller back; `-1` is the whole chain as an array.
-pub async fn previous_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn previous_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let step = match context.try_resolve_local_register(1 as RegisterSize) {
         Some(LpcRef::Int(n)) => n.0,
         _ => 0,

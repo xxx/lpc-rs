@@ -15,7 +15,7 @@ use crate::{
 
 /// `add_rule`, an efun that registers a pattern on `this_player()`: one rule
 /// per leading verb, all under the returned id.
-pub async fn add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let Some(player) = context.this_player().load_full() else {
         return Err(context.runtime_error("add_rule: no this_player() to attach to"));
     };

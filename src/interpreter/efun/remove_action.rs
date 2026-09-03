@@ -14,7 +14,7 @@ use crate::{
 /// `remove_action`, an efun that unregisters this object's rules for a verb:
 /// `(verb)` from `this_player()`, `(function, verb)` the MudOS shape, or
 /// `(verb, object)` the LDMud shape. Returns how many were removed.
-pub async fn remove_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn remove_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let first = context.resolve_local_register(1 as RegisterSize).clone();
     let LpcRef::String(first) = first else {
         return Err(context.runtime_error("remove_action: the first argument must be a string"));

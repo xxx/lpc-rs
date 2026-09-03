@@ -11,7 +11,7 @@ use crate::{
 /// `parse_remove(verb)`: drops every rule `this_object()` registered whose
 /// base verb (`protocol().verb`) is `verb`, synonyms included, and purges
 /// any rule left behind by a destructed owner.
-pub async fn parse_remove<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn parse_remove<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let LpcRef::String(verb) = context.resolve_local_register(1 as RegisterSize).clone() else {
         return Err(context.runtime_error("parse_remove: the verb must be a string"));
     };

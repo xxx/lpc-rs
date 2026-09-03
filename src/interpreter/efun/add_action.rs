@@ -19,7 +19,7 @@ use crate::{
 
 /// `add_action`, an efun that registers a verb on `this_player()`, handled
 /// by a function of this object or a bound function pointer.
-pub async fn add_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn add_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let Some(player) = context.this_player().load_full() else {
         return Err(context.runtime_error("add_action: no this_player() to attach to"));
     };

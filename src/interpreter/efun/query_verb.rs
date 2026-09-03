@@ -6,7 +6,7 @@ use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// `query_verb`, an efun returning the verb of the command in progress; with a
 /// nonzero argument, the first word as typed. 0 outside a command.
-pub async fn query_verb<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn query_verb<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let full = matches!(
         context.try_resolve_local_register(1 as RegisterSize),
         Some(LpcRef::Int(flag)) if flag.0 != 0

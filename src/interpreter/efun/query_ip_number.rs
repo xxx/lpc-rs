@@ -5,7 +5,7 @@ use crate::interpreter::efun::{self, efun_context::EfunContext};
 
 /// `query_ip_number`, an efun returning the address of an object's
 /// connection as text; 0 without one.
-pub async fn query_ip_number<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn query_ip_number<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     if let Some(connection) = efun::connection_of(context) {
         let ip = LpcString::from(connection.address.ip().to_string());
         context.return_efun_result(ip.into());

@@ -15,7 +15,7 @@ use crate::{
 /// `this_object()`, which must have called `parse_init()`. Do not read
 /// `verb_rules` here — it would make parallel registrations conflict; dead
 /// owners are purged by `parse_remove` and destruct.
-pub async fn parse_add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn parse_add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let this = context.frame().process.clone();
     if this.parser_ready.get().is_none() {
         return Err(context.runtime_error("parse_add_rule: parse_init() has not been called"));

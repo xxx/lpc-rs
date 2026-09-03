@@ -9,7 +9,7 @@ use crate::{
 
 /// `input_to`, an efun for registering a function to be called when the user
 /// types something into the game.
-pub async fn input_to<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn input_to<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let LpcRef::Function(ptr) = context.resolve_local_register(1 as RegisterSize) else {
         return Err(context.runtime_error("non-function sent as first argument to `input_to`"));
     };

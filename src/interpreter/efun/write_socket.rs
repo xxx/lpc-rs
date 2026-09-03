@@ -7,7 +7,7 @@ use crate::{
 };
 
 /// `write_socket`, an efun for writing to the interactive inhabiting the object.
-pub async fn write_socket<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn write_socket<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_ref = context.resolve_local_register(1 as RegisterSize);
 
     let result = match arg_ref {
