@@ -1,6 +1,9 @@
 use async_recursion::async_recursion;
 use lpc_rs_asm::instruction::{ArgList, Instruction};
-use lpc_rs_core::{LpcIntInner, register::RegisterVariant};
+use lpc_rs_core::{
+    LpcIntInner,
+    register::{Register, RegisterVariant},
+};
 use lpc_rs_errors::lpc_error;
 use lpc_rs_utils::lpc_string::LpcString;
 use thin_vec::ThinVec;
@@ -331,25 +334,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Or(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y| Some(x | y), |x, y, _| x.bitor(y))?;
             }
-            Instruction::PopulateArgv(r, num_args, _num_locals) => {
+            Instruction::PopulateArgv(r, num_args, num_locals) => {
                 let frame = self.stack.current_frame()?;
-                let arg_locations = &frame.arg_locations;
-                let num_args = usize::from(num_args);
-                let refs = {
-                    if arg_locations.len() < num_args {
-                        vec![]
-                    } else {
-                        let ellipsis_vars = &arg_locations[num_args..];
-                        ellipsis_vars
-                            .iter()
-                            .map(|x| {
-                                frame
-                                    .get_location(&self.context.txn, *x)
-                                    .map(std::borrow::Cow::into_owned)
-                            })
-                            .collect::<lpc_rs_errors::Result<Vec<_>>>()?
-                    }
-                };
+                // The extras sit past the locals, where `store_arg` put them.
+                let first = num_args + num_locals + 1;
+                let extras = frame.called_with_num_args.saturating_sub(num_args);
+                let refs = (0..extras)
+                    .map(|j| {
+                        frame
+                            .get_location(&self.context.txn, Register(first + j).as_local())
+                            .map(std::borrow::Cow::into_owned)
+                    })
+                    .collect::<lpc_rs_errors::Result<Vec<_>>>()?;
 
                 let new_ref =
                     LpcRef::Array(self.context.txn.with(|t| t.mint_array(LpcArray::new(refs))));

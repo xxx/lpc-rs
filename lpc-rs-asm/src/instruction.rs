@@ -225,13 +225,10 @@ pub enum Instruction {
     /// Special case instruction to dynamically populate the `argv` variable
     ///   that is created for ellipsis functions.
     /// `RegisterVariant` is the location of `argv`.
-    /// The first `u16` is the number of formal parameters to the function
-    ///   (whether they have default values or not, basically just the count
-    ///   of non-ellipsis params).
-    /// The second `u16` is the number of local variables used by the
-    /// function. We know both of these numbers at compile time, and any
-    /// other register present in the frame is an ellipsis argument, so
-    /// those are the ones we populate.
+    /// The first `u16` is the function's parameter count (default or not,
+    /// the ellipsis excluded), the second its locals count; `argv` is the
+    /// registers after `params + locals + 1`, one per argument passed
+    /// beyond the parameters.
     PopulateArgv(RegisterVariant, RegisterSize, RegisterSize),
 
     /// Jump into the `Jmp` table that follows, one entry per default
