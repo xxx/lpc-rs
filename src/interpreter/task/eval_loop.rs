@@ -227,8 +227,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.catch_points.push(catch_point);
             }
             Instruction::Copy(r1, r2) => {
-                let new_ref = get_location(&self.stack, &self.context.txn, r1)?.into_owned();
-                set_location(&mut self.stack, &self.context.txn, r2, new_ref)?;
+                let txn = &self.context.txn;
+                let frame = self.stack.current_frame_mut()?;
+                let new_ref = frame.get_location(txn, r1)?.into_owned();
+                frame.set_location(txn, r2, new_ref)?;
             }
             Instruction::Dec(r1) => {
                 bump_in_location(&mut self.stack, &self.context.txn, r1, -1)?;

@@ -218,11 +218,7 @@ impl CallFrame {
             return Err(self.runtime_bug(format!("new_upvalue on a non-upvalue {location}")));
         };
         let Some(cell) = self.upvalue_ptrs.get_mut(reg.index() as usize) else {
-            return Err(self.runtime_bug(format!(
-                "upvalue {} is outside this frame's {} cells",
-                reg.index(),
-                self.upvalue_ptrs.len()
-            )));
+            return Err(self.bad_upvalue(reg));
         };
         *cell = VarId::new();
         Ok(())
@@ -321,96 +317,110 @@ impl CallFrame {
     pub(crate) fn slot(&self, location: RegisterVariant) -> Result<Slot> {
         match location {
             RegisterVariant::Local(reg) => Ok(Slot::Register(reg)),
-            RegisterVariant::Global(reg) => Ok(Slot::Cell(self.process.var_id(reg.into()))),
-            RegisterVariant::Upvalue(reg) => {
-                let Some(&cell) = self.upvalue_ptrs.get(reg.index() as usize) else {
-                    return Err(self.runtime_bug(format!(
-                        "upvalue {} is outside this frame's {} cells",
-                        reg.index(),
-                        self.upvalue_ptrs.len()
-                    )));
-                };
-                Ok(Slot::Cell(cell))
-            }
+            RegisterVariant::Global(reg) => Ok(Slot::Cell(self.global(reg))),
+            RegisterVariant::Upvalue(reg) => self.upvalue(reg).map(Slot::Cell),
             RegisterVariant::Constant(reg) => Ok(Slot::Constant(reg)),
         }
     }
 
+    /// The world cell behind global `reg`.
+    #[inline(always)]
+    fn global(&self, reg: Register) -> VarId {
+        self.process.var_id(reg.into())
+    }
+
+    /// The captured cell `reg` names.
+    #[inline(always)]
+    fn upvalue(&self, reg: Register) -> Result<VarId> {
+        match self.upvalue_ptrs.get(reg.index() as usize) {
+            Some(&cell) => Ok(cell),
+            None => Err(self.bad_upvalue(reg)),
+        }
+    }
+
     /// The pool entry a `Constant` operand names, as a value.
+    #[inline(always)]
     fn constant(&self, reg: Register) -> Result<LpcRef> {
-        let Some(constant) = self.function.constants.get(reg.index() as usize) else {
-            return Err(self.runtime_bug(format!(
-                "constant k{} is outside this function's {} entries",
-                reg.index(),
-                self.function.constants.len()
-            )));
-        };
-        Ok(LpcRef::from(constant))
+        match self.function.constants.get(reg.index() as usize) {
+            Some(constant) => Ok(LpcRef::from(constant)),
+            None => Err(self.bad_constant(reg)),
+        }
+    }
+
+    /// The runtime bug for an upvalue past this frame's cells.
+    #[cold]
+    #[inline(never)]
+    fn bad_upvalue(&self, reg: Register) -> LpcError {
+        self.runtime_bug(format!(
+            "upvalue {} is outside this frame's {} cells",
+            reg.index(),
+            self.upvalue_ptrs.len()
+        ))
+    }
+
+    /// The runtime bug for a constant past the function's pool.
+    #[cold]
+    #[inline(never)]
+    fn bad_constant(&self, reg: Register) -> LpcError {
+        self.runtime_bug(format!(
+            "constant k{} is outside this function's {} entries",
+            reg.index(),
+            self.function.constants.len()
+        ))
+    }
+
+    /// The runtime bug for a write to a `Constant` operand.
+    #[cold]
+    #[inline(never)]
+    fn write_through_constant(&self, location: RegisterVariant) -> LpcError {
+        self.runtime_bug(format!("write through constant {location}"))
     }
 
     /// Read the [`LpcRef`] at `location`; an unwritten cell reads `NULL`.
-    #[instrument(level = "debug", skip_all)]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn get_location(
         &self,
         txn: &TxnHandle,
         location: RegisterVariant,
     ) -> Result<Cow<'_, LpcRef>> {
-        Ok(match self.slot(location)? {
-            Slot::Register(reg) => Cow::Borrowed(&self.registers[reg]),
-            Slot::Cell(cell) => Cow::Owned(txn.with(|t| t.read(cell).unwrap_or(NULL))),
-            Slot::Constant(reg) => Cow::Owned(self.constant(reg)?),
+        Ok(match location {
+            RegisterVariant::Local(reg) => Cow::Borrowed(&self.registers[reg]),
+            RegisterVariant::Constant(reg) => Cow::Owned(self.constant(reg)?),
+            RegisterVariant::Global(reg) => Cow::Owned(read_cell(txn, self.global(reg))),
+            RegisterVariant::Upvalue(reg) => Cow::Owned(read_cell(txn, self.upvalue(reg)?)),
         })
     }
 
     /// Assign an [`LpcRef`] to a specific location, based on the [`RegisterVariant`]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn set_location(
         &mut self,
         txn: &TxnHandle,
         location: RegisterVariant,
         lpc_ref: LpcRef,
     ) -> Result<()> {
-        match self.slot(location)? {
-            Slot::Register(reg) => self.registers[reg] = lpc_ref,
-            // A blind in-txn write: the read that computed `lpc_ref` was
-            // already tracked when the caller read it.
-            Slot::Cell(cell) => txn.with(|t| t.write(cell, lpc_ref)),
-            Slot::Constant(_) => {
-                return Err(self.runtime_bug(format!("write through constant {location}")));
-            }
+        match location {
+            RegisterVariant::Local(reg) => self.registers[reg] = lpc_ref,
+            RegisterVariant::Global(reg) => write_cell(txn, self.global(reg), lpc_ref),
+            RegisterVariant::Upvalue(reg) => write_cell(txn, self.upvalue(reg)?, lpc_ref),
+            RegisterVariant::Constant(_) => return Err(self.write_through_constant(location)),
         }
         Ok(())
     }
 
-    /// Add `delta` (`++`/`--`, so ±1) to the int at `location`. A register
-    /// bumps in place. A cell holding an int (or nothing) records a merge
-    /// write — no read is tracked, so concurrent bumps commute — and any
-    /// other cell takes the tracked read-modify-write path to produce the
-    /// typed error.
+    /// Add `delta` (`++`/`--`, so ±1) to the int at `location`.
+    #[inline(always)]
     pub(crate) fn bump_in_location(
         &mut self,
         txn: &TxnHandle,
         location: RegisterVariant,
         delta: LpcIntInner,
     ) -> Result<()> {
-        let bump = |x: &mut LpcRef| if delta >= 0 { x.inc() } else { x.dec() };
-        match self.slot(location)? {
-            Slot::Constant(_) => {
-                Err(self.runtime_bug(format!("write through constant {location}")))
-            }
-            Slot::Register(reg) => bump(&mut self.registers[reg]),
-            Slot::Cell(cell) => txn.with(|t| {
-                if t.peek_int(cell) {
-                    t.merge(cell, MergeOp::IntAdd(delta));
-                    Ok(())
-                } else {
-                    let mut cur = t.read(cell).unwrap_or(NULL);
-                    bump(&mut cur)?;
-                    t.write(cell, cur);
-                    Ok(())
-                }
-            }),
+        match location {
+            RegisterVariant::Local(reg) => bump(&mut self.registers[reg], delta),
+            RegisterVariant::Global(reg) => bump_cell(txn, self.global(reg), delta),
+            RegisterVariant::Upvalue(reg) => bump_cell(txn, self.upvalue(reg)?, delta),
+            RegisterVariant::Constant(_) => Err(self.write_through_constant(location)),
         }
     }
 
@@ -495,6 +505,43 @@ impl Display for CallFrame {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.to_stack_trace_format())
     }
+}
+
+/// Read `cell` in `txn`; an unwritten cell reads `NULL`.
+#[inline(never)]
+fn read_cell(txn: &TxnHandle, cell: VarId) -> LpcRef {
+    txn.with(|t| t.read(cell).unwrap_or(NULL))
+}
+
+/// Write `value` to `cell` in `txn`. A blind write: the read that computed
+/// `value` was already tracked when the caller read it.
+#[inline(never)]
+fn write_cell(txn: &TxnHandle, cell: VarId, value: LpcRef) {
+    txn.with(|t| t.write(cell, value))
+}
+
+/// `++`/`--` on `x` in place.
+#[inline(always)]
+fn bump(x: &mut LpcRef, delta: LpcIntInner) -> Result<()> {
+    if delta >= 0 { x.inc() } else { x.dec() }
+}
+
+/// Add `delta` to the int in `cell`. An int (or nothing) records a merge
+/// write — no read is tracked, so concurrent bumps commute — and any other
+/// value takes the tracked read-modify-write path to produce the typed error.
+#[inline(never)]
+fn bump_cell(txn: &TxnHandle, cell: VarId, delta: LpcIntInner) -> Result<()> {
+    txn.with(|t| {
+        if t.peek_int(cell) {
+            t.merge(cell, MergeOp::IntAdd(delta));
+            Ok(())
+        } else {
+            let mut cur = t.read(cell).unwrap_or(NULL);
+            bump(&mut cur, delta)?;
+            t.write(cell, cur);
+            Ok(())
+        }
+    })
 }
 
 #[cfg(test)]
@@ -763,6 +810,39 @@ mod tests {
 
         let err = frame.slot(Register(0).as_upvalue()).unwrap_err();
         assert!(err.is_bug(), "{err}");
+    }
+
+    #[test]
+    fn every_door_rejects_an_upvalue_past_the_frame() {
+        let txn = TxnHandle::empty();
+        let mut frame = CallFrame::new(Process::default(), value_function(), 0, None::<&[VarId]>);
+        let u0 = Register(0).as_upvalue();
+
+        assert!(frame.get_location(&txn, u0).unwrap_err().is_bug());
+        assert!(
+            frame
+                .set_location(&txn, u0, LpcRef::from(1))
+                .unwrap_err()
+                .is_bug()
+        );
+        assert!(frame.bump_in_location(&txn, u0, 1).unwrap_err().is_bug());
+    }
+
+    #[test]
+    fn a_global_round_trips_through_its_cell() {
+        let txn = TxnHandle::empty();
+        let program = Program {
+            num_globals: 1,
+            ..Program::default()
+        };
+        let mut frame =
+            CallFrame::new(Process::new(program), value_function(), 0, None::<&[VarId]>);
+        let g0 = Register(0).as_global();
+
+        assert_eq!(*frame.get_location(&txn, g0).unwrap(), NULL);
+        frame.set_location(&txn, g0, LpcRef::from(7)).unwrap();
+        frame.bump_in_location(&txn, g0, 1).unwrap();
+        assert_eq!(*frame.get_location(&txn, g0).unwrap(), LpcRef::from(8));
     }
 
     mod test_with_minimum_arg_capacity {

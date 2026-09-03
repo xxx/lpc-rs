@@ -6,7 +6,7 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{call_stack::CallStack, lpc_ref::LpcRef, stm::TxnHandle};
 
 /// Read `location` in the current frame.
-#[inline]
+#[inline(always)]
 pub(crate) fn get_location<'a, const N: usize>(
     stack: &'a CallStack<N>,
     txn: &TxnHandle,
@@ -16,7 +16,7 @@ pub(crate) fn get_location<'a, const N: usize>(
 }
 
 /// Write `location` in the current frame.
-#[inline]
+#[inline(always)]
 pub(crate) fn set_location<const N: usize>(
     stack: &mut CallStack<N>,
     txn: &TxnHandle,
@@ -29,7 +29,7 @@ pub(crate) fn set_location<const N: usize>(
 }
 
 /// Bump the int at `location` in the current frame by `delta`.
-#[inline]
+#[inline(always)]
 pub(crate) fn bump_in_location<const N: usize>(
     stack: &mut CallStack<N>,
     txn: &TxnHandle,

@@ -405,7 +405,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip_all)]
     fn binary_operation<F>(
         &mut self,
         r1: RegisterVariant,
@@ -416,23 +415,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     where
         F: Fn(&LpcRef, &LpcRef, &TxnHandle) -> Result<LpcRef>,
     {
-        let ref1 = &*get_location(&self.stack, &self.context.txn, r1)?;
-        let ref2 = &*get_location(&self.stack, &self.context.txn, r2)?;
+        let txn = &self.context.txn;
+        let frame = self.stack.current_frame_mut()?;
+        let result = {
+            let ref1 = &*frame.get_location(txn, r1)?;
+            let ref2 = &*frame.get_location(txn, r2)?;
+            operation(ref1, ref2, txn)
+        };
 
-        match operation(ref1, ref2, &self.context.txn) {
-            Ok(result) => {
-                set_location(&mut self.stack, &self.context.txn, r3, result)?;
-            }
-            Err(e) => {
-                let frame = self.stack.current_frame()?;
-                return Err(e.or_span(frame.current_debug_span()));
-            }
+        match result {
+            Ok(result) => frame.set_location(txn, r3, result),
+            Err(e) => Err(e.or_span(frame.current_debug_span())),
         }
-
-        Ok(())
     }
 
-    #[instrument(level = "debug", skip_all)]
     fn unary_operation<F>(
         &mut self,
         r1: RegisterVariant,
@@ -442,19 +438,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     where
         F: Fn(&LpcRef, &TxnHandle) -> Result<LpcRef>,
     {
-        let ref1 = &*get_location(&self.stack, &self.context.txn, r1)?;
+        let txn = &self.context.txn;
+        let frame = self.stack.current_frame_mut()?;
+        let result = {
+            let ref1 = &*frame.get_location(txn, r1)?;
+            operation(ref1, txn)
+        };
 
-        match operation(ref1, &self.context.txn) {
-            Ok(result) => {
-                set_location(&mut self.stack, &self.context.txn, r2, result)?;
-            }
-            Err(e) => {
-                let frame = self.stack.current_frame()?;
-                return Err(e.or_span(frame.current_debug_span()));
-            }
+        match result {
+            Ok(result) => frame.set_location(txn, r2, result),
+            Err(e) => Err(e.or_span(frame.current_debug_span())),
         }
-
-        Ok(())
     }
 
     /// Binary operations that return a boolean value (e.g. comparisons)
@@ -475,11 +469,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Whether `r1 kind r2` holds for the values in the two registers.
+    #[inline]
     fn holds(&self, kind: Comparison, r1: RegisterVariant, r2: RegisterVariant) -> Result<bool> {
-        let ref1 = &*get_location(&self.stack, &self.context.txn, r1)?;
-        let ref2 = &*get_location(&self.stack, &self.context.txn, r2)?;
+        let txn = &self.context.txn;
+        let frame = self.stack.current_frame()?;
+        let ref1 = &*frame.get_location(txn, r1)?;
+        let ref2 = &*frame.get_location(txn, r2)?;
 
-        Ok(ref1.compare(kind, ref2, &self.context.txn))
+        Ok(ref1.compare(kind, ref2, txn))
     }
 
     /// Write 1 or 0 to `r3` for whether `r1 kind r2` holds.
