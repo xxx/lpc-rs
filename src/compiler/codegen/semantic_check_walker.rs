@@ -3048,6 +3048,65 @@ mod tests {
         }
     }
 
+    mod test_expression_type {
+        use super::*;
+
+        /// The messages a snippet earns, warnings aside.
+        async fn messages(code: &str) -> Vec<String> {
+            let context = walk_code(code).await.expect("failed to parse?");
+            context
+                .diagnostics
+                .errors()
+                .iter()
+                .filter(|e| !e.is_warning())
+                .map(ToString::to_string)
+                .collect()
+        }
+
+        #[tokio::test]
+        async fn a_mixed_right_operand_absorbs() {
+            let code = r#"
+                void create() {
+                    mixed m = 1;
+                    string s = 1 + m;
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_float_right_operand_promotes() {
+            let code = r#"
+                void create() {
+                    float f = 1 + 1.5;
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn an_array_with_a_mixed_operand_takes_any_array() {
+            let code = r#"
+                void create() {
+                    mixed m = 1;
+                    int *a = ({ 1 });
+                    string *s = a + m;
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn an_int_from_a_string_operation_is_still_rejected() {
+            let code = r#"
+                void create() {
+                    string x = "a";
+                    int i = 1 + x;
+                }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["mismatched types: `i` (int) = `1 + x` (string)".to_string()]
+            );
+        }
+    }
+
     mod test_visit_ternary {
         use super::*;
 
