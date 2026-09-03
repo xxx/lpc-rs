@@ -43,12 +43,11 @@ impl Snapshot {
     pub(crate) fn apply(&self, version: Version, changeset: Changeset) -> Self {
         let mut state = self.state.clone();
 
-        let (writes, removals) = changeset.into_parts();
-        for (var_id, value) in writes {
-            state.insert(var_id, value);
-        }
-        for var_id in removals {
-            state.remove(&var_id);
+        for (var_id, change) in changeset.into_changes() {
+            match change {
+                Some(value) => state.insert(var_id, value),
+                None => state.remove(&var_id),
+            };
         }
         Self::new(version, state)
     }
