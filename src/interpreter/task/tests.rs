@@ -3167,6 +3167,23 @@ mod test_instructions {
             check_committed_globals(code, &[("a", BareVal::Int(790080)), ("b", BareVal::Int(0))])
                 .await;
         }
+
+        #[tokio::test]
+        async fn a_negative_count_shifts_from_the_width() {
+            let code = indoc! { r##"
+                    mixed a = -1;
+                    mixed b = 1 << a;
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::Int(-1)),
+                    ("b", BareVal::Int(LpcIntInner::MIN)),
+                ],
+            )
+            .await;
+        }
     }
 
     mod test_shr {

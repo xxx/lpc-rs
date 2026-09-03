@@ -15,12 +15,13 @@ use lpc_rs_core::{
     register::{Register, RegisterVariant},
 };
 use lpc_rs_errors::{LpcError, Result, span::Span};
-use lpc_rs_function_support::program_function::ProgramFunction;
+use lpc_rs_function_support::{constant::LpcConstant, program_function::ProgramFunction};
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
 
 use crate::interpreter::{
     bank::RefBank,
+    lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL},
     process::Process,
     stm::{MergeOp, TxnHandle, VarId},
@@ -389,6 +390,53 @@ impl CallFrame {
             RegisterVariant::Global(reg) => Cow::Owned(read_cell(txn, self.global(reg))),
             RegisterVariant::Upvalue(reg) => Cow::Owned(read_cell(txn, self.upvalue(reg)?)),
         })
+    }
+
+    /// The int at `location` when it sits in a register or the pool; `None`
+    /// for any other value, and for a cell, which only a full read tracks.
+    #[inline(always)]
+    pub(crate) fn peek_int(&self, location: RegisterVariant) -> Option<LpcIntInner> {
+        match location {
+            RegisterVariant::Local(reg) => match &self.registers[reg] {
+                LpcRef::Int(x) => Some(x.0),
+                _ => None,
+            },
+            RegisterVariant::Constant(reg) => {
+                match self.function.constants.get(reg.index() as usize) {
+                    Some(LpcConstant::Int(x)) => Some(*x),
+                    _ => None,
+                }
+            }
+            RegisterVariant::Global(_) | RegisterVariant::Upvalue(_) => None,
+        }
+    }
+
+    /// Store int `value` at `location`. An int register is overwritten in
+    /// place: a fresh `LpcRef`'s spill and wide reload stalled the eval loop.
+    #[inline(always)]
+    pub(crate) fn set_int(
+        &mut self,
+        txn: &TxnHandle,
+        location: RegisterVariant,
+        value: LpcIntInner,
+    ) -> Result<()> {
+        match location {
+            RegisterVariant::Local(reg) => {
+                let slot = &mut self.registers[reg];
+                match slot {
+                    LpcRef::Int(x) => x.0 = value,
+                    _ => *slot = LpcRef::Int(LpcInt(value)),
+                }
+            }
+            RegisterVariant::Global(reg) => {
+                write_cell(txn, self.global(reg), LpcRef::Int(LpcInt(value)))
+            }
+            RegisterVariant::Upvalue(reg) => {
+                write_cell(txn, self.upvalue(reg)?, LpcRef::Int(LpcInt(value)))
+            }
+            RegisterVariant::Constant(_) => return Err(self.write_through_constant(location)),
+        }
+        Ok(())
     }
 
     /// Assign an [`LpcRef`] to a specific location, based on the [`RegisterVariant`]
@@ -843,6 +891,83 @@ mod tests {
         frame.set_location(&txn, g0, LpcRef::from(7)).unwrap();
         frame.bump_in_location(&txn, g0, 1).unwrap();
         assert_eq!(*frame.get_location(&txn, g0).unwrap(), LpcRef::from(8));
+    }
+
+    #[test]
+    fn peek_int_reads_registers_and_the_pool_only() {
+        let txn = TxnHandle::empty();
+        let program = Program {
+            num_globals: 1,
+            ..Program::default()
+        };
+        let mut frame = CallFrame::new(
+            Process::new(program),
+            pooled_function(),
+            0,
+            None::<&[VarId]>,
+        );
+        let (l0, k0, k1, g0) = (
+            Register(0).as_local(),
+            Register(0).as_constant(),
+            Register(1).as_constant(),
+            Register(0).as_global(),
+        );
+        frame.set_location(&txn, l0, LpcRef::from(3)).unwrap();
+        frame.set_location(&txn, g0, LpcRef::from(4)).unwrap();
+
+        assert_eq!(
+            (
+                frame.peek_int(l0),
+                frame.peek_int(k0),
+                frame.peek_int(k1),
+                frame.peek_int(g0)
+            ),
+            (Some(3), Some(5), None, None)
+        );
+    }
+
+    #[test]
+    fn set_int_stores_through_every_writable_door() {
+        let txn = TxnHandle::empty();
+        let program = Program {
+            num_globals: 1,
+            ..Program::default()
+        };
+        let mut frame = CallFrame::new(
+            Process::new(program),
+            pooled_function(),
+            0,
+            None::<&[VarId]>,
+        );
+        let (l0, g0, k0) = (
+            Register(0).as_local(),
+            Register(0).as_global(),
+            Register(0).as_constant(),
+        );
+
+        frame.set_int(&txn, l0, 6).unwrap();
+        frame.set_int(&txn, g0, 7).unwrap();
+
+        assert_eq!(
+            (
+                *frame.get_location(&txn, l0).unwrap() == LpcRef::from(6),
+                *frame.get_location(&txn, g0).unwrap() == LpcRef::from(7),
+                frame.set_int(&txn, k0, 8).unwrap_err().is_bug(),
+            ),
+            (true, true, true)
+        );
+    }
+
+    #[test]
+    fn set_int_replaces_a_register_holding_another_type() {
+        let txn = TxnHandle::empty();
+        let mut frame = CallFrame::new(Process::default(), value_function(), 0, None::<&[VarId]>);
+        let l0 = Register(0).as_local();
+        frame.set_location(&txn, l0, LpcRef::from("s")).unwrap();
+
+        frame.set_int(&txn, l0, 6).unwrap();
+
+        assert_eq!(*frame.get_location(&txn, l0).unwrap(), LpcRef::from(6));
     }
 
     mod test_with_minimum_arg_capacity {

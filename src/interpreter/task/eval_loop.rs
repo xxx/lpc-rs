@@ -11,7 +11,7 @@ use crate::{
         efun::EFUN_FUNCTIONS,
         lpc_array::LpcArray,
         lpc_int::LpcInt,
-        lpc_ref::{LpcRef, NULL},
+        lpc_ref::{LpcRef, NULL, int_div, int_rem, int_shl, int_shr},
         task::{CatchPoint, Task, bump_in_location, get_location, set_location},
     },
     pop_frame,
@@ -158,7 +158,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Evaluate the instruction at the current value of the program counter.
     ///
     /// Not `async`: as an `async fn` this was a 2.3 KiB future copied, polled
-    /// and dropped on every instruction.
+    /// and dropped on every instruction. Inlined into `run_slice` explicitly:
+    /// left to LLVM it became a call per instruction once the doors grew.
+    #[inline(always)]
     #[instrument(level = "debug", skip_all)]
     fn step(&mut self) -> lpc_rs_errors::Result<Step> {
         if self.stack.is_empty() {
@@ -196,7 +198,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 consumed(&mut self.array_items, result)?;
             }
             Instruction::And(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, _| x.bitand(y))?;
+                self.binary_operation(r1, r2, r3, |x, y| Some(x & y), |x, y, _| x.bitand(y))?;
             }
             Instruction::BitwiseNot(r1, r2) => {
                 self.unary_operation(r1, r2, |x, _| x.bitnot())?;
@@ -245,10 +247,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 consumed(&mut self.partial_args, result)?;
             }
             Instruction::Div(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, _| x.div(y))?;
+                self.binary_operation(r1, r2, r3, int_div, |x, y, _| x.div(y))?;
             }
             Instruction::Mod(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, _| x.rem(y))?;
+                self.binary_operation(r1, r2, r3, int_rem, |x, y, _| x.rem(y))?;
             }
             Instruction::Inc(r1) => {
                 bump_in_location(&mut self.stack, &self.context.txn, r1, 1)?;
@@ -290,17 +292,35 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.handle_load_mapping_key(container, index, destination)?;
             }
             Instruction::Add(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, txn| x.add(y, txn))?;
+                self.binary_operation(
+                    r1,
+                    r2,
+                    r3,
+                    |x, y| Some(x.wrapping_add(y)),
+                    |x, y, txn| x.add(y, txn),
+                )?;
             }
             Instruction::MapConst(location) => {
                 let result = self.handle_mapconst(location);
                 consumed(&mut self.array_items, result)?;
             }
             Instruction::Mul(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, _| x.mul(y))?;
+                self.binary_operation(
+                    r1,
+                    r2,
+                    r3,
+                    |x, y| Some(x.wrapping_mul(y)),
+                    |x, y, _| x.mul(y),
+                )?;
             }
             Instruction::Sub(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, txn| x.sub(y, txn))?;
+                self.binary_operation(
+                    r1,
+                    r2,
+                    r3,
+                    |x, y| Some(x.wrapping_sub(y)),
+                    |x, y, txn| x.sub(y, txn),
+                )?;
             }
             Instruction::NewUpvalue(location) => {
                 self.stack.current_frame_mut()?.new_upvalue(location)?;
@@ -309,7 +329,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.unary_operation(r1, r2, |x, txn| Ok(x.not(txn)))?;
             }
             Instruction::Or(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, _| x.bitor(y))?;
+                self.binary_operation(r1, r2, r3, |x, y| Some(x | y), |x, y, _| x.bitor(y))?;
             }
             Instruction::PopulateArgv(r, num_args, _num_locals) => {
                 let frame = self.stack.current_frame()?;
@@ -535,13 +555,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.handle_store(value_loc, container_loc, index_loc)?;
             }
             Instruction::Shl(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, _| x.shl(y))?;
+                self.binary_operation(r1, r2, r3, |x, y| Some(int_shl(x, y)), |x, y, _| x.shl(y))?;
             }
             Instruction::Shr(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, _| x.shr(y))?;
+                self.binary_operation(r1, r2, r3, |x, y| Some(int_shr(x, y)), |x, y, _| x.shr(y))?;
             }
             Instruction::Xor(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y, _| x.bitxor(y))?;
+                self.binary_operation(r1, r2, r3, |x, y| Some(x ^ y), |x, y, _| x.bitxor(y))?;
             }
         }
 

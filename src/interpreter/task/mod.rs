@@ -405,7 +405,37 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
-    fn binary_operation<F>(
+    /// `r3 = r1 op r2`; `ints` answers for two register or pool ints, `None`
+    /// when they alone cannot (a zero divisor).
+    #[inline(always)]
+    fn binary_operation<I, F>(
+        &mut self,
+        r1: RegisterVariant,
+        r2: RegisterVariant,
+        r3: RegisterVariant,
+        ints: I,
+        operation: F,
+    ) -> Result<()>
+    where
+        I: Fn(LpcIntInner, LpcIntInner) -> Option<LpcIntInner>,
+        F: Fn(&LpcRef, &LpcRef, &TxnHandle) -> Result<LpcRef>,
+    {
+        let txn = &self.context.txn;
+        let frame = self.stack.current_frame_mut()?;
+        let shortcut = match (frame.peek_int(r1), frame.peek_int(r2)) {
+            (Some(x), Some(y)) => ints(x, y),
+            _ => None,
+        };
+        if let Some(value) = shortcut {
+            return frame.set_int(txn, r3, value);
+        }
+
+        self.binary_operation_slow(r1, r2, r3, operation)
+    }
+
+    /// `r3 = r1 op r2` for any operands, `operation` doing the work.
+    #[inline(never)]
+    fn binary_operation_slow<F>(
         &mut self,
         r1: RegisterVariant,
         r2: RegisterVariant,
@@ -422,9 +452,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let ref2 = &*frame.get_location(txn, r2)?;
             operation(ref1, ref2, txn)
         };
-
         match result {
-            Ok(result) => frame.set_location(txn, r3, result),
+            Ok(value) => frame.set_location(txn, r3, value),
             Err(e) => Err(e.or_span(frame.current_debug_span())),
         }
     }
@@ -451,8 +480,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
     }
 
-    /// Binary operations that return a boolean value (e.g. comparisons)
-    #[instrument(level = "debug", skip_all)]
     /// The current frame's argument list `list`; a list the function lacks
     /// is a codegen bug.
     pub(crate) fn args_of(&self, list: ArgList) -> Result<&[Arg]> {
@@ -469,13 +496,28 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Whether `r1 kind r2` holds for the values in the two registers.
-    #[inline]
+    #[inline(always)]
     fn holds(&self, kind: Comparison, r1: RegisterVariant, r2: RegisterVariant) -> Result<bool> {
+        let frame = self.stack.current_frame()?;
+        if let (Some(x), Some(y)) = (frame.peek_int(r1), frame.peek_int(r2)) {
+            return Ok(kind.holds(x, y));
+        }
+
+        self.holds_slow(kind, r1, r2)
+    }
+
+    /// [`Self::holds`] for any operands.
+    #[inline(never)]
+    fn holds_slow(
+        &self,
+        kind: Comparison,
+        r1: RegisterVariant,
+        r2: RegisterVariant,
+    ) -> Result<bool> {
         let txn = &self.context.txn;
         let frame = self.stack.current_frame()?;
         let ref1 = &*frame.get_location(txn, r1)?;
         let ref2 = &*frame.get_location(txn, r2)?;
-
         Ok(ref1.compare(kind, ref2, txn))
     }
 
