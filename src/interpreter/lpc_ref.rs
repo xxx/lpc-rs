@@ -98,6 +98,30 @@ fn shift_amount(y: LpcIntInner) -> u32 {
     }
 }
 
+/// `x / y` on ints; `None` for a zero divisor.
+#[inline]
+pub(crate) fn int_div(x: LpcIntInner, y: LpcIntInner) -> Option<LpcIntInner> {
+    (y != 0).then(|| x.wrapping_div(y))
+}
+
+/// `x % y` on ints; `None` for a zero divisor.
+#[inline]
+pub(crate) fn int_rem(x: LpcIntInner, y: LpcIntInner) -> Option<LpcIntInner> {
+    (y != 0).then(|| x.wrapping_rem(y))
+}
+
+/// `x << y` on ints, the count as [`shift_amount`] reads it.
+#[inline]
+pub(crate) fn int_shl(x: LpcIntInner, y: LpcIntInner) -> LpcIntInner {
+    x.checked_shl(shift_amount(y)).unwrap_or(0)
+}
+
+/// `x >> y` on ints, the count as [`shift_amount`] reads it.
+#[inline]
+pub(crate) fn int_shr(x: LpcIntInner, y: LpcIntInner) -> LpcIntInner {
+    x.checked_shr(shift_amount(y)).unwrap_or(0)
+}
+
 /// The error for a collection ref whose contents are not in the reading
 /// transaction's world.
 fn gone_error(kind: &str) -> LpcError {
@@ -180,12 +204,9 @@ impl LpcRef {
     /// unordered, so every ordering is false in both directions.
     pub(crate) fn compare(&self, kind: Comparison, other: &Self, txn: &TxnHandle) -> bool {
         match kind {
-            Comparison::Lt => self < other,
-            Comparison::Lte => self <= other,
-            Comparison::Gt => self > other,
-            Comparison::Gte => self >= other,
             Comparison::Eq => self.eq_in(other, txn),
             Comparison::Ne => !self.eq_in(other, txn),
+            ordering => ordering.holds(self, other),
         }
     }
 
@@ -452,8 +473,7 @@ impl LpcRef {
         let zero = || LpcError::runtime("Division by zero");
 
         match self.promote(rhs) {
-            Some(Numeric::Ints(_, 0)) => Err(zero()),
-            Some(Numeric::Ints(x, y)) => Ok(Self::Int(LpcInt(x.wrapping_div(y)))),
+            Some(Numeric::Ints(x, y)) => int_div(x, y).map(Self::from).ok_or_else(zero),
             Some(Numeric::Floats(_, y)) if is_zero(y) => Err(zero()),
             Some(Numeric::Floats(x, y)) => Ok(Self::Float(LpcFloat(x / y))),
             None => Err(self.to_error(BinaryOperation::Div, rhs)),
@@ -464,8 +484,7 @@ impl LpcRef {
         let zero = || LpcError::runtime("Remainder division by zero");
 
         match self.promote(rhs) {
-            Some(Numeric::Ints(_, 0)) => Err(zero()),
-            Some(Numeric::Ints(x, y)) => Ok(Self::Int(LpcInt(x.wrapping_rem(y)))),
+            Some(Numeric::Ints(x, y)) => int_rem(x, y).map(Self::from).ok_or_else(zero),
             Some(Numeric::Floats(_, y)) if is_zero(y) => Err(zero()),
             Some(Numeric::Floats(x, y)) => Ok(Self::Float(LpcFloat(x % y))),
             None => Err(self.to_error(BinaryOperation::Mod, rhs)),
@@ -485,15 +504,11 @@ impl LpcRef {
     }
 
     pub fn shl(&self, rhs: &Self) -> Result<Self> {
-        self.int_binop(rhs, BinaryOperation::Shl, |x, y| {
-            x.checked_shl(shift_amount(y)).unwrap_or(0)
-        })
+        self.int_binop(rhs, BinaryOperation::Shl, int_shl)
     }
 
     pub fn shr(&self, rhs: &Self) -> Result<Self> {
-        self.int_binop(rhs, BinaryOperation::Shr, |x, y| {
-            x.checked_shr(shift_amount(y)).unwrap_or(0)
-        })
+        self.int_binop(rhs, BinaryOperation::Shr, int_shr)
     }
 
     /// Logical not (the unary `!` operator): 1 for `0`, `0.0` and a
@@ -756,6 +771,16 @@ mod tests {
                 .map(|&k| under(k, &one, &two))
                 .collect();
             assert_eq!(answers, [true, true, false, false, false, true]);
+        }
+
+        #[test]
+        fn equal_ints_hold_under_lte_gte_and_eq() {
+            let two = LpcRef::from(2);
+            let answers: Vec<bool> = Comparison::ALL
+                .iter()
+                .map(|&k| under(k, &two, &two))
+                .collect();
+            assert_eq!(answers, [false, true, false, true, true, false]);
         }
     }
 
@@ -1077,6 +1102,13 @@ mod tests {
 
     mod test_sub {
         use super::*;
+
+        #[test]
+        fn int_int() {
+            let txn = test_txn();
+            let result = LpcRef::from(456).sub(&LpcRef::from(123), &txn);
+            assert_eq!(result.unwrap(), LpcRef::from(333));
+        }
 
         #[test]
         fn int_int_underflow_does_not_panic() {

@@ -78,6 +78,19 @@ pub enum Comparison {
 impl Comparison {
     /// Every kind, in declaration order.
     pub const ALL: [Comparison; 6] = [Self::Lt, Self::Lte, Self::Gt, Self::Gte, Self::Eq, Self::Ne];
+
+    /// Whether `x self y` holds.
+    #[inline(always)]
+    pub fn holds<T: PartialOrd>(self, x: T, y: T) -> bool {
+        match self {
+            Self::Lt => x < y,
+            Self::Lte => x <= y,
+            Self::Gt => x > y,
+            Self::Gte => x >= y,
+            Self::Eq => x == y,
+            Self::Ne => x != y,
+        }
+    }
 }
 
 impl Display for Comparison {
@@ -690,6 +703,12 @@ mod tests {
     use ustr::ustr;
 
     use super::*;
+
+    #[test]
+    fn a_comparison_holds_between_ordered_values() {
+        let answers: Vec<bool> = Comparison::ALL.iter().map(|&k| k.holds(1, 2)).collect();
+        assert_eq!(answers, [true, true, false, false, false, true]);
+    }
 
     #[test]
     fn string_operands_display_as_names() {
