@@ -16,7 +16,7 @@ use lpc_rs_core::{
 };
 use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol};
 use path_dedot::*;
-use ustr::Ustr;
+use ustr::{Ustr, existing_ustr};
 
 /// The in-game directory of `path`: its parent with `.`/`..` folded, rooted
 /// at `/`.
@@ -55,8 +55,9 @@ pub struct Program {
     #[builder(setter(into))]
     pub filename: Arc<LpcPath>,
 
-    /// function mapping of (mangled) name to the function
-    pub functions: Box<IndexMap<String, Arc<ProgramFunction>, ahash::RandomState>>,
+    /// Every function by mangled name, inherited ones first. Keyed by the
+    /// interned name so a `Call`'s `Ustr` hashes and compares by pointer.
+    pub functions: Box<IndexMap<Ustr, Arc<ProgramFunction>, ahash::RandomState>>,
 
     /// Function mapping of unmangled name to the function.
     /// This is needed for `call_other`.
@@ -95,28 +96,33 @@ impl Program {
         }
     }
 
-    /// Look up a function by its name, starting from this program,
-    /// and searching all of its inherited-from programs, last-declared-inherit
-    /// first.
+    /// The function with the mangled name `mangled`, inherited ones included.
+    #[inline]
+    pub fn function(&self, mangled: Ustr) -> Option<&Arc<ProgramFunction>> {
+        self.functions.get(&mangled)
+    }
+
+    /// Look up a function by its unmangled name, then its mangled one,
+    /// inherited ones included. The unmangled table comes first because a
+    /// `->` arrives here as a string, and the interner's probe on the way
+    /// to the mangled table cost call_churn 8%; a name never interned is a
+    /// miss, not an interning.
     pub fn lookup_function<T>(&self, name: T) -> Option<&Arc<ProgramFunction>>
     where
         T: AsRef<str>,
     {
         let function_name = name.as_ref();
-        self.functions
-            .get(function_name)
-            .or_else(|| self.unmangled_functions.get(function_name))
+        self.unmangled_functions.get(function_name).or_else(|| {
+            existing_ustr(function_name).and_then(|mangled| self.functions.get(&mangled))
+        })
     }
 
-    /// Return whether or not we have a function with this name either locally,
-    /// or in any of our inherited-from parents.
+    /// Whether [`Self::lookup_function`] would find `name`.
     pub fn contains_function<T>(&self, name: T) -> bool
     where
         T: AsRef<str>,
     {
-        let function_name = name.as_ref();
-        self.functions.contains_key(function_name)
-            || self.unmangled_functions.contains_key(function_name)
+        self.lookup_function(name).is_some()
     }
 
     /// Get the in-game directory of this program. Used for clone_object, etc.
@@ -222,6 +228,9 @@ impl Display for Program {
 
 #[cfg(test)]
 mod tests {
+    use lpc_rs_core::{lpc_type::LpcType, mangle::Mangle};
+    use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
+    use ustr::ustr;
 
     use super::*;
 
@@ -274,9 +283,9 @@ mod tests {
             ),
             None,
         );
-        let mut functions: IndexMap<String, Arc<ProgramFunction>, ahash::RandomState> =
+        let mut functions: IndexMap<Ustr, Arc<ProgramFunction>, ahash::RandomState> =
             IndexMap::default();
-        functions.insert("f".into(), Arc::new(function));
+        functions.insert(ustr("f"), Arc::new(function));
         let mut symbol = Symbol::new("g", LpcType::Int(false));
         symbol.location = Some(RegisterVariant::Global(Register(4)));
         let mut program = Program {
@@ -289,7 +298,7 @@ mod tests {
         program.relocate_globals(&[10, 0]);
 
         assert_eq!(
-            program.functions["f"].instructions,
+            program.functions[&ustr("f")].instructions,
             [Instruction::Copy(
                 RegisterVariant::Global(Register(11)),
                 RegisterVariant::Global(Register(1)),
@@ -301,5 +310,52 @@ mod tests {
         );
         let bases: Vec<_> = program.layout.iter().map(|r| r.base).collect();
         assert_eq!(bases, [10, 0]);
+    }
+
+    fn program_with(name: &'static str) -> Program {
+        let prototype = FunctionPrototypeBuilder::default()
+            .name(name)
+            .filename(Arc::new("/p.c".into()))
+            .return_type(LpcType::Void)
+            .build()
+            .unwrap();
+        let function = Arc::new(ProgramFunction::new(prototype, 0));
+        let mut functions: IndexMap<Ustr, Arc<ProgramFunction>, ahash::RandomState> =
+            IndexMap::default();
+        functions.insert(ustr(&function.mangle()), function.clone());
+        let mut unmangled: IndexMap<String, Arc<ProgramFunction>, ahash::RandomState> =
+            IndexMap::default();
+        unmangled.insert(name.to_string(), function);
+        Program {
+            functions: Box::new(functions),
+            unmangled_functions: Box::new(unmangled),
+            ..Program::default()
+        }
+    }
+
+    #[test]
+    fn function_finds_a_mangled_name_by_its_ustr() {
+        let program = program_with("f");
+        let mangled = ustr(&program.unmangled_functions["f"].mangle());
+
+        assert!(program.function(mangled).is_some());
+        assert!(program.function(ustr("f")).is_none());
+    }
+
+    #[test]
+    fn lookup_function_takes_a_mangled_name_as_str() {
+        let program = program_with("f");
+        let mangled = program.unmangled_functions["f"].mangle();
+
+        assert!(program.lookup_function(mangled.as_str()).is_some());
+        assert!(program.lookup_function("f").is_some());
+    }
+
+    #[test]
+    fn a_missed_lookup_interns_nothing() {
+        let program = program_with("f");
+
+        assert!(program.lookup_function("never_interned_zzq").is_none());
+        assert!(ustr::existing_ustr("never_interned_zzq").is_none());
     }
 }

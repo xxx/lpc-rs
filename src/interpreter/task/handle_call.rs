@@ -21,7 +21,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub(crate) fn handle_call(&mut self, name: Ustr, list: ArgList) -> lpc_rs_errors::Result<()> {
         let current_frame = self.stack.current_frame()?;
         // Codegen emits `Call` only for a name of this program; a miss is a bug.
-        let Some(func) = current_frame.process.program.lookup_function(name).cloned() else {
+        let Some(func) = current_frame.process.program.function(name).cloned() else {
             return Err(self
                 .stack
                 .runtime_bug(format!("call to unknown local function `{name}`")));

@@ -224,7 +224,7 @@ impl TreeWalker for InheritanceWalker {
                     program
                         .functions
                         .iter()
-                        .map(|(k, v)| (k.clone(), v.clone())),
+                        .map(|(name, function)| (*name, function.clone())),
                 );
                 self.context.inherits.push(program);
 
