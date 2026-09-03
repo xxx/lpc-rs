@@ -811,6 +811,102 @@ mod test_instructions {
         }
     }
 
+    mod test_register_packing {
+        use super::*;
+
+        #[tokio::test]
+        async fn temps_sharing_a_slot_across_statements_keep_their_values() {
+            let code = indoc! { r##"
+                    int *a = ({ 1, 2, 3, 4 });
+                    int total;
+                    void create() {
+                        int x = a[0] + a[1] + a[2] + a[3];
+                        int y = a[3] * a[2] - a[1];
+                        total = x * 100 + y;
+                    }
+                "##};
+
+            check_committed_globals(code, &[("total", BareVal::Int(1010))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_catch_result_survives_the_temps_of_its_body() {
+            let code = indoc! { r##"
+                    string caught;
+                    int after;
+                    void create() {
+                        int a = 6, b = 0;
+                        caught = catch(after = (a + 1) / (b + 0));
+                        after = a + b;
+                    }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    (
+                        "caught",
+                        BareVal::String("runtime error: Division by zero".into()),
+                    ),
+                    ("after", BareVal::Int(6)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_loop_carried_temp_is_not_clobbered_by_the_body() {
+            let code = indoc! { r##"
+                    int total;
+                    void create() {
+                        int i, s;
+                        for (i = 0; i < 4; i++) {
+                            s = s + i * 2;
+                            total = total + (s - i);
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("total", BareVal::Int(14))]).await;
+        }
+    }
+
+    mod test_foreach_in_a_loop {
+        use super::*;
+
+        #[tokio::test]
+        async fn an_array_foreach_inside_a_loop_restarts_each_time() {
+            let code = indoc! { r##"
+                    int total;
+                    void create() {
+                        int i, x;
+                        for (i = 0; i < 2; i++) {
+                            foreach (x: ({ 1, 2 })) { total += x; }
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("total", BareVal::Int(6))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_mapping_foreach_inside_a_loop_restarts_each_time() {
+            let code = indoc! { r##"
+                    int total;
+                    void create() {
+                        int i, v;
+                        string k;
+                        mapping m = ([ "a": 1, "b": 2 ]);
+                        for (i = 0; i < 2; i++) {
+                            foreach (k, v: m) { total += v; }
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("total", BareVal::Int(6))]).await;
+        }
+    }
+
     mod test_switch_shapes {
         use super::*;
 

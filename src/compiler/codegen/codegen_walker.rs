@@ -309,7 +309,7 @@ impl CodegenWalker {
         };
         ret.visit(self).await?;
 
-        let func = self.finalize_function(0, None, None)?;
+        let func = self.finalize_function(None, None)?;
         self.register_counter.pop();
 
         Ok(func)
@@ -923,22 +923,18 @@ impl CodegenWalker {
     /// `num_args`), backpatch argv and labels, and run the peephole.
     fn finalize_function(
         &mut self,
-        num_args: RegisterSize,
         populate_argv_index: Option<Address>,
         span: Option<Span>,
     ) -> Result<ProgramFunction> {
         let backpatch_map = self.backpatch_maps.pop().unwrap();
         let mut func = self.function_stack.pop().unwrap();
         self.constant_keys.truncate(self.function_stack.len());
-        func.num_locals = self
-            .register_counter
-            .number_emitted()
-            .saturating_sub(num_args);
+        Self::backpatch(&backpatch_map, &mut func)?;
+        super::peephole::peephole(&mut func);
+        super::register_packing::pack(&mut func);
         if let Some(idx) = populate_argv_index {
             Self::backpatch_populate_argv(&mut func, idx, span)?;
         }
-        Self::backpatch(&backpatch_map, &mut func)?;
-        super::peephole::peephole(&mut func);
         Ok(func)
     }
 
@@ -1424,7 +1420,6 @@ impl TreeWalker for CodegenWalker {
         };
 
         let arity = prototype.arity;
-        let num_args = arity.num_args;
         let num_default_args = arity.num_default_args;
 
         let func = ProgramFunction::new(prototype.clone(), 0);
@@ -1504,7 +1499,7 @@ impl TreeWalker for CodegenWalker {
             func.num_upvalues = self.context.scopes.get(scope_id).unwrap().num_upvalues;
             func.arg_locations = declared_arg_locations;
         }
-        let func = self.finalize_function(num_args, populate_argv_index, node.span)?;
+        let func = self.finalize_function(populate_argv_index, node.span)?;
 
         // The mangled name carries the file, so inherited code keeps its own closures.
         let name = ustr(&func.mangle());
@@ -1635,6 +1630,11 @@ impl TreeWalker for CodegenWalker {
         let collection_location = self.current_result;
 
         let index_location = self.assign_sym_location(FOREACH_INDEX)?;
+        // Only the first run of the foreach gets the frame's NULL fill for its index.
+        if self.inside_a_loop() {
+            let zero = self.constant(LpcConstant::Int(0), node.span)?;
+            push_instruction!(self, Instruction::Copy(zero, index_location), node.span);
+        }
         let length_location = self.assign_sym_location(FOREACH_LENGTH)?;
 
         let instruction = Instruction::Sizeof(collection_location, length_location);
@@ -1728,7 +1728,6 @@ impl TreeWalker for CodegenWalker {
         };
 
         let arity = prototype.arity;
-        let num_args = arity.num_args;
         let num_default_args = arity.num_default_args;
 
         let sym = ProgramFunction::new(prototype.clone(), 0);
@@ -1798,7 +1797,7 @@ impl TreeWalker for CodegenWalker {
                 .map_or(0, |scope| scope.num_upvalues);
             func.arg_locations = declared_arg_locations;
         }
-        let func = self.finalize_function(num_args, populate_argv_index, node.span)?;
+        let func = self.finalize_function(populate_argv_index, node.span)?;
         self.functions.insert(func.mangle(), func.into());
 
         self.register_counter.pop();
@@ -1969,7 +1968,7 @@ impl TreeWalker for CodegenWalker {
         };
         ret.visit(self).await?;
 
-        let init_globals = self.finalize_function(0, None, None)?;
+        let init_globals = self.finalize_function(None, None)?;
         debug_assert!(init_globals.name() == INIT_GLOBALS);
         let init_globals_name = ustr(&init_globals.mangle());
         debug_assert_eq!(init_globals_name, self.init_globals);
@@ -3015,9 +3014,9 @@ mod tests {
                 Lt(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
-                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(2)),
                 ),
-                Jnz(RegisterVariant::Local(Register(4)), Address(1)),
+                Jnz(RegisterVariant::Local(Register(2)), Address(1)),
                 Ret,
             ];
 
@@ -3073,9 +3072,9 @@ mod tests {
                 Lt(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(4)),
-                    RegisterVariant::Local(Register(5)),
+                    RegisterVariant::Local(Register(2)),
                 ),
-                Jnz(RegisterVariant::Local(Register(5)), Address(2)),
+                Jnz(RegisterVariant::Local(Register(2)), Address(2)),
                 Ret,
             ];
 
@@ -3122,9 +3121,9 @@ mod tests {
                 Lt(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
-                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(2)),
                 ),
-                Jnz(RegisterVariant::Local(Register(4)), Address(0)),
+                Jnz(RegisterVariant::Local(Register(2)), Address(0)),
                 Ret,
             ];
 
@@ -3167,19 +3166,19 @@ mod tests {
                 Gte(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(1)),
-                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(2)),
                 ),
                 Lte(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(2)),
-                    RegisterVariant::Local(Register(5)),
-                ),
-                And(
-                    RegisterVariant::Local(Register(4)),
-                    RegisterVariant::Local(Register(5)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jnz(RegisterVariant::Local(Register(3)), Address(13)),
+                And(
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(4)),
+                ),
+                Jnz(RegisterVariant::Local(Register(4)), Address(13)),
                 Jmp(Address(11)),
                 PushArg(RegisterVariant::Constant(Register(3))),
                 CallEfun(15),
@@ -3346,7 +3345,7 @@ mod tests {
                 Div(
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Constant(Register(1)),
-                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(1)),
                 ),
                 CatchEnd,
                 Ret,
@@ -4006,9 +4005,9 @@ mod tests {
                 Lt(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
-                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(2)),
                 ),
-                Jnz(RegisterVariant::Local(Register(4)), Address(1)),
+                Jnz(RegisterVariant::Local(Register(2)), Address(1)),
                 Ret,
             ];
 
@@ -4064,9 +4063,9 @@ mod tests {
                 Lt(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(4)),
-                    RegisterVariant::Local(Register(5)),
+                    RegisterVariant::Local(Register(2)),
                 ),
-                Jnz(RegisterVariant::Local(Register(5)), Address(2)),
+                Jnz(RegisterVariant::Local(Register(2)), Address(2)),
                 Ret,
             ];
 
@@ -4113,9 +4112,9 @@ mod tests {
                 Lt(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
-                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(2)),
                 ),
-                Jnz(RegisterVariant::Local(Register(4)), Address(0)),
+                Jnz(RegisterVariant::Local(Register(2)), Address(0)),
                 Ret,
             ];
 
@@ -5289,9 +5288,9 @@ mod tests {
                 Lt(
                     Register(1).as_local(),
                     Register(2).as_constant(),
-                    Register(4).as_local(),
+                    Register(3).as_local(),
                 ),
-                Jnz(Register(4).as_local(), Address(2)),
+                Jnz(Register(3).as_local(), Address(2)),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5333,18 +5332,18 @@ mod tests {
             let code = "void create() { foreach (x : ({ 1 })) { } }";
             let expected = vec![
                 PushArrayItem(Register(0).as_constant()),
-                AConst(Register(1).as_local()),
-                Sizeof(Register(1).as_local(), Register(3).as_local()),
+                AConst(Register(3).as_local()),
+                Sizeof(Register(3).as_local(), Register(4).as_local()),
                 Jmp(Address(6)),
                 Load(
-                    Register(1).as_local(),
+                    Register(3).as_local(),
                     Register(2).as_local(),
-                    Register(4).as_local(),
+                    Register(1).as_local(),
                 ),
                 Inc(Register(2).as_local()),
                 EqEq(
                     Register(2).as_local(),
-                    Register(3).as_local(),
+                    Register(4).as_local(),
                     Register(5).as_local(),
                 ),
                 Jz(Register(5).as_local(), Address(4)),
@@ -5357,22 +5356,22 @@ mod tests {
         async fn a_mapping_foreach_loads_the_key_then_the_value_after_its_entry_jump() {
             let code = "void create() { mapping m; foreach (k, v : m) { } }";
             let expected = vec![
-                Sizeof(Register(1).as_local(), Register(3).as_local()),
+                Sizeof(Register(1).as_local(), Register(5).as_local()),
                 Jmp(Address(5)),
                 LoadMappingKey(
                     Register(1).as_local(),
-                    Register(2).as_local(),
                     Register(4).as_local(),
+                    Register(2).as_local(),
                 ),
                 Load(
                     Register(1).as_local(),
-                    Register(4).as_local(),
-                    Register(5).as_local(),
-                ),
-                Inc(Register(2).as_local()),
-                EqEq(
                     Register(2).as_local(),
                     Register(3).as_local(),
+                ),
+                Inc(Register(4).as_local()),
+                EqEq(
+                    Register(4).as_local(),
+                    Register(5).as_local(),
                     Register(6).as_local(),
                 ),
                 Jz(Register(6).as_local(), Address(2)),
@@ -5412,9 +5411,9 @@ mod tests {
                 EqEq(
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Constant(Register(2)),
-                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(1)),
                 ),
-                Jnz(RegisterVariant::Local(Register(2)), Address(8)),
+                Jnz(RegisterVariant::Local(Register(1)), Address(8)),
                 Jmp(Address(11)),
                 PushArg(RegisterVariant::Constant(Register(3))),
                 CallEfun(15),
@@ -5500,9 +5499,9 @@ mod tests {
                 EqEq(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(1)),
-                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(2)),
                 ),
-                Jnz(RegisterVariant::Local(Register(3)), Address(6)),
+                Jnz(RegisterVariant::Local(Register(2)), Address(6)),
                 Jmp(Address(10)),
                 Jmp(Address(8)),
                 Copy(
@@ -5545,9 +5544,9 @@ mod tests {
                 EqEq(
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Constant(Register(0)),
-                    RegisterVariant::Local(Register(4)),
+                    RegisterVariant::Local(Register(3)),
                 ),
-                Jnz(RegisterVariant::Local(Register(4)), Address(6)),
+                Jnz(RegisterVariant::Local(Register(3)), Address(6)),
                 Jmp(Address(8)),
                 Copy(
                     RegisterVariant::Constant(Register(1)),
@@ -5868,6 +5867,106 @@ mod tests {
                 // ...etc. We don't care about the rest.
             ];
             assert_eq!(&instructions[0..=2], expected);
+        }
+    }
+
+    mod test_register_packing {
+        use super::*;
+
+        #[tokio::test]
+        async fn temps_that_never_meet_share_a_slot() {
+            let code = r#"
+                void create() {
+                    int a = 1;
+                    int b = 2;
+                    dump(a + b);
+                    dump(a - b);
+                }
+            "#;
+            let mut walker = walk_prog(code).await;
+
+            let expected = vec![
+                Instruction::Copy(
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(1)),
+                ),
+                Instruction::Copy(
+                    RegisterVariant::Constant(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                ),
+                Instruction::Add(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
+                ),
+                Instruction::PushArg(RegisterVariant::Local(Register(3))),
+                Instruction::CallEfun(15),
+                Instruction::Sub(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(3)),
+                ),
+                Instruction::PushArg(RegisterVariant::Local(Register(3))),
+                Instruction::CallEfun(15),
+                Instruction::Ret,
+            ];
+
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
+            assert_eq!(
+                walker
+                    .functions
+                    .values()
+                    .find(|f| f.name() == "create")
+                    .unwrap()
+                    .num_locals,
+                3
+            );
+        }
+
+        #[tokio::test]
+        async fn a_named_local_sits_below_the_temps() {
+            let code = r#"
+                int f(int n) {
+                    dump(n + 1);
+                    int x = n + 2;
+                    return x;
+                }
+            "#;
+            let mut walker = walk_prog(code).await;
+
+            let expected = vec![
+                Instruction::Add(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(3)),
+                ),
+                Instruction::PushArg(RegisterVariant::Local(Register(3))),
+                Instruction::CallEfun(15),
+                Instruction::Add(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Constant(Register(1)),
+                    RegisterVariant::Local(Register(2)),
+                ),
+                Instruction::Copy(
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(0)),
+                ),
+                Instruction::Ret,
+            ];
+
+            assert_eq!(walker_function_instructions(&mut walker, "f"), expected);
+            assert_eq!(
+                walker
+                    .functions
+                    .values()
+                    .find(|f| f.name() == "f")
+                    .unwrap()
+                    .num_locals,
+                2
+            );
         }
     }
 
@@ -6412,7 +6511,7 @@ mod tests {
                 .values()
                 .find(|f| f.name() == INIT_GLOBALS)
                 .unwrap();
-            assert_eq!(init_globals.num_locals, 2)
+            assert_eq!(init_globals.num_locals, 1)
         }
 
         #[tokio::test]
