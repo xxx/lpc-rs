@@ -644,6 +644,17 @@ mod test_instructions {
         use super::*;
 
         #[tokio::test]
+        async fn the_call_other_efun_form_passes_only_the_trailing_arguments() {
+            let code = indoc! { r##"
+                    int r;
+                    int f(int a) { return a; }
+                    void create() { r = call_other(this_object(), "f", 7); }
+                "##};
+
+            check_committed_globals(code, &[("r", BareVal::Int(7))]).await;
+        }
+
+        #[tokio::test]
         async fn call_other_extras_do_not_leak_into_an_uninitialized_local() {
             let code = indoc! { r##"
                     int r;
