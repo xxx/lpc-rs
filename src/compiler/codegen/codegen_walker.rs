@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use async_recursion::async_recursion;
 use async_trait::async_trait;
 use bit_set::BitSet;
 use if_chain::if_chain;
@@ -106,6 +107,22 @@ impl JumpTarget {
         Self {
             break_target,
             continue_target,
+        }
+    }
+}
+
+/// Which truth value of a condition takes the jump.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum JumpWhen {
+    True,
+    False,
+}
+
+impl JumpWhen {
+    fn flipped(self) -> Self {
+        match self {
+            Self::True => Self::False,
+            Self::False => Self::True,
         }
     }
 }
@@ -709,6 +726,70 @@ impl CodegenWalker {
     /// This is actually the *next* address that a pushed instruction will be
     /// stored at.
     /// tl;dr This returns the length of the current function's `instructions` vector.
+    /// The condition form of an expression: code that jumps to `label` when
+    /// the expression's truth is `when` and falls through otherwise, leaving
+    /// no value behind. `&&`, `||`, `!`, and integer literals become jumps
+    /// alone; anything else is visited for its value and tested once.
+    #[async_recursion]
+    async fn emit_condition(
+        &mut self,
+        node: &mut ExpressionNode,
+        when: JumpWhen,
+        label: &Label,
+    ) -> Result<()> {
+        let span = node.span();
+
+        match node {
+            ExpressionNode::Int(IntNode { value, .. }) => {
+                if (*value != 0) == (when == JumpWhen::True) {
+                    self.schedule_backpatch(label, self.current_address())?;
+                    push_instruction!(self, Instruction::Jmp(Address(0)), span);
+                }
+            }
+            ExpressionNode::UnaryOp(UnaryOpNode {
+                op: UnaryOperation::Bang,
+                expr,
+                ..
+            }) => {
+                self.emit_condition(expr, when.flipped(), label).await?;
+            }
+            ExpressionNode::BinaryOp(BinaryOpNode {
+                op: op @ (BinaryOperation::AndAnd | BinaryOperation::OrOr),
+                l,
+                r,
+                ..
+            }) => {
+                // The polarity a single operand can decide on its own.
+                let direct = if *op == BinaryOperation::AndAnd {
+                    JumpWhen::False
+                } else {
+                    JumpWhen::True
+                };
+
+                if when == direct {
+                    self.emit_condition(l, when, label).await?;
+                    self.emit_condition(r, when, label).await?;
+                } else {
+                    let skip_label = self.new_label("condition-skip");
+                    self.emit_condition(l, direct, &skip_label).await?;
+                    self.emit_condition(r, when, label).await?;
+                    self.insert_label(skip_label, self.current_address());
+                }
+            }
+            _ => {
+                node.visit(self).await?;
+                self.schedule_backpatch(label, self.current_address())?;
+                let instruction = match when {
+                    JumpWhen::True => Instruction::Jnz(self.current_result, Address(0)),
+                    JumpWhen::False => Instruction::Jz(self.current_result, Address(0)),
+                };
+                push_instruction!(self, instruction, span);
+            }
+        }
+
+        Ok(())
+    }
+
     fn current_address(&self) -> Address {
         let a = match self.function_stack.last() {
             Some(x) => x.instructions.len(),
@@ -987,6 +1068,26 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
+        if node.op == BinaryOperation::AndAnd {
+            // A loop re-enters with the last iteration's value still in the
+            // result register.
+            let end_label = self.new_label("andand-end");
+            let reg_result = self.register_counter.next().unwrap().as_local();
+            push_instruction!(self, Instruction::IConst0(reg_result), node.span);
+
+            self.emit_condition(&mut node.l, JumpWhen::False, &end_label)
+                .await?;
+
+            node.r.visit(self).await?;
+            let instruction = Instruction::Copy(self.current_result, reg_result);
+            push_instruction!(self, instruction, node.span);
+
+            self.insert_label(end_label, self.current_address());
+            self.current_result = reg_result;
+
+            return Ok(());
+        }
+
         node.l.visit(self).await?;
         let reg_left = self.current_result;
 
@@ -999,27 +1100,6 @@ impl TreeWalker for CodegenWalker {
                     self.emit_range(reg_left, range_node).await?;
                     return Ok(());
                 }
-            }
-            BinaryOperation::AndAnd => {
-                // A loop re-enters with the last iteration's value still in the
-                // result register.
-                let end_label = self.new_label("andand-end");
-                let reg_result = self.register_counter.next().unwrap().as_local();
-                let instruction = Instruction::IConst0(reg_result);
-                push_instruction!(self, instruction, node.span);
-
-                self.schedule_backpatch(&end_label, self.current_address())?;
-                let instruction = Instruction::Jz(reg_left, Address(0));
-                push_instruction!(self, instruction, node.span);
-
-                node.r.visit(self).await?;
-                let instruction = Instruction::Copy(self.current_result, reg_result);
-                push_instruction!(self, instruction, node.span);
-
-                self.insert_label(end_label, self.current_address());
-                self.current_result = reg_result;
-
-                return Ok(());
             }
             BinaryOperation::OrOr => {
                 // Handle short-circuit behavior
@@ -1504,12 +1584,8 @@ impl TreeWalker for CodegenWalker {
         let continue_addr = self.current_address();
         self.insert_label(continue_label, continue_addr);
 
-        node.condition.visit(self).await?;
-
-        // Go back to the start of the loop if the result isn't zero
-        self.schedule_backpatch(&start_label, self.current_address())?;
-        let instruction = Instruction::Jnz(self.current_result, Address(0));
-        push_instruction!(self, instruction, node.span);
+        self.emit_condition(&mut node.condition, JumpWhen::True, &start_label)
+            .await?;
         let end_addr = self.current_address();
         self.insert_label(end_label, end_addr);
 
@@ -1542,12 +1618,9 @@ impl TreeWalker for CodegenWalker {
         self.insert_label(start_label.clone(), start_addr);
 
         if let Some(cond) = &mut node.condition {
-            cond.visit(self).await?;
-
-            self.schedule_backpatch(&end_label, self.current_address())?;
-            let instruction = Instruction::Jz(self.current_result, Address(0));
-            push_instruction!(self, instruction, cond.span());
-        };
+            self.emit_condition(cond, JumpWhen::False, &end_label)
+                .await?;
+        }
 
         node.body.visit(self).await?;
 
@@ -1817,17 +1890,9 @@ impl TreeWalker for CodegenWalker {
         let else_label = self.new_label("if-else");
         let end_label = self.new_label("if-end");
 
-        // Visit the condition
-        node.condition.visit(self).await?;
+        self.emit_condition(&mut node.condition, JumpWhen::False, &else_label)
+            .await?;
 
-        // If the condition is false (i.e. equal to 0 or 0.0), jump to the end of the
-        // "then" body. Insert a placeholder address, which we correct below
-        // after the body's code is generated
-        self.schedule_backpatch(&else_label, self.current_address())?;
-        let instruction = Instruction::Jz(self.current_result, Address(0));
-        push_instruction!(self, instruction, node.span);
-
-        // Generate the main body of the statement
         node.body.visit(self).await?;
 
         if node.else_clause.is_some() {
@@ -2113,11 +2178,8 @@ impl TreeWalker for CodegenWalker {
         let else_label = self.new_label("ternary-else");
         let end_label = self.new_label("ternary-end");
 
-        node.condition.visit(self).await?;
-
-        self.schedule_backpatch(&else_label, self.current_address())?;
-        let instruction = Instruction::Jz(self.current_result, Address(0));
-        push_instruction!(self, instruction, node.span);
+        self.emit_condition(&mut node.condition, JumpWhen::False, &else_label)
+            .await?;
 
         node.body.visit(self).await?;
         push_instruction!(
@@ -2355,13 +2417,8 @@ impl TreeWalker for CodegenWalker {
         let start_addr = self.current_address();
         self.insert_label(start_label.clone(), start_addr);
 
-        node.condition.visit(self).await?;
-
-        let cond_result = self.current_result;
-
-        self.schedule_backpatch(&end_label, self.current_address())?;
-        let instruction = Instruction::Jz(cond_result, Address(0));
-        push_instruction!(self, instruction, node.span);
+        self.emit_condition(&mut node.condition, JumpWhen::False, &end_label)
+            .await?;
 
         node.body.visit(self).await?;
 
@@ -2665,9 +2722,7 @@ mod tests {
     }
 
     mod test_binary_op {
-        use lpc_rs_asm::instruction::Instruction::{
-            FConst, IConst0, IMul, Jnz, Jz, Load, MAdd, Range,
-        };
+        use lpc_rs_asm::instruction::Instruction::{FConst, IConst0, IMul, Jnz, Load, MAdd, Range};
 
         use super::*;
 
@@ -2906,16 +2961,14 @@ mod tests {
 
             let _ = walker.visit_binary_op(&mut node).await;
 
+            // A literal-true left operand needs no jump.
             let expected = vec![
-                IConst(RegisterVariant::Local(Register(1)), 123),
-                IConst0(RegisterVariant::Local(Register(2))),
-                Jz(RegisterVariant::Local(Register(1)), Address(0)),
-                SConst(RegisterVariant::Local(Register(3)), ustr("marf!")),
+                IConst0(RegisterVariant::Local(Register(1))),
+                SConst(RegisterVariant::Local(Register(2)), ustr("marf!")),
                 Copy(
-                    RegisterVariant::Local(Register(3)),
                     RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Local(Register(1)),
                 ),
-                // end is here
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4627,6 +4680,172 @@ mod tests {
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
+        }
+    }
+
+    mod test_condition_form {
+        use super::*;
+
+        async fn create_instructions(code: &str) -> Vec<Instruction> {
+            let mut walker = walk_prog(code).await;
+            walker_function_instructions(&mut walker, "create")
+        }
+
+        #[tokio::test]
+        async fn a_negated_if_jumps_on_true() {
+            let code = "void create() { int x; if (!x) { x = 1; } }";
+            let expected = vec![
+                Jnz(Register(1).as_local(), Address(2)),
+                IConst1(Register(1).as_local()),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_negated_while_jumps_on_true() {
+            let code = "void create() { int x; while (!x) { x = 1; } }";
+            let expected = vec![
+                Jnz(Register(1).as_local(), Address(3)),
+                IConst1(Register(1).as_local()),
+                Jmp(Address(0)),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn an_andand_if_jumps_past_on_either_false_operand() {
+            let code = "void create() { int a; int b; int c; if (a && b) { c = 1; } }";
+            let expected = vec![
+                Jz(Register(1).as_local(), Address(3)),
+                Jz(Register(2).as_local(), Address(3)),
+                IConst1(Register(3).as_local()),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn an_oror_if_enters_on_the_first_true_operand() {
+            let code = "void create() { int a; int b; int c; if (a || b) { c = 1; } }";
+            let expected = vec![
+                Jnz(Register(1).as_local(), Address(2)),
+                Jz(Register(2).as_local(), Address(3)),
+                IConst1(Register(3).as_local()),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn an_andand_do_while_loops_on_both_true_operands() {
+            let code = "void create() { int a; int b; int c; do { c++; } while (a && b); }";
+            let expected = vec![
+                Inc(Register(3).as_local()),
+                Jz(Register(1).as_local(), Address(3)),
+                Jnz(Register(2).as_local(), Address(0)),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_negated_andand_flips_both_operands() {
+            let code = "void create() { int a; int b; int c; if (!(a && b)) { c = 1; } }";
+            let expected = vec![
+                Jz(Register(1).as_local(), Address(2)),
+                Jnz(Register(2).as_local(), Address(3)),
+                IConst1(Register(3).as_local()),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_negated_oror_with_a_negated_operand_flips_twice() {
+            let code = "void create() { int a; int b; int c; if (!(a || !b)) { c = 1; } }";
+            let expected = vec![
+                Jnz(Register(1).as_local(), Address(3)),
+                Jz(Register(2).as_local(), Address(3)),
+                IConst1(Register(3).as_local()),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn an_andand_ternary_condition_leaves_no_value() {
+            let code = "void create() { int a; int b; int c; c = (a && b) ? 1 : 2; }";
+            let expected = vec![
+                Jz(Register(1).as_local(), Address(4)),
+                Jz(Register(2).as_local(), Address(4)),
+                IConst1(Register(4).as_local()),
+                Jmp(Address(5)),
+                IConst(Register(4).as_local(), 2),
+                Copy(Register(4).as_local(), Register(3).as_local()),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_literal_true_while_has_no_test() {
+            let code = "void create() { int c; while (1) { c++; if (c > 2) break; } }";
+            let expected = vec![
+                Inc(Register(1).as_local()),
+                IConst(Register(2).as_local(), 2),
+                Gt(
+                    Register(1).as_local(),
+                    Register(2).as_local(),
+                    Register(3).as_local(),
+                ),
+                Jz(Register(3).as_local(), Address(5)),
+                Jmp(Address(6)),
+                Jmp(Address(0)),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_literal_false_do_while_runs_once() {
+            let code = "void create() { int c; do { c++; } while (0); }";
+            let expected = vec![Inc(Register(1).as_local()), Ret];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_literal_false_if_jumps_past_its_body() {
+            let code = "void create() { int c; if (0) { c = 1; } }";
+            let expected = vec![Jmp(Address(2)), IConst1(Register(1).as_local()), Ret];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_for_condition_takes_the_condition_form() {
+            let code = "void create() { int i; for (; !i; ) { i = 1; } }";
+            let expected = vec![
+                Jnz(Register(1).as_local(), Address(3)),
+                IConst1(Register(1).as_local()),
+                Jmp(Address(0)),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn an_andand_value_sends_its_left_operand_through_the_condition_form() {
+            let code = "void create() { int a; int b; int c; c = (a && b) && 1; }";
+            let expected = vec![
+                IConst0(Register(4).as_local()),
+                Jz(Register(1).as_local(), Address(4)),
+                Jz(Register(2).as_local(), Address(4)),
+                IConst1(Register(4).as_local()),
+                Copy(Register(4).as_local(), Register(3).as_local()),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
         }
     }
 
