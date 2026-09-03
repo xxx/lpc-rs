@@ -12,7 +12,7 @@ use crate::interpreter::{
     lpc_array::LpcArray,
     lpc_mapping::LpcMapping,
     lpc_ref::{LpcRef, NULL},
-    process::Process,
+    process::{Liveness, Process},
     stm::VarId,
     task::{Task, get_location},
     task_context::{Loader, ObjectLookup, TaskContext},
@@ -295,16 +295,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     ObjectLookup::NotCreated => return Ok(Standing::Uncreated(path)),
                 }
             }
-            LpcRef::Object(_) => match receiver_ref.live_object(context.txn()) {
+            LpcRef::Object(_) => match receiver_ref.as_object() {
                 Some(process) => process,
                 None => return Ok(Standing::Dead),
             },
             _ => return Ok(Standing::Dead),
         };
-        Ok(if process.is_initialized(context.txn()) {
-            Standing::Ready(process)
-        } else {
-            Standing::Uninitialized(process)
+        Ok(match process.liveness(context.txn()) {
+            Liveness::Dead => Standing::Dead,
+            Liveness::Uninitialized => Standing::Uninitialized(process),
+            Liveness::Ready => Standing::Ready(process),
         })
     }
 
