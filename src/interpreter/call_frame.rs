@@ -50,6 +50,7 @@ pub struct CollectionCall {
 pub(crate) enum Slot {
     Register(Register),
     Cell(VarId),
+    Constant(Register),
 }
 
 /// A representation of a local variable name and value.
@@ -310,6 +311,9 @@ impl CallFrame {
             Slot::Register(_) => Err(self.runtime_bug(format!(
                 "by-reference argument {location} is a register, not a cell"
             ))),
+            Slot::Constant(_) => Err(self.runtime_bug(format!(
+                "by-reference argument {location} is a constant, not a cell"
+            ))),
         }
     }
 
@@ -328,7 +332,20 @@ impl CallFrame {
                 };
                 Ok(Slot::Cell(cell))
             }
+            RegisterVariant::Constant(reg) => Ok(Slot::Constant(reg)),
         }
+    }
+
+    /// The pool entry a `Constant` operand names, as a value.
+    fn constant(&self, reg: Register) -> Result<LpcRef> {
+        let Some(constant) = self.function.constants.get(reg.index() as usize) else {
+            return Err(self.runtime_bug(format!(
+                "constant k{} is outside this function's {} entries",
+                reg.index(),
+                self.function.constants.len()
+            )));
+        };
+        Ok(LpcRef::from(constant))
     }
 
     /// Read the [`LpcRef`] at `location`; an unwritten cell reads `NULL`.
@@ -342,6 +359,7 @@ impl CallFrame {
         Ok(match self.slot(location)? {
             Slot::Register(reg) => Cow::Borrowed(&self.registers[reg]),
             Slot::Cell(cell) => Cow::Owned(txn.with(|t| t.read(cell).unwrap_or(NULL))),
+            Slot::Constant(reg) => Cow::Owned(self.constant(reg)?),
         })
     }
 
@@ -358,6 +376,9 @@ impl CallFrame {
             // A blind in-txn write: the read that computed `lpc_ref` was
             // already tracked when the caller read it.
             Slot::Cell(cell) => txn.with(|t| t.write(cell, lpc_ref)),
+            Slot::Constant(_) => {
+                return Err(self.runtime_bug(format!("write through constant {location}")));
+            }
         }
         Ok(())
     }
@@ -375,6 +396,9 @@ impl CallFrame {
     ) -> Result<()> {
         let bump = |x: &mut LpcRef| if delta >= 0 { x.inc() } else { x.dec() };
         match self.slot(location)? {
+            Slot::Constant(_) => {
+                Err(self.runtime_bug(format!("write through constant {location}")))
+            }
             Slot::Register(reg) => bump(&mut self.registers[reg]),
             Slot::Cell(cell) => txn.with(|t| {
                 if t.peek_int(cell) {
@@ -478,7 +502,12 @@ mod tests {
     use std::sync::Arc;
 
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
-    use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototypeBuilder};
+    use lpc_rs_function_support::{
+        constant::LpcConstant,
+        function_prototype::{FunctionKind, FunctionPrototypeBuilder},
+    };
+    use lpc_rs_utils::lpc_string::LpcString;
+    use ustr::ustr;
 
     use super::*;
     use crate::interpreter::program::Program;
@@ -532,6 +561,77 @@ mod tests {
         assert_eq!(
             frame.slot(Register(0).as_upvalue()).unwrap(),
             Slot::Cell(cell)
+        );
+    }
+
+    /// A function whose pool holds an int and a string.
+    fn pooled_function() -> Arc<ProgramFunction> {
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("pooled")
+            .filename(Arc::new("pooled".into()))
+            .return_type(LpcType::Void)
+            .build()
+            .unwrap();
+        let mut pf = ProgramFunction::new(prototype, 0);
+        pf.constants = vec![
+            LpcConstant::Int(5),
+            LpcConstant::String(Arc::new(LpcString::Static(ustr("hi")))),
+        ];
+        Arc::new(pf)
+    }
+
+    #[test]
+    fn a_constant_operand_reads_the_pool() {
+        let txn = TxnHandle::empty();
+        let frame = CallFrame::new(Process::default(), pooled_function(), 0, None::<&[VarId]>);
+
+        assert_eq!(
+            frame.slot(Register(0).as_constant()).unwrap(),
+            Slot::Constant(Register(0))
+        );
+        assert_eq!(
+            *frame.get_location(&txn, Register(0).as_constant()).unwrap(),
+            LpcRef::from(5)
+        );
+        assert_eq!(
+            frame
+                .get_location(&txn, Register(1).as_constant())
+                .unwrap()
+                .as_str(),
+            Some("hi")
+        );
+    }
+
+    #[test]
+    fn a_constant_past_the_pool_is_a_runtime_bug() {
+        let txn = TxnHandle::empty();
+        let frame = CallFrame::new(Process::default(), pooled_function(), 0, None::<&[VarId]>);
+
+        let err = frame
+            .get_location(&txn, Register(2).as_constant())
+            .unwrap_err();
+
+        assert!(err.to_string().contains("k2"), "{err}");
+    }
+
+    #[test]
+    fn a_write_through_a_constant_operand_is_a_runtime_bug() {
+        let txn = TxnHandle::empty();
+        let mut frame = CallFrame::new(Process::default(), pooled_function(), 0, None::<&[VarId]>);
+
+        let err = frame
+            .set_location(&txn, Register(0).as_constant(), LpcRef::from(1))
+            .unwrap_err();
+        assert!(err.to_string().contains("k0"), "{err}");
+
+        let err = frame
+            .bump_in_location(&txn, Register(0).as_constant(), 1)
+            .unwrap_err();
+        assert!(err.to_string().contains("k0"), "{err}");
+
+        assert_eq!(
+            *frame.get_location(&txn, Register(0).as_constant()).unwrap(),
+            LpcRef::from(5)
         );
     }
 

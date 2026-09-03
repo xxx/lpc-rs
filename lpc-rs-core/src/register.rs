@@ -9,6 +9,8 @@ pub enum RegisterVariant {
     Local(Register),
     Global(Register),
     Upvalue(Register),
+    /// An entry in the function's constant pool: read-only, never a destination.
+    Constant(Register),
 }
 
 impl RegisterVariant {
@@ -17,7 +19,8 @@ impl RegisterVariant {
         match self {
             RegisterVariant::Local(reg)
             | RegisterVariant::Global(reg)
-            | RegisterVariant::Upvalue(reg) => reg.index(),
+            | RegisterVariant::Upvalue(reg)
+            | RegisterVariant::Constant(reg) => reg.index(),
         }
     }
 
@@ -26,7 +29,8 @@ impl RegisterVariant {
         match self {
             RegisterVariant::Local(reg)
             | RegisterVariant::Global(reg)
-            | RegisterVariant::Upvalue(reg) => *reg,
+            | RegisterVariant::Upvalue(reg)
+            | RegisterVariant::Constant(reg) => *reg,
         }
     }
 }
@@ -37,6 +41,7 @@ impl Display for RegisterVariant {
             RegisterVariant::Local(r) => r.to_string(),
             RegisterVariant::Global(r) => format!("g{}", r.index()),
             RegisterVariant::Upvalue(r) => format!("u{}", r.index()),
+            RegisterVariant::Constant(r) => format!("k{}", r.index()),
         };
 
         write!(f, "{s}")
@@ -72,6 +77,11 @@ impl Register {
     pub fn as_upvalue(&self) -> RegisterVariant {
         RegisterVariant::Upvalue(*self)
     }
+
+    #[inline]
+    pub fn as_constant(&self) -> RegisterVariant {
+        RegisterVariant::Constant(*self)
+    }
 }
 
 impl Display for Register {
@@ -103,6 +113,14 @@ mod tests {
     fn test_index_is_correct() {
         let register = Register(666);
         assert_eq!(register.index(), register.0);
+    }
+
+    #[test]
+    fn a_constant_operand_prints_with_a_k() {
+        let variant = Register(3).as_constant();
+        assert_eq!(variant, RegisterVariant::Constant(Register(3)));
+        assert_eq!(variant.to_string(), "k3");
+        assert_eq!(variant.index(), 3);
     }
 
     #[test]
