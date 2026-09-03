@@ -151,3 +151,8 @@ in the simul-efun object, with the caller as `previous_object()`; a call
 between two functions of the simul-efun file is a local call. An object need
 not inherit the file to call its functions; one that does inherits them like
 any parent's and runs its own copy.
+
+The simul-efun object is the first object the driver loads and initializes,
+so its globals are set and its `create()` has run before the master exists:
+a master apply from inside that `create()` answers as if undefined, and an
+error thrown there stops the driver like one from the master's.

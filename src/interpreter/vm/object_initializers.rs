@@ -18,18 +18,19 @@ use crate::{
 };
 
 impl GlobalState {
-    /// Initialize the simulated efuns file, if it is configured.
+    /// Compile the simul-efun file and initialize it (insert it into the
+    /// [`ObjectSpace`](crate::interpreter::object_space::ObjectSpace), then
+    /// run its initializer in a fresh task), before the master is loaded.
     ///
     /// # Returns
     ///
     /// * `Some(Ok(()))` - The simul_efun file was loaded successfully
     /// * `Some(Err(LpcError))` - If there was an error loading the simul_efun file
     /// * `None` - If there is no simul_efun file configured
-    pub async fn initialize_simul_efuns(&self) -> Option<Result<()>> {
+    pub async fn initialize_simul_efuns(self: &Arc<Self>) -> Option<Result<()>> {
         let simul_efun_path = self.config.simul_efun_source()?;
         Some(
-            self.object_space
-                .create_process_from_path(&simul_efun_path)
+            self.initialize_process_from_path(&simul_efun_path)
                 .await
                 .map(|_| ()),
         )
@@ -146,15 +147,6 @@ impl Vm {
     {
         self.global_state
             .initialize_process_from_code(filename, code)
-            .await
-    }
-
-    /// Compile the in-game file at `path` and physically insert it. Bootstrap
-    /// only; see [`ObjectSpace::create_process_from_path`](crate::interpreter::object_space::ObjectSpace::create_process_from_path).
-    pub async fn create_process_from_path(&self, path: &LpcPath) -> Result<Arc<Process>> {
-        self.global_state
-            .object_space
-            .create_process_from_path(path)
             .await
     }
 
