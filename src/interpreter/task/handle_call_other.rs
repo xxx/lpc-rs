@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 use lpc_rs_asm::instruction::{Arg, ArgList};
-use lpc_rs_core::{RegisterSize, register::RegisterVariant};
+use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, register::RegisterVariant};
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::{instrument, trace};
@@ -19,6 +19,56 @@ use crate::interpreter::{
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
+    /// Make a `->` whose receiver needs no loading, with no future built:
+    /// `true` when the instruction is done, `false` to defer it to
+    /// [`Self::handle_call_other`].
+    pub(crate) fn call_other_resident(
+        &mut self,
+        receiver: RegisterVariant,
+        name_location: RegisterVariant,
+        list: ArgList,
+    ) -> Result<bool> {
+        if self
+            .args_of(list)?
+            .iter()
+            .any(|arg| matches!(arg, Arg::Ref(_)))
+        {
+            return Err(self.runtime_bug("a by-reference argument reached call_other"));
+        }
+
+        // Both registers stay borrowed: an owned copy of each is an Arc pair per `->`.
+        let called = {
+            let receiver_ref = get_location(&self.stack, &self.context.txn, receiver)?;
+            if !matches!(*receiver_ref, LpcRef::String(_) | LpcRef::Object(_)) {
+                return Ok(false);
+            }
+            let name_ref = get_location(&self.stack, &self.context.txn, name_location)?;
+            let Some(name) = name_ref.as_str() else {
+                return Ok(false);
+            };
+            match Self::standing(&receiver_ref, &self.context)? {
+                Standing::Ready(process) => process
+                    .program
+                    .lookup_function(name)
+                    .filter(|function| function.public())
+                    .cloned()
+                    .map(|function| (process, function)),
+                Standing::Dead => None,
+                Standing::Uncreated(_) | Standing::Uninitialized(_) => return Ok(false),
+            }
+        };
+        match called {
+            Some((process, function)) => {
+                debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
+                self.push_call_frame(process, function, list, true)?;
+            }
+            None => self.stack.current_frame_mut()?.registers[0] = NULL,
+        }
+        Ok(true)
+    }
+
+    /// The `->`s [`Self::call_other_resident`] deferred: a receiver to
+    /// create or initialize, a collection, or an error to report.
     #[instrument(level = "debug", skip_all)]
     #[inline]
     pub(crate) async fn handle_call_other(
@@ -28,8 +78,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         list: ArgList,
     ) -> Result<()> {
         let receiver_ref = get_location(&self.stack, &self.context.txn, receiver)?.into_owned();
-        // The name stays borrowed from the register's value, not copied
-        // into a String per `->`.
         let name_ref = get_location(&self.stack, &self.context.txn, name_location)?.into_owned();
         let Some(function_name) = name_ref.as_str() else {
             return Err(
@@ -37,14 +85,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             );
         };
         trace!("Calling call_other: {}->{}", receiver_ref, function_name);
-
-        if self
-            .args_of(list)?
-            .iter()
-            .any(|arg| matches!(arg, Arg::Ref(_)))
-        {
-            return Err(self.runtime_bug("a by-reference argument reached call_other"));
-        }
 
         let result = match &receiver_ref {
             LpcRef::String(_) | LpcRef::Object(_) => {
@@ -242,6 +282,32 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         })
     }
 
+    /// Where a `->` receiver stands, loading nothing.
+    fn standing(receiver_ref: &LpcRef, context: &TaskContext) -> Result<Standing> {
+        let process = match receiver_ref {
+            LpcRef::String(_) => {
+                let path = receiver_ref
+                    .with_string(|s| context.object_path(s.to_str(), "/", "call_other"))??;
+                match context.find_object(&path) {
+                    ObjectLookup::Found(process) => process,
+                    // Creating a destructed object here would resurrect it.
+                    ObjectLookup::Removed => return Ok(Standing::Dead),
+                    ObjectLookup::NotCreated => return Ok(Standing::Uncreated(path)),
+                }
+            }
+            LpcRef::Object(_) => match receiver_ref.live_object(context.txn()) {
+                Some(process) => process,
+                None => return Ok(Standing::Dead),
+            },
+            _ => return Ok(Standing::Dead),
+        };
+        Ok(if process.is_initialized(context.txn()) {
+            Standing::Ready(process)
+        } else {
+            Standing::Uninitialized(process)
+        })
+    }
+
     /// The receiver's process and its function `name`, `None` for a dead
     /// receiver or a missing function. `loader` runs only for a receiver to
     /// create or initialize — a `->` to a resident, initialized object
@@ -257,55 +323,44 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         T: AsRef<str>,
         L: Fn() -> Result<Loader>,
     {
-        let (process, created_by) = match receiver_ref {
-            LpcRef::String(_) => {
-                let path = receiver_ref
-                    .with_string(|s| context.object_path(s.to_str(), "/", "call_other"))??;
-
-                match context.find_object(&path) {
-                    ObjectLookup::Found(proc) => (proc, None),
-                    // A destructed object: don't create (that would resurrect
-                    // it); the call below short-circuits.
-                    ObjectLookup::Removed => return Ok(None),
-                    // NotCreated: create-on-miss, transactionally.
-                    ObjectLookup::NotCreated => {
-                        let loader = loader()?;
-                        let process = context.compile_process(&path, &loader).await?;
-                        (process, Some(loader))
-                    }
-                }
+        // A receiver is created and initialized whether or not it has the
+        // function: old lib code calls an undefined one on purpose to load
+        // an object.
+        let process = match Self::standing(receiver_ref, context)? {
+            Standing::Ready(process) => process,
+            Standing::Dead => return Ok(None),
+            Standing::Uncreated(path) => {
+                let loader = loader()?;
+                let process = context.compile_process(&path, &loader).await?;
+                // This call created it, so a throwing initializer undoes the insert.
+                context
+                    .insert_and_initialize(loader.callers(), &process)
+                    .await?;
+                process
             }
-            LpcRef::Object(_) => match receiver_ref.live_object(context.txn()) {
-                Some(proc) => (proc, None),
-                None => return Ok(None),
-            },
-            _ => return Ok(None),
+            Standing::Uninitialized(process) => {
+                Self::initialize_process(context.nested(loader()?.callers(), process)?)
+                    .await?
+                    .context
+                    .process
+            }
         };
 
-        // If uninitialized, it's time to set that up. Note that we do this regardless
-        // of whether the function exists or not, because this is a primary way of
-        // initializing objects. If you've ever seen a call_other to some knowingly
-        // undefined function in old lib code, this is why.
-        let result = if let Some(loader) = created_by {
-            // This call created it, so a throwing initializer undoes the insert.
-            context
-                .insert_and_initialize(loader.callers(), &process)
-                .await?;
-            process
-        } else if !process.is_initialized(context.txn()) {
-            Self::initialize_process(context.nested(loader()?.callers(), process)?)
-                .await?
-                .context
-                .process
-        } else {
-            process
-        };
-
-        // Only switch the process if there's actually a function to
-        // call by this name on the other side.
-        let function = result.program.lookup_function(name).cloned();
-        Ok(function.map(|function| (result, function)))
+        let function = process.program.lookup_function(name).cloned();
+        Ok(function.map(|function| (process, function)))
     }
+}
+
+/// Where a `->` receiver stands before anything is loaded.
+enum Standing {
+    /// Resident and initialized.
+    Ready(Arc<Process>),
+    /// Destructed, or not an object: the call is 0.
+    Dead,
+    /// No object at this path yet.
+    Uncreated(LpcPath),
+    /// Resident, its `create` not yet run.
+    Uninitialized(Arc<Process>),
 }
 
 /// What `advance_collection_call` does next.
@@ -319,9 +374,20 @@ enum Step {
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
+    use lpc_rs_asm::instruction::Instruction;
+    use lpc_rs_core::register::RegisterVariant;
+    use thin_vec::ThinVec;
 
+    use super::super::eval_loop::{AsyncCall, Slice};
     use crate::{
-        interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
+        interpreter::{
+            CommittedReader,
+            call_frame::CallFrame,
+            lpc_ref::{LpcRef, NULL},
+            stm::{LiveSnapshot, Transaction, TxnHandle, VarId, start_txn},
+            task::{Task, task_template::TaskTemplate},
+            vm::Vm,
+        },
         test_support::test_config,
     };
 
@@ -792,5 +858,81 @@ mod tests {
             vm.global_state.committed_global(&process, 0u16),
             LpcRef::from(2)
         );
+    }
+
+    /// A task on `vm` at `/main.c`'s `create`, stepped to its first `->`,
+    /// under a live transaction: the snapshot returned keeps it open.
+    async fn task_at_first_call_other(
+        vm: &Vm,
+        code: &str,
+    ) -> (
+        Task<{ crate::compile_time_config::MAX_CALL_STACK_SIZE }>,
+        LiveSnapshot,
+    ) {
+        let process = vm.create_process_from_code("/main.c", code).await.unwrap();
+        let live = start_txn(&vm.global_state.committer_tx).await.unwrap();
+        let mut context =
+            TaskTemplate::from(vm.global_state.clone()).into_task_context(process.clone());
+        context.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+        let mut task = Task::new(context);
+        let create = process.program.lookup_function("create").unwrap().clone();
+        let frame = CallFrame::new(process, create, 0, None::<ThinVec<VarId>>);
+        task.stack.push(frame).unwrap();
+        for _ in 0..32 {
+            let at = task.stack.current_frame().unwrap().instruction();
+            if matches!(at, Some(Instruction::CallOther(..))) {
+                return (task, live);
+            }
+            task.run_slice(&mut 1).unwrap();
+        }
+        panic!("no `->` in {code}");
+    }
+
+    #[tokio::test]
+    async fn a_resident_receiver_is_called_with_no_await() {
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code("/other.c", OTHER)
+            .await
+            .unwrap();
+        let code = r#"int got; void create() { got = "/other"->two(); }"#;
+        let (mut task, _live) = task_at_first_call_other(&vm, code).await;
+
+        let slice = task.run_slice(&mut 1).unwrap();
+
+        assert!(matches!(slice, Slice::Budget));
+        assert_eq!(task.stack.len(), 2);
+        assert_eq!(task.stack.current_frame().unwrap().function.name(), "two");
+    }
+
+    #[tokio::test]
+    async fn a_receiver_still_to_initialize_awaits() {
+        let vm = vm_with_other().await;
+        let code = r#"int got; void create() { got = "/other"->two(); }"#;
+        let (mut task, _live) = task_at_first_call_other(&vm, code).await;
+
+        let slice = task.run_slice(&mut 1).unwrap();
+
+        assert!(matches!(slice, Slice::Await(AsyncCall::Other(..))));
+        assert_eq!(task.stack.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_dead_receiver_is_zero_with_no_await() {
+        let vm = vm_with_other().await;
+        let code = r#"int got; void create() { object ob; got = ob->two(); }"#;
+        let (mut task, _live) = task_at_first_call_other(&vm, code).await;
+        let frame = task.stack.current_frame_mut().unwrap();
+        let Some(Instruction::CallOther(RegisterVariant::Local(receiver), _, _)) =
+            frame.instruction()
+        else {
+            panic!("the receiver is a local");
+        };
+        frame.registers[receiver] = LpcRef::Object(std::sync::Weak::new());
+
+        let slice = task.run_slice(&mut 1).unwrap();
+
+        assert!(matches!(slice, Slice::Budget));
+        assert_eq!(task.stack.len(), 1);
+        assert_eq!(task.stack.current_frame().unwrap().registers[0], NULL);
     }
 }

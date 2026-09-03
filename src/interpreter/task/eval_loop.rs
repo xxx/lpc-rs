@@ -204,7 +204,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 return Ok(Step::Await(AsyncCall::FunctionPointer(location, list)));
             }
             Instruction::CallOther(receiver, name, list) => {
-                return Ok(Step::Await(AsyncCall::Other(receiver, name, list)));
+                // A receiver that needs no loading is called with no future built.
+                if !self.call_other_resident(receiver, name, list)? {
+                    return Ok(Step::Await(AsyncCall::Other(receiver, name, list)));
+                }
             }
             Instruction::CallSimulEfun(name, list) => {
                 self.handle_call_simul_efun(name, list)?;
