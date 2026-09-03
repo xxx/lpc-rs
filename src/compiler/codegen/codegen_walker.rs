@@ -113,6 +113,16 @@ impl JumpTarget {
     }
 }
 
+/// Whether a loop condition holds without a test: absent, or a non-zero
+/// integer literal.
+fn always_true(condition: Option<&ExpressionNode>) -> bool {
+    match condition {
+        None => true,
+        Some(ExpressionNode::Int(IntNode { value, .. })) => *value != 0,
+        Some(_) => false,
+    }
+}
+
 /// How the pool tells literals apart: floats by their bits, so `0.0` and
 /// `-0.0` are two entries.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -836,6 +846,45 @@ impl CodegenWalker {
         }
 
         Ok(())
+    }
+
+    /// An unconditional jump to `label`, patched once the label is placed.
+    fn emit_jump(&mut self, label: &Label, span: Option<Span>) -> Result<()> {
+        self.schedule_backpatch(label, self.current_address())?;
+        push_instruction!(self, Instruction::Jmp(Address(0)), span);
+        Ok(())
+    }
+
+    /// Open an inverted loop: jump forward to its test, unless the condition
+    /// always holds and the bottom test will be a bare jump back.
+    fn emit_loop_entry(
+        &mut self,
+        condition: Option<&ExpressionNode>,
+        test_label: &Label,
+        span: Option<Span>,
+    ) -> Result<()> {
+        if always_true(condition) {
+            return Ok(());
+        }
+
+        self.emit_jump(test_label, span)
+    }
+
+    /// Close an inverted loop: jump back to `start_label` while the condition
+    /// holds.
+    async fn emit_loop_test(
+        &mut self,
+        condition: Option<&mut ExpressionNode>,
+        start_label: &Label,
+        span: Option<Span>,
+    ) -> Result<()> {
+        match condition {
+            Some(condition) => {
+                self.emit_condition(condition, JumpWhen::True, start_label)
+                    .await
+            }
+            None => self.emit_jump(start_label, span),
+        }
     }
 
     fn current_address(&self) -> Address {
@@ -1649,17 +1698,16 @@ impl TreeWalker for CodegenWalker {
         }
 
         let start_label = self.new_label("for-start");
+        let test_label = self.new_label("for-test");
         let end_label = self.new_label("for-end");
         let continue_label = self.new_label("for-continue");
         let jump_target = JumpTarget::new(end_label.clone(), continue_label.clone());
         self.jump_targets.push(jump_target);
+
+        self.emit_loop_entry(node.condition.as_ref(), &test_label, node.span)?;
+
         let start_addr = self.current_address();
         self.insert_label(start_label.clone(), start_addr);
-
-        if let Some(cond) = &mut node.condition {
-            self.emit_condition(cond, JumpWhen::False, &end_label)
-                .await?;
-        }
 
         node.body.visit(self).await?;
 
@@ -1670,13 +1718,13 @@ impl TreeWalker for CodegenWalker {
             i.visit(self).await?;
         }
 
-        // go back to the start of the loop
-        self.schedule_backpatch(&start_label, self.current_address())?;
-        let instruction = Instruction::Jmp(Address(0));
-        push_instruction!(self, instruction, node.span);
+        let test_addr = self.current_address();
+        self.insert_label(test_label, test_addr);
+        self.emit_loop_test(node.condition.as_mut(), &start_label, node.span)
+            .await?;
 
-        let addr = self.current_address();
-        self.insert_label(end_label, addr);
+        let end_addr = self.current_address();
+        self.insert_label(end_label, end_addr);
 
         self.jump_targets.pop();
         Ok(())
@@ -1708,20 +1756,16 @@ impl TreeWalker for CodegenWalker {
         };
 
         let start_label = self.new_label("foreach-start");
+        let test_label = self.new_label("foreach-test");
         let end_label = self.new_label("foreach-end");
         let continue_label = self.new_label("foreach-continue");
         let jump_target = JumpTarget::new(end_label.clone(), continue_label.clone());
         self.jump_targets.push(jump_target);
+
+        self.emit_jump(&test_label, node.span)?;
+
         let start_addr = self.current_address();
         self.insert_label(start_label.clone(), start_addr);
-
-        let eqeq_result = self.register_counter.next().unwrap().as_local();
-        let instruction = Instruction::EqEq(index_location, length_location, eqeq_result);
-        push_instruction!(self, instruction, node.span);
-
-        self.schedule_backpatch(&end_label, self.current_address())?;
-        let instruction = Instruction::Jnz(eqeq_result, Address(0));
-        push_instruction!(self, instruction, node.span);
 
         // assign next element(s) to the locations
         match &node.initializer {
@@ -1753,13 +1797,17 @@ impl TreeWalker for CodegenWalker {
         let instruction = Instruction::Inc(index_location);
         push_instruction!(self, instruction, node.span);
 
-        // go back to the start of the loop
+        let test_addr = self.current_address();
+        self.insert_label(test_label, test_addr);
+        let eqeq_result = self.register_counter.next().unwrap().as_local();
+        let instruction = Instruction::EqEq(index_location, length_location, eqeq_result);
+        push_instruction!(self, instruction, node.span);
         self.schedule_backpatch(&start_label, self.current_address())?;
-        let instruction = Instruction::Jmp(Address(0));
+        let instruction = Instruction::Jz(eqeq_result, Address(0));
         push_instruction!(self, instruction, node.span);
 
-        let addr = self.current_address();
-        self.insert_label(end_label, addr);
+        let end_addr = self.current_address();
+        self.insert_label(end_label, end_addr);
 
         self.jump_targets.pop();
         Ok(())
@@ -2438,24 +2486,25 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     async fn visit_while(&mut self, node: &mut WhileNode) -> Result<()> {
         let start_label = self.new_label("while-start");
+        let test_label = self.new_label("while-test");
         let end_label = self.new_label("while-end");
         self.jump_targets
-            .push(JumpTarget::new(end_label.clone(), start_label.clone()));
+            .push(JumpTarget::new(end_label.clone(), test_label.clone()));
+
+        self.emit_loop_entry(Some(&node.condition), &test_label, node.span)?;
+
         let start_addr = self.current_address();
         self.insert_label(start_label.clone(), start_addr);
 
-        self.emit_condition(&mut node.condition, JumpWhen::False, &end_label)
-            .await?;
-
         node.body.visit(self).await?;
 
-        // go back to the start of the loop
-        self.schedule_backpatch(&start_label, self.current_address())?;
-        let instruction = Instruction::Jmp(Address(0));
-        push_instruction!(self, instruction, node.span);
+        let test_addr = self.current_address();
+        self.insert_label(test_label, test_addr);
+        self.emit_loop_test(Some(&mut node.condition), &start_label, node.span)
+            .await?;
 
-        let addr = self.current_address();
-        self.insert_label(end_label, addr);
+        let end_addr = self.current_address();
+        self.insert_label(end_label, end_addr);
 
         self.jump_targets.pop();
         Ok(())
@@ -3067,29 +3116,29 @@ mod tests {
 
             let mut walker = walk_prog(code).await;
             let expected = vec![
-                Lt(
-                    RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(0)),
-                    RegisterVariant::Local(Register(2)),
-                ),
-                Jz(RegisterVariant::Local(Register(2)), Address(11)),
+                Jmp(Address(9)),
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(15),
                 Gt(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(1)),
-                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(2)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), Address(9)),
-                PushArg(RegisterVariant::Constant(Register(2))),
+                Jz(RegisterVariant::Local(Register(2)), Address(8)),
+                PushArg(RegisterVariant::Constant(Register(1))),
                 CallEfun(15),
                 Jmp(Address(11)),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(3)),
+                    RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp(Address(0)),
+                Lt(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Constant(Register(3)),
+                    RegisterVariant::Local(Register(4)),
+                ),
+                Jnz(RegisterVariant::Local(Register(4)), Address(1)),
                 Ret,
             ];
 
@@ -3120,34 +3169,34 @@ mod tests {
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Lt(
-                    RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(1)),
-                    RegisterVariant::Local(Register(2)),
-                ),
-                Jz(RegisterVariant::Local(Register(2)), Address(13)),
+                Jmp(Address(11)),
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(15),
                 Gt(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(2)),
-                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Constant(Register(1)),
+                    RegisterVariant::Local(Register(2)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), Address(10)),
-                PushArg(RegisterVariant::Constant(Register(3))),
+                Jz(RegisterVariant::Local(Register(2)), Address(9)),
+                PushArg(RegisterVariant::Constant(Register(2))),
                 CallEfun(15),
                 Jmp(Address(13)),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(4)),
+                    RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(1)),
                 ),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(4)),
+                    RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp(Address(1)),
+                Lt(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Constant(Register(4)),
+                    RegisterVariant::Local(Register(5)),
+                ),
+                Jnz(RegisterVariant::Local(Register(5)), Address(2)),
                 Ret,
             ];
 
@@ -4060,29 +4109,29 @@ mod tests {
 
             let mut walker = walk_prog(code).await;
             let expected = vec![
-                Lt(
-                    RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(0)),
-                    RegisterVariant::Local(Register(2)),
-                ),
-                Jz(RegisterVariant::Local(Register(2)), Address(11)),
+                Jmp(Address(9)),
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(15),
                 Gt(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(1)),
-                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(2)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), Address(9)),
-                PushArg(RegisterVariant::Constant(Register(2))),
+                Jz(RegisterVariant::Local(Register(2)), Address(8)),
+                PushArg(RegisterVariant::Constant(Register(1))),
                 CallEfun(15),
-                Jmp(Address(0)),
+                Jmp(Address(9)),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(3)),
+                    RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp(Address(0)),
+                Lt(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Constant(Register(3)),
+                    RegisterVariant::Local(Register(4)),
+                ),
+                Jnz(RegisterVariant::Local(Register(4)), Address(1)),
                 Ret,
             ];
 
@@ -4113,34 +4162,34 @@ mod tests {
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Lt(
-                    RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(1)),
-                    RegisterVariant::Local(Register(2)),
-                ),
-                Jz(RegisterVariant::Local(Register(2)), Address(13)),
+                Jmp(Address(11)),
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(15),
                 Gt(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(2)),
-                    RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Constant(Register(1)),
+                    RegisterVariant::Local(Register(2)),
                 ),
-                Jz(RegisterVariant::Local(Register(3)), Address(10)),
-                PushArg(RegisterVariant::Constant(Register(3))),
+                Jz(RegisterVariant::Local(Register(2)), Address(9)),
+                PushArg(RegisterVariant::Constant(Register(2))),
                 CallEfun(15),
-                Jmp(Address(11)),
+                Jmp(Address(10)),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(4)),
+                    RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(1)),
                 ),
                 IAdd(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(4)),
+                    RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp(Address(1)),
+                Lt(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Constant(Register(4)),
+                    RegisterVariant::Local(Register(5)),
+                ),
+                Jnz(RegisterVariant::Local(Register(5)), Address(2)),
                 Ret,
             ];
 
@@ -4363,7 +4412,7 @@ mod tests {
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jz(RegisterVariant::Local(Register(1)), Address(0)),
+                Jmp(Address(0)),
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(15),
                 ISub(
@@ -4375,7 +4424,7 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp(Address(0)),
+                Jnz(RegisterVariant::Local(Register(1)), Address(0)),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4799,12 +4848,12 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn a_negated_while_jumps_on_true() {
+        async fn a_negated_while_loops_while_false() {
             let code = "void create() { int x; while (!x) { x = 1; } }";
             let expected = vec![
-                Jnz(Register(1).as_local(), Address(3)),
+                Jmp(Address(2)),
                 Copy(Register(0).as_constant(), Register(1).as_local()),
-                Jmp(Address(0)),
+                Jz(Register(1).as_local(), Address(1)),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5282,6 +5331,131 @@ mod tests {
         assert_eq!(pool.len(), 2);
         assert!(matches!(&pool[0], LpcConstant::String(s) if s.to_str() == "marf"));
         assert!(matches!(&pool[1], LpcConstant::String(s) if s.to_str() == "tacos"));
+    }
+
+    mod test_inverted_loops {
+        use super::*;
+
+        async fn create_instructions(code: &str) -> Vec<Instruction> {
+            let mut walker = walk_prog(code).await;
+            walker_function_instructions(&mut walker, "create")
+        }
+
+        #[tokio::test]
+        async fn a_while_jumps_to_its_test_first() {
+            let code = "void create() { int i; while (i < 3) { i++; } }";
+            let expected = vec![
+                Jmp(Address(2)),
+                Inc(Register(1).as_local()),
+                Lt(
+                    Register(1).as_local(),
+                    Register(0).as_constant(),
+                    Register(2).as_local(),
+                ),
+                Jnz(Register(2).as_local(), Address(1)),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_for_continues_at_its_incrementer_before_its_test() {
+            let code = "void create() { int i; for (i = 0; i < 3; i++) { if (i == 1) continue; } }";
+            let expected = vec![
+                Copy(Register(0).as_constant(), Register(1).as_local()),
+                Jmp(Address(6)),
+                EqEq(
+                    Register(1).as_local(),
+                    Register(1).as_constant(),
+                    Register(2).as_local(),
+                ),
+                Jz(Register(2).as_local(), Address(5)),
+                Jmp(Address(5)),
+                Inc(Register(1).as_local()),
+                Lt(
+                    Register(1).as_local(),
+                    Register(2).as_constant(),
+                    Register(3).as_local(),
+                ),
+                Jnz(Register(3).as_local(), Address(2)),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_for_without_a_condition_has_no_entry_jump() {
+            let code = "void create() { for (;;) { break; } }";
+            let expected = vec![Jmp(Address(2)), Jmp(Address(0)), Ret];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_literal_true_for_has_no_entry_jump() {
+            let code = "void create() { for (; 1;) { break; } }";
+            let expected = vec![Jmp(Address(2)), Jmp(Address(0)), Ret];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_literal_false_while_tests_nothing_at_the_bottom() {
+            let code = "void create() { int c; while (0) { c++; } }";
+            let expected = vec![Jmp(Address(2)), Inc(Register(1).as_local()), Ret];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_foreach_loads_the_element_after_its_entry_jump() {
+            let code = "void create() { foreach (x : ({ 1 })) { } }";
+            let expected = vec![
+                PushArrayItem(Register(0).as_constant()),
+                AConst(Register(1).as_local()),
+                Sizeof(Register(1).as_local(), Register(3).as_local()),
+                Jmp(Address(6)),
+                Load(
+                    Register(1).as_local(),
+                    Register(2).as_local(),
+                    Register(4).as_local(),
+                ),
+                Inc(Register(2).as_local()),
+                EqEq(
+                    Register(2).as_local(),
+                    Register(3).as_local(),
+                    Register(5).as_local(),
+                ),
+                Jz(Register(5).as_local(), Address(4)),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
+
+        #[tokio::test]
+        async fn a_mapping_foreach_loads_the_key_then_the_value_after_its_entry_jump() {
+            let code = "void create() { mapping m; foreach (k, v : m) { } }";
+            let expected = vec![
+                Sizeof(Register(1).as_local(), Register(3).as_local()),
+                Jmp(Address(5)),
+                LoadMappingKey(
+                    Register(1).as_local(),
+                    Register(2).as_local(),
+                    Register(4).as_local(),
+                ),
+                Load(
+                    Register(1).as_local(),
+                    Register(4).as_local(),
+                    Register(5).as_local(),
+                ),
+                Inc(Register(2).as_local()),
+                EqEq(
+                    Register(2).as_local(),
+                    Register(3).as_local(),
+                    Register(6).as_local(),
+                ),
+                Jz(Register(6).as_local(), Address(2)),
+                Ret,
+            ];
+            assert_eq!(create_instructions(code).await, expected);
+        }
     }
 
     mod test_visit_switch {
@@ -6042,7 +6216,7 @@ mod tests {
     }
 
     mod test_visit_while {
-        use lpc_rs_asm::instruction::Instruction::{EqEq, Jmp, Jz};
+        use lpc_rs_asm::instruction::Instruction::{EqEq, Jmp, Jnz};
 
         use super::*;
 
@@ -6070,15 +6244,15 @@ mod tests {
             let _ = walker.visit_while(&mut node).await;
 
             let expected = vec![
+                Jmp(Address(0)),
+                PushArg(RegisterVariant::Constant(Register(0))),
+                CallEfun(15),
                 EqEq(
-                    RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Constant(Register(1)),
+                    RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jz(RegisterVariant::Local(Register(1)), Address(0)),
-                PushArg(RegisterVariant::Constant(Register(2))),
-                CallEfun(15),
-                Jmp(Address(0)),
+                Jnz(RegisterVariant::Local(Register(1)), Address(0)),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);

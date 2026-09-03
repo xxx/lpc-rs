@@ -512,6 +512,133 @@ mod test_instructions {
         }
     }
 
+    mod test_inverted_loops {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_while_that_starts_false_never_runs_its_body() {
+            let code = indoc! { r##"
+                    int n = 0;
+                    void create() {
+                        int i = 5;
+                        while (i < 3) {
+                            n++;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("n", BareVal::Int(0))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_for_that_starts_false_runs_neither_body_nor_incrementer() {
+            let code = indoc! { r##"
+                    int n = 0;
+                    int steps = 0;
+                    void create() {
+                        int i;
+                        for (i = 5; i < 3; steps++) {
+                            n++;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("n", BareVal::Int(0)), ("steps", BareVal::Int(0))])
+                .await;
+        }
+
+        #[tokio::test]
+        async fn a_foreach_over_an_empty_array_never_runs_its_body() {
+            let code = indoc! { r##"
+                    int n = 0;
+                    void create() {
+                        foreach (x : ({ })) {
+                            n++;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("n", BareVal::Int(0))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_for_without_a_condition_leaves_by_break() {
+            let code = indoc! { r##"
+                    int n = 0;
+                    void create() {
+                        for (;;) {
+                            n++;
+                            if (n == 3) break;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("n", BareVal::Int(3))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_continue_in_a_while_reaches_the_test() {
+            let code = indoc! { r##"
+                    int n = 0;
+                    void create() {
+                        int i;
+                        while (i < 4) {
+                            i++;
+                            if (i == 2) continue;
+                            n++;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("n", BareVal::Int(3))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_while_condition_runs_once_more_than_its_body() {
+            let code = indoc! { r##"
+                    int n = 0;
+                    int tests = 0;
+                    int more() { tests++; return tests <= 3; }
+                    void create() {
+                        while (more()) {
+                            n++;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("n", BareVal::Int(3)), ("tests", BareVal::Int(4))])
+                .await;
+        }
+
+        #[tokio::test]
+        async fn a_foreach_over_a_mapping_visits_every_pair() {
+            let code = indoc! { r##"
+                    int n = 0;
+                    void create() {
+                        foreach (k, v : ([ 1: 10, 2: 20 ])) {
+                            n += v;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("n", BareVal::Int(30))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_foreach_over_a_string_visits_every_character() {
+            let code = indoc! { r##"
+                    int n = 0;
+                    void create() {
+                        foreach (c : "abc") {
+                            n++;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("n", BareVal::Int(3))]).await;
+        }
+    }
+
     mod test_over_passed_arguments {
         use super::*;
 
