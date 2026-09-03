@@ -125,24 +125,12 @@ impl Transaction {
     }
 
     /// Read the world value of a var: `Ref` for slots, payload contents for
-    /// payload vars. A var this attempt removed reads back as absent: the
-    /// committed world still holds its old value until commit, so falling
-    /// through to the snapshot would resurrect a removed var. A read
-    /// satisfied by the attempt's own write or removal observes no committed
-    /// state, so it is not tracked; world reads are tracked and memoized,
-    /// and pending merges collapse onto them into a write.
+    /// payload vars. The changeset decides what this attempt sees; the
+    /// snapshot only answers its miss, so a var this attempt removed is
+    /// never resurrected from the old value the world holds until commit.
     pub(crate) fn read_value(&mut self, var_id: VarId) -> Option<WorldValue> {
-        if self.changeset.is_removed(var_id) {
-            return None;
-        }
-        if let Some(own) = self.changeset.read(var_id) {
-            return Some(own);
-        }
         let snapshot = &self.snapshot;
-        let world = self
-            .changeset
-            .read_through(var_id, || snapshot.read(var_id));
-        self.changeset.collapse_merges(var_id, world)
+        self.changeset.read_value(var_id, || snapshot.read(var_id))
     }
 
     /// Write a slot value to the changeset.
@@ -183,19 +171,12 @@ impl Transaction {
     /// would re-buy the read the merge exists to avoid; a stale answer is
     /// caught by the committer's type check.
     pub(crate) fn peek_int(&self, var_id: VarId) -> bool {
-        if self.changeset.is_removed(var_id) {
-            return true; // absent: the op applies onto its identity
-        }
-        if let Some(own) = self.changeset.written(var_id) {
-            return matches!(own, WorldValue::Ref(LpcRef::Int(_)));
-        }
-        if !self.changeset.pending_merges(var_id).is_empty() {
-            return true; // an earlier peek already accepted the cell
-        }
-        !matches!(
-            self.snapshot.peek(var_id),
-            Some(value) if !matches!(value, WorldValue::Ref(LpcRef::Int(_)))
-        )
+        self.changeset.peek_int(var_id).unwrap_or_else(|| {
+            !matches!(
+                self.snapshot.peek(var_id),
+                Some(value) if !matches!(value, WorldValue::Ref(LpcRef::Int(_)))
+            )
+        })
     }
 
     /// Whether this attempt removes the var; a removed cell must not be read
@@ -293,9 +274,7 @@ impl Transaction {
         var_id: VarId,
         f: impl FnOnce(&mut LpcArray) -> Result<()>,
     ) -> Result<()> {
-        if !self.changeset.is_removed(var_id)
-            && let Some(own) = self.changeset.written_array_mut(var_id)
-        {
+        if let Some(own) = self.changeset.written_array_mut(var_id) {
             return f(Arc::make_mut(own));
         }
         let current = self
@@ -315,9 +294,7 @@ impl Transaction {
         var_id: VarId,
         f: impl FnOnce(&mut LpcMapping) -> Result<()>,
     ) -> Result<()> {
-        if !self.changeset.is_removed(var_id)
-            && let Some(own) = self.changeset.written_mapping_mut(var_id)
-        {
+        if let Some(own) = self.changeset.written_mapping_mut(var_id) {
             return f(Arc::make_mut(own));
         }
         let current = self
