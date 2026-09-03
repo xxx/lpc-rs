@@ -314,6 +314,57 @@ mod test_instructions {
             )
             .await;
         }
+
+        #[tokio::test]
+        async fn a_false_left_operand_yields_zero_in_a_loop_condition() {
+            let code = indoc! { r##"
+                    int hits = 0;
+                    void create() {
+                        int i;
+                        for (i = 0; i < 4; i++) {
+                            int a = i % 2;
+                            if (a && 1) {
+                                hits++;
+                            }
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("hits", BareVal::Int(2))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_false_left_operand_yields_zero_in_a_loop_assignment() {
+            let code = indoc! { r##"
+                    int hits = 0;
+                    void create() {
+                        int i;
+                        for (i = 0; i < 4; i++) {
+                            int a = i % 2;
+                            int r = a && 1;
+                            hits += r;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("hits", BareVal::Int(2))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_false_left_operand_yields_zero_in_a_loop_ternary() {
+            let code = indoc! { r##"
+                    int hits = 0;
+                    void create() {
+                        int i;
+                        for (i = 0; i < 4; i++) {
+                            int a = i % 2;
+                            hits += (a && 1) ? 1 : 0;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("hits", BareVal::Int(2))]).await;
+        }
     }
 
     mod test_bitwise_not {
