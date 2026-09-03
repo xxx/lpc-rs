@@ -435,6 +435,83 @@ mod test_instructions {
         }
     }
 
+    mod test_continue_in_switch {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_while_loop_continues_from_a_case() {
+            let code = indoc! { r##"
+                    int seen = 0;
+                    void create() {
+                        int i;
+                        while (i < 4) {
+                            i++;
+                            switch (i) {
+                                case 2: continue;
+                            }
+                            seen++;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("seen", BareVal::Int(3))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_for_loop_continues_through_its_incrementer_from_a_case() {
+            let code = indoc! { r##"
+                    int seen = 0;
+                    void create() {
+                        int i;
+                        for (i = 0; i < 4; i++) {
+                            switch (i) {
+                                case 2: continue;
+                            }
+                            seen++;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("seen", BareVal::Int(3))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_foreach_loop_continues_from_a_case() {
+            let code = indoc! { r##"
+                    int seen = 0;
+                    void create() {
+                        foreach (x : ({ 1, 2, 3, 4 })) {
+                            switch (x) {
+                                case 2: continue;
+                            }
+                            seen++;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("seen", BareVal::Int(3))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_do_while_loop_continues_to_its_test_from_a_case() {
+            let code = indoc! { r##"
+                    int seen = 0;
+                    void create() {
+                        int i;
+                        do {
+                            i++;
+                            switch (i) {
+                                case 2: continue;
+                            }
+                            seen++;
+                        } while (i < 4);
+                    }
+                "##};
+
+            check_committed_globals(code, &[("seen", BareVal::Int(3))]).await;
+        }
+    }
+
     mod test_over_passed_arguments {
         use super::*;
 
