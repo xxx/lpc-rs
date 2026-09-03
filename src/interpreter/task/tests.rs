@@ -1787,6 +1787,62 @@ mod test_instructions {
         }
     }
 
+    mod test_slice {
+        use super::*;
+
+        /// A task whose stack holds `create` of `code`, pc at 0.
+        async fn task_at_create(
+            code: &str,
+        ) -> Task<{ crate::compile_time_config::MAX_CALL_STACK_SIZE }> {
+            use crate::{
+                interpreter::{
+                    call_frame::CallFrame, object_space::ObjectSpace,
+                    task::task_template::TaskTemplate,
+                },
+                test_support::compile_prog,
+            };
+            use thin_vec::ThinVec;
+
+            let (program, config, _se_proc) = compile_prog(code).await;
+            let (tx, _rx) = tokio::sync::mpsc::channel(128);
+            let global_state = GlobalState::new(config, tx);
+            let process = Arc::new(Process::new(program));
+            ObjectSpace::insert_process_physical(&global_state.object_space, process.clone());
+            let context = TaskTemplate::from(global_state).into_task_context(process.clone());
+            let mut task = Task::new(context);
+            let create = process.program.lookup_function("create").unwrap().clone();
+            let frame = CallFrame::new(process.clone(), create, 0, None::<ThinVec<VarId>>);
+            task.stack.push(frame).unwrap();
+            task
+        }
+
+        #[tokio::test]
+        async fn a_slice_stops_when_its_budget_runs_out() {
+            use super::super::eval_loop::Slice;
+
+            let mut task =
+                task_at_create("void create() { int x = 1; x = x + 1; x = x + 1; x = x + 1; }")
+                    .await;
+            let mut budget = 2;
+            let slice = task.run_slice(&mut budget).unwrap();
+            assert!(matches!(slice, Slice::Budget));
+            assert_eq!(budget, 0);
+            assert!(!task.stack.is_empty());
+        }
+
+        #[tokio::test]
+        async fn a_slice_counts_the_instructions_it_ran_to_the_empty_stack() {
+            use super::super::eval_loop::Slice;
+
+            let mut task = task_at_create("void create() { int x = 1; x = x + 1; }").await;
+            let mut budget = 1000;
+            let slice = task.run_slice(&mut budget).unwrap();
+            assert!(matches!(slice, Slice::Halt));
+            assert!((1..1000).contains(&budget), "budget {budget}");
+            assert!(task.stack.is_empty());
+        }
+    }
+
     mod test_call_other {
         use super::*;
 

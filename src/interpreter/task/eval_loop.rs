@@ -1,6 +1,6 @@
 use async_recursion::async_recursion;
 use lpc_rs_asm::instruction::{ArgList, Instruction};
-use lpc_rs_core::{LpcIntInner, RegisterSize, register::RegisterVariant};
+use lpc_rs_core::{LpcIntInner, register::RegisterVariant};
 use lpc_rs_errors::lpc_error;
 use lpc_rs_utils::lpc_string::LpcString;
 use thin_vec::ThinVec;
@@ -39,12 +39,25 @@ enum Step {
 }
 
 /// The instructions that await, each because it can start a nested task.
-enum AsyncCall {
+pub(super) enum AsyncCall {
     Efun(u8, ArgList),
     FunctionPointer(RegisterVariant, ArgList),
     Other(RegisterVariant, RegisterVariant, ArgList),
     /// A `Ret` into a frame mid-way through a collection `->`.
     Collection,
+}
+
+/// Instructions between yields to the runtime.
+const SLICE: u32 = 1000;
+
+/// What ended a run of [`Task::step`]s.
+pub(super) enum Slice {
+    /// The budget ran out.
+    Budget,
+    /// The stack is empty.
+    Halt,
+    /// [`Task::dispatch`] finishes the instruction.
+    Await(AsyncCall),
 }
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
@@ -60,47 +73,61 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 return Err(e.with_stack_trace(self.stack.stack_trace()));
             }
         } else {
-            let mut halted = false;
+            let mut budget = SLICE;
 
-            let mut c = 0 as RegisterSize;
-
-            while !halted {
-                let result = match self.step() {
-                    Ok(Step::Next) => Ok(false),
-                    Ok(Step::Halt) => Ok(true),
-                    Ok(Step::Await(call)) => self.dispatch(call).await.map(|()| false),
+            loop {
+                let result = match self.run_slice(&mut budget) {
+                    Ok(Slice::Budget) => {
+                        // Ensure infinite loops and the like don't monopolize the runtime.
+                        budget = SLICE;
+                        tokio::task::yield_now().await;
+                        continue;
+                    }
+                    Ok(Slice::Halt) => break,
+                    Ok(Slice::Await(call)) => self.dispatch(call).await,
                     Err(e) => Err(e),
                 };
-                halted = match result {
-                    Ok(x) => x,
-                    Err(e) => {
-                        if e.is_bug() {
-                            error!("{}", e.diagnostic_string());
-                        }
 
-                        // `catch()` does not resume from a broken driver invariant.
-                        if !e.is_bug() && !self.catch_points.is_empty() {
-                            self.catch_error(e)?;
-
-                            false
-                        } else {
-                            let stack_trace = self.stack.stack_trace();
-                            return Err(e.with_stack_trace(stack_trace));
-                        }
+                if let Err(e) = result {
+                    if e.is_bug() {
+                        error!("{}", e.diagnostic_string());
                     }
-                };
 
-                // Ensure infinite loops and the like don't monopolize the runtime.
-                c += 1;
-                if c == 1000 {
-                    c = 0;
-                    tokio::task::yield_now().await;
+                    // `catch()` does not resume from a broken driver invariant.
+                    if !e.is_bug() && !self.catch_points.is_empty() {
+                        self.catch_error(e)?;
+                    } else {
+                        let stack_trace = self.stack.stack_trace();
+                        return Err(e.with_stack_trace(stack_trace));
+                    }
                 }
             }
         }
 
         assert!(self.stack.is_empty());
         Ok(())
+    }
+
+    /// Step until an instruction awaits, the stack empties, or `budget` hits zero.
+    ///
+    /// Keep the count out of the `resume` future: there it was loaded and
+    /// stored on every instruction.
+    pub(super) fn run_slice(&mut self, budget: &mut u32) -> lpc_rs_errors::Result<Slice> {
+        let mut left = *budget;
+        let slice = loop {
+            if left == 0 {
+                break Ok(Slice::Budget);
+            }
+            left -= 1;
+            match self.step() {
+                Ok(Step::Next) => {}
+                Ok(Step::Halt) => break Ok(Slice::Halt),
+                Ok(Step::Await(call)) => break Ok(Slice::Await(call)),
+                Err(e) => break Err(e),
+            }
+        };
+        *budget = left;
+        slice
     }
 
     /// Finish an instruction that awaits.
