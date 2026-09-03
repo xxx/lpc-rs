@@ -1,10 +1,9 @@
 use async_recursion::async_recursion;
-use indexmap::IndexMap;
-use itertools::Itertools;
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::{LpcIntInner, RegisterSize};
 use lpc_rs_errors::lpc_error;
 use lpc_rs_utils::lpc_string::LpcString;
+use thin_vec::ThinVec;
 use tracing::{error, instrument, trace, warn};
 
 use crate::{
@@ -12,12 +11,22 @@ use crate::{
         efun::EFUN_FUNCTIONS,
         lpc_array::LpcArray,
         lpc_int::LpcInt,
-        lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
         task::{Arg, CatchPoint, Task, bump_in_location, get_location, set_location},
     },
     pop_frame,
 };
+
+/// Empty a staging vector once its consuming instruction has run, whether or
+/// not it succeeded — a `catch` would otherwise hand the stale entries to the
+/// next consumer.
+fn consumed<T, R>(
+    staging: &mut ThinVec<T>,
+    result: lpc_rs_errors::Result<R>,
+) -> lpc_rs_errors::Result<R> {
+    staging.clear();
+    result
+}
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Resume execution of a New or Paused Task. Assumes the stack has already been set up
@@ -111,7 +120,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         match instruction {
             Instruction::AConst(location) => {
-                self.handle_aconst(location)?;
+                let result = self.handle_aconst(location);
+                consumed(&mut self.array_items, result)?;
             }
             Instruction::And(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.bitand(y))?;
@@ -120,7 +130,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.unary_operation(r1, r2, |x, _| x.bitnot())?;
             }
             Instruction::Call(name) => {
-                self.handle_call(name).await?;
+                let result = self.handle_call(name).await;
+                consumed(&mut self.args, result)?;
             }
             Instruction::CallEfun(name_idx) => {
                 let process = self.stack.current_frame()?.process.clone();
@@ -130,20 +141,24 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     (pf.clone(), name)
                 };
 
-                let new_frame = self.prepare_new_call_frame(process, pf).await?;
+                let new_frame = self.prepare_new_call_frame(process, pf).await;
+                let new_frame = consumed(&mut self.args, new_frame)?;
 
                 self.stack.push(new_frame)?;
 
                 self.prepare_and_call_efun(name).await?;
             }
             Instruction::CallFp(location) => {
-                self.handle_call_fp(location).await?;
+                let result = self.handle_call_fp(location).await;
+                consumed(&mut self.args, result)?;
             }
             Instruction::CallOther(receiver, name) => {
-                self.handle_call_other(receiver, name).await?;
+                let result = self.handle_call_other(receiver, name).await;
+                consumed(&mut self.args, result)?;
             }
             Instruction::CallSimulEfun(name) => {
-                self.handle_call_simul_efun(name).await?;
+                let result = self.handle_call_simul_efun(name).await;
+                consumed(&mut self.args, result)?;
             }
             Instruction::CatchEnd => {
                 self.catch_points.pop();
@@ -181,7 +196,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 receiver,
                 name,
             } => {
-                self.handle_functionptrconst(location, receiver, name)?;
+                let result = self.handle_functionptrconst(location, receiver, name);
+                consumed(&mut self.partial_args, result)?;
             }
             Instruction::Gt(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y, _| x > y)?;
@@ -233,29 +249,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::IAdd(r1, r2, r3) | Instruction::MAdd(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, txn| x.add(y, txn))?;
             }
-            Instruction::MapConst(r) => {
-                let mut register_map = IndexMap::with_capacity(self.array_items.len() / 2);
-
-                debug_assert!(
-                    self.array_items.len().is_multiple_of(2),
-                    "Odd number of items in `array` when creating a mapping constant"
-                );
-                for chunk in &self.array_items.iter().copied().chunks(2) {
-                    let (key, value) = chunk.into_iter().collect_tuple().unwrap();
-                    register_map.insert(
-                        get_location(&self.stack, &self.context.txn, key)?
-                            .mapping_key(&self.context.txn),
-                        get_location(&self.stack, &self.context.txn, value)?.into_owned(),
-                    );
-                }
-
-                let new_ref = LpcRef::Mapping(
-                    self.context
-                        .txn
-                        .with(|t| t.mint_mapping(LpcMapping::new(register_map))),
-                );
-
-                set_location(&mut self.stack, &self.context.txn, r, new_ref)?;
+            Instruction::MapConst(location) => {
+                let result = self.handle_mapconst(location);
+                consumed(&mut self.array_items, result)?;
             }
             Instruction::IMul(r1, r2, r3) | Instruction::MMul(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.mul(y))?;

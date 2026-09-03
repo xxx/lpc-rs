@@ -1,5 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
+use indexmap::IndexMap;
+use itertools::Itertools;
 use lpc_rs_core::{
     LpcIntInner, function_receiver::FunctionReceiver, lpc_path::LpcPath, register::RegisterVariant,
 };
@@ -11,6 +13,7 @@ use crate::interpreter::{
     function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
     lpc_array::LpcArray,
     lpc_int::LpcInt,
+    lpc_mapping::LpcMapping,
     lpc_ref::{LpcRef, NULL},
     stm::MergeOp,
     task::{Task, get_location, set_location},
@@ -27,6 +30,34 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .map(|i| get_location(&self.stack, &self.context.txn, *i).map(|i| i.into_owned()))
             .collect::<lpc_rs_errors::Result<Vec<_>>>()?;
         let new_ref = LpcRef::Array(self.context.txn.with(|t| t.mint_array(LpcArray::new(vars))));
+
+        set_location(&mut self.stack, &self.context.txn, location, new_ref)
+    }
+
+    /// Build a mapping from the staged items, taken as key/value pairs.
+    #[instrument(level = "debug", skip_all)]
+    #[inline]
+    pub(crate) fn handle_mapconst(
+        &mut self,
+        location: RegisterVariant,
+    ) -> lpc_rs_errors::Result<()> {
+        debug_assert!(
+            self.array_items.len().is_multiple_of(2),
+            "Odd number of items in `array` when creating a mapping constant"
+        );
+        let mut register_map = IndexMap::with_capacity(self.array_items.len() / 2);
+        for chunk in &self.array_items.iter().copied().chunks(2) {
+            let (key, value) = chunk.into_iter().collect_tuple().unwrap();
+            register_map.insert(
+                get_location(&self.stack, &self.context.txn, key)?.mapping_key(&self.context.txn),
+                get_location(&self.stack, &self.context.txn, value)?.into_owned(),
+            );
+        }
+        let new_ref = LpcRef::Mapping(
+            self.context
+                .txn
+                .with(|t| t.mint_mapping(LpcMapping::new(register_map))),
+        );
 
         set_location(&mut self.stack, &self.context.txn, location, new_ref)
     }
