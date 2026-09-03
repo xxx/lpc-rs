@@ -22,7 +22,6 @@ use crate::{
             for_node::ForNode,
             function_def_node::{ARGV, FunctionDefNode},
             function_ptr_node::FunctionPtrNode,
-            int_node::IntNode,
             label_node::LabelNode,
             program_node::ProgramNode,
             range_node::RangeNode,
@@ -44,7 +43,8 @@ use crate::{
         compilation_context::CompilationContext,
         diagnostics::Diagnostics,
         semantic::semantic_checks::{
-            check_binary_operation_types, check_unary_operation_types, is_keyword, node_type,
+            check_binary_operation_types, check_unary_operation_types, is_keyword, mismatch,
+            node_type, ternary_mismatch,
         },
     },
     interpreter::efun::CALL_OTHER,
@@ -188,14 +188,8 @@ impl TreeWalker for SemanticCheckWalker {
         walk_assignment(self, node).await?;
 
         let left_type = node_type(&node.lhs, &self.context)?;
-        let right_type = node_type(&node.rhs, &self.context)?;
 
-        // The integer 0 is always a valid assignment.
-        if left_type.matches_type(right_type)
-            || matches!(*node.rhs, ExpressionNode::Int(IntNode { value: 0, .. }))
-        {
-            Ok(())
-        } else {
+        if let Some(right_type) = mismatch(left_type, &node.rhs, &self.context)? {
             let e: LpcError = lpc_error!(
                 node.span,
                 "Mismatched types: `{}` ({}) = `{}` ({})",
@@ -205,8 +199,10 @@ impl TreeWalker for SemanticCheckWalker {
                 right_type
             );
 
-            Err(self.context.diagnostics.fail(e))
+            return Err(self.context.diagnostics.fail(e));
         }
+
+        Ok(())
     }
 
     async fn visit_binary_op(&mut self, node: &mut BinaryOpNode) -> Result<()> {
@@ -397,22 +393,19 @@ impl TreeWalker for SemanticCheckWalker {
 
             // Check argument types.
             for (index, ty) in prototype.arg_types.iter().enumerate() {
-                if_chain! {
-                    if let Some(arg) = node.arguments.get(index);
-                    // Literal zero is always allowed
-                    if !matches!(arg, ExpressionNode::Int(IntNode { value: 0, .. }));
-                    let arg_type = node_type(arg, &self.context)?;
-                    if !ty.matches_type(arg_type);
-                    then {
-                        let e = LpcError::new(format!(
-                            "unexpected argument type to `{}`: {}. Expected {}.",
-                            name, arg_type, ty
-                        ))
-                        .with_span(arg.span())
-                        .with_label("declared here", prototype.arg_spans.get(index).cloned());
+                let Some(arg) = node.arguments.get(index) else {
+                    continue;
+                };
 
-                        errors.push(e);
-                    }
+                if let Some(arg_type) = mismatch(*ty, arg, &self.context)? {
+                    let e = LpcError::new(format!(
+                        "unexpected argument type to `{}`: {}. Expected {}.",
+                        name, arg_type, ty
+                    ))
+                    .with_span(arg.span())
+                    .with_label("declared here", prototype.arg_spans.get(index).cloned());
+
+                    errors.push(e);
                 }
             }
         }
@@ -681,23 +674,17 @@ impl TreeWalker for SemanticCheckWalker {
 
         if let Some(function_def) = &self.current_function {
             if let Some(expression) = &node.value {
-                // returning a literal 0 is allowable for any type,
-                // including void.
-                if !matches!(expression, ExpressionNode::Int(IntNode { value: 0, .. })) {
-                    let return_type = node_type(expression, &self.context)?;
+                if let Some(return_type) =
+                    mismatch(function_def.return_type, expression, &self.context)?
+                {
+                    let error = LpcError::new(format!(
+                        "invalid return type {}. Expected {}.",
+                        return_type, function_def.return_type
+                    ))
+                    .with_span(node.span)
+                    .with_label("defined here", function_def.span);
 
-                    if function_def.return_type == LpcType::Void
-                        || !function_def.return_type.matches_type(return_type)
-                    {
-                        let error = LpcError::new(format!(
-                            "invalid return type {}. Expected {}.",
-                            return_type, function_def.return_type
-                        ))
-                        .with_span(node.span)
-                        .with_label("defined here", function_def.span);
-
-                        self.context.diagnostics.record(error);
-                    }
+                    self.context.diagnostics.record(error);
                 }
             } else if function_def.return_type != LpcType::Void {
                 let error = LpcError::new(format!(
@@ -730,10 +717,7 @@ impl TreeWalker for SemanticCheckWalker {
     async fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
         walk_ternary(self, node).await?;
 
-        let body_type = node_type(&node.body, &self.context)?;
-        let else_type = node_type(&node.else_clause, &self.context)?;
-
-        if body_type != else_type {
+        if let Some((body_type, else_type)) = ternary_mismatch(node, &self.context)? {
             let e = LpcError::new(format!(
                 "differing types in ternary expression: `{body_type}` and `{else_type}`"
             ))
@@ -810,31 +794,19 @@ impl TreeWalker for SemanticCheckWalker {
 
         walk_var_init(self, node).await?;
 
-        if let Some(expression) = &node.value {
-            let expr_type = node_type(expression, &self.context)?;
+        if let Some(expression) = &node.value
+            && let Some(expr_type) = mismatch(node.type_, expression, &self.context)?
+        {
+            let e = lpc_error!(
+                node.span,
+                "mismatched types: `{}` ({}) = `{}` ({})",
+                node.name,
+                node.type_,
+                expression,
+                expr_type
+            );
 
-            // The integer 0 is always a valid assignment.
-            let ret = if node.type_.matches_type(expr_type)
-                || matches!(*expression, ExpressionNode::Int(IntNode { value: 0, .. }))
-            {
-                Ok(())
-            } else {
-                let e = lpc_error!(
-                    node.span,
-                    "mismatched types: `{}` ({}) = `{}` ({})",
-                    node.name,
-                    node.type_,
-                    expression,
-                    expr_type
-                );
-
-                self.context.diagnostics.record(e);
-
-                // Non-fatal error.
-                Ok(())
-            };
-
-            return ret;
+            self.context.diagnostics.record(e);
         }
 
         Ok(())
@@ -865,6 +837,7 @@ mod tests {
     use ustr::ustr;
 
     use super::*;
+    use crate::compiler::ast::int_node::IntNode;
     use crate::test_support::CompileThrough;
     use crate::{
         compiler::{
@@ -3091,6 +3064,65 @@ mod tests {
                     string *s = a + m;
                 }"#;
             assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_ternary_takes_a_literal_zero_on_either_branch() {
+            let code = r#"
+                void create() {
+                    int c = 1;
+                    string s = c ? "a" : 0;
+                    string t = c ? 0 : "a";
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_ternary_with_a_mixed_branch_is_mixed() {
+            let code = r#"
+                void create() {
+                    int c = 1;
+                    mixed m = 1;
+                    int i = c ? m : 1;
+                    string s = c ? "a" : m;
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_call_others_answer_or_zero_is_a_string() {
+            let code = r#"
+                void create() {
+                    object ob;
+                    string s = ob ? ob->query_name() : 0;
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_ternary_with_differing_concrete_branches_reports_once() {
+            let code = r#"
+                void create() {
+                    int c = 1;
+                    string s = c ? 1 : "a";
+                }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["differing types in ternary expression: `int` and `string`".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_float_or_int_ternary_is_rejected() {
+            let code = r#"
+                void create() {
+                    int c = 1;
+                    float f = c ? 1.5 : 1;
+                }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["differing types in ternary expression: `float` and `int`".to_string()]
+            );
         }
 
         #[tokio::test]
