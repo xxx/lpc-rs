@@ -1543,19 +1543,6 @@ mod test_instructions {
         }
     }
 
-    mod test_fconst {
-        use super::*;
-
-        #[tokio::test]
-        async fn stores_the_value() {
-            let code = indoc! { r##"
-                    float π = 4.13;
-                "##};
-
-            check_committed_globals(code, &[("π", BareVal::Float(4.13.into()))]).await;
-        }
-    }
-
     mod test_inheritance {
         use super::*;
 
@@ -1873,42 +1860,52 @@ mod test_instructions {
         }
     }
 
-    mod test_iconst {
+    mod test_literals {
         use super::*;
 
         #[tokio::test]
-        async fn stores_the_value() {
+        async fn stores_a_float() {
+            let code = indoc! { r##"
+                    float π = 4.13;
+                "##};
+
+            check_committed_globals(code, &[("π", BareVal::Float(4.13.into()))]).await;
+        }
+
+        #[tokio::test]
+        async fn stores_an_int() {
             let code = indoc! { r##"
                     mixed q = 666;
                 "##};
 
             check_committed_globals(code, &[("q", BareVal::Int(666))]).await;
         }
-    }
-
-    mod test_iconst0 {
-        use super::*;
 
         #[tokio::test]
-        async fn stores_the_value() {
+        async fn stores_zero() {
             let code = indoc! { r##"
                     mixed q = 0;
                 "##};
 
             check_committed_globals(code, &[("q", BareVal::Int(0))]).await;
         }
-    }
-
-    mod test_iconst1 {
-        use super::*;
 
         #[tokio::test]
-        async fn stores_the_value() {
+        async fn stores_one() {
             let code = indoc! { r##"
                     mixed q = 1;
                 "##};
 
             check_committed_globals(code, &[("q", BareVal::Int(1))]).await;
+        }
+
+        #[tokio::test]
+        async fn stores_a_string() {
+            let code = indoc! { r##"
+                    string foo = "lolwut";
+                "##};
+
+            check_committed_globals(code, &[("foo", BareVal::String("lolwut".into()))]).await;
         }
     }
 
@@ -2708,9 +2705,12 @@ mod test_instructions {
     mod test_sizeof {
         use std::sync::Arc;
 
-        use lpc_rs_asm::instruction::Instruction::{Ret, SConst, Sizeof};
+        use lpc_rs_asm::instruction::Instruction::{Ret, Sizeof};
         use lpc_rs_core::{INIT_GLOBALS, lpc_path::LpcPath, lpc_type::LpcType};
-        use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
+        use lpc_rs_function_support::{
+            constant::LpcConstant, function_prototype::FunctionPrototypeBuilder,
+        };
+        use lpc_rs_utils::lpc_string::LpcString;
 
         use super::*;
         use crate::interpreter::program::Program;
@@ -2766,18 +2766,19 @@ mod test_instructions {
                 .unwrap();
             let initializer = ProgramFunction {
                 prototype,
-                num_locals: 2,
+                num_locals: 1,
                 num_upvalues: 0,
                 instructions: vec![
-                    SConst(Register(1).as_local(), ustr("Hello, world!")),
-                    Sizeof(Register(1).as_local(), Register(2).as_local()),
+                    Sizeof(Register(0).as_constant(), Register(1).as_local()),
                     Ret,
                 ],
                 debug_spans: vec![None, None],
                 labels: Some(HashMap::new()),
                 local_variables: Default::default(),
                 arg_locations: Default::default(),
-                constants: Default::default(),
+                constants: vec![LpcConstant::String(Arc::new(LpcString::Static(ustr(
+                    "Hello, world!",
+                ))))],
             }
             .into();
 
@@ -2798,11 +2799,7 @@ mod test_instructions {
 
             let registers = &task.popped_frame.unwrap().registers;
 
-            let expected = vec![
-                BareVal::Int(0),
-                BareVal::String("Hello, world!".into()),
-                BareVal::Int(13),
-            ];
+            let expected = vec![BareVal::Int(0), BareVal::Int(13)];
 
             BareVal::assert_vec_equal(&task.context.global_state, &expected, registers);
         }
@@ -2828,19 +2825,6 @@ mod test_instructions {
                 )],
             )
             .await;
-        }
-    }
-
-    mod test_sconst {
-        use super::*;
-
-        #[tokio::test]
-        async fn stores_the_value() {
-            let code = indoc! { r##"
-                    string foo = "lolwut";
-                "##};
-
-            check_committed_globals(code, &[("foo", BareVal::String("lolwut".into()))]).await;
         }
     }
 

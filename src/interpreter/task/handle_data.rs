@@ -3,9 +3,8 @@ use std::{path::PathBuf, sync::Arc};
 use lpc_rs_core::{
     LpcIntInner, function_receiver::FunctionReceiver, lpc_path::LpcPath, register::RegisterVariant,
 };
-use lpc_rs_utils::lpc_string::LpcString;
 use thin_vec::ThinVec;
-use tracing::{instrument, trace};
+use tracing::instrument;
 use ustr::Ustr;
 
 use crate::interpreter::{
@@ -306,22 +305,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         };
 
         set_location(&mut self.stack, &self.context.txn, destination, var)
-    }
-
-    #[instrument(level = "debug", skip_all)]
-    #[inline]
-    pub(crate) fn handle_sconst(
-        &mut self,
-        location: RegisterVariant,
-        value: Ustr,
-    ) -> lpc_rs_errors::Result<()> {
-        let lpc_string = LpcString::Static(value);
-
-        trace!(?lpc_string, "Storing static string");
-
-        let new_ref = lpc_string.into();
-
-        set_location(&mut self.stack, &self.context.txn, location, new_ref)
     }
 
     #[instrument(level = "debug", skip_all)]

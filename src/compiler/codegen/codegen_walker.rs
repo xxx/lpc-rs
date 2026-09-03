@@ -4786,13 +4786,6 @@ mod tests {
                 "{:?}",
                 f.instructions
             );
-            assert!(
-                f.instructions
-                    .iter()
-                    .all(|i| !matches!(i, IConst1(_) | IConst0(_) | IConst(..))),
-                "{:?}",
-                f.instructions
-            );
             assert!(f.constants.contains(&LpcConstant::Int(1)));
         }
 
