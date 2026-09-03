@@ -188,14 +188,14 @@ fn successors(
 ) -> Vec<usize> {
     let next = match *instruction {
         Instruction::Jmp(address) => vec![address.0],
-        Instruction::Jz(_, address)
-        | Instruction::Jnz(_, address)
-        | Instruction::CatchStart(_, address) => vec![address.0, at + 1],
         Instruction::Ret => vec![],
         Instruction::PopulateDefaults => (0..=usize::from(arity.num_default_args))
             .map(|entry| at + 1 + entry)
             .collect(),
-        _ => vec![at + 1],
+        other => match other.address() {
+            Some(address) => vec![address.0, at + 1],
+            None => vec![at + 1],
+        },
     };
     next.into_iter().filter(|&address| address < len).collect()
 }
@@ -539,6 +539,15 @@ mod tests {
         assert_eq!(successors(&PopulateDefaults, 0, &arity, 8), vec![1, 2, 3]);
         assert_eq!(
             successors(&Jnz(local(1), Address(6)), 4, &arity, 8),
+            vec![6, 5]
+        );
+        assert_eq!(
+            successors(
+                &Jcmp(Comparison::Lt, local(1), local(2), Address(6)),
+                4,
+                &arity,
+                8
+            ),
             vec![6, 5]
         );
         assert_eq!(successors(&Ret, 7, &arity, 8), Vec::<usize>::new());

@@ -9,7 +9,7 @@ use ustr::Ustr;
 
 use crate::address::Address;
 
-/// The kind of comparison a `Cmp` makes between its two operands.
+/// The kind of comparison a `Cmp`, `Jcmp`, or `Jncmp` makes between its two operands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Comparison {
     /// `<`
@@ -117,8 +117,14 @@ pub enum Instruction {
     /// Increment the value in x.0 by 1
     Inc(RegisterVariant),
 
+    /// Jump to x.3 when x.1 `kind` x.2 holds
+    Jcmp(Comparison, RegisterVariant, RegisterVariant, Address),
+
     /// Unconditional jump
     Jmp(Address),
+
+    /// Jump to x.3 when x.1 `kind` x.2 does not hold
+    Jncmp(Comparison, RegisterVariant, RegisterVariant, Address),
 
     /// Jump if the value in the register is not zero (Int or Float)
     Jnz(RegisterVariant, Address),
@@ -262,7 +268,9 @@ impl Instruction {
             | Self::CatchStart(_, _)
             | Self::Dec(_)
             | Self::Inc(_)
+            | Self::Jcmp(_, _, _, _)
             | Self::Jmp(_)
+            | Self::Jncmp(_, _, _, _)
             | Self::Jnz(_, _)
             | Self::Jz(_, _)
             | Self::NewUpvalue(_)
@@ -313,7 +321,9 @@ impl Instruction {
                 name,
             },
             Self::Inc(a0) => Self::Inc(f(a0)),
+            Self::Jcmp(kind, a0, a1, a2) => Self::Jcmp(kind, f(a0), f(a1), a2),
             Self::Jmp(a0) => Self::Jmp(a0),
+            Self::Jncmp(kind, a0, a1, a2) => Self::Jncmp(kind, f(a0), f(a1), a2),
             Self::Jnz(a0, a1) => Self::Jnz(f(a0), a1),
             Self::Jz(a0, a1) => Self::Jz(f(a0), a1),
             Self::Load(a0, a1, a2) => Self::Load(f(a0), f(a1), f(a2)),
@@ -341,6 +351,33 @@ impl Instruction {
         }
     }
 
+    /// This instruction with its address, if it carries one, passed
+    /// through `f`: a jump's target or a catch's end.
+    pub fn map_address<F>(self, f: F) -> Self
+    where
+        F: FnOnce(Address) -> Address,
+    {
+        match self {
+            Self::CatchStart(r, a) => Self::CatchStart(r, f(a)),
+            Self::Jcmp(kind, x, y, a) => Self::Jcmp(kind, x, y, f(a)),
+            Self::Jmp(a) => Self::Jmp(f(a)),
+            Self::Jncmp(kind, x, y, a) => Self::Jncmp(kind, x, y, f(a)),
+            Self::Jnz(r, a) => Self::Jnz(r, f(a)),
+            Self::Jz(r, a) => Self::Jz(r, f(a)),
+            other => other,
+        }
+    }
+
+    /// The address this instruction can transfer control to, if any.
+    pub fn address(&self) -> Option<Address> {
+        let mut found = None;
+        self.map_address(|a| {
+            found = Some(a);
+            a
+        });
+        found
+    }
+
     /// Backpatch an instruction with a new address.
     /// This is used to fix up jumps after the code has been generated.
     /// Returns an error if the instruction cannot be backpatched.
@@ -348,20 +385,10 @@ impl Instruction {
     where
         A: Into<Address>,
     {
-        match self {
-            Instruction::Jmp(_) => {
-                *self = Instruction::Jmp(address.into());
-            }
-            Instruction::Jnz(r, _) => {
-                *self = Instruction::Jnz(*r, address.into());
-            }
-            Instruction::Jz(r, _) => {
-                *self = Instruction::Jz(*r, address.into());
-            }
-            _ => {
-                return Err(lpc_bug!("Cannot backpatch instruction {:?}", self));
-            }
+        if self.address().is_none() {
+            return Err(lpc_bug!("Cannot backpatch instruction {:?}", self));
         }
+        *self = self.map_address(|_| address.into());
 
         Ok(())
     }
@@ -369,7 +396,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 42;
+    pub const COUNT: usize = 44;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -390,7 +417,9 @@ impl Instruction {
         "div",
         "function_ptr_const",
         "inc",
+        "jcmp",
         "jmp",
+        "jncmp",
         "jnz",
         "jz",
         "load",
@@ -437,31 +466,33 @@ impl Instruction {
             Self::Div(..) => 14,
             Self::FunctionPtrConst { .. } => 15,
             Self::Inc(..) => 16,
-            Self::Jmp(..) => 17,
-            Self::Jnz(..) => 18,
-            Self::Jz(..) => 19,
-            Self::Load(..) => 20,
-            Self::LoadMappingKey(..) => 21,
-            Self::MapConst(..) => 22,
-            Self::Mod(..) => 23,
-            Self::Mul(..) => 24,
-            Self::Not(..) => 25,
-            Self::NewUpvalue(..) => 26,
-            Self::Or(..) => 27,
-            Self::PopulateArgv(..) => 28,
-            Self::PopulateDefaults => 29,
-            Self::PushArg(..) => 30,
-            Self::PushArrayItem(..) => 31,
-            Self::PushPartialArg(..) => 32,
-            Self::PushRef(..) => 33,
-            Self::Range(..) => 34,
-            Self::Ret => 35,
-            Self::Shl(..) => 36,
-            Self::Shr(..) => 37,
-            Self::Sizeof(..) => 38,
-            Self::Store(..) => 39,
-            Self::Sub(..) => 40,
-            Self::Xor(..) => 41,
+            Self::Jcmp(..) => 17,
+            Self::Jmp(..) => 18,
+            Self::Jncmp(..) => 19,
+            Self::Jnz(..) => 20,
+            Self::Jz(..) => 21,
+            Self::Load(..) => 22,
+            Self::LoadMappingKey(..) => 23,
+            Self::MapConst(..) => 24,
+            Self::Mod(..) => 25,
+            Self::Mul(..) => 26,
+            Self::Not(..) => 27,
+            Self::NewUpvalue(..) => 28,
+            Self::Or(..) => 29,
+            Self::PopulateArgv(..) => 30,
+            Self::PopulateDefaults => 31,
+            Self::PushArg(..) => 32,
+            Self::PushArrayItem(..) => 33,
+            Self::PushPartialArg(..) => 34,
+            Self::PushRef(..) => 35,
+            Self::Range(..) => 36,
+            Self::Ret => 37,
+            Self::Shl(..) => 38,
+            Self::Shr(..) => 39,
+            Self::Sizeof(..) => 40,
+            Self::Store(..) => 41,
+            Self::Sub(..) => 42,
+            Self::Xor(..) => 43,
         }
     }
 
@@ -527,8 +558,14 @@ impl Display for Instruction {
             Instruction::Inc(r) => {
                 write!(f, "{} {r}", self.mnemonic())
             }
+            Instruction::Jcmp(kind, r1, r2, address) => {
+                write!(f, "{} {kind} {r1}, {r2}, {address}", self.mnemonic())
+            }
             Instruction::Jmp(address) => {
                 write!(f, "{} {address}", self.mnemonic())
+            }
+            Instruction::Jncmp(kind, r1, r2, address) => {
+                write!(f, "{} {kind} {r1}, {r2}, {address}", self.mnemonic())
             }
             Instruction::Jnz(r1, address) => {
                 write!(f, "{} {r1}, {address}", self.mnemonic())
@@ -651,6 +688,58 @@ mod tests {
     }
 
     #[test]
+    fn a_fused_branch_displays_its_kind_operands_and_target() {
+        let r1 = Register(1).as_local();
+        let k0 = RegisterVariant::Constant(Register(0));
+        assert_eq!(
+            Instruction::Jcmp(Comparison::Lt, r1, k0, Address(4)).to_string(),
+            "jcmp lt r1, k0, 0004"
+        );
+        assert_eq!(
+            Instruction::Jncmp(Comparison::Eq, r1, k0, Address(4)).to_string(),
+            "jncmp eq r1, k0, 0004"
+        );
+    }
+
+    #[test]
+    fn a_fused_branch_writes_no_register() {
+        let r = Register(1).as_local();
+        assert_eq!(
+            Instruction::Jcmp(Comparison::Lt, r, r, Address(0)).dest_register(),
+            None
+        );
+    }
+
+    #[test]
+    fn six_variants_carry_an_address() {
+        let carriers = every_variant()
+            .iter()
+            .filter(|i| i.address().is_some())
+            .count();
+        assert_eq!(carriers, 6);
+    }
+
+    #[test]
+    fn a_fused_branch_reports_its_target() {
+        let r = Register(1).as_local();
+        assert_eq!(
+            Instruction::Jncmp(Comparison::Ne, r, r, Address(7)).address(),
+            Some(Address(7))
+        );
+    }
+
+    #[test]
+    fn map_address_rewrites_a_carrier_and_leaves_the_rest() {
+        let r = Register(1).as_local();
+        let bump = |a: Address| Address(a.0 + 1);
+        assert_eq!(
+            Instruction::Jcmp(Comparison::Gt, r, r, Address(3)).map_address(bump),
+            Instruction::Jcmp(Comparison::Gt, r, r, Address(4))
+        );
+        assert_eq!(Instruction::Ret.map_address(bump), Instruction::Ret);
+    }
+
+    #[test]
     fn every_comparison_kind_has_a_display() {
         let shown: Vec<String> = Comparison::ALL.iter().map(ToString::to_string).collect();
         assert_eq!(shown, ["lt", "lte", "gt", "gte", "eq", "ne"]);
@@ -681,7 +770,9 @@ mod tests {
                 name: ustr("f"),
             },
             Inc(r()),
+            Jcmp(Comparison::Lt, r(), r(), Address(0)),
             Jmp(Address(0)),
+            Jncmp(Comparison::Lt, r(), r(), Address(0)),
             Jnz(r(), Address(0)),
             Jz(r(), Address(0)),
             Load(r(), r(), r()),
@@ -757,7 +848,7 @@ mod tests {
             .iter()
             .filter(|i| i.dest_register().is_none())
             .count();
-        assert_eq!(none_count, 21);
+        assert_eq!(none_count, 23);
         for i in [
             Call(ustr("f")),
             CallEfun(0),

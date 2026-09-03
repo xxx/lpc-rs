@@ -29,13 +29,7 @@ pub fn peephole(func: &mut ProgramFunction) {
 fn jump_targets(func: &ProgramFunction) -> Vec<Address> {
     func.instructions
         .iter()
-        .filter_map(|i| match *i {
-            Instruction::Jmp(a)
-            | Instruction::Jnz(_, a)
-            | Instruction::Jz(_, a)
-            | Instruction::CatchStart(_, a) => Some(a),
-            _ => None,
-        })
+        .filter_map(Instruction::address)
         .collect()
 }
 
@@ -248,13 +242,7 @@ fn remove(func: &mut ProgramFunction, delete: &[bool]) {
     new_index.push(kept);
 
     for instruction in func.instructions.iter_mut() {
-        *instruction = match *instruction {
-            Instruction::Jmp(a) => Instruction::Jmp(Address(new_index[a.0])),
-            Instruction::Jnz(r, a) => Instruction::Jnz(r, Address(new_index[a.0])),
-            Instruction::Jz(r, a) => Instruction::Jz(r, Address(new_index[a.0])),
-            Instruction::CatchStart(r, a) => Instruction::CatchStart(r, Address(new_index[a.0])),
-            other => other,
-        };
+        *instruction = instruction.map_address(|a| Address(new_index[a.0]));
     }
     if let Some(labels) = func.labels.as_mut() {
         for a in labels.values_mut() {
@@ -272,7 +260,7 @@ fn remove(func: &mut ProgramFunction, delete: &[bool]) {
 mod tests {
     use std::{collections::HashMap, sync::Arc};
 
-    use lpc_rs_asm::instruction::Instruction::*;
+    use lpc_rs_asm::instruction::{Comparison, Instruction::*};
     use lpc_rs_core::{function_arity::FunctionArity, lpc_path::LpcPath, lpc_type::LpcType};
     use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
 
@@ -625,6 +613,29 @@ mod tests {
         peephole(&mut func);
 
         assert_eq!(func.instructions, instructions);
+    }
+
+    #[test]
+    fn a_fused_branch_target_is_a_landing_site() {
+        let mut func = func_with(vec![
+            Jcmp(Comparison::Lt, local(1), local(2), Address(3)),
+            Ret,
+            Ret,
+            Copy(local(1), local(0)),
+            Ret,
+        ]);
+
+        peephole(&mut func);
+
+        assert_eq!(
+            func.instructions,
+            vec![
+                Jcmp(Comparison::Lt, local(1), local(2), Address(2)),
+                Ret,
+                Copy(local(1), local(0)),
+                Ret,
+            ]
+        );
     }
 
     #[test]
