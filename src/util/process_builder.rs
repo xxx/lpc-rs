@@ -86,9 +86,9 @@ pub async fn process_insert_and_initialize_program<const N: usize>(
     process: Arc<Process>,
     template: TaskTemplate,
 ) -> Result<Task<N>> {
-    let ctx = template.into_task_context(process.clone());
+    // Inserted first, so the simul-efun object is the resident its own
+    // initializer's context captures.
+    ObjectSpace::insert_process_physical(&template.global_state.object_space, process.clone());
 
-    ObjectSpace::insert_process_physical(ctx.object_space(), process);
-
-    Task::initialize_process(ctx).await
+    Task::initialize_process(template.into_task_context(process)).await
 }

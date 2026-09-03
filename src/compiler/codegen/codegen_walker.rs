@@ -1122,17 +1122,22 @@ impl TreeWalker for CodegenWalker {
 
         // Resolved before the arguments are visited: an implicit efun lvalue
         // is pushed as a cell, never evaluated.
-        let implicit_refs: Vec<bool> = match (receiver.is_none(), self.context.lookup_var(name)) {
-            (true, var) if !var.is_some_and(|v| v.type_.matches_type(LpcType::Function(false))) => {
-                self.context
-                    .lookup_function_complete(name, namespace)
-                    .map(|f| {
-                        let proto = f.as_ref();
-                        (0..argument_len).map(|i| proto.is_ref_param(i)).collect()
-                    })
-                    .unwrap_or_default()
-            }
-            _ => Vec::new(),
+        // A function-typed variable answers a bare name only.
+        let calls_variable = namespace == &CallNamespace::Local
+            && self
+                .context
+                .lookup_var(name)
+                .is_some_and(|v| v.type_.matches_type(LpcType::Function(false)));
+        let implicit_refs: Vec<bool> = if receiver.is_none() && !calls_variable {
+            self.context
+                .lookup_function_complete(name, namespace)
+                .map(|f| {
+                    let proto = f.as_ref();
+                    (0..argument_len).map(|i| proto.is_ref_param(i)).collect()
+                })
+                .unwrap_or_default()
+        } else {
+            Vec::new()
         };
 
         // Visited before `ClearArgs`: a receiver that is itself a call clears
@@ -1216,8 +1221,7 @@ impl TreeWalker for CodegenWalker {
                 Instruction::CallOther(receiver, name_index)
             } else {
                 if_chain! {
-                    if let Some(x) = self.context.lookup_var(name);
-                    if x.type_.matches_type(LpcType::Function(false));
+                    if calls_variable;
                     then {
                         Instruction::CallFp(self.location_of(name)?)
                     } else {

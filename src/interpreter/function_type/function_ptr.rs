@@ -233,16 +233,16 @@ impl FunctionPtr {
                 (owner, EFUN_FUNCTIONS[name.as_str()].clone())
             }
             FunctionAddress::SimulEfun(name) => {
+                // Links by name to the resident of the task firing it, like a
+                // direct call.
                 let Some(simul_efuns) = ctx.simul_efuns() else {
-                    return Err(LpcError::runtime_bug(format!(
-                        "simul_efun pointer without simul_efuns: {}",
-                        self
+                    return Err(LpcError::runtime(format!(
+                        "call to simul efun `{name}`: no simul-efun object is loaded"
                     )));
                 };
                 let Some(function) = simul_efuns.program.lookup_function(name) else {
                     return Err(LpcError::runtime(format!(
-                        "call to unknown simul_efun `{}`",
-                        name
+                        "call to unknown simul efun `{name}`"
                     )));
                 };
                 (simul_efuns.clone(), function.clone())

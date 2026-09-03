@@ -151,7 +151,7 @@ impl Vm {
     }
 
     /// Compile `code` (masquerading as `filename`) and physically insert it.
-    /// Bootstrap and test fixtures only; see
+    /// Test fixtures only; see
     /// [`ObjectSpace::create_process_from_code`](crate::interpreter::object_space::ObjectSpace::create_process_from_code).
     pub async fn create_process_from_code<P, S>(&self, filename: P, code: S) -> Result<Arc<Process>>
     where

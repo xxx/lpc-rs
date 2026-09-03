@@ -328,7 +328,9 @@ impl TreeWalker for ScopeWalker {
             }
         }
 
-        if let Some(symbol) = self.context.lookup_var(&name)
+        // A function-typed variable answers a bare name only.
+        if namespace == &CallNamespace::Local
+            && let Some(symbol) = self.context.lookup_var(&name)
             && symbol.type_.matches_type(LpcType::Function(false))
         {
             Self::note_reference(&mut self.referenced, symbol, *name);

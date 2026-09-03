@@ -222,8 +222,13 @@ async fn run_prog_core(
     let (program, config, se_proc) = compile_prog_with_config(code, config).await;
 
     let (tx, rx) = tokio::sync::mpsc::channel(128);
-    let global_state = GlobalState::new(config, tx);
-    ObjectSpace::insert_process_physical(&global_state.object_space, se_proc);
+    let global_state: Arc<GlobalState> = GlobalState::new(config, tx).into();
+    // Inserted and initialized the way boot does it.
+    process_insert_and_initialize_program::<MAX_CALL_STACK_SIZE>(
+        se_proc,
+        TaskTemplate::from(global_state.clone()),
+    )
+    .await?;
     permissive_master(&global_state.object_space).await;
 
     initialize_program(program, global_state)
