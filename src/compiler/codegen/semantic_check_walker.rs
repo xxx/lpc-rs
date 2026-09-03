@@ -27,7 +27,6 @@ use crate::{
             range_node::RangeNode,
             return_node::ReturnNode,
             switch_node::SwitchNode,
-            ternary_node::TernaryNode,
             unary_op_node::{UnaryOpNode, UnaryOperation},
             var_init_node::VarInitNode,
             var_node::VarNode,
@@ -37,14 +36,14 @@ use crate::{
         codegen::tree_walker::{
             ContextHolder, Pass, TreeWalker, walk_assignment, walk_binary_op, walk_block,
             walk_closure, walk_do_while, walk_for, walk_foreach, walk_function_def,
-            walk_function_ptr, walk_label, walk_range, walk_return, walk_switch, walk_ternary,
-            walk_unary_op, walk_var_init,
+            walk_function_ptr, walk_label, walk_range, walk_return, walk_switch, walk_unary_op,
+            walk_var_init,
         },
         compilation_context::CompilationContext,
         diagnostics::Diagnostics,
         semantic::semantic_checks::{
             check_binary_operation_types, check_unary_operation_types, is_keyword, mismatch,
-            node_type, ternary_mismatch,
+            node_type,
         },
     },
     interpreter::efun::CALL_OTHER,
@@ -714,20 +713,6 @@ impl TreeWalker for SemanticCheckWalker {
         Ok(())
     }
 
-    async fn visit_ternary(&mut self, node: &mut TernaryNode) -> Result<()> {
-        walk_ternary(self, node).await?;
-
-        if let Some((body_type, else_type)) = ternary_mismatch(node, &self.context)? {
-            let e = LpcError::new(format!(
-                "differing types in ternary expression: `{body_type}` and `{else_type}`"
-            ))
-            .with_span(node.span);
-            self.context.diagnostics.record(e);
-        }
-
-        Ok(())
-    }
-
     async fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
         walk_unary_op(self, node).await?;
 
@@ -837,7 +822,7 @@ mod tests {
     use ustr::ustr;
 
     use super::*;
-    use crate::compiler::ast::int_node::IntNode;
+    use crate::compiler::ast::{int_node::IntNode, ternary_node::TernaryNode};
     use crate::test_support::CompileThrough;
     use crate::{
         compiler::{
@@ -3100,29 +3085,24 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn a_ternary_with_differing_concrete_branches_reports_once() {
+        async fn a_ternary_with_differing_concrete_branches_is_mixed() {
             let code = r#"
                 void create() {
                     int c = 1;
                     string s = c ? 1 : "a";
+                    int i = c ? 1 : "a";
                 }"#;
-            assert_eq!(
-                messages(code).await,
-                vec!["differing types in ternary expression: `int` and `string`".to_string()]
-            );
+            assert_eq!(messages(code).await, Vec::<String>::new());
         }
 
         #[tokio::test]
-        async fn a_float_or_int_ternary_is_rejected() {
+        async fn a_float_or_int_ternary_is_accepted() {
             let code = r#"
                 void create() {
                     int c = 1;
                     float f = c ? 1.5 : 1;
                 }"#;
-            assert_eq!(
-                messages(code).await,
-                vec!["differing types in ternary expression: `float` and `int`".to_string()]
-            );
+            assert_eq!(messages(code).await, Vec::<String>::new());
         }
 
         #[tokio::test]
@@ -3189,7 +3169,7 @@ mod tests {
         use super::*;
 
         #[tokio::test]
-        async fn disallows_differing_types() {
+        async fn differing_branch_types_are_accepted() {
             let mut node = ExpressionNode::from(TernaryNode {
                 condition: Box::new(ExpressionNode::from(1)),
                 body: Box::new(ExpressionNode::from(1)),
@@ -3200,19 +3180,7 @@ mod tests {
             let mut walker = SemanticCheckWalker::new(CompilationContext::default());
             let _ = node.visit(&mut walker).await;
 
-            assert!(!walker.context.diagnostics.errors().is_empty());
-
-            assert_eq!(
-                walker
-                    .context
-                    .diagnostics
-                    .errors()
-                    .first()
-                    .unwrap()
-                    .to_string()
-                    .as_str(),
-                "differing types in ternary expression: `int` and `string`"
-            );
+            assert!(walker.context.diagnostics.errors().is_empty());
         }
     }
 
