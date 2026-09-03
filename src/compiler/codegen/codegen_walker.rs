@@ -471,6 +471,14 @@ impl CodegenWalker {
 
     /// The location of `name` in the current scope: a captured symbol keeps
     /// the cell the scope walker laid out, any other takes the next free register.
+    /// Whether the code being emitted sits inside a loop body, through any
+    /// `switch`.
+    fn inside_a_loop(&self) -> bool {
+        self.jump_targets
+            .iter()
+            .any(|target| target.continue_target.is_some())
+    }
+
     fn assign_sym_location(&mut self, name: &str) -> Result<RegisterVariant> {
         let Some(sym) = self.context.lookup_var_mut(name) else {
             return Ok(RegisterVariant::Local(Register(0)));
@@ -2332,8 +2340,13 @@ impl TreeWalker for CodegenWalker {
                 self.current_result
             }
         } else {
-            trace!("No value, defaulting to NULL");
-            self.assign_sym_location(&node.name)?
+            let location = self.assign_sym_location(&node.name)?;
+            // Only the first run of a declaration gets the frame's NULL fill.
+            if !global && !upvalue && self.inside_a_loop() {
+                let zero = self.constant(LpcConstant::Int(0), node.span())?;
+                push_instruction!(self, Instruction::Copy(zero, location), node.span());
+            }
+            location
         };
 
         self.current_result = current_register;
@@ -5862,6 +5875,69 @@ mod tests {
         use lpc_rs_asm::instruction::Instruction::MapConst;
 
         use super::*;
+
+        #[tokio::test]
+        async fn a_declaration_inside_a_loop_body_is_zeroed_each_time_it_runs() {
+            let code = r#"
+                void create() {
+                    int i;
+                    for (i = 0; i < 2; i++) {
+                        int x;
+                        x++;
+                    }
+                }
+            "#;
+            let mut walker = walk_prog(code).await;
+
+            let expected = vec![
+                Instruction::Copy(
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(1)),
+                ),
+                Instruction::Jmp(Address(5)),
+                Instruction::Copy(
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(2)),
+                ),
+                Instruction::Inc(RegisterVariant::Local(Register(2))),
+                Instruction::Inc(RegisterVariant::Local(Register(1))),
+                Instruction::Lt(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Constant(Register(1)),
+                    RegisterVariant::Local(Register(3)),
+                ),
+                Instruction::Jnz(RegisterVariant::Local(Register(3)), Address(2)),
+                Instruction::Ret,
+            ];
+
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
+        }
+
+        #[tokio::test]
+        async fn a_declaration_that_runs_once_per_call_emits_nothing() {
+            let code = r#"
+                int create() {
+                    int x;
+                    if (1) {
+                        int y;
+                        y = x;
+                    }
+                    return x;
+                }
+            "#;
+            let mut walker = walk_prog(code).await;
+
+            let instructions = walker_function_instructions(&mut walker, "create");
+            assert!(
+                !instructions
+                    .iter()
+                    .any(|i| matches!(i, Instruction::Copy(RegisterVariant::Constant(_), _))),
+                "{instructions:?}"
+            );
+        }
 
         fn setup() -> CodegenWalker {
             let mut context = CompilationContext::default();
