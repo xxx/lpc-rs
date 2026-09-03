@@ -11,7 +11,6 @@ use crate::compiler::{
         ast_node::SpannedNode,
         binary_op_node::{BinaryOpNode, BinaryOperation},
         call_node::CallChain,
-        closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
         int_node::IntNode,
@@ -401,7 +400,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                 CallChain::Node(_) => Ok(LpcType::Mixed(false)),
             }
         }
-        ExpressionNode::Closure(ClosureNode { return_type, .. }) => Ok(*return_type),
+        ExpressionNode::Closure(_) => Ok(LpcType::Function(false)),
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
             if !value.is_empty() {
                 let len = value.len();
@@ -541,6 +540,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::compiler::ast::closure_node::ClosureNode;
     use factori::create;
     use lpc_rs_core::call_namespace::CallNamespace;
     use lpc_rs_function_support::symbol::Symbol;
@@ -2208,7 +2208,7 @@ mod tests {
             }
 
             #[test]
-            fn closure_uses_return_type() {
+            fn a_closure_is_a_function_whatever_it_returns() {
                 let context = CompilationContext::default();
 
                 let node = ExpressionNode::Closure(ClosureNode {
@@ -2221,7 +2221,10 @@ mod tests {
                     scope_id: None,
                 });
 
-                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mapping(true));
+                assert_eq!(
+                    node_type(&node, &context).unwrap(),
+                    LpcType::Function(false)
+                );
             }
         }
 
