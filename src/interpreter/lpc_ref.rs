@@ -217,6 +217,7 @@ impl LpcRef {
         ))
     }
 
+    #[inline]
     pub fn inc(&mut self) -> Result<()> {
         match self {
             LpcRef::Int(x) => {
@@ -228,6 +229,7 @@ impl LpcRef {
         }
     }
 
+    #[inline]
     pub fn dec(&mut self) -> Result<()> {
         match self {
             LpcRef::Int(x) => {

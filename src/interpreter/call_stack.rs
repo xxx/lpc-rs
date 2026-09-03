@@ -53,18 +53,27 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn current_frame(&self) -> Result<&CallFrame> {
-        self.stack
-            .last()
-            .ok_or_else(|| lpc_error!("stack is somehow empty"))
+        match self.stack.last() {
+            Some(frame) => Ok(frame),
+            None => Err(Self::empty_stack()),
+        }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn current_frame_mut(&mut self) -> Result<&mut CallFrame> {
-        self.stack
-            .last_mut()
-            .ok_or_else(|| lpc_error!("stack is somehow empty"))
+        match self.stack.last_mut() {
+            Some(frame) => Ok(frame),
+            None => Err(Self::empty_stack()),
+        }
+    }
+
+    /// The error for a frame lookup on an empty stack.
+    #[cold]
+    #[inline(never)]
+    fn empty_stack() -> LpcError {
+        lpc_error!("stack is somehow empty")
     }
 
     /// Push a new frame onto the stack. Will return `Err` in the
