@@ -4,6 +4,7 @@ use itertools::Itertools;
 use lpc_rs_asm::instruction::{Arg, ArgList};
 use lpc_rs_core::{RegisterSize, register::RegisterVariant};
 use lpc_rs_errors::Result;
+use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::{instrument, trace};
 
 use crate::interpreter::{
@@ -26,14 +27,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         name_location: RegisterVariant,
         list: ArgList,
     ) -> Result<()> {
-        let (receiver_ref, function_name) = {
-            let receiver_ref = get_location(&self.stack, &self.context.txn, receiver)?.into_owned();
-            let name_ref = &*get_location(&self.stack, &self.context.txn, name_location)?;
-            let Ok(function_name) = name_ref.with_string(|s| s.to_string()) else {
-                let str = format!("Invalid name passed to `call_other`: {}", name_ref);
-                return Err(self.runtime_error(str));
-            };
-            (receiver_ref, function_name)
+        let receiver_ref = get_location(&self.stack, &self.context.txn, receiver)?.into_owned();
+        // The name stays borrowed from the register's value, not copied
+        // into a String per `->`.
+        let name_ref = get_location(&self.stack, &self.context.txn, name_location)?.into_owned();
+        let Some(function_name) = name_ref.as_str() else {
+            return Err(
+                self.runtime_error(format!("Invalid name passed to `call_other`: {name_ref}"))
+            );
         };
         trace!("Calling call_other: {}->{}", receiver_ref, function_name);
 
@@ -49,20 +50,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             LpcRef::String(_) | LpcRef::Object(_) => {
                 let resolved = Self::resolve_call_other_receiver(
                     &receiver_ref,
-                    &function_name,
+                    function_name,
                     &self.context,
                     || self.loader(),
                 )
                 .await?;
-                let Some(receiver) = resolved else {
+                let Some((receiver, function)) = resolved else {
                     self.stack.current_frame_mut()?.registers[0] = NULL;
                     return Ok(());
                 };
-                let function = receiver
-                    .program
-                    .lookup_function(&function_name)
-                    .expect("resolve_call_other_receiver checked the function is present")
-                    .clone();
                 if !function.public() {
                     NULL
                 } else {
@@ -92,7 +88,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 };
                 let results = Vec::with_capacity(remaining.len());
                 self.stack.current_frame_mut()?.pending = Some(Box::new(CollectionCall {
-                    name: function_name,
+                    name: function_name.to_string(),
                     args,
                     remaining,
                     keys,
@@ -201,17 +197,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         receiver: &LpcRef,
         name: &str,
     ) -> Result<Option<CallFrame>> {
-        let Some(process) =
+        let Some((process, function)) =
             Self::resolve_call_other_receiver(receiver, name, &self.context, || self.loader())
                 .await?
         else {
             return Ok(None);
         };
-        let function = process
-            .program
-            .lookup_function(name)
-            .expect("resolve_call_other_receiver checked the function is present")
-            .clone();
         if !function.public() {
             return Ok(None);
         }
@@ -251,15 +242,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         })
     }
 
-    /// `loader` runs only for a receiver to create or initialize — a `->` to
-    /// a resident, initialized object must allocate nothing.
+    /// The receiver's process and its function `name`, `None` for a dead
+    /// receiver or a missing function. `loader` runs only for a receiver to
+    /// create or initialize — a `->` to a resident, initialized object
+    /// must allocate nothing.
     #[instrument(level = "debug", skip_all)]
     async fn resolve_call_other_receiver<T, L>(
         receiver_ref: &LpcRef,
         name: T,
         context: &TaskContext,
         loader: L,
-    ) -> Result<Option<Arc<Process>>>
+    ) -> Result<Option<(Arc<Process>, Arc<ProgramFunction>)>>
     where
         T: AsRef<str>,
         L: Fn() -> Result<Loader>,
@@ -310,7 +303,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         // Only switch the process if there's actually a function to
         // call by this name on the other side.
-        Ok(result.program.contains_function(name).then_some(result))
+        let function = result.program.lookup_function(name).cloned();
+        Ok(function.map(|function| (result, function)))
     }
 }
 
