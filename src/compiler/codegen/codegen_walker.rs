@@ -2149,7 +2149,6 @@ impl TreeWalker for CodegenWalker {
             match case_address.0.0 {
                 Some(mut case_expr) => {
                     case_expr.visit(self).await?;
-                    let case_result = self.current_result;
                     let test_result = self.register_counter.next().unwrap().as_local();
 
                     if let ExpressionNode::Range(range_node) = case_expr {
@@ -2158,7 +2157,7 @@ impl TreeWalker for CodegenWalker {
                         // An open end of the range is always satisfied.
                         let gte_result = if let Some(left_reg) = range_left {
                             let result = self.register_counter.next().unwrap().as_local();
-                            let instruction = Instruction::Gte(case_result, left_reg, result);
+                            let instruction = Instruction::Gte(expr_result, left_reg, result);
                             push_instruction!(self, instruction, range_node.span);
                             result
                         } else {
@@ -2167,7 +2166,7 @@ impl TreeWalker for CodegenWalker {
 
                         let lte_result = if let Some(right_reg) = range_right {
                             let result = self.register_counter.next().unwrap().as_local();
-                            let instruction = Instruction::Lte(case_result, right_reg, result);
+                            let instruction = Instruction::Lte(expr_result, right_reg, result);
                             push_instruction!(self, instruction, range_node.span);
                             result
                         } else {
@@ -3270,12 +3269,12 @@ mod tests {
                 ),
                 Jnz(RegisterVariant::Local(Register(2)), Address(2)),
                 Gte(
-                    RegisterVariant::Constant(Register(5)),
+                    RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(4)),
                     RegisterVariant::Local(Register(4)),
                 ),
                 Lte(
-                    RegisterVariant::Constant(Register(5)),
+                    RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(5)),
                     RegisterVariant::Local(Register(5)),
                 ),
