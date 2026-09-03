@@ -49,49 +49,86 @@ pub(crate) struct MergeMismatch;
 impl MergeOp {
     /// Apply this op onto a committed value; `None` is the absent cell.
     pub(crate) fn apply_to(&self, base: Option<&WorldValue>) -> Result<WorldValue, MergeMismatch> {
+        let mut value = base.cloned().unwrap_or_else(|| self.identity());
+        self.apply_in_place(&mut value)?;
+        Ok(value)
+    }
+
+    /// Fold `ops` onto `base` in record order, cloning a shared payload
+    /// once — a loop over `apply_to` clones it per op.
+    pub(crate) fn fold_onto(
+        base: Option<WorldValue>,
+        ops: &[MergeOp],
+    ) -> Result<Option<WorldValue>, MergeMismatch> {
+        let Some(first) = ops.first() else {
+            return Ok(base);
+        };
+        let mut value = base.unwrap_or_else(|| first.identity());
+        for op in ops {
+            op.apply_in_place(&mut value)?;
+        }
+        Ok(Some(value))
+    }
+
+    /// Apply this op onto `value` in place; a payload shared with the
+    /// committed world is cloned, never mutated.
+    pub(crate) fn apply_in_place(&self, value: &mut WorldValue) -> Result<(), MergeMismatch> {
+        match (self, value) {
+            (MergeOp::IntAdd(n), WorldValue::Ref(LpcRef::Int(i))) => {
+                *i = i.wrapping_add(*n).into();
+            }
+            (MergeOp::ArrayAppend(values), WorldValue::Array(array)) => {
+                Arc::make_mut(array).array.extend(values.iter().cloned());
+            }
+            (MergeOp::ArrayRemoveValue(value), WorldValue::Array(array)) => {
+                Arc::make_mut(array).array.retain(|item| item != value);
+            }
+            (MergeOp::MapInsert(key, value), WorldValue::Mapping(mapping)) => {
+                Arc::make_mut(mapping).insert(key.clone(), value.clone());
+            }
+            (MergeOp::RulesAppend(rule), WorldValue::Rules(rules)) => {
+                let mut list = rules.to_vec();
+                list.push(rule.clone());
+                *rules = Arc::from(list);
+            }
+            (MergeOp::RulesRemove(id), WorldValue::Rules(rules)) => {
+                *rules = rules
+                    .iter()
+                    .filter(|rule| rule.id != *id)
+                    .cloned()
+                    .collect();
+            }
+            (MergeOp::RulesRemoveOwners(scope), WorldValue::Rules(rules)) => {
+                *rules = rules
+                    .iter()
+                    .filter(|rule| !scope.contains_weak(&rule.owner))
+                    .cloned()
+                    .collect();
+            }
+            (MergeOp::RulesRetainOwners(scope), WorldValue::Rules(rules)) => {
+                *rules = rules
+                    .iter()
+                    .filter(|rule| scope.contains_weak(&rule.owner))
+                    .cloned()
+                    .collect();
+            }
+            _ => return Err(MergeMismatch),
+        }
+        Ok(())
+    }
+
+    /// What this op applies onto for an absent cell.
+    fn identity(&self) -> WorldValue {
         match self {
-            MergeOp::IntAdd(n) => match base {
-                None => Ok(WorldValue::Ref(LpcRef::Int(LpcInt(*n)))),
-                Some(WorldValue::Ref(LpcRef::Int(i))) => {
-                    Ok(WorldValue::Ref(LpcRef::Int(i.wrapping_add(*n).into())))
-                }
-                Some(_) => Err(MergeMismatch),
-            },
-            MergeOp::ArrayAppend(values) => {
-                let mut array = base_array(base)?;
-                array.array.extend(values.iter().cloned());
-                Ok(WorldValue::Array(Arc::new(array)))
+            MergeOp::IntAdd(_) => WorldValue::Ref(LpcRef::Int(LpcInt(0))),
+            MergeOp::ArrayAppend(_) | MergeOp::ArrayRemoveValue(_) => {
+                WorldValue::Array(Arc::new(LpcArray::default()))
             }
-            MergeOp::ArrayRemoveValue(value) => {
-                let mut array = base_array(base)?;
-                array.array.retain(|item| item != value);
-                Ok(WorldValue::Array(Arc::new(array)))
-            }
-            MergeOp::MapInsert(key, value) => {
-                let mut mapping = base_mapping(base)?;
-                mapping.insert(key.clone(), value.clone());
-                Ok(WorldValue::Mapping(Arc::new(mapping)))
-            }
-            MergeOp::RulesAppend(rule) => {
-                let mut rules = base_rules(base)?;
-                rules.push(rule.clone());
-                Ok(WorldValue::Rules(Arc::from(rules)))
-            }
-            MergeOp::RulesRemove(id) => {
-                let mut rules = base_rules(base)?;
-                rules.retain(|rule| rule.id != *id);
-                Ok(WorldValue::Rules(Arc::from(rules)))
-            }
-            MergeOp::RulesRemoveOwners(scope) => {
-                let mut rules = base_rules(base)?;
-                rules.retain(|rule| !scope.contains_weak(&rule.owner));
-                Ok(WorldValue::Rules(Arc::from(rules)))
-            }
-            MergeOp::RulesRetainOwners(scope) => {
-                let mut rules = base_rules(base)?;
-                rules.retain(|rule| scope.contains_weak(&rule.owner));
-                Ok(WorldValue::Rules(Arc::from(rules)))
-            }
+            MergeOp::MapInsert(..) => WorldValue::Mapping(Arc::new(LpcMapping::default())),
+            MergeOp::RulesAppend(_)
+            | MergeOp::RulesRemove(_)
+            | MergeOp::RulesRemoveOwners(_)
+            | MergeOp::RulesRetainOwners(_) => WorldValue::Rules(Arc::from(Vec::new())),
         }
     }
 
@@ -112,35 +149,6 @@ impl MergeOp {
     }
 }
 
-/// The array a container op starts from: the committed contents, or empty
-/// for an absent cell.
-fn base_array(base: Option<&WorldValue>) -> Result<LpcArray, MergeMismatch> {
-    match base {
-        None => Ok(LpcArray::default()),
-        Some(WorldValue::Array(arc)) => Ok((**arc).clone()),
-        Some(_) => Err(MergeMismatch),
-    }
-}
-
-/// The mapping a container op starts from, as in [`base_array`].
-fn base_mapping(base: Option<&WorldValue>) -> Result<LpcMapping, MergeMismatch> {
-    match base {
-        None => Ok(LpcMapping::default()),
-        Some(WorldValue::Mapping(arc)) => Ok((**arc).clone()),
-        Some(_) => Err(MergeMismatch),
-    }
-}
-
-/// The rule list a rules op starts from: the committed list, or empty for
-/// an absent cell.
-fn base_rules(base: Option<&WorldValue>) -> Result<Vec<Rule>, MergeMismatch> {
-    match base {
-        None => Ok(Vec::new()),
-        Some(WorldValue::Rules(rules)) => Ok(rules.to_vec()),
-        Some(_) => Err(MergeMismatch),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -156,6 +164,22 @@ mod tests {
             WorldValue::Rules(rules) => rules.iter().map(|r| r.verb.as_str()).collect(),
             other => panic!("expected rules, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn apply_in_place_leaves_a_shared_payload_untouched() {
+        let shared = Arc::new(LpcMapping::default());
+        let mut value = WorldValue::Mapping(shared.clone());
+        MergeOp::MapInsert("a".into(), 1.into())
+            .apply_in_place(&mut value)
+            .expect("a mapping takes an insert");
+
+        assert!(shared.is_empty());
+        let WorldValue::Mapping(own) = value else {
+            panic!("a mapping stays a mapping");
+        };
+        assert!(!Arc::ptr_eq(&shared, &own));
+        assert_eq!(own.get(&"a".into()), Some(&1.into()));
     }
 
     #[test]

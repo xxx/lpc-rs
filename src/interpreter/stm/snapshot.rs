@@ -43,21 +43,10 @@ impl Snapshot {
     pub(crate) fn apply(&self, version: Version, changeset: Changeset) -> Self {
         let mut state = self.state.clone();
 
-        let (writes, merges, removals) = changeset.into_parts();
+        let (writes, removals) = changeset.into_parts();
         for (var_id, value) in writes {
             state.insert(var_id, value);
         }
-        for (var_id, ops) in merges {
-            let mut current = state.get(&var_id).cloned();
-            for op in ops {
-                current = Some(
-                    op.apply_to(current.as_ref())
-                        .expect("the committer prechecks merge types"),
-                );
-            }
-            state.insert(var_id, current.expect("at least one op ran"));
-        }
-
         for var_id in removals {
             state.remove(&var_id);
         }

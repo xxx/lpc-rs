@@ -152,7 +152,7 @@ fn a_mapping_payload_var_roundtrips_too() {
 }
 
 #[test]
-fn a_read_of_a_merged_var_materializes_tracked_and_folded() {
+fn a_read_of_a_merged_var_collapses_the_merges_into_a_tracked_write() {
     let var_id = VarId::new();
     let mut map = HashMap::new();
     map.insert(var_id, WorldValue::ref_of(LpcRef::from(5)));
@@ -162,10 +162,14 @@ fn a_read_of_a_merged_var_materializes_tracked_and_folded() {
     assert_eq!(transaction.read(var_id), Some(LpcRef::from(7)));
 
     // The read observed committed state, so it joined the conflict set;
-    // the merge stays a merge.
+    // with the base guarded, the folded value is an exact write.
     let (_, changeset) = transaction.into_parts();
     assert!(changeset.conflicts_with(&[var_id].into_iter().collect()));
-    assert_eq!(changeset.pending_merges(var_id), &[MergeOp::IntAdd(2)]);
+    assert!(changeset.pending_merges(var_id).is_empty());
+    assert_eq!(
+        changeset.written(var_id),
+        Some(&WorldValue::ref_of(LpcRef::from(7)))
+    );
 }
 
 #[test]
