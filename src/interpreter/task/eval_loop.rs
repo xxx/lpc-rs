@@ -196,10 +196,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Gte(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y, _| x >= y)?;
             }
-            Instruction::IDiv(r1, r2, r3) => {
+            Instruction::Div(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.div(y))?;
             }
-            Instruction::IMod(r1, r2, r3) => {
+            Instruction::Mod(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.rem(y))?;
             }
             Instruction::Inc(r1) => {
