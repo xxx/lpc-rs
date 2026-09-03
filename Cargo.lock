@@ -1372,6 +1372,7 @@ dependencies = [
  "regex-automata",
  "rpds",
  "serde_json",
+ "spin 0.10.1",
  "stable-vec",
  "syn 1.0.109",
  "thin-vec",
