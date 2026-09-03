@@ -3,7 +3,7 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process};
 
 /// `enable_commands`, an efun that enables an object to interact with the game world.
-pub async fn enable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn enable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let proc = &context.frame().process;
     let already = proc.commands_enabled(context.txn());
     let environment = Process::environment_of(context.txn(), proc);

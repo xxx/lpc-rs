@@ -483,6 +483,18 @@ mod tests {
         );
     }
 
+    /// A never-suspending efun answers the sync dispatcher; one that
+    /// awaits is left to the async one.
+    #[test]
+    fn the_sync_dispatcher_runs_only_efuns_that_never_suspend() {
+        use crate::interpreter::efun::{Efun, call_efun_sync};
+
+        let (task_context, mut stack) = efun_context();
+        let mut ctx = EfunContext::new(&mut stack, &task_context);
+        assert!(call_efun_sync(Efun::this_object, &mut ctx).is_some());
+        assert!(call_efun_sync(Efun::clone_object, &mut ctx).is_none());
+    }
+
     #[test]
     fn an_int_result_lands_in_register_zero() {
         let (task_context, mut stack) = efun_context();

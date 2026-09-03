@@ -5,7 +5,7 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef};
 
 /// `call_out`, an efun for calling a function at some future point in time
-pub async fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let func_ref = context.resolve_local_register(1 as RegisterSize).clone();
 
     // Some validations

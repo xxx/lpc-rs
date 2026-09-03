@@ -7,7 +7,7 @@ const SNAPSHOT_STACK: &str = "snapshot_stack";
 
 /// `debug`, the kitchen sink efun to do things around getting
 /// information from, or debugging the vm itself.
-pub async fn debug<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn debug<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let lpc_ref = context.resolve_local_register(1 as RegisterSize);
     let s = lpc_ref.with_string(|x| x.to_string())?;
 

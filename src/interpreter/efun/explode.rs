@@ -3,7 +3,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
-pub async fn explode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn explode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let subject_ref = context.resolve_local_register(1 as RegisterSize);
     let Some(subject) = subject_ref.as_str() else {
         return Ok(());

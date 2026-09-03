@@ -5,7 +5,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process};
 
-pub async fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn destruct<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let lpc_ref = context.resolve_local_register(1 as RegisterSize);
     let destruct = |proc: Arc<Process>| context.remove_process(proc);
 

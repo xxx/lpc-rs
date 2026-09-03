@@ -10,7 +10,7 @@ use crate::{
 
 /// `parse_dump()`: every rule in the driver, one line each,
 /// `"{verb} {rule}  ({owner})"`; a rule whose owner is dead is skipped.
-pub async fn parse_dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn parse_dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let rules = VerbRules::new(context.task_context()).all();
     let out: String = rules
         .iter()

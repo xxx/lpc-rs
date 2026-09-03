@@ -6,7 +6,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
-async fn type_predicate<const N: usize>(
+fn type_predicate<const N: usize>(
     context: &mut EfunContext<'_, N>,
     is: fn(&LpcRef) -> bool,
 ) -> Result<()> {
@@ -16,32 +16,32 @@ async fn type_predicate<const N: usize>(
 }
 
 /// `arrayp`: 1 if the argument is an array.
-pub async fn arrayp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    type_predicate(context, |r| matches!(r, LpcRef::Array(_))).await
+pub fn arrayp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    type_predicate(context, |r| matches!(r, LpcRef::Array(_)))
 }
 
 /// `floatp`: 1 if the argument is a float.
-pub async fn floatp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    type_predicate(context, |r| matches!(r, LpcRef::Float(_))).await
+pub fn floatp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    type_predicate(context, |r| matches!(r, LpcRef::Float(_)))
 }
 
 /// `functionp`: 1 if the argument is a function pointer.
-pub async fn functionp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    type_predicate(context, |r| matches!(r, LpcRef::Function(_))).await
+pub fn functionp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    type_predicate(context, |r| matches!(r, LpcRef::Function(_)))
 }
 
 /// `intp`: 1 if the argument is an int (a null object is one).
-pub async fn intp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    type_predicate(context, |r| matches!(r, LpcRef::Int(_))).await
+pub fn intp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    type_predicate(context, |r| matches!(r, LpcRef::Int(_)))
 }
 
 /// `mappingp`: 1 if the argument is a mapping.
-pub async fn mappingp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    type_predicate(context, |r| matches!(r, LpcRef::Mapping(_))).await
+pub fn mappingp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    type_predicate(context, |r| matches!(r, LpcRef::Mapping(_)))
 }
 
 /// `objectp`: 1 if the argument is a live object.
-pub async fn objectp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn objectp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let live = context
         .resolve_local_register(1 as RegisterSize)
         .live_object(context.txn())
@@ -51,8 +51,8 @@ pub async fn objectp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
 }
 
 /// `stringp`: 1 if the argument is a string.
-pub async fn stringp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    type_predicate(context, |r| matches!(r, LpcRef::String(_))).await
+pub fn stringp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    type_predicate(context, |r| matches!(r, LpcRef::String(_)))
 }
 
 #[cfg(test)]

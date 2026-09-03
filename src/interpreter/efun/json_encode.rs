@@ -4,7 +4,7 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{efun::efun_context::EfunContext, json, lpc_ref::LpcRef};
 
 /// `json_encode`, an efun rendering a value as JSON text.
-pub async fn json_encode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn json_encode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let value = context.resolve_local_register(1 as RegisterSize);
     let text =
         json::encode(value, context.txn()).map_err(|e| e.with_span(context.call_site_span()))?;

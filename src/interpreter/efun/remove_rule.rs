@@ -8,7 +8,7 @@ use crate::{
 
 /// `remove_rule`, an efun that unregisters the calling object's rule with
 /// this id from `this_player()`, every verb of it; 1 when one was there.
-pub async fn remove_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn remove_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let LpcRef::Int(id) = context.resolve_local_register(1 as RegisterSize).clone() else {
         return Err(context.runtime_error("remove_rule: the id must be an int"));
     };

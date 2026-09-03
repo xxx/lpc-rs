@@ -40,7 +40,8 @@ enum Step {
 
 /// The instructions that await, each because it can start a nested task.
 pub(super) enum AsyncCall {
-    Efun(u8, ArgList),
+    /// An efun that can suspend, its frame already pushed.
+    Efun(Efun),
     FunctionPointer(RegisterVariant, ArgList),
     Other(RegisterVariant, RegisterVariant, ArgList),
     /// A `Ret` into a frame mid-way through a collection `->`.
@@ -133,16 +134,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Finish an instruction that awaits.
     async fn dispatch(&mut self, call: AsyncCall) -> lpc_rs_errors::Result<()> {
         match call {
-            AsyncCall::Efun(index, list) => {
-                let Some(efun) = Efun::from_index(usize::from(index)) else {
-                    return Err(self
-                        .runtime_bug(format!("`CallEfun` index {index} is past the efun table")));
-                };
-                let process = self.stack.current_frame()?.process.clone();
-                self.push_call_frame(process, efun.function().clone(), list, false)?;
-
-                self.prepare_and_call_efun(efun).await
-            }
+            AsyncCall::Efun(efun) => self.prepare_and_call_efun(efun).await,
             AsyncCall::FunctionPointer(location, list) => self.handle_call_fp(location, list).await,
             AsyncCall::Other(receiver, name, list) => {
                 self.handle_call_other(receiver, name, list).await
@@ -200,8 +192,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.unary_operation(r1, r2, |x, _| x.bitnot())?;
             }
             Instruction::Call(name, list) => self.handle_call(name, list)?,
-            Instruction::CallEfun(name_idx, list) => {
-                return Ok(Step::Await(AsyncCall::Efun(name_idx, list)));
+            Instruction::CallEfun(index, list) => {
+                let Some(efun) = Efun::from_index(usize::from(index)) else {
+                    return Err(self
+                        .runtime_bug(format!("`CallEfun` index {index} is past the efun table")));
+                };
+                let process = self.stack.current_frame()?.process.clone();
+                self.push_call_frame(process, efun.function().clone(), list, false)?;
+                // An efun that never suspends runs with no future built.
+                if !self.call_efun_now(efun)? {
+                    return Ok(Step::Await(AsyncCall::Efun(efun)));
+                }
             }
             Instruction::CallFp(location, list) => {
                 return Ok(Step::Await(AsyncCall::FunctionPointer(location, list)));

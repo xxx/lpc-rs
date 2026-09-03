@@ -12,7 +12,7 @@ use crate::{
 /// `this_object()` registered under `old_verb` (or only the one whose text
 /// is `rule`) as a fresh rule for `new_verb` sharing its handlers; `old_verb`
 /// is the typed verb, so a synonym of a synonym works.
-pub async fn parse_add_synonym<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn parse_add_synonym<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let (LpcRef::String(new_verb), LpcRef::String(old_verb)) = (
         context.resolve_local_register(1 as RegisterSize).clone(),
         context.resolve_local_register(2 as RegisterSize).clone(),

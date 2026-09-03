@@ -107,19 +107,35 @@ pub const SIZEOF: &str = "sizeof";
 /// `(n, d, ellipsis)`, which also sets the prototype's ellipsis flag;
 /// `arity` and `args` may be omitted.
 /// `[in module]` dispatches to `module::name` instead of `name::name`;
+/// `[async]` (or `[async in module]`) marks an efun that can suspend; an
+/// unmarked one is a plain `fn` run inside
+/// [`Task::step`](crate::interpreter::task::Task::step), no future built;
 /// `[prototype only]` marks a special form: no module, no dispatch.
 /// `refs: from N` marks every argument from index `N` (0-based) as an
 /// lvalue the efun writes back through `write_ref`.
 macro_rules! efuns {
     (@dispatch $name:ident, $context:ident) => {
-        $name::$name($context).await
+        $name::$name($context)
     };
     (@dispatch $name:ident [in $module:ident], $context:ident) => {
+        $module::$name($context)
+    };
+    (@dispatch $name:ident [async], $context:ident) => {
+        $name::$name($context).await
+    };
+    (@dispatch $name:ident [async in $module:ident], $context:ident) => {
         $module::$name($context).await
     };
     // Unreachable: the compiler never emits `CallEfun` for a special form.
     (@dispatch $name:ident [prototype only], $context:ident) => {
         Err($context.runtime_error(format!("Unknown efun: {}", stringify!($name))))
+    };
+
+    (@sync $name:ident [async $($rest:tt)*], $context:ident) => {
+        None
+    };
+    (@sync $name:ident $([$($option:tt)*])?, $context:ident) => {
+        Some(efuns!(@dispatch $name $([$($option)*])?, $context))
     };
 
     (@arity) => {
@@ -186,6 +202,17 @@ macro_rules! efuns {
             }
         }
 
+        /// Run `efun` when it never suspends; `None` for one that awaits,
+        /// which only [`call_efun`] runs.
+        pub fn call_efun_sync<const STACKSIZE: usize>(
+            efun: Efun,
+            efun_context: &mut EfunContext<'_, STACKSIZE>,
+        ) -> Option<Result<()>> {
+            match efun {
+                $( Efun::$name => efuns!(@sync $name $([$($option)*])?, efun_context), )+
+            }
+        }
+
         /// Every efun prototype, in table order.
         /// [`Instruction::CallEfun`](lpc_rs_asm::instruction::Instruction::CallEfun)
         /// indexes into this map; a reorder invalidates compiled code.
@@ -215,12 +242,12 @@ efuns! {
             LpcType::Function(false) | LpcType::String(false),
         ],
     },
-    all_environment => {
+    all_environment [async] => {
         returns: LpcType::Object(true),
         arity: (1, 1),
         args: [LpcType::String(false) | LpcType::Object(false)],
     },
-    all_inventory => {
+    all_inventory [async] => {
         returns: LpcType::Object(true),
         arity: (1, 1),
         args: [LpcType::String(false) | LpcType::Object(false)],
@@ -252,12 +279,12 @@ efuns! {
         arity: 1,
         args: [LpcType::Mixed(false) | LpcType::Void],
     },
-    clone_object => {
+    clone_object [async] => {
         returns: LpcType::Object(false),
         arity: 1,
         args: [LpcType::String(false)],
     },
-    command => {
+    command [async] => {
         returns: LpcType::Int(false),
         arity: (2, 1),
         args: [LpcType::String(false), LpcType::Object(false)],
@@ -272,7 +299,7 @@ efuns! {
         arity: (2, 1),
         args: [LpcType::String(false), LpcType::Mixed(false)],
     },
-    deep_inventory => {
+    deep_inventory [async] => {
         returns: LpcType::Object(true),
         arity: (1, 1),
         args: [LpcType::String(false) | LpcType::Object(false)],
@@ -285,7 +312,7 @@ efuns! {
     disable_commands => {
         returns: LpcType::Void,
     },
-    dump => {
+    dump [async] => {
         returns: LpcType::Void,
         arity: (1, 0, ellipsis),
         args: [LpcType::Mixed(false)],
@@ -293,12 +320,12 @@ efuns! {
     enable_commands => {
         returns: LpcType::Void,
     },
-    environment => {
+    environment [async] => {
         returns: LpcType::Object(false),
         arity: (1, 1),
         args: [LpcType::String(false) | LpcType::Object(false)],
     },
-    exec => {
+    exec [async] => {
         returns: LpcType::Int(false),
         arity: 2,
         args: [LpcType::Object(false), LpcType::Object(false)],
@@ -313,7 +340,7 @@ efuns! {
         arity: 1,
         args: [LpcType::Object(false)],
     },
-    find_object => {
+    find_object [async] => {
         returns: LpcType::Object(false),
         arity: 1,
         args: [LpcType::String(false)],
@@ -338,7 +365,7 @@ efuns! {
         arity: (2, 1),
         args: [LpcType::Function(false), LpcType::Int(false)],
     },
-    interactive => {
+    interactive [async] => {
         returns: LpcType::Int(false),
         arity: (1, 1),
     },
@@ -347,7 +374,7 @@ efuns! {
         arity: 1,
         args: [LpcType::Mixed(false)],
     },
-    living => {
+    living [async] => {
         returns: LpcType::Int(false),
         arity: (1, 1),
         args: [LpcType::String(false) | LpcType::Object(false)],
@@ -357,7 +384,7 @@ efuns! {
         arity: 1,
         args: [LpcType::Mixed(false)],
     },
-    move_object => {
+    move_object [async] => {
         returns: LpcType::Void,
         arity: 1,
         args: [LpcType::String(false) | LpcType::Object(false)],
@@ -391,7 +418,7 @@ efuns! {
             LpcType::String(false),
         ],
     },
-    parse_command => {
+    parse_command [async] => {
         returns: LpcType::Int(false),
         arity: (3, 0, ellipsis),
         args: [
@@ -418,7 +445,7 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false)],
     },
-    parse_sentence => {
+    parse_sentence [async] => {
         returns: LpcType::Mixed(false),
         arity: (4, 3),
         args: [
@@ -428,7 +455,7 @@ efuns! {
             LpcType::Mapping(false),
         ],
     },
-    parse_string => {
+    parse_string [async] => {
         returns: LpcType::Mixed(true),
         arity: (3, 1),
         args: [
@@ -497,7 +524,7 @@ efuns! {
         arity: 1,
         args: [LpcType::Mixed(false)],
     },
-    tell_object => {
+    tell_object [async] => {
         returns: LpcType::Int(false),
         arity: 2,
         args: [LpcType::Object(false) | LpcType::String(false), LpcType::String(false)],
@@ -513,7 +540,7 @@ efuns! {
         arity: 1,
         args: [LpcType::Mixed(false)],
     },
-    write => {
+    write [async] => {
         returns: LpcType::Int(false),
         arity: 1,
         args: [LpcType::Mixed(false)],
@@ -543,22 +570,22 @@ efuns! {
         arity: 2,
         args: [LpcType::Object(false), LpcType::String(false)],
     },
-    get_dir => {
+    get_dir [async] => {
         returns: LpcType::String(true),
         arity: 1,
         args: [LpcType::String(false)],
     },
-    read_file => {
+    read_file [async] => {
         returns: LpcType::String(false),
         arity: 1,
         args: [LpcType::String(false)],
     },
-    rm => {
+    rm [async] => {
         returns: LpcType::Int(false),
         arity: 1,
         args: [LpcType::String(false)],
     },
-    write_file => {
+    write_file [async] => {
         returns: LpcType::Int(false),
         arity: 2,
         args: [LpcType::String(false), LpcType::String(false)],

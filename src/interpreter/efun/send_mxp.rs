@@ -8,7 +8,7 @@ use crate::{
 
 /// `send_mxp`, an efun sending MXP markup to an object's connection as
 /// written; the session drops it while the client has MXP off.
-pub async fn send_mxp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn send_mxp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let markup = context
         .resolve_local_register(2 as RegisterSize)
         .with_string(|s| s.to_string())?;

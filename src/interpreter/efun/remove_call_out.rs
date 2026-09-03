@@ -3,7 +3,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
-pub async fn remove_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn remove_call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let id = context.call_out_id(1 as RegisterSize, "remove_call_out")?;
     let ret = context.cancel_call_out(id);
 

@@ -11,7 +11,7 @@ use crate::interpreter::{
 
 /// `query_connection`, an efun returning what the driver knows about an
 /// object's connection as a mapping with a fixed key set; 0 without one.
-pub async fn query_connection<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+pub fn query_connection<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let Some(connection) = efun::connection_of(context) else {
         return Ok(());
     };

@@ -10,7 +10,7 @@ use ustr::Ustr;
 
 use crate::interpreter::{
     call_frame::CallFrame,
-    efun::{Efun, call_efun, efun_context::EfunContext},
+    efun::{Efun, call_efun, call_efun_sync, efun_context::EfunContext},
     lpc_ref::{LpcRef, NULL},
     process::Process,
     task::Task,
@@ -133,6 +133,25 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.prepare_and_call_efun(efun).await
     }
 
+    /// Run `efun` on the frame already pushed for it, in place: `false`
+    /// when it can suspend and needs [`Self::prepare_and_call_efun`].
+    pub(crate) fn call_efun_now(&mut self, efun: Efun) -> lpc_rs_errors::Result<bool> {
+        let mut ctx = EfunContext::new(&mut self.stack, &self.context);
+        let Some(result) = call_efun_sync(efun, &mut ctx) else {
+            return Ok(false);
+        };
+
+        #[cfg(test)]
+        {
+            if let Some(snap) = ctx.snapshot {
+                self.snapshots.push(snap);
+            }
+        }
+
+        self.finish_efun(result)?;
+        Ok(true)
+    }
+
     /// Run `efun` on the frame already pushed for it.
     pub(crate) async fn prepare_and_call_efun(&mut self, efun: Efun) -> lpc_rs_errors::Result<()> {
         let mut ctx = EfunContext::new(&mut self.stack, &self.context);
@@ -146,6 +165,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         }
 
+        self.finish_efun(result)
+    }
+
+    /// Pop the efun's frame, or return its error with a span.
+    fn finish_efun(&mut self, result: lpc_rs_errors::Result<()>) -> lpc_rs_errors::Result<()> {
         // The efun's own frame has no debug span; the caller's is the nearest
         // location for an error built without one.
         if let Err(e) = result {
