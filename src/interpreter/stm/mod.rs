@@ -129,7 +129,8 @@ impl Transaction {
     /// committed world still holds its old value until commit, so falling
     /// through to the snapshot would resurrect a removed var. A read
     /// satisfied by the attempt's own write or removal observes no committed
-    /// state, so it is not tracked; world reads are tracked and memoized.
+    /// state, so it is not tracked; world reads are tracked and memoized,
+    /// and pending merges collapse onto them into a write.
     pub(crate) fn read_value(&mut self, var_id: VarId) -> Option<WorldValue> {
         if self.changeset.is_removed(var_id) {
             return None;
@@ -141,16 +142,7 @@ impl Transaction {
         let world = self
             .changeset
             .read_through(var_id, || snapshot.read(var_id));
-        // A pending merge folds onto the world value. The read above is
-        // tracked and guards the base changing, so the merge stays a merge.
-        let mut value = world;
-        for op in self.changeset.pending_merges(var_id) {
-            value = Some(
-                op.apply_to(value.as_ref())
-                    .expect("the caller peeks the type before merging"),
-            );
-        }
-        value
+        self.changeset.collapse_merges(var_id, world)
     }
 
     /// Write a slot value to the changeset.

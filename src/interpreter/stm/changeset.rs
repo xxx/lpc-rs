@@ -4,7 +4,7 @@ use std::collections::hash_map::Entry;
 
 use ahash::{AHashMap, AHashSet};
 
-use crate::interpreter::stm::{MergeOp, VarId, Version, WorldValue};
+use crate::interpreter::stm::{MergeOp, VarId, Version, WorldValue, merge::MergeMismatch};
 
 /// One observed var: tracked for conflict detection, and — once a world
 /// lookup answered — carrying that answer so a re-read skips the world.
@@ -16,12 +16,9 @@ enum ReadEntry {
     Cached(Option<WorldValue>),
 }
 
-/// A changeset dismantled for application: writes, merges, removals.
-pub(crate) type ChangesetParts = (
-    AHashMap<VarId, WorldValue>,
-    AHashMap<VarId, Vec<MergeOp>>,
-    AHashSet<VarId>,
-);
+/// A changeset dismantled for application: writes and removals; the
+/// committer folds the merges into writes first.
+pub(crate) type ChangesetParts = (AHashMap<VarId, WorldValue>, AHashSet<VarId>);
 
 #[derive(Debug, Clone)]
 pub(crate) struct Changeset {
@@ -101,8 +98,7 @@ impl Changeset {
             return;
         }
         if let Some(written) = self.writes.get_mut(&var_id) {
-            *written = op
-                .apply_to(Some(written))
+            op.apply_in_place(written)
                 .expect("the caller peeks the type before merging");
             return;
         }
@@ -117,9 +113,35 @@ impl Changeset {
         }
     }
 
-    /// The pending merge writes by var, for the committer's type precheck.
-    pub(crate) fn merges(&self) -> impl Iterator<Item = (&VarId, &Vec<MergeOp>)> {
-        self.merges.iter()
+    /// `world` with the pending merges of `var_id` folded on, kept as the
+    /// attempt's write — exact because the read that supplied `world` is
+    /// tracked.
+    pub(crate) fn collapse_merges(
+        &mut self,
+        var_id: VarId,
+        world: Option<WorldValue>,
+    ) -> Option<WorldValue> {
+        let Some(ops) = self.merges.remove(&var_id) else {
+            return world;
+        };
+        let value = MergeOp::fold_onto(world, &ops)
+            .expect("the caller peeks the type before merging")
+            .expect("at least one op ran");
+        self.writes.insert(var_id, value.clone());
+        Some(value)
+    }
+
+    /// Fold every pending merge onto the world value `world` supplies,
+    /// making it a write; a type mismatch rejects the changeset.
+    pub(crate) fn fold_merges(
+        &mut self,
+        world: impl Fn(VarId) -> Option<WorldValue>,
+    ) -> Result<(), MergeMismatch> {
+        for (var_id, ops) in self.merges.drain() {
+            let value = MergeOp::fold_onto(world(var_id), &ops)?.expect("at least one op ran");
+            self.writes.insert(var_id, value);
+        }
+        Ok(())
     }
 
     /// The attempt's own written value for `var_id`, if any.
@@ -212,10 +234,11 @@ impl Changeset {
         vars
     }
 
-    /// The writes, merges, and removals this attempt made, for the snapshot
-    /// to apply on commit.
+    /// The writes and removals this attempt made, for the snapshot to apply
+    /// on commit.
     pub(crate) fn into_parts(self) -> ChangesetParts {
-        (self.writes, self.merges, self.removals)
+        debug_assert!(self.merges.is_empty(), "merges are folded before apply");
+        (self.writes, self.removals)
     }
 }
 
@@ -243,6 +266,23 @@ mod tests {
 
         assert_eq!(changeset.read(var_id), Some(WorldValue::ref_of(7.into())));
         assert!(changeset.pending_merges(var_id).is_empty());
+    }
+
+    #[test]
+    fn a_merge_onto_an_own_written_mapping_keeps_its_allocation() {
+        let mut changeset = Changeset::new(Version(0));
+        let var_id = VarId(0);
+        let payload = std::sync::Arc::new(crate::interpreter::lpc_mapping::LpcMapping::default());
+        let allocation = std::sync::Arc::as_ptr(&payload);
+        changeset.write(var_id, WorldValue::Mapping(payload));
+
+        changeset.merge(var_id, MergeOp::MapInsert("a".into(), 1.into()));
+
+        let Some(WorldValue::Mapping(written)) = changeset.written(var_id) else {
+            panic!("the mapping stays a mapping");
+        };
+        assert!(std::ptr::eq(std::sync::Arc::as_ptr(written), allocation));
+        assert_eq!(written.get(&"a".into()), Some(&1.into()));
     }
 
     #[test]

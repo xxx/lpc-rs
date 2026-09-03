@@ -472,7 +472,7 @@ impl Committer {
     /// conflict-checked, and are applied in the order they are committed.
     ///
     /// Returns `Ok` on success, or `Err(Conflict)` if the changeset conflicts.
-    pub(crate) fn commit(&mut self, changeset: Changeset) -> Result<(), Conflict> {
+    pub(crate) fn commit(&mut self, mut changeset: Changeset) -> Result<(), Conflict> {
         let current_version = self.snapshot.version();
         let changeset_version = changeset.base_version();
 
@@ -504,20 +504,14 @@ impl Committer {
             }
         }
 
-        // A merge applies to a value the attempt never observed, so its
-        // type is checked here; a mismatch rejects the whole changeset
-        // before anything applies.
-        for (var_id, ops) in changeset.merges() {
-            let mut current = self.snapshot.peek(*var_id).cloned();
-            for op in ops {
-                match op.apply_to(current.as_ref()) {
-                    Ok(value) => current = Some(value),
-                    Err(_) => {
-                        self.stats.conflict();
-                        return Err(Conflict);
-                    }
-                }
-            }
+        // The merges fold onto the committed values here, where a type
+        // mismatch rejects the whole changeset before anything applies.
+        if changeset
+            .fold_merges(|var_id| self.snapshot.peek(var_id).cloned())
+            .is_err()
+        {
+            self.stats.conflict();
+            return Err(Conflict);
         }
 
         let written_vars = changeset.touched_vars();
