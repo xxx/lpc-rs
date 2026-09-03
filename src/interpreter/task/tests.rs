@@ -1619,6 +1619,49 @@ mod test_instructions {
             );
         }
 
+        /// The frame goes on before its arguments are copied in; one the
+        /// callee refuses takes it off again.
+        #[tokio::test]
+        async fn a_refused_argument_takes_the_new_frame_off() {
+            use crate::{
+                compile_time_config::MAX_CALL_STACK_SIZE,
+                interpreter::{
+                    call_frame::CallFrame, object_space::ObjectSpace,
+                    task::task_template::TaskTemplate,
+                },
+                test_support::compile_prog,
+            };
+            use thin_vec::ThinVec;
+
+            let (program, config, _se_proc) =
+                compile_prog("int f(int ref x) { return x; } void create() { int x = 1; }").await;
+            let (tx, _rx) = tokio::sync::mpsc::channel(128);
+            let global_state = GlobalState::new(config, tx);
+            let process = Arc::new(Process::new(program));
+            ObjectSpace::insert_process_physical(&global_state.object_space, process.clone());
+            let context = TaskTemplate::from(global_state).into_task_context(process.clone());
+            let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context);
+            let mut create = (**process.program.lookup_function("create").unwrap()).clone();
+            create
+                .arg_lists
+                .push(vec![Arg::Value(Register(1).as_local())]);
+            let mut frame =
+                CallFrame::new(process.clone(), Arc::new(create), 0, None::<ThinVec<VarId>>);
+            frame.registers[1] = LpcRef::from(1);
+            task.stack.push(frame).unwrap();
+            let f = process.program.lookup_function("f").unwrap().clone();
+
+            let e = task
+                .push_call_frame(process.clone(), f, ArgList(0), false)
+                .unwrap_err();
+            assert!(
+                e.to_string()
+                    .starts_with("runtime error: argument 1 of `f` must be passed by reference"),
+                "{e}"
+            );
+            assert_eq!(task.stack.len(), 1);
+        }
+
         #[tokio::test]
         async fn a_positional_arg_follows_a_captured_parameter() {
             let code = indoc! { r##"

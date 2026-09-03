@@ -4,13 +4,15 @@ use std::{
 };
 
 use delegate::delegate;
-use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::{LpcError, Result, lpc_error};
+use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::interpreter::{
     call_frame::CallFrame,
     lpc_ref::{LpcRef, NULL},
     process::Process,
+    stm::VarId,
     task_context::{Caller, Callers},
 };
 
@@ -69,6 +71,15 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
         }
     }
 
+    /// The top frame and every frame below it.
+    #[inline(always)]
+    pub fn split_last_mut(&mut self) -> Result<(&mut CallFrame, &[CallFrame])> {
+        match self.stack.split_last_mut() {
+            Some((top, below)) => Ok((top, below)),
+            None => Err(Self::empty_stack()),
+        }
+    }
+
     /// The error for a frame lookup on an empty stack.
     #[cold]
     #[inline(never)]
@@ -76,14 +87,46 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
         lpc_error!("stack is somehow empty")
     }
 
+    /// The error for a push past `STACKSIZE`.
+    #[cold]
+    #[inline(never)]
+    fn overflow() -> LpcError {
+        lpc_error!("stack overflow")
+    }
+
     /// Push a new frame onto the stack. Will return `Err` in the
     /// case of a stack overflow.
     pub fn push(&mut self, frame: CallFrame) -> Result<()> {
         if self.stack.len() >= STACKSIZE {
-            return Err(lpc_error!("stack overflow"));
+            return Err(Self::overflow());
         }
 
         self.stack.push(frame);
+
+        Ok(())
+    }
+
+    /// Push a frame for `function`, built in its slot: a frame moved
+    /// through memory reloads its narrow stores wide, a stall per call.
+    #[inline]
+    pub fn push_new(
+        &mut self,
+        process: Arc<Process>,
+        function: Arc<ProgramFunction>,
+        called_with_num_args: RegisterSize,
+        arg_capacity: RegisterSize,
+    ) -> Result<()> {
+        if self.stack.len() >= STACKSIZE {
+            return Err(Self::overflow());
+        }
+
+        self.stack.push(CallFrame::with_minimum_arg_capacity(
+            process,
+            function,
+            called_with_num_args,
+            arg_capacity,
+            None::<&[VarId]>,
+        ));
 
         Ok(())
     }
@@ -92,22 +135,6 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     /// to it.
     pub fn pop(&mut self) -> Option<CallFrame> {
         self.stack.pop()
-    }
-
-    /// Convenience helper to copy a return value from a given stack frame, back
-    /// to the current one.
-    pub fn set_result(&mut self, result: LpcRef) -> Result<()> {
-        if !self.stack.is_empty() {
-            self.current_frame_mut()?.registers[0] = result;
-        }
-
-        Ok(())
-    }
-
-    /// Convenience helper to copy a return value from a given stack frame, back
-    /// to the current one.
-    pub fn copy_result(&mut self, from: &CallFrame) -> Result<()> {
-        self.set_result(from.registers[0].clone())
     }
 
     /// Create a runtime error at the current frame's location; `None` span

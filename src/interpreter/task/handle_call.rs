@@ -8,54 +8,46 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::{instrument, trace};
 use ustr::Ustr;
 
-use crate::interpreter::stm::VarId;
-use crate::{
-    interpreter::{
-        call_frame::CallFrame,
-        efun::{call_efun, efun_context::EfunContext},
-        lpc_ref::{LpcRef, NULL},
-        process::Process,
-        task::{Task, get_location},
-    },
-    pop_frame,
+use crate::interpreter::{
+    call_frame::CallFrame,
+    efun::{call_efun, efun_context::EfunContext},
+    lpc_ref::{LpcRef, NULL},
+    process::Process,
+    task::Task,
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(level = "debug", skip_all)]
     pub(crate) fn handle_call(&mut self, name: Ustr, list: ArgList) -> lpc_rs_errors::Result<()> {
         let current_frame = self.stack.current_frame()?;
-        let process = current_frame.process.clone();
         // Codegen emits `Call` only for a name of this program; a miss is a bug.
-        let Some(func) = process.program.lookup_function(name).cloned() else {
+        let Some(func) = current_frame.process.program.lookup_function(name).cloned() else {
             return Err(self
                 .stack
                 .runtime_bug(format!("call to unknown local function `{name}`")));
         };
+        let process = current_frame.process.clone();
 
-        let new_frame = self.prepare_new_call_frame(process, func, list)?;
-
-        trace!("pushing new frame");
-
-        self.stack.push(new_frame)?;
-
-        Ok(())
+        self.push_call_frame(process, func, list, false)
     }
 
-    /// Prepare and populate a new [`CallFrame`] for a call to a static function.
+    /// Push a frame for a call to `func` on `process`, its arguments read
+    /// from the current frame's `list`; `external` marks a frame entered
+    /// through a door.
     #[instrument(level = "debug", skip_all)]
-    pub(crate) fn prepare_new_call_frame(
+    pub(crate) fn push_call_frame(
         &mut self,
         process: Arc<Process>,
         func: Arc<ProgramFunction>,
         list: ArgList,
-    ) -> lpc_rs_errors::Result<CallFrame> {
-        let args = self.args_of(list)?;
-        let num_args = RegisterSize::try_from(args.len())?;
+        external: bool,
+    ) -> lpc_rs_errors::Result<()> {
+        let num_args = RegisterSize::try_from(self.args_of(list)?.len())?;
         // A simul_efun's prototype can change after a cached caller was compiled against it.
         if_chain! {
-            if args.len() < func.arity().num_args as usize;
+            if num_args < func.arity().num_args;
             if let Some(i) = func.prototype.first_ref_param();
-            if i >= args.len();
+            if i >= usize::from(num_args);
             then {
                 let caller_span = self.stack.current_frame().ok().and_then(CallFrame::current_debug_span);
                 return Err(LpcError::runtime(format!(
@@ -66,41 +58,44 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 .or_span(caller_span));
             }
         }
-        let mut new_frame = CallFrame::with_minimum_arg_capacity(
-            process,
-            func.clone(),
-            num_args,
-            num_args,
-            // A static function inherits no captures from its caller.
-            None::<&[VarId]>,
-        );
 
-        trace!("copying arguments to new frame: {num_args}");
-        // Looked up only on the error path; do not hoist it onto every call.
-        let caller_span = || {
-            self.stack
+        trace!("pushing new frame; copying arguments: {num_args}");
+        self.stack.push_new(process, func, num_args, num_args)?;
+        self.stack.current_frame_mut()?.external = external;
+        if let Err(e) = self.populate_arguments(list) {
+            // The half-built frame comes off; the error names the caller.
+            let depth = self.stack.len() - 1;
+            self.stack.truncate(depth);
+            let caller_span = self
+                .stack
                 .current_frame()
                 .ok()
-                .and_then(CallFrame::current_debug_span)
+                .and_then(CallFrame::current_debug_span);
+            return Err(e.or_span(caller_span));
+        }
+        Ok(())
+    }
+
+    /// Copy the arguments the caller's `list` names into the frame above it.
+    fn populate_arguments(&mut self, list: ArgList) -> lpc_rs_errors::Result<()> {
+        let txn = &self.context.txn;
+        let (callee, below) = self.stack.split_last_mut()?;
+        let Some(caller) = below.last() else {
+            return Err(callee.runtime_bug("a call with no frame to read its arguments from"));
         };
-        for (i, arg) in args.iter().enumerate() {
+        for (i, arg) in caller.function.args(list).iter().enumerate() {
             match *arg {
                 Arg::Value(loc) => {
-                    let lpc_ref = get_location(&self.stack, &self.context.txn, loc)?.into_owned();
-                    new_frame
-                        .push_arg(&self.context.txn, i, lpc_ref)
-                        .map_err(|e| e.or_span(caller_span()))?;
+                    let value = caller.get_location(txn, loc)?.into_owned();
+                    callee.push_arg(txn, i, value)?;
                 }
                 Arg::Ref(loc) => {
-                    let cell = self.stack.current_frame()?.ref_cell(loc)?;
-                    new_frame
-                        .push_ref(&self.context.txn, i, cell)
-                        .map_err(|e| e.or_span(caller_span()))?;
+                    let cell = caller.ref_cell(loc)?;
+                    callee.push_ref(txn, i, cell)?;
                 }
             }
         }
-
-        Ok(new_frame)
+        Ok(())
     }
 
     /// handle runtime type-checks for function pointer calls
@@ -156,7 +151,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Err(e.or_span(caller.and_then(|frame| frame.current_debug_span())));
         }
 
-        pop_frame!(self);
+        self.pop_frame()?;
 
         Ok(())
     }
@@ -180,11 +175,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Err(self.runtime_error(format!("call to unknown simul efun `{func_name}`")));
         };
 
-        let mut new_frame = self.prepare_new_call_frame(simul_efuns.clone(), func, list)?;
-        new_frame.external = true;
-
-        self.stack.push(new_frame)?;
-
-        Ok(())
+        self.push_call_frame(simul_efuns.clone(), func, list, true)
     }
 }

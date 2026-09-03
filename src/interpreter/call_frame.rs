@@ -17,7 +17,6 @@ use lpc_rs_core::{
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_function_support::{constant::LpcConstant, program_function::ProgramFunction};
 use thin_vec::ThinVec;
-use tracing::{instrument, trace};
 
 use crate::interpreter::{
     bank::RefBank,
@@ -164,6 +163,10 @@ impl CallFrame {
     /// * `arg_capacity` - Reserve space for at least this many registers (this
     ///   is used for ellipsis args and `call_other`)
     /// * `upvalue_ptrs` - The captured cells inherited from the creator
+    ///
+    /// The frame is the tail expression so a caller's slot receives it
+    /// directly; a `&mut` step before the move copied it wide.
+    #[inline]
     pub(crate) fn with_minimum_arg_capacity<P, V>(
         process: P,
         function: Arc<ProgramFunction>,
@@ -175,35 +178,25 @@ impl CallFrame {
         P: Into<Arc<Process>>,
         V: Into<ThinVec<VarId>>,
     {
-        let process = process.into();
-        let ups = upvalue_ptrs.map(Into::into).unwrap_or_default();
+        let mut upvalue_ptrs: ThinVec<VarId> = upvalue_ptrs.map(Into::into).unwrap_or_default();
+        // This call's own captured cells come after the inherited ones. A cell
+        // is an identity only; its value lives in the committer's world once written.
+        if function.num_upvalues > 0 {
+            upvalue_ptrs.extend((0..function.num_upvalues).map(|_| VarId::new()));
+        }
 
-        let mut instance = Self {
+        Self {
             registers: RefBank::initialized_for_function(&function, arg_capacity),
-            process,
+            process: process.into(),
             function,
             pc: 0,
             called_with_num_args,
-            upvalue_ptrs: ups,
+            upvalue_ptrs,
             ref_cells: ThinVec::new(),
             pending: None,
             origin: None,
             external: false,
-        };
-
-        instance.populate_upvalues();
-
-        instance
-    }
-
-    /// Mint this call's own captured cells, after the inherited ones. A cell
-    /// is an identity only; its value lives in the committer's world once written.
-    #[instrument(level = "debug", skip_all)]
-    fn populate_upvalues(&mut self) {
-        let num_upvalues = self.function.num_upvalues;
-        trace!("populating upvalues: {}", num_upvalues);
-        self.upvalue_ptrs
-            .extend((0..num_upvalues).map(|_| VarId::new()));
+        }
     }
 
     /// Bind the captured variable at `location` to a fresh cell; pointers
