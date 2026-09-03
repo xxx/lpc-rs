@@ -10,7 +10,7 @@ use lpc_rs_utils::config::ConfigBuilder;
 
 use crate::{
     interpreter::{process::Process, vm::Vm},
-    test_support::{TempLib, committed_string},
+    test_support::{TempLib, committed_string, permissive_master},
 };
 
 /// A simul efun answering what `this_object()` names.
@@ -297,5 +297,82 @@ async fn the_master_is_created_after_the_simul_efun_object() {
         )
         .await,
         "7,1"
+    );
+}
+
+/// The first version of a simul-efun file whose `gone()` a later version may
+/// drop.
+const V1: &str = "string gone() { return \"v1\"; }\n";
+const V2_KEEPS: &str = "string gone() { return \"v2\"; }\n";
+const V2_DROPS: &str = "string other() { return \"v2\"; }\n";
+
+/// Boot with [`V1`], compile `/user.c` (whose `later()` calls `gone()`)
+/// against it, destruct the simul-efun object, rewrite the file as `v2`,
+/// reload it through a `->` in its own task when `reload`, then ask
+/// `"/user"->later()` from a fresh task: its answer, or the error.
+async fn later_after(lib: &str, v2: &str, reload: bool) -> Result<String, String> {
+    let root = lib_holding(lib, &[("secure/simul_efuns.c", V1)]);
+    let config = ConfigBuilder::default()
+        .lib_dir(root.to_str().unwrap())
+        .simul_efun_file("/secure/simul_efuns")
+        .build()
+        .unwrap();
+    let vm = Vm::new(config);
+    vm.global_state
+        .initialize_simul_efuns()
+        .await
+        .expect("configured")
+        .expect("compiles");
+    permissive_master(&vm.global_state.object_space).await;
+    vm.initialize_process_from_code("/user.c", "string later() { return gone(); }")
+        .await
+        .unwrap();
+    vm.initialize_process_from_code(
+        "/destroyer.c",
+        r#"void create() { destruct(find_object("/secure/simul_efuns")); }"#,
+    )
+    .await
+    .unwrap();
+    std::fs::write(root.join("secure/simul_efuns.c"), v2).unwrap();
+    if reload {
+        vm.initialize_process_from_code(
+            "/reloader.c",
+            r#"void create() { "/secure/simul_efuns"->gone(); }"#,
+        )
+        .await
+        .unwrap();
+    }
+    let asker = vm
+        .initialize_process_from_code(
+            "/asker.c",
+            r#"string got; void create() { got = "/user"->later(); }"#,
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(string_global(&vm, &asker.context.process, "got"))
+}
+
+#[tokio::test]
+async fn a_destructed_simul_efun_object_fails_calls_from_later_tasks() {
+    assert_eq!(
+        later_after("simul-destructed", V2_KEEPS, false).await,
+        Err("runtime error: call to simul efun `gone`: no simul-efun object is loaded".into())
+    );
+}
+
+/// An object compiled against the old version links by name to the new one.
+#[tokio::test]
+async fn a_reloaded_simul_efun_object_serves_callers_compiled_against_the_old_one() {
+    assert_eq!(
+        later_after("simul-reloaded", V2_KEEPS, true).await,
+        Ok("v2".into())
+    );
+}
+
+#[tokio::test]
+async fn a_name_the_reloaded_simul_efun_file_dropped_fails_at_the_call() {
+    assert_eq!(
+        later_after("simul-dropped", V2_DROPS, true).await,
+        Err("runtime error: call to unknown simul efun `gone`".into())
     );
 }
