@@ -176,14 +176,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::EqEq(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y, txn| x.eq_in(y, txn))?;
             }
-            Instruction::FConst(r, f) => {
-                set_location(
-                    &mut self.stack,
-                    &self.context.txn,
-                    r,
-                    LpcRef::Float(f.into()),
-                )?;
-            }
             Instruction::FunctionPtrConst {
                 location,
                 receiver,
@@ -196,15 +188,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::Gte(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y, _| x >= y)?;
-            }
-            Instruction::IConst(r, i) => {
-                set_location(&mut self.stack, &self.context.txn, r, LpcRef::Int(i.into()))?;
-            }
-            Instruction::IConst0(r) => {
-                set_location(&mut self.stack, &self.context.txn, r, NULL)?;
-            }
-            Instruction::IConst1(r) => {
-                set_location(&mut self.stack, &self.context.txn, r, LpcRef::Int(1.into()))?;
             }
             Instruction::IDiv(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.div(y))?;
@@ -516,9 +499,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Store(value_loc, container_loc, index_loc) => {
                 // r2[r3] = r1;
                 self.handle_store(value_loc, container_loc, index_loc)?;
-            }
-            Instruction::SConst(location, value) => {
-                self.handle_sconst(location, value)?;
             }
             Instruction::Shl(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.shl(y))?;

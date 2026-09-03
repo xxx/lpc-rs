@@ -3,10 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use lpc_rs_core::{
-    LpcFloatInner, LpcIntInner, RegisterSize, function_receiver::FunctionReceiver,
-    register::RegisterVariant,
-};
+use lpc_rs_core::{RegisterSize, function_receiver::FunctionReceiver, register::RegisterVariant};
 use lpc_rs_errors::{Result, lpc_bug};
 use ustr::Ustr;
 
@@ -73,9 +70,6 @@ pub enum Instruction {
     /// x.2 = x.0 == x.1
     EqEq(RegisterVariant, RegisterVariant, RegisterVariant),
 
-    /// Float Constant
-    FConst(RegisterVariant, LpcFloatInner),
-
     /// A function pointer constant. Closures are stored as function pointers as well.
     /// `location` is where the pointer will be stored
     FunctionPtrConst {
@@ -94,15 +88,6 @@ pub enum Instruction {
 
     /// Integer addition - x.2 = x.0 + x.1
     IAdd(RegisterVariant, RegisterVariant, RegisterVariant),
-
-    /// Integer constant
-    IConst(RegisterVariant, LpcIntInner),
-
-    /// Integer constant 0
-    IConst0(RegisterVariant),
-
-    /// Integer constant 1
-    IConst1(RegisterVariant),
 
     /// Integer division - x.2 = x.0 / x.1
     IDiv(RegisterVariant, RegisterVariant, RegisterVariant),
@@ -235,9 +220,6 @@ pub enum Instruction {
     /// x.1[x.2] = x.0
     Store(RegisterVariant, RegisterVariant, RegisterVariant),
 
-    /// String constant.
-    SConst(RegisterVariant, Ustr),
-
     /// bitwise ^ comparison.
     /// x.2 = x.0 ^ x.1
     Xor(RegisterVariant, RegisterVariant, RegisterVariant),
@@ -254,17 +236,12 @@ impl Instruction {
             Self::AConst(d)
             | Self::BitwiseNot(_, d)
             | Self::Copy(_, d)
-            | Self::FConst(d, _)
             | Self::FunctionPtrConst { location: d, .. }
-            | Self::IConst(d, _)
-            | Self::IConst0(d)
-            | Self::IConst1(d)
             | Self::Load(_, _, d)
             | Self::LoadMappingKey(_, _, d)
             | Self::MapConst(d)
             | Self::Not(_, d)
             | Self::Range(_, _, _, d)
-            | Self::SConst(d, _)
             | Self::Sizeof(_, d) => Some(d),
             Self::And(_, _, d)
             | Self::EqEq(_, _, d)
@@ -334,7 +311,6 @@ impl Instruction {
             Self::Copy(a0, a1) => Self::Copy(f(a0), f(a1)),
             Self::Dec(a0) => Self::Dec(f(a0)),
             Self::EqEq(a0, a1, a2) => Self::EqEq(f(a0), f(a1), f(a2)),
-            Self::FConst(a0, a1) => Self::FConst(f(a0), a1),
             Self::FunctionPtrConst {
                 location,
                 receiver,
@@ -352,9 +328,6 @@ impl Instruction {
             Self::Gt(a0, a1, a2) => Self::Gt(f(a0), f(a1), f(a2)),
             Self::Gte(a0, a1, a2) => Self::Gte(f(a0), f(a1), f(a2)),
             Self::IAdd(a0, a1, a2) => Self::IAdd(f(a0), f(a1), f(a2)),
-            Self::IConst(a0, a1) => Self::IConst(f(a0), a1),
-            Self::IConst0(a0) => Self::IConst0(f(a0)),
-            Self::IConst1(a0) => Self::IConst1(f(a0)),
             Self::IDiv(a0, a1, a2) => Self::IDiv(f(a0), f(a1), f(a2)),
             Self::IMod(a0, a1, a2) => Self::IMod(f(a0), f(a1), f(a2)),
             Self::Inc(a0) => Self::Inc(f(a0)),
@@ -387,7 +360,6 @@ impl Instruction {
             Self::Shr(a0, a1, a2) => Self::Shr(f(a0), f(a1), f(a2)),
             Self::Sizeof(a0, a1) => Self::Sizeof(f(a0), f(a1)),
             Self::Store(a0, a1, a2) => Self::Store(f(a0), f(a1), f(a2)),
-            Self::SConst(a0, a1) => Self::SConst(f(a0), a1),
             Self::Xor(a0, a1, a2) => Self::Xor(f(a0), f(a1), f(a2)),
         }
     }
@@ -420,7 +392,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 58;
+    pub const COUNT: usize = 53;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -440,14 +412,10 @@ impl Instruction {
         "copy",
         "dec",
         "eq_eq",
-        "f_const",
         "function_ptr_const",
         "gt",
         "gte",
         "i_add",
-        "i_const",
-        "i_const0",
-        "i_const1",
         "i_div",
         "i_mod",
         "inc",
@@ -480,7 +448,6 @@ impl Instruction {
         "shr",
         "sizeof",
         "store",
-        "s_const",
         "xor",
     ];
 
@@ -503,48 +470,43 @@ impl Instruction {
             Self::Copy(..) => 13,
             Self::Dec(..) => 14,
             Self::EqEq(..) => 15,
-            Self::FConst(..) => 16,
-            Self::FunctionPtrConst { .. } => 17,
-            Self::Gt(..) => 18,
-            Self::Gte(..) => 19,
-            Self::IAdd(..) => 20,
-            Self::IConst(..) => 21,
-            Self::IConst0(..) => 22,
-            Self::IConst1(..) => 23,
-            Self::IDiv(..) => 24,
-            Self::IMod(..) => 25,
-            Self::Inc(..) => 26,
-            Self::IMul(..) => 27,
-            Self::ISub(..) => 28,
-            Self::Jmp(..) => 29,
-            Self::Jnz(..) => 30,
-            Self::Jz(..) => 31,
-            Self::Load(..) => 32,
-            Self::LoadMappingKey(..) => 33,
-            Self::Lt(..) => 34,
-            Self::Lte(..) => 35,
-            Self::MapConst(..) => 36,
-            Self::MAdd(..) => 37,
-            Self::MMul(..) => 38,
-            Self::MSub(..) => 39,
-            Self::Not(..) => 40,
-            Self::NotEq(..) => 41,
-            Self::NewUpvalue(..) => 42,
-            Self::Or(..) => 43,
-            Self::PopulateArgv(..) => 44,
-            Self::PopulateDefaults => 45,
-            Self::PushArg(..) => 46,
-            Self::PushArrayItem(..) => 47,
-            Self::PushPartialArg(..) => 48,
-            Self::PushRef(..) => 49,
-            Self::Range(..) => 50,
-            Self::Ret => 51,
-            Self::Shl(..) => 52,
-            Self::Shr(..) => 53,
-            Self::Sizeof(..) => 54,
-            Self::Store(..) => 55,
-            Self::SConst(..) => 56,
-            Self::Xor(..) => 57,
+            Self::FunctionPtrConst { .. } => 16,
+            Self::Gt(..) => 17,
+            Self::Gte(..) => 18,
+            Self::IAdd(..) => 19,
+            Self::IDiv(..) => 20,
+            Self::IMod(..) => 21,
+            Self::Inc(..) => 22,
+            Self::IMul(..) => 23,
+            Self::ISub(..) => 24,
+            Self::Jmp(..) => 25,
+            Self::Jnz(..) => 26,
+            Self::Jz(..) => 27,
+            Self::Load(..) => 28,
+            Self::LoadMappingKey(..) => 29,
+            Self::Lt(..) => 30,
+            Self::Lte(..) => 31,
+            Self::MapConst(..) => 32,
+            Self::MAdd(..) => 33,
+            Self::MMul(..) => 34,
+            Self::MSub(..) => 35,
+            Self::Not(..) => 36,
+            Self::NotEq(..) => 37,
+            Self::NewUpvalue(..) => 38,
+            Self::Or(..) => 39,
+            Self::PopulateArgv(..) => 40,
+            Self::PopulateDefaults => 41,
+            Self::PushArg(..) => 42,
+            Self::PushArrayItem(..) => 43,
+            Self::PushPartialArg(..) => 44,
+            Self::PushRef(..) => 45,
+            Self::Range(..) => 46,
+            Self::Ret => 47,
+            Self::Shl(..) => 48,
+            Self::Shr(..) => 49,
+            Self::Sizeof(..) => 50,
+            Self::Store(..) => 51,
+            Self::Xor(..) => 52,
         }
     }
 
@@ -597,9 +559,6 @@ impl Display for Instruction {
             Instruction::EqEq(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
-            Instruction::FConst(r, fl) => {
-                write!(f, "{} {r}, {fl}", self.mnemonic())
-            }
             Instruction::FunctionPtrConst {
                 location,
                 receiver,
@@ -615,15 +574,6 @@ impl Display for Instruction {
             }
             Instruction::IAdd(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
-            }
-            Instruction::IConst(r, i) => {
-                write!(f, "{} {r}, {i}", self.mnemonic())
-            }
-            Instruction::IConst0(r) => {
-                write!(f, "{} {r}", self.mnemonic())
-            }
-            Instruction::IConst1(r) => {
-                write!(f, "{} {r}", self.mnemonic())
             }
             Instruction::IDiv(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
@@ -716,9 +666,6 @@ impl Display for Instruction {
             Instruction::Store(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
-            Instruction::SConst(r, s) => {
-                write!(f, "{} {r}, {:?}", self.mnemonic(), s.as_str())
-            }
             Instruction::Xor(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
@@ -741,10 +688,6 @@ mod tests {
     #[test]
     fn string_operands_display_as_names() {
         let r1 = Register(1).as_local();
-        assert_eq!(
-            Instruction::SConst(r1, ustr("hi")).to_string(),
-            "s_const r1, \"hi\""
-        );
         assert_eq!(
             Instruction::Call(ustr("foo__v__/a.c__pb__")).to_string(),
             "call foo__v__/a.c__pb__"
@@ -788,7 +731,6 @@ mod tests {
             Copy(r(), r()),
             Dec(r()),
             EqEq(r(), r(), r()),
-            FConst(r(), LpcFloatInner::from(0.0)),
             FunctionPtrConst {
                 location: r(),
                 receiver: FunctionReceiver::Local,
@@ -797,9 +739,6 @@ mod tests {
             Gt(r(), r(), r()),
             Gte(r(), r(), r()),
             IAdd(r(), r(), r()),
-            IConst(r(), 0),
-            IConst0(r()),
-            IConst1(r()),
             IDiv(r(), r(), r()),
             IMod(r(), r(), r()),
             Inc(r()),
@@ -832,7 +771,6 @@ mod tests {
             Shr(r(), r(), r()),
             Sizeof(r(), r()),
             Store(r(), r(), r()),
-            SConst(r(), ustr("s")),
             Xor(r(), r(), r()),
         ]
     }
@@ -870,7 +808,6 @@ mod tests {
         assert_eq!(Copy(r(), d).dest_register(), Some(d));
         assert_eq!(Load(r(), r(), d).dest_register(), Some(d));
         assert_eq!(Range(r(), r(), r(), d).dest_register(), Some(d));
-        assert_eq!(SConst(d, ustr("s")).dest_register(), Some(d));
         assert_eq!(Sizeof(r(), d).dest_register(), Some(d));
         assert_eq!(
             FunctionPtrConst {

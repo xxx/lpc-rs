@@ -247,7 +247,7 @@ mod tests {
     #[test]
     fn a_fold_retargets_the_definer_and_remaps_addresses() {
         let mut func = func_with(vec![
-            IConst(local(1), 5),
+            IAdd(local(8), local(9), local(1)),
             Copy(local(1), global(0)),
             Jmp(Address(3)),
             Ret,
@@ -261,7 +261,7 @@ mod tests {
 
         assert_eq!(
             func.instructions,
-            vec![IConst(global(0), 5), Jmp(Address(2)), Ret]
+            vec![IAdd(local(8), local(9), global(0)), Jmp(Address(2)), Ret]
         );
         assert_eq!(func.debug_spans.len(), 3);
         assert_eq!(func.labels.as_ref().unwrap()["end"], Address(2));
@@ -270,7 +270,7 @@ mod tests {
     #[test]
     fn a_jump_targeted_copy_survives() {
         let instructions = vec![
-            IConst(local(1), 5),
+            IAdd(local(8), local(9), local(1)),
             Copy(local(1), global(0)),
             Jmp(Address(1)),
             Ret,
@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn a_reread_temp_keeps_its_copy() {
         let instructions = vec![
-            IConst(local(1), 5),
+            IAdd(local(8), local(9), local(1)),
             Copy(local(1), global(0)),
             PushArg(local(1)),
             Ret,
@@ -299,7 +299,11 @@ mod tests {
 
     #[test]
     fn an_argument_location_is_not_folded() {
-        let instructions = vec![IConst(local(1), 5), Copy(local(1), global(0)), Ret];
+        let instructions = vec![
+            IAdd(local(8), local(9), local(1)),
+            Copy(local(1), global(0)),
+            Ret,
+        ];
         let mut func = func_with(instructions.clone());
         func.arg_locations = vec![local(1)];
 
@@ -354,7 +358,7 @@ mod tests {
     fn a_join_inside_the_window_keeps_the_copy() {
         let instructions = vec![
             Copy(local(0), local(1)),
-            IConst0(local(3)),
+            IAdd(local(8), local(9), local(3)),
             PushArg(local(1)),
             Jmp(Address(1)),
             Ret,
@@ -386,7 +390,7 @@ mod tests {
         let mut func = func_with(vec![
             Copy(local(0), local(1)),
             Jnz(local(1), Address(3)),
-            IConst0(local(2)),
+            IAdd(local(8), local(9), local(2)),
             Ret,
         ]);
 
@@ -394,7 +398,11 @@ mod tests {
 
         assert_eq!(
             func.instructions,
-            vec![Jnz(local(0), Address(2)), IConst0(local(2)), Ret]
+            vec![
+                Jnz(local(0), Address(2)),
+                IAdd(local(8), local(9), local(2)),
+                Ret
+            ]
         );
     }
 
@@ -419,7 +427,7 @@ mod tests {
     #[test]
     fn chained_copies_collapse_to_the_final_dest() {
         let mut func = func_with(vec![
-            IConst(local(1), 5),
+            IAdd(local(8), local(9), local(1)),
             Copy(local(1), local(2)),
             Copy(local(2), global(0)),
             Ret,
@@ -427,13 +435,16 @@ mod tests {
 
         coalesce(&mut func);
 
-        assert_eq!(func.instructions, vec![IConst(global(0), 5), Ret]);
+        assert_eq!(
+            func.instructions,
+            vec![IAdd(local(8), local(9), global(0)), Ret]
+        );
     }
 
     #[test]
     fn a_push_ref_operand_is_never_rewritten() {
         let mut func = func_with(vec![
-            IConst(local(1), 1),
+            IAdd(local(8), local(9), local(1)),
             Copy(local(1), RegisterVariant::Upvalue(Register(0))),
             ClearArgs,
             PushRef(RegisterVariant::Upvalue(Register(0))),
