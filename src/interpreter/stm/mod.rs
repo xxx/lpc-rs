@@ -8,7 +8,6 @@ use std::{
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
-use parking_lot::RwLock;
 
 use crate::{
     command::registry::RuleList,
@@ -393,12 +392,16 @@ impl Transaction {
 /// One top-level task = one transaction. Nested sub-tasks join it by
 /// cloning this handle, so a joiner's reads, writes, effects and call outs
 /// are the parent's attempt's and ride the parent's single commit.
+///
+/// A spin mutex, not `parking_lot`: one task drives an attempt at a time,
+/// so the lock is never contended and its uncontended trip (one locked
+/// instruction, a plain store to release) is what every read pays.
 #[derive(Debug, Clone)]
-pub(crate) struct TxnHandle(Arc<RwLock<Transaction>>);
+pub(crate) struct TxnHandle(Arc<spin::Mutex<Transaction>>);
 
 impl TxnHandle {
     pub(crate) fn new(txn: Transaction) -> Self {
-        Self(Arc::new(RwLock::new(txn)))
+        Self(Arc::new(spin::Mutex::new(txn)))
     }
 
     /// Empty, uncommitted transaction (top-level defaults, fresh
@@ -410,18 +413,19 @@ impl TxnHandle {
         Self::new(txn)
     }
 
-    /// Run `f` over the transaction, holding the lock.
+    /// Run `f` over the transaction, holding the lock; a nested `with`
+    /// from inside `f` spins forever.
     pub(crate) fn with<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut Transaction) -> R,
     {
-        let mut guard = self.0.write();
+        let mut guard = self.0.lock();
         f(&mut guard)
     }
 
     /// Whether this handle wraps a live attempt that can be joined by a nested task.
     pub(crate) fn joinable(&self) -> bool {
-        self.0.read().joinable
+        self.0.lock().joinable
     }
 }
 

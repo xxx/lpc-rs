@@ -46,6 +46,7 @@ logos = "0.16.1"
 lru = "0.18.3"
 once_cell = "1.10.0"
 parking_lot = "0.12.1"
+spin = "0.10"
 path-dedot = "4.0.1"
 phf = { version = "0.14.0", features = ["macros"] }
 readonly = "0.2.3"
