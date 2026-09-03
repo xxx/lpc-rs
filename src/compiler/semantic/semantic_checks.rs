@@ -270,8 +270,8 @@ pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationCont
     }
 }
 
-/// Check two types, and return the promotion if one occurs (or the same type if
-/// both are the same) Returns the first type if no promotion is possible.
+/// The type of a binary operation on its operand types; a pair the operation
+/// check rejects is `mixed`.
 fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType {
     if matches!(
         op,
@@ -293,22 +293,24 @@ fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType
         return type1.as_array(type2.is_array());
     }
 
-    if type1 == type2
-        || (!type1.is_array() && type2.is_array())
-        || (type1.is_array() && !type2.is_array())
-    {
+    if type1 == type2 {
         return type1;
     }
 
-    // array <op> array is always a mixed array
+    if type1 == LpcType::Mixed(false) || type2 == LpcType::Mixed(false) {
+        return LpcType::Mixed(false);
+    }
+
     if type1.is_array() && type2.is_array() {
         return LpcType::Mixed(true);
     }
 
     match (type1, type2) {
+        (LpcType::Int(false), LpcType::Float(false))
+        | (LpcType::Float(false), LpcType::Int(false)) => LpcType::Float(false),
         (LpcType::Int(false), LpcType::String(false))
         | (LpcType::String(false), LpcType::Int(false)) => LpcType::String(false),
-        (x, _) => x,
+        _ => LpcType::Mixed(false),
     }
 }
 
@@ -875,7 +877,7 @@ mod tests {
                     BinaryOperation::Add,
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(vec![123])),
-                        r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                        r: Box::new(ExpressionNode::from(VarNode::new("array1"))),
                         op: BinaryOperation::Add,
                         span: None
                     }),
@@ -1037,7 +1039,7 @@ mod tests {
                     BinaryOperation::Mul,
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(vec![222])),
-                        r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                        r: Box::new(ExpressionNode::from(VarNode::new("array1"))),
                         op: BinaryOperation::Add,
                         span: None
                     }),
@@ -1199,7 +1201,7 @@ mod tests {
                     BinaryOperation::Mod,
                     ExpressionNode::from(BinaryOpNode {
                         l: Box::new(ExpressionNode::from(vec![222])),
-                        r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
+                        r: Box::new(ExpressionNode::from(VarNode::new("array1"))),
                         op: BinaryOperation::Add,
                         span: None
                     }),
@@ -1278,7 +1280,7 @@ mod tests {
                 get_result(
                     BinaryOperation::Index,
                     ExpressionNode::from(BinaryOpNode {
-                        l: Box::new(ExpressionNode::from(vec![123])),
+                        l: Box::new(ExpressionNode::from(VarNode::new("string1"))),
                         r: Box::new(ExpressionNode::from(VarNode::new("int1"))),
                         op: BinaryOperation::Add,
                         span: None
@@ -1817,20 +1819,73 @@ mod tests {
         }
 
         #[test]
-        fn differing_array_status_returns_first_type() {
+        fn a_rejected_pair_is_mixed() {
+            for (l, r) in [
+                (LpcType::String(true), LpcType::Int(false)),
+                (LpcType::String(false), LpcType::Int(true)),
+                (LpcType::Object(false), LpcType::Int(false)),
+            ] {
+                let combo = combine_types(l, r, BinaryOperation::Add);
+                assert_eq!(combo, LpcType::Mixed(false), "{l} + {r}");
+            }
+        }
+
+        #[test]
+        fn mixed_absorbs_from_either_side() {
+            for op in [
+                BinaryOperation::Add,
+                BinaryOperation::Sub,
+                BinaryOperation::Mul,
+                BinaryOperation::Div,
+                BinaryOperation::Mod,
+                BinaryOperation::And,
+                BinaryOperation::Or,
+                BinaryOperation::Xor,
+                BinaryOperation::Shl,
+                BinaryOperation::Shr,
+                BinaryOperation::AndAnd,
+                BinaryOperation::OrOr,
+            ] {
+                let combo = combine_types(LpcType::Int(false), LpcType::Mixed(false), op);
+                assert_eq!(combo, LpcType::Mixed(false), "{op}");
+
+                let combo = combine_types(LpcType::Mixed(false), LpcType::Int(false), op);
+                assert_eq!(combo, LpcType::Mixed(false), "{op}");
+            }
+        }
+
+        #[test]
+        fn an_array_with_a_mixed_operand_is_mixed() {
             let combo = combine_types(
-                LpcType::String(true),
-                LpcType::Int(false),
+                LpcType::Int(true),
+                LpcType::Mixed(false),
                 BinaryOperation::Add,
             );
-            assert_eq!(combo, LpcType::String(true));
+            assert_eq!(combo, LpcType::Mixed(false));
 
             let combo = combine_types(
-                LpcType::String(false),
+                LpcType::Mixed(false),
                 LpcType::Int(true),
                 BinaryOperation::Add,
             );
-            assert_eq!(combo, LpcType::String(false));
+            assert_eq!(combo, LpcType::Mixed(false));
+        }
+
+        #[test]
+        fn int_with_float_is_float_from_either_side() {
+            let combo = combine_types(
+                LpcType::Int(false),
+                LpcType::Float(false),
+                BinaryOperation::Add,
+            );
+            assert_eq!(combo, LpcType::Float(false));
+
+            let combo = combine_types(
+                LpcType::Float(false),
+                LpcType::Int(false),
+                BinaryOperation::Mul,
+            );
+            assert_eq!(combo, LpcType::Float(false));
         }
 
         #[test]
