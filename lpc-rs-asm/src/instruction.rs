@@ -59,6 +59,9 @@ pub enum Instruction {
     /// Decrement the value in x.0 by 1
     Dec(RegisterVariant),
 
+    /// x.2 = x.0 / x.1
+    Div(RegisterVariant, RegisterVariant, RegisterVariant),
+
     /// `==` comparison
     /// x.2 = x.0 == x.1
     EqEq(RegisterVariant, RegisterVariant, RegisterVariant),
@@ -78,12 +81,6 @@ pub enum Instruction {
     /// Greater than or equal to
     /// x.2 = x.0 >= x.1
     Gte(RegisterVariant, RegisterVariant, RegisterVariant),
-
-    /// Integer division - x.2 = x.0 / x.1
-    IDiv(RegisterVariant, RegisterVariant, RegisterVariant),
-
-    /// Integer modulo division - x.2 = x.0 % x.1
-    IMod(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Increment the value in x.0 by 1
     Inc(RegisterVariant),
@@ -115,6 +112,9 @@ pub enum Instruction {
 
     /// Create a mapping from the keys and values in the hashmap
     MapConst(RegisterVariant),
+
+    /// x.2 = x.0 % x.1
+    Mod(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// x.2 = x.0 * x.1
     Mul(RegisterVariant, RegisterVariant, RegisterVariant),
@@ -224,13 +224,13 @@ impl Instruction {
             | Self::Sizeof(_, d) => Some(d),
             Self::Add(_, _, d)
             | Self::And(_, _, d)
+            | Self::Div(_, _, d)
             | Self::EqEq(_, _, d)
             | Self::Gt(_, _, d)
             | Self::Gte(_, _, d)
-            | Self::IDiv(_, _, d)
-            | Self::IMod(_, _, d)
             | Self::Lt(_, _, d)
             | Self::Lte(_, _, d)
+            | Self::Mod(_, _, d)
             | Self::Mul(_, _, d)
             | Self::NotEq(_, _, d)
             | Self::Or(_, _, d)
@@ -281,6 +281,7 @@ impl Instruction {
             Self::CatchStart(a0, a1) => Self::CatchStart(f(a0), a1),
             Self::Copy(a0, a1) => Self::Copy(f(a0), f(a1)),
             Self::Dec(a0) => Self::Dec(f(a0)),
+            Self::Div(a0, a1, a2) => Self::Div(f(a0), f(a1), f(a2)),
             Self::EqEq(a0, a1, a2) => Self::EqEq(f(a0), f(a1), f(a2)),
             Self::FunctionPtrConst {
                 location,
@@ -298,8 +299,6 @@ impl Instruction {
             },
             Self::Gt(a0, a1, a2) => Self::Gt(f(a0), f(a1), f(a2)),
             Self::Gte(a0, a1, a2) => Self::Gte(f(a0), f(a1), f(a2)),
-            Self::IDiv(a0, a1, a2) => Self::IDiv(f(a0), f(a1), f(a2)),
-            Self::IMod(a0, a1, a2) => Self::IMod(f(a0), f(a1), f(a2)),
             Self::Inc(a0) => Self::Inc(f(a0)),
             Self::Jmp(a0) => Self::Jmp(a0),
             Self::Jnz(a0, a1) => Self::Jnz(f(a0), a1),
@@ -309,6 +308,7 @@ impl Instruction {
             Self::Lt(a0, a1, a2) => Self::Lt(f(a0), f(a1), f(a2)),
             Self::Lte(a0, a1, a2) => Self::Lte(f(a0), f(a1), f(a2)),
             Self::MapConst(a0) => Self::MapConst(f(a0)),
+            Self::Mod(a0, a1, a2) => Self::Mod(f(a0), f(a1), f(a2)),
             Self::Mul(a0, a1, a2) => Self::Mul(f(a0), f(a1), f(a2)),
             Self::Not(a0, a1) => Self::Not(f(a0), f(a1)),
             Self::NewUpvalue(a0) => Self::NewUpvalue(f(a0)),
@@ -376,12 +376,11 @@ impl Instruction {
         "catch_start",
         "copy",
         "dec",
+        "div",
         "eq_eq",
         "function_ptr_const",
         "gt",
         "gte",
-        "i_div",
-        "i_mod",
         "inc",
         "jmp",
         "jnz",
@@ -391,6 +390,7 @@ impl Instruction {
         "lt",
         "lte",
         "map_const",
+        "mod",
         "mul",
         "not",
         "not_eq",
@@ -428,21 +428,21 @@ impl Instruction {
             Self::CatchStart(..) => 10,
             Self::Copy(..) => 11,
             Self::Dec(..) => 12,
-            Self::EqEq(..) => 13,
-            Self::FunctionPtrConst { .. } => 14,
-            Self::Gt(..) => 15,
-            Self::Gte(..) => 16,
-            Self::IDiv(..) => 17,
-            Self::IMod(..) => 18,
-            Self::Inc(..) => 19,
-            Self::Jmp(..) => 20,
-            Self::Jnz(..) => 21,
-            Self::Jz(..) => 22,
-            Self::Load(..) => 23,
-            Self::LoadMappingKey(..) => 24,
-            Self::Lt(..) => 25,
-            Self::Lte(..) => 26,
-            Self::MapConst(..) => 27,
+            Self::Div(..) => 13,
+            Self::EqEq(..) => 14,
+            Self::FunctionPtrConst { .. } => 15,
+            Self::Gt(..) => 16,
+            Self::Gte(..) => 17,
+            Self::Inc(..) => 18,
+            Self::Jmp(..) => 19,
+            Self::Jnz(..) => 20,
+            Self::Jz(..) => 21,
+            Self::Load(..) => 22,
+            Self::LoadMappingKey(..) => 23,
+            Self::Lt(..) => 24,
+            Self::Lte(..) => 25,
+            Self::MapConst(..) => 26,
+            Self::Mod(..) => 27,
             Self::Mul(..) => 28,
             Self::Not(..) => 29,
             Self::NotEq(..) => 30,
@@ -511,6 +511,9 @@ impl Display for Instruction {
             Instruction::Dec(r) => {
                 write!(f, "{} {r}", self.mnemonic())
             }
+            Instruction::Div(r1, r2, r3) => {
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
+            }
             Instruction::EqEq(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
@@ -525,12 +528,6 @@ impl Display for Instruction {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Gte(r1, r2, r3) => {
-                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
-            }
-            Instruction::IDiv(r1, r2, r3) => {
-                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
-            }
-            Instruction::IMod(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Inc(r) => {
@@ -559,6 +556,9 @@ impl Display for Instruction {
             }
             Instruction::MapConst(r) => {
                 write!(f, "{} {r}", self.mnemonic())
+            }
+            Instruction::Mod(r1, r2, r3) => {
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Mul(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
@@ -671,6 +671,7 @@ mod tests {
             CatchStart(r(), Address(0)),
             Copy(r(), r()),
             Dec(r()),
+            Div(r(), r(), r()),
             EqEq(r(), r(), r()),
             FunctionPtrConst {
                 location: r(),
@@ -679,8 +680,6 @@ mod tests {
             },
             Gt(r(), r(), r()),
             Gte(r(), r(), r()),
-            IDiv(r(), r(), r()),
-            IMod(r(), r(), r()),
             Inc(r()),
             Jmp(Address(0)),
             Jnz(r(), Address(0)),
@@ -690,6 +689,7 @@ mod tests {
             Lt(r(), r(), r()),
             Lte(r(), r(), r()),
             MapConst(r()),
+            Mod(r(), r(), r()),
             Mul(r(), r(), r()),
             Not(r(), r()),
             NotEq(r(), r(), r()),

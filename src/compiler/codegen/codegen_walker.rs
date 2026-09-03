@@ -426,8 +426,8 @@ impl CodegenWalker {
             BinaryOperation::Add => Instruction::Add(reg_left, reg_right, reg_result),
             BinaryOperation::Sub => Instruction::Sub(reg_left, reg_right, reg_result),
             BinaryOperation::Mul => Instruction::Mul(reg_left, reg_right, reg_result),
-            BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result),
-            BinaryOperation::Mod => Instruction::IMod(reg_left, reg_right, reg_result),
+            BinaryOperation::Div => Instruction::Div(reg_left, reg_right, reg_result),
+            BinaryOperation::Mod => Instruction::Mod(reg_left, reg_right, reg_result),
             BinaryOperation::Index => Instruction::Load(reg_left, reg_right, reg_result),
             BinaryOperation::AndAnd => {
                 unimplemented!("The short-circuiting behavior requires multiple instructions")
@@ -3219,7 +3219,7 @@ mod tests {
     }
 
     mod test_visit_call {
-        use lpc_rs_asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, IDiv};
+        use lpc_rs_asm::instruction::Instruction::{Call, CallOther, CatchEnd, CatchStart, Div};
         use lpc_rs_core::{function_arity::FunctionArity, function_flags::FunctionFlags};
 
         use super::*;
@@ -3363,7 +3363,7 @@ mod tests {
 
             let expected = vec![
                 CatchStart(RegisterVariant::Local(Register(1)), Address(2)),
-                IDiv(
+                Div(
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(2)),
