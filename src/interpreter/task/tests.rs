@@ -2897,6 +2897,50 @@ mod test_instructions {
         }
 
         #[tokio::test]
+        async fn a_call_after_a_missing_function_starts_clean() {
+            let code = indoc! { r##"
+                int n = 1;
+                varargs int second(int a, int b) { return b; }
+                void create() {
+                    object o = this_object();
+                    o->missing(1);
+                    n = second(2);
+                }
+            "##};
+
+            check_committed_globals(code, &[("n", BareVal::Int(0))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_call_after_a_caught_pointer_failure_starts_clean() {
+            let code = indoc! { r##"
+                int n = 1;
+                varargs int second(int a, int b) { return b; }
+                void create() {
+                    function f;
+                    catch(f(1));
+                    n = second(2);
+                }
+            "##};
+
+            check_committed_globals(code, &[("n", BareVal::Int(0))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_call_after_a_simul_efun_starts_clean() {
+            let code = indoc! { r##"
+                int n = 1;
+                varargs int second(int a, int b) { return b; }
+                void create() {
+                    simul_efun("x");
+                    n = second(2);
+                }
+            "##};
+
+            check_committed_globals(code, &[("n", BareVal::Int(0))]).await;
+        }
+
+        #[tokio::test]
         async fn an_efun_call_starts_with_only_its_own_arguments() {
             let (gs, registers) = run(
                 vec![
