@@ -3,7 +3,6 @@ use std::{
     ffi::OsStr,
     fmt::Display,
     hash::{Hash, Hasher},
-    ops::Add,
     path::Path,
 };
 
@@ -47,6 +46,19 @@ impl LpcString {
     #[inline]
     pub fn chars(&self) -> std::str::Chars<'_> {
         self.to_str().chars()
+    }
+
+    /// `a` followed by `b` in one allocation, or an error past
+    /// [`MAX_STRING_LENGTH`].
+    pub fn concat(a: &str, b: &str) -> Result<Self> {
+        let len = a.len() + b.len();
+        if len > MAX_STRING_LENGTH {
+            return Err(lpc_error!("overflow in string concatenation"));
+        }
+        let mut s = String::with_capacity(len);
+        s.push_str(a);
+        s.push_str(b);
+        Ok(Self::Dynamic(s))
     }
 }
 
@@ -157,24 +169,6 @@ impl AsRef<OsStr> for LpcString {
     }
 }
 
-impl Add<LpcString> for LpcString {
-    type Output = Result<Self>;
-
-    #[inline]
-    fn add(self, rhs: Self) -> Self::Output {
-        let new_capacity = self.len() + rhs.len();
-        if new_capacity <= MAX_STRING_LENGTH {
-            let mut s = String::with_capacity(self.len() + rhs.len());
-            s.push_str(self.to_str());
-            s.push_str(rhs.to_str());
-
-            Ok(Self::from(s))
-        } else {
-            Err(lpc_error!("overflow in string concatenation"))
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use ustr::ustr;
@@ -187,5 +181,21 @@ mod tests {
         assert_eq!(s.to_str(), "hello");
         assert_eq!(s, LpcString::from("hello"));
         assert_eq!(s.len(), 5);
+    }
+
+    #[test]
+    fn concat_joins_in_order() {
+        let joined = LpcString::concat("hello, ", "world").unwrap();
+        assert_eq!(joined, "hello, world");
+    }
+
+    #[test]
+    fn concat_past_the_maximum_length_is_an_error() {
+        let full = "a".repeat(MAX_STRING_LENGTH);
+        let result = LpcString::concat(&full, "b");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "overflow in string concatenation"
+        );
     }
 }

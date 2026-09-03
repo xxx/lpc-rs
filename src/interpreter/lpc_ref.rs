@@ -13,7 +13,7 @@ use lpc_rs_core::{BaseFloat, LpcFloatInner, LpcIntInner, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::constant::LpcConstant;
 use lpc_rs_utils::lpc_string::LpcString;
-use lpc_rs_utils::{string, string::concatenate_strings};
+use lpc_rs_utils::string;
 
 use crate::{
     compiler::ast::{binary_op_node::BinaryOperation, unary_op_node::UnaryOperation},
@@ -397,13 +397,13 @@ impl LpcRef {
 
         match (self, rhs) {
             (LpcRef::Int(i), LpcRef::String(s)) => {
-                Ok(LpcString::from(concatenate_strings(i.to_string(), s.to_str())?).into())
+                Ok(LpcString::concat(&i.to_string(), s.to_str())?.into())
             }
             (LpcRef::String(a), LpcRef::String(b)) => {
-                Ok(LpcString::from(concatenate_strings(a.to_string(), b.to_str())?).into())
+                Ok(LpcString::concat(a.to_str(), b.to_str())?.into())
             }
             (LpcRef::String(s), LpcRef::Int(i)) => {
-                Ok(LpcString::from(concatenate_strings(s.to_string(), i.to_string())?).into())
+                Ok(LpcString::concat(s.to_str(), &i.to_string())?.into())
             }
             (LpcRef::Array(cell), LpcRef::Array(rhs_cell)) => txn.with(|t| {
                 let (a, b) = (t.read_array(cell.id), t.read_array(rhs_cell.id));
