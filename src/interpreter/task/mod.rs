@@ -158,13 +158,14 @@ pub struct Task<const STACKSIZE: usize> {
     /// Stack of [`CatchPoint`]s
     catch_points: ThinVec<CatchPoint>,
 
-    /// The arg vector, populated prior to executing any of the `Call`-family [`Instruction`](lpc_rs_asm::instruction::Instruction)s
-    pub args: ThinVec<Arg>,
+    /// Staging for the next call: filled by `PushArg`/`PushRef`, emptied by
+    /// the eval loop after the consuming instruction, success or not.
+    args: ThinVec<Arg>,
 
-    /// The vector used to collect arguments when creating a partially-applied function pointer
-    pub partial_args: ThinVec<Option<RegisterVariant>>,
+    /// Staging for the next `FunctionPtrConst`, filled by `PushPartialArg`.
+    partial_args: ThinVec<Option<RegisterVariant>>,
 
-    /// The vector used to collect members of a soon-to-be-created array
+    /// Staging for the next `AConst` or `MapConst`, filled by `PushArrayItem`.
     array_items: ThinVec<RegisterVariant>,
 
     /// The context of this task; its `txn` is the transaction this task runs in.

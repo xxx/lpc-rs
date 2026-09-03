@@ -2805,6 +2805,234 @@ mod test_instructions {
         }
     }
 
+    mod test_staging {
+        use std::sync::Arc;
+
+        use lpc_rs_asm::instruction::Instruction::{self, *};
+        use lpc_rs_core::{
+            INIT_GLOBALS, function_arity::FunctionArity, function_receiver::FunctionReceiver,
+            lpc_path::LpcPath, lpc_type::LpcType,
+        };
+        use lpc_rs_function_support::{
+            constant::LpcConstant, function_prototype::FunctionPrototypeBuilder,
+        };
+        use lpc_rs_utils::lpc_string::LpcString;
+
+        use super::*;
+        use crate::{
+            interpreter::{efun::EFUN_PROTOTYPES, program::Program},
+            test_support::test_config,
+        };
+
+        fn local(n: RegisterSize) -> RegisterVariant {
+            Register(n).as_local()
+        }
+
+        fn constant(n: RegisterSize) -> RegisterVariant {
+            Register(n).as_constant()
+        }
+
+        fn string(s: &str) -> LpcConstant {
+            LpcConstant::String(Arc::new(LpcString::Static(ustr(s))))
+        }
+
+        /// `second(a, b)` returns `b`.
+        fn second(path: &Arc<LpcPath>) -> ProgramFunction {
+            let prototype = FunctionPrototypeBuilder::default()
+                .name("second")
+                .filename(path.clone())
+                .return_type(LpcType::Mixed(false))
+                .arity(FunctionArity::new(2))
+                .arg_types(vec![LpcType::Mixed(false), LpcType::Mixed(false)])
+                .build()
+                .unwrap();
+            let mut func = ProgramFunction::new(prototype, 0);
+            func.push_instruction(Copy(local(2), local(0)), None);
+            func.push_instruction(Ret, None);
+            func
+        }
+
+        /// Run a hand-assembled initializer that never clears a staging
+        /// vector, alongside `second`, and return its registers.
+        async fn run(
+            instructions: Vec<Instruction>,
+            num_locals: RegisterSize,
+            constants: Vec<LpcConstant>,
+        ) -> (Arc<GlobalState>, Vec<LpcRef>) {
+            let config = Arc::new(test_config());
+            let path = Arc::new(LpcPath::new_in_game("/my_file.c", "/", &*config.lib_dir));
+
+            let prototype = FunctionPrototypeBuilder::default()
+                .name(INIT_GLOBALS)
+                .filename(path.clone())
+                .return_type(LpcType::Void)
+                .build()
+                .unwrap();
+            let mut initializer = ProgramFunction::new(prototype, num_locals);
+            for instruction in instructions {
+                initializer.push_instruction(instruction, None);
+            }
+            initializer.constants = constants;
+
+            let mut functions = IndexMap::default();
+            functions.insert("second".to_string(), Arc::new(second(&path)));
+            let program = Program {
+                filename: path,
+                functions: Box::new(functions),
+                initializer: Some(initializer.into()),
+                ..Default::default()
+            };
+
+            let (tx, _rx) = mpsc::channel(128);
+            let global_state = GlobalState::new(config, tx);
+            let task = initialize_program::<20>(program, global_state)
+                .await
+                .expect("failed to initialize");
+            let registers = task.popped_frame.unwrap().registers.to_vec();
+            (task.context.global_state, registers)
+        }
+
+        fn stringp() -> Instruction {
+            CallEfun(u8::try_from(EFUN_PROTOTYPES.get_index_of("stringp").unwrap()).unwrap())
+        }
+
+        #[tokio::test]
+        async fn an_efun_call_starts_with_only_its_own_arguments() {
+            let (gs, registers) = run(
+                vec![
+                    PushArg(constant(0)),
+                    stringp(),
+                    Copy(local(0), local(1)),
+                    PushArg(constant(1)),
+                    stringp(),
+                    Copy(local(0), local(2)),
+                    Ret,
+                ],
+                2,
+                vec![LpcConstant::Int(7), string("cde")],
+            )
+            .await;
+
+            BareVal::Int(1).assert_equal(&gs, &registers[2]);
+        }
+
+        #[tokio::test]
+        async fn a_local_call_starts_with_only_its_own_arguments() {
+            let (gs, registers) = run(
+                vec![
+                    PushArg(constant(0)),
+                    Call(ustr("second")),
+                    Copy(local(0), local(1)),
+                    PushArg(constant(1)),
+                    Call(ustr("second")),
+                    Copy(local(0), local(2)),
+                    Ret,
+                ],
+                2,
+                vec![string("ab"), string("cde")],
+            )
+            .await;
+
+            BareVal::Int(0).assert_equal(&gs, &registers[2]);
+        }
+
+        #[tokio::test]
+        async fn a_pointer_call_starts_with_only_its_own_arguments() {
+            let (gs, registers) = run(
+                vec![
+                    FunctionPtrConst {
+                        location: local(1),
+                        receiver: FunctionReceiver::Local,
+                        name: ustr("second"),
+                    },
+                    PushArg(constant(0)),
+                    CallFp(local(1)),
+                    Copy(local(0), local(2)),
+                    PushArg(constant(1)),
+                    CallFp(local(1)),
+                    Copy(local(0), local(3)),
+                    Ret,
+                ],
+                3,
+                vec![string("ab"), string("cde")],
+            )
+            .await;
+
+            BareVal::Int(0).assert_equal(&gs, &registers[3]);
+        }
+
+        #[tokio::test]
+        async fn an_array_starts_with_only_its_own_items() {
+            let (gs, registers) = run(
+                vec![
+                    PushArrayItem(constant(0)),
+                    AConst(local(1)),
+                    PushArrayItem(constant(1)),
+                    AConst(local(2)),
+                    Ret,
+                ],
+                2,
+                vec![string("ab"), string("cde")],
+            )
+            .await;
+
+            BareVal::Array(vec![BareVal::String("cde".into())]).assert_equal(&gs, &registers[2]);
+        }
+
+        #[tokio::test]
+        async fn a_mapping_starts_with_only_its_own_pairs() {
+            let (gs, registers) = run(
+                vec![
+                    PushArrayItem(constant(0)),
+                    PushArrayItem(constant(2)),
+                    MapConst(local(1)),
+                    PushArrayItem(constant(1)),
+                    PushArrayItem(constant(3)),
+                    MapConst(local(2)),
+                    Ret,
+                ],
+                2,
+                vec![
+                    string("ab"),
+                    string("cde"),
+                    LpcConstant::Int(1),
+                    LpcConstant::Int(2),
+                ],
+            )
+            .await;
+
+            let expected = HashMap::from([(BareVal::String("cde".into()), BareVal::Int(2))]);
+            BareVal::Mapping(expected).assert_equal(&gs, &registers[2]);
+        }
+
+        #[tokio::test]
+        async fn a_pointer_starts_with_only_its_own_partial_arguments() {
+            let (gs, registers) = run(
+                vec![
+                    PushPartialArg(Some(constant(0))),
+                    FunctionPtrConst {
+                        location: local(1),
+                        receiver: FunctionReceiver::Local,
+                        name: ustr("second"),
+                    },
+                    PushPartialArg(Some(constant(1))),
+                    FunctionPtrConst {
+                        location: local(2),
+                        receiver: FunctionReceiver::Local,
+                        name: ustr("second"),
+                    },
+                    Ret,
+                ],
+                2,
+                vec![string("ab"), string("cde")],
+            )
+            .await;
+
+            BareVal::Function("second".into(), vec![Some(BareVal::String("cde".into()))])
+                .assert_equal(&gs, &registers[2]);
+        }
+    }
+
     mod test_store {
         use super::*;
 
