@@ -43,7 +43,6 @@ pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
 
     let instructions = vec![
         Instruction::PopulateArgv(RegisterVariant::Local(Register(3)), 2, 4),
-        Instruction::ClearArgs,
         Instruction::PushArg(RegisterVariant::Local(Register(2))),
         Instruction::PushArg(RegisterVariant::Local(Register(3))),
         Instruction::CallEfun(
@@ -53,13 +52,11 @@ pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
             RegisterVariant::Local(Register(0)),
             RegisterVariant::Local(Register(4)),
         ),
-        Instruction::ClearArgs,
         Instruction::CallFp(RegisterVariant::Local(Register(4))), // g(argv)
         Instruction::Copy(
             RegisterVariant::Local(Register(0)),
             RegisterVariant::Local(Register(5)),
         ),
-        Instruction::ClearArgs,
         Instruction::PushArg(RegisterVariant::Local(Register(5))),
         Instruction::CallFp(RegisterVariant::Local(Register(1))), // f(g(argv))
         Instruction::Ret,

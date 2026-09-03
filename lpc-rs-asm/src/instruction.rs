@@ -50,16 +50,6 @@ pub enum Instruction {
     /// get back to the correct location.
     CatchStart(RegisterVariant, Address),
 
-    /// Clear the `Task`'s `args` vector, in preparation for a new call
-    ClearArgs,
-
-    /// Clear the `Task`'s `partial_args` vector, in preparation for a new function pointer
-    ClearPartialArgs,
-
-    /// Clear the `Task`'s `array_items` vector, in preparation for a
-    /// new array or mapping constant.
-    ClearArrayItems,
-
     /// Copy x.0 to x.1
     Copy(RegisterVariant, RegisterVariant),
 
@@ -177,15 +167,16 @@ pub enum Instruction {
     /// parameters that have default values.
     PopulateDefaults,
 
-    /// Push the location into the Task's `args` vector
+    /// Push the location onto the `Task`'s `args` staging; the call
+    /// instruction that consumes it leaves it empty, success or not.
     PushArg(RegisterVariant),
 
-    /// Push a location onto the `Task`'s `array_items` vector, used for creating
-    /// array literals
+    /// Push a location onto the `Task`'s `array_items` staging for the next
+    /// `AConst` or `MapConst`, which leaves it empty.
     PushArrayItem(RegisterVariant),
 
-    /// Push a location onto the `Task`'s `partial_args` vector, used for creating
-    /// function pointer literals
+    /// Push a location onto the `Task`'s `partial_args` staging for the next
+    /// `FunctionPtrConst`, which leaves it empty.
     PushPartialArg(Option<RegisterVariant>),
 
     /// Push the location as a by-reference argument: the callee aliases the
@@ -269,9 +260,6 @@ impl Instruction {
             | Self::CallOther(_, _)
             | Self::CatchEnd
             | Self::CatchStart(_, _)
-            | Self::ClearArgs
-            | Self::ClearPartialArgs
-            | Self::ClearArrayItems
             | Self::Dec(_)
             | Self::Inc(_)
             | Self::Jmp(_)
@@ -305,9 +293,6 @@ impl Instruction {
             Self::CallOther(a0, a1) => Self::CallOther(f(a0), f(a1)),
             Self::CatchEnd => Self::CatchEnd,
             Self::CatchStart(a0, a1) => Self::CatchStart(f(a0), a1),
-            Self::ClearArgs => Self::ClearArgs,
-            Self::ClearPartialArgs => Self::ClearPartialArgs,
-            Self::ClearArrayItems => Self::ClearArrayItems,
             Self::Copy(a0, a1) => Self::Copy(f(a0), f(a1)),
             Self::Dec(a0) => Self::Dec(f(a0)),
             Self::EqEq(a0, a1, a2) => Self::EqEq(f(a0), f(a1), f(a2)),
@@ -392,7 +377,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 53;
+    pub const COUNT: usize = 50;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -406,9 +391,6 @@ impl Instruction {
         "call_other",
         "catch_end",
         "catch_start",
-        "clear_args",
-        "clear_partial_args",
-        "clear_array_items",
         "copy",
         "dec",
         "eq_eq",
@@ -464,49 +446,46 @@ impl Instruction {
             Self::CallOther(..) => 7,
             Self::CatchEnd => 8,
             Self::CatchStart(..) => 9,
-            Self::ClearArgs => 10,
-            Self::ClearPartialArgs => 11,
-            Self::ClearArrayItems => 12,
-            Self::Copy(..) => 13,
-            Self::Dec(..) => 14,
-            Self::EqEq(..) => 15,
-            Self::FunctionPtrConst { .. } => 16,
-            Self::Gt(..) => 17,
-            Self::Gte(..) => 18,
-            Self::IAdd(..) => 19,
-            Self::IDiv(..) => 20,
-            Self::IMod(..) => 21,
-            Self::Inc(..) => 22,
-            Self::IMul(..) => 23,
-            Self::ISub(..) => 24,
-            Self::Jmp(..) => 25,
-            Self::Jnz(..) => 26,
-            Self::Jz(..) => 27,
-            Self::Load(..) => 28,
-            Self::LoadMappingKey(..) => 29,
-            Self::Lt(..) => 30,
-            Self::Lte(..) => 31,
-            Self::MapConst(..) => 32,
-            Self::MAdd(..) => 33,
-            Self::MMul(..) => 34,
-            Self::MSub(..) => 35,
-            Self::Not(..) => 36,
-            Self::NotEq(..) => 37,
-            Self::NewUpvalue(..) => 38,
-            Self::Or(..) => 39,
-            Self::PopulateArgv(..) => 40,
-            Self::PopulateDefaults => 41,
-            Self::PushArg(..) => 42,
-            Self::PushArrayItem(..) => 43,
-            Self::PushPartialArg(..) => 44,
-            Self::PushRef(..) => 45,
-            Self::Range(..) => 46,
-            Self::Ret => 47,
-            Self::Shl(..) => 48,
-            Self::Shr(..) => 49,
-            Self::Sizeof(..) => 50,
-            Self::Store(..) => 51,
-            Self::Xor(..) => 52,
+            Self::Copy(..) => 10,
+            Self::Dec(..) => 11,
+            Self::EqEq(..) => 12,
+            Self::FunctionPtrConst { .. } => 13,
+            Self::Gt(..) => 14,
+            Self::Gte(..) => 15,
+            Self::IAdd(..) => 16,
+            Self::IDiv(..) => 17,
+            Self::IMod(..) => 18,
+            Self::Inc(..) => 19,
+            Self::IMul(..) => 20,
+            Self::ISub(..) => 21,
+            Self::Jmp(..) => 22,
+            Self::Jnz(..) => 23,
+            Self::Jz(..) => 24,
+            Self::Load(..) => 25,
+            Self::LoadMappingKey(..) => 26,
+            Self::Lt(..) => 27,
+            Self::Lte(..) => 28,
+            Self::MapConst(..) => 29,
+            Self::MAdd(..) => 30,
+            Self::MMul(..) => 31,
+            Self::MSub(..) => 32,
+            Self::Not(..) => 33,
+            Self::NotEq(..) => 34,
+            Self::NewUpvalue(..) => 35,
+            Self::Or(..) => 36,
+            Self::PopulateArgv(..) => 37,
+            Self::PopulateDefaults => 38,
+            Self::PushArg(..) => 39,
+            Self::PushArrayItem(..) => 40,
+            Self::PushPartialArg(..) => 41,
+            Self::PushRef(..) => 42,
+            Self::Range(..) => 43,
+            Self::Ret => 44,
+            Self::Shl(..) => 45,
+            Self::Shr(..) => 46,
+            Self::Sizeof(..) => 47,
+            Self::Store(..) => 48,
+            Self::Xor(..) => 49,
         }
     }
 
@@ -547,9 +526,6 @@ impl Display for Instruction {
             Instruction::CallSimulEfun(name) => {
                 write!(f, "{} {name}", self.mnemonic())
             }
-            Instruction::ClearArgs => f.write_str(self.mnemonic()),
-            Instruction::ClearArrayItems => f.write_str(self.mnemonic()),
-            Instruction::ClearPartialArgs => f.write_str(self.mnemonic()),
             Instruction::Copy(r1, r2) => {
                 write!(f, "{} {r1}, {r2}", self.mnemonic())
             }
@@ -725,9 +701,6 @@ mod tests {
             CallOther(r(), r()),
             CatchEnd,
             CatchStart(r(), Address(0)),
-            ClearArgs,
-            ClearPartialArgs,
-            ClearArrayItems,
             Copy(r(), r()),
             Dec(r()),
             EqEq(r(), r(), r()),
@@ -823,7 +796,7 @@ mod tests {
             .iter()
             .filter(|i| i.dest_register().is_none())
             .count();
-        assert_eq!(none_count, 24);
+        assert_eq!(none_count, 21);
         for i in [
             Call(ustr("f")),
             CallEfun(0),
