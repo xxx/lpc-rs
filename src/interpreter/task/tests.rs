@@ -1290,6 +1290,44 @@ mod test_instructions {
 
             check_committed_globals(code, &[("q", BareVal::Object("/my_file".into()))]).await;
         }
+
+        /// A `CallEfun` index past the table is the compiler's bug, not a panic.
+        #[tokio::test]
+        async fn an_index_past_the_table_is_a_bug() {
+            use lpc_rs_asm::instruction::Instruction::{CallEfun, Ret};
+            use lpc_rs_core::{INIT_GLOBALS, lpc_path::LpcPath, lpc_type::LpcType};
+            use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
+
+            use crate::{interpreter::program::Program, test_support::test_config};
+
+            let config = Arc::new(test_config());
+            let path = Arc::new(LpcPath::new_in_game("/my_file.c", "/", &*config.lib_dir));
+            let prototype = FunctionPrototypeBuilder::default()
+                .name(INIT_GLOBALS)
+                .filename(path.clone())
+                .return_type(LpcType::Void)
+                .build()
+                .unwrap();
+            let mut initializer = ProgramFunction::new(prototype, 0);
+            initializer.push_instruction(CallEfun(u8::MAX, ArgList(0)), None);
+            initializer.push_instruction(Ret, None);
+            initializer.arg_lists = vec![vec![]];
+            let program = Program {
+                filename: path,
+                initializer: Some(initializer.into()),
+                ..Default::default()
+            };
+
+            let (tx, _rx) = mpsc::channel(128);
+            let error = initialize_program::<20>(program, GlobalState::new(config, tx))
+                .await
+                .expect_err("index 255 names no efun");
+
+            assert_eq!(
+                error.to_string(),
+                "runtime bug: `CallEfun` index 255 is past the efun table"
+            );
+        }
     }
 
     mod test_call_simul_efun {

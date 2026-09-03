@@ -10,7 +10,7 @@ use thin_vec::ThinVec;
 use tracing::{error, instrument, trace, warn};
 
 use crate::interpreter::{
-    efun::EFUN_FUNCTIONS,
+    efun::Efun,
     lpc_array::LpcArray,
     lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL, int_div, int_rem, int_shl, int_shr},
@@ -69,7 +69,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         if f.prototype.is_efun() {
             // call the efun, then we're done with this Task
-            if let Err(e) = self.prepare_and_call_efun(f.name()).await {
+            if let Err(e) = self.call_frame_efun().await {
                 return Err(e.with_stack_trace(self.stack.stack_trace()));
             }
         } else {
@@ -133,12 +133,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Finish an instruction that awaits.
     async fn dispatch(&mut self, call: AsyncCall) -> lpc_rs_errors::Result<()> {
         match call {
-            AsyncCall::Efun(name_idx, list) => {
+            AsyncCall::Efun(index, list) => {
+                let Some(efun) = Efun::from_index(usize::from(index)) else {
+                    return Err(self
+                        .runtime_bug(format!("`CallEfun` index {index} is past the efun table")));
+                };
                 let process = self.stack.current_frame()?.process.clone();
-                let (name, pf) = EFUN_FUNCTIONS.get_index(name_idx as usize).unwrap();
-                self.push_call_frame(process, pf.clone(), list, false)?;
+                self.push_call_frame(process, efun.function().clone(), list, false)?;
 
-                self.prepare_and_call_efun(name).await
+                self.prepare_and_call_efun(efun).await
             }
             AsyncCall::FunctionPointer(location, list) => self.handle_call_fp(location, list).await,
             AsyncCall::Other(receiver, name, list) => {

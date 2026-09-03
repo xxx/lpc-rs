@@ -89,7 +89,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.stack.push(new_frame)?;
 
         if function.prototype.is_efun() {
-            self.prepare_and_call_efun(function.name()).await?;
+            self.call_frame_efun().await?;
         }
 
         Ok(())
