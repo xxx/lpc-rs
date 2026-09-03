@@ -1387,7 +1387,7 @@ mod tests {
             let mut program = Program::default();
             program
                 .functions
-                .insert(String::from("known"), program_function.into());
+                .insert(ustr("known"), program_function.into());
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
@@ -1420,7 +1420,7 @@ mod tests {
             let mut program = Program::default();
             program
                 .functions
-                .insert(String::from("known"), program_function.into());
+                .insert(ustr("known"), program_function.into());
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
@@ -1454,7 +1454,7 @@ mod tests {
             let mut program = Program::default();
             program
                 .functions
-                .insert(String::from("known"), program_function.into());
+                .insert(ustr("known"), program_function.into());
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
@@ -1492,7 +1492,7 @@ mod tests {
             let mut program = Program::default();
             program
                 .functions
-                .insert(String::from("known"), program_function.into());
+                .insert(ustr("known"), program_function.into());
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
@@ -1546,7 +1546,7 @@ mod tests {
             let mut program = Program::default();
             program
                 .functions
-                .insert(String::from("known"), program_function.into());
+                .insert(ustr("known"), program_function.into());
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
@@ -1587,7 +1587,7 @@ mod tests {
             let mut program = Program::default();
             program
                 .functions
-                .insert(String::from("known"), program_function.into());
+                .insert(ustr("known"), program_function.into());
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
@@ -1625,7 +1625,7 @@ mod tests {
             let mut program = Program::default();
             program
                 .functions
-                .insert(String::from("known"), program_function.into());
+                .insert(ustr("known"), program_function.into());
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();
@@ -2242,7 +2242,7 @@ mod tests {
             let mut program = Program::default();
             program
                 .functions
-                .insert(String::from("known"), program_function.into());
+                .insert(ustr("known"), program_function.into());
 
             let mut scopes = ScopeTree::default();
             scopes.push_new();

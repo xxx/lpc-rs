@@ -354,7 +354,11 @@ impl CodegenWalker {
             .context
             .inherited_functions
             .into_iter()
-            .chain(self.functions)
+            .chain(
+                self.functions
+                    .into_iter()
+                    .map(|(name, function)| (ustr(&name), function)),
+            )
             .collect();
 
         // Note that due to name clashes, only the latest seen version of a function is included,
@@ -3897,7 +3901,7 @@ mod tests {
             assert_eq!(closure.name(), "closure-0");
 
             let program = walker.into_program().unwrap();
-            assert!(program.functions.contains_key(&name));
+            assert!(program.functions.contains_key(&ustr(&name)));
             assert!(!program.unmangled_functions.contains_key("closure-0"));
         }
 
@@ -6799,7 +6803,7 @@ mod tests {
             Some(RegisterVariant::Global(Register(8)))
         );
 
-        let b_init = &program.functions["init-globals__v__/sibling_b.c__pv__"];
+        let b_init = &program.functions[&ustr("init-globals__v__/sibling_b.c__pv__")];
         let globals_written: Vec<_> = b_init
             .instructions
             .iter()
@@ -6810,7 +6814,7 @@ mod tests {
             .collect();
         assert_eq!(globals_written, vec![4, 5, 6]);
 
-        let own_init = &program.functions["init-globals__v____pv__"];
+        let own_init = &program.functions[&ustr("init-globals__v____pv__")];
         assert!(own_init.instructions.iter().all(|i| !matches!(i, Call(..))));
 
         assert_eq!(
@@ -6855,7 +6859,7 @@ mod tests {
             ]
         );
 
-        let set_left_a = &program.functions["set_left_a__v__/diamond_left.c__pb__i"];
+        let set_left_a = &program.functions[&ustr("set_left_a__v__/diamond_left.c__pb__i")];
         assert!(
             set_left_a
                 .instructions

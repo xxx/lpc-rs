@@ -240,9 +240,7 @@ mod tests {
 
         let func = ProgramFunction::new(prototype, 0);
 
-        program
-            .functions
-            .insert(String::from("duplicate"), func.into());
+        program.functions.insert(ustr("duplicate"), func.into());
 
         context.inherits.push(program);
 

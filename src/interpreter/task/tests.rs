@@ -3542,7 +3542,7 @@ mod test_instructions {
             initializer.arg_lists = arg_lists;
 
             let mut functions = IndexMap::default();
-            functions.insert("second".to_string(), Arc::new(second(&path)));
+            functions.insert(ustr("second"), Arc::new(second(&path)));
             let program = Program {
                 filename: path,
                 functions: Box::new(functions),
