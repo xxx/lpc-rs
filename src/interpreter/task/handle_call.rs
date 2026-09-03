@@ -164,20 +164,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         &mut self,
         func_name: Ustr,
     ) -> lpc_rs_errors::Result<()> {
+        // A caller links by name to whichever resident a task starts with, so a
+        // destructed or recompiled simul-efun object is a runtime miss here.
         let Some(simul_efuns) = self.context.simul_efuns() else {
-            // This could be legitimately hit in the case an object was compiled with simul_efuns,
-            // cached to disk, and then later executed without them.
-            // tl;dr objects are dynamically linked.
-            return Err(self.runtime_error("Unable to find simul_efuns. Were they configured?"));
+            return Err(self.runtime_error(format!(
+                "call to simul efun `{func_name}`: no simul-efun object is loaded"
+            )));
         };
 
-        let func = {
-            if let Some(func) = simul_efuns.program.lookup_function(func_name) {
-                func.clone()
-            } else {
-                let msg = format!("Call to unknown simul efun `{func_name}`");
-                return Err(self.runtime_error(msg));
-            }
+        let Some(func) = simul_efuns.program.lookup_function(func_name).cloned() else {
+            return Err(self.runtime_error(format!("call to unknown simul efun `{func_name}`")));
         };
 
         let mut new_frame = self
