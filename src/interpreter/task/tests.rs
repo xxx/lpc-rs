@@ -534,6 +534,44 @@ mod test_instructions {
         }
     }
 
+    mod test_switch_ranges {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_range_case_matches_only_the_switch_value_inside_it() {
+            let code = indoc! { r##"
+                    int below; int inside; int above;
+                    int f(int x) { switch (x) { case 10..200: return 1; default: return 0; } }
+                    void create() { below = f(5); inside = f(50); above = f(500); }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("below", BareVal::Int(0)),
+                    ("inside", BareVal::Int(1)),
+                    ("above", BareVal::Int(0)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn an_open_range_case_is_bounded_on_one_side() {
+            let code = indoc! { r##"
+                    int low; int high;
+                    int f(int x) { switch (x) { case ..9: return 1; case 100..: return 2; default: return 0; } }
+                    void create() { low = f(-4) * 10 + f(9); high = f(100) * 10 + f(50); }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[("low", BareVal::Int(11)), ("high", BareVal::Int(20))],
+            )
+            .await;
+        }
+    }
+
     mod test_bitwise_not {
         use super::*;
 
