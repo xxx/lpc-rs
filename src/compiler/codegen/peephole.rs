@@ -1,4 +1,4 @@
-//! Copy coalescing: the per-function rewrite behind
+//! The peephole: the per-function rewrite behind
 //! [`finalize_function`](super::codegen_walker::CodegenWalker), run after
 //! label backpatch so every jump operand is a concrete [`Address`].
 
@@ -6,25 +6,28 @@ use lpc_rs_asm::{address::Address, instruction::Instruction};
 use lpc_rs_core::register::{Register, RegisterVariant};
 use lpc_rs_function_support::program_function::ProgramFunction;
 
-/// Rewrite `func` so values land where they are used: fold a
-/// define-into-fresh-temp followed by its `Copy` into a retargeted dest,
-/// read a call's result straight from r0 where no clobber intervenes,
-/// drop identity copies, and drop copies into temps nothing reads.
-pub fn coalesce(func: &mut ProgramFunction) {
-    while pass(func) {}
+/// Rewrite `func` to a fixpoint of the copy rules and the control rules.
+///
+/// Copy rules: fold a define-into-fresh-temp followed by its `Copy` into
+/// a retargeted dest, read a call's result straight from r0 where no
+/// clobber intervenes, drop identity copies, and drop copies into temps
+/// nothing reads. Control rules: drop the unreachable tail after a `Ret`
+/// or `Jmp`, and drop a `Jmp` to the next address.
+pub fn peephole(func: &mut ProgramFunction) {
+    loop {
+        let copies = coalesce_copies(func);
+        let control = prune_control(func);
+        if !copies && !control {
+            break;
+        }
+    }
 }
 
-/// One sweep; true when it deleted anything.
-fn pass(func: &mut ProgramFunction) -> bool {
-    let r0 = RegisterVariant::Local(Register(0));
-    let named: Vec<RegisterVariant> = func
-        .local_variables
-        .iter()
-        .filter_map(|sym| sym.location)
-        .chain(func.arg_locations.iter().copied())
-        .collect();
-    let jump_targets: Vec<Address> = func
-        .instructions
+/// The addresses named by jump operands and catch ends; a
+/// `PopulateDefaults` table slot is not among them, being entered by
+/// offset.
+fn jump_targets(func: &ProgramFunction) -> Vec<Address> {
+    func.instructions
         .iter()
         .filter_map(|i| match *i {
             Instruction::Jmp(a)
@@ -33,7 +36,67 @@ fn pass(func: &mut ProgramFunction) -> bool {
             | Instruction::CatchStart(_, a) => Some(a),
             _ => None,
         })
+        .collect()
+}
+
+/// One sweep of the control rules; true when it deleted anything.
+fn prune_control(func: &mut ProgramFunction) -> bool {
+    let len = func.instructions.len();
+    let mut landing = vec![false; len];
+    for a in jump_targets(func) {
+        if a.0 < len {
+            landing[a.0] = true;
+        }
+    }
+    // A table slot is landed on by offset and must keep its position.
+    let mut slot = vec![false; len];
+    let num_default_args = usize::from(func.arity().num_default_args);
+    for (i, instruction) in func.instructions.iter().enumerate() {
+        if matches!(instruction, Instruction::PopulateDefaults) {
+            for s in slot.iter_mut().skip(i + 1).take(num_default_args) {
+                *s = true;
+            }
+        }
+    }
+
+    let mut delete = vec![false; len];
+    let mut changed = false;
+    let mut dead = false;
+    for i in 0..len {
+        if landing[i] || slot[i] {
+            dead = false;
+        }
+        if dead {
+            delete[i] = true;
+            changed = true;
+            continue;
+        }
+        match func.instructions[i] {
+            Instruction::Jmp(a) if a.0 == i + 1 && !slot[i] => {
+                delete[i] = true;
+                changed = true;
+            }
+            Instruction::Jmp(_) | Instruction::Ret => dead = true,
+            _ => {}
+        }
+    }
+
+    if changed {
+        remove(func, &delete);
+    }
+    changed
+}
+
+/// One sweep of the copy rules; true when it deleted anything.
+fn coalesce_copies(func: &mut ProgramFunction) -> bool {
+    let r0 = RegisterVariant::Local(Register(0));
+    let named: Vec<RegisterVariant> = func
+        .local_variables
+        .iter()
+        .filter_map(|sym| sym.location)
+        .chain(func.arg_locations.iter().copied())
         .collect();
+    let jump_targets = jump_targets(func);
 
     let mut delete = vec![false; func.instructions.len()];
     let mut changed = false;
@@ -210,7 +273,7 @@ mod tests {
     use std::{collections::HashMap, sync::Arc};
 
     use lpc_rs_asm::instruction::Instruction::*;
-    use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType};
+    use lpc_rs_core::{function_arity::FunctionArity, lpc_path::LpcPath, lpc_type::LpcType};
     use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
 
     use super::*;
@@ -240,7 +303,7 @@ mod tests {
     #[test]
     fn a_dead_copy_from_a_constant_is_deleted() {
         let mut func = func_with(vec![Copy(Register(0).as_constant(), local(2)), Ret]);
-        coalesce(&mut func);
+        peephole(&mut func);
         assert_eq!(func.instructions, vec![Ret]);
     }
 
@@ -249,7 +312,7 @@ mod tests {
         let mut func = func_with(vec![
             Add(local(8), local(9), local(1)),
             Copy(local(1), global(0)),
-            Jmp(Address(3)),
+            Jz(local(8), Address(3)),
             Ret,
         ]);
         func.labels
@@ -257,11 +320,15 @@ mod tests {
             .unwrap()
             .insert("end".into(), Address(3));
 
-        coalesce(&mut func);
+        peephole(&mut func);
 
         assert_eq!(
             func.instructions,
-            vec![Add(local(8), local(9), global(0)), Jmp(Address(2)), Ret]
+            vec![
+                Add(local(8), local(9), global(0)),
+                Jz(local(8), Address(2)),
+                Ret
+            ]
         );
         assert_eq!(func.debug_spans.len(), 3);
         assert_eq!(func.labels.as_ref().unwrap()["end"], Address(2));
@@ -272,12 +339,12 @@ mod tests {
         let instructions = vec![
             Add(local(8), local(9), local(1)),
             Copy(local(1), global(0)),
-            Jmp(Address(1)),
+            Jz(local(8), Address(1)),
             Ret,
         ];
         let mut func = func_with(instructions.clone());
 
-        coalesce(&mut func);
+        peephole(&mut func);
 
         assert_eq!(func.instructions, instructions);
     }
@@ -292,7 +359,7 @@ mod tests {
         ];
         let mut func = func_with(instructions.clone());
 
-        coalesce(&mut func);
+        peephole(&mut func);
 
         assert_eq!(func.instructions, instructions);
     }
@@ -307,7 +374,7 @@ mod tests {
         let mut func = func_with(instructions.clone());
         func.arg_locations = vec![local(1)];
 
-        coalesce(&mut func);
+        peephole(&mut func);
 
         assert_eq!(func.instructions, instructions);
     }
@@ -317,7 +384,7 @@ mod tests {
         let instructions = vec![Copy(global(0), local(1)), Ret];
         let mut func = func_with(instructions.clone());
 
-        coalesce(&mut func);
+        peephole(&mut func);
 
         assert_eq!(func.instructions, instructions);
     }
@@ -330,7 +397,7 @@ mod tests {
             Ret,
         ]);
 
-        coalesce(&mut func);
+        peephole(&mut func);
 
         assert_eq!(
             func.instructions,
@@ -349,7 +416,7 @@ mod tests {
         ];
         let mut func = func_with(instructions.clone());
 
-        coalesce(&mut func);
+        peephole(&mut func);
 
         assert_eq!(func.instructions, instructions);
     }
@@ -360,12 +427,12 @@ mod tests {
             Copy(local(0), local(1)),
             Add(local(8), local(9), local(3)),
             PushArg(local(1)),
-            Jmp(Address(1)),
+            Jz(local(3), Address(1)),
             Ret,
         ];
         let mut func = func_with(instructions.clone());
 
-        coalesce(&mut func);
+        peephole(&mut func);
 
         assert_eq!(func.instructions, instructions);
     }
@@ -376,11 +443,12 @@ mod tests {
             Copy(local(0), local(1)),
             Jmp(Address(3)),
             PushArg(local(1)),
+            Jz(local(2), Address(2)),
             Ret,
         ];
         let mut func = func_with(instructions.clone());
 
-        coalesce(&mut func);
+        peephole(&mut func);
 
         assert_eq!(func.instructions, instructions);
     }
@@ -394,7 +462,7 @@ mod tests {
             Ret,
         ]);
 
-        coalesce(&mut func);
+        peephole(&mut func);
 
         assert_eq!(
             func.instructions,
@@ -416,7 +484,7 @@ mod tests {
             Ret,
         ]);
 
-        coalesce(&mut func);
+        peephole(&mut func);
 
         assert_eq!(
             func.instructions,
@@ -433,7 +501,7 @@ mod tests {
             Ret,
         ]);
 
-        coalesce(&mut func);
+        peephole(&mut func);
 
         assert_eq!(
             func.instructions,
@@ -451,11 +519,166 @@ mod tests {
             Ret,
         ]);
 
-        coalesce(&mut func);
+        peephole(&mut func);
 
         assert!(
             func.instructions
                 .contains(&PushRef(RegisterVariant::Upvalue(Register(0))))
+        );
+    }
+
+    fn func_with_defaults(
+        num_default_args: u16,
+        instructions: Vec<Instruction>,
+    ) -> ProgramFunction {
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("t")
+            .filename(Arc::new(LpcPath::new_in_game("/t.c", "/", "/")))
+            .return_type(LpcType::Void)
+            .arity(FunctionArity {
+                num_args: num_default_args,
+                num_default_args,
+            })
+            .build()
+            .unwrap();
+        let mut func = ProgramFunction::new(prototype, 0);
+        func.debug_spans = vec![None; instructions.len()];
+        func.labels = Some(HashMap::new());
+        func.instructions = instructions;
+        func
+    }
+
+    #[test]
+    fn the_tail_after_a_ret_is_deleted() {
+        let mut func = func_with(vec![Ret, Add(local(1), local(2), local(3))]);
+
+        peephole(&mut func);
+
+        assert_eq!(func.instructions, vec![Ret]);
+    }
+
+    #[test]
+    fn a_jmp_over_a_dead_tail_collapses() {
+        let mut func = func_with(vec![
+            Jmp(Address(2)),
+            Add(local(1), local(2), local(3)),
+            Ret,
+        ]);
+
+        peephole(&mut func);
+
+        assert_eq!(func.instructions, vec![Ret]);
+    }
+
+    #[test]
+    fn a_jump_target_ends_the_tail() {
+        let mut func = func_with(vec![
+            Jz(local(1), Address(3)),
+            Jmp(Address(4)),
+            Add(local(1), local(2), local(3)),
+            Sub(local(1), local(2), local(3)),
+            Ret,
+        ]);
+
+        peephole(&mut func);
+
+        assert_eq!(
+            func.instructions,
+            vec![
+                Jz(local(1), Address(2)),
+                Jmp(Address(3)),
+                Sub(local(1), local(2), local(3)),
+                Ret,
+            ]
+        );
+    }
+
+    #[test]
+    fn a_catch_end_is_a_target() {
+        let instructions = vec![
+            CatchStart(local(1), Address(2)),
+            Ret,
+            Add(local(1), local(2), local(3)),
+            Ret,
+        ];
+        let mut func = func_with(instructions.clone());
+
+        peephole(&mut func);
+
+        assert_eq!(func.instructions, instructions);
+    }
+
+    #[test]
+    fn a_defaults_table_is_untouched() {
+        let instructions = vec![
+            PopulateDefaults,
+            Jmp(Address(5)),
+            Jmp(Address(6)),
+            Mul(local(1), local(2), local(0)),
+            Ret,
+            Copy(RegisterVariant::Constant(Register(0)), local(2)),
+            Copy(RegisterVariant::Constant(Register(1)), local(1)),
+            Jmp(Address(3)),
+        ];
+        let mut func = func_with_defaults(2, instructions.clone());
+
+        peephole(&mut func);
+
+        assert_eq!(func.instructions, instructions);
+    }
+
+    #[test]
+    fn a_jmp_to_the_next_address_is_deleted() {
+        let mut func = func_with(vec![Jmp(Address(1)), Ret]);
+
+        peephole(&mut func);
+
+        assert_eq!(func.instructions, vec![Ret]);
+    }
+
+    #[test]
+    fn labels_and_spans_shift_past_a_pruned_tail() {
+        let mut func = func_with(vec![
+            Jz(local(1), Address(3)),
+            Ret,
+            Add(local(1), local(2), local(3)),
+            Ret,
+        ]);
+        func.labels
+            .as_mut()
+            .unwrap()
+            .insert("end".into(), Address(3));
+
+        peephole(&mut func);
+
+        assert_eq!(func.instructions, vec![Jz(local(1), Address(2)), Ret, Ret]);
+        assert_eq!(func.labels.as_ref().unwrap()["end"], Address(2));
+        assert_eq!(func.debug_spans.len(), 3);
+    }
+
+    #[test]
+    fn a_pruned_jmp_unlocks_a_fold() {
+        let mut func = func_with(vec![
+            Jz(local(1), Address(3)),
+            Ret,
+            Jmp(Address(4)),
+            Add(local(1), local(2), local(3)),
+            Copy(local(3), local(4)),
+            Sub(local(4), local(1), local(0)),
+            Ret,
+        ]);
+
+        peephole(&mut func);
+
+        assert_eq!(
+            func.instructions,
+            vec![
+                Jz(local(1), Address(2)),
+                Ret,
+                Add(local(1), local(2), local(4)),
+                Sub(local(4), local(1), local(0)),
+                Ret,
+            ]
         );
     }
 }
