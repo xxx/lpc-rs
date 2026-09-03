@@ -728,32 +728,73 @@ mod tests {
     /// A namespaced call names a program to look in; the check that reports
     /// an unknown function honours it.
     mod namespaced_calls {
+        use lpc_rs_asm::instruction::Instruction;
         use lpc_rs_utils::config::ConfigBuilder;
 
         use super::*;
 
-        /// The messages of every diagnostic compiling `code` against the
-        /// fixture lib reports, `None` when it compiles.
-        async fn diagnostics_of(code: &str) -> Option<Vec<String>> {
+        /// `code` compiled against the fixture lib.
+        async fn compile(code: &str) -> lpc_rs_errors::Result<Compiled> {
             let config: Arc<Config> = ConfigBuilder::default()
                 .lib_dir("tests/fixtures/code")
                 .build()
                 .unwrap()
                 .into();
             let compiler = CompilerBuilder::default().config(config).build().unwrap();
-            let err = compiler.compile_string("my_file.c", code).await.err()?;
+            compiler.compile_string("my_file.c", code).await
+        }
+
+        /// The messages of the errors compiling `code` reports, warnings left
+        /// out, or `None` when it compiles.
+        async fn errors_of(code: &str) -> Option<Vec<String>> {
+            let err = compile(code).await.err()?;
             Some(
-                err.to_diagnostics()
-                    .into_iter()
-                    .map(|d| d.message)
+                std::iter::once(&err)
+                    .chain(err.additional_errors())
+                    .filter(|e| !e.is_warning())
+                    .map(|e| e.message().to_owned())
                     .collect(),
             )
+        }
+
+        const SHADOWED: &str = r#"inherit "/std/object" parent;
+            void f() { function public_function = (: 1 :); parent::public_function(); }"#;
+
+        /// A same-named function-typed variable does not capture a namespaced
+        /// call.
+        #[tokio::test]
+        async fn a_namespaced_call_shadowed_by_a_variable_calls_the_function() {
+            let compiled = compile(SHADOWED).await.unwrap();
+            let f = compiled
+                .program
+                .functions
+                .values()
+                .find(|f| f.name() == "f")
+                .unwrap();
+            let calls: Vec<_> = f
+                .instructions
+                .iter()
+                .filter(|i| matches!(i, Instruction::Call(_) | Instruction::CallFp(_)))
+                .collect();
+            assert!(matches!(calls[..], [Instruction::Call(_)]), "{calls:?}");
+        }
+
+        #[tokio::test]
+        async fn the_variable_a_namespaced_call_passes_over_is_unused() {
+            let warnings: Vec<String> = compile(SHADOWED)
+                .await
+                .unwrap()
+                .warnings
+                .iter()
+                .flat_map(|w| w.warnings.iter().map(|e| e.message().to_owned()))
+                .collect();
+            assert_eq!(warnings, ["unused variable `public_function`"]);
         }
 
         #[tokio::test]
         async fn a_parent_call_reaches_an_inherited_function() {
             let code = r#"inherit "/std/object" parent; void f() { parent::public_function(); }"#;
-            assert_eq!(diagnostics_of(code).await, None);
+            assert_eq!(errors_of(code).await, None);
         }
 
         #[tokio::test]
@@ -761,7 +802,7 @@ mod tests {
             let code =
                 r#"inherit "/std/object" parent; void nope() {} void f() { parent::nope(); }"#;
             assert_eq!(
-                diagnostics_of(code).await,
+                errors_of(code).await,
                 Some(vec!["call to unknown function `parent::nope`".into()])
             );
         }
@@ -770,7 +811,7 @@ mod tests {
         async fn the_parent_form_of_an_own_only_function_is_unknown() {
             let code = r#"inherit "/std/object"; void nope() {} void f() { ::nope(); }"#;
             assert_eq!(
-                diagnostics_of(code).await,
+                errors_of(code).await,
                 Some(vec!["call to unknown function `::nope`".into()])
             );
         }
@@ -779,7 +820,7 @@ mod tests {
         async fn an_efun_call_to_an_inherited_function_is_unknown() {
             let code = r#"inherit "/std/object"; void f() { efun::public_function(); }"#;
             assert_eq!(
-                diagnostics_of(code).await,
+                errors_of(code).await,
                 Some(vec![
                     "call to unknown function `efun::public_function`".into()
                 ])
@@ -790,7 +831,7 @@ mod tests {
         async fn a_parent_call_to_an_efun_is_unknown() {
             let code = r#"inherit "/std/object" parent; void f() { parent::explode("a b", " "); }"#;
             assert_eq!(
-                diagnostics_of(code).await,
+                errors_of(code).await,
                 Some(vec!["call to unknown function `parent::explode`".into()])
             );
         }
@@ -801,7 +842,7 @@ mod tests {
             let code = r#"inherit "/std/object" parent;
                 void f() { function fp = (: 1 :); parent::fp(); }"#;
             assert_eq!(
-                diagnostics_of(code).await,
+                errors_of(code).await,
                 Some(vec!["call to unknown function `parent::fp`".into()])
             );
         }
@@ -810,7 +851,7 @@ mod tests {
         async fn an_unknown_namespace_is_reported_once() {
             let code = r#"inherit "/std/object"; void f() { other::public_function(); }"#;
             assert_eq!(
-                diagnostics_of(code).await,
+                errors_of(code).await,
                 Some(vec!["unknown namespace `other`".into()])
             );
         }

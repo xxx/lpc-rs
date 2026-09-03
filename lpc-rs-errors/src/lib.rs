@@ -185,6 +185,11 @@ impl LpcError {
         self.0.severity == LpcErrorSeverity::Bug
     }
 
+    /// The other diagnostics of the same compile, in recording order.
+    pub fn additional_errors(&self) -> &[LpcError] {
+        &self.0.additional_errors
+    }
+
     /// Set the primary span for this error
     pub fn with_span(mut self, span: Option<Span>) -> Self {
         self.0.span = span;

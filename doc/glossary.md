@@ -154,8 +154,9 @@ any parent's and runs its own copy.
 
 The simul-efun object is the first object the driver loads and initializes,
 so its globals are set and its `create()` has run before the master exists:
-a master apply from inside that `create()` answers as if undefined, and an
-error thrown there stops the driver like one from the master's. It is
+a master apply from inside that `create()` answers as if undefined, so a gate
+such as `valid_load` denies and that `create()` can load or clone nothing, and
+an error thrown there stops the driver like one from the master's. It is
 otherwise an ordinary object: destructing it makes every simul-efun call in
 later tasks fail until the file is loaded again, and an object compiled
 against an earlier version keeps linking by name, so a name the new version

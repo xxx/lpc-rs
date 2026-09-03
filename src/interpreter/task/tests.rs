@@ -732,8 +732,9 @@ mod test_instructions {
             globals["r"].to_string()
         }
 
+        /// A stored pointer outlives the resident it was made against.
         #[tokio::test]
-        async fn a_pointer_call_keeps_the_bug_severity() {
+        async fn a_pointer_call_without_a_resident_is_a_runtime_error() {
             use crate::{
                 compile_time_config::MAX_CALL_STACK_SIZE,
                 interpreter::{
@@ -772,10 +773,11 @@ mod test_instructions {
                 .handle_call_fp(Register(1).as_local())
                 .await
                 .unwrap_err();
-            assert!(e.is_bug(), "{e}");
+            assert!(!e.is_bug(), "{e}");
             assert!(
-                e.to_string()
-                    .starts_with("runtime bug: simul_efun pointer without simul_efuns"),
+                e.to_string().starts_with(
+                    "runtime error: call to simul efun `nope`: no simul-efun object is loaded"
+                ),
                 "{e}"
             );
         }
