@@ -918,7 +918,7 @@ impl CodegenWalker {
 
     /// Seal the function on top of the stack: set its locals count (a
     /// captured parameter holds no register, so the count can fall short of
-    /// `num_args`), backpatch argv and labels, and coalesce copies.
+    /// `num_args`), backpatch argv and labels, and run the peephole.
     fn finalize_function(
         &mut self,
         num_args: RegisterSize,
@@ -936,7 +936,7 @@ impl CodegenWalker {
             Self::backpatch_populate_argv(&mut func, idx, span)?;
         }
         Self::backpatch(&backpatch_map, &mut func)?;
-        super::coalesce::coalesce(&mut func);
+        super::peephole::peephole(&mut func);
         Ok(func)
     }
 
@@ -4478,6 +4478,46 @@ mod tests {
         use super::*;
 
         #[tokio::test]
+        async fn two_returning_arms_leave_no_dead_jump() {
+            let code = "int f(int x) { if (x) { return 1; } else { return 2; } }";
+            let mut walker = walk_prog(code).await;
+
+            assert_eq!(
+                walker_function_instructions(&mut walker, "f"),
+                vec![
+                    Instruction::Jz(RegisterVariant::Local(Register(1)), Address(3)),
+                    Instruction::Copy(
+                        RegisterVariant::Constant(Register(0)),
+                        RegisterVariant::Local(Register(0)),
+                    ),
+                    Instruction::Ret,
+                    Instruction::Copy(
+                        RegisterVariant::Constant(Register(1)),
+                        RegisterVariant::Local(Register(0)),
+                    ),
+                    Instruction::Ret,
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn statements_after_a_return_are_not_emitted() {
+            let code = "int f(int x) { return 1; x = 2; }";
+            let mut walker = walk_prog(code).await;
+
+            assert_eq!(
+                walker_function_instructions(&mut walker, "f"),
+                vec![
+                    Instruction::Copy(
+                        RegisterVariant::Constant(Register(0)),
+                        RegisterVariant::Local(Register(0)),
+                    ),
+                    Instruction::Ret,
+                ]
+            );
+        }
+
+        #[tokio::test]
         async fn test_populates_the_instructions() {
             let mut walker = default_walker();
             walker.backpatch_maps.push(HashMap::new());
@@ -4857,13 +4897,9 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn a_literal_false_if_jumps_past_its_body() {
+        async fn a_literal_false_if_emits_nothing() {
             let code = "void create() { int c; if (0) { c = 1; } }";
-            let expected = vec![
-                Jmp(Address(2)),
-                Copy(Register(0).as_constant(), Register(1).as_local()),
-                Ret,
-            ];
+            let expected = vec![Ret];
             assert_eq!(create_instructions(code).await, expected);
         }
 
@@ -5257,24 +5293,25 @@ mod tests {
 
         #[tokio::test]
         async fn a_for_continues_at_its_incrementer_before_its_test() {
-            let code = "void create() { int i; for (i = 0; i < 3; i++) { if (i == 1) continue; } }";
+            let code = "void create() { int i, c; for (i = 0; i < 3; i++) { if (i == 1) continue; c++; } }";
             let expected = vec![
                 Copy(Register(0).as_constant(), Register(1).as_local()),
-                Jmp(Address(6)),
+                Jmp(Address(7)),
                 EqEq(
                     Register(1).as_local(),
                     Register(1).as_constant(),
-                    Register(2).as_local(),
+                    Register(3).as_local(),
                 ),
-                Jz(Register(2).as_local(), Address(5)),
-                Jmp(Address(5)),
+                Jz(Register(3).as_local(), Address(5)),
+                Jmp(Address(6)),
+                Inc(Register(2).as_local()),
                 Inc(Register(1).as_local()),
                 Lt(
                     Register(1).as_local(),
                     Register(2).as_constant(),
-                    Register(3).as_local(),
+                    Register(4).as_local(),
                 ),
-                Jnz(Register(3).as_local(), Address(2)),
+                Jnz(Register(4).as_local(), Address(2)),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5282,22 +5319,32 @@ mod tests {
 
         #[tokio::test]
         async fn a_for_without_a_condition_has_no_entry_jump() {
-            let code = "void create() { for (;;) { break; } }";
-            let expected = vec![Jmp(Address(2)), Jmp(Address(0)), Ret];
+            let code = "void create() { int c; for (;;) { if (c) break; } }";
+            let expected = vec![
+                Jz(Register(1).as_local(), Address(2)),
+                Jmp(Address(3)),
+                Jmp(Address(0)),
+                Ret,
+            ];
             assert_eq!(create_instructions(code).await, expected);
         }
 
         #[tokio::test]
         async fn a_literal_true_for_has_no_entry_jump() {
-            let code = "void create() { for (; 1;) { break; } }";
-            let expected = vec![Jmp(Address(2)), Jmp(Address(0)), Ret];
+            let code = "void create() { int c; for (; 1;) { if (c) break; } }";
+            let expected = vec![
+                Jz(Register(1).as_local(), Address(2)),
+                Jmp(Address(3)),
+                Jmp(Address(0)),
+                Ret,
+            ];
             assert_eq!(create_instructions(code).await, expected);
         }
 
         #[tokio::test]
-        async fn a_literal_false_while_tests_nothing_at_the_bottom() {
+        async fn a_literal_false_while_emits_nothing() {
             let code = "void create() { int c; while (0) { c++; } }";
-            let expected = vec![Jmp(Address(2)), Inc(Register(1).as_local()), Ret];
+            let expected = vec![Ret];
             assert_eq!(create_instructions(code).await, expected);
         }
 

@@ -146,10 +146,10 @@ pub enum Instruction {
     /// those are the ones we populate.
     PopulateArgv(RegisterVariant, RegisterSize, RegisterSize),
 
-    /// Special case instruction to handle calls to functions that have default
-    /// argument values.
-    /// The vector is the list of addresses to jump to, to initialize the
-    /// parameters that have default values.
+    /// Jump into the `Jmp` table that follows, one entry per default
+    /// parameter, at the entry of the first parameter the call left
+    /// unfilled; the eval loop reaches a slot by offset, so the table
+    /// never moves or shrinks.
     PopulateDefaults,
 
     /// Push the location onto the `Task`'s `args` staging; the call
