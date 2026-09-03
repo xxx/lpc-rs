@@ -96,18 +96,19 @@ enum OperationType {
     Memory,
 }
 
-/// a pair to store where to jump to in the case of a `break` or `continue`
+/// Where `break` and `continue` jump inside the innermost loop or `switch`.
 #[derive(Debug)]
 struct JumpTarget {
     pub break_target: Label,
-    pub continue_target: Label,
+    /// `None` inside a `switch` that no loop encloses.
+    pub continue_target: Option<Label>,
 }
 
 impl JumpTarget {
     fn new(break_target: Label, continue_target: Label) -> Self {
         Self {
             break_target,
-            continue_target,
+            continue_target: Some(continue_target),
         }
     }
 }
@@ -1584,7 +1585,8 @@ impl TreeWalker for CodegenWalker {
     #[instrument(skip_all)]
     async fn visit_continue(&mut self, node: &mut ContinueNode) -> Result<()> {
         if let Some(JumpTarget {
-            continue_target, ..
+            continue_target: Some(continue_target),
+            ..
         }) = self.jump_targets.last()
         {
             self.schedule_backpatch(&continue_target.clone(), self.current_address())?;
@@ -2097,8 +2099,15 @@ impl TreeWalker for CodegenWalker {
         push_instruction!(self, instruction, node.span);
 
         let end_label = self.new_label("switch-end");
-        self.jump_targets
-            .push(JumpTarget::new(end_label.clone(), "".into()));
+        // `continue` inside a case belongs to the enclosing loop.
+        let continue_target = self
+            .jump_targets
+            .last()
+            .and_then(|target| target.continue_target.clone());
+        self.jump_targets.push(JumpTarget {
+            break_target: end_label.clone(),
+            continue_target,
+        });
         let addresses = vec![];
         self.case_addresses.push(addresses);
 

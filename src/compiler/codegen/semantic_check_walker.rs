@@ -86,9 +86,11 @@ impl SemanticCheckWalker {
             .push((BreakAllowed(true), ContinueAllowed(true)));
     }
 
+    /// `continue` inside a `switch` stays as the enclosing loop allows.
     fn allow_breaks(&mut self) {
+        let can_continue = self.can_continue();
         self.valid_jumps
-            .push((BreakAllowed(true), ContinueAllowed(false)));
+            .push((BreakAllowed(true), ContinueAllowed(can_continue)));
     }
 
     fn prevent_jumps(&mut self) {
@@ -1217,6 +1219,55 @@ mod tests {
                             break;
                         default:
                             dump("weeeeak");
+                    }
+                }"#;
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert!(context.diagnostics.errors().is_empty());
+        }
+    }
+
+    mod test_visit_continue {
+        use super::*;
+
+        #[tokio::test]
+        async fn disallows_outside_of_a_loop() {
+            let code = "void create() { continue; }";
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "invalid `continue`."
+            );
+        }
+
+        #[tokio::test]
+        async fn disallows_in_a_switch_outside_of_a_loop() {
+            let code = r#"
+                void create() {
+                    int i;
+                    switch (i) {
+                        case 1: continue;
+                    }
+                }"#;
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "invalid `continue`."
+            );
+        }
+
+        #[tokio::test]
+        async fn allows_in_a_switch_inside_a_loop() {
+            let code = r#"
+                void create() {
+                    int i;
+                    while (i < 10) {
+                        i += 1;
+                        switch (i) {
+                            case 1: continue;
+                        }
                     }
                 }"#;
             let context = walk_code(code).await.expect("failed to parse?");
