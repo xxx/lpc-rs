@@ -10,7 +10,7 @@ use if_chain::if_chain;
 use indexmap::IndexMap;
 use lpc_rs_asm::{
     address::{Address, Label},
-    instruction::Instruction,
+    instruction::{Comparison, Instruction},
 };
 use lpc_rs_core::{
     CREATE_FUNCTION, INIT_GLOBALS, INIT_PROGRAM, LpcIntInner, RegisterSize, ScopeId,
@@ -432,12 +432,24 @@ impl CodegenWalker {
             BinaryOperation::And => Instruction::And(reg_left, reg_right, reg_result),
             BinaryOperation::Or => Instruction::Or(reg_left, reg_right, reg_result),
             BinaryOperation::Xor => Instruction::Xor(reg_left, reg_right, reg_result),
-            BinaryOperation::EqEq => Instruction::EqEq(reg_left, reg_right, reg_result),
-            BinaryOperation::NotEq => Instruction::NotEq(reg_left, reg_right, reg_result),
-            BinaryOperation::Lt => Instruction::Lt(reg_left, reg_right, reg_result),
-            BinaryOperation::Lte => Instruction::Lte(reg_left, reg_right, reg_result),
-            BinaryOperation::Gt => Instruction::Gt(reg_left, reg_right, reg_result),
-            BinaryOperation::Gte => Instruction::Gte(reg_left, reg_right, reg_result),
+            BinaryOperation::EqEq => {
+                Instruction::Cmp(Comparison::Eq, reg_left, reg_right, reg_result)
+            }
+            BinaryOperation::NotEq => {
+                Instruction::Cmp(Comparison::Ne, reg_left, reg_right, reg_result)
+            }
+            BinaryOperation::Lt => {
+                Instruction::Cmp(Comparison::Lt, reg_left, reg_right, reg_result)
+            }
+            BinaryOperation::Lte => {
+                Instruction::Cmp(Comparison::Lte, reg_left, reg_right, reg_result)
+            }
+            BinaryOperation::Gt => {
+                Instruction::Cmp(Comparison::Gt, reg_left, reg_right, reg_result)
+            }
+            BinaryOperation::Gte => {
+                Instruction::Cmp(Comparison::Gte, reg_left, reg_right, reg_result)
+            }
             BinaryOperation::Shl => Instruction::Shl(reg_left, reg_right, reg_result),
             BinaryOperation::Shr => Instruction::Shr(reg_left, reg_right, reg_result),
             BinaryOperation::Compose => unimplemented!(
@@ -1699,7 +1711,8 @@ impl TreeWalker for CodegenWalker {
         let test_addr = self.current_address();
         self.insert_label(test_label, test_addr);
         let eqeq_result = self.register_counter.next().unwrap().as_local();
-        let instruction = Instruction::EqEq(index_location, length_location, eqeq_result);
+        let instruction =
+            Instruction::Cmp(Comparison::Eq, index_location, length_location, eqeq_result);
         push_instruction!(self, instruction, node.span);
         self.schedule_backpatch(&start_label, self.current_address())?;
         let instruction = Instruction::Jz(eqeq_result, Address(0));
@@ -2062,7 +2075,8 @@ impl TreeWalker for CodegenWalker {
                 // An open end of the range is always satisfied.
                 let gte_result = if let Some(left_reg) = range_left {
                     let result = self.register_counter.next().unwrap().as_local();
-                    let instruction = Instruction::Gte(expr_result, left_reg, result);
+                    let instruction =
+                        Instruction::Cmp(Comparison::Gte, expr_result, left_reg, result);
                     push_instruction!(self, instruction, range_node.span);
                     result
                 } else {
@@ -2071,7 +2085,8 @@ impl TreeWalker for CodegenWalker {
 
                 let lte_result = if let Some(right_reg) = range_right {
                     let result = self.register_counter.next().unwrap().as_local();
-                    let instruction = Instruction::Lte(expr_result, right_reg, result);
+                    let instruction =
+                        Instruction::Cmp(Comparison::Lte, expr_result, right_reg, result);
                     push_instruction!(self, instruction, range_node.span);
                     result
                 } else {
@@ -2082,7 +2097,12 @@ impl TreeWalker for CodegenWalker {
                 let instruction = Instruction::And(gte_result, lte_result, test_result);
                 push_instruction!(self, instruction, node.span);
             } else {
-                let instruction = Instruction::EqEq(expr_result, self.current_result, test_result);
+                let instruction = Instruction::Cmp(
+                    Comparison::Eq,
+                    expr_result,
+                    self.current_result,
+                    test_result,
+                );
                 push_instruction!(self, instruction, node.span);
             }
 
@@ -2421,6 +2441,7 @@ mod tests {
 
     use claims::assert_some;
     use factori::create;
+    use lpc_rs_asm::instruction::Comparison;
     use lpc_rs_asm::instruction::Instruction::*;
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType};
     use lpc_rs_errors::{Result, span::Span};
@@ -2997,7 +3018,8 @@ mod tests {
                 Jmp(Address(9)),
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(15),
-                Gt(
+                Cmp(
+                    Comparison::Gt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(2)),
@@ -3011,7 +3033,8 @@ mod tests {
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Lt(
+                Cmp(
+                    Comparison::Lt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(2)),
@@ -3050,7 +3073,8 @@ mod tests {
                 Jmp(Address(11)),
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(15),
-                Gt(
+                Cmp(
+                    Comparison::Gt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(2)),
@@ -3069,7 +3093,8 @@ mod tests {
                     RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Lt(
+                Cmp(
+                    Comparison::Lt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(4)),
                     RegisterVariant::Local(Register(2)),
@@ -3104,7 +3129,8 @@ mod tests {
             let expected = vec![
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(15),
-                Gt(
+                Cmp(
+                    Comparison::Gt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(2)),
@@ -3118,7 +3144,8 @@ mod tests {
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Lt(
+                Cmp(
+                    Comparison::Lt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(2)),
@@ -3157,18 +3184,21 @@ mod tests {
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(2)),
                 ),
                 Jnz(RegisterVariant::Local(Register(2)), Address(8)),
-                Gte(
+                Cmp(
+                    Comparison::Gte,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(2)),
                 ),
-                Lte(
+                Cmp(
+                    Comparison::Lte,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(3)),
@@ -3988,7 +4018,8 @@ mod tests {
                 Jmp(Address(9)),
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(15),
-                Gt(
+                Cmp(
+                    Comparison::Gt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(2)),
@@ -4002,7 +4033,8 @@ mod tests {
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Lt(
+                Cmp(
+                    Comparison::Lt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(2)),
@@ -4041,7 +4073,8 @@ mod tests {
                 Jmp(Address(11)),
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(15),
-                Gt(
+                Cmp(
+                    Comparison::Gt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(2)),
@@ -4060,7 +4093,8 @@ mod tests {
                     RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Lt(
+                Cmp(
+                    Comparison::Lt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(4)),
                     RegisterVariant::Local(Register(2)),
@@ -4095,7 +4129,8 @@ mod tests {
             let expected = vec![
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(15),
-                Gt(
+                Cmp(
+                    Comparison::Gt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(2)),
@@ -4109,7 +4144,8 @@ mod tests {
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Lt(
+                Cmp(
+                    Comparison::Lt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(2)),
@@ -4180,7 +4216,10 @@ mod tests {
     }
 
     mod test_visit_do_while {
-        use lpc_rs_asm::instruction::Instruction::{EqEq, Jnz};
+        use lpc_rs_asm::instruction::{
+            Comparison,
+            Instruction::{Cmp, Jnz},
+        };
 
         use super::*;
         use crate::compiler::ast::do_while_node::DoWhileNode;
@@ -4211,7 +4250,8 @@ mod tests {
             let expected = vec![
                 PushArg(RegisterVariant::Constant(Register(0))),
                 CallEfun(15),
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
@@ -4452,7 +4492,10 @@ mod tests {
     }
 
     mod test_visit_if {
-        use lpc_rs_asm::instruction::Instruction::{EqEq, Jmp, Jz};
+        use lpc_rs_asm::instruction::{
+            Comparison,
+            Instruction::{Cmp, Jmp, Jz},
+        };
 
         use super::*;
 
@@ -4525,7 +4568,8 @@ mod tests {
             let _ = walker.visit_if(&mut node).await;
 
             let expected = vec![
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(1)),
@@ -4855,7 +4899,8 @@ mod tests {
             let code = "void create() { int c; while (1) { c++; if (c > 2) break; } }";
             let expected = vec![
                 Inc(Register(1).as_local()),
-                Gt(
+                Cmp(
+                    Comparison::Gt,
                     Register(1).as_local(),
                     Register(0).as_constant(),
                     Register(2).as_local(),
@@ -5259,7 +5304,8 @@ mod tests {
             let expected = vec![
                 Jmp(Address(2)),
                 Inc(Register(1).as_local()),
-                Lt(
+                Cmp(
+                    Comparison::Lt,
                     Register(1).as_local(),
                     Register(0).as_constant(),
                     Register(2).as_local(),
@@ -5276,7 +5322,8 @@ mod tests {
             let expected = vec![
                 Copy(Register(0).as_constant(), Register(1).as_local()),
                 Jmp(Address(7)),
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     Register(1).as_local(),
                     Register(1).as_constant(),
                     Register(3).as_local(),
@@ -5285,7 +5332,8 @@ mod tests {
                 Jmp(Address(6)),
                 Inc(Register(2).as_local()),
                 Inc(Register(1).as_local()),
-                Lt(
+                Cmp(
+                    Comparison::Lt,
                     Register(1).as_local(),
                     Register(2).as_constant(),
                     Register(3).as_local(),
@@ -5341,7 +5389,8 @@ mod tests {
                     Register(1).as_local(),
                 ),
                 Inc(Register(2).as_local()),
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     Register(2).as_local(),
                     Register(4).as_local(),
                     Register(5).as_local(),
@@ -5369,7 +5418,8 @@ mod tests {
                     Register(3).as_local(),
                 ),
                 Inc(Register(4).as_local()),
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     Register(4).as_local(),
                     Register(5).as_local(),
                     Register(6).as_local(),
@@ -5402,13 +5452,15 @@ mod tests {
                 }
             "#;
             let expected = vec![
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(1)),
                 ),
                 Jnz(RegisterVariant::Local(Register(1)), Address(5)),
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
@@ -5437,7 +5489,8 @@ mod tests {
         async fn a_switch_without_a_default_jumps_past_its_bodies() {
             let code = r#"void create() { switch (1) { case 1: dump("one"); } }"#;
             let expected = vec![
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(1)),
@@ -5461,7 +5514,8 @@ mod tests {
             let code =
                 r#"void create() { switch (1) { default: dump("d"); case 1: dump("one"); } }"#;
             let expected = vec![
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(1)),
@@ -5490,13 +5544,15 @@ mod tests {
             "#;
             let mut walker = walk_prog(code).await;
             let expected = vec![
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(2)),
                 ),
                 Jnz(RegisterVariant::Local(Register(2)), Address(5)),
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(2)),
@@ -5534,14 +5590,16 @@ mod tests {
             "#;
             let mut walker = walk_prog(code).await;
             let expected = vec![
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(3)),
                 ),
                 Jnz(RegisterVariant::Local(Register(3)), Address(3)),
                 Jmp(Address(10)),
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(3)),
@@ -5570,7 +5628,10 @@ mod tests {
     }
 
     mod test_visit_ternary {
-        use lpc_rs_asm::instruction::Instruction::{Jmp, Jz, Lte};
+        use lpc_rs_asm::instruction::{
+            Comparison,
+            Instruction::{Cmp, Jmp, Jz},
+        };
 
         use super::*;
         use crate::compiler::ast::ternary_node::TernaryNode;
@@ -5595,7 +5656,8 @@ mod tests {
             walker.visit_ternary(&mut node).await.unwrap();
 
             let expected = vec![
-                Lte(
+                Cmp(
+                    Comparison::Lte,
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(2)),
@@ -6000,7 +6062,8 @@ mod tests {
                 ),
                 Instruction::Inc(RegisterVariant::Local(Register(2))),
                 Instruction::Inc(RegisterVariant::Local(Register(1))),
-                Instruction::Lt(
+                Instruction::Cmp(
+                    Comparison::Lt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(3)),
@@ -6431,7 +6494,10 @@ mod tests {
     }
 
     mod test_visit_while {
-        use lpc_rs_asm::instruction::Instruction::{EqEq, Jmp, Jnz};
+        use lpc_rs_asm::instruction::{
+            Comparison,
+            Instruction::{Cmp, Jmp, Jnz},
+        };
 
         use super::*;
 
@@ -6462,7 +6528,8 @@ mod tests {
                 Jmp(Address(0)),
                 PushArg(RegisterVariant::Constant(Register(0))),
                 CallEfun(15),
-                EqEq(
+                Cmp(
+                    Comparison::Eq,
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),

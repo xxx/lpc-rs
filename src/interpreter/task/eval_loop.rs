@@ -179,8 +179,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Dec(r1) => {
                 bump_in_location(&mut self.stack, &self.context.txn, r1, -1)?;
             }
-            Instruction::EqEq(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y, txn| x.eq_in(y, txn))?;
+            Instruction::Cmp(kind, r1, r2, r3) => {
+                self.binary_boolean_operation(r1, r2, r3, |x, y, txn| x.compare(kind, y, txn))?;
             }
             Instruction::FunctionPtrConst {
                 location,
@@ -189,12 +189,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             } => {
                 let result = self.handle_functionptrconst(location, receiver, name);
                 consumed(&mut self.partial_args, result)?;
-            }
-            Instruction::Gt(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y, _| x > y)?;
-            }
-            Instruction::Gte(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y, _| x >= y)?;
             }
             Instruction::Div(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.div(y))?;
@@ -231,12 +225,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::LoadMappingKey(container, index, destination) => {
                 self.handle_load_mapping_key(container, index, destination)?;
             }
-            Instruction::Lt(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y, _| x < y)?;
-            }
-            Instruction::Lte(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y, _| x <= y)?;
-            }
             Instruction::Add(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, txn| x.add(y, txn))?;
             }
@@ -255,9 +243,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::Not(r1, r2) => {
                 self.unary_operation(r1, r2, |x, txn| Ok(x.not(txn)))?;
-            }
-            Instruction::NotEq(r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y, txn| !x.eq_in(y, txn))?;
             }
             Instruction::Or(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.bitor(y))?;

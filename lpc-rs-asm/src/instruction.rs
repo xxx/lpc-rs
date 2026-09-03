@@ -9,6 +9,42 @@ use ustr::Ustr;
 
 use crate::address::Address;
 
+/// The kind of comparison a `Cmp` makes between its two operands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Comparison {
+    /// `<`
+    Lt,
+    /// `<=`
+    Lte,
+    /// `>`
+    Gt,
+    /// `>=`
+    Gte,
+    /// `==`
+    Eq,
+    /// `!=`
+    Ne,
+}
+
+impl Comparison {
+    /// Every kind, in declaration order.
+    pub const ALL: [Comparison; 6] = [Self::Lt, Self::Lte, Self::Gt, Self::Gte, Self::Eq, Self::Ne];
+}
+
+impl Display for Comparison {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Lt => "lt",
+            Self::Lte => "lte",
+            Self::Gt => "gt",
+            Self::Gte => "gte",
+            Self::Eq => "eq",
+            Self::Ne => "ne",
+        };
+        write!(f, "{s}")
+    }
+}
+
 /// Representation of an assembly language instruction.
 /// In general, they are structured as `name(arg1, ...argn, destination)`, a la
 /// the AT&T syntax
@@ -53,6 +89,14 @@ pub enum Instruction {
     /// get back to the correct location.
     CatchStart(RegisterVariant, Address),
 
+    /// x.3 = x.1 `kind` x.2, as 1 or 0
+    Cmp(
+        Comparison,
+        RegisterVariant,
+        RegisterVariant,
+        RegisterVariant,
+    ),
+
     /// Copy x.0 to x.1
     Copy(RegisterVariant, RegisterVariant),
 
@@ -62,10 +106,6 @@ pub enum Instruction {
     /// x.2 = x.0 / x.1
     Div(RegisterVariant, RegisterVariant, RegisterVariant),
 
-    /// `==` comparison
-    /// x.2 = x.0 == x.1
-    EqEq(RegisterVariant, RegisterVariant, RegisterVariant),
-
     /// A function pointer constant. Closures are stored as function pointers as well.
     /// `location` is where the pointer will be stored
     FunctionPtrConst {
@@ -73,14 +113,6 @@ pub enum Instruction {
         receiver: FunctionReceiver,
         name: Ustr,
     },
-
-    /// Greater than
-    /// x.2 = x.0 > x.1
-    Gt(RegisterVariant, RegisterVariant, RegisterVariant),
-
-    /// Greater than or equal to
-    /// x.2 = x.0 >= x.1
-    Gte(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Increment the value in x.0 by 1
     Inc(RegisterVariant),
@@ -102,14 +134,6 @@ pub enum Instruction {
     /// x.2 = x.0[x.1]
     LoadMappingKey(RegisterVariant, RegisterVariant, RegisterVariant),
 
-    /// Less than
-    /// x.2 = x.0 < x.1
-    Lt(RegisterVariant, RegisterVariant, RegisterVariant),
-
-    /// Less than or equal to
-    /// x.2 = x.0 <= x.1
-    Lte(RegisterVariant, RegisterVariant, RegisterVariant),
-
     /// Create a mapping from the keys and values in the hashmap
     MapConst(RegisterVariant),
 
@@ -121,10 +145,6 @@ pub enum Instruction {
 
     /// Check if x.0 is equal to 0
     Not(RegisterVariant, RegisterVariant),
-
-    /// `!=` comparison
-    /// x.2 = x.0 != x.1
-    NotEq(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// bitwise | comparison.
     /// Give the captured variable at x.0 a fresh cell: a declaration that runs
@@ -224,15 +244,10 @@ impl Instruction {
             | Self::Sizeof(_, d) => Some(d),
             Self::Add(_, _, d)
             | Self::And(_, _, d)
+            | Self::Cmp(_, _, _, d)
             | Self::Div(_, _, d)
-            | Self::EqEq(_, _, d)
-            | Self::Gt(_, _, d)
-            | Self::Gte(_, _, d)
-            | Self::Lt(_, _, d)
-            | Self::Lte(_, _, d)
             | Self::Mod(_, _, d)
             | Self::Mul(_, _, d)
-            | Self::NotEq(_, _, d)
             | Self::Or(_, _, d)
             | Self::Shl(_, _, d)
             | Self::Shr(_, _, d)
@@ -279,10 +294,10 @@ impl Instruction {
             Self::CallOther(a0, a1) => Self::CallOther(f(a0), f(a1)),
             Self::CatchEnd => Self::CatchEnd,
             Self::CatchStart(a0, a1) => Self::CatchStart(f(a0), a1),
+            Self::Cmp(kind, a0, a1, a2) => Self::Cmp(kind, f(a0), f(a1), f(a2)),
             Self::Copy(a0, a1) => Self::Copy(f(a0), f(a1)),
             Self::Dec(a0) => Self::Dec(f(a0)),
             Self::Div(a0, a1, a2) => Self::Div(f(a0), f(a1), f(a2)),
-            Self::EqEq(a0, a1, a2) => Self::EqEq(f(a0), f(a1), f(a2)),
             Self::FunctionPtrConst {
                 location,
                 receiver,
@@ -297,22 +312,17 @@ impl Instruction {
                 },
                 name,
             },
-            Self::Gt(a0, a1, a2) => Self::Gt(f(a0), f(a1), f(a2)),
-            Self::Gte(a0, a1, a2) => Self::Gte(f(a0), f(a1), f(a2)),
             Self::Inc(a0) => Self::Inc(f(a0)),
             Self::Jmp(a0) => Self::Jmp(a0),
             Self::Jnz(a0, a1) => Self::Jnz(f(a0), a1),
             Self::Jz(a0, a1) => Self::Jz(f(a0), a1),
             Self::Load(a0, a1, a2) => Self::Load(f(a0), f(a1), f(a2)),
             Self::LoadMappingKey(a0, a1, a2) => Self::LoadMappingKey(f(a0), f(a1), f(a2)),
-            Self::Lt(a0, a1, a2) => Self::Lt(f(a0), f(a1), f(a2)),
-            Self::Lte(a0, a1, a2) => Self::Lte(f(a0), f(a1), f(a2)),
             Self::MapConst(a0) => Self::MapConst(f(a0)),
             Self::Mod(a0, a1, a2) => Self::Mod(f(a0), f(a1), f(a2)),
             Self::Mul(a0, a1, a2) => Self::Mul(f(a0), f(a1), f(a2)),
             Self::Not(a0, a1) => Self::Not(f(a0), f(a1)),
             Self::NewUpvalue(a0) => Self::NewUpvalue(f(a0)),
-            Self::NotEq(a0, a1, a2) => Self::NotEq(f(a0), f(a1), f(a2)),
             Self::Or(a0, a1, a2) => Self::Or(f(a0), f(a1), f(a2)),
             Self::PopulateArgv(a0, a1, a2) => Self::PopulateArgv(f(a0), a1, a2),
             Self::PopulateDefaults => Self::PopulateDefaults,
@@ -359,7 +369,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 47;
+    pub const COUNT: usize = 42;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -374,26 +384,21 @@ impl Instruction {
         "call_other",
         "catch_end",
         "catch_start",
+        "cmp",
         "copy",
         "dec",
         "div",
-        "eq_eq",
         "function_ptr_const",
-        "gt",
-        "gte",
         "inc",
         "jmp",
         "jnz",
         "jz",
         "load",
         "load_mapping_key",
-        "lt",
-        "lte",
         "map_const",
         "mod",
         "mul",
         "not",
-        "not_eq",
         "new_upvalue",
         "or",
         "populate_argv",
@@ -426,42 +431,37 @@ impl Instruction {
             Self::CallOther(..) => 8,
             Self::CatchEnd => 9,
             Self::CatchStart(..) => 10,
-            Self::Copy(..) => 11,
-            Self::Dec(..) => 12,
-            Self::Div(..) => 13,
-            Self::EqEq(..) => 14,
+            Self::Cmp(..) => 11,
+            Self::Copy(..) => 12,
+            Self::Dec(..) => 13,
+            Self::Div(..) => 14,
             Self::FunctionPtrConst { .. } => 15,
-            Self::Gt(..) => 16,
-            Self::Gte(..) => 17,
-            Self::Inc(..) => 18,
-            Self::Jmp(..) => 19,
-            Self::Jnz(..) => 20,
-            Self::Jz(..) => 21,
-            Self::Load(..) => 22,
-            Self::LoadMappingKey(..) => 23,
-            Self::Lt(..) => 24,
-            Self::Lte(..) => 25,
-            Self::MapConst(..) => 26,
-            Self::Mod(..) => 27,
-            Self::Mul(..) => 28,
-            Self::Not(..) => 29,
-            Self::NotEq(..) => 30,
-            Self::NewUpvalue(..) => 31,
-            Self::Or(..) => 32,
-            Self::PopulateArgv(..) => 33,
-            Self::PopulateDefaults => 34,
-            Self::PushArg(..) => 35,
-            Self::PushArrayItem(..) => 36,
-            Self::PushPartialArg(..) => 37,
-            Self::PushRef(..) => 38,
-            Self::Range(..) => 39,
-            Self::Ret => 40,
-            Self::Shl(..) => 41,
-            Self::Shr(..) => 42,
-            Self::Sizeof(..) => 43,
-            Self::Store(..) => 44,
-            Self::Sub(..) => 45,
-            Self::Xor(..) => 46,
+            Self::Inc(..) => 16,
+            Self::Jmp(..) => 17,
+            Self::Jnz(..) => 18,
+            Self::Jz(..) => 19,
+            Self::Load(..) => 20,
+            Self::LoadMappingKey(..) => 21,
+            Self::MapConst(..) => 22,
+            Self::Mod(..) => 23,
+            Self::Mul(..) => 24,
+            Self::Not(..) => 25,
+            Self::NewUpvalue(..) => 26,
+            Self::Or(..) => 27,
+            Self::PopulateArgv(..) => 28,
+            Self::PopulateDefaults => 29,
+            Self::PushArg(..) => 30,
+            Self::PushArrayItem(..) => 31,
+            Self::PushPartialArg(..) => 32,
+            Self::PushRef(..) => 33,
+            Self::Range(..) => 34,
+            Self::Ret => 35,
+            Self::Shl(..) => 36,
+            Self::Shr(..) => 37,
+            Self::Sizeof(..) => 38,
+            Self::Store(..) => 39,
+            Self::Sub(..) => 40,
+            Self::Xor(..) => 41,
         }
     }
 
@@ -490,6 +490,9 @@ impl Display for Instruction {
             Instruction::CatchStart(r1, label) => {
                 write!(f, "{} {r1}, {label}", self.mnemonic())
             }
+            Instruction::Cmp(kind, r1, r2, r3) => {
+                write!(f, "{} {kind} {r1}, {r2}, {r3}", self.mnemonic())
+            }
             Instruction::Call(name) => {
                 write!(f, "{} {name}", self.mnemonic())
             }
@@ -514,21 +517,12 @@ impl Display for Instruction {
             Instruction::Div(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
-            Instruction::EqEq(r1, r2, r3) => {
-                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
-            }
             Instruction::FunctionPtrConst {
                 location,
                 receiver,
                 name,
             } => {
                 write!(f, "{} {location}, {receiver}, {name}", self.mnemonic())
-            }
-            Instruction::Gt(r1, r2, r3) => {
-                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
-            }
-            Instruction::Gte(r1, r2, r3) => {
-                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Inc(r) => {
                 write!(f, "{} {r}", self.mnemonic())
@@ -548,12 +542,6 @@ impl Display for Instruction {
             Instruction::LoadMappingKey(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
-            Instruction::Lt(r1, r2, r3) => {
-                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
-            }
-            Instruction::Lte(r1, r2, r3) => {
-                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
-            }
             Instruction::MapConst(r) => {
                 write!(f, "{} {r}", self.mnemonic())
             }
@@ -568,9 +556,6 @@ impl Display for Instruction {
             }
             Instruction::Not(r1, r2) => {
                 write!(f, "{} {r1}, {r2}", self.mnemonic())
-            }
-            Instruction::NotEq(r1, r2, r3) => {
-                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Or(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
@@ -654,6 +639,23 @@ mod tests {
         RegisterVariant::Local(Register(0))
     }
 
+    #[test]
+    fn a_compare_displays_its_kind_before_its_operands() {
+        let r1 = Register(1).as_local();
+        let r2 = Register(2).as_local();
+        let r3 = Register(3).as_local();
+        assert_eq!(
+            Instruction::Cmp(Comparison::Lte, r1, r2, r3).to_string(),
+            "cmp lte r1, r2, r3"
+        );
+    }
+
+    #[test]
+    fn every_comparison_kind_has_a_display() {
+        let shown: Vec<String> = Comparison::ALL.iter().map(ToString::to_string).collect();
+        assert_eq!(shown, ["lt", "lte", "gt", "gte", "eq", "ne"]);
+    }
+
     /// One instance of every variant, in declaration order.
     fn every_variant() -> Vec<Instruction> {
         use Instruction::*;
@@ -669,30 +671,25 @@ mod tests {
             CallOther(r(), r()),
             CatchEnd,
             CatchStart(r(), Address(0)),
+            Cmp(Comparison::Lt, r(), r(), r()),
             Copy(r(), r()),
             Dec(r()),
             Div(r(), r(), r()),
-            EqEq(r(), r(), r()),
             FunctionPtrConst {
                 location: r(),
                 receiver: FunctionReceiver::Local,
                 name: ustr("f"),
             },
-            Gt(r(), r(), r()),
-            Gte(r(), r(), r()),
             Inc(r()),
             Jmp(Address(0)),
             Jnz(r(), Address(0)),
             Jz(r(), Address(0)),
             Load(r(), r(), r()),
             LoadMappingKey(r(), r(), r()),
-            Lt(r(), r(), r()),
-            Lte(r(), r(), r()),
             MapConst(r()),
             Mod(r(), r(), r()),
             Mul(r(), r(), r()),
             Not(r(), r()),
-            NotEq(r(), r(), r()),
             NewUpvalue(r()),
             Or(r(), r(), r()),
             PopulateArgv(r(), 0, 0),
