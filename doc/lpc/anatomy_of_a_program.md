@@ -27,3 +27,4 @@ notes:
 - globals are 'global' only to the program, and cannot be accessed from other programs. they just outlive function invocations.
 - globals are initialized when the object is created, prior to calling `create`, (which happens automatically)
 - a parameter declared `ref` is the caller's variable; see [references](references.md)
+- `::f()` calls the inherited `f`, `name::f()` the one of the parent inherited as `name` (`inherit "/x" name;`), and `efun::f()` the efun; each looks only there, so a name that program lacks is a compile error

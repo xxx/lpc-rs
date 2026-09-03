@@ -263,11 +263,10 @@ impl TreeWalker for SemanticCheckWalker {
             return Ok(());
         }
 
-        if let CallNamespace::Named(namespace) = namespace
-            && !self.context.inherit_names.contains_key(namespace.as_str())
-            && namespace.as_str() != EFUN
-        {
-            let e = lpc_error!(node.span, "unknown namespace `{}`", namespace);
+        let unknown_namespace = matches!(namespace, CallNamespace::Named(ns)
+            if !self.context.inherit_names.contains_key(ns.as_str()) && ns.as_str() != EFUN);
+        if unknown_namespace {
+            let e = lpc_error!(node.span, "unknown namespace `{}`", namespace.as_str());
             self.context.diagnostics.record(e);
         }
 
@@ -275,16 +274,26 @@ impl TreeWalker for SemanticCheckWalker {
             argument.visit(self).await?;
         }
 
-        let lookup = self.context.lookup_var(*name);
-        let is_function_pointer =
-            lookup.is_some_and(|sym| sym.type_.matches_type(LpcType::Function(false)));
+        // A function-typed variable answers a bare name only.
+        let is_function_pointer = namespace == &CallNamespace::Local
+            && self
+                .context
+                .lookup_var(*name)
+                .is_some_and(|sym| sym.type_.matches_type(LpcType::Function(false)));
 
-        // Check function existence.
-        if !self.context.contains_function_complete(name.as_str(), &CallNamespace::Local)
-            // check for function pointers & closures
-            && (lookup.is_none() || !is_function_pointer)
+        // An unknown namespace is reported above, not searched.
+        if !unknown_namespace
+            && !is_function_pointer
+            && !self
+                .context
+                .contains_function_complete(name.as_str(), namespace)
         {
-            let e = lpc_error!(node.span, "call to unknown function `{}`", name);
+            let e = lpc_error!(
+                node.span,
+                "call to unknown function `{}{}`",
+                namespace,
+                name
+            );
             self.context.diagnostics.record(e);
             // Non-fatal. Continue.
         }
