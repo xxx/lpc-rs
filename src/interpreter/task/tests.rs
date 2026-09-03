@@ -367,6 +367,74 @@ mod test_instructions {
         }
     }
 
+    mod test_condition_form {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_negated_andand_follows_de_morgan() {
+            let code = indoc! { r##"
+                    int hits = 0;
+                    void create() {
+                        int i;
+                        for (i = 0; i < 4; i++) {
+                            if (!(i % 2 && i > 1)) {
+                                hits++;
+                            }
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("hits", BareVal::Int(3))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_do_while_oror_condition_runs_until_both_operands_are_false() {
+            let code = indoc! { r##"
+                    int hits = 0;
+                    void create() {
+                        int a = 2;
+                        int b = 3;
+                        do {
+                            hits++;
+                            if (a) a--;
+                            else b--;
+                        } while (a || b);
+                    }
+                "##};
+
+            check_committed_globals(code, &[("hits", BareVal::Int(5))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_literal_true_while_leaves_by_break() {
+            let code = indoc! { r##"
+                    int hits = 0;
+                    void create() {
+                        while (1) {
+                            hits++;
+                            if (hits == 3) break;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("hits", BareVal::Int(3))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_dead_object_is_false_through_a_negated_condition() {
+            let code = indoc! { r##"
+                    int gone = 0;
+                    void create() {
+                        object ob = clone_object("/std/object");
+                        destruct(ob);
+                        if (!ob) gone = 1;
+                    }
+                "##};
+
+            check_committed_globals(code, &[("gone", BareVal::Int(1))]).await;
+        }
+    }
+
     mod test_bitwise_not {
         use super::*;
 
