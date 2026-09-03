@@ -132,11 +132,19 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.task_context.in_game_cwd_of(&self.frame().process)
     }
 
-    /// Place the passed `result` into the correct location to return from an efun.
-    #[inline]
+    /// Place `result` in the frame's return register. An int into an int
+    /// register is a scalar store: the 16-byte enum move stalls on its own
+    /// spill.
+    #[inline(always)]
     pub fn return_efun_result(&mut self, result: LpcRef) {
-        let frame = self.stack.last_mut().unwrap();
-        frame.registers[0] = result;
+        let slot = &mut self.stack.last_mut().unwrap().registers[0];
+        match result {
+            LpcRef::Int(value) => match slot {
+                LpcRef::Int(x) => x.0 = value.0,
+                _ => *slot = LpcRef::Int(value),
+            },
+            other => *slot = other,
+        }
     }
 
     /// Write `value` back through by-reference argument `index` (0-based).
@@ -364,6 +372,7 @@ mod tests {
     use lpc_rs_function_support::{
         function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunctionBuilder,
     };
+    use lpc_rs_utils::lpc_string::LpcString;
 
     use super::*;
     use crate::{
@@ -471,6 +480,34 @@ mod tests {
         assert!(
             Arc::ptr_eq(&p3, &p3b),
             "find returns the live object's identity"
+        );
+    }
+
+    #[test]
+    fn an_int_result_lands_in_register_zero() {
+        let (task_context, mut stack) = efun_context();
+        let mut ctx = EfunContext::new(&mut stack, &task_context);
+        ctx.return_efun_result(LpcRef::from(7));
+        assert_eq!(ctx.frame().registers[0], LpcRef::from(7));
+    }
+
+    #[test]
+    fn an_int_result_replaces_a_register_holding_another_type() {
+        let (task_context, mut stack) = efun_context();
+        stack.last_mut().unwrap().registers[0] = LpcString::from("was a string").into();
+        let mut ctx = EfunContext::new(&mut stack, &task_context);
+        ctx.return_efun_result(LpcRef::from(true));
+        assert_eq!(ctx.frame().registers[0], LpcRef::from(1));
+    }
+
+    #[test]
+    fn a_non_int_result_lands_in_register_zero() {
+        let (task_context, mut stack) = efun_context();
+        let mut ctx = EfunContext::new(&mut stack, &task_context);
+        ctx.return_efun_result(LpcString::from("result").into());
+        assert_eq!(
+            ctx.frame().registers[0],
+            LpcRef::from(LpcString::from("result"))
         );
     }
 
