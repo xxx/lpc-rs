@@ -9,15 +9,12 @@ use lpc_rs_utils::lpc_string::LpcString;
 use thin_vec::ThinVec;
 use tracing::{error, instrument, trace, warn};
 
-use crate::{
-    interpreter::{
-        efun::EFUN_FUNCTIONS,
-        lpc_array::LpcArray,
-        lpc_int::LpcInt,
-        lpc_ref::{LpcRef, NULL, int_div, int_rem, int_shl, int_shr},
-        task::{CatchPoint, Task, bump_in_location, get_location, set_location},
-    },
-    pop_frame,
+use crate::interpreter::{
+    efun::EFUN_FUNCTIONS,
+    lpc_array::LpcArray,
+    lpc_int::LpcInt,
+    lpc_ref::{LpcRef, NULL, int_div, int_rem, int_shl, int_shr},
+    task::{CatchPoint, Task, bump_in_location, get_location, set_location},
 };
 
 /// Empty a staging vector once its consuming instruction has run, whether or
@@ -138,15 +135,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         match call {
             AsyncCall::Efun(name_idx, list) => {
                 let process = self.stack.current_frame()?.process.clone();
-                let (pf, name) = {
-                    let (name, pf) = EFUN_FUNCTIONS.get_index(name_idx as usize).unwrap();
-
-                    (pf.clone(), name)
-                };
-
-                let new_frame = self.prepare_new_call_frame(process, pf, list)?;
-
-                self.stack.push(new_frame)?;
+                let (name, pf) = EFUN_FUNCTIONS.get_index(name_idx as usize).unwrap();
+                self.push_call_frame(process, pf.clone(), list, false)?;
 
                 self.prepare_and_call_efun(name).await
             }
@@ -493,9 +483,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 return_value(new_ref, &mut self.stack)?;
             }
             Instruction::Ret => {
-                pop_frame!(self).map(|frame| {
-                    trace!("Returning from function: {}", frame.function.name());
-                });
+                self.pop_frame()?;
 
                 // halt at the end of all input
                 if self.stack.is_empty() {

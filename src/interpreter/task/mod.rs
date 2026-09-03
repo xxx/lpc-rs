@@ -31,7 +31,7 @@ use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::{ThinVec, thin_vec};
 use tokio::time::timeout;
-use tracing::{error, instrument, warn};
+use tracing::{error, instrument, trace, warn};
 
 use lpc_rs_utils::lpc_string::LpcString;
 
@@ -50,22 +50,6 @@ use crate::interpreter::{
     },
     task_context::{Caller, TaskContext},
 };
-
-#[macro_export]
-macro_rules! pop_frame {
-    ($task:expr) => {{
-        let opt = $task.pop_frame();
-        if let Some(ref frame) = opt {
-            $task.stack.copy_result(&frame)?;
-
-            if $task.stack.is_empty() {
-                $task.context.set_result(frame.registers[0].clone())?;
-            }
-        }
-
-        opt
-    }};
-}
 
 /// A type to track where `catch` calls need to go if there is an error
 #[derive(Debug, Clone)]
@@ -364,21 +348,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let frame_index = catch_point.frame_index;
         let new_pc = catch_point.address;
 
-        let truncate_len = frame_index + 2;
-
-        // clear away stack frames that won't be executed any further, which lie between
-        // the error and the catch point's stack frame.
-        // Does nothing if you're already in the correct stack frame, or one away.
-        // The +2 is because truncate takes a length, not an index.
-        self.stack.truncate(truncate_len);
-
-        // If these aren't equal, we're already in the correct stack frame.
-        // That only happens when the stack has one frame.
-        if self.stack.len() == truncate_len {
-            // Pop the final frame via pop_frame(), to keep other state changes to a single
-            // code path, (e.g. changing the current process)
-            self.pop_frame();
-        }
+        // The frames between the error and the catch point's are done; the
+        // erroring callee's `r0` is not a result, so this is not a pop.
+        self.stack.truncate(frame_index + 1);
 
         if self.stack.is_empty() {
             return Err(self.runtime_bug("stack is empty after popping to catch point?"));
@@ -560,22 +532,27 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             "Attempting to access index {index} in an array of length {length}"
         ))
     }
-    /// Pop the top frame from the stack, and return it.
-    /// Use the `pop_frame!` macro instead for most uses.
+    /// Pop the top frame: its `r0` becomes the caller's, or the task's
+    /// result when it was the last. The frame drops in its slot; moved out
+    /// first, it reloaded wide.
     #[inline]
-    #[allow(clippy::let_and_return)]
-    fn pop_frame(&mut self) -> Option<CallFrame> {
-        let frame = self.stack.pop();
-
+    fn pop_frame(&mut self) -> Result<()> {
+        let Some(frame) = self.stack.last_mut() else {
+            return Ok(());
+        };
+        trace!("Returning from function: {}", frame.function.name());
         #[cfg(test)]
-        if frame
-            .as_ref()
-            .is_some_and(|f| f.function.name() != lpc_rs_core::INIT_PROGRAM)
-        {
-            self.popped_frame = frame.clone();
+        if frame.function.name() != lpc_rs_core::INIT_PROGRAM {
+            self.popped_frame = Some(frame.clone());
         }
-
-        frame
+        let result = std::mem::take(&mut frame.registers[0]);
+        let depth = self.stack.len() - 1;
+        self.stack.truncate(depth);
+        match self.stack.current_frame_mut() {
+            Ok(caller) => caller.registers[0] = result,
+            Err(_) => self.context.set_result(result)?,
+        }
+        Ok(())
     }
 
     // /// Negotiate how much space needs to be made for a call to a function pointer.
