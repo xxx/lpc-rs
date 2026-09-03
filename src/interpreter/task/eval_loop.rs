@@ -179,9 +179,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Dec(r1) => {
                 bump_in_location(&mut self.stack, &self.context.txn, r1, -1)?;
             }
-            Instruction::Cmp(kind, r1, r2, r3) => {
-                self.binary_boolean_operation(r1, r2, r3, |x, y, txn| x.compare(kind, y, txn))?;
-            }
+            Instruction::Cmp(kind, r1, r2, r3) => self.compare_into(kind, r1, r2, r3)?,
             Instruction::FunctionPtrConst {
                 location,
                 receiver,
@@ -199,9 +197,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Inc(r1) => {
                 bump_in_location(&mut self.stack, &self.context.txn, r1, 1)?;
             }
+            Instruction::Jcmp(kind, r1, r2, address) => {
+                if self.holds(kind, r1, r2)? {
+                    self.stack.current_frame_mut()?.set_pc(address);
+                }
+            }
             Instruction::Jmp(address) => {
                 let frame = self.stack.current_frame_mut()?;
                 frame.set_pc(address);
+            }
+            Instruction::Jncmp(kind, r1, r2, address) => {
+                if !self.holds(kind, r1, r2)? {
+                    self.stack.current_frame_mut()?.set_pc(address);
+                }
             }
             Instruction::Jnz(r1, address) => {
                 let v = &*get_location(&self.stack, &self.context.txn, r1)?;

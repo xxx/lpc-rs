@@ -907,6 +907,73 @@ mod test_instructions {
         }
     }
 
+    mod test_comparison_branches {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_mismatched_pair_is_false_under_both_polarities() {
+            let code = indoc! { r##"
+                    int lt; int not_lt; int gte;
+                    void create() {
+                        mixed s = "a";
+                        if (s < 1) lt = 1;
+                        if (!(s < 1)) not_lt = 1;
+                        if (s >= 1) gte = 1;
+                    }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("lt", BareVal::Int(0)),
+                    ("not_lt", BareVal::Int(1)),
+                    ("gte", BareVal::Int(0)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_range_case_takes_its_ends_and_nothing_outside() {
+            let code = indoc! { r##"
+                    int below; int low; int high; int above;
+                    int f(int x) { switch (x) { case 1..3: return 1; default: return 0; } }
+                    void create() { below = f(0); low = f(1); high = f(3); above = f(4); }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("below", BareVal::Int(0)),
+                    ("low", BareVal::Int(1)),
+                    ("high", BareVal::Int(1)),
+                    ("above", BareVal::Int(0)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn an_open_range_end_is_always_satisfied() {
+            let code = indoc! { r##"
+                    int low; int edge; int gap; int high;
+                    int f(int x) { switch (x) { case ..2: return 1; case 5..: return 2; default: return 0; } }
+                    void create() { low = f(-5); edge = f(2); gap = f(3); high = f(99); }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("low", BareVal::Int(1)),
+                    ("edge", BareVal::Int(1)),
+                    ("gap", BareVal::Int(0)),
+                    ("high", BareVal::Int(2)),
+                ],
+            )
+            .await;
+        }
+    }
+
     mod test_switch_shapes {
         use super::*;
 

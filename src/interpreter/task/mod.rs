@@ -19,7 +19,7 @@ use std::{
 use async_recursion::async_recursion;
 use educe::Educe;
 pub(crate) use location::{bump_in_location, get_location, set_location};
-use lpc_rs_asm::address::Address;
+use lpc_rs_asm::{address::Address, instruction::Comparison};
 use lpc_rs_core::{
     LpcIntInner, RegisterSize,
     register::{Register, RegisterVariant},
@@ -472,20 +472,23 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// Binary operations that return a boolean value (e.g. comparisons)
     #[instrument(level = "debug", skip_all)]
-    fn binary_boolean_operation<F>(
-        &mut self,
-        r1: RegisterVariant,
-        r2: RegisterVariant,
-        r3: RegisterVariant,
-        operation: F,
-    ) -> Result<()>
-    where
-        F: Fn(&LpcRef, &LpcRef, &TxnHandle) -> bool,
-    {
+    /// Whether `r1 kind r2` holds for the values in the two registers.
+    fn holds(&self, kind: Comparison, r1: RegisterVariant, r2: RegisterVariant) -> Result<bool> {
         let ref1 = &*get_location(&self.stack, &self.context.txn, r1)?;
         let ref2 = &*get_location(&self.stack, &self.context.txn, r2)?;
 
-        let out = operation(ref1, ref2, &self.context.txn) as LpcIntInner;
+        Ok(ref1.compare(kind, ref2, &self.context.txn))
+    }
+
+    /// Write 1 or 0 to `r3` for whether `r1 kind r2` holds.
+    fn compare_into(
+        &mut self,
+        kind: Comparison,
+        r1: RegisterVariant,
+        r2: RegisterVariant,
+        r3: RegisterVariant,
+    ) -> Result<()> {
+        let out = self.holds(kind, r1, r2)? as LpcIntInner;
 
         set_location(
             &mut self.stack,
