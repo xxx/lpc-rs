@@ -3,11 +3,13 @@
 //! call by bare name resolves own and inherited functions first, then simul
 //! efuns, then efuns.
 
+use std::sync::Arc;
+
 use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_utils::config::ConfigBuilder;
 
 use crate::{
-    interpreter::vm::Vm,
+    interpreter::{process::Process, vm::Vm},
     test_support::{TempLib, committed_string},
 };
 
@@ -17,15 +19,31 @@ const ME: &str = "string me() { return file_name(this_object()); }\n";
 /// `/user.c`: `got` is what `me()` returns.
 const USER_ME: &str = "string got; void create() { got = me(); }";
 
-/// The `got` global of `/user.c` compiled from `user`, in a lib holding
-/// `files` (path under the lib, source) whose simul-efun file the config
-/// names as `spelling`.
-async fn got_from_user(lib: &str, spelling: &str, files: &[(&str, &str)], user: &str) -> String {
+/// A lib holding `files` (path under the lib, source), with a `secure/` dir.
+fn lib_holding(lib: &str, files: &[(&str, &str)]) -> TempLib {
     let root = TempLib::new(lib);
     std::fs::create_dir_all(root.join("secure")).unwrap();
     for (path, source) in files {
         std::fs::write(root.join(path), source).unwrap();
     }
+    root
+}
+
+/// The string global `name` of `process`.
+fn string_global(vm: &Vm, process: &Arc<Process>, name: &str) -> String {
+    // An inherited global comes before the file's own.
+    let Some(RegisterVariant::Global(register)) = process.program.global_variables[name].location
+    else {
+        panic!("`{name}` is a global");
+    };
+    committed_string(vm, process, register.index())
+}
+
+/// The `got` global of `/user.c` compiled from `user`, in a lib holding
+/// `files` (path under the lib, source) whose simul-efun file the config
+/// names as `spelling`.
+async fn got_from_user(lib: &str, spelling: &str, files: &[(&str, &str)], user: &str) -> String {
+    let root = lib_holding(lib, files);
     let config = ConfigBuilder::default()
         .lib_dir(root.to_str().unwrap())
         .simul_efun_file(spelling)
@@ -43,12 +61,23 @@ async fn got_from_user(lib: &str, spelling: &str, files: &[(&str, &str)], user: 
         .unwrap()
         .context
         .process;
-    // An inherited global comes before `/user.c`'s own.
-    let Some(RegisterVariant::Global(register)) = user.program.global_variables["got"].location
-    else {
-        panic!("`got` is a global");
-    };
-    committed_string(&vm, &user, register.index())
+    string_global(&vm, &user, "got")
+}
+
+/// The `got` global of `/secure/master.c` compiled from `master`, after a
+/// boot of a lib holding `files` (path under the lib, source).
+async fn got_from_master(lib: &str, files: &[(&str, &str)], master: &str) -> String {
+    let root = lib_holding(lib, files);
+    std::fs::write(root.join("secure/master.c"), master).unwrap();
+    let config = ConfigBuilder::default()
+        .lib_dir(root.to_str().unwrap())
+        .simul_efun_file("/secure/simul_efuns")
+        .master_object(ustr::ustr("/secure/master.c"))
+        .build()
+        .unwrap();
+    let mut vm = Vm::new(config);
+    let master = vm.bootstrap().await.expect("boots").process;
+    string_global(&vm, &master, "got")
 }
 
 /// What `me()` returns to `/user.c` when the config names the simul-efun
@@ -211,4 +240,62 @@ async fn an_object_inheriting_the_simul_efun_file_may_call_the_parent_form() {
     )
     .await;
     assert_eq!(got, "user");
+}
+
+/// A simul-efun file with an initialized global and a `create()` that counts
+/// its runs.
+const COUNTED: &str = "int n = 7; int created;\n\
+    void create() { created++; }\n\
+    string seven() { return \"\" + n; }\n\
+    string creations() { return \"\" + created; }\n";
+
+const SIMUL_COUNTED: (&str, &str) = ("secure/simul_efuns.c", COUNTED);
+
+#[tokio::test]
+async fn a_simul_efun_global_is_initialized_at_boot() {
+    assert_eq!(
+        got_from_user(
+            "simul-init-global",
+            "/secure/simul_efuns",
+            &[SIMUL_COUNTED],
+            "string got; void create() { got = seven(); }",
+        )
+        .await,
+        "7"
+    );
+}
+
+/// Boot runs `create()`; a later `->` finds the object initialized and does
+/// not run it again.
+#[tokio::test]
+async fn the_simul_efun_file_is_created_once_at_boot() {
+    let user = r#"string got;
+        void create() {
+            string before = creations();
+            "/secure/simul_efuns"->creations();
+            got = before + "," + creations();
+        }"#;
+    assert_eq!(
+        got_from_user(
+            "simul-create-once",
+            "/secure/simul_efuns",
+            &[SIMUL_COUNTED],
+            user
+        )
+        .await,
+        "1,1"
+    );
+}
+
+#[tokio::test]
+async fn the_master_is_created_after_the_simul_efun_object() {
+    assert_eq!(
+        got_from_master(
+            "simul-before-master",
+            &[SIMUL_COUNTED],
+            "string got; void create() { got = seven() + \",\" + creations(); }",
+        )
+        .await,
+        "7,1"
+    );
 }
