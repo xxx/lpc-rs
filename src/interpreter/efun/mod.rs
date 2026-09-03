@@ -163,14 +163,26 @@ macro_rules! efuns {
     };
 
     ($( $name:ident $([$($option:tt)*])? => { $($row:tt)* } ),+ $(,)?) => {
-        /// Run the efun named `efun_name` against `efun_context`.
+        /// Every efun; the discriminant is its [`EFUN_PROTOTYPES`] index,
+        /// the one a [`CallEfun`](lpc_rs_asm::instruction::Instruction::CallEfun)
+        /// carries.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        #[expect(non_camel_case_types, reason = "one variant per efun, spelled as its table row is")]
+        pub enum Efun {
+            $( $name, )+
+        }
+
+        impl Efun {
+            const ALL: &'static [Efun] = &[$( Efun::$name, )+];
+        }
+
+        /// Run `efun` against `efun_context`.
         pub async fn call_efun<const STACKSIZE: usize>(
-            efun_name: &str,
+            efun: Efun,
             efun_context: &mut EfunContext<'_, STACKSIZE>,
         ) -> Result<()> {
-            match efun_name {
-                $( stringify!($name) => efuns!(@dispatch $name $([$($option)*])?, efun_context), )+
-                _ => Err(efun_context.runtime_error(format!("Unknown efun: {}", efun_name))),
+            match efun {
+                $( Efun::$name => efuns!(@dispatch $name $([$($option)*])?, efun_context), )+
             }
         }
 
@@ -579,6 +591,29 @@ pub static EFUN_FUNCTIONS: Lazy<IndexMap<&'static str, Arc<ProgramFunction>>> = 
         .collect()
 });
 
+impl Efun {
+    /// The efun at a
+    /// [`CallEfun`](lpc_rs_asm::instruction::Instruction::CallEfun) index,
+    /// `None` past the table.
+    #[inline]
+    pub fn from_index(index: usize) -> Option<Efun> {
+        Self::ALL.get(index).copied()
+    }
+
+    /// The efun with this name, `None` for a name outside the table.
+    pub fn from_name(name: &str) -> Option<Efun> {
+        EFUN_PROTOTYPES
+            .get_index_of(name)
+            .and_then(Self::from_index)
+    }
+
+    /// The function every frame calling this efun carries.
+    #[inline]
+    pub fn function(self) -> &'static Arc<ProgramFunction> {
+        &EFUN_FUNCTIONS[self as usize]
+    }
+}
+
 /// The object an optional argument names: `0` is the caller, a string is
 /// loaded by path (a failed load is the error), a destructed or non-object
 /// argument is `None`.
@@ -654,6 +689,20 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `Efun`'s discriminants are the table positions `CallEfun` carries.
+    #[test]
+    fn efun_ids_follow_the_prototype_table() {
+        for (index, name) in EFUN_PROTOTYPES.keys().enumerate() {
+            let efun = Efun::from_index(index).expect(name);
+            assert_eq!(
+                (efun as usize, format!("{efun:?}").as_str()),
+                (index, *name)
+            );
+            assert_eq!(Efun::from_name(name), Some(efun));
+        }
+        assert_eq!(Efun::from_index(EFUN_PROTOTYPES.len()), None);
+    }
 
     #[test]
     fn the_arity_tuple_sets_the_ellipsis_flag() {

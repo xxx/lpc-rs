@@ -10,7 +10,7 @@ use ustr::Ustr;
 
 use crate::interpreter::{
     call_frame::CallFrame,
-    efun::{call_efun, efun_context::EfunContext},
+    efun::{Efun, call_efun, efun_context::EfunContext},
     lpc_ref::{LpcRef, NULL},
     process::Process,
     task::Task,
@@ -124,14 +124,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
-    /// Create a new [`EfunContext`] and called the named efun.
-    pub(crate) async fn prepare_and_call_efun<S>(&mut self, name: S) -> lpc_rs_errors::Result<()>
-    where
-        S: AsRef<str>,
-    {
+    /// Call the efun the top frame was pushed for, resolving it by name.
+    pub(crate) async fn call_frame_efun(&mut self) -> lpc_rs_errors::Result<()> {
+        let name = self.stack.current_frame()?.function.name();
+        let Some(efun) = Efun::from_name(name) else {
+            return Err(self.runtime_bug(format!("`{name}` is typed efun but has no table row")));
+        };
+        self.prepare_and_call_efun(efun).await
+    }
+
+    /// Run `efun` on the frame already pushed for it.
+    pub(crate) async fn prepare_and_call_efun(&mut self, efun: Efun) -> lpc_rs_errors::Result<()> {
         let mut ctx = EfunContext::new(&mut self.stack, &self.context);
 
-        let result = call_efun(name.as_ref(), &mut ctx).await;
+        let result = call_efun(efun, &mut ctx).await;
 
         #[cfg(test)]
         {
