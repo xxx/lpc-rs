@@ -300,25 +300,6 @@ pub fn mismatch(
     }
 }
 
-/// A ternary's branch types when they disagree: neither is a literal `0` and
-/// the body's type does not take the else branch.
-///
-/// # Arguments
-/// * `node` - The ternary.
-/// * `context` - The current [`CompilationContext`]
-pub fn ternary_mismatch(
-    node: &TernaryNode,
-    context: &CompilationContext,
-) -> Result<Option<(LpcType, LpcType)>> {
-    if is_literal_zero(&node.body) {
-        return Ok(None);
-    }
-
-    let body_type = node_type(&node.body, context)?;
-
-    Ok(mismatch(body_type, &node.else_clause, context)?.map(|else_type| (body_type, else_type)))
-}
-
 /// The type of a binary operation on its operand types; a pair the operation
 /// check rejects is `mixed`.
 fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType {
@@ -2018,41 +1999,6 @@ mod tests {
             let found = mismatch(LpcType::String(false), &ExpressionNode::from(1), &context);
 
             assert_eq!(found.unwrap(), Some(LpcType::Int(false)));
-        }
-    }
-
-    mod ternary_mismatch_tests {
-        use super::*;
-
-        fn ternary(body: ExpressionNode, else_clause: ExpressionNode) -> TernaryNode {
-            TernaryNode {
-                condition: Box::new(ExpressionNode::from(1)),
-                body: Box::new(body),
-                else_clause: Box::new(else_clause),
-                span: None,
-            }
-        }
-
-        #[test]
-        fn a_literal_zero_branch_agrees_with_anything() {
-            let context = CompilationContext::default();
-
-            let node = ternary(ExpressionNode::from("a"), ExpressionNode::from(0));
-            assert_eq!(ternary_mismatch(&node, &context).unwrap(), None);
-
-            let node = ternary(ExpressionNode::from(0), ExpressionNode::from("a"));
-            assert_eq!(ternary_mismatch(&node, &context).unwrap(), None);
-        }
-
-        #[test]
-        fn differing_concrete_branches_are_reported() {
-            let context = CompilationContext::default();
-            let node = ternary(ExpressionNode::from(1), ExpressionNode::from("a"));
-
-            assert_eq!(
-                ternary_mismatch(&node, &context).unwrap(),
-                Some((LpcType::Int(false), LpcType::String(false)))
-            );
         }
     }
 
