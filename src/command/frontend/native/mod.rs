@@ -442,13 +442,11 @@ impl Compiled {
 
 #[cfg(test)]
 mod tests {
+    use lpc_rs_utils::lpc_string::LpcString;
     use std::sync::Arc;
 
     use super::*;
-    use crate::{
-        command::grammar::parse,
-        interpreter::{lpc_ref::LpcRef, lpc_string::LpcString},
-    };
+    use crate::{command::grammar::parse, interpreter::lpc_ref::LpcRef};
 
     fn s(text: &str) -> LpcRef {
         LpcString::from(text).into()

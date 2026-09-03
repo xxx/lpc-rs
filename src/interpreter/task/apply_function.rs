@@ -3,6 +3,7 @@ use std::sync::Arc;
 use indexmap::IndexMap;
 use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
+use lpc_rs_utils::lpc_string::LpcString;
 
 use super::{SeedArg, TaskSeed};
 use crate::{
@@ -12,7 +13,6 @@ use crate::{
         apply::in_game_location,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
-        lpc_string::LpcString,
         process::Process,
         task::{Task, task_template::TaskTemplate},
         task_context::{Caller, TaskContext},

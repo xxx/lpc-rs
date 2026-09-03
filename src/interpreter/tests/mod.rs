@@ -13,9 +13,10 @@ mod simul_efuns;
 mod virtual_objects;
 
 use lpc_rs_utils::config::Config;
+use lpc_rs_utils::lpc_string::LpcString;
 
 use crate::{
-    interpreter::{lpc_ref::LpcRef, lpc_string::LpcString, vm::Vm},
+    interpreter::{lpc_ref::LpcRef, vm::Vm},
     test_support::test_config,
 };
 

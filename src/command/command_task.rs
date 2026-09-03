@@ -111,12 +111,12 @@ pub(crate) async fn run_command_line(
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
+    use lpc_rs_utils::lpc_string::LpcString;
 
     use super::*;
     use crate::{
         interpreter::{
-            CommittedReader, lpc_ref::LpcRef, lpc_string::LpcString,
-            task::task_template::TaskTemplate, vm::Vm,
+            CommittedReader, lpc_ref::LpcRef, task::task_template::TaskTemplate, vm::Vm,
         },
         test_support::test_config,
     };

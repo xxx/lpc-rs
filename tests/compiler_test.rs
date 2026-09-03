@@ -6,13 +6,12 @@ use std::sync::Arc;
 use indoc::indoc;
 use lpc_rs::{
     compiler::{Compiler, CompilerBuilder},
-    interpreter::{
-        CommittedReader, lpc_int::LpcInt, lpc_ref::LpcRef, lpc_string::LpcString, vm::Vm,
-    },
+    interpreter::{CommittedReader, lpc_int::LpcInt, lpc_ref::LpcRef, vm::Vm},
 };
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::RegisterSize;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
+use lpc_rs_utils::lpc_string::LpcString;
 use ustr::ustr;
 
 use crate::support::{run_prog, test_config, test_config_builder};

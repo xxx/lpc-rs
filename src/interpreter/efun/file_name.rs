@@ -1,10 +1,10 @@
 use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::Result;
+use lpc_rs_utils::lpc_string::LpcString;
 
 use crate::interpreter::{
     efun::efun_context::EfunContext,
     lpc_ref::{LpcRef, NULL},
-    lpc_string::LpcString,
 };
 
 pub async fn file_name<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {

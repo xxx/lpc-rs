@@ -1,7 +1,8 @@
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
+use lpc_rs_utils::lpc_string::LpcString;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, lpc_string::LpcString};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// `query_verb`, an efun returning the verb of the command in progress; with a
 /// nonzero argument, the first word as typed. 0 outside a command.

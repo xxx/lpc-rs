@@ -1,6 +1,7 @@
 //! The add_action family's rule shape: a verb as a grammar, the first-word
 //! pre-filter, and the handler's argument taken from the token offsets.
 
+use lpc_rs_utils::lpc_string::LpcString;
 use std::sync::{Arc, LazyLock};
 
 use crate::{
@@ -9,7 +10,7 @@ use crate::{
         memo::Memo,
         registry::{ArgSpan, Reported, VerbMatch},
     },
-    interpreter::{lpc_ref::LpcRef, lpc_string::LpcString},
+    interpreter::lpc_ref::LpcRef,
 };
 
 /// The cache key: every prefix rule shares one grammar, an exact verb gets

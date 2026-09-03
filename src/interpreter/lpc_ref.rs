@@ -10,6 +10,7 @@ use std::{
 use decorum::Total;
 use lpc_rs_core::{BaseFloat, LpcFloatInner, LpcIntInner, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_utils::lpc_string::LpcString;
 use lpc_rs_utils::{string, string::concatenate_strings};
 
 use crate::{
@@ -20,7 +21,6 @@ use crate::{
         lpc_float::LpcFloat,
         lpc_int::LpcInt,
         lpc_mapping::LpcMapping,
-        lpc_string::LpcString,
         process::Process,
         stm::{SVar, TxnHandle},
     },

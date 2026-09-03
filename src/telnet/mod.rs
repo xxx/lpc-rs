@@ -9,6 +9,7 @@ use indexmap::IndexMap;
 use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::lpc_error;
 use lpc_rs_telnet::{Event, MAX_LINE, Op, Session};
+use lpc_rs_utils::lpc_string::LpcString;
 use once_cell::sync::OnceCell;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
@@ -23,7 +24,6 @@ use crate::{
     interpreter::{
         CommittedReader, GET_MUD_STATS, GMCP, NET_DEAD, WINDOW_SIZE, WRITE_PROMPT,
         lpc_ref::LpcRef,
-        lpc_string::LpcString,
         process::Process,
         task::{
             apply_function::{

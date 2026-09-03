@@ -1,12 +1,12 @@
 use indexmap::IndexMap;
 use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::Result;
+use lpc_rs_utils::lpc_string::LpcString;
 
 use crate::interpreter::{
     efun::{self, efun_context::EfunContext},
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
-    lpc_string::LpcString,
 };
 
 /// `query_connection`, an efun returning what the driver knows about an
@@ -56,11 +56,11 @@ mod tests {
 
     use crate::{
         interpreter::{
-            CommittedReader, lpc_ref::LpcRef, lpc_string::LpcString, task::Task,
-            task::task_template::TaskTemplate, vm::Vm,
+            CommittedReader, lpc_ref::LpcRef, task::Task, task::task_template::TaskTemplate, vm::Vm,
         },
         test_support::{connect, test_config},
     };
+    use lpc_rs_utils::lpc_string::LpcString;
 
     const IAC: u8 = 255;
     const SB: u8 = 250;
