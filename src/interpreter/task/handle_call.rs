@@ -22,11 +22,7 @@ use crate::{
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(level = "debug", skip_all)]
-    pub(crate) async fn handle_call(
-        &mut self,
-        name: Ustr,
-        list: ArgList,
-    ) -> lpc_rs_errors::Result<()> {
+    pub(crate) fn handle_call(&mut self, name: Ustr, list: ArgList) -> lpc_rs_errors::Result<()> {
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
         // Codegen emits `Call` only for a name of this program; a miss is a bug.
@@ -36,7 +32,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 .runtime_bug(format!("call to unknown local function `{name}`")));
         };
 
-        let new_frame = self.prepare_new_call_frame(process, func, list).await?;
+        let new_frame = self.prepare_new_call_frame(process, func, list)?;
 
         trace!("pushing new frame");
 
@@ -47,7 +43,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// Prepare and populate a new [`CallFrame`] for a call to a static function.
     #[instrument(level = "debug", skip_all)]
-    pub(crate) async fn prepare_new_call_frame(
+    pub(crate) fn prepare_new_call_frame(
         &mut self,
         process: Arc<Process>,
         func: Arc<ProgramFunction>,
@@ -167,7 +163,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     #[instrument(level = "debug", skip_all)]
     #[inline]
-    pub(crate) async fn handle_call_simul_efun(
+    pub(crate) fn handle_call_simul_efun(
         &mut self,
         func_name: Ustr,
         list: ArgList,
@@ -184,9 +180,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Err(self.runtime_error(format!("call to unknown simul efun `{func_name}`")));
         };
 
-        let mut new_frame = self
-            .prepare_new_call_frame(simul_efuns.clone(), func, list)
-            .await?;
+        let mut new_frame = self.prepare_new_call_frame(simul_efuns.clone(), func, list)?;
         new_frame.external = true;
 
         self.stack.push(new_frame)?;

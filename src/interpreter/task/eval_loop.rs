@@ -1,6 +1,6 @@
 use async_recursion::async_recursion;
-use lpc_rs_asm::instruction::Instruction;
-use lpc_rs_core::{LpcIntInner, RegisterSize};
+use lpc_rs_asm::instruction::{ArgList, Instruction};
+use lpc_rs_core::{LpcIntInner, RegisterSize, register::RegisterVariant};
 use lpc_rs_errors::lpc_error;
 use lpc_rs_utils::lpc_string::LpcString;
 use thin_vec::ThinVec;
@@ -28,6 +28,25 @@ fn consumed<T, R>(
     result
 }
 
+/// What [`Task::step`] did with one instruction.
+enum Step {
+    /// Go on to the next instruction.
+    Next,
+    /// The stack is empty.
+    Halt,
+    /// [`Task::dispatch`] finishes the instruction.
+    Await(AsyncCall),
+}
+
+/// The instructions that await, each because it can start a nested task.
+enum AsyncCall {
+    Efun(u8, ArgList),
+    FunctionPointer(RegisterVariant, ArgList),
+    Other(RegisterVariant, RegisterVariant, ArgList),
+    /// A `Ret` into a frame mid-way through a collection `->`.
+    Collection,
+}
+
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Resume execution of a New or Paused Task. Assumes the stack has already been set up
     #[instrument(skip_all)]
@@ -46,7 +65,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let mut c = 0 as RegisterSize;
 
             while !halted {
-                halted = match self.eval_one_instruction().await {
+                let result = match self.step() {
+                    Ok(Step::Next) => Ok(false),
+                    Ok(Step::Halt) => Ok(true),
+                    Ok(Step::Await(call)) => self.dispatch(call).await.map(|()| false),
+                    Err(e) => Err(e),
+                };
+                halted = match result {
                     Ok(x) => x,
                     Err(e) => {
                         if e.is_bug() {
@@ -78,19 +103,39 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
+    /// Finish an instruction that awaits.
+    async fn dispatch(&mut self, call: AsyncCall) -> lpc_rs_errors::Result<()> {
+        match call {
+            AsyncCall::Efun(name_idx, list) => {
+                let process = self.stack.current_frame()?.process.clone();
+                let (pf, name) = {
+                    let (name, pf) = EFUN_FUNCTIONS.get_index(name_idx as usize).unwrap();
+
+                    (pf.clone(), name)
+                };
+
+                let new_frame = self.prepare_new_call_frame(process, pf, list)?;
+
+                self.stack.push(new_frame)?;
+
+                self.prepare_and_call_efun(name).await
+            }
+            AsyncCall::FunctionPointer(location, list) => self.handle_call_fp(location, list).await,
+            AsyncCall::Other(receiver, name, list) => {
+                self.handle_call_other(receiver, name, list).await
+            }
+            AsyncCall::Collection => self.advance_collection_call().await,
+        }
+    }
+
     /// Evaluate the instruction at the current value of the program counter.
-    /// This is the main interpretation function for the VM.
     ///
-    /// # Returns
-    ///
-    /// A [`lpc_rs_errors::Result`], with a boolean indicating whether we are at the end of input
-    // Not boxed: the recursion cycle is already broken by the boxed
-    // futures on `timed_eval_seed` and `resume`.
+    /// Not `async`: as an `async fn` this was a 2.3 KiB future copied, polled
+    /// and dropped on every instruction.
     #[instrument(level = "debug", skip_all)]
-    #[inline]
-    async fn eval_one_instruction(&mut self) -> lpc_rs_errors::Result<bool> {
+    fn step(&mut self) -> lpc_rs_errors::Result<Step> {
         if self.stack.is_empty() {
-            return Ok(true);
+            return Ok(Step::Halt);
         }
 
         let instruction = {
@@ -99,14 +144,14 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 Err(_) => {
                     warn!("Expected to get an instruction, but there are no more frames.");
 
-                    return Ok(true);
+                    return Ok(Step::Halt);
                 }
             };
 
             let Some(instruction) = frame.instruction() else {
                 warn!("No more instructions. Missing Ret instruction?");
 
-                return Ok(true);
+                return Ok(Step::Halt);
             };
             trace!("about to evaluate: {}", instruction);
 
@@ -129,27 +174,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::BitwiseNot(r1, r2) => {
                 self.unary_operation(r1, r2, |x, _| x.bitnot())?;
             }
-            Instruction::Call(name, list) => self.handle_call(name, list).await?,
+            Instruction::Call(name, list) => self.handle_call(name, list)?,
             Instruction::CallEfun(name_idx, list) => {
-                let process = self.stack.current_frame()?.process.clone();
-                let (pf, name) = {
-                    let (name, pf) = EFUN_FUNCTIONS.get_index(name_idx as usize).unwrap();
-
-                    (pf.clone(), name)
-                };
-
-                let new_frame = self.prepare_new_call_frame(process, pf, list).await?;
-
-                self.stack.push(new_frame)?;
-
-                self.prepare_and_call_efun(name).await?;
+                return Ok(Step::Await(AsyncCall::Efun(name_idx, list)));
             }
-            Instruction::CallFp(location, list) => self.handle_call_fp(location, list).await?,
+            Instruction::CallFp(location, list) => {
+                return Ok(Step::Await(AsyncCall::FunctionPointer(location, list)));
+            }
             Instruction::CallOther(receiver, name, list) => {
-                self.handle_call_other(receiver, name, list).await?;
+                return Ok(Step::Await(AsyncCall::Other(receiver, name, list)));
             }
             Instruction::CallSimulEfun(name, list) => {
-                self.handle_call_simul_efun(name, list).await?;
+                self.handle_call_simul_efun(name, list)?;
             }
             Instruction::CatchEnd => {
                 self.catch_points.pop();
@@ -418,11 +454,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 // halt at the end of all input
                 if self.stack.is_empty() {
-                    return Ok(true);
+                    return Ok(Step::Halt);
                 }
                 // A return into a frame mid-way through a collection `->`.
                 if self.stack.current_frame()?.pending.is_some() {
-                    self.advance_collection_call().await?;
+                    return Ok(Step::Await(AsyncCall::Collection));
                 }
             }
             Instruction::Sizeof(r1, r2) => {
@@ -480,6 +516,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         }
 
-        Ok(false)
+        Ok(Step::Next)
     }
 }

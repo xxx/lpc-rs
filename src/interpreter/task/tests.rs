@@ -1611,10 +1611,7 @@ mod test_instructions {
             let frame = CallFrame::new(process.clone(), create, 0, None::<ThinVec<VarId>>);
             task.stack.push(frame).unwrap();
 
-            let e = task
-                .handle_call(ustr("nope"), ArgList(0))
-                .await
-                .unwrap_err();
+            let e = task.handle_call(ustr("nope"), ArgList(0)).unwrap_err();
             assert!(e.is_bug(), "{e}");
             assert_eq!(
                 e.to_string(),

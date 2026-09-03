@@ -68,9 +68,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 } else {
                     debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
                     // The callee returns through `pop_frame!`'s `copy_result`.
-                    let mut frame = self
-                        .prepare_new_call_frame(receiver, function, list)
-                        .await?;
+                    let mut frame = self.prepare_new_call_frame(receiver, function, list)?;
                     frame.external = true;
                     self.stack.push(frame)?;
                     return Ok(());
