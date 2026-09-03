@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use itertools::Itertools;
+use lpc_rs_asm::instruction::{Arg, ArgList};
 use lpc_rs_core::{RegisterSize, register::RegisterVariant};
 use lpc_rs_errors::Result;
 use tracing::{instrument, trace};
@@ -12,7 +13,7 @@ use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
     process::Process,
     stm::VarId,
-    task::{Arg, Task, get_location},
+    task::{Task, get_location},
     task_context::{Loader, ObjectLookup, TaskContext},
 };
 
@@ -23,6 +24,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         &mut self,
         receiver: RegisterVariant,
         name_location: RegisterVariant,
+        list: ArgList,
     ) -> Result<()> {
         let (receiver_ref, function_name) = {
             let receiver_ref = get_location(&self.stack, &self.context.txn, receiver)?.into_owned();
@@ -35,7 +37,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         };
         trace!("Calling call_other: {}->{}", receiver_ref, function_name);
 
-        if self.args.iter().any(|arg| matches!(arg, Arg::Ref(_))) {
+        if self
+            .args_of(list)?
+            .iter()
+            .any(|arg| matches!(arg, Arg::Ref(_)))
+        {
             return Err(self.runtime_bug("a by-reference argument reached call_other"));
         }
 
@@ -62,14 +68,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 } else {
                     debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
                     // The callee returns through `pop_frame!`'s `copy_result`.
-                    let mut frame = self.prepare_new_call_frame(receiver, function).await?;
+                    let mut frame = self
+                        .prepare_new_call_frame(receiver, function, list)
+                        .await?;
                     frame.external = true;
                     self.stack.push(frame)?;
                     return Ok(());
                 }
             }
             LpcRef::Array(_) | LpcRef::Mapping(_) => {
-                let args = self.arg_values()?;
+                let args = self.arg_values(list)?;
                 let (remaining, keys) = match &receiver_ref {
                     LpcRef::Array(_) => {
                         let mut receivers = receiver_ref
@@ -107,9 +115,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
-    /// The staged arguments as values; refs were rejected before this.
-    fn arg_values(&self) -> Result<Vec<LpcRef>> {
-        self.args
+    /// The call's arguments as values; refs were rejected before this.
+    fn arg_values(&self, list: ArgList) -> Result<Vec<LpcRef>> {
+        self.args_of(list)?
             .iter()
             .map(|arg| match *arg {
                 Arg::Value(loc) => {

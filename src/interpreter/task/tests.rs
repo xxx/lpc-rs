@@ -6,6 +6,7 @@ use std::{
 
 use indexmap::IndexMap;
 use indoc::indoc;
+use lpc_rs_asm::instruction::{Arg, ArgList};
 use lpc_rs_core::{LpcFloatInner, LpcIntInner, register::RegisterVariant};
 use tokio::sync::mpsc;
 use ustr::ustr;
@@ -1549,8 +1550,10 @@ mod test_instructions {
             assert!(context.simul_efuns().is_none());
 
             let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(context);
-            let create = process.program.lookup_function("create").unwrap().clone();
-            let mut frame = CallFrame::new(process.clone(), create, 0, None::<ThinVec<VarId>>);
+            let mut create = (**process.program.lookup_function("create").unwrap()).clone();
+            create.arg_lists.push(vec![]);
+            let mut frame =
+                CallFrame::new(process.clone(), Arc::new(create), 0, None::<ThinVec<VarId>>);
             let ptr = FunctionPtrBuilder::default()
                 .owner(Arc::downgrade(&process))
                 .address(FunctionAddress::SimulEfun(ustr("nope")))
@@ -1560,7 +1563,7 @@ mod test_instructions {
             task.stack.push(frame).unwrap();
 
             let e = task
-                .handle_call_fp(Register(1).as_local())
+                .handle_call_fp(Register(1).as_local(), ArgList(0))
                 .await
                 .unwrap_err();
             assert!(!e.is_bug(), "{e}");
@@ -1597,7 +1600,10 @@ mod test_instructions {
             let frame = CallFrame::new(process.clone(), create, 0, None::<ThinVec<VarId>>);
             task.stack.push(frame).unwrap();
 
-            let e = task.handle_call(ustr("nope")).await.unwrap_err();
+            let e = task
+                .handle_call(ustr("nope"), ArgList(0))
+                .await
+                .unwrap_err();
             assert!(e.is_bug(), "{e}");
             assert_eq!(
                 e.to_string(),
@@ -3313,6 +3319,7 @@ mod test_instructions {
                 constants: vec![LpcConstant::String(Arc::new(LpcString::Static(ustr(
                     "Hello, world!",
                 ))))],
+                arg_lists: vec![],
             }
             .into();
 
@@ -3392,6 +3399,7 @@ mod test_instructions {
             instructions: Vec<Instruction>,
             num_locals: RegisterSize,
             constants: Vec<LpcConstant>,
+            arg_lists: Vec<Vec<Arg>>,
         ) -> (Arc<GlobalState>, Vec<LpcRef>) {
             let config = Arc::new(test_config());
             let path = Arc::new(LpcPath::new_in_game("/my_file.c", "/", &*config.lib_dir));
@@ -3407,6 +3415,7 @@ mod test_instructions {
                 initializer.push_instruction(instruction, None);
             }
             initializer.constants = constants;
+            initializer.arg_lists = arg_lists;
 
             let mut functions = IndexMap::default();
             functions.insert("second".to_string(), Arc::new(second(&path)));
@@ -3426,8 +3435,11 @@ mod test_instructions {
             (task.context.global_state, registers)
         }
 
-        fn stringp() -> Instruction {
-            CallEfun(u8::try_from(EFUN_PROTOTYPES.get_index_of("stringp").unwrap()).unwrap())
+        fn stringp(list: ArgList) -> Instruction {
+            CallEfun(
+                u8::try_from(EFUN_PROTOTYPES.get_index_of("stringp").unwrap()).unwrap(),
+                list,
+            )
         }
 
         #[tokio::test]
@@ -3478,16 +3490,15 @@ mod test_instructions {
         async fn an_efun_call_starts_with_only_its_own_arguments() {
             let (gs, registers) = run(
                 vec![
-                    PushArg(constant(0)),
-                    stringp(),
+                    stringp(ArgList(0)),
                     Copy(local(0), local(1)),
-                    PushArg(constant(1)),
-                    stringp(),
+                    stringp(ArgList(1)),
                     Copy(local(0), local(2)),
                     Ret,
                 ],
                 2,
                 vec![LpcConstant::Int(7), string("cde")],
+                vec![vec![Arg::Value(constant(0))], vec![Arg::Value(constant(1))]],
             )
             .await;
 
@@ -3498,16 +3509,15 @@ mod test_instructions {
         async fn a_local_call_starts_with_only_its_own_arguments() {
             let (gs, registers) = run(
                 vec![
-                    PushArg(constant(0)),
-                    Call(ustr("second")),
+                    Call(ustr("second"), ArgList(0)),
                     Copy(local(0), local(1)),
-                    PushArg(constant(1)),
-                    Call(ustr("second")),
+                    Call(ustr("second"), ArgList(1)),
                     Copy(local(0), local(2)),
                     Ret,
                 ],
                 2,
                 vec![string("ab"), string("cde")],
+                vec![vec![Arg::Value(constant(0))], vec![Arg::Value(constant(1))]],
             )
             .await;
 
@@ -3523,16 +3533,15 @@ mod test_instructions {
                         receiver: FunctionReceiver::Local,
                         name: ustr("second"),
                     },
-                    PushArg(constant(0)),
-                    CallFp(local(1)),
+                    CallFp(local(1), ArgList(0)),
                     Copy(local(0), local(2)),
-                    PushArg(constant(1)),
-                    CallFp(local(1)),
+                    CallFp(local(1), ArgList(1)),
                     Copy(local(0), local(3)),
                     Ret,
                 ],
                 3,
                 vec![string("ab"), string("cde")],
+                vec![vec![Arg::Value(constant(0))], vec![Arg::Value(constant(1))]],
             )
             .await;
 
@@ -3551,6 +3560,7 @@ mod test_instructions {
                 ],
                 2,
                 vec![string("ab"), string("cde")],
+                vec![],
             )
             .await;
 
@@ -3576,6 +3586,7 @@ mod test_instructions {
                     LpcConstant::Int(1),
                     LpcConstant::Int(2),
                 ],
+                vec![],
             )
             .await;
 
@@ -3603,6 +3614,7 @@ mod test_instructions {
                 ],
                 2,
                 vec![string("ab"), string("cde")],
+                vec![],
             )
             .await;
 

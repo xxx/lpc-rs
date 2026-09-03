@@ -19,7 +19,10 @@ use std::{
 use async_recursion::async_recursion;
 use educe::Educe;
 pub(crate) use location::{bump_in_location, get_location, set_location};
-use lpc_rs_asm::{address::Address, instruction::Comparison};
+use lpc_rs_asm::{
+    address::Address,
+    instruction::{Arg, ArgList, Comparison},
+};
 use lpc_rs_core::{
     LpcIntInner, RegisterSize,
     register::{Register, RegisterVariant},
@@ -137,16 +140,6 @@ impl TaskSeed {
     }
 }
 
-/// One argument of the pending call: a value to copy into the callee, or
-/// a cell the callee aliases.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Arg {
-    /// A value, copied into the callee's own register.
-    Value(RegisterVariant),
-    /// A cell the callee aliases in place of minting its own.
-    Ref(RegisterVariant),
-}
-
 /// An abstraction to allow for isolated running to completion of a specified
 /// function. It represents a single thread of execution
 #[derive(Educe, Clone)]
@@ -157,10 +150,6 @@ pub struct Task<const STACKSIZE: usize> {
 
     /// Stack of [`CatchPoint`]s
     catch_points: ThinVec<CatchPoint>,
-
-    /// Staging for the next call: filled by `PushArg`/`PushRef`, emptied by
-    /// the eval loop after the consuming instruction, success or not.
-    args: ThinVec<Arg>,
 
     /// Staging for the next `FunctionPtrConst`, filled by `PushPartialArg`.
     partial_args: ThinVec<Option<RegisterVariant>>,
@@ -205,7 +194,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Self {
             stack: CallStack::default(),
             catch_points: thin_vec![],
-            args: ThinVec::with_capacity(4),
             partial_args: thin_vec![],
             array_items: ThinVec::with_capacity(10),
             context: task_context,
@@ -234,7 +222,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // Cleared, not replaced: the ~3KB boxed stack survives the retry.
         self.stack.clear();
         self.catch_points.clear();
-        self.args.clear();
         self.partial_args.clear();
         self.array_items.clear();
         self.context.reset();
@@ -472,6 +459,21 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// Binary operations that return a boolean value (e.g. comparisons)
     #[instrument(level = "debug", skip_all)]
+    /// The current frame's argument list `list`; a list the function lacks
+    /// is a codegen bug.
+    pub(crate) fn args_of(&self, list: ArgList) -> Result<&[Arg]> {
+        let function = &self.stack.current_frame()?.function;
+        function
+            .arg_lists
+            .get(usize::from(list.0))
+            .map(Vec::as_slice)
+            .ok_or_else(|| {
+                self.runtime_bug(format!(
+                    "call names argument list {list} its function lacks"
+                ))
+            })
+    }
+
     /// Whether `r1 kind r2` holds for the values in the two registers.
     fn holds(&self, kind: Comparison, r1: RegisterVariant, r2: RegisterVariant) -> Result<bool> {
         let ref1 = &*get_location(&self.stack, &self.context.txn, r1)?;

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use if_chain::if_chain;
+use lpc_rs_asm::instruction::{Arg, ArgList};
 use lpc_rs_core::{RegisterSize, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
@@ -14,14 +15,18 @@ use crate::{
         efun::{call_efun, efun_context::EfunContext},
         lpc_ref::{LpcRef, NULL},
         process::Process,
-        task::{Arg, Task, get_location},
+        task::{Task, get_location},
     },
     pop_frame,
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(level = "debug", skip_all)]
-    pub(crate) async fn handle_call(&mut self, name: Ustr) -> lpc_rs_errors::Result<()> {
+    pub(crate) async fn handle_call(
+        &mut self,
+        name: Ustr,
+        list: ArgList,
+    ) -> lpc_rs_errors::Result<()> {
         let current_frame = self.stack.current_frame()?;
         let process = current_frame.process.clone();
         // Codegen emits `Call` only for a name of this program; a miss is a bug.
@@ -31,7 +36,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 .runtime_bug(format!("call to unknown local function `{name}`")));
         };
 
-        let new_frame = self.prepare_new_call_frame(process, func).await?;
+        let new_frame = self.prepare_new_call_frame(process, func, list).await?;
 
         trace!("pushing new frame");
 
@@ -46,13 +51,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         &mut self,
         process: Arc<Process>,
         func: Arc<ProgramFunction>,
+        list: ArgList,
     ) -> lpc_rs_errors::Result<CallFrame> {
-        let num_args = RegisterSize::try_from(self.args.len())?;
+        let args = self.args_of(list)?;
+        let num_args = RegisterSize::try_from(args.len())?;
         // A simul_efun's prototype can change after a cached caller was compiled against it.
         if_chain! {
-            if self.args.len() < func.arity().num_args as usize;
+            if args.len() < func.arity().num_args as usize;
             if let Some(i) = func.prototype.first_ref_param();
-            if i >= self.args.len();
+            if i >= args.len();
             then {
                 let caller_span = self.stack.current_frame().ok().and_then(CallFrame::current_debug_span);
                 return Err(LpcError::runtime(format!(
@@ -80,7 +87,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 .ok()
                 .and_then(CallFrame::current_debug_span)
         };
-        for (i, arg) in self.args.iter().enumerate() {
+        for (i, arg) in args.iter().enumerate() {
             match *arg {
                 Arg::Value(loc) => {
                     let lpc_ref = get_location(&self.stack, &self.context.txn, loc)?.into_owned();
@@ -163,6 +170,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub(crate) async fn handle_call_simul_efun(
         &mut self,
         func_name: Ustr,
+        list: ArgList,
     ) -> lpc_rs_errors::Result<()> {
         // A caller links by name to whichever resident a task starts with, so a
         // destructed or recompiled simul-efun object is a runtime miss here.
@@ -177,7 +185,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         };
 
         let mut new_frame = self
-            .prepare_new_call_frame(simul_efuns.clone(), func)
+            .prepare_new_call_frame(simul_efuns.clone(), func, list)
             .await?;
         new_frame.external = true;
 

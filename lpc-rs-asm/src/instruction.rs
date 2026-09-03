@@ -9,6 +9,55 @@ use ustr::Ustr;
 
 use crate::address::Address;
 
+/// One argument of a call: a value copied into the callee, or a cell the
+/// callee aliases in place of minting its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Arg {
+    /// A value, read from the register at call time.
+    Value(RegisterVariant),
+    /// A `ref` argument's cell.
+    Ref(RegisterVariant),
+}
+
+impl Arg {
+    /// The register this argument reads.
+    pub fn register(self) -> RegisterVariant {
+        match self {
+            Self::Value(r) | Self::Ref(r) => r,
+        }
+    }
+
+    /// This argument with its register passed through `f`.
+    pub fn map_register<F>(self, f: F) -> Self
+    where
+        F: FnOnce(RegisterVariant) -> RegisterVariant,
+    {
+        match self {
+            Self::Value(r) => Self::Value(f(r)),
+            Self::Ref(r) => Self::Ref(f(r)),
+        }
+    }
+}
+
+impl Display for Arg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Value(r) => write!(f, "{r}"),
+            Self::Ref(r) => write!(f, "ref {r}"),
+        }
+    }
+}
+
+/// The index of a call's argument list in its function's `arg_lists`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ArgList(pub u16);
+
+impl Display for ArgList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "a{}", self.0)
+    }
+}
+
 /// The kind of comparison a `Cmp`, `Jcmp`, or `Jncmp` makes between its two operands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Comparison {
@@ -64,20 +113,20 @@ pub enum Instruction {
     BitwiseNot(RegisterVariant, RegisterVariant),
 
     /// Call a function in the current object, by mangled name.
-    Call(Ustr),
+    Call(Ustr, ArgList),
 
     /// Call an Efun. x.0 is the index into the `EFUN_PROTOTYPES` map.
-    CallEfun(u8),
+    CallEfun(u8, ArgList),
 
     /// Call a simulated efun, by name.
-    CallSimulEfun(Ustr),
+    CallSimulEfun(Ustr, ArgList),
 
     /// Call a function pointer, located in x.0.
-    CallFp(RegisterVariant),
+    CallFp(RegisterVariant, ArgList),
 
     /// Call a function in another object.
     /// x.0 is the receiver, x.1 is the function name
-    CallOther(RegisterVariant, RegisterVariant),
+    CallOther(RegisterVariant, RegisterVariant, ArgList),
 
     /// Finish a block of instructions that can catch errors and continue
     /// execution.
@@ -178,10 +227,6 @@ pub enum Instruction {
     /// never moves or shrinks.
     PopulateDefaults,
 
-    /// Push the location onto the `Task`'s `args` staging; the call
-    /// instruction that consumes it leaves it empty, success or not.
-    PushArg(RegisterVariant),
-
     /// Push a location onto the `Task`'s `array_items` staging for the next
     /// `AConst` or `MapConst`, which leaves it empty.
     PushArrayItem(RegisterVariant),
@@ -189,10 +234,6 @@ pub enum Instruction {
     /// Push a location onto the `Task`'s `partial_args` staging for the next
     /// `FunctionPtrConst`, which leaves it empty.
     PushPartialArg(Option<RegisterVariant>),
-
-    /// Push the location as a by-reference argument: the callee aliases the
-    /// cell behind it instead of copying its value.
-    PushRef(RegisterVariant),
 
     /// Create a new value from some range of another value
     /// x.4 = x.1[x.2 .. x.3]
@@ -259,11 +300,11 @@ impl Instruction {
             | Self::Shr(_, _, d)
             | Self::Sub(_, _, d)
             | Self::Xor(_, _, d) => Some(d),
-            Self::Call(_)
-            | Self::CallEfun(_)
-            | Self::CallSimulEfun(_)
-            | Self::CallFp(_)
-            | Self::CallOther(_, _)
+            Self::Call(_, _)
+            | Self::CallEfun(_, _)
+            | Self::CallSimulEfun(_, _)
+            | Self::CallFp(_, _)
+            | Self::CallOther(_, _, _)
             | Self::CatchEnd
             | Self::CatchStart(_, _)
             | Self::Dec(_)
@@ -276,10 +317,8 @@ impl Instruction {
             | Self::NewUpvalue(_)
             | Self::PopulateArgv(_, _, _)
             | Self::PopulateDefaults
-            | Self::PushArg(_)
             | Self::PushArrayItem(_)
             | Self::PushPartialArg(_)
-            | Self::PushRef(_)
             | Self::Ret
             | Self::Store(_, _, _) => None,
         }
@@ -295,11 +334,11 @@ impl Instruction {
             Self::Add(a0, a1, a2) => Self::Add(f(a0), f(a1), f(a2)),
             Self::And(a0, a1, a2) => Self::And(f(a0), f(a1), f(a2)),
             Self::BitwiseNot(a0, a1) => Self::BitwiseNot(f(a0), f(a1)),
-            Self::Call(a0) => Self::Call(a0),
-            Self::CallEfun(a0) => Self::CallEfun(a0),
-            Self::CallSimulEfun(a0) => Self::CallSimulEfun(a0),
-            Self::CallFp(a0) => Self::CallFp(f(a0)),
-            Self::CallOther(a0, a1) => Self::CallOther(f(a0), f(a1)),
+            Self::Call(a0, a1) => Self::Call(a0, a1),
+            Self::CallEfun(a0, a1) => Self::CallEfun(a0, a1),
+            Self::CallSimulEfun(a0, a1) => Self::CallSimulEfun(a0, a1),
+            Self::CallFp(a0, a1) => Self::CallFp(f(a0), a1),
+            Self::CallOther(a0, a1, a2) => Self::CallOther(f(a0), f(a1), a2),
             Self::CatchEnd => Self::CatchEnd,
             Self::CatchStart(a0, a1) => Self::CatchStart(f(a0), a1),
             Self::Cmp(kind, a0, a1, a2) => Self::Cmp(kind, f(a0), f(a1), f(a2)),
@@ -336,10 +375,8 @@ impl Instruction {
             Self::Or(a0, a1, a2) => Self::Or(f(a0), f(a1), f(a2)),
             Self::PopulateArgv(a0, a1, a2) => Self::PopulateArgv(f(a0), a1, a2),
             Self::PopulateDefaults => Self::PopulateDefaults,
-            Self::PushArg(a0) => Self::PushArg(f(a0)),
             Self::PushArrayItem(a0) => Self::PushArrayItem(f(a0)),
             Self::PushPartialArg(a0) => Self::PushPartialArg(a0.map(&f)),
-            Self::PushRef(a0) => Self::PushRef(f(a0)),
             Self::Range(a0, a1, a2, a3) => Self::Range(f(a0), f(a1), f(a2), f(a3)),
             Self::Ret => Self::Ret,
             Self::Shl(a0, a1, a2) => Self::Shl(f(a0), f(a1), f(a2)),
@@ -378,6 +415,18 @@ impl Instruction {
         found
     }
 
+    /// The argument list this instruction calls with, for the call family.
+    pub fn arg_list(&self) -> Option<ArgList> {
+        match *self {
+            Self::Call(_, list)
+            | Self::CallEfun(_, list)
+            | Self::CallSimulEfun(_, list)
+            | Self::CallFp(_, list)
+            | Self::CallOther(_, _, list) => Some(list),
+            _ => None,
+        }
+    }
+
     /// Backpatch an instruction with a new address.
     /// This is used to fix up jumps after the code has been generated.
     /// Returns an error if the instruction cannot be backpatched.
@@ -396,7 +445,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 44;
+    pub const COUNT: usize = 42;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -432,10 +481,8 @@ impl Instruction {
         "or",
         "populate_argv",
         "populate_defaults",
-        "push_arg",
         "push_array_item",
         "push_partial_arg",
-        "push_ref",
         "range",
         "ret",
         "shl",
@@ -481,18 +528,16 @@ impl Instruction {
             Self::Or(..) => 29,
             Self::PopulateArgv(..) => 30,
             Self::PopulateDefaults => 31,
-            Self::PushArg(..) => 32,
-            Self::PushArrayItem(..) => 33,
-            Self::PushPartialArg(..) => 34,
-            Self::PushRef(..) => 35,
-            Self::Range(..) => 36,
-            Self::Ret => 37,
-            Self::Shl(..) => 38,
-            Self::Shr(..) => 39,
-            Self::Sizeof(..) => 40,
-            Self::Store(..) => 41,
-            Self::Sub(..) => 42,
-            Self::Xor(..) => 43,
+            Self::PushArrayItem(..) => 32,
+            Self::PushPartialArg(..) => 33,
+            Self::Range(..) => 34,
+            Self::Ret => 35,
+            Self::Shl(..) => 36,
+            Self::Shr(..) => 37,
+            Self::Sizeof(..) => 38,
+            Self::Store(..) => 39,
+            Self::Sub(..) => 40,
+            Self::Xor(..) => 41,
         }
     }
 
@@ -524,20 +569,20 @@ impl Display for Instruction {
             Instruction::Cmp(kind, r1, r2, r3) => {
                 write!(f, "{} {kind} {r1}, {r2}, {r3}", self.mnemonic())
             }
-            Instruction::Call(name) => {
-                write!(f, "{} {name}", self.mnemonic())
+            Instruction::Call(name, list) => {
+                write!(f, "{} {name}, {list}", self.mnemonic())
             }
-            Instruction::CallEfun(name_index) => {
-                write!(f, "{} {name_index}", self.mnemonic())
+            Instruction::CallEfun(name_index, list) => {
+                write!(f, "{} {name_index}, {list}", self.mnemonic())
             }
-            Instruction::CallFp(location) => {
-                write!(f, "{} {location}", self.mnemonic())
+            Instruction::CallFp(location, list) => {
+                write!(f, "{} {location}, {list}", self.mnemonic())
             }
-            Instruction::CallOther(receiver, name) => {
-                write!(f, "{} {receiver}, {name}", self.mnemonic())
+            Instruction::CallOther(receiver, name, list) => {
+                write!(f, "{} {receiver}, {name}, {list}", self.mnemonic())
             }
-            Instruction::CallSimulEfun(name) => {
-                write!(f, "{} {name}", self.mnemonic())
+            Instruction::CallSimulEfun(name, list) => {
+                write!(f, "{} {name}, {list}", self.mnemonic())
             }
             Instruction::Copy(r1, r2) => {
                 write!(f, "{} {r1}, {r2}", self.mnemonic())
@@ -601,9 +646,6 @@ impl Display for Instruction {
                 write!(f, "{} {r}, {num_args}, {num_locals}", self.mnemonic())
             }
             Instruction::PopulateDefaults => f.write_str(self.mnemonic()),
-            Instruction::PushArg(r) => {
-                write!(f, "{} {r}", self.mnemonic())
-            }
             Instruction::PushArrayItem(r1) => {
                 write!(f, "{} {r1}", self.mnemonic())
             }
@@ -611,7 +653,6 @@ impl Display for Instruction {
                 let s = r.map(|r| r.to_string()).unwrap_or_default();
                 write!(f, "{} {s}", self.mnemonic())
             }
-            Instruction::PushRef(r) => write!(f, "{} {r}", self.mnemonic()),
             Instruction::Range(r1, r2, r3, r4) => {
                 write!(f, "{} {r1}, {r2}, {r3}, {r4}", self.mnemonic())
             }
@@ -654,12 +695,12 @@ mod tests {
     fn string_operands_display_as_names() {
         let r1 = Register(1).as_local();
         assert_eq!(
-            Instruction::Call(ustr("foo__v__/a.c__pb__")).to_string(),
-            "call foo__v__/a.c__pb__"
+            Instruction::Call(ustr("foo__v__/a.c__pb__"), ArgList(0)).to_string(),
+            "call foo__v__/a.c__pb__, a0"
         );
         assert_eq!(
-            Instruction::CallSimulEfun(ustr("bar")).to_string(),
-            "call_simul_efun bar"
+            Instruction::CallSimulEfun(ustr("bar"), ArgList(1)).to_string(),
+            "call_simul_efun bar, a1"
         );
         assert_eq!(
             Instruction::FunctionPtrConst {
@@ -740,6 +781,37 @@ mod tests {
     }
 
     #[test]
+    fn a_call_displays_its_argument_list_last() {
+        let r1 = Register(1).as_local();
+        assert_eq!(
+            Instruction::Call(ustr("foo__v__/a.c__pb__"), ArgList(0)).to_string(),
+            "call foo__v__/a.c__pb__, a0"
+        );
+        assert_eq!(
+            Instruction::CallOther(r1, r1, ArgList(2)).to_string(),
+            "call_other r1, r1, a2"
+        );
+    }
+
+    #[test]
+    fn an_argument_displays_bare_and_a_ref_argument_with_ref() {
+        let r1 = Register(1).as_local();
+        assert_eq!(
+            (Arg::Value(r1).to_string(), Arg::Ref(r1).to_string()),
+            ("r1".to_string(), "ref r1".to_string())
+        );
+    }
+
+    #[test]
+    fn five_variants_carry_an_argument_list() {
+        let carriers = every_variant()
+            .iter()
+            .filter(|i| i.arg_list().is_some())
+            .count();
+        assert_eq!(carriers, 5);
+    }
+
+    #[test]
     fn every_comparison_kind_has_a_display() {
         let shown: Vec<String> = Comparison::ALL.iter().map(ToString::to_string).collect();
         assert_eq!(shown, ["lt", "lte", "gt", "gte", "eq", "ne"]);
@@ -753,11 +825,11 @@ mod tests {
             Add(r(), r(), r()),
             And(r(), r(), r()),
             BitwiseNot(r(), r()),
-            Call(ustr("f")),
-            CallEfun(0),
-            CallSimulEfun(ustr("f")),
-            CallFp(r()),
-            CallOther(r(), r()),
+            Call(ustr("f"), ArgList(0)),
+            CallEfun(0, ArgList(0)),
+            CallSimulEfun(ustr("f"), ArgList(0)),
+            CallFp(r(), ArgList(0)),
+            CallOther(r(), r(), ArgList(0)),
             CatchEnd,
             CatchStart(r(), Address(0)),
             Cmp(Comparison::Lt, r(), r(), r()),
@@ -785,10 +857,8 @@ mod tests {
             Or(r(), r(), r()),
             PopulateArgv(r(), 0, 0),
             PopulateDefaults,
-            PushArg(r()),
             PushArrayItem(r()),
             PushPartialArg(Some(r())),
-            PushRef(r()),
             Range(r(), r(), r(), r()),
             Ret,
             Shl(r(), r(), r()),
@@ -848,10 +918,10 @@ mod tests {
             .iter()
             .filter(|i| i.dest_register().is_none())
             .count();
-        assert_eq!(none_count, 23);
+        assert_eq!(none_count, 21);
         for i in [
-            Call(ustr("f")),
-            CallEfun(0),
+            Call(ustr("f"), ArgList(0)),
+            CallEfun(0, ArgList(0)),
             CatchStart(r(), Address(0)),
             Inc(r()),
             Dec(r()),
@@ -865,15 +935,13 @@ mod tests {
     }
 
     #[test]
-    fn push_ref_is_an_operand_without_a_dest() {
-        let i = Instruction::PushRef(RegisterVariant::Upvalue(Register(3)));
-        assert_eq!(i.dest_register(), None);
+    fn a_ref_argument_keeps_its_kind_through_a_register_map() {
+        let arg = Arg::Ref(RegisterVariant::Upvalue(Register(3)));
+        assert_eq!(arg.register(), RegisterVariant::Upvalue(Register(3)));
         assert_eq!(
-            i.map_registers(|_| RegisterVariant::Global(Register(9))),
-            Instruction::PushRef(RegisterVariant::Global(Register(9)))
+            arg.map_register(|_| RegisterVariant::Global(Register(9))),
+            Arg::Ref(RegisterVariant::Global(Register(9)))
         );
-        assert_eq!(i.mnemonic(), "push_ref");
-        assert_eq!(i.to_string(), "push_ref u3");
     }
 
     #[test]

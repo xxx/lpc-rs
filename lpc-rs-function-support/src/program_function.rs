@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    cell::RefCell,
     collections::HashMap,
     fmt::{Display, Formatter},
     sync::Arc,
@@ -8,7 +9,7 @@ use std::{
 use derive_builder::Builder;
 use lpc_rs_asm::{
     address::{Address, Label},
-    instruction::Instruction,
+    instruction::{Arg, ArgList, Instruction},
 };
 use lpc_rs_core::{
     RegisterSize, function_arity::FunctionArity, lpc_type::LpcType, mangle::Mangle,
@@ -73,6 +74,10 @@ pub struct ProgramFunction {
     /// pool order.
     #[builder(default)]
     pub constants: Vec<LpcConstant>,
+    /// The argument lists this function's calls read, one per call site,
+    /// named by `ArgList` operands.
+    #[builder(default)]
+    pub arg_lists: Vec<Vec<Arg>>,
 }
 
 impl ProgramFunction {
@@ -108,7 +113,58 @@ impl ProgramFunction {
             local_variables: vec![],
             arg_locations: vec![],
             constants: vec![],
+            arg_lists: vec![],
         }
+    }
+
+    /// The arguments the call with `list` reads.
+    #[inline]
+    pub fn args(&self, list: ArgList) -> &[Arg] {
+        &self.arg_lists[usize::from(list.0)]
+    }
+
+    /// Every register `instruction` names: its own operands in order, then
+    /// its argument list's.
+    pub fn operand_registers(&self, instruction: &Instruction) -> Vec<RegisterVariant> {
+        let seen = RefCell::new(Vec::new());
+        let _ = instruction.map_registers(|register| {
+            seen.borrow_mut().push(register);
+            register
+        });
+        let mut registers = seen.into_inner();
+        if let Some(list) = instruction.arg_list() {
+            registers.extend(self.args(list).iter().map(|arg| arg.register()));
+        }
+        registers
+    }
+
+    /// Every register in the instructions and their argument lists passed
+    /// through `f`.
+    pub fn rename_registers<F>(&mut self, f: F)
+    where
+        F: Fn(RegisterVariant) -> RegisterVariant,
+    {
+        for instruction in &mut self.instructions {
+            *instruction = instruction.map_registers(&f);
+        }
+        for arg in self.arg_lists.iter_mut().flatten() {
+            *arg = arg.map_register(&f);
+        }
+    }
+
+    /// The instruction at `at` and its argument list, registers passed
+    /// through `f`.
+    pub fn rename_registers_at<F>(&mut self, at: usize, f: F)
+    where
+        F: Fn(RegisterVariant) -> RegisterVariant,
+    {
+        let instruction = self.instructions[at].map_registers(&f);
+        if let Some(list) = instruction.arg_list() {
+            for arg in &mut self.arg_lists[usize::from(list.0)] {
+                *arg = arg.map_register(&f);
+            }
+        }
+        self.instructions[at] = instruction;
     }
 
     /// Push an [`Instruction`] and corresponding [`Span`] into this function's code.
@@ -145,6 +201,10 @@ impl ProgramFunction {
 
         for (index, constant) in self.constants.iter().enumerate() {
             v.push(format!("    k{index} = {constant}"));
+        }
+        for (index, list) in self.arg_lists.iter().enumerate() {
+            let args: Vec<String> = list.iter().map(ToString::to_string).collect();
+            v.push(format!("    a{index} = ({})", args.join(", ")));
         }
 
         // use MultiMap as multiple labels can be at the same address
@@ -209,7 +269,7 @@ impl AsRef<FunctionPrototype> for Arc<ProgramFunction> {
 
 #[cfg(test)]
 mod tests {
-    use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType};
+    use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType, register::Register};
 
     use lpc_rs_utils::lpc_string::LpcString;
     use ustr::ustr;
@@ -226,6 +286,75 @@ mod tests {
             .build()
             .unwrap();
         ProgramFunction::new(prototype, 0)
+    }
+
+    fn local(i: RegisterSize) -> RegisterVariant {
+        RegisterVariant::Local(Register(i))
+    }
+
+    #[test]
+    fn a_call_reads_its_list() {
+        let mut func = function(FunctionKind::Local);
+        func.arg_lists
+            .push(vec![Arg::Value(local(2)), Arg::Ref(local(3))]);
+        assert_eq!(
+            func.args(ArgList(0)),
+            &[Arg::Value(local(2)), Arg::Ref(local(3))]
+        );
+    }
+
+    #[test]
+    fn a_register_rename_reaches_the_lists() {
+        let mut func = function(FunctionKind::Local);
+        func.instructions = vec![Instruction::Call(ustr("f"), ArgList(0))];
+        func.arg_lists.push(vec![Arg::Value(local(2))]);
+        func.rename_registers(|r| if r == local(2) { local(5) } else { r });
+        assert_eq!(func.arg_lists, vec![vec![Arg::Value(local(5))]]);
+    }
+
+    #[test]
+    fn a_rename_at_one_call_reaches_only_its_list() {
+        let mut func = function(FunctionKind::Local);
+        func.instructions = vec![
+            Instruction::Call(ustr("f"), ArgList(0)),
+            Instruction::Call(ustr("g"), ArgList(1)),
+        ];
+        func.arg_lists = vec![vec![Arg::Value(local(2))], vec![Arg::Value(local(2))]];
+        func.rename_registers_at(1, |r| if r == local(2) { local(0) } else { r });
+        assert_eq!(
+            func.arg_lists,
+            vec![vec![Arg::Value(local(2))], vec![Arg::Value(local(0))]]
+        );
+    }
+
+    #[test]
+    fn a_calls_operands_end_with_its_list() {
+        let mut func = function(FunctionKind::Local);
+        func.arg_lists
+            .push(vec![Arg::Value(local(2)), Arg::Ref(local(3))]);
+        let call = Instruction::CallOther(local(1), local(4), ArgList(0));
+        assert_eq!(
+            func.operand_registers(&call),
+            vec![local(1), local(4), local(2), local(3)]
+        );
+    }
+
+    #[test]
+    fn the_listing_prints_each_list_after_the_constants() {
+        let mut func = function(FunctionKind::Local);
+        func.constants = vec![LpcConstant::Int(1)];
+        func.arg_lists
+            .push(vec![Arg::Value(local(2)), Arg::Ref(local(3))]);
+        func.instructions = vec![Instruction::Call(ustr("f"), ArgList(0))];
+        let listing = func.listing();
+        assert_eq!(
+            &listing[1..],
+            [
+                "    k0 = 1",
+                "    a0 = (r2, ref r3)",
+                "    0000  call f, a0"
+            ]
+        );
     }
 
     #[test]

@@ -12,7 +12,7 @@ use crate::{
         lpc_array::LpcArray,
         lpc_int::LpcInt,
         lpc_ref::{LpcRef, NULL},
-        task::{Arg, CatchPoint, Task, bump_in_location, get_location, set_location},
+        task::{CatchPoint, Task, bump_in_location, get_location, set_location},
     },
     pop_frame,
 };
@@ -129,11 +129,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::BitwiseNot(r1, r2) => {
                 self.unary_operation(r1, r2, |x, _| x.bitnot())?;
             }
-            Instruction::Call(name) => {
-                let result = self.handle_call(name).await;
-                consumed(&mut self.args, result)?;
-            }
-            Instruction::CallEfun(name_idx) => {
+            Instruction::Call(name, list) => self.handle_call(name, list).await?,
+            Instruction::CallEfun(name_idx, list) => {
                 let process = self.stack.current_frame()?.process.clone();
                 let (pf, name) = {
                     let (name, pf) = EFUN_FUNCTIONS.get_index(name_idx as usize).unwrap();
@@ -141,24 +138,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     (pf.clone(), name)
                 };
 
-                let new_frame = self.prepare_new_call_frame(process, pf).await;
-                let new_frame = consumed(&mut self.args, new_frame)?;
+                let new_frame = self.prepare_new_call_frame(process, pf, list).await?;
 
                 self.stack.push(new_frame)?;
 
                 self.prepare_and_call_efun(name).await?;
             }
-            Instruction::CallFp(location) => {
-                let result = self.handle_call_fp(location).await;
-                consumed(&mut self.args, result)?;
+            Instruction::CallFp(location, list) => self.handle_call_fp(location, list).await?,
+            Instruction::CallOther(receiver, name, list) => {
+                self.handle_call_other(receiver, name, list).await?;
             }
-            Instruction::CallOther(receiver, name) => {
-                let result = self.handle_call_other(receiver, name).await;
-                consumed(&mut self.args, result)?;
-            }
-            Instruction::CallSimulEfun(name) => {
-                let result = self.handle_call_simul_efun(name).await;
-                consumed(&mut self.args, result)?;
+            Instruction::CallSimulEfun(name, list) => {
+                self.handle_call_simul_efun(name, list).await?;
             }
             Instruction::CatchEnd => {
                 self.catch_points.pop();
@@ -293,14 +284,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let jump = num_default_args - defaults_to_init;
                 frame.set_pc(frame.pc() + jump as usize);
             }
-            Instruction::PushArg(r) => self.args.push(Arg::Value(r)),
             Instruction::PushArrayItem(r1) => {
                 self.array_items.push(r1);
             }
             Instruction::PushPartialArg(r) => {
                 self.partial_args.push(r);
             }
-            Instruction::PushRef(r) => self.args.push(Arg::Ref(r)),
             Instruction::Range(r1, r2, r3, r4) => {
                 // r4 = r1[r2..r3]
 

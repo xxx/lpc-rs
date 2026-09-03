@@ -132,8 +132,7 @@ fn coalesce_copies(func: &mut ProgramFunction) -> bool {
             && let Some(use_at) = propagation_use(func, i, dst, &jump_targets)
             && !delete[use_at]
         {
-            func.instructions[use_at] =
-                func.instructions[use_at].map_registers(|r| if r == dst { r0 } else { r });
+            func.rename_registers_at(use_at, |r| if r == dst { r0 } else { r });
             delete[i] = true;
             changed = true;
             continue;
@@ -164,19 +163,19 @@ fn coalesce_copies(func: &mut ProgramFunction) -> bool {
 /// Whole-function, never a suffix — a loop back edge re-reads earlier
 /// addresses.
 fn mentions(func: &ProgramFunction, reg: RegisterVariant) -> usize {
-    func.instructions.iter().map(|i| mentions_in(i, reg)).sum()
+    func.instructions
+        .iter()
+        .map(|i| mentions_in(func, i, reg))
+        .sum()
 }
 
-/// How many of this instruction's operand slots name `reg`.
-fn mentions_in(instruction: &Instruction, reg: RegisterVariant) -> usize {
-    let count = std::cell::Cell::new(0);
-    instruction.map_registers(|r| {
-        if r == reg {
-            count.set(count.get() + 1);
-        }
-        r
-    });
-    count.get()
+/// How many of this instruction's operand slots, its argument list's
+/// included, name `reg`.
+fn mentions_in(func: &ProgramFunction, instruction: &Instruction, reg: RegisterVariant) -> usize {
+    func.operand_registers(instruction)
+        .into_iter()
+        .filter(|&r| r == reg)
+        .count()
 }
 
 /// The single use of `temp` reachable straight-line from the copy at
@@ -197,17 +196,17 @@ fn propagation_use(
             return None;
         }
         let instruction = &func.instructions[j];
-        if mentions_in(instruction, temp) > 0 {
+        if mentions_in(func, instruction, temp) > 0 {
             return Some(j);
         }
         let clobbers_r0 = instruction.dest_register() == Some(r0)
             || matches!(
                 instruction,
-                Instruction::Call(_)
-                    | Instruction::CallEfun(_)
-                    | Instruction::CallSimulEfun(_)
-                    | Instruction::CallFp(_)
-                    | Instruction::CallOther(_, _)
+                Instruction::Call(..)
+                    | Instruction::CallEfun(..)
+                    | Instruction::CallSimulEfun(..)
+                    | Instruction::CallFp(..)
+                    | Instruction::CallOther(..)
             );
         if clobbers_r0
             || matches!(
@@ -260,7 +259,7 @@ fn remove(func: &mut ProgramFunction, delete: &[bool]) {
 mod tests {
     use std::{collections::HashMap, sync::Arc};
 
-    use lpc_rs_asm::instruction::{Comparison, Instruction::*};
+    use lpc_rs_asm::instruction::{Arg, ArgList, Comparison, Instruction::*};
     use lpc_rs_core::{function_arity::FunctionArity, lpc_path::LpcPath, lpc_type::LpcType};
     use lpc_rs_function_support::function_prototype::FunctionPrototypeBuilder;
 
@@ -278,6 +277,18 @@ mod tests {
         func.labels = Some(HashMap::new());
         func.instructions = instructions;
         func
+    }
+
+    /// A function whose calls read `lists`.
+    fn func_with_lists(instructions: Vec<Instruction>, lists: Vec<Vec<Arg>>) -> ProgramFunction {
+        let mut func = func_with(instructions);
+        func.arg_lists = lists;
+        func
+    }
+
+    /// A call reading argument list `list`, the reader these tests use.
+    fn reads(list: u16) -> Instruction {
+        CallEfun(0, ArgList(list))
     }
 
     fn local(i: u16) -> RegisterVariant {
@@ -342,10 +353,10 @@ mod tests {
         let instructions = vec![
             Add(local(8), local(9), local(1)),
             Copy(local(1), global(0)),
-            PushArg(local(1)),
+            reads(0),
             Ret,
         ];
-        let mut func = func_with(instructions.clone());
+        let mut func = func_with_lists(instructions.clone(), vec![vec![Arg::Value(local(1))]]);
 
         peephole(&mut func);
 
@@ -396,13 +407,16 @@ mod tests {
     #[test]
     fn a_clobbered_result_keeps_its_copy() {
         let instructions = vec![
-            Call(ustr::ustr("f")),
+            Call(ustr::ustr("f"), ArgList(0)),
             Copy(local(0), local(1)),
-            CallEfun(0),
-            PushArg(local(1)),
+            CallEfun(0, ArgList(1)),
+            reads(2),
             Ret,
         ];
-        let mut func = func_with(instructions.clone());
+        let mut func = func_with_lists(
+            instructions.clone(),
+            vec![vec![], vec![], vec![Arg::Value(local(1))]],
+        );
 
         peephole(&mut func);
 
@@ -414,11 +428,11 @@ mod tests {
         let instructions = vec![
             Copy(local(0), local(1)),
             Add(local(8), local(9), local(3)),
-            PushArg(local(1)),
+            reads(0),
             Jz(local(3), Address(1)),
             Ret,
         ];
-        let mut func = func_with(instructions.clone());
+        let mut func = func_with_lists(instructions.clone(), vec![vec![Arg::Value(local(1))]]);
 
         peephole(&mut func);
 
@@ -430,11 +444,11 @@ mod tests {
         let instructions = vec![
             Copy(local(0), local(1)),
             Jmp(Address(3)),
-            PushArg(local(1)),
+            reads(0),
             Jz(local(2), Address(2)),
             Ret,
         ];
-        let mut func = func_with(instructions.clone());
+        let mut func = func_with_lists(instructions.clone(), vec![vec![Arg::Value(local(1))]]);
 
         peephole(&mut func);
 
@@ -464,20 +478,24 @@ mod tests {
 
     #[test]
     fn a_fall_through_use_past_a_branch_reads_r0() {
-        let mut func = func_with(vec![
-            Copy(local(0), local(1)),
-            Jz(local(2), Address(4)),
-            PushArg(local(1)),
-            Ret,
-            Ret,
-        ]);
+        let mut func = func_with_lists(
+            vec![
+                Copy(local(0), local(1)),
+                Jz(local(2), Address(4)),
+                reads(0),
+                Ret,
+                Ret,
+            ],
+            vec![vec![Arg::Value(local(1))]],
+        );
 
         peephole(&mut func);
 
         assert_eq!(
             func.instructions,
-            vec![Jz(local(2), Address(3)), PushArg(local(0)), Ret, Ret]
+            vec![Jz(local(2), Address(3)), reads(0), Ret, Ret]
         );
+        assert_eq!(func.arg_lists, vec![vec![Arg::Value(local(0))]]);
     }
 
     #[test]
@@ -498,21 +516,21 @@ mod tests {
     }
 
     #[test]
-    fn a_push_ref_operand_is_never_rewritten() {
-        let mut func = func_with(vec![
-            Add(local(8), local(9), local(1)),
-            Copy(local(1), RegisterVariant::Upvalue(Register(0))),
-            PushRef(RegisterVariant::Upvalue(Register(0))),
-            Call(ustr::ustr("inc")),
-            Ret,
-        ]);
+    fn a_ref_argument_is_never_rewritten() {
+        let upvalue = RegisterVariant::Upvalue(Register(0));
+        let mut func = func_with_lists(
+            vec![
+                Add(local(8), local(9), local(1)),
+                Copy(local(1), upvalue),
+                Call(ustr::ustr("inc"), ArgList(0)),
+                Ret,
+            ],
+            vec![vec![Arg::Ref(upvalue)]],
+        );
 
         peephole(&mut func);
 
-        assert!(
-            func.instructions
-                .contains(&PushRef(RegisterVariant::Upvalue(Register(0))))
-        );
+        assert_eq!(func.arg_lists, vec![vec![Arg::Ref(upvalue)]]);
     }
 
     fn func_with_defaults(

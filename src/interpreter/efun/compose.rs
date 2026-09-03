@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use lpc_rs_asm::instruction::Instruction;
+use lpc_rs_asm::instruction::{Arg, ArgList, Instruction};
 use lpc_rs_core::{
     RegisterSize,
     function_arity::FunctionArity,
@@ -43,31 +43,38 @@ pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
 
     let instructions = vec![
         Instruction::PopulateArgv(RegisterVariant::Local(Register(3)), 2, 4),
-        Instruction::PushArg(RegisterVariant::Local(Register(2))),
-        Instruction::PushArg(RegisterVariant::Local(Register(3))),
         Instruction::CallEfun(
             u8::try_from(EFUN_PROTOTYPES.get_index_of("papplyv").unwrap()).unwrap(),
-        ), // papplyv()
+            ArgList(0),
+        ), // papplyv(g, argv)
         Instruction::Copy(
             RegisterVariant::Local(Register(0)),
             RegisterVariant::Local(Register(4)),
         ),
-        Instruction::CallFp(RegisterVariant::Local(Register(4))), // g(argv)
+        Instruction::CallFp(RegisterVariant::Local(Register(4)), ArgList(1)), // g(argv)
         Instruction::Copy(
             RegisterVariant::Local(Register(0)),
             RegisterVariant::Local(Register(5)),
         ),
-        Instruction::PushArg(RegisterVariant::Local(Register(5))),
-        Instruction::CallFp(RegisterVariant::Local(Register(1))), // f(g(argv))
+        Instruction::CallFp(RegisterVariant::Local(Register(1)), ArgList(2)), // f(g(argv))
         Instruction::Ret,
     ];
 
+    let arg_lists = vec![
+        vec![
+            Arg::Value(RegisterVariant::Local(Register(2))),
+            Arg::Value(RegisterVariant::Local(Register(3))),
+        ],
+        vec![],
+        vec![Arg::Value(RegisterVariant::Local(Register(5)))],
+    ];
     let debug_spans = vec![None; instructions.len()];
 
     let func = ProgramFunctionBuilder::default()
         .prototype(prototype)
         .num_locals(4)
         .num_upvalues(0)
+        .arg_lists(arg_lists)
         .instructions(instructions)
         .debug_spans(debug_spans)
         .labels(Default::default())
