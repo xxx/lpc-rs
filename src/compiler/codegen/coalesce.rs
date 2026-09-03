@@ -446,7 +446,6 @@ mod tests {
         let mut func = func_with(vec![
             IAdd(local(8), local(9), local(1)),
             Copy(local(1), RegisterVariant::Upvalue(Register(0))),
-            ClearArgs,
             PushRef(RegisterVariant::Upvalue(Register(0))),
             Call(ustr::ustr("inc")),
             Ret,

@@ -172,15 +172,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 self.catch_points.push(catch_point);
             }
-            Instruction::ClearArgs => {
-                self.args.clear();
-            }
-            Instruction::ClearArrayItems => {
-                self.array_items.clear();
-            }
-            Instruction::ClearPartialArgs => {
-                self.partial_args.clear();
-            }
             Instruction::Copy(r1, r2) => {
                 let new_ref = get_location(&self.stack, &self.context.txn, r1)?.into_owned();
                 set_location(&mut self.stack, &self.context.txn, r2, new_ref)?;
