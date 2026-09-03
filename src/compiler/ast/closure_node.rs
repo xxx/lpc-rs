@@ -4,7 +4,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use itertools::Itertools;
 use lpc_rs_core::{ScopeId, function_flags::FunctionFlags, lpc_type::LpcType};
 use lpc_rs_errors::{Result, span::Span};
 use ustr::Ustr;
@@ -47,7 +46,45 @@ impl AstNodeTrait for ClosureNode {
 
 impl Display for ClosureNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let b = self.body.iter().map(|a| a.to_string()).join(", ");
-        write!(f, "{{: {b} :}}")
+        // Statements have no source rendering, so only a lone expression body shows.
+        match self.body.as_slice() {
+            [AstNode::Expression(expression)] => write!(f, "(: {expression} :)"),
+            _ => write!(f, "(: ... :)"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::compiler::ast::expression_node::ExpressionNode;
+
+    fn closure(body: Vec<AstNode>) -> ClosureNode {
+        ClosureNode {
+            name: "closure-1".into(),
+            return_type: LpcType::Mixed(false),
+            parameters: None,
+            flags: Default::default(),
+            body,
+            span: None,
+            scope_id: None,
+        }
+    }
+
+    #[test]
+    fn a_lone_expression_body_displays_as_source() {
+        let node = closure(vec![AstNode::Expression(ExpressionNode::from(1))]);
+
+        assert_eq!(node.to_string(), "(: 1 :)");
+    }
+
+    #[test]
+    fn a_statement_body_is_elided() {
+        let node = closure(vec![
+            AstNode::Expression(ExpressionNode::from(1)),
+            AstNode::Expression(ExpressionNode::from(2)),
+        ]);
+
+        assert_eq!(node.to_string(), "(: ... :)");
     }
 }

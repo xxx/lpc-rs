@@ -3126,6 +3126,52 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn a_closure_literal_is_a_function() {
+            let code = r#"
+                void create() {
+                    function f = (: 1 :);
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_closure_literal_is_not_an_int() {
+            let code = r#"
+                void create() {
+                    int i = (: 1 :);
+                }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["mismatched types: `i` (int) = `(: 1 :)` (function)".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_closure_argument_to_an_int_parameter_is_rejected() {
+            let code = r#"
+                void g(int x) {}
+                void create() {
+                    g((: 1 :));
+                }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["unexpected argument type to `g`: function. Expected int.".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_closure_returned_from_an_int_function_is_rejected() {
+            let code = r#"
+                int f() {
+                    return (: 1 :);
+                }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["invalid return type function. Expected int.".to_string()]
+            );
+        }
+
+        #[tokio::test]
         async fn an_int_from_a_string_operation_is_still_rejected() {
             let code = r#"
                 void create() {

@@ -441,7 +441,7 @@ mod tests {
             "call_receiver" => expr(format!("a{}", rep("->f()"))),
             "call_node" => expr(format!("f(a){}", "()".repeat(n - 1))),
             "closure_body" => expr(nest("(: ", " :)", "1")),
-            "closure_param" => expr(nest("(: [int p = ", "] :)", "1")),
+            "closure_param" => expr(nest("(: [mixed p = ", "] :)", "1")),
             "fptr_args" => expr(nest("&f(", ")", "1")),
             "fptr_receiver" => expr(nest("&(", ")->f()", "a")),
             "array" => expr(nest("({ ", " })", "1")),
