@@ -84,11 +84,6 @@ pub struct CallFrame {
     #[builder(setter(into))]
     pub function: Arc<ProgramFunction>,
 
-    /// The actual locations of all arguments that were passed-in.
-    /// Necessary for populating `argv` in ellipsis functions, e.g.
-    #[builder(default)]
-    pub arg_locations: ThinVec<RegisterVariant>,
-
     /// Our registers. By convention, `registers[0]` is for the return value of
     /// the call, and is not otherwise used for storage of locals.
     #[builder(default)]
@@ -187,7 +182,6 @@ impl CallFrame {
             registers: RefBank::initialized_for_function(&function, arg_capacity),
             process,
             function,
-            arg_locations: ThinVec::with_capacity(called_with_num_args as usize),
             pc: 0,
             called_with_num_args,
             upvalue_ptrs: ups,
@@ -228,7 +222,7 @@ impl CallFrame {
     /// Store argument `i` where the function declares it. An efun lays out
     /// no registers, so its arguments sit at `1..`; one beyond a compiled
     /// function's declared list goes past its locals, where the bank has
-    /// reserved room for it.
+    /// reserved room for it and `PopulateArgv` reads it back.
     fn store_arg(&mut self, txn: &TxnHandle, i: usize, value: LpcRef) -> Result<()> {
         let target = match self.function.arg_locations.get(i) {
             Some(&location) => location,
@@ -245,7 +239,6 @@ impl CallFrame {
                 Register(register).as_local()
             }
         };
-        self.arg_locations.push(target);
         self.set_location(txn, target, value)
     }
 
@@ -297,7 +290,6 @@ impl CallFrame {
             )));
         };
         *slot = cell;
-        self.arg_locations.push(RegisterVariant::Upvalue(reg));
         Ok(())
     }
 
@@ -772,7 +764,6 @@ mod tests {
             frame.slot(Register(0).as_upvalue()).unwrap(),
             Slot::Cell(cell)
         );
-        assert_eq!(frame.arg_locations.as_slice(), &[Register(0).as_upvalue()]);
         assert_eq!(
             *frame.get_location(&txn, Register(0).as_upvalue()).unwrap(),
             LpcRef::from(41)

@@ -105,7 +105,7 @@ pub struct TaskSeed {
 impl TaskSeed {
     /// Build the entry [`CallFrame`] for one attempt. Args go through
     /// `push_arg`, never straight into registers `1..=len` — a captured
-    /// parameter lives in a cell, and `argv` comes from `arg_locations`.
+    /// parameter lives in a cell, and an extra lands past the locals for `argv`.
     /// A [`SeedArg::FreshMapping`] is minted into `txn` here, once per
     /// attempt.
     pub(crate) fn build_call_frame(
