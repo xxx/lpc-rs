@@ -442,11 +442,15 @@ pub(crate) fn txn_find_object(
 ) -> ObjectLookup {
     let key = object_space.path_key(path.as_ref());
     match object_space.get_cell_id(&key) {
-        Some(var_id) if txn.with(|t| t.is_removed(var_id)) => ObjectLookup::Removed,
-        Some(var_id) => match txn.with(|t| t.read_object(var_id)) {
-            Some(process) => ObjectLookup::Found(process),
-            None => ObjectLookup::NotCreated,
-        },
+        Some(var_id) => txn.with(|t| {
+            if t.is_removed(var_id) {
+                return ObjectLookup::Removed;
+            }
+            match t.read_object(var_id) {
+                Some(process) => ObjectLookup::Found(process),
+                None => ObjectLookup::NotCreated,
+            }
+        }),
         None => match object_space.lookup(&key) {
             Some(process) => ObjectLookup::Found(process),
             None => ObjectLookup::NotCreated,

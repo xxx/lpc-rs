@@ -131,6 +131,17 @@ impl Default for Process {
     }
 }
 
+/// Where an object stands for one attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Liveness {
+    /// Removed by a committed destruct or by this attempt.
+    Dead,
+    /// Resident, its initializer not yet run.
+    Uninitialized,
+    /// Resident and initialized.
+    Ready,
+}
+
 impl Process {
     /// Shared constructor body for `new`, `new_clone` and `new_virtual`.
     fn with_name(program: Arc<Program>, name: ObjectName) -> Self {
@@ -367,6 +378,20 @@ impl Process {
         txn.with(|t| t.read(self.initialized.id).is_some())
     }
 
+    /// [`is_live`](Self::is_live) and [`is_initialized`](Self::is_initialized)
+    /// in one trip through the lock; a dead object's marker is not read.
+    pub(crate) fn liveness(&self, txn: &TxnHandle) -> Liveness {
+        txn.with(|t| {
+            if self.cell.get().is_some_and(|&cell| t.is_removed(cell)) {
+                Liveness::Dead
+            } else if t.read(self.initialized.id).is_some() {
+                Liveness::Ready
+            } else {
+                Liveness::Uninitialized
+            }
+        })
+    }
+
     /// Write the marker in `txn` and return `true`, or `false` when already
     /// initialized.
     pub(crate) fn claim_init(&self, txn: &TxnHandle) -> bool {
@@ -567,5 +592,33 @@ mod tests {
             .process;
         use crate::interpreter::CommittedReader;
         assert!(vm.global_state.committed_rules(&proc).is_empty());
+    }
+
+    #[test]
+    fn a_resident_process_is_uninitialized_until_the_claim() {
+        let proc = Process::new(program_at("/liveness.c"));
+        let txn = TxnHandle::empty();
+
+        assert_eq!(proc.liveness(&txn), Liveness::Uninitialized);
+    }
+
+    #[test]
+    fn a_claimed_init_makes_the_process_ready() {
+        let proc = Process::new(program_at("/liveness.c"));
+        let txn = TxnHandle::empty();
+        assert!(proc.claim_init(&txn));
+
+        assert_eq!(proc.liveness(&txn), Liveness::Ready);
+    }
+
+    #[test]
+    fn a_destruct_in_the_attempt_makes_the_process_dead() {
+        let proc = Process::new(program_at("/liveness.c"));
+        let txn = TxnHandle::empty();
+        assert!(proc.claim_init(&txn));
+        let cell = *proc.cell.get_or_init(VarId::new);
+        txn.with(|t| t.drop_var(cell));
+
+        assert_eq!(proc.liveness(&txn), Liveness::Dead);
     }
 }
