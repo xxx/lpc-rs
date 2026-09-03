@@ -320,8 +320,8 @@ mod tests {
         assert!(LpcType::Object(true).matches_type(LpcType::Mixed(true)));
         assert!(LpcType::Mapping(true).matches_type(LpcType::Mixed(true)));
 
-        assert!(
-            LpcType::Mapping(false).matches_type(LpcType::Mapping(false) | LpcType::Mixed(true))
-        )
+        let union = LpcType::Mapping(false) | LpcType::Mixed(true);
+        assert!(union.matches_type(LpcType::Mapping(false)));
+        assert!(!LpcType::Mapping(false).matches_type(union));
     }
 }
