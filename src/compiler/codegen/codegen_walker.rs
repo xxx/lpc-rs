@@ -918,9 +918,9 @@ impl CodegenWalker {
         Ok(())
     }
 
-    /// Seal the function on top of the stack: set its locals count (a
-    /// captured parameter holds no register, so the count can fall short of
-    /// `num_args`), backpatch argv and labels, and run the peephole.
+    /// Seal the function on top of the stack: backpatch its labels, run the
+    /// peephole, pack its registers, then backpatch argv with the packed
+    /// locals count.
     fn finalize_function(
         &mut self,
         populate_argv_index: Option<Address>,
