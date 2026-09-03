@@ -776,6 +776,138 @@ mod test_instructions {
         }
     }
 
+    mod test_switch_shapes {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_matching_case_falls_through_to_the_next_body() {
+            let code = indoc! { r##"
+                    int one; int two; int three; int none;
+                    int f(int x) {
+                        int r;
+                        switch (x) { case 1: r += 1; case 2: r += 10; break; case 3: r += 100; }
+                        return r;
+                    }
+                    void create() { one = f(1); two = f(2); three = f(3); none = f(4); }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("one", BareVal::Int(11)),
+                    ("two", BareVal::Int(10)),
+                    ("three", BareVal::Int(100)),
+                    ("none", BareVal::Int(0)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_default_in_the_middle_is_tested_last_and_falls_through() {
+            let code = indoc! { r##"
+                    int one; int two; int other;
+                    int f(int x) {
+                        int r;
+                        switch (x) { case 1: r = 1; break; default: r = 5; case 2: r += 10; break; }
+                        return r;
+                    }
+                    void create() { one = f(1); two = f(2); other = f(9); }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("one", BareVal::Int(1)),
+                    ("two", BareVal::Int(10)),
+                    ("other", BareVal::Int(15)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn no_match_and_no_default_runs_no_body() {
+            let code = indoc! { r##"
+                    int hit; int miss;
+                    int f(int x) { switch (x) { case 1: return 1; } return 0; }
+                    void create() { hit = f(1); miss = f(2); }
+                "##};
+
+            check_committed_globals(code, &[("hit", BareVal::Int(1)), ("miss", BareVal::Int(0))])
+                .await;
+        }
+
+        #[tokio::test]
+        async fn string_cases_match_by_value() {
+            let code = indoc! { r##"
+                    int a; int b; int c;
+                    int f(string s) { switch (s) { case "a": return 1; case "b": return 2; default: return 0; } }
+                    void create() { a = f("a"); b = f("b"); c = f("c"); }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::Int(1)),
+                    ("b", BareVal::Int(2)),
+                    ("c", BareVal::Int(0)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_nested_switch_keeps_its_own_cases() {
+            let code = indoc! { r##"
+                    int inner_hit; int inner_default; int outer_two; int outer_default;
+                    int f(int x, int y) {
+                        switch (x) {
+                            case 1: switch (y) { case 1: return 11; default: return 10; }
+                            case 2: return 2;
+                            default: return 0;
+                        }
+                    }
+                    void create() {
+                        inner_hit = f(1, 1); inner_default = f(1, 2);
+                        outer_two = f(2, 1); outer_default = f(3, 1);
+                    }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("inner_hit", BareVal::Int(11)),
+                    ("inner_default", BareVal::Int(10)),
+                    ("outer_two", BareVal::Int(2)),
+                    ("outer_default", BareVal::Int(0)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_case_inside_an_if_is_reached_by_the_test() {
+            let code = indoc! { r##"
+                    int one; int two; int other;
+                    int f(int x) {
+                        switch (x) { case 1: if (0) { case 2: return 2; } return 1; default: return 0; }
+                    }
+                    void create() { one = f(1); two = f(2); other = f(3); }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("one", BareVal::Int(1)),
+                    ("two", BareVal::Int(2)),
+                    ("other", BareVal::Int(0)),
+                ],
+            )
+            .await;
+        }
+    }
+
     mod test_bitwise_not {
         use super::*;
 

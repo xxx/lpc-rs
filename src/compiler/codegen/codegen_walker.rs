@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -149,16 +152,6 @@ impl JumpWhen {
     }
 }
 
-/// Something to store switch case statements
-#[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
-struct SwitchCase(Option<ExpressionNode>);
-impl SwitchCase {
-    #[inline]
-    pub fn is_default(&self) -> bool {
-        self.0.is_none()
-    }
-}
-
 /// A call argument as codegen pushes it: a value register, or the cell a
 /// `ref` argument names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -224,8 +217,9 @@ pub struct CodegenWalker {
     /// Labels where jumps at any particular time need to go to.
     jump_targets: Vec<JumpTarget>,
 
-    /// Mapping of `switch` cases to the address of the first instruction for a match
-    case_addresses: Vec<Vec<(SwitchCase, Address)>>,
+    /// The labels of each open `switch`'s cases in visit order, taken by
+    /// `visit_label` as the bodies are emitted.
+    case_labels: Vec<VecDeque<Label>>,
 
     /// Because Ranges have two results, we store both locations when we `visit_range`.
     visit_range_results: Option<(Option<RegisterVariant>, Option<RegisterVariant>)>,
@@ -1906,19 +1900,18 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_label(&mut self, node: &mut LabelNode) -> Result<()> {
-        let address = self.current_address();
-        match self.case_addresses.last_mut() {
-            Some(x) => {
-                // track address of where this label will point
-                let case = SwitchCase(node.case.clone());
-                x.push((case, address));
-                Ok(())
-            }
-            None => Err(lpc_error!(
+        let Some(labels) = self.case_labels.last_mut() else {
+            return Err(lpc_bug!(node.span, "a case label outside any `switch`"));
+        };
+        let Some(label) = labels.pop_front() else {
+            return Err(lpc_bug!(
                 node.span,
-                "Found a label in the code generator, but nowhere to store the address?",
-            )),
-        }
+                "a case label the switch's collector did not find"
+            ));
+        };
+        let address = self.current_address();
+        self.insert_label(label, address);
+        Ok(())
     }
 
     #[instrument(skip_all)]
@@ -2038,12 +2031,61 @@ impl TreeWalker for CodegenWalker {
         node.expression.visit(self).await?;
         let expr_result = self.current_result;
 
-        let test_label = self.new_label("switch-test");
-        self.schedule_backpatch(&test_label, self.current_address())?;
-        let instruction = Instruction::Jmp(Address(0));
-        push_instruction!(self, instruction, node.span);
-
+        // The default is tested last, whatever its source position.
+        let cases = super::case_collector::collect_cases(&mut node.body).await?;
         let end_label = self.new_label("switch-end");
+        let mut labels = VecDeque::with_capacity(cases.len());
+        let mut default_label = None;
+        for case in cases {
+            let Some(mut case_expr) = case else {
+                let label = self.new_label("switch-default");
+                labels.push_back(label.clone());
+                default_label = Some(label);
+                continue;
+            };
+            let label = self.new_label("switch-case");
+            labels.push_back(label.clone());
+
+            case_expr.visit(self).await?;
+            let test_result = self.register_counter.next().unwrap().as_local();
+
+            if let ExpressionNode::Range(range_node) = case_expr {
+                let (range_left, range_right) = self.visit_range_results.unwrap();
+
+                // An open end of the range is always satisfied.
+                let gte_result = if let Some(left_reg) = range_left {
+                    let result = self.register_counter.next().unwrap().as_local();
+                    let instruction = Instruction::Gte(expr_result, left_reg, result);
+                    push_instruction!(self, instruction, range_node.span);
+                    result
+                } else {
+                    self.constant(LpcConstant::Int(1), range_node.span)?
+                };
+
+                let lte_result = if let Some(right_reg) = range_right {
+                    let result = self.register_counter.next().unwrap().as_local();
+                    let instruction = Instruction::Lte(expr_result, right_reg, result);
+                    push_instruction!(self, instruction, range_node.span);
+                    result
+                } else {
+                    self.constant(LpcConstant::Int(1), range_node.span)?
+                };
+
+                // & the results to see if we're in the range
+                let instruction = Instruction::And(gte_result, lte_result, test_result);
+                push_instruction!(self, instruction, node.span);
+            } else {
+                let instruction = Instruction::EqEq(expr_result, self.current_result, test_result);
+                push_instruction!(self, instruction, node.span);
+            }
+
+            self.schedule_backpatch(&label, self.current_address())?;
+            let instruction = Instruction::Jnz(test_result, Address(0));
+            push_instruction!(self, instruction, node.span);
+        }
+        let fall_through = default_label.unwrap_or_else(|| end_label.clone());
+        self.emit_jump(&fall_through, node.span)?;
+
         // `continue` inside a case belongs to the enclosing loop.
         let continue_target = self
             .jump_targets
@@ -2053,91 +2095,18 @@ impl TreeWalker for CodegenWalker {
             break_target: end_label.clone(),
             continue_target,
         });
-        let addresses = vec![];
-        self.case_addresses.push(addresses);
+        self.case_labels.push(labels);
 
         node.body.visit(self).await?;
 
-        // skip over the tests that we're about to generate.
-        let instruction = Instruction::Jmp(Address(0));
-        // skip this jump if the final case statement ended with its own `break`.
-        if self
-            .function_stack
-            .last()
-            .unwrap()
-            .instructions
-            .last()
-            .unwrap()
-            != &instruction
-        {
-            self.schedule_backpatch(&end_label, self.current_address())?;
-            push_instruction!(self, instruction, node.span);
+        let leftovers = self.case_labels.pop().unwrap();
+        if !leftovers.is_empty() {
+            return Err(lpc_bug!(
+                node.span,
+                "the switch's collector found {} case label(s) its body did not emit",
+                leftovers.len()
+            ));
         }
-
-        // generate all the tests for matching the case statements
-        let test_address = self.current_address();
-        self.insert_label(test_label, test_address);
-
-        let mut case_addresses = self.case_addresses.pop().unwrap();
-        // move the default case to the end, so we check it last when generating code.
-        if let Some(idx) = case_addresses.iter().position(|i| i.0.is_default()) {
-            let last_idx = case_addresses.len() - 1;
-            case_addresses.swap(idx, last_idx);
-        }
-
-        for case_address in case_addresses {
-            match case_address.0.0 {
-                Some(mut case_expr) => {
-                    case_expr.visit(self).await?;
-                    let test_result = self.register_counter.next().unwrap().as_local();
-
-                    if let ExpressionNode::Range(range_node) = case_expr {
-                        let (range_left, range_right) = self.visit_range_results.unwrap();
-
-                        // An open end of the range is always satisfied.
-                        let gte_result = if let Some(left_reg) = range_left {
-                            let result = self.register_counter.next().unwrap().as_local();
-                            let instruction = Instruction::Gte(expr_result, left_reg, result);
-                            push_instruction!(self, instruction, range_node.span);
-                            result
-                        } else {
-                            self.constant(LpcConstant::Int(1), range_node.span)?
-                        };
-
-                        let lte_result = if let Some(right_reg) = range_right {
-                            let result = self.register_counter.next().unwrap().as_local();
-                            let instruction = Instruction::Lte(expr_result, right_reg, result);
-                            push_instruction!(self, instruction, range_node.span);
-                            result
-                        } else {
-                            self.constant(LpcConstant::Int(1), range_node.span)?
-                        };
-
-                        // & the results to see if we're in the range
-                        let instruction = Instruction::And(gte_result, lte_result, test_result);
-                        push_instruction!(self, instruction, node.span);
-                    } else {
-                        let instruction =
-                            Instruction::EqEq(expr_result, self.current_result, test_result);
-                        push_instruction!(self, instruction, node.span);
-                    }
-
-                    let case_label = self.new_label("switch-case");
-                    self.schedule_backpatch(&case_label, self.current_address())?;
-                    let instruction = Instruction::Jnz(test_result, Address(0));
-                    push_instruction!(self, instruction, node.span);
-                    self.insert_label(case_label, case_address.1);
-                }
-                None => {
-                    let default_label = self.new_label("switch-default");
-                    self.schedule_backpatch(&default_label, self.current_address())?;
-                    let instruction = Instruction::Jmp(Address(0));
-                    push_instruction!(self, instruction, node.span);
-                    self.insert_label(default_label, case_address.1);
-                }
-            }
-        }
-
         let end_address = self.current_address();
         self.insert_label(end_label, end_address);
 
@@ -2427,7 +2396,7 @@ impl Default for CodegenWalker {
             global_counter,
             context: Default::default(),
             jump_targets: vec![],
-            case_addresses: vec![],
+            case_labels: vec![],
             visit_range_results: None,
             closure_arg_locations: vec![],
         }
@@ -3176,29 +3145,20 @@ mod tests {
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jmp(Address(10)),
-                PushArg(RegisterVariant::Constant(Register(1))),
-                CallEfun(15),
-                Jmp(Address(17)),
-                PushArg(RegisterVariant::Constant(Register(2))),
-                CallEfun(15),
-                PushArg(RegisterVariant::Constant(Register(3))),
-                CallEfun(15),
-                Jmp(Address(17)),
                 EqEq(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(2)),
                 ),
-                Jnz(RegisterVariant::Local(Register(2)), Address(2)),
+                Jnz(RegisterVariant::Local(Register(2)), Address(8)),
                 Gte(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(4)),
+                    RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(4)),
                 ),
                 Lte(
                     RegisterVariant::Local(Register(1)),
-                    RegisterVariant::Constant(Register(5)),
+                    RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(5)),
                 ),
                 And(
@@ -3206,8 +3166,15 @@ mod tests {
                     RegisterVariant::Local(Register(5)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Jnz(RegisterVariant::Local(Register(3)), Address(7)),
-                Jmp(Address(5)),
+                Jnz(RegisterVariant::Local(Register(3)), Address(13)),
+                Jmp(Address(11)),
+                PushArg(RegisterVariant::Constant(Register(3))),
+                CallEfun(15),
+                Jmp(Address(15)),
+                PushArg(RegisterVariant::Constant(Register(4))),
+                CallEfun(15),
+                PushArg(RegisterVariant::Constant(Register(5))),
+                CallEfun(15),
                 Ret,
             ];
 
@@ -5406,7 +5373,7 @@ mod tests {
         use super::*;
 
         #[tokio::test]
-        async fn populates_the_instructions() {
+        async fn tests_come_first_then_the_bodies_in_source_order() {
             let code = r#"
                 void create() {
                     switch(666) {
@@ -5422,42 +5389,171 @@ mod tests {
                     }
                 }
             "#;
-
-            let walker = walk_prog(code).await;
-            let func = walker
-                .functions
-                .values()
-                .find(|f| f.name() == "create")
-                .unwrap();
-            let instructions = func.instructions.clone();
             let expected = vec![
-                Jmp(Address(10)),
-                PushArg(RegisterVariant::Constant(Register(1))),
-                CallEfun(15),
-                Jmp(Address(15)),
-                PushArg(RegisterVariant::Constant(Register(2))),
-                CallEfun(15),
-                Jmp(Address(15)),
-                PushArg(RegisterVariant::Constant(Register(3))),
-                CallEfun(15),
-                Jmp(Address(15)),
                 EqEq(
                     RegisterVariant::Constant(Register(0)),
-                    RegisterVariant::Constant(Register(4)),
+                    RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                Jnz(RegisterVariant::Local(Register(1)), Address(1)),
+                Jnz(RegisterVariant::Local(Register(1)), Address(5)),
                 EqEq(
                     RegisterVariant::Constant(Register(0)),
-                    RegisterVariant::Constant(Register(5)),
+                    RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(2)),
                 ),
-                Jnz(RegisterVariant::Local(Register(2)), Address(4)),
-                Jmp(Address(7)),
+                Jnz(RegisterVariant::Local(Register(2)), Address(8)),
+                Jmp(Address(11)),
+                PushArg(RegisterVariant::Constant(Register(3))),
+                CallEfun(15),
+                Jmp(Address(13)),
+                PushArg(RegisterVariant::Constant(Register(4))),
+                CallEfun(15),
+                Jmp(Address(13)),
+                PushArg(RegisterVariant::Constant(Register(5))),
+                CallEfun(15),
                 Ret,
             ];
 
-            assert_eq!(instructions, expected);
+            let mut walker = walk_prog(code).await;
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
+        }
+
+        #[tokio::test]
+        async fn a_switch_without_a_default_jumps_past_its_bodies() {
+            let code = r#"void create() { switch (1) { case 1: dump("one"); } }"#;
+            let expected = vec![
+                EqEq(
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(1)),
+                ),
+                Jnz(RegisterVariant::Local(Register(1)), Address(3)),
+                Jmp(Address(5)),
+                PushArg(RegisterVariant::Constant(Register(1))),
+                CallEfun(15),
+                Ret,
+            ];
+
+            let mut walker = walk_prog(code).await;
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
+        }
+
+        #[tokio::test]
+        async fn a_default_first_in_source_order_is_still_tested_last() {
+            let code =
+                r#"void create() { switch (1) { default: dump("d"); case 1: dump("one"); } }"#;
+            let expected = vec![
+                EqEq(
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(1)),
+                ),
+                Jnz(RegisterVariant::Local(Register(1)), Address(4)),
+                PushArg(RegisterVariant::Constant(Register(1))),
+                CallEfun(15),
+                PushArg(RegisterVariant::Constant(Register(2))),
+                CallEfun(15),
+                Ret,
+            ];
+
+            let mut walker = walk_prog(code).await;
+            assert_eq!(
+                walker_function_instructions(&mut walker, "create"),
+                expected
+            );
+        }
+
+        #[tokio::test]
+        async fn a_case_inside_an_if_is_collected() {
+            let code = r#"
+                int f(int x) {
+                    switch (x) { case 1: if (0) { case 2: return 2; } return 1; default: return 0; }
+                }
+            "#;
+            let mut walker = walk_prog(code).await;
+            let expected = vec![
+                EqEq(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(2)),
+                ),
+                Jnz(RegisterVariant::Local(Register(2)), Address(5)),
+                EqEq(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Constant(Register(1)),
+                    RegisterVariant::Local(Register(3)),
+                ),
+                Jnz(RegisterVariant::Local(Register(3)), Address(6)),
+                Jmp(Address(10)),
+                Jmp(Address(8)),
+                Copy(
+                    RegisterVariant::Constant(Register(1)),
+                    RegisterVariant::Local(Register(0)),
+                ),
+                Ret,
+                Copy(
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(0)),
+                ),
+                Ret,
+                Copy(
+                    RegisterVariant::Constant(Register(2)),
+                    RegisterVariant::Local(Register(0)),
+                ),
+                Ret,
+            ];
+
+            assert_eq!(walker_function_instructions(&mut walker, "f"), expected);
+        }
+
+        #[tokio::test]
+        async fn a_nested_switch_keeps_its_own_chain() {
+            let code = r#"
+                int f(int x, int y) {
+                    switch (x) { case 1: switch (y) { case 1: return 11; } return 1; }
+                    return 0;
+                }
+            "#;
+            let mut walker = walk_prog(code).await;
+            let expected = vec![
+                EqEq(
+                    RegisterVariant::Local(Register(1)),
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(3)),
+                ),
+                Jnz(RegisterVariant::Local(Register(3)), Address(3)),
+                Jmp(Address(10)),
+                EqEq(
+                    RegisterVariant::Local(Register(2)),
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(4)),
+                ),
+                Jnz(RegisterVariant::Local(Register(4)), Address(6)),
+                Jmp(Address(8)),
+                Copy(
+                    RegisterVariant::Constant(Register(1)),
+                    RegisterVariant::Local(Register(0)),
+                ),
+                Ret,
+                Copy(
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(0)),
+                ),
+                Ret,
+                Copy(
+                    RegisterVariant::Constant(Register(2)),
+                    RegisterVariant::Local(Register(0)),
+                ),
+                Ret,
+            ];
+
+            assert_eq!(walker_function_instructions(&mut walker, "f"), expected);
         }
     }
 
