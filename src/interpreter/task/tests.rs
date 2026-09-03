@@ -483,6 +483,57 @@ mod test_instructions {
         }
     }
 
+    mod test_constant_pool {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_string_constant_survives_mutation_of_a_copy() {
+            let code = indoc! { r##"
+                    string s;
+                    string t;
+                    void create() {
+                        int i;
+                        for (i = 0; i < 2; i++) {
+                            s = "ab";
+                            t = s;
+                            t += "c";
+                        }
+                    }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("s", BareVal::String("ab".into())),
+                    ("t", BareVal::String("abc".into())),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn string_literals_compare_equal_across_functions() {
+            let code = indoc! { r##"
+                    int r;
+                    string g() { return "x"; }
+                    void create() { r = g() == "x"; }
+                "##};
+
+            check_committed_globals(code, &[("r", BareVal::Int(1))]).await;
+        }
+
+        #[tokio::test]
+        async fn call_other_by_a_literal_name_reaches_the_function() {
+            let code = indoc! { r##"
+                    int r;
+                    int f() { return 42; }
+                    void create() { r = this_object()->f(); }
+                "##};
+
+            check_committed_globals(code, &[("r", BareVal::Int(42))]).await;
+        }
+    }
+
     mod test_bitwise_not {
         use super::*;
 
@@ -2688,6 +2739,7 @@ mod test_instructions {
                 labels: Some(HashMap::new()),
                 local_variables: Default::default(),
                 arg_locations: Default::default(),
+                constants: Default::default(),
             }
             .into();
 

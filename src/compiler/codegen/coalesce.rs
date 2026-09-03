@@ -84,8 +84,10 @@ fn pass(func: &mut ProgramFunction) -> bool {
 
         // A Global/Upvalue source stays — its tracked read is part of
         // the attempt's conflict set.
-        if matches!(src, RegisterVariant::Local(_))
-            && matches!(dst, RegisterVariant::Local(_))
+        if matches!(
+            src,
+            RegisterVariant::Local(_) | RegisterVariant::Constant(_)
+        ) && matches!(dst, RegisterVariant::Local(_))
             && dst != r0
             && !named.contains(&dst)
             && mentions(func, dst) == 1
@@ -233,6 +235,13 @@ mod tests {
 
     fn global(i: u16) -> RegisterVariant {
         RegisterVariant::Global(Register(i))
+    }
+
+    #[test]
+    fn a_dead_copy_from_a_constant_is_deleted() {
+        let mut func = func_with(vec![Copy(Register(0).as_constant(), local(2)), Ret]);
+        coalesce(&mut func);
+        assert_eq!(func.instructions, vec![Ret]);
     }
 
     #[test]

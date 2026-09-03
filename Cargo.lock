@@ -1437,10 +1437,12 @@ dependencies = [
  "lpc-rs-asm",
  "lpc-rs-core",
  "lpc-rs-errors",
+ "lpc-rs-utils",
  "multimap",
  "once_cell",
  "readonly",
  "tracing",
+ "ustr",
 ]
 
 [[package]]

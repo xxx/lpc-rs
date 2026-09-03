@@ -10,6 +10,7 @@ use std::{
 use decorum::Total;
 use lpc_rs_core::{BaseFloat, LpcFloatInner, LpcIntInner, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_function_support::constant::LpcConstant;
 use lpc_rs_utils::lpc_string::LpcString;
 use lpc_rs_utils::{string, string::concatenate_strings};
 
@@ -538,6 +539,17 @@ impl From<String> for LpcRef {
     #[inline]
     fn from(value: String) -> Self {
         LpcRef::String(Arc::new(LpcString::from(value)))
+    }
+}
+
+impl From<&LpcConstant> for LpcRef {
+    #[inline]
+    fn from(constant: &LpcConstant) -> Self {
+        match constant {
+            LpcConstant::Int(x) => LpcRef::Int(LpcInt(*x)),
+            LpcConstant::Float(x) => LpcRef::Float(LpcFloat(*x)),
+            LpcConstant::String(x) => LpcRef::String(x.clone()),
+        }
     }
 }
 

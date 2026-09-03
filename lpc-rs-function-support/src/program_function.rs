@@ -19,6 +19,7 @@ use multimap::MultiMap;
 use tracing::trace;
 
 use crate::{
+    constant::LpcConstant,
     function_prototype::{FunctionKind, FunctionPrototype},
     symbol::Symbol,
 };
@@ -67,6 +68,11 @@ pub struct ProgramFunction {
     /// Track the location of where my arguments are expected
     #[builder(default)]
     pub arg_locations: Vec<RegisterVariant>,
+
+    /// The literals this function reads through `Constant` operands, in
+    /// pool order.
+    #[builder(default)]
+    pub constants: Vec<LpcConstant>,
 }
 
 impl ProgramFunction {
@@ -101,6 +107,7 @@ impl ProgramFunction {
             labels: Some(HashMap::new()),
             local_variables: vec![],
             arg_locations: vec![],
+            constants: vec![],
         }
     }
 
@@ -135,6 +142,10 @@ impl ProgramFunction {
             self.num_locals,
             self.num_upvalues
         ));
+
+        for (index, constant) in self.constants.iter().enumerate() {
+            v.push(format!("    k{index} = {constant}"));
+        }
 
         // use MultiMap as multiple labels can be at the same address
         let labels_by_pc = self
@@ -200,8 +211,11 @@ impl AsRef<FunctionPrototype> for Arc<ProgramFunction> {
 mod tests {
     use lpc_rs_core::{lpc_path::LpcPath, lpc_type::LpcType};
 
+    use lpc_rs_utils::lpc_string::LpcString;
+    use ustr::ustr;
+
     use super::*;
-    use crate::function_prototype::FunctionPrototypeBuilder;
+    use crate::{constant::LpcConstant, function_prototype::FunctionPrototypeBuilder};
 
     fn function(kind: FunctionKind) -> ProgramFunction {
         let prototype = FunctionPrototypeBuilder::default()
@@ -212,6 +226,28 @@ mod tests {
             .build()
             .unwrap();
         ProgramFunction::new(prototype, 0)
+    }
+
+    #[test]
+    fn a_new_function_has_an_empty_constant_pool() {
+        assert!(function(FunctionKind::Local).constants.is_empty());
+    }
+
+    #[test]
+    fn the_listing_names_each_constant() {
+        let mut func = function(FunctionKind::Local);
+        func.constants = vec![
+            LpcConstant::Int(5),
+            LpcConstant::Float(1.5.into()),
+            LpcConstant::String(Arc::new(LpcString::Static(ustr("a")))),
+        ];
+
+        let listing = func.listing();
+
+        assert_eq!(
+            &listing[1..4],
+            ["    k0 = 5", "    k1 = 1.5", "    k2 = \"a\""]
+        );
     }
 
     #[test]
