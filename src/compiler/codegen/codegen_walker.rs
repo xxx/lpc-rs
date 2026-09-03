@@ -1001,25 +1001,23 @@ impl TreeWalker for CodegenWalker {
                 }
             }
             BinaryOperation::AndAnd => {
-                // Handle short-circuit behavior
+                // A loop re-enters with the last iteration's value still in the
+                // result register.
                 let end_label = self.new_label("andand-end");
+                let reg_result = self.register_counter.next().unwrap().as_local();
+                let instruction = Instruction::IConst0(reg_result);
+                push_instruction!(self, instruction, node.span);
+
                 self.schedule_backpatch(&end_label, self.current_address())?;
                 let instruction = Instruction::Jz(reg_left, Address(0));
                 push_instruction!(self, instruction, node.span);
 
                 node.r.visit(self).await?;
-                let reg_right = self.current_result;
-                self.schedule_backpatch(&end_label, self.current_address())?;
-                let instruction = Instruction::Jz(reg_right, Address(0));
-                push_instruction!(self, instruction, node.span);
-
-                let reg_result = self.register_counter.next().unwrap().as_local();
-                self.current_result = reg_result;
-
-                let instruction = Instruction::Copy(reg_right, reg_result);
+                let instruction = Instruction::Copy(self.current_result, reg_result);
                 push_instruction!(self, instruction, node.span);
 
                 self.insert_label(end_label, self.current_address());
+                self.current_result = reg_result;
 
                 return Ok(());
             }
@@ -2910,13 +2908,12 @@ mod tests {
 
             let expected = vec![
                 IConst(RegisterVariant::Local(Register(1)), 123),
+                IConst0(RegisterVariant::Local(Register(2))),
                 Jz(RegisterVariant::Local(Register(1)), Address(0)),
-                // and also
-                SConst(RegisterVariant::Local(Register(2)), ustr("marf!")),
-                Jz(RegisterVariant::Local(Register(2)), Address(0)),
+                SConst(RegisterVariant::Local(Register(3)), ustr("marf!")),
                 Copy(
-                    RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
+                    RegisterVariant::Local(Register(2)),
                 ),
                 // end is here
             ];
