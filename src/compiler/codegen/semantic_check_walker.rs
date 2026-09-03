@@ -467,7 +467,14 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         self.check_unreachable(&node.body);
+        // A closure compiles to its own function, so its body cannot jump
+        // to an enclosing loop or switch.
+        self.valid_jumps
+            .push((BreakAllowed(false), ContinueAllowed(false)));
+        self.valid_labels.push(LabelAllowed(false));
         walk_closure(self, node).await?;
+        self.prevent_labels();
+        self.prevent_jumps();
 
         self.closure_depth -= 1;
 
@@ -1146,6 +1153,39 @@ mod tests {
         use super::*;
 
         #[tokio::test]
+        async fn disallows_inside_a_closure_within_a_loop() {
+            let code = r#"
+                void create() {
+                    while (1) {
+                        dump((: break; :));
+                    }
+                }"#;
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "Invalid `break`."
+            );
+        }
+
+        #[tokio::test]
+        async fn allows_in_a_closures_own_loop_within_a_loop() {
+            let code = r#"
+                void create() {
+                    while (1) {
+                        dump((: while (1) { break; } :));
+                    }
+                }"#;
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert!(
+                context.diagnostics.errors().is_empty(),
+                "{:?}",
+                context.diagnostics.errors()
+            );
+        }
+
+        #[tokio::test]
         async fn disallows_outside_of_loop_or_switch() {
             let code = "void create() { break; }";
             let context = walk_code(code).await.expect("failed to parse?");
@@ -1229,6 +1269,22 @@ mod tests {
 
     mod test_visit_continue {
         use super::*;
+
+        #[tokio::test]
+        async fn disallows_inside_a_closure_within_a_loop() {
+            let code = r#"
+                void create() {
+                    while (1) {
+                        dump((: continue; :));
+                    }
+                }"#;
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "invalid `continue`."
+            );
+        }
 
         #[tokio::test]
         async fn disallows_outside_of_a_loop() {
@@ -2265,6 +2321,23 @@ mod tests {
 
     mod test_visit_label {
         use super::*;
+
+        #[tokio::test]
+        async fn disallows_inside_a_closure_within_a_switch() {
+            let code = r#"
+                void create() {
+                    switch (1) {
+                        case 1:
+                            dump((: case 2: 0; :));
+                    }
+                }"#;
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "invalid `case` statement."
+            );
+        }
 
         #[tokio::test]
         async fn disallows_case_outside_of_switch() {
