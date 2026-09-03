@@ -227,26 +227,26 @@ impl CallFrame {
         Ok(())
     }
 
-    /// Store argument `i` where the function declares it, or in the next
-    /// local register past the last argument for one beyond the declared list.
+    /// Store argument `i` where the function declares it. An efun lays out
+    /// no registers, so its arguments sit at `1..`; one beyond a compiled
+    /// function's declared list goes past its locals, where the bank has
+    /// reserved room for it.
     fn store_arg(&mut self, txn: &TxnHandle, i: usize, value: LpcRef) -> Result<()> {
-        let target = self
-            .function
-            .arg_locations
-            .get(i)
-            .copied()
-            .unwrap_or_else(|| {
-                let next = self
-                    .arg_locations
-                    .iter()
-                    .rev()
-                    .find_map(|loc| match loc {
-                        RegisterVariant::Local(r) => Some(r.index() + 1),
-                        _ => None,
-                    })
-                    .unwrap_or(1);
-                Register(next).as_local()
-            });
+        let target = match self.function.arg_locations.get(i) {
+            Some(&location) => location,
+            None => {
+                let Ok(i) = RegisterSize::try_from(i) else {
+                    return Err(self.runtime_bug(format!("argument {i} does not fit a register")));
+                };
+                let num_args = self.function.arity().num_args;
+                let register = if i < num_args {
+                    i + 1
+                } else {
+                    num_args + self.function.num_locals + 1 + (i - num_args)
+                };
+                Register(register).as_local()
+            }
+        };
         self.arg_locations.push(target);
         self.set_location(txn, target, value)
     }

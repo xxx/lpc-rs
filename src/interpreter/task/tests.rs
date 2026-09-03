@@ -435,6 +435,54 @@ mod test_instructions {
         }
     }
 
+    mod test_over_passed_arguments {
+        use super::*;
+
+        #[tokio::test]
+        async fn call_other_extras_do_not_leak_into_an_uninitialized_local() {
+            let code = indoc! { r##"
+                    int r;
+                    int f(int a) { int x; return x; }
+                    void create() { r = this_object()->f(1, 2); }
+                "##};
+
+            check_committed_globals(code, &[("r", BareVal::Int(0))]).await;
+        }
+
+        #[tokio::test]
+        async fn pointer_extras_do_not_leak_into_an_uninitialized_local() {
+            let code = indoc! { r##"
+                    int r;
+                    int f(int a) { int x; return x; }
+                    void create() { function fp = &f(); r = fp(1, 2); }
+                "##};
+
+            check_committed_globals(code, &[("r", BareVal::Int(0))]).await;
+        }
+
+        #[tokio::test]
+        async fn ellipsis_extras_reach_argv_past_the_locals() {
+            let code = indoc! { r##"
+                    int r;
+                    int f(int a, ...) { int x; int y; x = argv[0]; y = argv[1]; return a + x * 10 + y; }
+                    void create() { r = f(1, 5, 6); }
+                "##};
+
+            check_committed_globals(code, &[("r", BareVal::Int(57))]).await;
+        }
+
+        #[tokio::test]
+        async fn call_other_extras_reach_argv_past_the_locals() {
+            let code = indoc! { r##"
+                    int r;
+                    int f(int a, ...) { int x; int y; x = argv[0]; y = argv[1]; return a + x * 10 + y; }
+                    void create() { r = this_object()->f(1, 5, 6); }
+                "##};
+
+            check_committed_globals(code, &[("r", BareVal::Int(57))]).await;
+        }
+    }
+
     mod test_bitwise_not {
         use super::*;
 
