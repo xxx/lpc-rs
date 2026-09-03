@@ -233,7 +233,10 @@ fn local_index(register: RegisterVariant) -> Option<usize> {
 mod tests {
     use std::{collections::HashMap, sync::Arc};
 
-    use lpc_rs_asm::{address::Address, instruction::Instruction::*};
+    use lpc_rs_asm::{
+        address::Address,
+        instruction::{Comparison, Instruction::*},
+    };
     use lpc_rs_core::{
         lpc_path::LpcPath,
         lpc_type::LpcType,
@@ -406,7 +409,7 @@ mod tests {
             PushArg(local(2)),
             CallEfun(0),
             Inc(local(1)),
-            Lt(local(1), constant(2), local(3)),
+            Cmp(Comparison::Lt, local(1), constant(2), local(3)),
             Jnz(local(3), Address(1)),
             Ret,
         ]);
@@ -419,7 +422,7 @@ mod tests {
                 PushArg(local(2)),
                 CallEfun(0),
                 Inc(local(1)),
-                Lt(local(1), constant(2), local(2)),
+                Cmp(Comparison::Lt, local(1), constant(2), local(2)),
                 Jnz(local(2), Address(1)),
                 Ret,
             ]

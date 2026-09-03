@@ -8,6 +8,7 @@ use std::{
 };
 
 use decorum::Total;
+use lpc_rs_asm::instruction::Comparison;
 use lpc_rs_core::{BaseFloat, LpcFloatInner, LpcIntInner, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::constant::LpcConstant;
@@ -172,6 +173,19 @@ impl LpcRef {
             (true, true) => true,
             (true, false) => other.is_null(),
             (false, true) => self.is_null(),
+        }
+    }
+
+    /// Whether `self kind other` holds. Two values of different types are
+    /// unordered, so every ordering is false in both directions.
+    pub(crate) fn compare(&self, kind: Comparison, other: &Self, txn: &TxnHandle) -> bool {
+        match kind {
+            Comparison::Lt => self < other,
+            Comparison::Lte => self <= other,
+            Comparison::Gt => self > other,
+            Comparison::Gte => self >= other,
+            Comparison::Eq => self.eq_in(other, txn),
+            Comparison::Ne => !self.eq_in(other, txn),
         }
     }
 
@@ -694,6 +708,54 @@ impl Default for LpcRef {
 #[cfg(test)]
 mod tests {
     use claims::assert_err;
+
+    mod compare {
+        use lpc_rs_asm::instruction::Comparison;
+
+        use super::super::*;
+
+        fn under(kind: Comparison, a: &LpcRef, b: &LpcRef) -> bool {
+            a.compare(kind, b, &TxnHandle::empty())
+        }
+
+        #[test]
+        fn a_mismatched_pair_is_false_under_every_ordering() {
+            let s = LpcRef::from("a");
+            let i = LpcRef::from(1);
+            let orderings = [
+                Comparison::Lt,
+                Comparison::Lte,
+                Comparison::Gt,
+                Comparison::Gte,
+            ];
+            assert!(
+                orderings
+                    .iter()
+                    .all(|&kind| !under(kind, &s, &i) && !under(kind, &i, &s))
+            );
+        }
+
+        #[test]
+        fn a_mismatched_pair_is_unequal() {
+            let s = LpcRef::from("a");
+            let i = LpcRef::from(1);
+            assert_eq!(
+                (under(Comparison::Eq, &s, &i), under(Comparison::Ne, &s, &i)),
+                (false, true)
+            );
+        }
+
+        #[test]
+        fn ints_order() {
+            let one = LpcRef::from(1);
+            let two = LpcRef::from(2);
+            let answers: Vec<bool> = Comparison::ALL
+                .iter()
+                .map(|&k| under(k, &one, &two))
+                .collect();
+            assert_eq!(answers, [true, true, false, false, false, true]);
+        }
+    }
 
     use super::*;
     use crate::interpreter::lpc_array::LpcArray;
