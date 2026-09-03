@@ -14,6 +14,7 @@ use crate::compiler::{
         closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
+        int_node::IntNode,
         ref_node::RefNode,
         ternary_node::TernaryNode,
         unary_op_node::{UnaryOpNode, UnaryOperation},
@@ -270,6 +271,55 @@ pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationCont
     }
 }
 
+fn is_literal_zero(expression: &ExpressionNode) -> bool {
+    matches!(expression, ExpressionNode::Int(IntNode { value: 0, .. }))
+}
+
+/// The expression's type when `expected` does not take it: a literal `0` is
+/// taken by any type, `void` takes nothing, and `mixed` on either side takes
+/// the other.
+///
+/// # Arguments
+/// * `expected` - The declared type at the site.
+/// * `expression` - The expression the site receives.
+/// * `context` - The current [`CompilationContext`]
+pub fn mismatch(
+    expected: LpcType,
+    expression: &ExpressionNode,
+    context: &CompilationContext,
+) -> Result<Option<LpcType>> {
+    if is_literal_zero(expression) {
+        return Ok(None);
+    }
+
+    let found = node_type(expression, context)?;
+
+    if expected != LpcType::Void && expected.matches_type(found) {
+        Ok(None)
+    } else {
+        Ok(Some(found))
+    }
+}
+
+/// A ternary's branch types when they disagree: neither is a literal `0` and
+/// the body's type does not take the else branch.
+///
+/// # Arguments
+/// * `node` - The ternary.
+/// * `context` - The current [`CompilationContext`]
+pub fn ternary_mismatch(
+    node: &TernaryNode,
+    context: &CompilationContext,
+) -> Result<Option<(LpcType, LpcType)>> {
+    if is_literal_zero(&node.body) {
+        return Ok(None);
+    }
+
+    let body_type = node_type(&node.body, context)?;
+
+    Ok(mismatch(body_type, &node.else_clause, context)?.map(|else_type| (body_type, else_type)))
+}
+
 /// The type of a binary operation on its operand types; a pair the operation
 /// check rejects is `mixed`.
 fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType {
@@ -423,7 +473,26 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                 Ok(LpcType::Mixed(true))
             }
         }
-        ExpressionNode::Ternary(TernaryNode { body, .. }) => Ok(node_type(body, context)?),
+        ExpressionNode::Ternary(TernaryNode {
+            body, else_clause, ..
+        }) => {
+            if is_literal_zero(body) {
+                return node_type(else_clause, context);
+            }
+
+            if is_literal_zero(else_clause) {
+                return node_type(body, context);
+            }
+
+            let body_type = node_type(body, context)?;
+            let else_type = node_type(else_clause, context)?;
+
+            Ok(if body_type == else_type {
+                body_type
+            } else {
+                LpcType::Mixed(false)
+            })
+        }
         ExpressionNode::Mapping(_) => Ok(LpcType::Mapping(false)),
         ExpressionNode::FunctionPtr(_) => Ok(LpcType::Function(false)),
     }
@@ -1916,6 +1985,77 @@ mod tests {
         }
     }
 
+    mod mismatch_tests {
+        use super::*;
+
+        #[test]
+        fn a_literal_zero_is_taken_by_any_type() {
+            let context = CompilationContext::default();
+            let found = mismatch(LpcType::String(false), &ExpressionNode::from(0), &context);
+
+            assert_eq!(found.unwrap(), None);
+        }
+
+        #[test]
+        fn mixed_takes_anything() {
+            let context = CompilationContext::default();
+            let found = mismatch(LpcType::Mixed(false), &ExpressionNode::from("a"), &context);
+
+            assert_eq!(found.unwrap(), None);
+        }
+
+        #[test]
+        fn void_takes_nothing() {
+            let context = CompilationContext::default();
+            let found = mismatch(LpcType::Void, &ExpressionNode::from(1), &context);
+
+            assert_eq!(found.unwrap(), Some(LpcType::Int(false)));
+        }
+
+        #[test]
+        fn a_wrong_type_is_the_expressions_type() {
+            let context = CompilationContext::default();
+            let found = mismatch(LpcType::String(false), &ExpressionNode::from(1), &context);
+
+            assert_eq!(found.unwrap(), Some(LpcType::Int(false)));
+        }
+    }
+
+    mod ternary_mismatch_tests {
+        use super::*;
+
+        fn ternary(body: ExpressionNode, else_clause: ExpressionNode) -> TernaryNode {
+            TernaryNode {
+                condition: Box::new(ExpressionNode::from(1)),
+                body: Box::new(body),
+                else_clause: Box::new(else_clause),
+                span: None,
+            }
+        }
+
+        #[test]
+        fn a_literal_zero_branch_agrees_with_anything() {
+            let context = CompilationContext::default();
+
+            let node = ternary(ExpressionNode::from("a"), ExpressionNode::from(0));
+            assert_eq!(ternary_mismatch(&node, &context).unwrap(), None);
+
+            let node = ternary(ExpressionNode::from(0), ExpressionNode::from("a"));
+            assert_eq!(ternary_mismatch(&node, &context).unwrap(), None);
+        }
+
+        #[test]
+        fn differing_concrete_branches_are_reported() {
+            let context = CompilationContext::default();
+            let node = ternary(ExpressionNode::from(1), ExpressionNode::from("a"));
+
+            assert_eq!(
+                ternary_mismatch(&node, &context).unwrap(),
+                Some((LpcType::Int(false), LpcType::String(false)))
+            );
+        }
+    }
+
     mod test_node_type {
         use super::*;
 
@@ -2082,6 +2222,46 @@ mod tests {
                 });
 
                 assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mapping(true));
+            }
+        }
+
+        mod ternaries {
+            use super::*;
+
+            fn ternary(body: ExpressionNode, else_clause: ExpressionNode) -> ExpressionNode {
+                ExpressionNode::Ternary(TernaryNode {
+                    condition: Box::new(ExpressionNode::from(1)),
+                    body: Box::new(body),
+                    else_clause: Box::new(else_clause),
+                    span: None,
+                })
+            }
+
+            #[test]
+            fn agreeing_branches_give_their_type() {
+                let node = ternary(ExpressionNode::from(1), ExpressionNode::from(2));
+                let context = CompilationContext::default();
+
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Int(false));
+            }
+
+            #[test]
+            fn a_literal_zero_branch_gives_the_other_branchs_type() {
+                let context = CompilationContext::default();
+
+                let node = ternary(ExpressionNode::from("a"), ExpressionNode::from(0));
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::String(false));
+
+                let node = ternary(ExpressionNode::from(0), ExpressionNode::from("a"));
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::String(false));
+            }
+
+            #[test]
+            fn differing_branches_are_mixed() {
+                let node = ternary(ExpressionNode::from(1), ExpressionNode::from("a"));
+                let context = CompilationContext::default();
+
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(false));
             }
         }
 
