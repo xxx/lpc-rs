@@ -1331,7 +1331,15 @@ impl TreeWalker for CodegenWalker {
             return Ok(());
         }
 
-        let list = self.arg_list(arg_results.clone(), node.span)?;
+        // The efun form's receiver and name are the instruction's operands,
+        // not the callee's arguments.
+        let efun_form = receiver_result.is_none() && name.as_str() == CALL_OTHER;
+        let callee_args = if efun_form {
+            arg_results.get(2..).unwrap_or_default().to_vec()
+        } else {
+            arg_results.clone()
+        };
+        let list = self.arg_list(callee_args, node.span)?;
         let instruction = {
             if let Some(receiver_result) = receiver_result {
                 let name = LpcString::Static(*name);
@@ -1339,7 +1347,7 @@ impl TreeWalker for CodegenWalker {
                     self.constant(LpcConstant::String(Arc::new(name)), node.span)?;
 
                 Instruction::CallOther(receiver_result, name_register, list)
-            } else if name.as_str() == CALL_OTHER {
+            } else if efun_form {
                 debug_assert!(
                     arg_results.len() >= 2,
                     "CallOther requires at least 2 arguments, for the receiver and function name"
