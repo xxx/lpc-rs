@@ -3,6 +3,7 @@ pub mod codegen_walker;
 pub mod function_prototype_walker;
 pub mod inheritance_walker;
 pub mod peephole;
+pub mod register_packing;
 pub mod scope_walker;
 pub mod semantic_check_walker;
 pub mod tree_printer;
