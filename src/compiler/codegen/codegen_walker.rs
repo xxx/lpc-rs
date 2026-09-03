@@ -87,15 +87,6 @@ macro_rules! push_instruction {
     };
 }
 
-/// Partition on whether the value is stored in registers or memory, to help
-/// select instructions. tl;dr - Value types use `Register`, while reference
-/// types use `Memory`.
-#[derive(Debug)]
-enum OperationType {
-    Register,
-    Memory,
-}
-
 /// Where `break` and `continue` jump inside the innermost loop or `switch`.
 #[derive(Debug)]
 struct JumpTarget {
@@ -422,70 +413,6 @@ impl CodegenWalker {
         Ok(())
     }
 
-    /// helper to choose operation instructions
-    fn to_operation_type(&self, node: &ExpressionNode) -> OperationType {
-        match node {
-            ExpressionNode::Int(_) | ExpressionNode::Float(_) => OperationType::Register,
-
-            ExpressionNode::String(_)
-            | ExpressionNode::Array(_)
-            | ExpressionNode::Mapping(_)
-            | ExpressionNode::Closure(_)
-            | ExpressionNode::CommaExpression(_)
-            | ExpressionNode::Range(_)
-            | ExpressionNode::FunctionPtr(_) => OperationType::Memory,
-            ExpressionNode::Assignment(node) => self.to_operation_type(&node.lhs),
-            ExpressionNode::Call(node) => {
-                if_chain! {
-                    if let CallChain::Root { name, namespace, .. } = &node.chain;
-                    if let Some(func) = self.context.lookup_function_complete(name, namespace);
-                    if let LpcType::Int(_) | LpcType::Float(_) = func.prototype().return_type;
-                    then {
-                        OperationType::Register
-                    } else {
-                        OperationType::Memory
-                    }
-                }
-            }
-            ExpressionNode::BinaryOp(node) => {
-                let left_type = self.to_operation_type(&node.l);
-                let right_type = self.to_operation_type(&node.r);
-                match (left_type, right_type) {
-                    (OperationType::Register, OperationType::Register) => OperationType::Register,
-                    _ => OperationType::Memory,
-                }
-            }
-            ExpressionNode::Ternary(node) => {
-                let body_type = self.to_operation_type(&node.body);
-                let else_type = self.to_operation_type(&node.else_clause);
-                match (body_type, else_type) {
-                    (OperationType::Register, OperationType::Register) => OperationType::Register,
-                    _ => OperationType::Memory,
-                }
-            }
-            ExpressionNode::UnaryOp(node) => {
-                let expr_type = self.to_operation_type(&node.expr);
-
-                if matches!(expr_type, OperationType::Register) {
-                    OperationType::Register
-                } else {
-                    OperationType::Memory
-                }
-            }
-            ExpressionNode::Var(VarNode { name, .. })
-            | ExpressionNode::Ref(RefNode { name, .. }) => {
-                match self.context.lookup_var(name) {
-                    Some(Symbol { type_: ty, .. }) => match ty {
-                        LpcType::Int(false) => OperationType::Register,
-                        LpcType::Float(false) => OperationType::Register,
-                        _ => OperationType::Memory,
-                    },
-                    None => OperationType::Memory, // arbitrary - doing this instead of panicking
-                }
-            }
-        }
-    }
-
     /// The main switch to determine which instruction we select for a binary
     /// operation
     fn choose_op_instruction(
@@ -496,21 +423,9 @@ impl CodegenWalker {
         reg_result: RegisterVariant,
     ) -> Instruction {
         match node.op {
-            BinaryOperation::Add => self.choose_num_or_mixed(
-                node,
-                || Instruction::IAdd(reg_left, reg_right, reg_result),
-                || Instruction::MAdd(reg_left, reg_right, reg_result),
-            ),
-            BinaryOperation::Sub => self.choose_num_or_mixed(
-                node,
-                || Instruction::ISub(reg_left, reg_right, reg_result),
-                || Instruction::MSub(reg_left, reg_right, reg_result),
-            ),
-            BinaryOperation::Mul => self.choose_num_or_mixed(
-                node,
-                || Instruction::IMul(reg_left, reg_right, reg_result),
-                || Instruction::MMul(reg_left, reg_right, reg_result),
-            ),
+            BinaryOperation::Add => Instruction::Add(reg_left, reg_right, reg_result),
+            BinaryOperation::Sub => Instruction::Sub(reg_left, reg_right, reg_result),
+            BinaryOperation::Mul => Instruction::Mul(reg_left, reg_right, reg_result),
             BinaryOperation::Div => Instruction::IDiv(reg_left, reg_right, reg_result),
             BinaryOperation::Mod => Instruction::IMod(reg_left, reg_right, reg_result),
             BinaryOperation::Index => Instruction::Load(reg_left, reg_right, reg_result),
@@ -534,24 +449,6 @@ impl CodegenWalker {
             BinaryOperation::Compose => unimplemented!(
                 "Composition takes multiple instructions, so this is done elsewhere."
             ),
-        }
-    }
-
-    /// Allows for recursive determination of typed binary operator
-    /// instructions, allowing choice between a numeric (i.e. held in
-    /// registers) and mixed (i.e. tracked via references) Switching on the
-    /// instructions lets us avoid some value lookups at runtime.
-    fn choose_num_or_mixed<F, G>(&self, node: &BinaryOpNode, a: F, b: G) -> Instruction
-    where
-        F: Fn() -> Instruction,
-        G: Fn() -> Instruction,
-    {
-        let left_type = self.to_operation_type(&node.l);
-        let right_type = self.to_operation_type(&node.r);
-
-        match (left_type, right_type) {
-            (OperationType::Register, OperationType::Register) => a(),
-            _ => b(),
         }
     }
 
@@ -2296,7 +2193,7 @@ impl TreeWalker for CodegenWalker {
                 let minus_one = self.constant(LpcConstant::Int(-1), node.span)?;
                 let reg_result = self.register_counter.next().unwrap().as_local();
 
-                let instruction = Instruction::MMul(location, minus_one, reg_result);
+                let instruction = Instruction::Mul(location, minus_one, reg_result);
                 push_instruction!(self, instruction, node.span);
 
                 reg_result
@@ -2784,7 +2681,7 @@ mod tests {
     }
 
     mod test_binary_op {
-        use lpc_rs_asm::instruction::Instruction::{IMul, Jnz, Load, MAdd, Range};
+        use lpc_rs_asm::instruction::Instruction::{Add, Jnz, Load, Mul, Range};
 
         use super::*;
 
@@ -2807,12 +2704,12 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node).await;
 
             let expected = vec![
-                IAdd(
+                Add(
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                IMul(
+                Mul(
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2)),
@@ -2852,12 +2749,12 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node).await;
 
             let expected = vec![
-                IMul(
+                Mul(
                     RegisterVariant::Local(Register(9)),
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                IAdd(
+                Add(
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2)),
@@ -2886,12 +2783,12 @@ mod tests {
             let _ = walker.visit_binary_op(&mut node).await;
 
             let expected = vec![
-                MAdd(
+                Add(
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                MAdd(
+                Add(
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2)),
@@ -2919,7 +2816,7 @@ mod tests {
                 AConst(RegisterVariant::Local(Register(1))),
                 PushArrayItem(RegisterVariant::Constant(Register(1))),
                 AConst(RegisterVariant::Local(Register(2))),
-                MAdd(
+                Add(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
@@ -3128,7 +3025,7 @@ mod tests {
                 PushArg(RegisterVariant::Constant(Register(1))),
                 CallEfun(15),
                 Jmp(Address(11)),
-                IAdd(
+                Add(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
@@ -3181,12 +3078,12 @@ mod tests {
                 PushArg(RegisterVariant::Constant(Register(2))),
                 CallEfun(15),
                 Jmp(Address(13)),
-                IAdd(
+                Add(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                IAdd(
+                Add(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(1)),
@@ -3235,7 +3132,7 @@ mod tests {
                 PushArg(RegisterVariant::Constant(Register(1))),
                 CallEfun(15),
                 Jmp(Address(10)),
-                IAdd(
+                Add(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
@@ -3852,7 +3749,7 @@ mod tests {
             assert_eq!(
                 walker_function_instructions(&mut walker, "closure-0"),
                 vec![
-                    MAdd(
+                    Add(
                         RegisterVariant::Constant(Register(0)),
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2))
@@ -3892,7 +3789,7 @@ mod tests {
                     PopulateDefaults,
                     Jmp(Address(5)),
                     Jmp(Address(6)),
-                    IMul(
+                    Mul(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2)),
                         RegisterVariant::Local(Register(0)),
@@ -4121,7 +4018,7 @@ mod tests {
                 PushArg(RegisterVariant::Constant(Register(1))),
                 CallEfun(15),
                 Jmp(Address(9)),
-                IAdd(
+                Add(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
@@ -4174,12 +4071,12 @@ mod tests {
                 PushArg(RegisterVariant::Constant(Register(2))),
                 CallEfun(15),
                 Jmp(Address(10)),
-                IAdd(
+                Add(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                IAdd(
+                Add(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(1)),
@@ -4228,7 +4125,7 @@ mod tests {
                 PushArg(RegisterVariant::Constant(Register(1))),
                 CallEfun(15),
                 Jmp(Address(8)),
-                IAdd(
+                Add(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(1)),
@@ -4415,7 +4312,7 @@ mod tests {
                 Jmp(Address(0)),
                 PushArg(RegisterVariant::Local(Register(1))),
                 CallEfun(15),
-                ISub(
+                Sub(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(2)),
@@ -4472,7 +4369,7 @@ mod tests {
             assert_compiles_to(
                 "int main(int i) { return i + 4; }",
                 vec![
-                    IAdd(
+                    Add(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Constant(Register(0)),
                         RegisterVariant::Local(Register(0)),
@@ -4507,7 +4404,7 @@ mod tests {
                     PopulateDefaults,
                     Jmp(Address(5)),
                     Jmp(Address(6)),
-                    IMul(
+                    Mul(
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2)),
                         RegisterVariant::Local(Register(0)),
@@ -4664,7 +4561,7 @@ mod tests {
         #[tokio::test]
         async fn an_operand_reads_the_constant_directly() {
             let f = function("int f(int n) { return n - 1; }", "f").await;
-            assert_eq!(f.instructions, vec![ISub(l(1), k(0), l(0)), Ret]);
+            assert_eq!(f.instructions, vec![Sub(l(1), k(0), l(0)), Ret]);
             assert_eq!(f.constants, vec![LpcConstant::Int(1)]);
         }
 
@@ -4673,7 +4570,7 @@ mod tests {
             let f = function("int f(int n) { return n + 5 + 5; }", "f").await;
             assert_eq!(
                 f.instructions,
-                vec![IAdd(l(1), k(0), l(2)), IAdd(l(2), k(0), l(0)), Ret]
+                vec![Add(l(1), k(0), l(2)), Add(l(2), k(0), l(0)), Ret]
             );
             assert_eq!(f.constants, vec![LpcConstant::Int(5)]);
         }
@@ -4684,9 +4581,9 @@ mod tests {
             assert_eq!(
                 f.instructions,
                 vec![
-                    IAdd(l(1), k(0), l(2)),
-                    IAdd(l(2), k(1), l(3)),
-                    IAdd(l(3), k(0), l(0)),
+                    Add(l(1), k(0), l(2)),
+                    Add(l(2), k(1), l(3)),
+                    Add(l(3), k(0), l(0)),
                     Ret,
                 ]
             );
@@ -4740,7 +4637,7 @@ mod tests {
         #[tokio::test]
         async fn a_negation_multiplies_by_a_pooled_minus_one() {
             let f = function("int f(int x) { return -x; }", "f").await;
-            assert_eq!(f.instructions, vec![MMul(l(1), k(0), l(0)), Ret]);
+            assert_eq!(f.instructions, vec![Mul(l(1), k(0), l(0)), Ret]);
             assert_eq!(f.constants, vec![LpcConstant::Int(-1)]);
         }
 
@@ -5060,7 +4957,7 @@ mod tests {
             let mut walker = walk_prog("int c;\nvoid create() { c = c + 1; }").await;
 
             let expected = vec![
-                IAdd(
+                Add(
                     RegisterVariant::Global(Register(0)),
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Global(Register(0)),
@@ -5089,7 +4986,7 @@ mod tests {
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(2)),
                 ),
-                IAdd(
+                Add(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(0)),
@@ -5127,7 +5024,7 @@ mod tests {
                 // g clobbers r0 before the add, so this copy must stay.
                 Copy(Register(0).as_local(), Register(1).as_local()),
                 Call(ustr("g__i____pb__")),
-                IAdd(
+                Add(
                     Register(1).as_local(),
                     Register(0).as_local(),
                     Register(0).as_global(),
@@ -5612,7 +5509,7 @@ mod tests {
             async fn populates_instructions() {
                 let mut walker = setup(UnaryOperation::Negate, false).await;
 
-                let expected = vec![MMul(
+                let expected = vec![Mul(
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(1)),

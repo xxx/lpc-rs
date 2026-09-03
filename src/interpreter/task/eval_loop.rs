@@ -237,17 +237,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::Lte(r1, r2, r3) => {
                 self.binary_boolean_operation(r1, r2, r3, |x, y, _| x <= y)?;
             }
-            Instruction::IAdd(r1, r2, r3) | Instruction::MAdd(r1, r2, r3) => {
+            Instruction::Add(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, txn| x.add(y, txn))?;
             }
             Instruction::MapConst(location) => {
                 let result = self.handle_mapconst(location);
                 consumed(&mut self.array_items, result)?;
             }
-            Instruction::IMul(r1, r2, r3) | Instruction::MMul(r1, r2, r3) => {
+            Instruction::Mul(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, _| x.mul(y))?;
             }
-            Instruction::ISub(r1, r2, r3) | Instruction::MSub(r1, r2, r3) => {
+            Instruction::Sub(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, |x, y, txn| x.sub(y, txn))?;
             }
             Instruction::NewUpvalue(location) => {

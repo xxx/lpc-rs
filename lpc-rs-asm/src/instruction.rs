@@ -17,6 +17,9 @@ pub enum Instruction {
     /// Create an array with values from the vector
     AConst(RegisterVariant),
 
+    /// x.2 = x.0 + x.1
+    Add(RegisterVariant, RegisterVariant, RegisterVariant),
+
     /// bitwise-and combination.
     /// x.2 = x.0 & x.1
     And(RegisterVariant, RegisterVariant, RegisterVariant),
@@ -76,9 +79,6 @@ pub enum Instruction {
     /// x.2 = x.0 >= x.1
     Gte(RegisterVariant, RegisterVariant, RegisterVariant),
 
-    /// Integer addition - x.2 = x.0 + x.1
-    IAdd(RegisterVariant, RegisterVariant, RegisterVariant),
-
     /// Integer division - x.2 = x.0 / x.1
     IDiv(RegisterVariant, RegisterVariant, RegisterVariant),
 
@@ -87,12 +87,6 @@ pub enum Instruction {
 
     /// Increment the value in x.0 by 1
     Inc(RegisterVariant),
-
-    /// Integer division - x.2 = x.0 * x.1
-    IMul(RegisterVariant, RegisterVariant, RegisterVariant),
-
-    /// Integer division - x.2 = x.0 - x.1
-    ISub(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Unconditional jump
     Jmp(Address),
@@ -122,17 +116,8 @@ pub enum Instruction {
     /// Create a mapping from the keys and values in the hashmap
     MapConst(RegisterVariant),
 
-    /// Addition where at least one side is a reference type, so check at
-    /// runtime.
-    MAdd(RegisterVariant, RegisterVariant, RegisterVariant),
-
-    /// Multiplication where at least one side is a reference type, so check at
-    /// runtime.
-    MMul(RegisterVariant, RegisterVariant, RegisterVariant),
-
-    /// Subtraction where at least one side is a reference type, so check at
-    /// runtime.
-    MSub(RegisterVariant, RegisterVariant, RegisterVariant),
+    /// x.2 = x.0 * x.1
+    Mul(RegisterVariant, RegisterVariant, RegisterVariant),
 
     /// Check if x.0 is equal to 0
     Not(RegisterVariant, RegisterVariant),
@@ -211,6 +196,9 @@ pub enum Instruction {
     /// x.1[x.2] = x.0
     Store(RegisterVariant, RegisterVariant, RegisterVariant),
 
+    /// x.2 = x.0 - x.1
+    Sub(RegisterVariant, RegisterVariant, RegisterVariant),
+
     /// bitwise ^ comparison.
     /// x.2 = x.0 ^ x.1
     Xor(RegisterVariant, RegisterVariant, RegisterVariant),
@@ -234,24 +222,21 @@ impl Instruction {
             | Self::Not(_, d)
             | Self::Range(_, _, _, d)
             | Self::Sizeof(_, d) => Some(d),
-            Self::And(_, _, d)
+            Self::Add(_, _, d)
+            | Self::And(_, _, d)
             | Self::EqEq(_, _, d)
             | Self::Gt(_, _, d)
             | Self::Gte(_, _, d)
-            | Self::IAdd(_, _, d)
             | Self::IDiv(_, _, d)
             | Self::IMod(_, _, d)
-            | Self::IMul(_, _, d)
-            | Self::ISub(_, _, d)
             | Self::Lt(_, _, d)
             | Self::Lte(_, _, d)
-            | Self::MAdd(_, _, d)
-            | Self::MMul(_, _, d)
-            | Self::MSub(_, _, d)
+            | Self::Mul(_, _, d)
             | Self::NotEq(_, _, d)
             | Self::Or(_, _, d)
             | Self::Shl(_, _, d)
             | Self::Shr(_, _, d)
+            | Self::Sub(_, _, d)
             | Self::Xor(_, _, d) => Some(d),
             Self::Call(_)
             | Self::CallEfun(_)
@@ -284,6 +269,7 @@ impl Instruction {
     {
         match self {
             Self::AConst(a0) => Self::AConst(f(a0)),
+            Self::Add(a0, a1, a2) => Self::Add(f(a0), f(a1), f(a2)),
             Self::And(a0, a1, a2) => Self::And(f(a0), f(a1), f(a2)),
             Self::BitwiseNot(a0, a1) => Self::BitwiseNot(f(a0), f(a1)),
             Self::Call(a0) => Self::Call(a0),
@@ -312,12 +298,9 @@ impl Instruction {
             },
             Self::Gt(a0, a1, a2) => Self::Gt(f(a0), f(a1), f(a2)),
             Self::Gte(a0, a1, a2) => Self::Gte(f(a0), f(a1), f(a2)),
-            Self::IAdd(a0, a1, a2) => Self::IAdd(f(a0), f(a1), f(a2)),
             Self::IDiv(a0, a1, a2) => Self::IDiv(f(a0), f(a1), f(a2)),
             Self::IMod(a0, a1, a2) => Self::IMod(f(a0), f(a1), f(a2)),
             Self::Inc(a0) => Self::Inc(f(a0)),
-            Self::IMul(a0, a1, a2) => Self::IMul(f(a0), f(a1), f(a2)),
-            Self::ISub(a0, a1, a2) => Self::ISub(f(a0), f(a1), f(a2)),
             Self::Jmp(a0) => Self::Jmp(a0),
             Self::Jnz(a0, a1) => Self::Jnz(f(a0), a1),
             Self::Jz(a0, a1) => Self::Jz(f(a0), a1),
@@ -326,9 +309,7 @@ impl Instruction {
             Self::Lt(a0, a1, a2) => Self::Lt(f(a0), f(a1), f(a2)),
             Self::Lte(a0, a1, a2) => Self::Lte(f(a0), f(a1), f(a2)),
             Self::MapConst(a0) => Self::MapConst(f(a0)),
-            Self::MAdd(a0, a1, a2) => Self::MAdd(f(a0), f(a1), f(a2)),
-            Self::MMul(a0, a1, a2) => Self::MMul(f(a0), f(a1), f(a2)),
-            Self::MSub(a0, a1, a2) => Self::MSub(f(a0), f(a1), f(a2)),
+            Self::Mul(a0, a1, a2) => Self::Mul(f(a0), f(a1), f(a2)),
             Self::Not(a0, a1) => Self::Not(f(a0), f(a1)),
             Self::NewUpvalue(a0) => Self::NewUpvalue(f(a0)),
             Self::NotEq(a0, a1, a2) => Self::NotEq(f(a0), f(a1), f(a2)),
@@ -345,6 +326,7 @@ impl Instruction {
             Self::Shr(a0, a1, a2) => Self::Shr(f(a0), f(a1), f(a2)),
             Self::Sizeof(a0, a1) => Self::Sizeof(f(a0), f(a1)),
             Self::Store(a0, a1, a2) => Self::Store(f(a0), f(a1), f(a2)),
+            Self::Sub(a0, a1, a2) => Self::Sub(f(a0), f(a1), f(a2)),
             Self::Xor(a0, a1, a2) => Self::Xor(f(a0), f(a1), f(a2)),
         }
     }
@@ -377,11 +359,12 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 50;
+    pub const COUNT: usize = 47;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
         "aconst",
+        "add",
         "and",
         "bitwise_not",
         "call",
@@ -397,12 +380,9 @@ impl Instruction {
         "function_ptr_const",
         "gt",
         "gte",
-        "i_add",
         "i_div",
         "i_mod",
         "inc",
-        "i_mul",
-        "i_sub",
         "jmp",
         "jnz",
         "jz",
@@ -411,9 +391,7 @@ impl Instruction {
         "lt",
         "lte",
         "map_const",
-        "m_add",
-        "m_mul",
-        "m_sub",
+        "mul",
         "not",
         "not_eq",
         "new_upvalue",
@@ -430,6 +408,7 @@ impl Instruction {
         "shr",
         "sizeof",
         "store",
+        "sub",
         "xor",
     ];
 
@@ -437,55 +416,52 @@ impl Instruction {
     pub const fn index(&self) -> u8 {
         match self {
             Self::AConst(..) => 0,
-            Self::And(..) => 1,
-            Self::BitwiseNot(..) => 2,
-            Self::Call(..) => 3,
-            Self::CallEfun(..) => 4,
-            Self::CallSimulEfun(..) => 5,
-            Self::CallFp(..) => 6,
-            Self::CallOther(..) => 7,
-            Self::CatchEnd => 8,
-            Self::CatchStart(..) => 9,
-            Self::Copy(..) => 10,
-            Self::Dec(..) => 11,
-            Self::EqEq(..) => 12,
-            Self::FunctionPtrConst { .. } => 13,
-            Self::Gt(..) => 14,
-            Self::Gte(..) => 15,
-            Self::IAdd(..) => 16,
+            Self::Add(..) => 1,
+            Self::And(..) => 2,
+            Self::BitwiseNot(..) => 3,
+            Self::Call(..) => 4,
+            Self::CallEfun(..) => 5,
+            Self::CallSimulEfun(..) => 6,
+            Self::CallFp(..) => 7,
+            Self::CallOther(..) => 8,
+            Self::CatchEnd => 9,
+            Self::CatchStart(..) => 10,
+            Self::Copy(..) => 11,
+            Self::Dec(..) => 12,
+            Self::EqEq(..) => 13,
+            Self::FunctionPtrConst { .. } => 14,
+            Self::Gt(..) => 15,
+            Self::Gte(..) => 16,
             Self::IDiv(..) => 17,
             Self::IMod(..) => 18,
             Self::Inc(..) => 19,
-            Self::IMul(..) => 20,
-            Self::ISub(..) => 21,
-            Self::Jmp(..) => 22,
-            Self::Jnz(..) => 23,
-            Self::Jz(..) => 24,
-            Self::Load(..) => 25,
-            Self::LoadMappingKey(..) => 26,
-            Self::Lt(..) => 27,
-            Self::Lte(..) => 28,
-            Self::MapConst(..) => 29,
-            Self::MAdd(..) => 30,
-            Self::MMul(..) => 31,
-            Self::MSub(..) => 32,
-            Self::Not(..) => 33,
-            Self::NotEq(..) => 34,
-            Self::NewUpvalue(..) => 35,
-            Self::Or(..) => 36,
-            Self::PopulateArgv(..) => 37,
-            Self::PopulateDefaults => 38,
-            Self::PushArg(..) => 39,
-            Self::PushArrayItem(..) => 40,
-            Self::PushPartialArg(..) => 41,
-            Self::PushRef(..) => 42,
-            Self::Range(..) => 43,
-            Self::Ret => 44,
-            Self::Shl(..) => 45,
-            Self::Shr(..) => 46,
-            Self::Sizeof(..) => 47,
-            Self::Store(..) => 48,
-            Self::Xor(..) => 49,
+            Self::Jmp(..) => 20,
+            Self::Jnz(..) => 21,
+            Self::Jz(..) => 22,
+            Self::Load(..) => 23,
+            Self::LoadMappingKey(..) => 24,
+            Self::Lt(..) => 25,
+            Self::Lte(..) => 26,
+            Self::MapConst(..) => 27,
+            Self::Mul(..) => 28,
+            Self::Not(..) => 29,
+            Self::NotEq(..) => 30,
+            Self::NewUpvalue(..) => 31,
+            Self::Or(..) => 32,
+            Self::PopulateArgv(..) => 33,
+            Self::PopulateDefaults => 34,
+            Self::PushArg(..) => 35,
+            Self::PushArrayItem(..) => 36,
+            Self::PushPartialArg(..) => 37,
+            Self::PushRef(..) => 38,
+            Self::Range(..) => 39,
+            Self::Ret => 40,
+            Self::Shl(..) => 41,
+            Self::Shr(..) => 42,
+            Self::Sizeof(..) => 43,
+            Self::Store(..) => 44,
+            Self::Sub(..) => 45,
+            Self::Xor(..) => 46,
         }
     }
 
@@ -500,6 +476,9 @@ impl Display for Instruction {
         match self {
             Instruction::AConst(r1) => {
                 write!(f, "{} {r1}", self.mnemonic())
+            }
+            Instruction::Add(r1, r2, r3) => {
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::And(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
@@ -548,9 +527,6 @@ impl Display for Instruction {
             Instruction::Gte(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
-            Instruction::IAdd(r1, r2, r3) => {
-                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
-            }
             Instruction::IDiv(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
@@ -559,12 +535,6 @@ impl Display for Instruction {
             }
             Instruction::Inc(r) => {
                 write!(f, "{} {r}", self.mnemonic())
-            }
-            Instruction::IMul(r1, r2, r3) => {
-                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
-            }
-            Instruction::ISub(r1, r2, r3) => {
-                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Jmp(address) => {
                 write!(f, "{} {address}", self.mnemonic())
@@ -590,13 +560,7 @@ impl Display for Instruction {
             Instruction::MapConst(r) => {
                 write!(f, "{} {r}", self.mnemonic())
             }
-            Instruction::MAdd(r1, r2, r3) => {
-                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
-            }
-            Instruction::MMul(r1, r2, r3) => {
-                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
-            }
-            Instruction::MSub(r1, r2, r3) => {
+            Instruction::Mul(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::NewUpvalue(r) => {
@@ -640,6 +604,9 @@ impl Display for Instruction {
                 write!(f, "{} {r1}, {r2}", self.mnemonic())
             }
             Instruction::Store(r1, r2, r3) => {
+                write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
+            }
+            Instruction::Sub(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
             }
             Instruction::Xor(r1, r2, r3) => {
@@ -692,6 +659,7 @@ mod tests {
         use Instruction::*;
         vec![
             AConst(r()),
+            Add(r(), r(), r()),
             And(r(), r(), r()),
             BitwiseNot(r(), r()),
             Call(ustr("f")),
@@ -711,12 +679,9 @@ mod tests {
             },
             Gt(r(), r(), r()),
             Gte(r(), r(), r()),
-            IAdd(r(), r(), r()),
             IDiv(r(), r(), r()),
             IMod(r(), r(), r()),
             Inc(r()),
-            IMul(r(), r(), r()),
-            ISub(r(), r(), r()),
             Jmp(Address(0)),
             Jnz(r(), Address(0)),
             Jz(r(), Address(0)),
@@ -725,9 +690,7 @@ mod tests {
             Lt(r(), r(), r()),
             Lte(r(), r(), r()),
             MapConst(r()),
-            MAdd(r(), r(), r()),
-            MMul(r(), r(), r()),
-            MSub(r(), r(), r()),
+            Mul(r(), r(), r()),
             Not(r(), r()),
             NotEq(r(), r(), r()),
             NewUpvalue(r()),
@@ -744,6 +707,7 @@ mod tests {
             Shr(r(), r(), r()),
             Sizeof(r(), r()),
             Store(r(), r(), r()),
+            Sub(r(), r(), r()),
             Xor(r(), r(), r()),
         ]
     }
@@ -776,7 +740,7 @@ mod tests {
         let d = RegisterVariant::Local(Register(7));
 
         assert_eq!(AConst(d).dest_register(), Some(d));
-        assert_eq!(IAdd(r(), r(), d).dest_register(), Some(d));
+        assert_eq!(Add(r(), r(), d).dest_register(), Some(d));
         assert_eq!(BitwiseNot(r(), d).dest_register(), Some(d));
         assert_eq!(Copy(r(), d).dest_register(), Some(d));
         assert_eq!(Load(r(), r(), d).dest_register(), Some(d));
