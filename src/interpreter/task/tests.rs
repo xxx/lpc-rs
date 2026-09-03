@@ -776,6 +776,41 @@ mod test_instructions {
         }
     }
 
+    mod test_local_declaration {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_loop_body_local_reads_zero_each_iteration() {
+            let code = indoc! { r##"
+                    int total;
+                    void create() {
+                        int i;
+                        for (i = 0; i < 3; i++) { int n; n += i; total += n; }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("total", BareVal::Int(3))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_local_declared_deeper_inside_a_loop_reads_zero_each_iteration() {
+            let code = indoc! { r##"
+                    int total;
+                    void create() {
+                        int i = 0;
+                        while (i < 3) {
+                            switch (i) {
+                                default: { int n; n += 10; total += n; }
+                            }
+                            i++;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(code, &[("total", BareVal::Int(30))]).await;
+        }
+    }
+
     mod test_switch_shapes {
         use super::*;
 
