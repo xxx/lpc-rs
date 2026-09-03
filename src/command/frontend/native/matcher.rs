@@ -4,11 +4,12 @@
 use std::sync::Arc;
 
 use lpc_rs_errors::{Result, lpc_bug};
+use lpc_rs_utils::lpc_string::LpcString;
 
 use super::{Capture, CaptureKind, Compiled};
 use crate::{
     command::resolve::{LpcVocabulary, Resolved, Resolver, Vocabulary},
-    interpreter::{lpc_array::LpcArray, lpc_ref::LpcRef, lpc_string::LpcString},
+    interpreter::{lpc_array::LpcArray, lpc_ref::LpcRef},
 };
 
 /// One capture, valued: its text, its int, or what the resolver found.

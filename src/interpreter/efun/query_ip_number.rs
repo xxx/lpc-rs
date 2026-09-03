@@ -1,9 +1,7 @@
 use lpc_rs_errors::Result;
+use lpc_rs_utils::lpc_string::LpcString;
 
-use crate::interpreter::{
-    efun::{self, efun_context::EfunContext},
-    lpc_string::LpcString,
-};
+use crate::interpreter::efun::{self, efun_context::EfunContext};
 
 /// `query_ip_number`, an efun returning the address of an object's
 /// connection as text; 0 without one.

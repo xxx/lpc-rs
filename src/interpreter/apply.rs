@@ -7,6 +7,7 @@ use indexmap::IndexMap;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
+use lpc_rs_utils::lpc_string::LpcString;
 
 use crate::{
     interpreter::{
@@ -14,7 +15,6 @@ use crate::{
         function_type::function_ptr::FunctionPtr,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
-        lpc_string::LpcString,
         process::Process,
         stm::Effect,
         task::apply_function::apply_function,

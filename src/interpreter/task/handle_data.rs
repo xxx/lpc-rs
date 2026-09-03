@@ -3,6 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use lpc_rs_core::{
     LpcIntInner, function_receiver::FunctionReceiver, lpc_path::LpcPath, register::RegisterVariant,
 };
+use lpc_rs_utils::lpc_string::LpcString;
 use thin_vec::ThinVec;
 use tracing::{instrument, trace};
 use ustr::Ustr;
@@ -12,7 +13,6 @@ use crate::interpreter::{
     lpc_array::LpcArray,
     lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL},
-    lpc_string::LpcString,
     stm::MergeOp,
     task::{Task, get_location, set_location},
     task_context::ObjectLookup,

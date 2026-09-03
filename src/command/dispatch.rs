@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use lpc_rs_errors::Result;
+use lpc_rs_utils::lpc_string::LpcString;
 
 use crate::{
     command::trial,
@@ -13,7 +14,6 @@ use crate::{
         function_type::function_ptr::FunctionPtr,
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
-        lpc_string::LpcString,
         process::Process,
         task_context::TaskContext,
     },
@@ -193,9 +193,10 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::{CommittedReader, lpc_ref::LpcRef, lpc_string::LpcString, vm::Vm},
+        interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
         test_support::test_config,
     };
+    use lpc_rs_utils::lpc_string::LpcString;
 
     fn s(text: &str) -> LpcRef {
         LpcString::from(text).into()

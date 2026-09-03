@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::{LpcError, lpc_error};
+use lpc_rs_utils::lpc_string::LpcString;
 use tracing::{debug, instrument};
 
 use crate::{
     interpreter::{
         CONNECT, LOGON,
         lpc_ref::LpcRef,
-        lpc_string::LpcString,
         process::Process,
         task::{
             apply_function::{apply_function_by_name, report_runtime_error},

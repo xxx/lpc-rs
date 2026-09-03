@@ -1,6 +1,7 @@
 use lpc_rs_errors::Result;
+use lpc_rs_utils::lpc_string::LpcString;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_string::LpcString};
+use crate::interpreter::efun::efun_context::EfunContext;
 
 /// `query_command`, an efun returning the whole line of the command in
 /// progress (after `process_input`); 0 outside a command.

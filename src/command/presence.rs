@@ -134,6 +134,7 @@ pub(crate) async fn fire_init(
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
+    use lpc_rs_utils::lpc_string::LpcString;
     use tokio::{sync::Barrier, task::JoinSet};
 
     use super::*;
@@ -142,7 +143,6 @@ mod tests {
         interpreter::{
             CommittedReader,
             lpc_ref::LpcRef,
-            lpc_string::LpcString,
             task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
             vm::Vm,
         },

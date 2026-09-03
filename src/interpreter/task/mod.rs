@@ -30,6 +30,8 @@ use thin_vec::{ThinVec, thin_vec};
 use tokio::time::timeout;
 use tracing::{error, instrument, warn};
 
+use lpc_rs_utils::lpc_string::LpcString;
+
 #[cfg(test)]
 use crate::interpreter::stm::RetryStats;
 use crate::interpreter::{
@@ -38,7 +40,6 @@ use crate::interpreter::{
     lpc_int::LpcInt,
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
-    lpc_string::LpcString,
     process::Process,
     stm::{
         AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, TxnHandle, VarId,

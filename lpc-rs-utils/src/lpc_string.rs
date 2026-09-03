@@ -7,8 +7,8 @@ use std::{
     path::Path,
 };
 
+use crate::string::MAX_STRING_LENGTH;
 use lpc_rs_errors::{Result, lpc_error};
-use lpc_rs_utils::string::MAX_STRING_LENGTH;
 use ustr::Ustr;
 
 /// An enum to differentiate between statically and dynamically created strings.

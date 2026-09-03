@@ -4,6 +4,7 @@ use itertools::Itertools;
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::{LpcIntInner, RegisterSize};
 use lpc_rs_errors::lpc_error;
+use lpc_rs_utils::lpc_string::LpcString;
 use tracing::{error, instrument, trace, warn};
 
 use crate::{
@@ -13,7 +14,6 @@ use crate::{
         lpc_int::LpcInt,
         lpc_mapping::LpcMapping,
         lpc_ref::{LpcRef, NULL},
-        lpc_string::LpcString,
         task::{Arg, CatchPoint, Task, bump_in_location, get_location, set_location},
     },
     pop_frame,
