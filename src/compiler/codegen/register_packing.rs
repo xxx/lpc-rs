@@ -1,8 +1,6 @@
 //! Register packing: the frame layout `finalize_function` settles after the
 //! peephole, from the liveness of the emitted instructions.
 
-use std::cell::RefCell;
-
 use bit_set::BitSet;
 use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::{
@@ -24,7 +22,7 @@ pub fn pack(func: &mut ProgramFunction) {
         .instructions
         .iter()
         .enumerate()
-        .map(|(at, instruction)| Flow::of(instruction, at, num_args, &arity, len))
+        .map(|(at, instruction)| Flow::of(func, instruction, at, num_args, &arity, len))
         .collect();
 
     let mut named: Vec<usize> = func
@@ -99,10 +97,7 @@ pub fn pack(func: &mut ProgramFunction) {
         }
         other => other,
     };
-    func.instructions = std::mem::take(&mut func.instructions)
-        .into_iter()
-        .map(|instruction| instruction.map_registers(remap))
-        .collect();
+    func.rename_registers(remap);
     for symbol in &mut func.local_variables {
         if let Some(RegisterVariant::Local(old)) = symbol.location {
             symbol.location = Some(remap(RegisterVariant::Local(old)));
@@ -149,13 +144,14 @@ struct Flow {
 
 impl Flow {
     fn of(
+        func: &ProgramFunction,
         instruction: &Instruction,
         at: usize,
         num_args: usize,
         arity: &FunctionArity,
         len: usize,
     ) -> Self {
-        let mut operands = local_operands(instruction);
+        let mut operands = local_operands(func, instruction);
         let def = match *instruction {
             // Bumped in place, so the operand stays a read as well.
             Instruction::Inc(register) | Instruction::Dec(register) => local_index(register),
@@ -200,16 +196,13 @@ fn successors(
     next.into_iter().filter(|&address| address < len).collect()
 }
 
-/// Every Local operand of `instruction`, dests included, in operand order.
-fn local_operands(instruction: &Instruction) -> Vec<usize> {
-    let seen = RefCell::new(Vec::new());
-    let _ = (*instruction).map_registers(|register| {
-        if let Some(index) = local_index(register) {
-            seen.borrow_mut().push(index);
-        }
-        register
-    });
-    seen.into_inner()
+/// Every Local operand of `instruction`, dests and its argument list
+/// included, in operand order.
+fn local_operands(func: &ProgramFunction, instruction: &Instruction) -> Vec<usize> {
+    func.operand_registers(instruction)
+        .into_iter()
+        .filter_map(local_index)
+        .collect()
 }
 
 /// Drop the dest's own occurrence from `operands`, leaving any read of the
@@ -235,7 +228,7 @@ mod tests {
 
     use lpc_rs_asm::{
         address::Address,
-        instruction::{Comparison, Instruction::*},
+        instruction::{Arg, ArgList, Comparison, Instruction::*},
     };
     use lpc_rs_core::{
         lpc_path::LpcPath,
@@ -274,6 +267,11 @@ mod tests {
         func_with(FunctionArity::default(), &[], instructions)
     }
 
+    fn with_lists(mut func: ProgramFunction, lists: Vec<Vec<Arg>>) -> ProgramFunction {
+        func.arg_lists = lists;
+        func
+    }
+
     fn local(i: u16) -> RegisterVariant {
         RegisterVariant::Local(Register(i))
     }
@@ -283,28 +281,69 @@ mod tests {
     }
 
     #[test]
+    fn temps_read_through_one_list_are_live_together_at_the_call() {
+        let mut func = with_lists(
+            temps_only(vec![
+                Copy(constant(0), local(1)),
+                Copy(constant(1), local(2)),
+                CallEfun(0, ArgList(0)),
+                Ret,
+            ]),
+            vec![vec![Arg::Value(local(1)), Arg::Value(local(2))]],
+        );
+        pack(&mut func);
+        assert_eq!(
+            func.arg_lists,
+            vec![vec![Arg::Value(local(1)), Arg::Value(local(2))]]
+        );
+    }
+
+    #[test]
+    fn a_list_reads_the_packed_slot() {
+        let mut func = with_lists(
+            temps_only(vec![
+                Copy(constant(0), local(5)),
+                CallEfun(0, ArgList(0)),
+                Ret,
+            ]),
+            vec![vec![Arg::Value(local(5))]],
+        );
+        pack(&mut func);
+        assert_eq!(
+            (func.instructions, func.arg_lists),
+            (
+                vec![Copy(constant(0), local(1)), CallEfun(0, ArgList(0)), Ret],
+                vec![vec![Arg::Value(local(1))]]
+            )
+        );
+    }
+
+    #[test]
     fn a_temp_dead_before_another_is_defined_shares_its_slot() {
-        let mut func = temps_only(vec![
-            Copy(constant(0), local(1)),
-            PushArg(local(1)),
-            CallEfun(0),
-            Copy(constant(1), local(2)),
-            PushArg(local(2)),
-            CallEfun(0),
-            Ret,
-        ]);
+        let mut func = with_lists(
+            temps_only(vec![
+                Copy(constant(0), local(1)),
+                CallEfun(0, ArgList(0)),
+                Copy(constant(1), local(2)),
+                CallEfun(0, ArgList(1)),
+                Ret,
+            ]),
+            vec![vec![Arg::Value(local(1))], vec![Arg::Value(local(2))]],
+        );
         pack(&mut func);
         assert_eq!(
             func.instructions,
             vec![
                 Copy(constant(0), local(1)),
-                PushArg(local(1)),
-                CallEfun(0),
+                CallEfun(0, ArgList(0)),
                 Copy(constant(1), local(1)),
-                PushArg(local(1)),
-                CallEfun(0),
-                Ret,
+                CallEfun(0, ArgList(1)),
+                Ret
             ]
+        );
+        assert_eq!(
+            func.arg_lists,
+            vec![vec![Arg::Value(local(1))], vec![Arg::Value(local(1))]]
         );
         assert_eq!(func.num_locals, 1);
     }
@@ -326,18 +365,19 @@ mod tests {
 
     #[test]
     fn a_named_local_keeps_its_slot_for_the_whole_function() {
-        let mut func = func_with(
-            FunctionArity::default(),
-            &[1],
-            vec![
-                Copy(constant(0), local(1)),
-                PushArg(local(1)),
-                CallEfun(0),
-                Copy(constant(1), local(2)),
-                PushArg(local(2)),
-                CallEfun(0),
-                Ret,
-            ],
+        let mut func = with_lists(
+            func_with(
+                FunctionArity::default(),
+                &[1],
+                vec![
+                    Copy(constant(0), local(1)),
+                    CallEfun(0, ArgList(0)),
+                    Copy(constant(1), local(2)),
+                    CallEfun(0, ArgList(1)),
+                    Ret,
+                ],
+            ),
+            vec![vec![Arg::Value(local(1))], vec![Arg::Value(local(2))]],
         );
         let before = func.instructions.clone();
         pack(&mut func);
@@ -347,20 +387,24 @@ mod tests {
 
     #[test]
     fn named_locals_come_first_dense_in_declaration_order() {
-        let mut func = func_with(
-            FunctionArity::default(),
-            &[3],
+        let mut func = with_lists(
+            func_with(
+                FunctionArity::default(),
+                &[3],
+                vec![
+                    Copy(constant(0), local(1)),
+                    CallEfun(0, ArgList(0)),
+                    Copy(constant(1), local(2)),
+                    CallEfun(0, ArgList(1)),
+                    Copy(constant(2), local(3)),
+                    CallEfun(0, ArgList(2)),
+                    Ret,
+                ],
+            ),
             vec![
-                Copy(constant(0), local(1)),
-                PushArg(local(1)),
-                CallEfun(0),
-                Copy(constant(1), local(2)),
-                PushArg(local(2)),
-                CallEfun(0),
-                Copy(constant(2), local(3)),
-                PushArg(local(3)),
-                CallEfun(0),
-                Ret,
+                vec![Arg::Value(local(1))],
+                vec![Arg::Value(local(2))],
+                vec![Arg::Value(local(3))],
             ],
         );
         pack(&mut func);
@@ -368,15 +412,20 @@ mod tests {
             func.instructions,
             vec![
                 Copy(constant(0), local(2)),
-                PushArg(local(2)),
-                CallEfun(0),
+                CallEfun(0, ArgList(0)),
                 Copy(constant(1), local(2)),
-                PushArg(local(2)),
-                CallEfun(0),
+                CallEfun(0, ArgList(1)),
                 Copy(constant(2), local(1)),
-                PushArg(local(1)),
-                CallEfun(0),
-                Ret,
+                CallEfun(0, ArgList(2)),
+                Ret
+            ]
+        );
+        assert_eq!(
+            func.arg_lists,
+            vec![
+                vec![Arg::Value(local(2))],
+                vec![Arg::Value(local(2))],
+                vec![Arg::Value(local(1))]
             ]
         );
         assert_eq!(func.local_variables[0].location, Some(local(1)));
@@ -385,16 +434,17 @@ mod tests {
 
     #[test]
     fn a_back_edge_keeps_a_temp_live_until_its_next_read() {
-        let mut func = temps_only(vec![
-            Copy(constant(0), local(1)),
-            PushArg(local(1)),
-            CallEfun(0),
-            Copy(constant(1), local(2)),
-            PushArg(local(2)),
-            CallEfun(0),
-            Jnz(local(0), Address(1)),
-            Ret,
-        ]);
+        let mut func = with_lists(
+            temps_only(vec![
+                Copy(constant(0), local(1)),
+                CallEfun(0, ArgList(0)),
+                Copy(constant(1), local(2)),
+                CallEfun(0, ArgList(1)),
+                Jnz(local(0), Address(1)),
+                Ret,
+            ]),
+            vec![vec![Arg::Value(local(1))], vec![Arg::Value(local(2))]],
+        );
         let before = func.instructions.clone();
         pack(&mut func);
         assert_eq!(func.instructions, before);
@@ -403,30 +453,32 @@ mod tests {
 
     #[test]
     fn a_loop_bodys_temps_share_a_slot_when_they_never_meet() {
-        let mut func = temps_only(vec![
-            Copy(constant(0), local(1)),
-            Copy(constant(1), local(2)),
-            PushArg(local(2)),
-            CallEfun(0),
-            Inc(local(1)),
-            Cmp(Comparison::Lt, local(1), constant(2), local(3)),
-            Jnz(local(3), Address(1)),
-            Ret,
-        ]);
+        let mut func = with_lists(
+            temps_only(vec![
+                Copy(constant(0), local(1)),
+                Copy(constant(1), local(2)),
+                CallEfun(0, ArgList(0)),
+                Inc(local(1)),
+                Cmp(Comparison::Lt, local(1), constant(2), local(3)),
+                Jnz(local(3), Address(1)),
+                Ret,
+            ]),
+            vec![vec![Arg::Value(local(2))]],
+        );
         pack(&mut func);
         assert_eq!(
             func.instructions,
             vec![
                 Copy(constant(0), local(1)),
                 Copy(constant(1), local(2)),
-                PushArg(local(2)),
-                CallEfun(0),
+                CallEfun(0, ArgList(0)),
                 Inc(local(1)),
                 Cmp(Comparison::Lt, local(1), constant(2), local(2)),
                 Jnz(local(2), Address(1)),
-                Ret,
+                Ret
             ]
         );
+        assert_eq!(func.arg_lists, vec![vec![Arg::Value(local(2))]]);
         assert_eq!(func.num_locals, 2);
     }
 
@@ -474,15 +526,17 @@ mod tests {
 
     #[test]
     fn a_catch_result_is_live_through_its_body() {
-        let mut func = temps_only(vec![
-            CatchStart(local(1), Address(5)),
-            Copy(constant(0), local(2)),
-            PushArg(local(2)),
-            CallEfun(0),
-            CatchEnd,
-            Copy(local(1), local(0)),
-            Ret,
-        ]);
+        let mut func = with_lists(
+            temps_only(vec![
+                CatchStart(local(1), Address(5)),
+                Copy(constant(0), local(2)),
+                CallEfun(0, ArgList(0)),
+                CatchEnd,
+                Copy(local(1), local(0)),
+                Ret,
+            ]),
+            vec![vec![Arg::Value(local(2))]],
+        );
         let before = func.instructions.clone();
         pack(&mut func);
         assert_eq!(func.instructions, before);
@@ -491,14 +545,16 @@ mod tests {
 
     #[test]
     fn an_inc_reads_its_register_before_writing_it() {
-        let mut func = temps_only(vec![
-            Copy(constant(0), local(1)),
-            PushArg(local(1)),
-            CallEfun(0),
-            Inc(local(2)),
-            Copy(local(2), local(0)),
-            Ret,
-        ]);
+        let mut func = with_lists(
+            temps_only(vec![
+                Copy(constant(0), local(1)),
+                CallEfun(0, ArgList(0)),
+                Inc(local(2)),
+                Copy(local(2), local(0)),
+                Ret,
+            ]),
+            vec![vec![Arg::Value(local(1))]],
+        );
         let before = func.instructions.clone();
         pack(&mut func);
         assert_eq!(func.instructions, before);
@@ -507,26 +563,28 @@ mod tests {
 
     #[test]
     fn populate_argv_writes_its_register() {
-        let mut func = temps_only(vec![
-            Copy(constant(0), local(1)),
-            PushArg(local(1)),
-            CallEfun(0),
-            PopulateArgv(local(2), 0, 0),
-            Copy(local(2), local(0)),
-            Ret,
-        ]);
+        let mut func = with_lists(
+            temps_only(vec![
+                Copy(constant(0), local(1)),
+                CallEfun(0, ArgList(0)),
+                PopulateArgv(local(2), 0, 0),
+                Copy(local(2), local(0)),
+                Ret,
+            ]),
+            vec![vec![Arg::Value(local(1))]],
+        );
         pack(&mut func);
         assert_eq!(
             func.instructions,
             vec![
                 Copy(constant(0), local(1)),
-                PushArg(local(1)),
-                CallEfun(0),
+                CallEfun(0, ArgList(0)),
                 PopulateArgv(local(1), 0, 0),
                 Copy(local(1), local(0)),
-                Ret,
+                Ret
             ]
         );
+        assert_eq!(func.arg_lists, vec![vec![Arg::Value(local(1))]]);
         assert_eq!(func.num_locals, 1);
     }
 

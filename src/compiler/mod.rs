@@ -774,9 +774,9 @@ mod tests {
             let calls: Vec<_> = f
                 .instructions
                 .iter()
-                .filter(|i| matches!(i, Instruction::Call(_) | Instruction::CallFp(_)))
+                .filter(|i| matches!(i, Instruction::Call(..) | Instruction::CallFp(..)))
                 .collect();
-            assert!(matches!(calls[..], [Instruction::Call(_)]), "{calls:?}");
+            assert!(matches!(calls[..], [Instruction::Call(..)]), "{calls:?}");
         }
 
         #[tokio::test]

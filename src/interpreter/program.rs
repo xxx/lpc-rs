@@ -148,9 +148,7 @@ impl Program {
         };
         for func in self.functions.values_mut() {
             let mut moved = ProgramFunction::clone(func);
-            for instruction in &mut moved.instructions {
-                *instruction = instruction.map_registers(relocate);
-            }
+            moved.rename_registers(relocate);
             *func = Arc::new(moved);
         }
         for symbol in self.global_variables.values_mut() {

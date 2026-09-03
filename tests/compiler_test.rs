@@ -12,7 +12,6 @@ use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::RegisterSize;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use lpc_rs_utils::lpc_string::LpcString;
-use ustr::ustr;
 
 use crate::support::{run_prog, test_config, test_config_builder};
 
@@ -245,13 +244,15 @@ async fn test_inherited_create_called_when_not_overridden() {
     let init = child_ctx.process().program.initializer.clone().unwrap();
 
     // parent2's create is inherited last, so it wins.
-    let expected = vec![
-        Instruction::Call(ustr("create__v__/create_parent2.c__pb__")),
-        Instruction::Ret,
-    ];
-
     let inst = &init.instructions;
-    assert_eq!(&inst[(inst.len() - 2)..], &expected);
+    assert!(
+        matches!(
+            inst[inst.len() - 2],
+            Instruction::Call(name, _) if name == "create__v__/create_parent2.c__pb__"
+        ),
+        "{inst:?}"
+    );
+    assert_eq!(inst[inst.len() - 1], Instruction::Ret);
 }
 
 #[tokio::test]

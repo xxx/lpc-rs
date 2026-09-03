@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use lpc_rs_asm::instruction::{Arg, ArgList};
 use lpc_rs_core::{RegisterSize, register::RegisterVariant};
 use lpc_rs_errors::Result;
 use tracing::instrument;
@@ -8,13 +9,17 @@ use crate::interpreter::{
     call_frame::CallFrame,
     function_type::function_ptr::ResolvedCall,
     lpc_ref::{LpcRef, NULL},
-    task::{Arg, Task, get_location},
+    task::{Task, get_location},
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(level = "debug", skip_all)]
     #[inline]
-    pub(crate) async fn handle_call_fp(&mut self, location: RegisterVariant) -> Result<()> {
+    pub(crate) async fn handle_call_fp(
+        &mut self,
+        location: RegisterVariant,
+        list: ArgList,
+    ) -> Result<()> {
         let ptr = {
             let lpc_ref = &*get_location(&self.stack, &self.context.txn, location)?;
             let LpcRef::Function(ptr) = lpc_ref else {
@@ -26,7 +31,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         };
 
         let passed = self
-            .args
+            .args_of(list)?
             .iter()
             .map(|arg| match *arg {
                 Arg::Value(loc) => {
