@@ -3085,22 +3085,60 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn a_ternary_with_differing_concrete_branches_is_mixed() {
+        async fn a_union_typed_ternary_is_rejected_by_a_type_missing_a_branch() {
             let code = r#"
                 void create() {
                     int c = 1;
                     string s = c ? 1 : "a";
-                    int i = c ? 1 : "a";
+                }"#;
+            assert_eq!(
+                messages(code).await,
+                vec![
+                    r#"mismatched types: `s` (string) = `c ? 1 : "a"` (int | string)"#.to_string()
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_union_typed_ternary_is_taken_by_mixed() {
+            let code = r#"
+                void create() {
+                    int c = 1;
+                    mixed m = c ? 1 : "a";
                 }"#;
             assert_eq!(messages(code).await, Vec::<String>::new());
         }
 
         #[tokio::test]
-        async fn a_float_or_int_ternary_is_accepted() {
+        async fn a_float_or_int_ternary_is_rejected_by_a_float() {
             let code = r#"
                 void create() {
                     int c = 1;
                     float f = c ? 1.5 : 1;
+                }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["mismatched types: `f` (float) = `c ? 1.5 : 1` (int | float)".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn previous_object_answers_either_form() {
+            let code = r#"
+                void create() {
+                    object ob = previous_object();
+                    object *all = previous_object(-1);
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_mixed_branch_absorbs_the_other() {
+            let code = r#"
+                void create() {
+                    int c = 1;
+                    mixed m = 1;
+                    int i = (c ? m : 1) + 1;
                 }"#;
             assert_eq!(messages(code).await, Vec::<String>::new());
         }

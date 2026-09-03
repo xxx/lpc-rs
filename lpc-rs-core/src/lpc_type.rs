@@ -27,10 +27,14 @@ impl LpcType {
     /// This method is intended to be called on the left hand side type for a
     /// binary expression, passing the right hand side.
     pub fn matches_type(self, other: LpcType) -> bool {
-        if let LpcType::Union(self_union) = self {
+        // A value that may be any member is only taken when every member is.
+        if let LpcType::Union(other_union) = other {
+            other_union
+                .types()
+                .into_iter()
+                .all(|member| self.matches_type(member))
+        } else if let LpcType::Union(self_union) = self {
             self_union.matches_type(other)
-        } else if let LpcType::Union(other_union) = other {
-            other_union.matches_type(self)
         } else if let LpcType::Mixed(array) = self {
             // "mixed *" only matches arrays (but the elements can be any type)
             // "mixed" is a literal wildcard.
@@ -203,6 +207,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_type_does_not_take_a_union_with_a_member_it_rejects() {
+        let found = LpcType::Int(false) | LpcType::String(false);
+
+        assert!(!LpcType::String(false).matches_type(found));
+    }
+
+    #[test]
+    fn mixed_takes_any_union() {
+        let found = LpcType::Int(false) | LpcType::String(false);
+
+        assert!(LpcType::Mixed(false).matches_type(found));
+    }
+
+    #[test]
+    fn a_union_takes_a_union_of_its_members() {
+        let expected = LpcType::Int(false) | LpcType::String(false) | LpcType::Object(false);
+        let found = LpcType::Int(false) | LpcType::String(false);
+
+        assert!(expected.matches_type(found));
+    }
+
+    #[test]
     fn test_bitor() {
         let lpc_u = LpcType::Int(false) | LpcType::Int(true) | LpcType::Void;
 
@@ -232,7 +258,8 @@ mod tests {
         assert!(!LpcType::Void.matches_type(LpcType::Int(true)));
 
         let union = LpcType::Void | LpcType::Int(false);
-        assert!(LpcType::Void.matches_type(union));
+        assert!(union.matches_type(LpcType::Void));
+        assert!(!LpcType::Void.matches_type(union));
 
         // Void only matches void.
         assert!(!LpcType::Mixed(false).matches_type(LpcType::Void));

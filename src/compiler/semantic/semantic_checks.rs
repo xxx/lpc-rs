@@ -469,8 +469,10 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
 
             Ok(if body_type == else_type {
                 body_type
-            } else {
+            } else if body_type == LpcType::Mixed(false) || else_type == LpcType::Mixed(false) {
                 LpcType::Mixed(false)
+            } else {
+                body_type | else_type
             })
         }
         ExpressionNode::Mapping(_) => Ok(LpcType::Mapping(false)),
@@ -2206,11 +2208,14 @@ mod tests {
             }
 
             #[test]
-            fn differing_branches_are_mixed() {
+            fn differing_branches_are_their_union() {
                 let node = ternary(ExpressionNode::from(1), ExpressionNode::from("a"));
                 let context = CompilationContext::default();
 
-                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(false));
+                assert_eq!(
+                    node_type(&node, &context).unwrap(),
+                    LpcType::Int(false) | LpcType::String(false)
+                );
             }
         }
 

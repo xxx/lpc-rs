@@ -174,6 +174,32 @@ impl LpcTypeUnion {
         }
     }
 
+    /// The member types, in declaration order.
+    pub fn types(self) -> Vec<LpcType> {
+        let members = [
+            (self.void(), LpcType::Void),
+            (self.int(), LpcType::Int(false)),
+            (self.int_array(), LpcType::Int(true)),
+            (self.string(), LpcType::String(false)),
+            (self.string_array(), LpcType::String(true)),
+            (self.float(), LpcType::Float(false)),
+            (self.float_array(), LpcType::Float(true)),
+            (self.object(), LpcType::Object(false)),
+            (self.object_array(), LpcType::Object(true)),
+            (self.mapping(), LpcType::Mapping(false)),
+            (self.mapping_array(), LpcType::Mapping(true)),
+            (self.mixed(), LpcType::Mixed(false)),
+            (self.mixed_array(), LpcType::Mixed(true)),
+            (self.function(), LpcType::Function(false)),
+            (self.function_array(), LpcType::Function(true)),
+        ];
+
+        members
+            .into_iter()
+            .filter_map(|(present, type_)| present.then_some(type_))
+            .collect()
+    }
+
     /// Is at least one of our types an array?
     pub fn is_array(self) -> bool {
         self.int_array()
@@ -188,67 +214,8 @@ impl LpcTypeUnion {
 
 impl Display for LpcTypeUnion {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut vec = vec![];
-
-        // facepalm.
-
-        if self.void() {
-            vec.push(LpcType::Void)
-        }
-
-        if self.int() {
-            vec.push(LpcType::Int(false));
-        }
-
-        if self.int_array() {
-            vec.push(LpcType::Int(true));
-        }
-
-        if self.string() {
-            vec.push(LpcType::String(false));
-        }
-
-        if self.string_array() {
-            vec.push(LpcType::String(true));
-        }
-
-        if self.float() {
-            vec.push(LpcType::Float(false));
-        }
-
-        if self.float_array() {
-            vec.push(LpcType::Float(true));
-        }
-
-        if self.object() {
-            vec.push(LpcType::Object(false));
-        }
-
-        if self.object_array() {
-            vec.push(LpcType::Object(true));
-        }
-
-        if self.mapping() {
-            vec.push(LpcType::Mapping(false));
-        }
-
-        if self.mapping_array() {
-            vec.push(LpcType::Mapping(true));
-        }
-
-        if self.mixed() {
-            vec.push(LpcType::Mixed(false));
-        }
-
-        if self.mixed_array() {
-            vec.push(LpcType::Mixed(true));
-        }
-
-        if self.function_array() {
-            vec.push(LpcType::Function(true));
-        }
-
-        let s = vec
+        let s = self
+            .types()
             .iter()
             .map(|i| format!("{i}"))
             .collect::<Vec<_>>()
@@ -347,6 +314,25 @@ impl BitOr for LpcTypeUnion {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_function_member_displays() {
+        let union = LpcType::Function(false) | LpcType::String(false);
+
+        assert_eq!(union.to_string(), "string | function");
+    }
+
+    #[test]
+    fn types_lists_every_member_in_display_order() {
+        let LpcType::Union(union) = LpcType::String(false) | LpcType::Int(false) else {
+            panic!("not a union");
+        };
+
+        assert_eq!(
+            union.types(),
+            vec![LpcType::Int(false), LpcType::String(false)]
+        );
+    }
 
     #[test]
     fn test_bitor() {
