@@ -335,6 +335,25 @@ impl LpcRef {
         }
     }
 
+    /// Drop this mapping's keys that name destructed objects, as `sizeof`,
+    /// `keys` and `values` answer without them.
+    pub(crate) fn drop_dead_keys(&self, txn: &TxnHandle) -> Result<()> {
+        // The COW closure holds the transaction lock, so liveness is checked before it.
+        let dead = self.with_mapping(txn, |m| {
+            m.keys()
+                .filter(|k| k.is_dead_object(txn))
+                .cloned()
+                .collect::<Vec<_>>()
+        })?;
+        if !dead.is_empty() {
+            self.with_mapping_cow(txn, |m| {
+                m.retain(|k, _| !dead.contains(k));
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+
     /// Copy-on-write this mapping cell, as in [`with_array_cow`].
     pub(crate) fn with_mapping_cow<F>(&self, txn: &TxnHandle, f: F) -> Result<()>
     where

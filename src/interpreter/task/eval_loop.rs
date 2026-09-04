@@ -502,19 +502,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                     LpcRef::Mapping(_) => {
                         let txn = &self.context.txn;
-                        // The COW closure holds the transaction lock, so liveness is checked before it.
-                        let dead = lpc_ref.with_mapping(txn, |m| {
-                            m.keys()
-                                .filter(|k| k.is_dead_object(txn))
-                                .cloned()
-                                .collect::<Vec<_>>()
-                        })?;
-                        if !dead.is_empty() {
-                            lpc_ref.with_mapping_cow(txn, |m| {
-                                m.retain(|k, _| !dead.contains(k));
-                                Ok(())
-                            })?;
-                        }
+                        lpc_ref.drop_dead_keys(txn)?;
                         let l = lpc_ref.with_mapping(txn, |m| m.len())?;
 
                         LpcRef::Int(LpcInt(l as LpcIntInner))
