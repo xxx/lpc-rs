@@ -5,6 +5,7 @@ pub(crate) mod add_action;
 pub(crate) mod add_rule;
 pub(crate) mod all_environment;
 pub(crate) mod all_inventory;
+pub(crate) mod allocate;
 pub(crate) mod call_out;
 pub(crate) mod case;
 pub(crate) mod clone_object;
@@ -30,7 +31,10 @@ pub(crate) mod input_to;
 pub(crate) mod interactive;
 pub(crate) mod json_decode;
 pub(crate) mod json_encode;
+pub(crate) mod keys_values;
 pub(crate) mod living;
+pub(crate) mod m_delete;
+pub(crate) mod member_array;
 pub(crate) mod min_max;
 pub(crate) mod move_object;
 pub(crate) mod notify_fail;
@@ -700,6 +704,31 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false)],
     },
+    allocate => {
+        returns: LpcType::Mixed(true),
+        arity: (2, 1),
+        args: [LpcType::Int(false), LpcType::Mixed(false)],
+    },
+    keys [in keys_values] => {
+        returns: LpcType::Mixed(true),
+        arity: 1,
+        args: [LpcType::Mapping(false)],
+    },
+    m_delete => {
+        returns: LpcType::Mapping(false),
+        arity: 2,
+        args: [LpcType::Mapping(false), LpcType::Mixed(false)],
+    },
+    member_array => {
+        returns: LpcType::Int(false),
+        arity: (3, 1),
+        args: [LpcType::Mixed(false), LpcType::Mixed(true), LpcType::Int(false)],
+    },
+    values [in keys_values] => {
+        returns: LpcType::Mixed(true),
+        arity: 1,
+        args: [LpcType::Mapping(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -958,6 +987,11 @@ mod tests {
                 "to_string",
                 "typeof",
                 "upper_case",
+                "allocate",
+                "keys",
+                "m_delete",
+                "member_array",
+                "values",
             ]
         );
     }

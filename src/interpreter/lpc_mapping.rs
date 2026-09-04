@@ -20,6 +20,7 @@ impl LpcMapping {
 
     delegate! {
         to self.mapping {
+            pub fn contains_key(&self, key: &LpcRef) -> bool;
             pub fn get(&self, key: &LpcRef) -> Option<&LpcRef>;
             pub fn get_index(&self, index: usize) -> Option<(&LpcRef, &LpcRef)>;
             pub fn insert(&mut self, key: LpcRef, value: LpcRef) -> Option<LpcRef>;
@@ -32,6 +33,7 @@ impl LpcMapping {
             pub fn values(&self) -> indexmap::map::Values<'_, LpcRef, LpcRef>;
             pub fn retain<F>(&mut self, keep: F)
                 where F: FnMut(&LpcRef, &mut LpcRef) -> bool;
+            pub fn shift_remove(&mut self, key: &LpcRef) -> Option<LpcRef>;
         }
     }
 }
