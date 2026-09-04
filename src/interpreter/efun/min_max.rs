@@ -2,25 +2,9 @@
 
 use std::cmp::Ordering;
 
-use lpc_rs_core::{BaseFloat, LpcFloatInner};
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
-
-/// Numeric order across ints and floats; `None` for a non-number.
-fn numeric_cmp(a: &LpcRef, b: &LpcRef) -> Option<Ordering> {
-    match (a, b) {
-        (LpcRef::Int(x), LpcRef::Int(y)) => Some(x.cmp(y)),
-        (LpcRef::Float(x), LpcRef::Float(y)) => Some(x.cmp(y)),
-        (LpcRef::Int(x), LpcRef::Float(y)) => Some(as_float(x.0).cmp(&y.0)),
-        (LpcRef::Float(x), LpcRef::Int(y)) => Some(x.0.cmp(&as_float(y.0))),
-        _ => None,
-    }
-}
-
-fn as_float(i: i64) -> LpcFloatInner {
-    LpcFloatInner::from(i as BaseFloat)
-}
 
 /// The value the `wins` ordering picks out of the arguments, or out of
 /// the one array passed; the winner keeps its own type.
@@ -45,7 +29,7 @@ fn extreme<const N: usize>(
             );
         }
         best = Some(match best {
-            Some(current) if numeric_cmp(value, current) != Some(wins) => current,
+            Some(current) if value.natural_cmp(current) != Some(wins) => current,
             _ => value,
         });
     }

@@ -7,6 +7,7 @@ pub(crate) mod all_environment;
 pub(crate) mod all_inventory;
 pub(crate) mod allocate;
 pub(crate) mod call_out;
+pub(crate) mod callback;
 pub(crate) mod case;
 pub(crate) mod clone_object;
 pub(crate) mod command;
@@ -25,6 +26,7 @@ pub(crate) mod explode;
 pub(crate) mod file_access;
 pub(crate) mod file_name;
 pub(crate) mod file_size;
+pub(crate) mod filter;
 pub(crate) mod find_object;
 pub(crate) mod function_exists;
 pub(crate) mod get_dir;
@@ -36,6 +38,7 @@ pub(crate) mod json_encode;
 pub(crate) mod keys_values;
 pub(crate) mod living;
 pub(crate) mod m_delete;
+pub(crate) mod map;
 pub(crate) mod member_array;
 pub(crate) mod min_max;
 pub(crate) mod mkdir;
@@ -72,6 +75,7 @@ pub(crate) mod rmdir;
 pub(crate) mod send_gmcp;
 pub(crate) mod send_mxp;
 pub(crate) mod set_this_player;
+pub(crate) mod sort_array;
 pub(crate) mod sscanf;
 pub(crate) mod tell_object;
 pub(crate) mod this_interactive;
@@ -767,6 +771,21 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false)],
     },
+    filter [async] => {
+        returns: LpcType::Mixed(false),
+        arity: (2, 0, ellipsis),
+        args: [LpcType::Mixed(true) | LpcType::Mapping(false), LpcType::Function(false)],
+    },
+    map [async] => {
+        returns: LpcType::Mixed(false),
+        arity: (2, 0, ellipsis),
+        args: [LpcType::Mixed(true) | LpcType::Mapping(false), LpcType::Function(false)],
+    },
+    sort_array [async] => {
+        returns: LpcType::Mixed(true),
+        arity: 2,
+        args: [LpcType::Mixed(true), LpcType::Function(false) | LpcType::Int(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1037,6 +1056,9 @@ mod tests {
                 "mkdir",
                 "rename",
                 "rmdir",
+                "filter",
+                "map",
+                "sort_array",
             ]
         );
     }

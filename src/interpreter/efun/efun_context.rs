@@ -14,6 +14,7 @@ use crate::interpreter::{
     call_stack::CallStack,
     efun::Efun,
     lpc_array::LpcArray,
+    lpc_mapping::LpcMapping,
     lpc_ref::{LpcRef, NULL},
     object_space::ObjectSpace,
     process::Process,
@@ -321,6 +322,12 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     {
         let array = items.into_iter().collect::<LpcArray>();
         LpcRef::Array(self.txn().with(|t| t.mint_array(array)))
+    }
+
+    /// Mint `mapping` in this efun's transaction and return it from the efun.
+    pub(crate) fn return_mapping(&mut self, mapping: LpcMapping) {
+        let result = LpcRef::Mapping(self.txn().with(|t| t.mint_mapping(mapping)));
+        self.return_efun_result(result);
     }
 
     /// Mint `items` as an array and return it from the efun.
