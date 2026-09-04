@@ -1342,6 +1342,7 @@ dependencies = [
  "educe",
  "factori",
  "fake",
+ "fastrand",
  "flume",
  "if_chain",
  "imbl",

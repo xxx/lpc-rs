@@ -37,6 +37,7 @@ educe = "0.7.6"
 flume = "0.12.0"
 if_chain = "1.0.1"
 imbl = "7.0.1"
+fastrand = "2.5.0"
 indexmap = "2.14.0"
 indextree = { version = "4.3.1", features = ["deser"] }
 itertools = "0.15.0"
