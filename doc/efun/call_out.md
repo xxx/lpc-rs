@@ -58,7 +58,7 @@ call_out((: my_good_call_out(player) :), 1.5);
 ```
 
 Note that function pointers will evaluate their arguments immediately, while functions
-called within closures will not. Make sure that values of things like this_player()
+called within closures will not. Make sure that values of things like `this_player()`
 are what you expect!
 
 ### See Also
