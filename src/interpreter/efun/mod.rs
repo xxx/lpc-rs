@@ -1,13 +1,17 @@
 pub mod efun_context;
 
+pub(crate) mod abs;
 pub(crate) mod add_action;
 pub(crate) mod add_rule;
 pub(crate) mod all_environment;
 pub(crate) mod all_inventory;
 pub(crate) mod call_out;
+pub(crate) mod case;
 pub(crate) mod clone_object;
 pub(crate) mod command;
 pub(crate) mod compose;
+pub(crate) mod conversions;
+pub(crate) mod ctime;
 pub(crate) mod debug;
 pub(crate) mod deep_inventory;
 pub(crate) mod destruct;
@@ -27,6 +31,7 @@ pub(crate) mod interactive;
 pub(crate) mod json_decode;
 pub(crate) mod json_encode;
 pub(crate) mod living;
+pub(crate) mod min_max;
 pub(crate) mod move_object;
 pub(crate) mod notify_fail;
 pub(crate) mod papplyv;
@@ -49,6 +54,7 @@ pub(crate) mod query_ip_number;
 pub(crate) mod query_notify_fail;
 pub(crate) mod query_resident_memory;
 pub(crate) mod query_verb;
+pub(crate) mod random;
 pub(crate) mod read_file;
 pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
@@ -62,6 +68,8 @@ pub(crate) mod tell_object;
 pub(crate) mod this_object;
 pub(crate) mod this_player;
 pub(crate) mod throw;
+pub(crate) mod time;
+pub(crate) mod type_of;
 pub(crate) mod type_predicates;
 pub(crate) mod write;
 pub(crate) mod write_file;
@@ -99,10 +107,17 @@ pub const CALL_OTHER: &str = "call_other";
 pub const CATCH: &str = "catch";
 pub const SIZEOF: &str = "sizeof";
 
+/// The name an efun row spells, without the `r#` a Rust keyword needs
+/// (`r#typeof`).
+fn efun_name(spelled: &'static str) -> &'static str {
+    spelled.strip_prefix("r#").unwrap_or(spelled)
+}
+
 /// The efun table: one row per efun expands to its dispatch arm and its
 /// [`EFUN_PROTOTYPES`] entry.
 ///
 /// Row: `name [option] => { returns: <LpcType>, arity: <arity>, args: [<LpcType>, ..] }`.
+/// A name that is a Rust keyword is spelled raw (`r#typeof`).
 /// `arity` is `n` (n arguments), `(n, d)` (the last `d` defaulted) or
 /// `(n, d, ellipsis)`, which also sets the prototype's ellipsis flag;
 /// `arity` and `args` may be omitted.
@@ -173,7 +188,7 @@ macro_rules! efuns {
         $(,)?
     }) => {
         FunctionPrototypeBuilder::default()
-            .name(stringify!($name))
+            .name(efun_name(stringify!($name)))
             .filename(LpcPath::InGame("".into()))
             .return_type($returns)
             .kind(FunctionKind::Efun)
@@ -226,10 +241,19 @@ macro_rules! efuns {
         /// indexes into this map; a reorder invalidates compiled code.
         pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = Lazy::new(|| {
             let mut m = IndexMap::new();
-            $( m.insert(stringify!($name), efuns!(@prototype $name { $($row)* })); )+
+            $( m.insert(efun_name(stringify!($name)), efuns!(@prototype $name { $($row)* })); )+
             m
         });
     };
+}
+
+/// What `min` and `max` take: numbers, or one array of them.
+fn numbers() -> LpcType {
+    LpcType::Int(false)
+        | LpcType::Float(false)
+        | LpcType::Int(true)
+        | LpcType::Float(true)
+        | LpcType::Mixed(true)
 }
 
 efuns! {
@@ -613,6 +637,69 @@ efuns! {
         arity: (1, 1),
         args: [LpcType::Int(false)],
     },
+    abs => {
+        returns: LpcType::Mixed(false),
+        arity: 1,
+        args: [LpcType::Int(false) | LpcType::Float(false)],
+    },
+    capitalize [in case] => {
+        returns: LpcType::String(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
+    ctime => {
+        returns: LpcType::String(false),
+        arity: (1, 1),
+        args: [LpcType::Int(false)],
+    },
+    lower_case [in case] => {
+        returns: LpcType::String(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
+    max [in min_max] => {
+        returns: LpcType::Mixed(false),
+        arity: (1, 0, ellipsis),
+        args: [numbers()],
+    },
+    min [in min_max] => {
+        returns: LpcType::Mixed(false),
+        arity: (1, 0, ellipsis),
+        args: [numbers()],
+    },
+    random => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Int(false)],
+    },
+    time => {
+        returns: LpcType::Int(false),
+    },
+    to_float [in conversions] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    to_int [in conversions] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    to_string [in conversions] => {
+        returns: LpcType::String(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    r#typeof [in type_of] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    upper_case [in case] => {
+        returns: LpcType::String(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -675,6 +762,18 @@ async fn arg_or_this_object<const N: usize>(
         LpcRef::String(path) => Some(context.load_object(path.to_str()).await?),
         _ => arg_ref.live_object(context.txn()),
     })
+}
+
+/// `process`'s file as an in-game path without its extension
+/// (`/secure/master`), what `file_name` and `to_string` answer.
+pub(crate) fn in_game_name<const N: usize>(
+    context: &EfunContext<'_, N>,
+    process: &Process,
+) -> String {
+    LpcPath::new_server(&*process.filename())
+        .as_in_game(&*context.config().lib_dir)
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// The connection of the object register 1 names — `this_player()` when the
@@ -846,6 +945,19 @@ mod tests {
                 "json_encode",
                 "json_decode",
                 "previous_object",
+                "abs",
+                "capitalize",
+                "ctime",
+                "lower_case",
+                "max",
+                "min",
+                "random",
+                "time",
+                "to_float",
+                "to_int",
+                "to_string",
+                "typeof",
+                "upper_case",
             ]
         );
     }
