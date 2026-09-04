@@ -1,4 +1,3 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
@@ -23,16 +22,12 @@ pub fn add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
         return Err(context.runtime_error("add_rule: this_player() is not a living object"));
     }
 
-    let LpcRef::String(pattern) = context.resolve_local_register(1 as RegisterSize).clone() else {
+    let LpcRef::String(pattern) = context.arg(0).clone() else {
         return Err(context.runtime_error("add_rule: the pattern must be a string"));
     };
     let compiled =
         compile(pattern.to_str()).map_err(|e| context.runtime_error(format!("add_rule: {e}")))?;
-    let handler = handler_from(
-        context,
-        context.resolve_local_register(2 as RegisterSize).clone(),
-        "add_rule",
-    )?;
+    let handler = handler_from(context, context.arg(1).clone(), "add_rule")?;
 
     let Some((first_verb, other_verbs)) = compiled.verbs.split_first() else {
         return Err(context.runtime_bug("add_rule: a compiled pattern has no verb"));

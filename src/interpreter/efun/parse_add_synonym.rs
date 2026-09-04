@@ -1,6 +1,5 @@
 //! `parse_add_synonym`: register another verb for an existing rule.
 
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
@@ -13,14 +12,13 @@ use crate::{
 /// is `rule`) as a fresh rule for `new_verb` sharing its handlers; `old_verb`
 /// is the typed verb, so a synonym of a synonym works.
 pub fn parse_add_synonym<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let (LpcRef::String(new_verb), LpcRef::String(old_verb)) = (
-        context.resolve_local_register(1 as RegisterSize).clone(),
-        context.resolve_local_register(2 as RegisterSize).clone(),
-    ) else {
+    let (LpcRef::String(new_verb), LpcRef::String(old_verb)) =
+        (context.arg(0).clone(), context.arg(1).clone())
+    else {
         return Err(context.runtime_error("parse_add_synonym: the verbs must be strings"));
     };
     let rule_filter = context
-        .try_resolve_local_register(3 as RegisterSize)
+        .try_arg(2)
         .filter(|r| !r.is_null())
         .map(|r| match r {
             LpcRef::String(s) => Ok(s.to_str()),

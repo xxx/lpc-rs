@@ -1,4 +1,3 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
@@ -8,7 +7,7 @@ use crate::{
 
 /// `write_socket`, an efun for writing to the interactive inhabiting the object.
 pub fn write_socket<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let arg_ref = context.resolve_local_register(1 as RegisterSize);
+    let arg_ref = context.arg(0);
 
     let result = match arg_ref {
         LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::String(_) => arg_ref.to_string(),

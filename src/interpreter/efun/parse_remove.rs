@@ -1,6 +1,5 @@
 //! `parse_remove`: drop `this_object()`'s rules for a verb.
 
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
@@ -12,7 +11,7 @@ use crate::{
 /// base verb (`protocol().verb`) is `verb`, synonyms included, and purges
 /// any rule left behind by a destructed owner.
 pub fn parse_remove<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let LpcRef::String(verb) = context.resolve_local_register(1 as RegisterSize).clone() else {
+    let LpcRef::String(verb) = context.arg(0).clone() else {
         return Err(context.runtime_error("parse_remove: the verb must be a string"));
     };
     let this = context.process().clone();

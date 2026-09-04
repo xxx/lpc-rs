@@ -1,12 +1,12 @@
 use chrono::Duration;
-use lpc_rs_core::{LpcFloatInner, LpcIntInner, RegisterSize};
+use lpc_rs_core::{LpcFloatInner, LpcIntInner};
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef};
 
 /// `call_out`, an efun for calling a function at some future point in time
 pub fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let func_ref = context.resolve_local_register(1 as RegisterSize).clone();
+    let func_ref = context.arg(0).clone();
 
     // Some validations
     {
@@ -20,14 +20,14 @@ pub fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
         }
     }
 
-    let duration_ref = context.resolve_local_register(2 as RegisterSize);
+    let duration_ref = context.arg(1);
     let duration = match duration_ref {
         LpcRef::Int(x) => Duration::seconds(x.0),
         LpcRef::Float(x) => to_millis(x.0),
         _ => return Err(context.runtime_error("invalid duration sent to `call_out`")),
     };
 
-    let repeat_ref = context.try_resolve_local_register(3 as RegisterSize);
+    let repeat_ref = context.try_arg(2);
     let repeat = if let Some(repeat_ref) = repeat_ref {
         match repeat_ref {
             LpcRef::Int(x) => {

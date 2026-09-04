@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
@@ -25,7 +24,7 @@ pub async fn parse_sentence<const N: usize>(context: &mut EfunContext<'_, N>) ->
         return Err(context.runtime_error("parse_sentence: this_player() is not a living"));
     }
 
-    let LpcRef::String(line) = context.resolve_local_register(1 as RegisterSize).clone() else {
+    let LpcRef::String(line) = context.arg(0).clone() else {
         return Err(context.runtime_error("parse_sentence: the line must be a string"));
     };
     let scope = scope_arg(context)?;
@@ -59,10 +58,7 @@ const MAX_SCOPE_DEPTH: usize = 20;
 /// Register 3: `None` when absent or `NULL`; an array's live objects, with
 /// nested arrays flattened; anything else is an error.
 fn scope_arg<const N: usize>(context: &EfunContext<'_, N>) -> Result<Option<Vec<Arc<Process>>>> {
-    let Some(value) = context
-        .try_resolve_local_register(3 as RegisterSize)
-        .filter(|r| !r.is_null())
-    else {
+    let Some(value) = context.try_arg(2).filter(|r| !r.is_null()) else {
         return Ok(None);
     };
     match value {
@@ -102,10 +98,7 @@ fn flatten_objects<const N: usize>(
 /// Register 4: empty when absent or `NULL`; a mapping's `(string, object)`
 /// entries as nicknames, other entries skipped; anything else is an error.
 fn nicknames_arg<const N: usize>(context: &EfunContext<'_, N>) -> Result<Vec<Nickname>> {
-    let Some(value) = context
-        .try_resolve_local_register(4 as RegisterSize)
-        .filter(|r| !r.is_null())
-    else {
+    let Some(value) = context.try_arg(3).filter(|r| !r.is_null()) else {
         return Ok(Vec::new());
     };
     let txn = context.txn();

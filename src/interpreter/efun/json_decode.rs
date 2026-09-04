@@ -1,11 +1,10 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, json};
 
 /// `json_decode`, an efun parsing JSON text into a value.
 pub fn json_decode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let Some(text) = context.resolve_local_register(1 as RegisterSize).as_str() else {
+    let Some(text) = context.arg(0).as_str() else {
         return Err(context.runtime_error("json_decode: text must be a string"));
     };
     let value =

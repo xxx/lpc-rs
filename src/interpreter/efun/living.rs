@@ -1,4 +1,3 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun, efun::efun_context::EfunContext, lpc_ref::LpcRef};
@@ -6,7 +5,7 @@ use crate::interpreter::{efun, efun::efun_context::EfunContext, lpc_ref::LpcRef}
 /// `living`, an efun that returns whether an object (the caller by default)
 /// has commands enabled.
 pub async fn living<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let arg_ref = context.resolve_local_register(1 as RegisterSize);
+    let arg_ref = context.arg(0);
 
     let result = efun::arg_or_this_object(arg_ref, context)
         .await?

@@ -1,4 +1,3 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -7,13 +6,13 @@ use crate::interpreter::{
 
 /// `papplyv`, an efun to partially apply a function to arguments taken from an array
 pub fn papplyv<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let LpcRef::Function(func) = context.resolve_local_register(1 as RegisterSize) else {
+    let LpcRef::Function(func) = context.arg(0) else {
         return Err(context.runtime_error("non-function argument sent to `papplyv`"));
     };
 
     let ptr = FunctionPtr::clone(func);
 
-    let arg_array = context.resolve_local_register(2 as RegisterSize);
+    let arg_array = context.arg(1);
 
     let result = arg_array.with_array(context.txn(), |arr| ptr.partially_apply(arr).into())?;
 

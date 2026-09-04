@@ -1,4 +1,3 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -11,7 +10,7 @@ use crate::interpreter::{
 /// `valid_read` allows it. Reads live: a `write_file` earlier in this task
 /// has not landed yet.
 pub async fn read_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let access = authorize(context, "read_file", VALID_READ, 1 as RegisterSize).await?;
+    let access = authorize(context, "read_file", VALID_READ, 0).await?;
     let contents = tokio::fs::read_to_string(&access.server)
         .await
         .map_err(|e| context.runtime_error(format!("read_file: {}: {e}", access.in_game)))?;

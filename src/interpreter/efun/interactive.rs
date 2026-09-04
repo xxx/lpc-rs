@@ -1,10 +1,9 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun, efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 pub async fn interactive<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let arg_ref = context.resolve_local_register(1 as RegisterSize);
+    let arg_ref = context.arg(0);
     let result = efun::arg_or_this_object(arg_ref, context)
         .await?
         .is_some_and(|proc| {

@@ -1,4 +1,3 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -12,7 +11,7 @@ use crate::interpreter::{
 /// Checked now — it exists and is a file or a symlink — and removed at
 /// commit. A symlink is unlinked as a link, never followed.
 pub async fn rm<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let access = authorize(context, "rm", VALID_WRITE, 1 as RegisterSize).await?;
+    let access = authorize(context, "rm", VALID_WRITE, 0).await?;
     let metadata = tokio::fs::symlink_metadata(&access.server)
         .await
         .map_err(|e| context.runtime_error(format!("rm: {}: {e}", access.in_game)))?;

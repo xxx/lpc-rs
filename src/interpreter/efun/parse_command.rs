@@ -15,19 +15,13 @@ use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process},
 };
 
-/// The register holding the destination for capture slot `slot`: registers
-/// 1–3 are `cmd`, `scope`, `pattern`.
-fn destination(slot: usize) -> Option<RegisterSize> {
-    RegisterSize::try_from(4 + slot).ok()
-}
-
 /// `parse_command(cmd, scope, pattern, ref...)`: 1 and the destinations
 /// written when some parse of `cmd` covers the pattern and every noun
 /// resolves; 0 and nothing written otherwise.
 pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let cmd = context.resolve_local_register(1 as RegisterSize).clone();
-    let scope_arg = context.resolve_local_register(2 as RegisterSize).clone();
-    let pattern = context.resolve_local_register(3 as RegisterSize).clone();
+    let cmd = context.arg(0).clone();
+    let scope_arg = context.arg(1).clone();
+    let pattern = context.arg(2).clone();
     let (Some(cmd), Some(pattern)) = (cmd.as_str(), pattern.as_str()) else {
         context.return_efun_result(LpcRef::from(0));
         return Ok(());
@@ -121,10 +115,10 @@ fn preposition_list<const N: usize>(
     context: &EfunContext<'_, N>,
     slot: usize,
 ) -> Result<Option<Vec<String>>> {
-    let Some(register) = destination(slot) else {
+    // Arguments 0-2 are `cmd`, `scope`, `pattern`.
+    let Some(value) = context.try_arg(3 + slot) else {
         return Ok(None);
     };
-    let value = context.resolve_local_register(register);
     if !matches!(value, LpcRef::Array(_)) {
         return Ok(None);
     }

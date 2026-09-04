@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
@@ -23,7 +22,7 @@ async fn load_prototype<const N: usize>(
 
 /// `clone_object`, the efun for creating new object instances.
 pub async fn clone_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let arg = context.resolve_local_register(1 as RegisterSize);
+    let arg = context.arg(0);
 
     let path = arg.with_string(|s| s.to_string())?;
 
