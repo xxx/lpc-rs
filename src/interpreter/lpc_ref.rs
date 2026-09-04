@@ -210,6 +210,20 @@ impl LpcRef {
         }
     }
 
+    /// Natural order: ints and floats by value, together; strings by
+    /// content; `None` for any other pair.
+    pub(crate) fn natural_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (LpcRef::Int(x), LpcRef::Float(y)) => {
+                Some(LpcFloatInner::from(x.0 as BaseFloat).cmp(&y.0))
+            }
+            (LpcRef::Float(x), LpcRef::Int(y)) => {
+                Some(x.0.cmp(&LpcFloatInner::from(y.0 as BaseFloat)))
+            }
+            _ => self.partial_cmp(other),
+        }
+    }
+
     /// The string payload, or `None` for a non-string.
     pub fn as_str(&self) -> Option<&str> {
         match self {
