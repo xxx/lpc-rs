@@ -24,6 +24,7 @@ use thin_vec::ThinVec;
 
 use crate::interpreter::{
     bank::RefBank,
+    continuation::Pending,
     lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL},
     process::Process,
@@ -31,7 +32,7 @@ use crate::interpreter::{
 };
 
 /// A collection `->` in flight: one receiver's frame on the stack at a time,
-/// driven by `Task::advance_collection_call` from the frame that issued it.
+/// driven by `Task::advance_pending` from the frame that issued it.
 #[derive(Debug, Clone)]
 pub struct CollectionCall {
     /// The function every receiver is called with.
@@ -44,8 +45,6 @@ pub struct CollectionCall {
     pub keys: Option<Vec<LpcRef>>,
     /// One result per receiver called so far.
     pub results: Vec<LpcRef>,
-    /// The last receiver's frame is on the stack; its `r0` is owed.
-    pub owed: bool,
 }
 
 /// Where a [`RegisterVariant`] resolves in a frame: a local register, or the
@@ -106,9 +105,9 @@ pub struct CallFrame {
     #[builder(default, setter(into))]
     pub upvalue_ptrs: ThinVec<VarId>,
 
-    /// The collection `->` this frame issued and has not finished.
+    /// The call this frame has in flight, advanced by every `Ret` into it.
     #[builder(default)]
-    pub pending: Option<Box<CollectionCall>>,
+    pub pending: Option<Box<Pending>>,
 
     /// For an efun frame fired through a pointer: the file that wrote the
     /// pointer, which is the code the efun acts for.
