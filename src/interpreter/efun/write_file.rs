@@ -2,7 +2,10 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_WRITE,
-    efun::{efun_context::EfunContext, file_access::authorize},
+    efun::{
+        efun_context::EfunContext,
+        file_access::{authorize, parent_is_dir},
+    },
     lpc_ref::LpcRef,
     stm::Effect,
 };
@@ -28,15 +31,7 @@ pub async fn write_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(io_error(e)),
         _ => {}
     }
-    let parent_is_dir = match access.server.parent() {
-        Some(parent) => match tokio::fs::metadata(parent).await {
-            Ok(m) => m.is_dir(),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
-            Err(e) => return Err(io_error(e)),
-        },
-        None => false,
-    };
-    if !parent_is_dir {
+    if !parent_is_dir(&access.server).await.map_err(io_error)? {
         return Err(context.runtime_error(format!(
             "write_file: {}: parent directory does not exist",
             access.in_game

@@ -24,6 +24,7 @@ pub(crate) mod exec;
 pub(crate) mod explode;
 pub(crate) mod file_access;
 pub(crate) mod file_name;
+pub(crate) mod file_size;
 pub(crate) mod find_object;
 pub(crate) mod function_exists;
 pub(crate) mod get_dir;
@@ -37,6 +38,7 @@ pub(crate) mod living;
 pub(crate) mod m_delete;
 pub(crate) mod member_array;
 pub(crate) mod min_max;
+pub(crate) mod mkdir;
 pub(crate) mod move_object;
 pub(crate) mod notify_fail;
 pub(crate) mod papplyv;
@@ -64,7 +66,9 @@ pub(crate) mod read_file;
 pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
 pub(crate) mod remove_rule;
+pub(crate) mod rename;
 pub(crate) mod rm;
+pub(crate) mod rmdir;
 pub(crate) mod send_gmcp;
 pub(crate) mod send_mxp;
 pub(crate) mod set_this_player;
@@ -743,6 +747,26 @@ efuns! {
     users => {
         returns: LpcType::Object(true),
     },
+    file_size [async] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
+    mkdir [async] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
+    rename [async] => {
+        returns: LpcType::Int(false),
+        arity: 2,
+        args: [LpcType::String(false), LpcType::String(false)],
+    },
+    rmdir [async] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1009,6 +1033,10 @@ mod tests {
                 "function_exists",
                 "this_interactive",
                 "users",
+                "file_size",
+                "mkdir",
+                "rename",
+                "rmdir",
             ]
         );
     }

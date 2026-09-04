@@ -1,7 +1,10 @@
 //! The shared front of the file efuns: the path argument canonicalized,
 //! confined to the lib, and put to the master.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use lpc_rs_errors::Result;
 
@@ -26,6 +29,19 @@ pub(crate) async fn authorize<const N: usize>(
     apply: &str,
     i: usize,
 ) -> Result<FileAccess> {
+    authorize_or_deny(context, efun, apply, i)
+        .await?
+        .ok_or_else(|| context.runtime_error(format!("{efun}: permission denied")))
+}
+
+/// [`authorize`] with the master's refusal as `None`, for an efun that
+/// answers a refusal the way it answers a missing file.
+pub(crate) async fn authorize_or_deny<const N: usize>(
+    context: &EfunContext<'_, N>,
+    efun: &str,
+    apply: &str,
+    i: usize,
+) -> Result<Option<FileAccess>> {
     let Some(arg) = context.arg(i).as_str() else {
         return Err(context.runtime_error(format!("{efun}: path must be a string")));
     };
@@ -45,8 +61,19 @@ pub(crate) async fn authorize<const N: usize>(
         LpcRef::from(Arc::downgrade(context.process())),
         context.calling_program(),
     ];
-    if !valid_apply(context.task_context(), Some(context.chain()), apply, &args).await? {
-        return Err(context.runtime_error(format!("{efun}: permission denied")));
+    let allowed = valid_apply(context.task_context(), Some(context.chain()), apply, &args).await?;
+    Ok(allowed.then_some(FileAccess { in_game, server }))
+}
+
+/// Whether `server`'s parent exists and is a directory; a missing parent
+/// is `false`, any other failure the error.
+pub(crate) async fn parent_is_dir(server: &Path) -> std::io::Result<bool> {
+    let Some(parent) = server.parent() else {
+        return Ok(false);
+    };
+    match tokio::fs::metadata(parent).await {
+        Ok(m) => Ok(m.is_dir()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e),
     }
-    Ok(FileAccess { in_game, server })
 }

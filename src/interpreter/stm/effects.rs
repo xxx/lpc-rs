@@ -121,6 +121,21 @@ pub(crate) enum Effect {
     /// `rm`'s unlink of the file at `server`, once the attempt commits;
     /// `in_game` names it in the log when the unlink fails.
     RemoveFile { in_game: String, server: PathBuf },
+
+    /// `mkdir`'s directory at `server`, once the attempt commits.
+    CreateDir { in_game: String, server: PathBuf },
+
+    /// `rmdir`'s removal of the empty directory at `server`, once the
+    /// attempt commits.
+    RemoveDir { in_game: String, server: PathBuf },
+
+    /// `rename`'s move of `from` to `to`, once the attempt commits;
+    /// `in_game` names the source in the log when the move fails.
+    Rename {
+        in_game: String,
+        from: PathBuf,
+        to: PathBuf,
+    },
 }
 
 impl Effect {
@@ -192,6 +207,30 @@ impl Effect {
                         .await;
                 }
             }
+            Self::CreateDir { in_game, server } => {
+                if let Err(e) = tokio::fs::create_dir(&server).await {
+                    global_state
+                        .config
+                        .debug_log(format!("mkdir: {in_game}: {e}"))
+                        .await;
+                }
+            }
+            Self::RemoveDir { in_game, server } => {
+                if let Err(e) = tokio::fs::remove_dir(&server).await {
+                    global_state
+                        .config
+                        .debug_log(format!("rmdir: {in_game}: {e}"))
+                        .await;
+                }
+            }
+            Self::Rename { in_game, from, to } => {
+                if let Err(e) = tokio::fs::rename(&from, &to).await {
+                    global_state
+                        .config
+                        .debug_log(format!("rename: {in_game}: {e}"))
+                        .await;
+                }
+            }
         }
     }
 }
@@ -220,6 +259,11 @@ impl std::fmt::Debug for Effect {
             Self::Disconnect { message, .. } => f.debug_tuple("Disconnect").field(message).finish(),
             Self::AppendFile { in_game, .. } => f.debug_tuple("AppendFile").field(in_game).finish(),
             Self::RemoveFile { in_game, .. } => f.debug_tuple("RemoveFile").field(in_game).finish(),
+            Self::CreateDir { in_game, .. } => f.debug_tuple("CreateDir").field(in_game).finish(),
+            Self::RemoveDir { in_game, .. } => f.debug_tuple("RemoveDir").field(in_game).finish(),
+            Self::Rename { in_game, to, .. } => {
+                f.debug_tuple("Rename").field(in_game).field(to).finish()
+            }
         }
     }
 }
