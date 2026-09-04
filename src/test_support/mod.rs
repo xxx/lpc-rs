@@ -2,7 +2,7 @@
 
 use std::{net::ToSocketAddrs, sync::Arc};
 
-use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
 use tokio::sync::mpsc::{Receiver, UnboundedReceiver};
@@ -146,6 +146,20 @@ pub fn committed_string(vm: &Vm, process: &Arc<Process>, reg: u16) -> String {
         LpcRef::String(s) => s.to_str().to_owned(),
         other => panic!("a string in register {reg}: {other:?}"),
     }
+}
+
+/// `task`'s committed global `name`; panics if there is no such global.
+pub fn committed_global(task: &Task<MAX_CALL_STACK_SIZE>, name: &str) -> LpcRef {
+    let process = task.context.process();
+    let Some(sym) = process.program.global_variables.get(name) else {
+        panic!("no global named `{name}`");
+    };
+    let Some(RegisterVariant::Global(reg)) = sym.location else {
+        panic!("`{name}` is not a global register");
+    };
+    task.context
+        .global_state
+        .committed_global(process, reg.index())
 }
 
 async fn compile_simul_efuns(config: &Arc<Config>) -> Program {

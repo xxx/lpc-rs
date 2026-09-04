@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     fmt,
     fmt::{Display, Formatter},
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 
 use derive_builder::Builder;
@@ -12,10 +12,14 @@ use lpc_rs_core::LpcIntInner;
 use lpc_rs_core::{
     RegisterSize,
     lpc_path::LpcPath,
+    lpc_type::LpcType,
     register::{Register, RegisterVariant},
 };
 use lpc_rs_errors::{LpcError, Result, span::Span};
-use lpc_rs_function_support::{constant::LpcConstant, program_function::ProgramFunction};
+use lpc_rs_function_support::{
+    constant::LpcConstant, function_prototype::FunctionPrototypeBuilder,
+    program_function::ProgramFunction,
+};
 use thin_vec::ThinVec;
 
 use crate::interpreter::{
@@ -117,6 +121,22 @@ pub struct CallFrame {
     pub external: bool,
 }
 
+/// The function an efun fired through a pointer runs in: one `Ret`, so the
+/// efun's result in `r0` reaches the frame that called the pointer, or the
+/// task when there is none.
+pub static ENTRY: LazyLock<Arc<ProgramFunction>> = LazyLock::new(|| {
+    let prototype = FunctionPrototypeBuilder::default()
+        .name("<entry>")
+        .filename(Arc::new(LpcPath::InGame("/<entry>".into())))
+        .return_type(LpcType::Mixed(false))
+        .build()
+        .expect("the entry prototype has every field");
+    let mut function = ProgramFunction::new(prototype, 0);
+    function.instructions = vec![Instruction::Ret];
+    function.debug_spans = vec![None];
+    Arc::new(function)
+});
+
 impl CallFrame {
     /// Create a new [`CallFrame`] instance
     ///
@@ -144,6 +164,18 @@ impl CallFrame {
             called_with_num_args,
             upvalue_ptrs,
         )
+    }
+
+    /// The frame an efun fired through a pointer runs in, as `process`.
+    pub(crate) fn entry(process: Arc<Process>) -> Self {
+        Self::new(process, ENTRY.clone(), 0, None::<&[VarId]>)
+    }
+
+    /// Whether this frame is an entry frame: the frame below it, if any, is
+    /// the one that called the pointer.
+    #[inline]
+    pub fn is_entry(&self) -> bool {
+        Arc::ptr_eq(&self.function, &ENTRY)
     }
 
     /// Create a new [`CallFrame`] instance with space for at least
