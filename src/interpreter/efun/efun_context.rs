@@ -58,9 +58,6 @@ pub struct EfunContext<'task, const N: usize> {
     /// frame's.
     fired: Option<Fired>,
 
-    /// The result of an efun run with no frame under it.
-    entry_result: Option<LpcRef>,
-
     /// Allow the user to take a snapshot of the callstack, for testing and
     /// debugging
     #[cfg(test)]
@@ -173,23 +170,42 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             passed,
             list,
             fired,
-            entry_result: None,
 
             #[cfg(test)]
             snapshot: None,
         }
     }
 
-    /// Close the call: an error gets the call-site span; `Some` is the
-    /// result of an efun run with no frame under it, for the task.
-    pub(crate) fn finish(self, result: Result<()>) -> Result<Option<LpcRef>> {
-        result.map_err(|e| e.or_span(self.call_site_span()))?;
-        Ok(self.entry_result)
+    /// The efun's outcome with the call site on an error.
+    pub(crate) fn finish(self, result: Result<()>) -> Result<()> {
+        result.map_err(|e| e.or_span(self.call_site_span()))
     }
 
     /// The frame whose instruction called this efun.
     fn calling_frame(&self) -> &CallFrame {
         self.stack.last().expect(NO_CALLING_FRAME)
+    }
+
+    /// The frame whose code called this efun: the calling frame, or the one
+    /// below it when the efun runs in an entry frame; none for a task entry.
+    fn caller_frame(&self) -> Option<&CallFrame> {
+        let top = self.stack.len().checked_sub(1)?;
+        let frame = self.stack.get(top)?;
+        if frame.is_entry() {
+            self.stack.get(top.checked_sub(1)?)
+        } else {
+            Some(frame)
+        }
+    }
+
+    /// The index of `caller_frame`.
+    fn caller_index(&self) -> Option<usize> {
+        let top = self.stack.len().checked_sub(1)?;
+        if self.stack.get(top)?.is_entry() {
+            top.checked_sub(1)
+        } else {
+            Some(top)
+        }
     }
 
     delegate! {
@@ -266,7 +282,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// fired as a task's entry.
     #[inline]
     pub fn call_site_span(&self) -> Option<Span> {
-        self.stack.last().and_then(CallFrame::current_debug_span)
+        self.caller_frame().and_then(CallFrame::current_debug_span)
     }
 
     /// The in-game directory of the object running this efun — its own,
@@ -275,16 +291,12 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.task_context.in_game_cwd_of(self.process())
     }
 
-    /// Place `result` where the caller reads it: its register 0, or the
-    /// task's result when no frame is under the efun. An int into an int
-    /// register is a scalar store: the 16-byte enum move stalls on its own
-    /// spill.
+    /// Place `result` where the caller reads it: its register 0. An int into
+    /// an int register is a scalar store: the 16-byte enum move stalls on
+    /// its own spill.
     #[inline(always)]
     pub fn return_efun_result(&mut self, result: LpcRef) {
-        let Some(frame) = self.stack.last_mut() else {
-            self.entry_result = Some(result);
-            return;
-        };
+        let frame = self.stack.last_mut().expect(NO_CALLING_FRAME);
         let slot = &mut frame.registers[0];
         match result {
             LpcRef::Int(value) => match slot {
@@ -460,36 +472,28 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.task_context
     }
 
-    /// The objects that called through a door to reach the code running this
-    /// efun, innermost first: the firer of a fired efun, the stack's
-    /// crossers, then the task's chain.
+    /// The objects that led here, nearest first: for a fired efun the frame
+    /// that called the pointer, then every door crossed below it, then the
+    /// task's callers.
     pub fn previous_objects(&self) -> impl Iterator<Item = &Arc<Process>> {
-        let firer = self
-            .fired
-            .as_ref()
-            .and_then(|_| self.stack.last())
-            .map(|frame| &frame.process);
+        let caller = self.caller_frame();
+        let firer = self.fired.as_ref().and(caller).map(|frame| &frame.process);
         let crossers = self
-            .stack
-            .len()
-            .checked_sub(1)
+            .caller_index()
             .into_iter()
-            .flat_map(|top| self.stack.door_crossers(top));
+            .flat_map(|index| self.stack.door_crossers(index));
         firer
             .into_iter()
             .chain(crossers)
             .chain(Caller::objects(&self.task_context.callers))
     }
 
-    /// The chain a task this efun starts is entered with: the object running
-    /// it, and what `previous_object` answers there.
+    /// The chain a load or apply made by this efun is entered with.
     pub fn chain(&self) -> Arc<Caller> {
         let tail = self.task_context.callers.clone();
         let frames = self
-            .stack
-            .len()
-            .checked_sub(1)
-            .map(|top| self.stack.chain(top, tail.clone()));
+            .caller_index()
+            .map(|index| self.stack.chain(index, tail.clone()));
         match &self.fired {
             Some(fired) => Caller::link(fired.owner.clone(), frames.or(tail)),
             None => frames.expect(NO_CALLING_FRAME),
@@ -513,13 +517,19 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// fired as a task's entry).
     pub(crate) fn calling_program(&self) -> LpcRef {
         let lib_dir = self.config().lib_dir.as_str();
-        match self
+        let origin = self
             .fired
             .as_ref()
-            .and_then(|fired| fired.origin.as_deref())
-        {
+            .and_then(|fired| fired.origin.as_deref());
+        match origin {
             Some(origin) => LpcRef::from(origin.as_in_game(lib_dir).display().to_string()),
-            None => self.stack.calling_program(lib_dir),
+            None => match self.caller_frame() {
+                Some(frame) => {
+                    let path = &frame.function.prototype.filename;
+                    LpcRef::from(path.as_in_game(lib_dir).display().to_string())
+                }
+                None => NULL,
+            },
         }
     }
 
@@ -740,11 +750,13 @@ mod tests {
         );
     }
 
-    /// With no frame under the efun, the result is handed to the task.
+    /// A fired efun with no LPC caller still has its entry frame: the result
+    /// lands there, for `Ret` to hand to the task.
     #[test]
-    fn a_result_with_no_calling_frame_is_the_tasks() {
+    fn a_fired_efuns_result_lands_in_its_entry_frame() {
         let (task_context, mut stack) = efun_context();
         let owner = stack.pop().unwrap().process;
+        stack.push(CallFrame::entry(owner.clone())).unwrap();
         let mut ctx = EfunContext::fired(
             &mut stack,
             &task_context,
@@ -754,7 +766,8 @@ mod tests {
             None,
         );
         ctx.return_efun_result(LpcRef::from(3));
-        assert_eq!(ctx.finish(Ok(())).unwrap(), Some(LpcRef::from(3)));
+        assert!(ctx.finish(Ok(())).is_ok());
+        assert_eq!(stack.last().unwrap().registers[0], LpcRef::from(3));
     }
 
     #[test]
@@ -814,5 +827,33 @@ mod tests {
             None,
         );
         assert!(ctx.calling_program().is_null());
+    }
+
+    #[tokio::test]
+    async fn an_efun_fired_in_an_entry_frame_chains_its_owner_once() {
+        use crate::{
+            interpreter::{call_stack::CallStack, efun::Efun, task_context::Caller},
+            test_support::run_prog,
+        };
+        let task = run_prog("int x;").await;
+        let owner = task.context.process().clone();
+        let mut stack = CallStack::<8>::default();
+        stack.push(CallFrame::entry(owner.clone())).unwrap();
+        let ctx = EfunContext::fired(
+            &mut stack,
+            &task.context,
+            Efun::from_name("intp").unwrap(),
+            vec![],
+            owner.clone(),
+            None,
+        );
+
+        let chain = Some(ctx.chain());
+
+        let objects: Vec<_> = Caller::objects(&chain).collect();
+        assert_eq!(objects.len(), 1);
+        assert!(Arc::ptr_eq(objects[0], &owner));
+        assert_eq!(ctx.previous_objects().count(), 0);
+        assert_eq!(ctx.call_site_span(), None);
     }
 }

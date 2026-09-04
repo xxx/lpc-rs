@@ -162,8 +162,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
+    /// Push the frame an efun fired through a pointer runs in: `owner`'s,
+    /// written by `origin`.
+    pub(crate) fn push_entry_frame(
+        &mut self,
+        owner: Arc<Process>,
+        origin: Option<Arc<LpcPath>>,
+    ) -> lpc_rs_errors::Result<()> {
+        let mut frame = CallFrame::entry(owner);
+        frame.origin = origin;
+        self.stack.push(frame)
+    }
+
     /// Run `efun` fired through a pointer with `args`, as `owner`, written
-    /// by `origin`; on an empty stack the result is the task's.
+    /// by `origin`, in the entry frame on top.
     pub(crate) async fn call_fired_efun(
         &mut self,
         efun: Efun,
@@ -188,10 +200,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             self.snapshots.push(snap);
         }
 
-        if let Some(result) = ctx.finish(result)? {
-            self.context.set_result(result)?;
-        }
-        Ok(())
+        ctx.finish(result)
     }
 
     /// The efun a function with an efun prototype names; none is the

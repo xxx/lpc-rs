@@ -16,7 +16,9 @@ use crate::{
     interpreter::{
         CommittedReader, lpc_ref::LpcRef, process::Process, vm::global_state::GlobalState,
     },
-    test_support::{initialize_program, run_prog, try_run_prog, try_run_prog_with_config},
+    test_support::{
+        committed_global, initialize_program, run_prog, try_run_prog, try_run_prog_with_config,
+    },
 };
 
 /// Committed global values by name, read through the committer.
@@ -1877,6 +1879,21 @@ mod test_instructions {
             let result = try_run_prog(code).await;
 
             assert_ok!(result);
+        }
+
+        #[tokio::test]
+        async fn an_efun_pointer_sees_the_calling_frame_as_previous_object() {
+            let code = indoc! { r##"
+                int got;
+                void create() {
+                    function f = &previous_object();
+                    got = f() == this_object();
+                }
+            "##};
+
+            let task = run_prog(code).await;
+
+            assert_eq!(committed_global(&task, "got"), LpcRef::from(1));
         }
     }
 

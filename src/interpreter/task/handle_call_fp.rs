@@ -178,6 +178,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         if function.prototype.is_efun() {
             let efun = self.efun_of(&function)?;
+            self.push_entry_frame(process.clone(), ptr.origin.clone())?;
             return self
                 .call_fired_efun(efun, args, process, ptr.origin.clone())
                 .await;

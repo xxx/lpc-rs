@@ -314,19 +314,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(live)
     }
 
-    /// Run one attempt from `seed`: an efun with no frame, else its frame
-    /// pushed and stepped to completion.
+    /// Run one attempt from `seed`: its frame pushed — an efun's is the entry
+    /// frame it is fired in — and stepped to completion.
     async fn run_entry(&mut self, seed: &TaskSeed) -> Result<()> {
         if seed.function.prototype.is_efun() {
             let efun = self.efun_of(&seed.function)?;
             let args = seed.arg_values(&self.context.txn);
-            return self
-                .call_fired_efun(efun, args, seed.process.clone(), None)
-                .await;
+            self.push_entry_frame(seed.process.clone(), None)?;
+            self.call_fired_efun(efun, args, seed.process.clone(), None)
+                .await?;
+        } else {
+            let frame =
+                seed.build_call_frame(&self.context.txn, self.context.upvalue_ptrs.as_deref())?;
+            self.stack.push(frame)?;
         }
-        let frame =
-            seed.build_call_frame(&self.context.txn, self.context.upvalue_ptrs.as_deref())?;
-        self.stack.push(frame)?;
         self.resume().await
     }
 
@@ -688,6 +689,74 @@ mod stm_retry_tests {
             initializes: false,
         };
         task.eval_with_committer(tx, &seed).await
+    }
+
+    /// The committer thread `run_attempts` needs; join it through the returned handle.
+    fn committer() -> (flume::Sender<CommitProtocol>, std::thread::JoinHandle<()>) {
+        let (tx, rx) = flume::bounded(4);
+        let committer_tx = tx.clone();
+        let handle = std::thread::spawn(move || {
+            Committer::new().run(committer_tx, rx);
+        });
+        (tx, handle)
+    }
+
+    async fn eval_efun_seed(
+        task: &mut Task<MAX_CALL_STACK_SIZE>,
+        name: &str,
+        args: Vec<LpcRef>,
+    ) -> Result<()> {
+        let (tx, handle) = committer();
+        let seed = TaskSeed {
+            process: task.context.process().clone(),
+            function: crate::interpreter::efun::EFUN_FUNCTIONS[name].clone(),
+            args: args.into_iter().map(SeedArg::Value).collect(),
+            initializes: false,
+        };
+        let (res, _) = task.eval_with_committer(&tx, &seed).await;
+        tx.send(CommitProtocol::Close).expect("committer open");
+        drop(tx);
+        let _ = handle.join();
+        res
+    }
+
+    #[tokio::test]
+    async fn an_efun_seed_answers_through_an_entry_frame() {
+        let mut task = run_prog("int x;").await;
+
+        eval_efun_seed(&mut task, "intp", vec![LpcRef::from(1)])
+            .await
+            .unwrap();
+
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert!(task.stack.is_empty());
+        assert!(task.popped_frame.as_ref().unwrap().is_entry());
+    }
+
+    #[tokio::test]
+    async fn an_efun_seed_runs_as_the_owner() {
+        let mut task = run_prog("int x;").await;
+        let owner = task.context.process().clone();
+
+        eval_efun_seed(&mut task, "this_object", vec![])
+            .await
+            .unwrap();
+
+        let LpcRef::Object(got) = task.result().unwrap() else {
+            panic!("an object");
+        };
+        assert!(Arc::ptr_eq(&got.upgrade().unwrap(), &owner));
+    }
+
+    #[tokio::test]
+    async fn an_efun_seed_has_no_previous_object() {
+        let mut task = run_prog("int x;").await;
+
+        eval_efun_seed(&mut task, "previous_object", vec![])
+            .await
+            .unwrap();
+
+        assert_eq!(task.result(), Some(LpcRef::from(0)));
     }
 
     const CODE: &str = indoc! { r##"
