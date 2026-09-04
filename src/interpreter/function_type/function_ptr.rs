@@ -1,4 +1,5 @@
 use std::{
+    convert::Infallible,
     fmt::{Display, Formatter},
     sync::{Arc, Weak},
 };
@@ -95,17 +96,44 @@ impl FunctionPtr {
     /// The argument list for a call with `passed`: the holes in the partial
     /// args fill left to right, the rest append, an unfilled hole is `0`.
     pub fn bound_args(&self, passed: &[LpcRef]) -> Vec<LpcRef> {
-        let mut passed = passed.iter();
-        let mut args: Vec<LpcRef> = self
-            .partial_args
-            .iter()
-            .map(|arg| match arg {
-                Some(lpc_ref) => lpc_ref.clone(),
-                None => passed.next().cloned().unwrap_or(NULL),
-            })
-            .collect();
-        args.extend(passed.cloned());
+        let mut args = Vec::with_capacity(self.bound_len(passed.len()));
+        let Ok(()) = self.each_bound(
+            passed.iter().cloned().map(Ok::<_, Infallible>),
+            |_, value| {
+                args.push(value);
+                Ok(())
+            },
+        );
         args
+    }
+
+    /// How many arguments a call with `passed` values runs with.
+    pub(crate) fn bound_len(&self, passed: usize) -> usize {
+        self.partial_args.len() + passed.saturating_sub(self.arity())
+    }
+
+    /// Every argument a call with `passed` values runs with, in order, to
+    /// `sink`: a hole takes the next passed value (0 when none is left), the
+    /// extras follow.
+    pub(crate) fn each_bound<E>(
+        &self,
+        mut passed: impl Iterator<Item = std::result::Result<LpcRef, E>>,
+        mut sink: impl FnMut(usize, LpcRef) -> std::result::Result<(), E>,
+    ) -> std::result::Result<(), E> {
+        let mut i = 0;
+        for arg in &self.partial_args {
+            let value = match arg {
+                Some(value) => value.clone(),
+                None => passed.next().transpose()?.unwrap_or(NULL),
+            };
+            sink(i, value)?;
+            i += 1;
+        }
+        for value in passed {
+            sink(i, value?)?;
+            i += 1;
+        }
+        Ok(())
     }
 
     /// Whether a call can find this pointer's receiver without arguments:

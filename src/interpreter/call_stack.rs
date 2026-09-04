@@ -7,6 +7,7 @@ use delegate::delegate;
 use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
+use thin_vec::ThinVec;
 
 use crate::interpreter::{
     call_frame::CallFrame,
@@ -109,13 +110,17 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     /// Push a frame for `function`, built in its slot: a frame moved
     /// through memory reloads its narrow stores wide, a stall per call.
     #[inline]
-    pub fn push_new(
+    pub fn push_new<V>(
         &mut self,
         process: Arc<Process>,
         function: Arc<ProgramFunction>,
         called_with_num_args: RegisterSize,
         arg_capacity: RegisterSize,
-    ) -> Result<()> {
+        upvalue_ptrs: Option<V>,
+    ) -> Result<()>
+    where
+        V: Into<ThinVec<VarId>>,
+    {
         if self.stack.len() >= STACKSIZE {
             return Err(Self::overflow());
         }
@@ -125,7 +130,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
             function,
             called_with_num_args,
             arg_capacity,
-            None::<&[VarId]>,
+            upvalue_ptrs,
         ));
 
         Ok(())

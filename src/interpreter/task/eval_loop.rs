@@ -195,7 +195,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.call_efun_now(efun, list)?;
             }
             Instruction::CallFp(location, list) => {
-                return Ok(Step::Await(AsyncCall::FunctionPointer(location, list)));
+                // A pointer into a resident object is called with no future built.
+                if !self.call_fp_local(location, list)? {
+                    return Ok(Step::Await(AsyncCall::FunctionPointer(location, list)));
+                }
             }
             Instruction::CallOther(receiver, name, list) => {
                 // A receiver that needs no loading is called with no future built.

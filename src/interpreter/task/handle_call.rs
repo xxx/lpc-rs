@@ -13,6 +13,7 @@ use crate::interpreter::{
     efun::{Efun, call_efun, call_efun_sync, efun_context::EfunContext},
     lpc_ref::{LpcRef, NULL},
     process::Process,
+    stm::{TxnHandle, VarId},
     task::Task,
 };
 
@@ -60,7 +61,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         trace!("pushing new frame; copying arguments: {num_args}");
-        self.stack.push_new(process, func, num_args, num_args)?;
+        self.stack
+            .push_new(process, func, num_args, num_args, None::<&[VarId]>)?;
         self.stack.current_frame_mut()?.external = external;
         if let Err(e) = self.populate_arguments(list) {
             // The half-built frame comes off; the error names the caller.
@@ -106,22 +108,21 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         arg_def_span: Option<&Span>,
         function_name: &str,
     ) -> lpc_rs_errors::Result<()> {
-        if_chain! {
-            if !lpc_ref.eq_in(&NULL, &self.context.txn); // 0 is always allowed
-            if let Some(arg_type) = arg_type;
-            let ref_type = lpc_ref.as_lpc_type();
-            if !ref_type.matches_type(*arg_type);
-            then {
-                let error = self.runtime_error(format!(
-                    "unexpected argument type to `{function_name}`: {ref_type}. expected {arg_type}."
-                ))
-                .with_label("defined here", arg_def_span.copied());
-
-                return Err(error);
-            }
-        }
-
-        Ok(())
+        check_arg_type(
+            &self.context.txn,
+            lpc_ref,
+            arg_type,
+            arg_def_span,
+            function_name,
+        )
+        .map_err(|e| {
+            e.with_span(
+                self.stack
+                    .current_frame()
+                    .ok()
+                    .and_then(CallFrame::current_debug_span),
+            )
+        })
     }
 
     /// Run `efun`, called by the top frame's instruction with `list`, in
@@ -225,4 +226,29 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         self.push_call_frame(simul_efuns.clone(), func, list, true)
     }
+}
+
+/// `lpc_ref` fits a parameter typed `arg_type` (0 always does), else the
+/// runtime error, labelled at `arg_def_span`, with no call site span.
+pub(crate) fn check_arg_type(
+    txn: &TxnHandle,
+    lpc_ref: &LpcRef,
+    arg_type: Option<&LpcType>,
+    arg_def_span: Option<&Span>,
+    function_name: &str,
+) -> lpc_rs_errors::Result<()> {
+    if lpc_ref.eq_in(&NULL, txn) {
+        return Ok(());
+    }
+    let Some(arg_type) = arg_type else {
+        return Ok(());
+    };
+    let ref_type = lpc_ref.as_lpc_type();
+    if ref_type.matches_type(*arg_type) {
+        return Ok(());
+    }
+    Err(LpcError::runtime(format!(
+        "unexpected argument type to `{function_name}`: {ref_type}. expected {arg_type}."
+    ))
+    .with_label("defined here", arg_def_span.copied()))
 }
