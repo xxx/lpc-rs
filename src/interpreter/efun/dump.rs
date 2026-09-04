@@ -19,7 +19,9 @@ fn recursion_too_deep<const N: usize>(size: usize, context: &EfunContext<N>) -> 
     Ok(())
 }
 
-fn format_ref<const N: usize>(
+/// `lpc_ref` as `dump` prints it (and `sprintf`'s `%O`): arrays and
+/// mappings one entry per line, `indent` spaces in.
+pub(crate) fn format_ref<const N: usize>(
     lpc_ref: &LpcRef,
     context: &EfunContext<N>,
     txn: &TxnHandle,

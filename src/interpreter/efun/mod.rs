@@ -77,6 +77,7 @@ pub(crate) mod send_gmcp;
 pub(crate) mod send_mxp;
 pub(crate) mod set_this_player;
 pub(crate) mod sort_array;
+pub(crate) mod sprintf;
 pub(crate) mod sscanf;
 pub(crate) mod tell_object;
 pub(crate) mod this_interactive;
@@ -792,6 +793,11 @@ efuns! {
         arity: (2, 1),
         args: [LpcType::String(false) | LpcType::Object(false), LpcType::Object(false)],
     },
+    sprintf => {
+        returns: LpcType::String(false),
+        arity: (1, 0, ellipsis),
+        args: [LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1066,6 +1072,7 @@ mod tests {
                 "map",
                 "sort_array",
                 "present",
+                "sprintf",
             ]
         );
     }
