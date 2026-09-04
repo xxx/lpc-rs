@@ -2,28 +2,63 @@ use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use arc_swap::ArcSwapAny;
 use delegate::delegate;
+use lpc_rs_asm::instruction::{Arg, ArgList};
 use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_utils::config::Config;
+use smallvec::SmallVec;
 
 use crate::command::{presence::forget_destruct, registry::VerbRules};
 use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,
+    efun::Efun,
     lpc_array::LpcArray,
-    lpc_ref::LpcRef,
+    lpc_ref::{LpcRef, NULL},
     object_space::ObjectSpace,
     process::Process,
     stm::{Effect, TxnHandle},
     task_context::{Caller, Loader, ObjectLookup, TaskContext},
 };
 
-/// A structure to hold various pieces of interpreter state, to be passed to
-/// Efuns when they're called
+/// An efun fired through a pointer: the object it runs as, and the
+/// pointer's writer.
+#[derive(Debug)]
+struct Fired {
+    owner: Arc<Process>,
+    origin: Option<Arc<LpcPath>>,
+}
+
+const NO_CALLING_FRAME: &str = "an efun at a call site has its calling frame";
+
+/// An efun's view of its call: its arguments, the object it runs as and
+/// the calling frame, with no frame of its own.
 #[derive(Debug)]
 pub struct EfunContext<'task, const N: usize> {
     stack: &'task mut CallStack<N>,
     task_context: &'task TaskContext,
+
+    /// The efun being called.
+    efun: Efun,
+
+    /// The argument values in call order, padded with `NULL` to the
+    /// prototype's arity; a by-reference argument is its cell's value at
+    /// the call.
+    args: SmallVec<[LpcRef; 4]>,
+
+    /// How many arguments the call passed.
+    passed: usize,
+
+    /// The calling instruction's list, where a by-reference cell is found;
+    /// `None` for a fired efun.
+    list: Option<ArgList>,
+
+    /// `Some` when fired through a pointer; else the efun is the calling
+    /// frame's.
+    fired: Option<Fired>,
+
+    /// The result of an efun run with no frame under it.
+    entry_result: Option<LpcRef>,
 
     /// Allow the user to take a snapshot of the callstack, for testing and
     /// debugging
@@ -32,14 +67,128 @@ pub struct EfunContext<'task, const N: usize> {
 }
 
 impl<'task, const N: usize> EfunContext<'task, N> {
-    pub fn new(stack: &'task mut CallStack<N>, task_context: &'task TaskContext) -> Self {
+    /// A context for `efun` with no arguments, at a call site.
+    pub fn new(
+        stack: &'task mut CallStack<N>,
+        task_context: &'task TaskContext,
+        efun: Efun,
+    ) -> Self {
+        Self::build(stack, task_context, efun, SmallVec::new(), None, None)
+    }
+
+    /// The context for `efun`, called by the top frame's instruction with
+    /// `list`: the values read now, a by-reference cell's with them.
+    pub(crate) fn at_call(
+        stack: &'task mut CallStack<N>,
+        task_context: &'task TaskContext,
+        efun: Efun,
+        list: ArgList,
+    ) -> Result<Self> {
+        let caller = stack.current_frame()?;
+        let txn = task_context.txn();
+        let prototype = efun.prototype();
+        let mut args = SmallVec::new();
+        for (i, arg) in caller.function.args(list).iter().enumerate() {
+            let value = match *arg {
+                Arg::Value(location) => {
+                    if prototype.is_ref_param(i) {
+                        return Err(caller.runtime_error(format!(
+                            "argument {} of `{}` must be passed by reference",
+                            i + 1,
+                            prototype.name
+                        )));
+                    }
+                    caller.get_location(txn, location)?.into_owned()
+                }
+                Arg::Ref(location) => {
+                    if !prototype.is_ref_param(i) {
+                        return Err(caller.runtime_error(format!(
+                            "`{}` does not take argument {} by reference",
+                            prototype.name,
+                            i + 1
+                        )));
+                    }
+                    let cell = caller.ref_cell(location)?;
+                    txn.with(|t| t.read(cell).unwrap_or(NULL))
+                }
+            };
+            args.push(value);
+        }
+        Ok(Self::build(
+            stack,
+            task_context,
+            efun,
+            args,
+            Some(list),
+            None,
+        ))
+    }
+
+    /// The context for `efun` fired through a pointer: `args` already
+    /// resolved, run as `owner`, written by `origin`; the stack may be
+    /// empty.
+    pub(crate) fn fired(
+        stack: &'task mut CallStack<N>,
+        task_context: &'task TaskContext,
+        efun: Efun,
+        args: Vec<LpcRef>,
+        owner: Arc<Process>,
+        origin: Option<Arc<LpcPath>>,
+    ) -> Self {
+        let fired = Fired { owner, origin };
+        Self::build(
+            stack,
+            task_context,
+            efun,
+            SmallVec::from_vec(args),
+            None,
+            Some(fired),
+        )
+    }
+
+    fn build(
+        stack: &'task mut CallStack<N>,
+        task_context: &'task TaskContext,
+        efun: Efun,
+        args: SmallVec<[LpcRef; 4]>,
+        list: Option<ArgList>,
+        fired: Option<Fired>,
+    ) -> Self {
+        let passed = args.len();
+        let mut args = args;
+        let declared = usize::from(efun.prototype().arity.num_args);
+        if args.len() < declared {
+            args.resize(declared, NULL);
+        }
+        // An efun that answers 0 by leaving the result slot alone relies on this.
+        if let Some(frame) = stack.last_mut() {
+            frame.registers[0] = NULL;
+        }
         Self {
             stack,
             task_context,
+            efun,
+            args,
+            passed,
+            list,
+            fired,
+            entry_result: None,
 
             #[cfg(test)]
             snapshot: None,
         }
+    }
+
+    /// Close the call: an error gets the call-site span; `Some` is the
+    /// result of an efun run with no frame under it, for the task.
+    pub(crate) fn finish(self, result: Result<()>) -> Result<Option<LpcRef>> {
+        result.map_err(|e| e.or_span(self.call_site_span()))?;
+        Ok(self.entry_result)
+    }
+
+    /// The frame whose instruction called this efun.
+    fn calling_frame(&self) -> &CallFrame {
+        self.stack.last().expect(NO_CALLING_FRAME)
     }
 
     delegate! {
@@ -73,7 +222,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// and its initializer runs in a sub-task that joins this transaction; a
     /// throwing initializer undoes the insert instead of leaving it resident.
     pub async fn load_object(&self, arg: &str) -> Result<Arc<Process>> {
-        let func = self.frame().function.name().to_string();
+        let func = self.efun.name().to_string();
         let path = self
             .task_context
             .object_path(arg, self.in_game_cwd(), &func)
@@ -112,32 +261,30 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
     }
 
-    /// The span of the instruction that called this efun; an efun's own
-    /// frame carries no spans.
+    /// The span of the instruction that called this efun; `None` for one
+    /// fired as a task's entry.
     #[inline]
     pub fn call_site_span(&self) -> Option<Span> {
-        self.previous_debug_span()
-            .or_else(|| self.current_debug_span())
+        self.stack.last().and_then(CallFrame::current_debug_span)
     }
 
-    /// Get a reference to the current [`CallFrame`]
-    #[inline]
-    pub fn frame(&self) -> &CallFrame {
-        self.stack.last().unwrap()
-    }
-
-    /// The in-game directory of the object executing this efun — the frame's,
+    /// The in-game directory of the object running this efun — its own,
     /// not the task entry's, so a room reached by `->` resolves its own exits.
     pub fn in_game_cwd(&self) -> PathBuf {
-        self.task_context.in_game_cwd_of(&self.frame().process)
+        self.task_context.in_game_cwd_of(self.process())
     }
 
-    /// Place `result` in the frame's return register. An int into an int
+    /// Place `result` where the caller reads it: its register 0, or the
+    /// task's result when no frame is under the efun. An int into an int
     /// register is a scalar store: the 16-byte enum move stalls on its own
     /// spill.
     #[inline(always)]
     pub fn return_efun_result(&mut self, result: LpcRef) {
-        let slot = &mut self.stack.last_mut().unwrap().registers[0];
+        let Some(frame) = self.stack.last_mut() else {
+            self.entry_result = Some(result);
+            return;
+        };
+        let slot = &mut frame.registers[0];
         match result {
             LpcRef::Int(value) => match slot {
                 LpcRef::Int(x) => x.0 = value.0,
@@ -149,12 +296,20 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
     /// Write `value` back through by-reference argument `index` (0-based).
     pub(crate) fn write_ref(&self, index: RegisterSize, value: LpcRef) -> Result<()> {
-        let Some(&(_, cell)) = self.frame().ref_cells.iter().find(|(i, _)| *i == index) else {
+        let cell = self.list.and_then(|list| {
+            let caller = self.stack.last()?;
+            match caller.function.args(list).get(usize::from(index)) {
+                Some(&Arg::Ref(location)) => Some(caller.ref_cell(location)),
+                _ => None,
+            }
+        });
+        let Some(cell) = cell else {
             return Err(self.runtime_bug(format!(
                 "argument {index} of `{}` is not a by-reference argument",
-                self.frame().function.name()
+                self.efun.name()
             )));
         };
+        let cell = cell?;
         self.txn().with(|t| t.write(cell, value));
         Ok(())
     }
@@ -185,7 +340,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// Read a call-out id argument: a non-int is a bug, a negative id an error.
     pub fn call_out_id<I>(&self, register: I, efun_name: &str) -> Result<u64>
     where
-        I: Into<RegisterSize>,
+        I: Into<usize>,
     {
         let LpcRef::Int(idx) = self.resolve_local_register(register) else {
             return Err(self.runtime_bug(format!("non-int call out ID sent to `{efun_name}`")));
@@ -196,22 +351,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             );
         }
         Ok(idx.0 as u64)
-    }
-
-    /// Get the current debug span
-    #[inline]
-    pub fn current_debug_span(&self) -> Option<Span> {
-        self.frame().current_debug_span()
-    }
-
-    /// Get the current debug span of the previous frame
-    #[inline]
-    pub fn previous_debug_span(&self) -> Option<Span> {
-        if self.stack.len() > 1 {
-            self.stack[self.stack.len() - 2].current_debug_span()
-        } else {
-            None
-        }
     }
 
     /// A runtime error located at the instruction that called this efun.
@@ -226,22 +365,31 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         LpcError::runtime_bug(msg).with_span(self.call_site_span())
     }
 
-    /// Resolve a local register
+    /// Argument `register`, numbered from 1 as the register it once sat in.
     #[inline]
     pub fn resolve_local_register<I>(&self, register: I) -> &LpcRef
     where
-        I: Into<RegisterSize>,
+        I: Into<usize>,
     {
-        &self.frame().registers[register.into()]
+        &self.args[register.into() - 1]
     }
 
-    /// Resolve a local register
+    /// Argument `register`, numbered from 1; `None` past the arguments.
     #[inline]
     pub fn try_resolve_local_register<I>(&self, register: I) -> Option<&LpcRef>
     where
         I: Into<usize>,
     {
-        self.frame().registers.get(register.into())
+        register
+            .into()
+            .checked_sub(1)
+            .and_then(|i| self.args.get(i))
+    }
+
+    /// How many arguments the call passed.
+    #[inline]
+    pub fn arg_count(&self) -> usize {
+        self.passed
     }
 
     /// The transaction this efun's task runs in.
@@ -318,33 +466,66 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     }
 
     /// The objects that called through a door to reach the code running this
-    /// efun, innermost first: the stack's crossers, then the task's chain.
+    /// efun, innermost first: the firer of a fired efun, the stack's
+    /// crossers, then the task's chain.
     pub fn previous_objects(&self) -> impl Iterator<Item = &Arc<Process>> {
-        self.stack
-            .door_crossers(self.stack.len() - 1)
+        let firer = self
+            .fired
+            .as_ref()
+            .and_then(|_| self.stack.last())
+            .map(|frame| &frame.process);
+        let crossers = self
+            .stack
+            .len()
+            .checked_sub(1)
+            .into_iter()
+            .flat_map(|top| self.stack.door_crossers(top));
+        firer
+            .into_iter()
+            .chain(crossers)
             .chain(Caller::objects(&self.task_context.callers))
     }
 
     /// The chain a task this efun starts is entered with: the object running
     /// it, and what `previous_object` answers there.
     pub fn chain(&self) -> Arc<Caller> {
-        self.stack
-            .chain(self.stack.len() - 1, self.task_context.callers.clone())
+        let tail = self.task_context.callers.clone();
+        let frames = self
+            .stack
+            .len()
+            .checked_sub(1)
+            .map(|top| self.stack.chain(top, tail.clone()));
+        match &self.fired {
+            Some(fired) => Caller::link(fired.owner.clone(), frames.or(tail)),
+            None => frames.expect(NO_CALLING_FRAME),
+        }
     }
 
-    /// Get a reference to the [`Process`] that contains the call to this efun
+    /// The object this efun runs as: the pointer's owner when fired
+    /// through one, else the calling frame's.
     #[inline]
     pub fn process(&self) -> &Arc<Process> {
-        &self.frame().process
+        match &self.fired {
+            Some(fired) => &fired.owner,
+            None => &self.calling_frame().process,
+        }
     }
 
     /// The defining file of the code that called this efun — the file that
-    /// wrote the pointer when it was fired through one, else the nearest
-    /// frame under it that is not an efun's — as an in-game path with its
-    /// extension (`/secure/master.c`); `NULL` when there is none (an efun
-    /// pointer fired as a task's entry).
+    /// wrote the pointer when it was fired through one, else the calling
+    /// frame's — as an in-game path with its extension
+    /// (`/secure/master.c`); `NULL` when there is neither (an efun pointer
+    /// fired as a task's entry).
     pub(crate) fn calling_program(&self) -> LpcRef {
-        self.stack.calling_program(self.config().lib_dir.as_str())
+        let lib_dir = self.config().lib_dir.as_str();
+        match self
+            .fired
+            .as_ref()
+            .and_then(|fired| fired.origin.as_deref())
+        {
+            Some(origin) => LpcRef::from(origin.as_in_game(lib_dir).display().to_string()),
+            None => self.stack.calling_program(lib_dir),
+        }
     }
 
     /// Get a reference to `this_player` from the context
@@ -370,13 +551,15 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 mod tests {
     use lpc_rs_core::lpc_type::LpcType;
     use lpc_rs_function_support::{
-        function_prototype::FunctionPrototypeBuilder, program_function::ProgramFunctionBuilder,
+        function_prototype::FunctionPrototypeBuilder,
+        program_function::{ProgramFunction, ProgramFunctionBuilder},
     };
     use lpc_rs_utils::lpc_string::LpcString;
 
     use super::*;
     use crate::{
         interpreter::{
+            efun::Efun,
             program::ProgramBuilder,
             vm::{global_state::GlobalState, vm_op::VmOp},
         },
@@ -386,7 +569,8 @@ mod tests {
     /// A fresh, uncommitted `EfunContext` whose call stack holds one real
     /// frame: `load_object` records the caller's debug span, so `frame()`
     /// must resolve.
-    fn efun_context() -> (TaskContext, CallStack<10>) {
+    /// A `/caller` process with `function`'s frame on the stack.
+    fn calling_frame(function: ProgramFunction) -> (TaskContext, CallStack<10>) {
         let (tx, _rx) = tokio::sync::mpsc::channel::<VmOp>(128);
         let global_state = GlobalState::new(test_config(), tx);
         let program = ProgramBuilder::default()
@@ -396,6 +580,19 @@ mod tests {
         let process = Arc::new(Process::new(program));
         let task_context = TaskContext::new(Arc::new(global_state), process.clone(), None);
 
+        let frame = CallFrame::new(
+            process,
+            Arc::new(function),
+            0 as RegisterSize,
+            None::<&[crate::interpreter::stm::VarId]>,
+        );
+        let mut stack = CallStack::default();
+        stack.push(frame).expect("push entry frame");
+
+        (task_context, stack)
+    }
+
+    fn efun_context() -> (TaskContext, CallStack<10>) {
         let function = ProgramFunctionBuilder::default()
             .prototype(
                 FunctionPrototypeBuilder::default()
@@ -407,16 +604,44 @@ mod tests {
             )
             .build()
             .expect("function builder");
-        let frame = CallFrame::new(
-            process,
-            Arc::new(function),
-            0 as RegisterSize,
-            None::<&[crate::interpreter::stm::VarId]>,
-        );
-        let mut stack = CallStack::default();
-        stack.push(frame).expect("push entry frame");
+        calling_frame(function)
+    }
 
-        (task_context, stack)
+    /// The arguments come from the calling frame's list: a register and a
+    /// constant, numbered as the efun's registers were.
+    #[test]
+    fn at_call_reads_the_calling_frames_list() {
+        use lpc_rs_asm::instruction::{Arg, ArgList};
+        use lpc_rs_core::register::Register;
+        use lpc_rs_function_support::constant::LpcConstant;
+
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("caller")
+            .filename(Arc::new(LpcPath::InGame("/caller".into())))
+            .return_type(LpcType::Void)
+            .build()
+            .unwrap();
+        let mut function = ProgramFunction::new(prototype, 1);
+        function.constants = vec![LpcConstant::Int(5)];
+        function.arg_lists = vec![vec![
+            Arg::Value(Register(1).as_local()),
+            Arg::Value(Register(0).as_constant()),
+        ]];
+        let (task_context, mut stack) = calling_frame(function);
+        stack.last_mut().unwrap().registers[1] = LpcRef::from(7);
+
+        let ctx =
+            EfunContext::at_call(&mut stack, &task_context, Efun::implode, ArgList(0)).unwrap();
+
+        assert_eq!(ctx.arg_count(), 2);
+        assert_eq!(
+            *ctx.resolve_local_register(1 as RegisterSize),
+            LpcRef::from(7)
+        );
+        assert_eq!(
+            *ctx.resolve_local_register(2 as RegisterSize),
+            LpcRef::from(5)
+        );
     }
 
     // `destruct` + re-create of a prototype, repeated in one transaction. The
@@ -432,7 +657,7 @@ mod tests {
     async fn destruct_and_recreate_cycles_yield_fresh_objects() {
         let (task_context, mut stack) = efun_context();
         crate::test_support::permissive_master(&task_context.global_state.object_space).await;
-        let ctx = EfunContext::new(&mut stack, &task_context);
+        let ctx = EfunContext::new(&mut stack, &task_context, Efun::this_object);
 
         let path = LpcPath::new_in_game(
             "/example",
@@ -487,106 +712,118 @@ mod tests {
     /// awaits is left to the async one.
     #[test]
     fn the_sync_dispatcher_runs_only_efuns_that_never_suspend() {
-        use crate::interpreter::efun::{Efun, call_efun_sync};
+        use crate::interpreter::efun::call_efun_sync;
 
         let (task_context, mut stack) = efun_context();
-        let mut ctx = EfunContext::new(&mut stack, &task_context);
+        let mut ctx = EfunContext::new(&mut stack, &task_context, Efun::this_object);
         assert!(call_efun_sync(Efun::this_object, &mut ctx).is_some());
         assert!(call_efun_sync(Efun::clone_object, &mut ctx).is_none());
     }
 
     #[test]
-    fn an_int_result_lands_in_register_zero() {
+    fn an_int_result_lands_in_the_calling_frames_register_zero() {
         let (task_context, mut stack) = efun_context();
-        let mut ctx = EfunContext::new(&mut stack, &task_context);
+        let mut ctx = EfunContext::new(&mut stack, &task_context, Efun::this_object);
         ctx.return_efun_result(LpcRef::from(7));
-        assert_eq!(ctx.frame().registers[0], LpcRef::from(7));
+        drop(ctx);
+        assert_eq!(stack.last().unwrap().registers[0], LpcRef::from(7));
     }
 
     #[test]
     fn an_int_result_replaces_a_register_holding_another_type() {
         let (task_context, mut stack) = efun_context();
         stack.last_mut().unwrap().registers[0] = LpcString::from("was a string").into();
-        let mut ctx = EfunContext::new(&mut stack, &task_context);
+        let mut ctx = EfunContext::new(&mut stack, &task_context, Efun::this_object);
         ctx.return_efun_result(LpcRef::from(true));
-        assert_eq!(ctx.frame().registers[0], LpcRef::from(1));
+        drop(ctx);
+        assert_eq!(stack.last().unwrap().registers[0], LpcRef::from(1));
     }
 
     #[test]
-    fn a_non_int_result_lands_in_register_zero() {
+    fn a_non_int_result_lands_in_the_calling_frames_register_zero() {
         let (task_context, mut stack) = efun_context();
-        let mut ctx = EfunContext::new(&mut stack, &task_context);
+        let mut ctx = EfunContext::new(&mut stack, &task_context, Efun::this_object);
         ctx.return_efun_result(LpcString::from("result").into());
+        drop(ctx);
         assert_eq!(
-            ctx.frame().registers[0],
+            stack.last().unwrap().registers[0],
             LpcRef::from(LpcString::from("result"))
         );
+    }
+
+    /// With no frame under the efun, the result is handed to the task.
+    #[test]
+    fn a_result_with_no_calling_frame_is_the_tasks() {
+        let (task_context, mut stack) = efun_context();
+        let owner = stack.pop().unwrap().process;
+        let mut ctx = EfunContext::fired(
+            &mut stack,
+            &task_context,
+            Efun::this_object,
+            vec![],
+            owner,
+            None,
+        );
+        ctx.return_efun_result(LpcRef::from(3));
+        assert_eq!(ctx.finish(Ok(())).unwrap(), Some(LpcRef::from(3)));
     }
 
     #[test]
     fn write_ref_to_an_index_with_no_cell_is_a_runtime_bug() {
         let (task_context, mut stack) = efun_context();
-        let ctx = EfunContext::new(&mut stack, &task_context);
+        let ctx = EfunContext::new(&mut stack, &task_context, Efun::this_object);
         let err = ctx.write_ref(2, LpcRef::from(1)).unwrap_err().to_string();
         assert!(
-            err.contains("argument 2 of `efun_test` is not a by-reference argument"),
+            err.contains("argument 2 of `this_object` is not a by-reference argument"),
             "{err}"
         );
     }
 
-    /// The frame under the efun's is the caller; its file is the program.
+    /// The calling frame's file is the program.
     #[test]
-    fn calling_program_is_the_file_of_the_frame_under_the_efun() {
-        use crate::interpreter::{efun::EFUN_FUNCTIONS, stm::VarId};
-
+    fn calling_program_is_the_file_of_the_calling_frame() {
         let (task_context, mut stack) = efun_context();
-        let process = stack.last().unwrap().process.clone();
-        let efun_frame = CallFrame::new(
-            process,
-            EFUN_FUNCTIONS["this_object"].clone(),
-            0 as RegisterSize,
-            None::<&[VarId]>,
-        );
-        stack.push(efun_frame).unwrap();
-        let ctx = EfunContext::new(&mut stack, &task_context);
+        let ctx = EfunContext::new(&mut stack, &task_context, Efun::this_object);
         assert_eq!(ctx.calling_program().as_str(), Some("/caller"));
     }
 
-    /// An efun frame fired through a pointer reports the pointer's writer,
-    /// not the frame under it.
+    /// An efun fired through a pointer runs as the pointer's owner and
+    /// reports the pointer's writer, not the frame under it.
     #[test]
-    fn an_efun_frame_fired_through_a_pointer_reports_the_pointers_origin() {
-        use crate::interpreter::{efun::EFUN_FUNCTIONS, stm::VarId};
-
+    fn a_fired_efun_is_the_owners_with_the_pointers_origin() {
         let (task_context, mut stack) = efun_context();
-        let process = stack.last().unwrap().process.clone();
-        let mut efun_frame = CallFrame::new(
-            process,
-            EFUN_FUNCTIONS["this_object"].clone(),
-            0 as RegisterSize,
-            None::<&[VarId]>,
+        let owner = Arc::new(Process::new(
+            ProgramBuilder::default()
+                .filename(LpcPath::InGame("/owner".into()))
+                .build()
+                .unwrap(),
+        ));
+        let origin = Arc::new(LpcPath::InGame("/writer.c".into()));
+        let ctx = EfunContext::fired(
+            &mut stack,
+            &task_context,
+            Efun::this_object,
+            vec![],
+            owner.clone(),
+            Some(origin),
         );
-        efun_frame.origin = Some(Arc::new(LpcPath::InGame("/writer.c".into())));
-        stack.push(efun_frame).unwrap();
-        let ctx = EfunContext::new(&mut stack, &task_context);
+        assert!(Arc::ptr_eq(ctx.process(), &owner));
         assert_eq!(ctx.calling_program().as_str(), Some("/writer.c"));
     }
 
     /// An efun fired as a task's entry has no LPC caller.
     #[test]
     fn calling_program_is_zero_without_an_lpc_frame() {
-        use crate::interpreter::{efun::EFUN_FUNCTIONS, stm::VarId};
-
         let (task_context, mut stack) = efun_context();
-        let process = stack.pop().unwrap().process;
-        let efun_frame = CallFrame::new(
-            process,
-            EFUN_FUNCTIONS["this_object"].clone(),
-            0 as RegisterSize,
-            None::<&[VarId]>,
+        let owner = stack.pop().unwrap().process;
+        let ctx = EfunContext::fired(
+            &mut stack,
+            &task_context,
+            Efun::this_object,
+            vec![],
+            owner,
+            None,
         );
-        stack.push(efun_frame).unwrap();
-        let ctx = EfunContext::new(&mut stack, &task_context);
         assert!(ctx.calling_program().is_null());
     }
 }

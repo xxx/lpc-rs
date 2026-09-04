@@ -231,7 +231,7 @@ pub fn sscanf<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
         return Ok(());
     };
     let pieces = pieces(fmt).map_err(|e| context.runtime_error(format!("sscanf: {e}")))?;
-    let variables = usize::from(context.frame().called_with_num_args).saturating_sub(2);
+    let variables = context.arg_count().saturating_sub(2);
     let needed = pieces
         .iter()
         .filter(|p| matches!(p, Piece::Convert { skip: false, .. }))

@@ -74,6 +74,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             )?;
         }
 
+        if function.prototype.is_efun() {
+            let efun = self.efun_of(&function)?;
+            return self
+                .call_fired_efun(efun, args, process, ptr.origin.clone())
+                .await;
+        }
+
         let mut new_frame = CallFrame::new(
             process,
             function.clone(),
@@ -87,10 +94,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         new_frame.external = true;
 
         self.stack.push(new_frame)?;
-
-        if function.prototype.is_efun() {
-            self.call_frame_efun().await?;
-        }
 
         Ok(())
     }

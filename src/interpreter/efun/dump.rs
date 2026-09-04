@@ -119,7 +119,7 @@ fn format_mapping<const N: usize>(
 
 /// The dump() Efun
 pub async fn dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let arg_count = context.frame().called_with_num_args;
+    let arg_count = context.arg_count();
 
     let s = (1..=arg_count)
         .map(|i| {

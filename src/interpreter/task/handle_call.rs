@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use if_chain::if_chain;
 use lpc_rs_asm::instruction::{Arg, ArgList};
-use lpc_rs_core::{RegisterSize, lpc_type::LpcType};
+use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::{instrument, trace};
@@ -91,7 +91,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
                 Arg::Ref(loc) => {
                     let cell = caller.ref_cell(loc)?;
-                    callee.push_ref(txn, i, cell)?;
+                    callee.push_ref(i, cell)?;
                 }
             }
         }
@@ -124,66 +124,84 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
-    /// Call the efun the top frame was pushed for, resolving it by name.
-    pub(crate) async fn call_frame_efun(&mut self) -> lpc_rs_errors::Result<()> {
-        let name = self.stack.current_frame()?.function.name();
-        let Some(efun) = Efun::from_name(name) else {
-            return Err(self.runtime_bug(format!("`{name}` is typed efun but has no table row")));
-        };
-        self.prepare_and_call_efun(efun).await
-    }
-
-    /// Run `efun` on the frame already pushed for it, in place: `false`
-    /// when it can suspend and needs [`Self::prepare_and_call_efun`].
-    pub(crate) fn call_efun_now(&mut self, efun: Efun) -> lpc_rs_errors::Result<bool> {
-        let mut ctx = EfunContext::new(&mut self.stack, &self.context);
-        let Some(result) = call_efun_sync(efun, &mut ctx) else {
-            return Ok(false);
+    /// Run `efun`, called by the top frame's instruction with `list`, in
+    /// place; its result lands in that frame's register 0.
+    pub(crate) fn call_efun_now(&mut self, efun: Efun, list: ArgList) -> lpc_rs_errors::Result<()> {
+        let mut ctx = EfunContext::at_call(&mut self.stack, &self.context, efun, list)?;
+        let result = match call_efun_sync(efun, &mut ctx) {
+            Some(result) => result,
+            None => Err(ctx.runtime_bug(format!("`{efun:?}` suspends but reached the sync door"))),
         };
 
         #[cfg(test)]
-        {
-            if let Some(snap) = ctx.snapshot {
-                self.snapshots.push(snap);
-            }
+        if let Some(snap) = ctx.snapshot.take() {
+            self.snapshots.push(snap);
         }
 
-        self.finish_efun(result)?;
-        Ok(true)
+        ctx.finish(result)?;
+        Ok(())
     }
 
-    /// Run `efun` on the frame already pushed for it.
-    pub(crate) async fn prepare_and_call_efun(&mut self, efun: Efun) -> lpc_rs_errors::Result<()> {
-        let mut ctx = EfunContext::new(&mut self.stack, &self.context);
-
+    /// Run `efun`, one that can suspend, called by the top frame's
+    /// instruction with `list`.
+    pub(crate) async fn prepare_and_call_efun(
+        &mut self,
+        efun: Efun,
+        list: ArgList,
+    ) -> lpc_rs_errors::Result<()> {
+        let mut ctx = EfunContext::at_call(&mut self.stack, &self.context, efun, list)?;
         let result = call_efun(efun, &mut ctx).await;
 
         #[cfg(test)]
-        {
-            if let Some(snap) = ctx.snapshot {
-                self.snapshots.push(snap);
-            }
+        if let Some(snap) = ctx.snapshot.take() {
+            self.snapshots.push(snap);
         }
 
-        self.finish_efun(result)
+        ctx.finish(result)?;
+        Ok(())
     }
 
-    /// Pop the efun's frame, or return its error with a span.
-    fn finish_efun(&mut self, result: lpc_rs_errors::Result<()>) -> lpc_rs_errors::Result<()> {
-        // The efun's own frame has no debug span; the caller's is the nearest
-        // location for an error built without one.
-        if let Err(e) = result {
-            let caller = self
-                .stack
-                .len()
-                .checked_sub(2)
-                .and_then(|i| self.stack.get(i));
-            return Err(e.or_span(caller.and_then(|frame| frame.current_debug_span())));
+    /// Run `efun` fired through a pointer with `args`, as `owner`, written
+    /// by `origin`; on an empty stack the result is the task's.
+    pub(crate) async fn call_fired_efun(
+        &mut self,
+        efun: Efun,
+        args: Vec<LpcRef>,
+        owner: Arc<Process>,
+        origin: Option<Arc<LpcPath>>,
+    ) -> lpc_rs_errors::Result<()> {
+        let prototype = efun.prototype();
+        if let Some(i) = (0..args.len()).find(|&i| prototype.is_ref_param(i)) {
+            return Err(self.runtime_error(format!(
+                "argument {} of `{}` must be passed by reference",
+                i + 1,
+                prototype.name
+            )));
         }
 
-        self.pop_frame()?;
+        let mut ctx = EfunContext::fired(&mut self.stack, &self.context, efun, args, owner, origin);
+        let result = call_efun(efun, &mut ctx).await;
 
+        #[cfg(test)]
+        if let Some(snap) = ctx.snapshot.take() {
+            self.snapshots.push(snap);
+        }
+
+        if let Some(result) = ctx.finish(result)? {
+            self.context.set_result(result)?;
+        }
         Ok(())
+    }
+
+    /// The efun a function with an efun prototype names; none is the
+    /// driver's bug.
+    pub(crate) fn efun_of(&self, function: &ProgramFunction) -> lpc_rs_errors::Result<Efun> {
+        Efun::from_name(function.name()).ok_or_else(|| {
+            self.runtime_bug(format!(
+                "`{}` is typed efun but has no table row",
+                function.name()
+            ))
+        })
     }
 
     #[instrument(level = "debug", skip_all)]

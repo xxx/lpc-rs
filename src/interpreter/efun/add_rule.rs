@@ -38,7 +38,7 @@ pub fn add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
         return Err(context.runtime_bug("add_rule: a compiled pattern has no verb"));
     };
     let first = Rule::new(
-        &context.frame().process,
+        context.process(),
         *first_verb,
         Family::Native {
             compiled: compiled.clone(),

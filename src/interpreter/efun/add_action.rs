@@ -69,7 +69,7 @@ pub fn add_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
         return Err(context.runtime_error(format!("add_action: unknown flag {flag}")));
     };
 
-    let owner = &context.frame().process;
+    let owner = context.process();
     let rules: Vec<Rule> = verbs
         .into_iter()
         .map(|verb| {
@@ -101,7 +101,7 @@ pub(crate) fn handler_from<const N: usize>(
 ) -> Result<Arc<FunctionPtr>> {
     match arg {
         LpcRef::String(name) => {
-            let this_object = &context.frame().process;
+            let this_object = context.process();
             let Some(function) = this_object.program.unmangled_functions.get(name.to_str()) else {
                 return Err(context.runtime_error(format!(
                     "{efun}: no function `{}` in {}",

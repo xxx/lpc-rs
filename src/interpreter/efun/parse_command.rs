@@ -39,7 +39,7 @@ pub async fn parse_command<const N: usize>(context: &mut EfunContext<'_, N>) -> 
     let scope = candidates_of(context, &scope_arg)?;
     let compiled = native::compile_pattern(pattern)
         .map_err(|e| context.runtime_error(format!("parse_command: {e}")))?;
-    let destinations = usize::from(context.frame().called_with_num_args).saturating_sub(3);
+    let destinations = context.arg_count().saturating_sub(3);
     if compiled.kinds.len() > destinations {
         return Err(context.runtime_error("parse_command: too few arguments for the pattern"));
     }

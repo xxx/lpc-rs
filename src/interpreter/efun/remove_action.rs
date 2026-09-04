@@ -19,7 +19,7 @@ pub fn remove_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
     let LpcRef::String(first) = first else {
         return Err(context.runtime_error("remove_action: the first argument must be a string"));
     };
-    let this_object = context.frame().process.clone();
+    let this_object = context.process().clone();
 
     // An omitted default arg is still a live register, filled with NULL
     // rather than left absent.

@@ -20,7 +20,7 @@ pub fn remove_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
         return Ok(());
     };
     let id = RuleId(id);
-    let this_object = &context.frame().process;
+    let this_object = context.process();
     let held = player
         .rules_of(context.txn())
         .iter()

@@ -7,13 +7,7 @@ use crate::interpreter::efun::efun_context::EfunContext;
 pub fn throw<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg = context.resolve_local_register(1 as RegisterSize);
 
-    Err(lpc_error!(
-        context
-            .previous_debug_span()
-            .or_else(|| context.current_debug_span()),
-        "{}",
-        arg.to_string()
-    ))
+    Err(lpc_error!(context.call_site_span(), "{}", arg.to_string()))
 }
 
 #[cfg(test)]

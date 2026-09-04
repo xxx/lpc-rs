@@ -45,7 +45,7 @@ pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         }
     };
 
-    let this_object = context.frame().process.clone();
+    let this_object = context.process().clone();
     let ctx = context.task_context();
     let already_there = Process::environment_of(ctx.txn(), &this_object)
         .is_some_and(|env| Arc::ptr_eq(&env, &destination));

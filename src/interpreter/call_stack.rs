@@ -4,7 +4,7 @@ use std::{
 };
 
 use delegate::delegate;
-use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
+use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 
@@ -155,21 +155,16 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
         }
     }
 
-    /// The defining file of the calling code: the topmost frame that is not
-    /// an efun's, or the origin an efun frame carries — as an in-game path
-    /// with its extension (`/secure/master.c`); `NULL` when there is neither
-    /// (an efun pointer fired as a task's entry).
+    /// The defining file of the top frame's code, as an in-game path with
+    /// its extension (`/secure/master.c`); `NULL` on an empty stack.
     pub fn calling_program(&self, lib_dir: &str) -> LpcRef {
-        let render = |path: &LpcPath| LpcRef::from(path.as_in_game(lib_dir).display().to_string());
-        for frame in self.iter().rev() {
-            if !frame.function.prototype.is_efun() {
-                return render(&frame.function.prototype.filename);
+        match self.last() {
+            Some(frame) => {
+                let path = &frame.function.prototype.filename;
+                LpcRef::from(path.as_in_game(lib_dir).display().to_string())
             }
-            if let Some(origin) = &frame.origin {
-                return render(origin);
-            }
+            None => NULL,
         }
-        NULL
     }
 
     /// The objects that crossed a door to reach the frame at `index`,
