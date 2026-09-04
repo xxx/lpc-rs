@@ -36,7 +36,8 @@ enum Resolved {
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Advance the top frame's pending call — `answered` when a callee's
     /// answer sits in its `r0` — until a callee frame is on top, the call
-    /// finishes into `r0`, or a step needs the async arm.
+    /// finishes into `r0`, or a step needs the async arm. On an error the
+    /// slot stays empty: the frame is unwound, or its `catch` clears it.
     pub(crate) fn advance_pending(&mut self, answered: bool) -> Result<Advance> {
         let owner = self.stack.len().saturating_sub(1);
         let frame = self.stack.current_frame_mut()?;
@@ -96,6 +97,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         .cloned();
                     match function {
                         Some(function) => {
+                            debug_assert!(
+                                !function.prototype.is_efun(),
+                                "a `->` callee has a body"
+                            );
                             let args = call.args.clone();
                             self.push_external_frame(process, function, args.into_iter(), None)?;
                             return Ok(Collected::Framed);
@@ -131,7 +136,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// The async arm of a suspended step: load or initialize the receiver,
-    /// then push its frame or record 0.
+    /// then push its frame or record 0. On an error the slot stays empty:
+    /// the frame is unwound, or its `catch` clears it.
     async fn resolve_suspended(&mut self) -> Result<Resolved> {
         let owner = self.stack.len().saturating_sub(1);
         let frame = self.stack.current_frame_mut()?;
@@ -152,6 +158,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     .filter(|(_, function)| function.public());
                 match callee {
                     Some((process, function)) => {
+                        debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
                         let args = call.args.clone();
                         self.push_external_frame(process, function, args.into_iter(), None)?;
                         Resolved::Framed
