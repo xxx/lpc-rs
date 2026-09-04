@@ -25,6 +25,7 @@ pub(crate) mod explode;
 pub(crate) mod file_access;
 pub(crate) mod file_name;
 pub(crate) mod find_object;
+pub(crate) mod function_exists;
 pub(crate) mod get_dir;
 pub(crate) mod implode;
 pub(crate) mod input_to;
@@ -69,12 +70,14 @@ pub(crate) mod send_mxp;
 pub(crate) mod set_this_player;
 pub(crate) mod sscanf;
 pub(crate) mod tell_object;
+pub(crate) mod this_interactive;
 pub(crate) mod this_object;
 pub(crate) mod this_player;
 pub(crate) mod throw;
 pub(crate) mod time;
 pub(crate) mod type_of;
 pub(crate) mod type_predicates;
+pub(crate) mod users;
 pub(crate) mod write;
 pub(crate) mod write_file;
 pub(crate) mod write_socket;
@@ -729,6 +732,17 @@ efuns! {
         arity: 1,
         args: [LpcType::Mapping(false)],
     },
+    function_exists [async] => {
+        returns: LpcType::Mixed(false),
+        arity: (2, 1),
+        args: [LpcType::String(false), LpcType::String(false) | LpcType::Object(false)],
+    },
+    this_interactive => {
+        returns: LpcType::Object(false),
+    },
+    users => {
+        returns: LpcType::Object(true),
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -992,6 +1006,9 @@ mod tests {
                 "m_delete",
                 "member_array",
                 "values",
+                "function_exists",
+                "this_interactive",
+                "users",
             ]
         );
     }
