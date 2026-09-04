@@ -36,6 +36,9 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
             /// Get a frame by index
             pub fn get(&self, index: usize) -> Option<&CallFrame>;
 
+            /// Get a mutable reference to a frame by index
+            pub fn get_mut(&mut self, index: usize) -> Option<&mut CallFrame>;
+
             /// Get the number of objects in the space
             pub fn len(&self) -> usize;
 

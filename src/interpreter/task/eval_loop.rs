@@ -14,7 +14,7 @@ use crate::interpreter::{
     lpc_array::LpcArray,
     lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL, int_div, int_rem, int_shl, int_shr},
-    task::{CatchPoint, Task, bump_in_location, get_location, set_location},
+    task::{CatchPoint, Task, advance::Advance, bump_in_location, get_location, set_location},
 };
 
 /// Empty a staging vector once its consuming instruction has run, whether or
@@ -44,8 +44,8 @@ pub(super) enum AsyncCall {
     Efun(Efun, ArgList),
     FunctionPointer(RegisterVariant, ArgList),
     Other(RegisterVariant, RegisterVariant, ArgList),
-    /// A `Ret` into a frame mid-way through a collection `->`.
-    Collection,
+    /// The top frame's pending call needs the async arm.
+    Pending,
 }
 
 /// Instructions between yields to the runtime.
@@ -130,7 +130,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             AsyncCall::Other(receiver, name, list) => {
                 self.handle_call_other(receiver, name, list).await
             }
-            AsyncCall::Collection => self.advance_collection_call().await,
+            AsyncCall::Pending => self.continue_pending().await,
         }
     }
 
@@ -201,9 +201,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::CallOther(receiver, name, list) => {
-                // A receiver that needs no loading is called with no future built.
+                // A receiver, or every remaining collection element, that
+                // needs no loading is called with no future built.
                 if !self.call_other_resident(receiver, name, list)? {
-                    return Ok(Step::Await(AsyncCall::Other(receiver, name, list)));
+                    // A collection installs pending before this check; a lone receiver never does.
+                    let call = if self.stack.current_frame()?.pending.is_some() {
+                        AsyncCall::Pending
+                    } else {
+                        AsyncCall::Other(receiver, name, list)
+                    };
+                    return Ok(Step::Await(call));
                 }
             }
             Instruction::CallSimulEfun(name, list) => {
@@ -489,9 +496,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 if self.stack.is_empty() {
                     return Ok(Step::Halt);
                 }
-                // A return into a frame mid-way through a collection `->`.
-                if self.stack.current_frame()?.pending.is_some() {
-                    return Ok(Step::Await(AsyncCall::Collection));
+                // A return into a frame with a call in flight.
+                if self.stack.current_frame()?.pending.is_some()
+                    && matches!(self.advance_pending(true)?, Advance::Suspends)
+                {
+                    return Ok(Step::Await(AsyncCall::Pending));
                 }
             }
             Instruction::Sizeof(r1, r2) => {

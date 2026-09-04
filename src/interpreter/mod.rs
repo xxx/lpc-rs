@@ -4,6 +4,7 @@ pub mod call_frame;
 pub mod call_outs;
 pub mod call_stack;
 pub(crate) mod compile_gate;
+pub mod continuation;
 pub mod efun;
 pub mod function_type;
 pub(crate) mod json;
