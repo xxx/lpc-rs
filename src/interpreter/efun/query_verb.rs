@@ -1,4 +1,3 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 use lpc_rs_utils::lpc_string::LpcString;
 
@@ -8,7 +7,7 @@ use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 /// nonzero argument, the first word as typed. 0 outside a command.
 pub fn query_verb<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let full = matches!(
-        context.try_resolve_local_register(1 as RegisterSize),
+        context.try_arg(0),
         Some(LpcRef::Int(flag)) if flag.0 != 0
     );
     let verb = context.task_context().with_command(|state| {

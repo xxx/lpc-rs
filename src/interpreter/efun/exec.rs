@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use if_chain::if_chain;
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -30,10 +29,10 @@ pub(crate) const DISPLACED: &str =
 /// commits, so a rejected attempt never touches the physical connection.
 pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     if_chain! {
-        let new_ref = context.resolve_local_register(1 as RegisterSize);
+        let new_ref = context.arg(0);
         if let LpcRef::Object(new_ob) = new_ref;
         if let Some(new_ob) = new_ob.upgrade();
-        let old_ref = context.resolve_local_register(2 as RegisterSize);
+        let old_ref = context.arg(1);
         if let LpcRef::Object(old_ob) = old_ref;
         if let Some(old_ob) = old_ob.upgrade();
         then {

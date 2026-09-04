@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 use ustr::Ustr;
 
@@ -27,13 +26,9 @@ pub fn add_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
         return Err(context.runtime_error("add_action: this_player() is not a living object"));
     }
 
-    let handler = handler_from(
-        context,
-        context.resolve_local_register(1 as RegisterSize).clone(),
-        "add_action",
-    )?;
+    let handler = handler_from(context, context.arg(0).clone(), "add_action")?;
 
-    let verb_ref = context.resolve_local_register(2 as RegisterSize);
+    let verb_ref = context.arg(1);
     let verbs: Vec<Ustr> = match verb_ref {
         LpcRef::String(s) => vec![Ustr::from(s.to_str())],
         LpcRef::Array(_) => {
@@ -57,9 +52,7 @@ pub fn add_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
 
     // An omitted default arg is still a live register, filled with NULL
     // rather than left absent.
-    let flag_ref = context
-        .try_resolve_local_register(3 as RegisterSize)
-        .filter(|r| !r.is_null());
+    let flag_ref = context.try_arg(2).filter(|r| !r.is_null());
     let flag = match flag_ref {
         None => 0,
         Some(LpcRef::Int(i)) => i.0,

@@ -338,11 +338,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     }
 
     /// Read a call-out id argument: a non-int is a bug, a negative id an error.
-    pub fn call_out_id<I>(&self, register: I, efun_name: &str) -> Result<u64>
-    where
-        I: Into<usize>,
-    {
-        let LpcRef::Int(idx) = self.resolve_local_register(register) else {
+    pub fn call_out_id(&self, i: usize, efun_name: &str) -> Result<u64> {
+        let LpcRef::Int(idx) = self.arg(i) else {
             return Err(self.runtime_bug(format!("non-int call out ID sent to `{efun_name}`")));
         };
         if idx.0 < 0 {
@@ -365,25 +362,16 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         LpcError::runtime_bug(msg).with_span(self.call_site_span())
     }
 
-    /// Argument `register`, numbered from 1 as the register it once sat in.
+    /// Argument `i` (0-based); one past the arity is a bug.
     #[inline]
-    pub fn resolve_local_register<I>(&self, register: I) -> &LpcRef
-    where
-        I: Into<usize>,
-    {
-        &self.args[register.into() - 1]
+    pub fn arg(&self, i: usize) -> &LpcRef {
+        &self.args[i]
     }
 
-    /// Argument `register`, numbered from 1; `None` past the arguments.
+    /// Argument `i` (0-based); `None` past the arguments.
     #[inline]
-    pub fn try_resolve_local_register<I>(&self, register: I) -> Option<&LpcRef>
-    where
-        I: Into<usize>,
-    {
-        register
-            .into()
-            .checked_sub(1)
-            .and_then(|i| self.args.get(i))
+    pub fn try_arg(&self, i: usize) -> Option<&LpcRef> {
+        self.args.get(i)
     }
 
     /// How many arguments the call passed.
@@ -608,7 +596,7 @@ mod tests {
     }
 
     /// The arguments come from the calling frame's list: a register and a
-    /// constant, numbered as the efun's registers were.
+    /// constant.
     #[test]
     fn at_call_reads_the_calling_frames_list() {
         use lpc_rs_asm::instruction::{Arg, ArgList};
@@ -634,14 +622,8 @@ mod tests {
             EfunContext::at_call(&mut stack, &task_context, Efun::implode, ArgList(0)).unwrap();
 
         assert_eq!(ctx.arg_count(), 2);
-        assert_eq!(
-            *ctx.resolve_local_register(1 as RegisterSize),
-            LpcRef::from(7)
-        );
-        assert_eq!(
-            *ctx.resolve_local_register(2 as RegisterSize),
-            LpcRef::from(5)
-        );
+        assert_eq!(*ctx.arg(0), LpcRef::from(7));
+        assert_eq!(*ctx.arg(1), LpcRef::from(5));
     }
 
     // `destruct` + re-create of a prototype, repeated in one transaction. The

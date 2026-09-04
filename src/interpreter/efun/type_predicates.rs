@@ -1,7 +1,6 @@
 //! The type predicates (`intp`, `floatp`, ...): 1 when the one argument is
 //! that variant, else 0.
 
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
@@ -10,7 +9,7 @@ fn type_predicate<const N: usize>(
     context: &mut EfunContext<'_, N>,
     is: fn(&LpcRef) -> bool,
 ) -> Result<()> {
-    let result = is(context.resolve_local_register(1 as RegisterSize));
+    let result = is(context.arg(0));
     context.return_efun_result(LpcRef::from(result));
     Ok(())
 }
@@ -42,10 +41,7 @@ pub fn mappingp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
 
 /// `objectp`: 1 if the argument is a live object.
 pub fn objectp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let live = context
-        .resolve_local_register(1 as RegisterSize)
-        .live_object(context.txn())
-        .is_some();
+    let live = context.arg(0).live_object(context.txn()).is_some();
     context.return_efun_result(LpcRef::from(live));
     Ok(())
 }

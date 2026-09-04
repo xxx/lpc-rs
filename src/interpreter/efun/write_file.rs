@@ -1,4 +1,3 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -12,11 +11,11 @@ use crate::interpreter::{
 /// the master's `valid_write` allows it. Checked now, written at commit: a
 /// read of the file later in this task sees it as it was.
 pub async fn write_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let Some(contents) = context.resolve_local_register(2 as RegisterSize).as_str() else {
+    let Some(contents) = context.arg(1).as_str() else {
         return Err(context.runtime_error("write_file: contents must be a string"));
     };
     let contents = contents.to_owned();
-    let access = authorize(context, "write_file", VALID_WRITE, 1 as RegisterSize).await?;
+    let access = authorize(context, "write_file", VALID_WRITE, 0).await?;
     let io_error =
         |e: std::io::Error| context.runtime_error(format!("write_file: {}: {e}", access.in_game));
     match tokio::fs::metadata(&access.server).await {

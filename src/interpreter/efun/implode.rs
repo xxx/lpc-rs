@@ -1,11 +1,10 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::efun::efun_context::EfunContext;
 
 pub fn implode<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let subject_ref = context.resolve_local_register(1 as RegisterSize);
-    let delimiter_ref = context.resolve_local_register(2 as RegisterSize);
+    let subject_ref = context.arg(0);
+    let delimiter_ref = context.arg(1);
     let delimiter = if delimiter_ref.is_null() {
         " "
     } else if let Some(delimiter) = delimiter_ref.as_str() {

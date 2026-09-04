@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
@@ -18,7 +17,7 @@ use crate::{
 /// `init()` on the mover and its new surroundings, and expires the rules the
 /// move leaves out of scope.
 pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let arg_ref = context.resolve_local_register(1 as RegisterSize);
+    let arg_ref = context.arg(0);
     let destination = match arg_ref {
         LpcRef::Float(_)
         | LpcRef::Int(_)

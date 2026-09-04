@@ -71,7 +71,7 @@ use std::sync::Arc;
 
 use indexmap::IndexMap;
 use lpc_rs_core::{
-    RegisterSize, function_arity::FunctionArity, function_flags::FunctionFlags, lpc_path::LpcPath,
+    function_arity::FunctionArity, function_flags::FunctionFlags, lpc_path::LpcPath,
     lpc_type::LpcType,
 };
 use lpc_rs_errors::Result;
@@ -680,7 +680,7 @@ async fn arg_or_this_object<const N: usize>(
 /// The connection of the object register 1 names — `this_player()` when the
 /// argument is absent or 0 — or `None` when there is none.
 fn connection_of<const N: usize>(context: &EfunContext<'_, N>) -> Option<Arc<Connection>> {
-    let target = match context.resolve_local_register(1 as RegisterSize) {
+    let target = match context.arg(0) {
         LpcRef::Int(LpcInt(0)) => context.this_player().load_full(),
         arg => arg.live_object(context.txn()),
     };
@@ -694,9 +694,7 @@ fn connection_of<const N: usize>(context: &EfunContext<'_, N>) -> Option<Arc<Con
 /// Record `op` for the connection of the object register 1 names; nothing but
 /// a trace when it has none.
 fn send_to_connection<const N: usize>(context: &EfunContext<'_, N>, op: ConnectionOp) {
-    let target = context
-        .resolve_local_register(1 as RegisterSize)
-        .live_object(context.txn());
+    let target = context.arg(0).live_object(context.txn());
     let connection = target.and_then(|proc| {
         context
             .txn()
@@ -722,7 +720,7 @@ where
     I: IntoIterator<Item = Arc<Process>>,
     F: FnOnce(&TxnHandle, Arc<Process>) -> I,
 {
-    let arg_ref = context.resolve_local_register(1 as RegisterSize);
+    let arg_ref = context.arg(0);
     let objects = arg_or_this_object(arg_ref, context)
         .await?
         .map(|env| f(context.txn(), env));

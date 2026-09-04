@@ -1,4 +1,3 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -11,7 +10,7 @@ use crate::interpreter::{
 /// master's `valid_read` allows it; a `path` that is not a directory is an
 /// error.
 pub async fn get_dir<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let access = authorize(context, "get_dir", VALID_READ, 1 as RegisterSize).await?;
+    let access = authorize(context, "get_dir", VALID_READ, 0).await?;
     let io_error =
         |e: std::io::Error| context.runtime_error(format!("get_dir: {}: {e}", access.in_game));
     let mut entries = tokio::fs::read_dir(&access.server)

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -14,7 +13,7 @@ use crate::interpreter::{
 /// entry — `0` when the driver did, or it is destructed. A step `n` names
 /// the `n`th caller back; `-1` is the whole chain as an array.
 pub fn previous_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let step = match context.try_resolve_local_register(1 as RegisterSize) {
+    let step = match context.try_arg(0) {
         Some(LpcRef::Int(n)) => n.0,
         _ => 0,
     };

@@ -1,4 +1,3 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
@@ -7,7 +6,7 @@ use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 /// for the command in progress if nothing handles it. Returns 0, so
 /// `return notify_fail("...")` reads as "not handled".
 pub fn notify_fail<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let message = context.resolve_local_register(1 as RegisterSize).clone();
+    let message = context.arg(0).clone();
     if !matches!(message, LpcRef::String(_) | LpcRef::Function(_)) {
         return Err(
             context.runtime_error("notify_fail: the message must be a string or a function")

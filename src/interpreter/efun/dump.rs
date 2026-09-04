@@ -121,9 +121,9 @@ fn format_mapping<const N: usize>(
 pub async fn dump<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let arg_count = context.arg_count();
 
-    let s = (1..=arg_count)
+    let s = (0..arg_count)
         .map(|i| {
-            let lpc_ref = context.resolve_local_register(i).clone();
+            let lpc_ref = context.arg(i).clone();
 
             format_ref(&lpc_ref, context, context.txn(), 0, 0)
         })

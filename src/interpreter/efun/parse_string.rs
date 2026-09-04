@@ -8,7 +8,6 @@ use std::{
     sync::Arc,
 };
 
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
@@ -37,18 +36,13 @@ pub(crate) const LIMITS: Limits = Limits {
 /// `parse_string(grammar, str, alternatives)`: the flat array of the first
 /// derivation whose actions all accept it, or 0 when none does.
 pub async fn parse_string<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let grammar = context.resolve_local_register(1 as RegisterSize).clone();
-    let input = context.resolve_local_register(2 as RegisterSize).clone();
+    let grammar = context.arg(0).clone();
+    let input = context.arg(1).clone();
     let (Some(grammar), Some(input)) = (grammar.as_str(), input.as_str()) else {
         context.return_efun_result(LpcRef::from(0));
         return Ok(());
     };
-    if context.arg_count() >= 3
-        && !matches!(
-            context.resolve_local_register(3 as RegisterSize),
-            LpcRef::Int(LpcInt(0))
-        )
-    {
+    if context.arg_count() >= 3 && !matches!(context.arg(2), LpcRef::Int(LpcInt(0))) {
         return Err(context.runtime_error("parse_string: alternatives are not supported"));
     }
     let compiled = dgd::compile_cached(grammar)

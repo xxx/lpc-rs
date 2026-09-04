@@ -1,6 +1,5 @@
 use std::{collections::HashSet, sync::Arc};
 
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
@@ -15,7 +14,7 @@ use crate::{
 /// `(verb)` from `this_player()`, `(function, verb)` the MudOS shape, or
 /// `(verb, object)` the LDMud shape. Returns how many were removed.
 pub fn remove_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let first = context.resolve_local_register(1 as RegisterSize).clone();
+    let first = context.arg(0).clone();
     let LpcRef::String(first) = first else {
         return Err(context.runtime_error("remove_action: the first argument must be a string"));
     };
@@ -23,9 +22,7 @@ pub fn remove_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
 
     // An omitted default arg is still a live register, filled with NULL
     // rather than left absent.
-    let second = context
-        .try_resolve_local_register(2 as RegisterSize)
-        .filter(|r| !r.is_null());
+    let second = context.try_arg(1).filter(|r| !r.is_null());
     let (verb, function_name, target): (String, Option<String>, Arc<Process>) = match second {
         None => (first.to_str().to_owned(), None, player(context)?),
         Some(LpcRef::String(verb)) => (

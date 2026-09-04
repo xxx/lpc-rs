@@ -1,4 +1,3 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -6,10 +5,8 @@ use crate::interpreter::{
 };
 
 pub async fn tell_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let msg = context
-        .resolve_local_register(2 as RegisterSize)
-        .with_string(|s| s.to_string())?;
-    let ob_ref = context.resolve_local_register(1 as RegisterSize);
+    let msg = context.arg(1).with_string(|s| s.to_string())?;
+    let ob_ref = context.arg(0);
     let proc = if let Some(path) = ob_ref.as_str() {
         Some(context.load_object(path).await?)
     } else {

@@ -1,11 +1,10 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::{Result, lpc_error};
 
 use crate::interpreter::efun::efun_context::EfunContext;
 
 /// `throw`, intentionally throw an error. Can be caught by `catch`.
 pub fn throw<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let arg = context.resolve_local_register(1 as RegisterSize);
+    let arg = context.arg(0);
 
     Err(lpc_error!(context.call_site_span(), "{}", arg.to_string()))
 }

@@ -3,7 +3,6 @@
 
 use std::{path::PathBuf, sync::Arc};
 
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{apply::valid_apply, efun::efun_context::EfunContext, lpc_ref::LpcRef};
@@ -17,7 +16,7 @@ pub(crate) struct FileAccess {
     pub server: PathBuf,
 }
 
-/// The path in `register`, canonicalized against the caller's directory
+/// The path in argument `i`, canonicalized against the caller's directory
 /// and allowed by the master's `apply` (`valid_read`/`valid_write`) for
 /// `efun`. A non-string, a path that leaves the lib (the master is not
 /// asked), or a refusal is a runtime error.
@@ -25,9 +24,9 @@ pub(crate) async fn authorize<const N: usize>(
     context: &EfunContext<'_, N>,
     efun: &str,
     apply: &str,
-    register: RegisterSize,
+    i: usize,
 ) -> Result<FileAccess> {
-    let Some(arg) = context.resolve_local_register(register).as_str() else {
+    let Some(arg) = context.arg(i).as_str() else {
         return Err(context.runtime_error(format!("{efun}: path must be a string")));
     };
     let path = context.in_game_path(arg);

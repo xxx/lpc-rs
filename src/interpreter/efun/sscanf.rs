@@ -224,8 +224,8 @@ fn stop_for(next: Option<&Piece<'_>>, input: &str) -> Option<usize> {
 /// `int sscanf(string str, string fmt, mixed var...)`: the number of
 /// conversions matched; variables are written through their cells.
 pub fn sscanf<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let input = context.resolve_local_register(1 as RegisterSize).clone();
-    let fmt = context.resolve_local_register(2 as RegisterSize).clone();
+    let input = context.arg(0).clone();
+    let fmt = context.arg(1).clone();
     let (Some(input), Some(fmt)) = (input.as_str(), fmt.as_str()) else {
         context.return_efun_result(LpcRef::from(0));
         return Ok(());

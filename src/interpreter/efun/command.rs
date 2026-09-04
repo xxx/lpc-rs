@@ -1,4 +1,3 @@
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
@@ -9,11 +8,11 @@ use crate::{
 /// `command`, an efun that runs a line as `this_player()` (or a given
 /// living) inside the caller's transaction; 1 when handled.
 pub async fn command<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let LpcRef::String(line) = context.resolve_local_register(1 as RegisterSize).clone() else {
+    let LpcRef::String(line) = context.arg(0).clone() else {
         return Err(context.runtime_error("command: the command must be a string"));
     };
     // An omitted default argument arrives as a NULL-filled register, not an absent one.
-    let actor = match context.try_resolve_local_register(2 as RegisterSize) {
+    let actor = match context.try_arg(1) {
         None => context.this_player().load_full(),
         Some(given) if given.is_null() => context.this_player().load_full(),
         Some(given @ LpcRef::Object(_)) => given.live_object(context.txn()),

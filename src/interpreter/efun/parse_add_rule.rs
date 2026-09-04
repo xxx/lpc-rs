@@ -1,6 +1,5 @@
 //! `parse_add_rule`: register a parser-package rule for a verb.
 
-use lpc_rs_core::RegisterSize;
 use lpc_rs_errors::Result;
 
 use crate::{
@@ -20,10 +19,9 @@ pub fn parse_add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     if this.parser_ready.get().is_none() {
         return Err(context.runtime_error("parse_add_rule: parse_init() has not been called"));
     }
-    let (LpcRef::String(verb), LpcRef::String(rule)) = (
-        context.resolve_local_register(1 as RegisterSize).clone(),
-        context.resolve_local_register(2 as RegisterSize).clone(),
-    ) else {
+    let (LpcRef::String(verb), LpcRef::String(rule)) =
+        (context.arg(0).clone(), context.arg(1).clone())
+    else {
         return Err(context.runtime_error("parse_add_rule: the verb and rule must be strings"));
     };
     let parser = compile(verb.to_str(), rule.to_str())
