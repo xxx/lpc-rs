@@ -78,7 +78,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// The `->`s [`Self::call_other_resident`] deferred: a receiver to
-    /// create or initialize, a collection, or an error to report.
+    /// create or initialize, or an error to report.
     #[instrument(level = "debug", skip_all)]
     #[inline]
     pub(crate) async fn handle_call_other(
@@ -118,10 +118,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Ok(());
                 }
             }
+            // `call_other_resident` installs every collection's pending call
+            // itself; the name check above already ran before it did, so a
+            // collection never reaches this door.
             LpcRef::Array(_) | LpcRef::Mapping(_) => {
-                let pending = self.collection_pending(&receiver_ref, function_name, list)?;
-                self.stack.current_frame_mut()?.pending = Some(pending);
-                return self.advance_pending_async(false).await;
+                return Err(
+                    self.runtime_bug("a collection receiver is installed by the resident door")
+                );
             }
             _ => {
                 return Err(self
