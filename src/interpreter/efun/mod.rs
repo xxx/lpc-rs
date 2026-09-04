@@ -55,6 +55,7 @@ pub(crate) mod parse_refresh;
 pub(crate) mod parse_remove;
 pub(crate) mod parse_sentence;
 pub(crate) mod parse_string;
+pub(crate) mod present;
 pub(crate) mod previous_object;
 pub(crate) mod query_call_out;
 pub(crate) mod query_call_outs;
@@ -786,6 +787,11 @@ efuns! {
         arity: 2,
         args: [LpcType::Mixed(true), LpcType::Function(false) | LpcType::Int(false)],
     },
+    present [async] => {
+        returns: LpcType::Object(false),
+        arity: (2, 1),
+        args: [LpcType::String(false) | LpcType::Object(false), LpcType::Object(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1059,6 +1065,7 @@ mod tests {
                 "filter",
                 "map",
                 "sort_array",
+                "present",
             ]
         );
     }
