@@ -16,7 +16,7 @@ use crate::{
 /// `verb_rules` here — it would make parallel registrations conflict; dead
 /// owners are purged by `parse_remove` and destruct.
 pub fn parse_add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let this = context.frame().process.clone();
+    let this = context.process().clone();
     if this.parser_ready.get().is_none() {
         return Err(context.runtime_error("parse_add_rule: parse_init() has not been called"));
     }

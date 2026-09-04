@@ -60,7 +60,6 @@ async fn check_popped_vars(code: &str, expected: &[(&str, BareVal)]) {
 async fn check_snapshot_vars(code: &str, expected: &[(&str, BareVal)]) {
     let mut task = run_prog(code).await;
     let snapshot = &mut task.snapshots.pop().unwrap();
-    snapshot.pop(); // pop off the init frame
     let frame = snapshot.pop().unwrap();
     let vars = frame.local_variables(task.context.txn());
     assert_named_vars(&task.context.global_state, &vars, expected);
@@ -1289,6 +1288,19 @@ mod test_instructions {
                 "##};
 
             check_committed_globals(code, &[("q", BareVal::Object("/my_file".into()))]).await;
+        }
+
+        /// An efun has no frame, so a runtime error raised inside one lists
+        /// only LPC frames.
+        #[tokio::test]
+        async fn an_error_inside_an_efun_lists_no_efun_frame() {
+            let code = r#"void create() { throw("boom"); }"#;
+
+            let error = try_run_prog(code).await.expect_err("throw raises");
+
+            let rendered = error.diagnostic_string();
+            assert!(rendered.contains("in create()"), "{rendered}");
+            assert!(!rendered.contains("in throw()"), "{rendered}");
         }
 
         /// A `CallEfun` index past the table is the compiler's bug, not a panic.

@@ -4,7 +4,7 @@ use crate::interpreter::{efun::efun_context::EfunContext, process::Process};
 
 /// `disable_commands`, an efun that disables an object from being able to interact with the game world.
 pub fn disable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let proc = &context.frame().process;
+    let proc = context.process();
     let was_enabled = proc.commands_enabled(context.txn());
     let environment = Process::environment_of(context.txn(), proc);
 

@@ -107,9 +107,9 @@ pub fn compose<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let executor = COMPOSE_EXECUTOR.clone();
 
     let ptr = FunctionPtrBuilder::default()
-        .owner(Arc::downgrade(&context.frame().process))
+        .owner(Arc::downgrade(context.process()))
         .address(FunctionAddress::Local(
-            Arc::downgrade(&context.frame().process),
+            Arc::downgrade(context.process()),
             executor,
         ))
         .partial_args(thin_vec![Some(a), Some(b)])

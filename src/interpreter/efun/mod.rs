@@ -138,6 +138,13 @@ macro_rules! efuns {
         Some(efuns!(@dispatch $name $([$($option)*])?, $context))
     };
 
+    (@suspends [async $($rest:tt)*]) => {
+        true
+    };
+    (@suspends $([$($option:tt)*])?) => {
+        false
+    };
+
     (@arity) => {
         FunctionArity::default()
     };
@@ -190,6 +197,7 @@ macro_rules! efuns {
 
         impl Efun {
             const ALL: &'static [Efun] = &[$( Efun::$name, )+];
+            const SUSPENDS: &'static [bool] = &[$( efuns!(@suspends $([$($option)*])?), )+];
         }
 
         /// Run `efun` against `efun_context`.
@@ -634,10 +642,24 @@ impl Efun {
             .and_then(Self::from_index)
     }
 
-    /// The function every frame calling this efun carries.
+    /// Whether this efun can suspend (an `[async]` row).
     #[inline]
-    pub fn function(self) -> &'static Arc<ProgramFunction> {
-        &EFUN_FUNCTIONS[self as usize]
+    pub fn suspends(self) -> bool {
+        Self::SUSPENDS[self as usize]
+    }
+
+    /// The efun's prototype.
+    #[inline]
+    pub fn prototype(self) -> &'static FunctionPrototype {
+        &EFUN_PROTOTYPES[self as usize]
+    }
+
+    /// The efun's name.
+    #[inline]
+    pub fn name(self) -> &'static str {
+        EFUN_PROTOTYPES
+            .get_index(self as usize)
+            .map_or("", |(name, _)| name)
     }
 }
 
@@ -649,7 +671,7 @@ async fn arg_or_this_object<const N: usize>(
     context: &EfunContext<'_, N>,
 ) -> Result<Option<Arc<Process>>> {
     Ok(match arg_ref {
-        LpcRef::Int(LpcInt(0)) => Some(context.frame().process.clone()),
+        LpcRef::Int(LpcInt(0)) => Some(context.process().clone()),
         LpcRef::String(path) => Some(context.load_object(path.to_str()).await?),
         _ => arg_ref.live_object(context.txn()),
     })
@@ -716,6 +738,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `[async]` rows suspend; the rest never do.
+    #[test]
+    fn suspends_follows_the_rows() {
+        assert!(Efun::clone_object.suspends());
+        assert!(!Efun::this_object.suspends());
+        assert!(!Efun::intp.suspends());
+    }
 
     /// `Efun`'s discriminants are the table positions `CallEfun` carries.
     #[test]

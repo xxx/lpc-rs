@@ -40,8 +40,8 @@ enum Step {
 
 /// The instructions that await, each because it can start a nested task.
 pub(super) enum AsyncCall {
-    /// An efun that can suspend, its frame already pushed.
-    Efun(Efun),
+    /// An efun that can suspend, with the calling instruction's list.
+    Efun(Efun, ArgList),
     FunctionPointer(RegisterVariant, ArgList),
     Other(RegisterVariant, RegisterVariant, ArgList),
     /// A `Ret` into a frame mid-way through a collection `->`.
@@ -66,41 +66,32 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(skip_all)]
     #[async_recursion]
     pub async fn resume(&mut self) -> lpc_rs_errors::Result<()> {
-        let f = &self.stack.current_frame()?.function.clone();
+        let mut budget = SLICE;
 
-        if f.prototype.is_efun() {
-            // call the efun, then we're done with this Task
-            if let Err(e) = self.call_frame_efun().await {
-                return Err(e.with_stack_trace(self.stack.stack_trace()));
-            }
-        } else {
-            let mut budget = SLICE;
+        loop {
+            let result = match self.run_slice(&mut budget) {
+                Ok(Slice::Budget) => {
+                    // Ensure infinite loops and the like don't monopolize the runtime.
+                    budget = SLICE;
+                    tokio::task::yield_now().await;
+                    continue;
+                }
+                Ok(Slice::Halt) => break,
+                Ok(Slice::Await(call)) => self.dispatch(call).await,
+                Err(e) => Err(e),
+            };
 
-            loop {
-                let result = match self.run_slice(&mut budget) {
-                    Ok(Slice::Budget) => {
-                        // Ensure infinite loops and the like don't monopolize the runtime.
-                        budget = SLICE;
-                        tokio::task::yield_now().await;
-                        continue;
-                    }
-                    Ok(Slice::Halt) => break,
-                    Ok(Slice::Await(call)) => self.dispatch(call).await,
-                    Err(e) => Err(e),
-                };
+            if let Err(e) = result {
+                if e.is_bug() {
+                    error!("{}", e.diagnostic_string());
+                }
 
-                if let Err(e) = result {
-                    if e.is_bug() {
-                        error!("{}", e.diagnostic_string());
-                    }
-
-                    // `catch()` does not resume from a broken driver invariant.
-                    if !e.is_bug() && !self.catch_points.is_empty() {
-                        self.catch_error(e)?;
-                    } else {
-                        let stack_trace = self.stack.stack_trace();
-                        return Err(e.with_stack_trace(stack_trace));
-                    }
+                // `catch()` does not resume from a broken driver invariant.
+                if !e.is_bug() && !self.catch_points.is_empty() {
+                    self.catch_error(e)?;
+                } else {
+                    let stack_trace = self.stack.stack_trace();
+                    return Err(e.with_stack_trace(stack_trace));
                 }
             }
         }
@@ -134,7 +125,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Finish an instruction that awaits.
     async fn dispatch(&mut self, call: AsyncCall) -> lpc_rs_errors::Result<()> {
         match call {
-            AsyncCall::Efun(efun) => self.prepare_and_call_efun(efun).await,
+            AsyncCall::Efun(efun, list) => self.prepare_and_call_efun(efun, list).await,
             AsyncCall::FunctionPointer(location, list) => self.handle_call_fp(location, list).await,
             AsyncCall::Other(receiver, name, list) => {
                 self.handle_call_other(receiver, name, list).await
@@ -197,12 +188,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Err(self
                         .runtime_bug(format!("`CallEfun` index {index} is past the efun table")));
                 };
-                let process = self.stack.current_frame()?.process.clone();
-                self.push_call_frame(process, efun.function().clone(), list, false)?;
                 // An efun that never suspends runs with no future built.
-                if !self.call_efun_now(efun)? {
-                    return Ok(Step::Await(AsyncCall::Efun(efun)));
+                if efun.suspends() {
+                    return Ok(Step::Await(AsyncCall::Efun(efun, list)));
                 }
+                self.call_efun_now(efun, list)?;
             }
             Instruction::CallFp(location, list) => {
                 return Ok(Step::Await(AsyncCall::FunctionPointer(location, list)));

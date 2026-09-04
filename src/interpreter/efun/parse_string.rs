@@ -43,7 +43,7 @@ pub async fn parse_string<const N: usize>(context: &mut EfunContext<'_, N>) -> R
         context.return_efun_result(LpcRef::from(0));
         return Ok(());
     };
-    if context.frame().called_with_num_args >= 3
+    if context.arg_count() >= 3
         && !matches!(
             context.resolve_local_register(3 as RegisterSize),
             LpcRef::Int(LpcInt(0))

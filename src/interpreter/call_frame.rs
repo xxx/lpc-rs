@@ -102,11 +102,6 @@ pub struct CallFrame {
     #[builder(default, setter(into))]
     pub upvalue_ptrs: ThinVec<VarId>,
 
-    /// The by-reference arguments an efun frame received: `(argument
-    /// index, cell)`, written back through `EfunContext::write_ref`.
-    #[builder(default)]
-    pub ref_cells: ThinVec<(RegisterSize, VarId)>,
-
     /// The collection `->` this frame issued and has not finished.
     #[builder(default)]
     pub pending: Option<Box<CollectionCall>>,
@@ -192,7 +187,6 @@ impl CallFrame {
             pc: 0,
             called_with_num_args,
             upvalue_ptrs,
-            ref_cells: ThinVec::new(),
             pending: None,
             origin: None,
             external: false,
@@ -212,10 +206,10 @@ impl CallFrame {
         Ok(())
     }
 
-    /// Store argument `i` where the function declares it. An efun lays out
-    /// no registers, so its arguments sit at `1..`; one beyond a compiled
-    /// function's declared list goes past its locals, where the bank has
-    /// reserved room for it and `PopulateArgv` reads it back.
+    /// Store argument `i` where the function declares it: at `i + 1` with
+    /// no declared location, and past the locals beyond the declared list,
+    /// where the bank has reserved room for it and `PopulateArgv` reads it
+    /// back.
     fn store_arg(&mut self, txn: &TxnHandle, i: usize, value: LpcRef) -> Result<()> {
         let target = match self.function.arg_locations.get(i) {
             Some(&location) => location,
@@ -247,26 +241,14 @@ impl CallFrame {
         self.store_arg(txn, i, value)
     }
 
-    /// Bind argument `i` to `cell`: an LPC callee's parameter aliases it;
-    /// an efun gets the cell's value in its register and the cell in
-    /// `ref_cells` for writing back.
-    pub(crate) fn push_ref(&mut self, txn: &TxnHandle, i: usize, cell: VarId) -> Result<()> {
+    /// Bind argument `i` to `cell`: the callee's parameter aliases it.
+    pub(crate) fn push_ref(&mut self, i: usize, cell: VarId) -> Result<()> {
         let name = self.function.name();
         if !self.function.prototype.is_ref_param(i) {
             return Err(self.runtime_error(format!(
                 "`{name}` does not take argument {} by reference",
                 i + 1
             )));
-        }
-        if self.function.prototype.is_efun() {
-            let value = txn.with(|t| t.read(cell).unwrap_or(NULL));
-            let Ok(index) = RegisterSize::try_from(i) else {
-                return Err(
-                    self.runtime_bug(format!("ref argument index {i} does not fit a register"))
-                );
-            };
-            self.ref_cells.push((index, cell));
-            return self.store_arg(txn, i, value);
         }
         let Some(RegisterVariant::Upvalue(reg)) = self.function.arg_locations.get(i).copied()
         else {
@@ -583,8 +565,7 @@ mod tests {
 
     use lpc_rs_core::{function_arity::FunctionArity, lpc_type::LpcType};
     use lpc_rs_function_support::{
-        constant::LpcConstant,
-        function_prototype::{FunctionKind, FunctionPrototypeBuilder},
+        constant::LpcConstant, function_prototype::FunctionPrototypeBuilder,
     };
     use lpc_rs_utils::lpc_string::LpcString;
     use ustr::ustr;
@@ -752,7 +733,7 @@ mod tests {
         let cell = VarId::new();
         txn.with(|t| t.write(cell, LpcRef::from(41)));
         let mut frame = CallFrame::new(Process::default(), ref_function(), 1, None::<&[VarId]>);
-        frame.push_ref(&txn, 0, cell).unwrap();
+        frame.push_ref(0, cell).unwrap();
         assert_eq!(
             frame.slot(Register(0).as_upvalue()).unwrap(),
             Slot::Cell(cell)
@@ -779,40 +760,12 @@ mod tests {
 
     #[test]
     fn a_ref_into_a_value_parameter_is_a_runtime_error() {
-        let txn = TxnHandle::empty();
         let mut frame = CallFrame::new(Process::default(), value_function(), 1, None::<&[VarId]>);
-        let err = frame
-            .push_ref(&txn, 0, VarId::new())
-            .unwrap_err()
-            .to_string();
+        let err = frame.push_ref(0, VarId::new()).unwrap_err().to_string();
         assert!(
             err.contains("`g` does not take argument 1 by reference"),
             "{err}"
         );
-    }
-
-    #[test]
-    fn an_efun_frame_copies_the_value_and_records_the_cell() {
-        let txn = TxnHandle::empty();
-        let cell = VarId::new();
-        txn.with(|t| t.write(cell, LpcRef::from("seed")));
-        let prototype = FunctionPrototypeBuilder::default()
-            .name("sscanf")
-            .filename(Arc::new("".into()))
-            .return_type(LpcType::Int(false))
-            .kind(FunctionKind::Efun)
-            .arity(FunctionArity::new(2))
-            .ref_tail(Some(2))
-            .build()
-            .unwrap();
-        let pf = Arc::new(ProgramFunction::new(prototype, 0));
-        let mut frame =
-            CallFrame::with_minimum_arg_capacity(Process::default(), pf, 3, 3, None::<&[VarId]>);
-        frame.push_arg(&txn, 0, LpcRef::from("a b")).unwrap();
-        frame.push_arg(&txn, 1, LpcRef::from("%s")).unwrap();
-        frame.push_ref(&txn, 2, cell).unwrap();
-        assert_eq!(frame.registers[Register(3)], LpcRef::from("seed"));
-        assert_eq!(frame.ref_cells.as_slice(), &[(2, cell)]);
     }
 
     #[test]

@@ -4,7 +4,7 @@ use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, proce
 
 /// `enable_commands`, an efun that enables an object to interact with the game world.
 pub fn enable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    let proc = &context.frame().process;
+    let proc = context.process();
     let already = proc.commands_enabled(context.txn());
     let environment = Process::environment_of(context.txn(), proc);
 

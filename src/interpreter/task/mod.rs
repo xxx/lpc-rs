@@ -112,15 +112,26 @@ impl TaskSeed {
             upvalue_ptrs,
         );
         for (i, arg) in self.args.iter().enumerate() {
-            let arg = match arg {
-                SeedArg::Value(value) => value.clone(),
-                SeedArg::FreshMapping(mapping) => {
-                    LpcRef::Mapping(txn.with(|t| t.mint_mapping(mapping.clone())))
-                }
-            };
-            frame.push_arg(txn, i, arg)?;
+            frame.push_arg(txn, i, Self::value_of(arg, txn))?;
         }
         Ok(frame)
+    }
+
+    /// The argument values, a fresh mapping minted into `txn`.
+    pub(crate) fn arg_values(&self, txn: &TxnHandle) -> Vec<LpcRef> {
+        self.args
+            .iter()
+            .map(|arg| Self::value_of(arg, txn))
+            .collect()
+    }
+
+    fn value_of(arg: &SeedArg, txn: &TxnHandle) -> LpcRef {
+        match arg {
+            SeedArg::Value(value) => value.clone(),
+            SeedArg::FreshMapping(mapping) => {
+                LpcRef::Mapping(txn.with(|t| t.mint_mapping(mapping.clone())))
+            }
+        }
     }
 }
 
@@ -277,15 +288,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Ok(live);
         }
 
-        let frame =
-            seed.build_call_frame(&self.context.txn, self.context.upvalue_ptrs.as_deref())?;
-        self.stack.push(frame)?;
-
         // One timeout per attempt; the committer's conflict rule is the sole
         // serialization control.
         let outcome = match self.timeout_ms {
-            Some(ms) => timeout(Duration::from_millis(ms), self.resume()).await,
-            None => Ok(self.resume().await),
+            Some(ms) => timeout(Duration::from_millis(ms), self.run_entry(&seed)).await,
+            None => Ok(self.run_entry(&seed).await),
         };
         let run_result = match outcome {
             Ok(run) => run,
@@ -305,6 +312,22 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         Ok(live)
+    }
+
+    /// Run one attempt from `seed`: an efun with no frame, else its frame
+    /// pushed and stepped to completion.
+    async fn run_entry(&mut self, seed: &TaskSeed) -> Result<()> {
+        if seed.function.prototype.is_efun() {
+            let efun = self.efun_of(&seed.function)?;
+            let args = seed.arg_values(&self.context.txn);
+            return self
+                .call_fired_efun(efun, args, seed.process.clone(), None)
+                .await;
+        }
+        let frame =
+            seed.build_call_frame(&self.context.txn, self.context.upvalue_ptrs.as_deref())?;
+        self.stack.push(frame)?;
+        self.resume().await
     }
 
     /// Evaluate `f` to completion, or an error; a `timeout_ms` of 0 means

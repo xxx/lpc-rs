@@ -28,7 +28,7 @@ pub fn parse_add_synonym<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         })
         .transpose()?;
 
-    let this = context.frame().process.clone();
+    let this = context.process().clone();
     let old_verb = old_verb.to_str();
     let verb_rules = VerbRules::new(context.task_context());
     let found: Vec<Rule> = verb_rules

@@ -50,7 +50,7 @@ pub fn call_out<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
         None
     };
 
-    let id = context.schedule_call_out(&context.frame().process, func_ref, duration, repeat);
+    let id = context.schedule_call_out(context.process(), func_ref, duration, repeat);
 
     let result = LpcRef::Int(LpcInt(id as LpcIntInner));
     context.return_efun_result(result);

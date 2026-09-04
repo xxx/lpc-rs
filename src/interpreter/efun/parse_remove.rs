@@ -15,7 +15,7 @@ pub fn parse_remove<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
     let LpcRef::String(verb) = context.resolve_local_register(1 as RegisterSize).clone() else {
         return Err(context.runtime_error("parse_remove: the verb must be a string"));
     };
-    let this = context.frame().process.clone();
+    let this = context.process().clone();
     let verb = verb.to_str();
     let verb_rules = VerbRules::new(context.task_context());
     for rule in verb_rules.all().iter() {
