@@ -24,18 +24,8 @@ pub fn allocate<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
 mod tests {
     use crate::{
         interpreter::lpc_ref::LpcRef,
-        test_support::{run_prog, try_run_prog},
+        test_support::{run_prog, strings_of, try_run_prog},
     };
-
-    async fn strings_of(code: &str) -> Vec<String> {
-        let task = run_prog(code).await;
-        task.result()
-            .unwrap()
-            .with_array(task.context.txn(), |arr| {
-                arr.iter().map(|x| x.to_string()).collect()
-            })
-            .unwrap()
-    }
 
     #[tokio::test]
     async fn allocate_makes_n_zeros() {

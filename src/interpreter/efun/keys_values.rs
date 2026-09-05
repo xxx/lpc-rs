@@ -36,17 +36,7 @@ pub fn values<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_support::{run_prog, try_run_prog};
-
-    async fn strings_of(code: &str) -> Vec<String> {
-        let task = run_prog(code).await;
-        task.result()
-            .unwrap()
-            .with_array(task.context.txn(), |arr| {
-                arr.iter().map(|x| x.to_string()).collect()
-            })
-            .unwrap()
-    }
+    use crate::test_support::{strings_of, try_run_prog};
 
     #[tokio::test]
     async fn keys_are_in_insertion_order() {

@@ -244,6 +244,17 @@ pub async fn run_prog(code: &str) -> Task<MAX_CALL_STACK_SIZE> {
     run_prog_with_config(code, Arc::new(test_config())).await
 }
 
+/// `run_prog`'s array result, each element as its `to_string`.
+pub async fn strings_of(code: &str) -> Vec<String> {
+    let task = run_prog(code).await;
+    task.result()
+        .unwrap()
+        .with_array(task.context.txn(), |arr| {
+            arr.iter().map(|x| x.to_string()).collect()
+        })
+        .unwrap()
+}
+
 pub async fn run_prog_with_config(code: &str, config: Arc<Config>) -> Task<MAX_CALL_STACK_SIZE> {
     expect_initialized(try_run_prog_with_config(code, config).await)
 }
