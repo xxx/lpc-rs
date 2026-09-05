@@ -297,6 +297,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_number_of_zero_needs_no_callback() {
+        let w = world().await;
+        let r = found(&w, r#""/finder"->find("sword 0")"#).await;
+        assert_eq!(r, LpcRef::from(0));
+    }
+
+    #[tokio::test]
+    async fn an_environment_with_nothing_in_it_needs_no_callback() {
+        let w = world().await;
+        let r = found(
+            &w,
+            r#""/finder"->find_in("sword", find_object("/room_sword"))"#,
+        )
+        .await;
+        assert_eq!(r, LpcRef::from(0));
+    }
+
+    #[tokio::test]
     async fn a_first_argument_that_is_neither_is_an_error() {
         let w = world().await;
         let err = w
