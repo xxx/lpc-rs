@@ -481,20 +481,28 @@ ForInit: AstNode = {
 };
 
 ForEachInit: ForEachInit = {
+    <var:ForEachVar> => ForEachInit::Array(var),
+    <key:ForEachVar> "," <value:ForEachVar> => ForEachInit::Mapping { key, value },
+};
+
+// A loop variable; untyped is `mixed`.
+ForEachVar: VarInitNode = {
     <name:"ID"> => {
         let mut node = VarInitNode::new(&name.1, LpcType::Mixed(false));
         node.span = Some(name.0);
-        
-        ForEachInit::Array(node)
+        node
     },
-    <key_name:"ID"> "," <value_name:"ID"> => {
-        let mut key = VarInitNode::new(&key_name.1, LpcType::Mixed(false));
-        key.span = Some(key_name.0);
-
-        let mut value = VarInitNode::new(&value_name.1, LpcType::Mixed(false));
-        value.span = Some(value_name.0);
-        
-        ForEachInit::Mapping { key, value }
+    <var_type:Type> <star:"*"?> <name:"ID"> =>? {
+        let span = Span::join(var_type.0, name.0);
+        if var_type.1 == "void" {
+            let error = lpc_error!(Some(span), "a `foreach` variable cannot be `void`");
+            return Err(ParseError::User { error });
+        }
+        let array = star.is_some();
+        let mut node = VarInitNode::new(&name.1, LpcType::from(var_type.1).as_array(array));
+        node.array = array;
+        node.span = Some(span);
+        Ok(node)
     },
 };
 

@@ -10,6 +10,7 @@ use lpc_rs::{
             decl_node::DeclNode,
             expression_node::ExpressionNode,
             float_node::FloatNode,
+            for_each_node::ForEachInit,
             function_def_node::FunctionDefNode,
             function_ptr_node::FunctionPtrNode,
             if_node::IfNode,
@@ -609,6 +610,57 @@ async fn test_closure_bodies() {
     "#};
 
     assert_ok!(parse_prog(prog).await);
+}
+
+#[tokio::test]
+async fn a_foreach_variable_may_be_typed() {
+    let code = "void f(mixed a) { foreach (string s : a) {} foreach (int *k, mixed v : a) {} }";
+    let prog = parse_prog(code).await.unwrap();
+    let AstNode::FunctionDef(def) = &prog.body[0] else {
+        panic!("expected a function");
+    };
+    let AstNode::ForEach(first) = &def.body[0] else {
+        panic!("expected a foreach");
+    };
+    let ForEachInit::Array(var) = &first.initializer else {
+        panic!("expected one variable");
+    };
+    assert_eq!(var.type_, LpcType::String(false));
+    assert_eq!(var.name.as_str(), "s");
+    let AstNode::ForEach(second) = &def.body[1] else {
+        panic!("expected a foreach");
+    };
+    let ForEachInit::Mapping { key, value } = &second.initializer else {
+        panic!("expected a key and a value");
+    };
+    assert_eq!(key.type_, LpcType::Int(true));
+    assert!(key.array);
+    assert_eq!(value.type_, LpcType::Mixed(false));
+}
+
+#[tokio::test]
+async fn an_untyped_foreach_variable_is_mixed() {
+    let prog = parse_prog("void f(mixed a) { foreach (x : a) {} }")
+        .await
+        .unwrap();
+    let AstNode::FunctionDef(def) = &prog.body[0] else {
+        panic!("expected a function");
+    };
+    let AstNode::ForEach(node) = &def.body[0] else {
+        panic!("expected a foreach");
+    };
+    let ForEachInit::Array(var) = &node.initializer else {
+        panic!("expected one variable");
+    };
+    assert_eq!(var.type_, LpcType::Mixed(false));
+}
+
+#[tokio::test]
+async fn a_void_foreach_variable_is_rejected() {
+    let err = parse_prog("void f(mixed a) { foreach (void x : a) {} }")
+        .await
+        .unwrap_err();
+    assert_eq!(err.to_string(), "a `foreach` variable cannot be `void`");
 }
 
 async fn parse_prog(prog: &str) -> Result<ProgramNode> {

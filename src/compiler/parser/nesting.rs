@@ -147,7 +147,7 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
             }
             AstNode::ForEach(n) => {
                 match &n.initializer {
-                    ForEachInit::Array(init) | ForEachInit::String(init) => {
+                    ForEachInit::Array(init) => {
                         out.push(Child::VarInit(init));
                     }
                     ForEachInit::Mapping { key, value } => {

@@ -920,6 +920,35 @@ mod test_instructions {
         }
     }
 
+    mod test_typed_foreach {
+        use super::*;
+
+        #[tokio::test]
+        async fn typed_variables_receive_the_elements() {
+            let code = indoc! { r##"
+                    int total = 0;
+                    int keys = 0;
+                    void create() {
+                        foreach (int i : ({ 1, 2, 3 })) {
+                            total += i;
+                        }
+                        foreach (string k, int v : ([ "a": 10, "b": 20 ])) {
+                            if (k == "a" || k == "b") {
+                                keys += 1;
+                            }
+                            total += v;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[("total", BareVal::Int(36)), ("keys", BareVal::Int(2))],
+            )
+            .await;
+        }
+    }
+
     mod test_comparison_branches {
         use super::*;
 

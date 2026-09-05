@@ -300,6 +300,18 @@ pub fn mismatch(
     }
 }
 
+/// The element type a `foreach` over a collection of static type
+/// `collection` yields, when the type says: `T *` yields `T`, a string
+/// yields the character's code.
+pub fn element_type(collection: LpcType) -> Option<LpcType> {
+    match collection {
+        LpcType::String(false) => Some(LpcType::Int(false)),
+        LpcType::Mixed(_) | LpcType::Mapping(false) | LpcType::Union(_) | LpcType::Void => None,
+        typed if typed.is_array() => Some(typed.as_array(false)),
+        _ => None,
+    }
+}
+
 /// The type of a binary operation on its operand types; a pair the operation
 /// check rejects is `mixed`.
 fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType {

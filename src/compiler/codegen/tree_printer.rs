@@ -316,7 +316,7 @@ impl TreeWalker for TreePrinter {
         self.println_indented("init:");
         self.indent += 2;
         match &mut node.initializer {
-            ForEachInit::Array(init) | ForEachInit::String(init) => {
+            ForEachInit::Array(init) => {
                 init.visit(self).await?;
             }
             ForEachInit::Mapping { key, value } => {

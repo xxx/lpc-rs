@@ -268,7 +268,7 @@ where
     W: TreeWalker + Send,
 {
     match &mut node.initializer {
-        ForEachInit::Array(init) | ForEachInit::String(init) => {
+        ForEachInit::Array(init) => {
             let _ = init.visit(walker).await;
         }
         ForEachInit::Mapping { key, value } => {

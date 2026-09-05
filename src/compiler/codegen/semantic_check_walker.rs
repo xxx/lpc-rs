@@ -41,8 +41,8 @@ use crate::{
         compilation_context::CompilationContext,
         diagnostics::Diagnostics,
         semantic::semantic_checks::{
-            check_binary_operation_types, check_unary_operation_types, is_keyword, mismatch,
-            node_type,
+            check_binary_operation_types, check_unary_operation_types, element_type, is_keyword,
+            mismatch, node_type,
         },
     },
     interpreter::efun::CALL_OTHER,
@@ -516,12 +516,17 @@ impl TreeWalker for SemanticCheckWalker {
             self.context.diagnostics.record(e);
         }
 
-        if let ForEachInit::Mapping { key, value } = &node.initializer
-            && (key.type_ != LpcType::Mixed(false) || value.type_ != LpcType::Mixed(false))
+        if let ForEachInit::Array(init) = &node.initializer
+            && let Some(element) = element_type(collection_type)
+            && !init.type_.matches_type(element)
         {
             let e = lpc_error!(
-                node.span,
-                "the key and value types for iterating a mapping via `foreach` must be of type `mixed`"
+                init.span,
+                "mismatched types: `foreach` variable `{}` ({}) over `{}` ({} elements)",
+                init.name,
+                init.type_,
+                node.collection,
+                element
             );
             self.context.diagnostics.record(e);
         }
@@ -2038,6 +2043,90 @@ mod tests {
             let context = walk_code(code).await.expect("failed to parse?");
 
             assert!(context.diagnostics.errors().is_empty());
+        }
+
+        #[tokio::test]
+        async fn allows_typed_variables_the_collection_can_fill() {
+            let code = indoc! { r#"
+                void create() {
+                    int *a = ({ 1, 2, 3 });
+                    string s = "abc";
+                    mapping m = ([ "a": 1 ]);
+                    foreach (int i : a) {
+                        dump(i);
+                    }
+                    foreach (int c : s) {
+                        dump(c);
+                    }
+                    foreach (string k, int v : m) {
+                        dump(k);
+                    }
+                    foreach (string *row : ({ ({ "x" }) })) {
+                        dump(row);
+                    }
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert!(
+                context.diagnostics.errors().is_empty(),
+                "{:?}",
+                context.diagnostics.errors()
+            );
+        }
+
+        #[tokio::test]
+        async fn rejects_a_variable_type_the_elements_cannot_be() {
+            let code = indoc! { r#"
+                void create() {
+                    int *a = ({ 1, 2, 3 });
+                    foreach (string s : a) {
+                        dump(s);
+                    }
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "mismatched types: `foreach` variable `s` (string) over `a` (int elements)"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_string_yields_ints() {
+            let code = indoc! { r#"
+                void create() {
+                    string s = "abc";
+                    foreach (string c : s) {
+                        dump(c);
+                    }
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "mismatched types: `foreach` variable `c` (string) over `s` (int elements)"
+            );
+        }
+
+        #[tokio::test]
+        async fn an_array_variable_over_a_flat_array_is_rejected() {
+            let code = indoc! { r#"
+                void create() {
+                    int *a = ({ 1, 2, 3 });
+                    foreach (int *row : a) {
+                        dump(row);
+                    }
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "mismatched types: `foreach` variable `row` (int *) over `a` (int elements)"
+            );
         }
 
         #[tokio::test]
