@@ -9,6 +9,7 @@ use lpc_rs_core::{RegisterSize, register::RegisterVariant};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::instrument;
+use ustr::Ustr;
 
 use crate::interpreter::{
     call_frame::CallFrame,
@@ -25,13 +26,32 @@ use crate::interpreter::{
     },
 };
 
-/// The values a pointer call passes, before the pointer's partial
-/// application binds on top of them.
+/// The pointer a call reads and the values it passes, before the pointer's
+/// partial application binds on top of them.
+#[derive(Clone, Copy)]
 pub(crate) enum Passed<'a> {
-    /// The calling instruction's list, read from the caller frame.
-    List(ArgList),
-    /// Values in hand.
-    Values(&'a [LpcRef]),
+    /// The pointer in the calling frame's `pointer` register, called with
+    /// the calling instruction's `list`.
+    List {
+        pointer: RegisterVariant,
+        list: ArgList,
+    },
+    /// A pointer in hand with its values.
+    Values {
+        ptr: &'a Arc<FunctionPtr>,
+        values: &'a [LpcRef],
+    },
+}
+
+impl<'a> Passed<'a> {
+    /// `ptr` outliving the register borrow it may have come from: a pointer
+    /// in hand is borrowed, one read from a register is cloned.
+    fn hold(self, ptr: &Arc<FunctionPtr>) -> Cow<'a, Arc<FunctionPtr>> {
+        match self {
+            Passed::Values { ptr, .. } => Cow::Borrowed(ptr),
+            Passed::List { .. } => Cow::Owned(ptr.clone()),
+        }
+    }
 }
 
 /// How the pointer door left the call.
@@ -46,6 +66,26 @@ pub(crate) enum Called {
     /// The top frame holds a suspended pending call: the efun ran in its
     /// entry frame and asked for a callback that needs the async arm.
     Pending,
+}
+
+/// What one read of a pointer resolves it to.
+enum Resolved<'a> {
+    /// A resident function: its frame, built off the stack with the
+    /// arguments bound and type-checked under that one read.
+    Frame(CallFrame),
+    /// A receiver that needs loading or initializing.
+    Suspends,
+    /// A plain efun, fired in an entry frame on `owner`.
+    Efun {
+        ptr: Cow<'a, Arc<FunctionPtr>>,
+        efun: Efun,
+        owner: Arc<Process>,
+    },
+    /// `&->name()`, resolved on its receiver argument.
+    Dynamic {
+        ptr: Cow<'a, Arc<FunctionPtr>>,
+        name: Ustr,
+    },
 }
 
 /// The error a pointer whose receiver was destructed gives.
@@ -63,18 +103,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         location: RegisterVariant,
         list: ArgList,
     ) -> Result<Option<AsyncCall>> {
-        if self
-            .args_of(list)?
-            .iter()
-            .any(|arg| matches!(arg, Arg::Ref(_)))
-        {
-            return Ok(Some(AsyncCall::FunctionPointer(location, list)));
-        }
-        let ptr = match &*get_location(&self.stack, &self.context.txn, location)? {
-            LpcRef::Function(ptr) => ptr.clone(),
-            _ => return Ok(Some(AsyncCall::FunctionPointer(location, list))),
-        };
-        match self.call_pointer_now(&ptr, Passed::List(list)) {
+        match self.call_pointer_now(Passed::List {
+            pointer: location,
+            list,
+        }) {
             Ok(Called::Framed) => Ok(None),
             Ok(Called::Unresolved) => {
                 self.stack.current_frame_mut()?.registers[0] = NULL;
@@ -86,59 +118,94 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
     }
 
-    /// Call `ptr` with `passed` where no loading is needed: a frame pushed
-    /// with the arguments bound in place, an efun run in its entry frame.
-    pub(crate) fn call_pointer_now(
-        &mut self,
-        ptr: &Arc<FunctionPtr>,
-        passed: Passed<'_>,
-    ) -> Result<Called> {
-        match &ptr.address {
-            FunctionAddress::Local(receiver, function) => {
-                let Some(process) = receiver.upgrade() else {
-                    return Err(destructed_receiver(ptr));
-                };
-                match process.liveness(&self.context.txn) {
-                    Liveness::Dead => Err(destructed_receiver(ptr)),
-                    Liveness::Uninitialized => Ok(Called::Suspends),
-                    Liveness::Ready => {
-                        self.push_pointer_frame(process, function.clone(), ptr, passed)?;
-                        Ok(Called::Framed)
+    /// Call the pointer `passed` names where no loading is needed: a frame
+    /// pushed with the arguments bound in place, an efun run in its entry
+    /// frame.
+    pub(crate) fn call_pointer_now(&mut self, passed: Passed<'_>) -> Result<Called> {
+        let resolved = {
+            let held;
+            let ptr = match passed {
+                Passed::List { pointer, .. } => {
+                    held = get_location(&self.stack, &self.context.txn, pointer)?;
+                    match &*held {
+                        LpcRef::Function(ptr) => ptr,
+                        other => {
+                            return Err(self.runtime_error(format!(
+                                "callfp instruction on non-function: {other}"
+                            )));
+                        }
                     }
                 }
+                Passed::Values { ptr, .. } => ptr,
+            };
+            match &ptr.address {
+                FunctionAddress::Local(receiver, function) => {
+                    let Some(process) = receiver.upgrade() else {
+                        return Err(destructed_receiver(ptr));
+                    };
+                    match process.liveness(&self.context.txn) {
+                        Liveness::Dead => return Err(destructed_receiver(ptr)),
+                        Liveness::Uninitialized => Resolved::Suspends,
+                        Liveness::Ready => {
+                            Resolved::Frame(self.resident_frame(process, function, ptr, passed)?)
+                        }
+                    }
+                }
+                FunctionAddress::SimulEfun(name) => {
+                    let Some(simul_efuns) = self.context.simul_efuns() else {
+                        return Err(LpcError::runtime(format!(
+                            "call to simul efun `{name}`: no simul-efun object is loaded"
+                        )));
+                    };
+                    let Some(function) = simul_efuns.program.lookup_function(name) else {
+                        return Err(LpcError::runtime(format!(
+                            "call to unknown simul efun `{name}`"
+                        )));
+                    };
+                    Resolved::Frame(self.resident_frame(
+                        simul_efuns.clone(),
+                        function,
+                        ptr,
+                        passed,
+                    )?)
+                }
+                FunctionAddress::Efun(name) => {
+                    let Some(owner) = ptr
+                        .owner
+                        .upgrade()
+                        .filter(|owner| owner.is_live(&self.context.txn))
+                    else {
+                        return Err(LpcError::runtime(format!(
+                            "attempted to call an efun pointer whose owner is destructed: {ptr}"
+                        )));
+                    };
+                    let Some(efun) = Efun::from_name(name) else {
+                        return Err(self
+                            .runtime_bug(format!("`{name}` is typed efun but has no table row")));
+                    };
+                    if efun.suspends() {
+                        Resolved::Suspends
+                    } else {
+                        Resolved::Efun {
+                            ptr: passed.hold(ptr),
+                            efun,
+                            owner,
+                        }
+                    }
+                }
+                FunctionAddress::Dynamic(name) => Resolved::Dynamic {
+                    ptr: passed.hold(ptr),
+                    name: *name,
+                },
             }
-            FunctionAddress::SimulEfun(name) => {
-                let Some(simul_efuns) = self.context.simul_efuns().cloned() else {
-                    return Err(LpcError::runtime(format!(
-                        "call to simul efun `{name}`: no simul-efun object is loaded"
-                    )));
-                };
-                let Some(function) = simul_efuns.program.lookup_function(name).cloned() else {
-                    return Err(LpcError::runtime(format!(
-                        "call to unknown simul efun `{name}`"
-                    )));
-                };
-                self.push_pointer_frame(simul_efuns, function, ptr, passed)?;
+        };
+        match resolved {
+            Resolved::Frame(frame) => {
+                self.stack.push(frame)?;
                 Ok(Called::Framed)
             }
-            FunctionAddress::Efun(name) => {
-                let Some(owner) = ptr
-                    .owner
-                    .upgrade()
-                    .filter(|owner| owner.is_live(&self.context.txn))
-                else {
-                    return Err(LpcError::runtime(format!(
-                        "attempted to call an efun pointer whose owner is destructed: {ptr}"
-                    )));
-                };
-                let Some(efun) = Efun::from_name(name) else {
-                    return Err(
-                        self.runtime_bug(format!("`{name}` is typed efun but has no table row"))
-                    );
-                };
-                if efun.suspends() {
-                    return Ok(Called::Suspends);
-                }
+            Resolved::Suspends => Ok(Called::Suspends),
+            Resolved::Efun { ptr, efun, owner } => {
                 let args = ptr.bound_args(&self.passed_values(passed)?);
                 self.refuse_ref_params(efun)?;
                 self.push_entry_frame(owner.clone(), ptr.origin.clone())?;
@@ -147,93 +214,45 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     Advance::Suspends => Ok(Called::Pending),
                 }
             }
-            FunctionAddress::Dynamic(name) => {
-                let mut args = ptr.bound_args(&self.passed_values(passed)?);
-                let receiver = if args.is_empty() {
-                    NULL
-                } else {
-                    args.remove(0)
-                };
-                let process = match &receiver {
-                    LpcRef::Object(_) | LpcRef::String(_) => {
-                        match Self::standing(&receiver, &self.context)? {
-                            Standing::Ready(process) => process,
-                            Standing::Dead => {
-                                return Err(LpcError::runtime(format!(
-                                    "attempted to call `{name}` on a destructed object"
-                                )));
-                            }
-                            Standing::Removed(path) => {
-                                return Err(LpcError::runtime(format!(
-                                    "attempted to call `{name}` on a destructed object `{path}`"
-                                )));
-                            }
-                            Standing::Uncreated(_) | Standing::Uninitialized(_) => {
-                                return Ok(Called::Suspends);
-                            }
-                        }
-                    }
-                    _ => {
-                        return Err(LpcError::runtime(format!(
-                            "`&->{name}()` needs an object or path as its receiver, got `{receiver}`"
-                        )));
-                    }
-                };
-                let Some(function) = process.program.lookup_function(name).cloned() else {
-                    return Ok(Called::Unresolved);
-                };
-                if let Some(i) = function.prototype.first_ref_param() {
-                    return Err(LpcError::runtime(format!(
-                        "`{}` takes argument {} by reference; call it directly",
-                        function.name(),
-                        i + 1
-                    )));
-                }
-                let prototype = &function.prototype;
-                for (i, arg) in args.iter().enumerate() {
-                    check_arg_type(
-                        &self.context.txn,
-                        arg,
-                        prototype.arg_types.get(i),
-                        prototype.arg_spans.get(i),
-                        &prototype.name,
-                    )?;
-                }
-                self.push_external_frame(process, function, args.into_iter(), ptr.origin.clone())?;
-                Ok(Called::Framed)
-            }
+            Resolved::Dynamic { ptr, name } => self.call_dynamic_pointer(&ptr, name, passed),
         }
     }
 
-    /// `passed` as owned values.
-    fn passed_values(&self, passed: Passed<'_>) -> Result<Vec<LpcRef>> {
-        match passed {
-            Passed::Values(values) => Ok(values.to_vec()),
-            Passed::List(list) => {
-                self.args_of(list)?
-                    .iter()
-                    .map(|arg| match *arg {
-                        Arg::Value(loc) => {
-                            get_location(&self.stack, &self.context.txn, loc).map(Cow::into_owned)
-                        }
-                        Arg::Ref(_) => Err(self.runtime_bug(
-                            "a by-reference argument reached a function pointer call",
-                        )),
-                    })
-                    .collect()
-            }
-        }
-    }
-
-    /// Push `function`'s frame on `process` with `ptr`'s binding of `passed`
-    /// stored in place; a refused argument pops it and reports at the caller.
-    fn push_pointer_frame(
-        &mut self,
+    /// `pointer_frame` over `passed`: the calling frame's list read, or the
+    /// values in hand.
+    fn resident_frame(
+        &self,
         process: Arc<Process>,
-        function: Arc<ProgramFunction>,
+        function: &Arc<ProgramFunction>,
         ptr: &FunctionPtr,
         passed: Passed<'_>,
-    ) -> Result<()> {
+    ) -> Result<CallFrame> {
+        match passed {
+            Passed::List { list, .. } => {
+                let args = self.args_of(list)?;
+                self.pointer_frame(
+                    process,
+                    function,
+                    ptr,
+                    args.iter().map(|arg| self.arg_value(*arg)),
+                )
+            }
+            Passed::Values { values, .. } => {
+                self.pointer_frame(process, function, ptr, values.iter().cloned().map(Ok))
+            }
+        }
+    }
+
+    /// `function`'s frame on `process` with `ptr`'s binding of `passed`
+    /// stored in place, each argument checked against its parameter type;
+    /// nothing is pushed.
+    fn pointer_frame(
+        &self,
+        process: Arc<Process>,
+        function: &Arc<ProgramFunction>,
+        ptr: &FunctionPtr,
+        passed: impl ExactSizeIterator<Item = Result<LpcRef>>,
+    ) -> Result<CallFrame> {
         if let Some(i) = function.prototype.first_ref_param() {
             return Err(LpcError::runtime(format!(
                 "`{}` takes argument {} by reference; call it directly",
@@ -241,48 +260,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 i + 1
             )));
         }
-        let passed_len = match passed {
-            Passed::List(list) => self.args_of(list)?.len(),
-            Passed::Values(values) => values.len(),
-        };
-        let num_args = RegisterSize::try_from(ptr.bound_len(passed_len))?;
-        self.stack.push_new(
+        let txn = &self.context.txn;
+        let num_args = RegisterSize::try_from(ptr.bound_len(passed.len()))?;
+        let mut frame = CallFrame::with_minimum_arg_capacity(
             process,
             function.clone(),
             num_args,
             num_args,
             Some(ptr.upvalue_ptrs.clone()),
-        )?;
-        if let Err(e) = self.bind_pointer_args(ptr, passed, &function) {
-            let depth = self.stack.len() - 1;
-            self.stack.truncate(depth);
-            let caller_span = self
-                .stack
-                .current_frame()
-                .ok()
-                .and_then(CallFrame::current_debug_span);
-            return Err(e.or_span(caller_span));
-        }
-        Ok(())
-    }
-
-    /// Store the bound arguments in the callee frame on top, each checked
-    /// against `function`'s parameter type.
-    fn bind_pointer_args(
-        &mut self,
-        ptr: &FunctionPtr,
-        passed: Passed<'_>,
-        function: &ProgramFunction,
-    ) -> Result<()> {
-        let txn = &self.context.txn;
-        let (callee, below) = self.stack.split_last_mut()?;
-        let Some(caller) = below.last() else {
-            return Err(
-                callee.runtime_bug("a pointer call with no frame to read its arguments from")
-            );
-        };
+        );
         let prototype = &function.prototype;
-        let mut store = |i: usize, value: LpcRef| {
+        ptr.each_bound(passed, |i, value| {
             check_arg_type(
                 txn,
                 &value,
@@ -290,23 +278,98 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 prototype.arg_spans.get(i),
                 &prototype.name,
             )?;
-            callee.push_arg(txn, i, value)
-        };
-        match passed {
-            Passed::List(list) => ptr.each_bound(
-                caller.function.args(list).iter().map(|arg| match *arg {
-                    Arg::Value(loc) => caller.get_location(txn, loc).map(Cow::into_owned),
-                    Arg::Ref(_) => Err(LpcError::runtime_bug(
-                        "a by-reference argument reached a function pointer call",
-                    )),
-                }),
-                &mut store,
-            )?,
-            Passed::Values(values) => ptr.each_bound(values.iter().cloned().map(Ok), &mut store)?,
+            frame.push_arg(txn, i, value)
+        })?;
+        frame.origin = ptr.origin.clone();
+        frame.external = true;
+        Ok(frame)
+    }
+
+    /// The value the current frame's `arg` names.
+    fn arg_value(&self, arg: Arg) -> Result<LpcRef> {
+        match arg {
+            Arg::Value(loc) => {
+                get_location(&self.stack, &self.context.txn, loc).map(Cow::into_owned)
+            }
+            Arg::Ref(_) => {
+                Err(self.runtime_bug("a by-reference argument reached a function pointer call"))
+            }
         }
-        callee.origin = ptr.origin.clone();
-        callee.external = true;
-        Ok(())
+    }
+
+    /// `passed` as owned values.
+    fn passed_values(&self, passed: Passed<'_>) -> Result<Vec<LpcRef>> {
+        match passed {
+            Passed::Values { values, .. } => Ok(values.to_vec()),
+            Passed::List { list, .. } => self
+                .args_of(list)?
+                .iter()
+                .map(|arg| self.arg_value(*arg))
+                .collect(),
+        }
+    }
+
+    /// Call `&->name()` with `passed`: the first bound argument is the
+    /// receiver, resident or the call suspends.
+    fn call_dynamic_pointer(
+        &mut self,
+        ptr: &FunctionPtr,
+        name: Ustr,
+        passed: Passed<'_>,
+    ) -> Result<Called> {
+        let mut args = ptr.bound_args(&self.passed_values(passed)?);
+        let receiver = if args.is_empty() {
+            NULL
+        } else {
+            args.remove(0)
+        };
+        let process = match &receiver {
+            LpcRef::Object(_) | LpcRef::String(_) => {
+                match Self::standing(&receiver, &self.context)? {
+                    Standing::Ready(process) => process,
+                    Standing::Dead => {
+                        return Err(LpcError::runtime(format!(
+                            "attempted to call `{name}` on a destructed object"
+                        )));
+                    }
+                    Standing::Removed(path) => {
+                        return Err(LpcError::runtime(format!(
+                            "attempted to call `{name}` on a destructed object `{path}`"
+                        )));
+                    }
+                    Standing::Uncreated(_) | Standing::Uninitialized(_) => {
+                        return Ok(Called::Suspends);
+                    }
+                }
+            }
+            _ => {
+                return Err(LpcError::runtime(format!(
+                    "`&->{name}()` needs an object or path as its receiver, got `{receiver}`"
+                )));
+            }
+        };
+        let Some(function) = process.program.lookup_function(name).cloned() else {
+            return Ok(Called::Unresolved);
+        };
+        if let Some(i) = function.prototype.first_ref_param() {
+            return Err(LpcError::runtime(format!(
+                "`{}` takes argument {} by reference; call it directly",
+                function.name(),
+                i + 1
+            )));
+        }
+        let prototype = &function.prototype;
+        for (i, arg) in args.iter().enumerate() {
+            check_arg_type(
+                &self.context.txn,
+                arg,
+                prototype.arg_types.get(i),
+                prototype.arg_spans.get(i),
+                &prototype.name,
+            )?;
+        }
+        self.push_external_frame(process, function, args.into_iter(), ptr.origin.clone())?;
+        Ok(Called::Framed)
     }
 
     /// Call `ptr` with `passed`, loading or initializing the receiver and
@@ -385,7 +448,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             };
             ptr.clone()
         };
-        let passed = self.passed_values(Passed::List(list))?;
+        let passed = self.passed_values(Passed::List {
+            pointer: location,
+            list,
+        })?;
         if let Called::Unresolved = self.call_pointer_slow(&ptr, passed).await? {
             self.stack.current_frame_mut()?.registers[0] = NULL;
         }
@@ -603,6 +669,29 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("sscanf"), "{msg}");
         assert!(msg.contains("must be passed by reference"), "{msg}");
+        assert_eq!(task.stack.len(), 1);
+        assert_eq!(
+            err.span(),
+            task.stack.current_frame().unwrap().current_debug_span()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_non_function_value_fails_at_the_call_site_with_no_await() {
+        let code = indoc! { r#"
+            int got;
+            void create() { mixed f = 3; got = f(1); }
+        "# };
+        let (mut task, _live) = task_at_first_call_fp(code).await;
+
+        let Err(err) = task.run_slice(&mut 1) else {
+            panic!("the call is refused");
+        };
+
+        assert_eq!(
+            err.to_string(),
+            "runtime error: callfp instruction on non-function: 3"
+        );
         assert_eq!(task.stack.len(), 1);
         assert_eq!(
             err.span(),

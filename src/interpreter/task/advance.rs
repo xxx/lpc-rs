@@ -111,7 +111,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Make `callee`'s call where no loading is needed.
     fn call_callee_now(&mut self, callee: &Callee) -> Result<Called> {
         match callee {
-            Callee::Pointer { ptr, args } => self.call_pointer_now(ptr, Passed::Values(args)),
+            Callee::Pointer { ptr, args } => {
+                self.call_pointer_now(Passed::Values { ptr, values: args })
+            }
             Callee::Function {
                 process,
                 function,
