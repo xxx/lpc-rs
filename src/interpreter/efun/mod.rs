@@ -41,6 +41,7 @@ pub(crate) mod keys_values;
 pub(crate) mod living;
 pub(crate) mod m_delete;
 pub(crate) mod map;
+pub(crate) mod math;
 pub(crate) mod member_array;
 pub(crate) mod min_max;
 pub(crate) mod mkdir;
@@ -267,6 +268,11 @@ macro_rules! efuns {
 }
 
 /// What `min` and `max` take: numbers, or one array of them.
+/// An int or a float.
+fn number() -> LpcType {
+    LpcType::Int(false) | LpcType::Float(false)
+}
+
 fn numbers() -> LpcType {
     LpcType::Int(false)
         | LpcType::Float(false)
@@ -810,6 +816,71 @@ efuns! {
         arity: (2, 1),
         args: [LpcType::String(false), LpcType::String(false) | LpcType::Int(false)],
     },
+    sin [in math] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [number()],
+    },
+    cos [in math] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [number()],
+    },
+    tan [in math] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [number()],
+    },
+    asin [in math] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [number()],
+    },
+    acos [in math] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [number()],
+    },
+    atan [in math] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [number()],
+    },
+    atan2 [in math] => {
+        returns: LpcType::Float(false),
+        arity: 2,
+        args: [number(), number()],
+    },
+    exp [in math] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [number()],
+    },
+    log [in math] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [number()],
+    },
+    pow [in math] => {
+        returns: LpcType::Float(false),
+        arity: 2,
+        args: [number(), number()],
+    },
+    sqrt [in math] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [number()],
+    },
+    floor [in math] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [number()],
+    },
+    ceil [in math] => {
+        returns: LpcType::Float(false),
+        arity: 1,
+        args: [number()],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1087,6 +1158,19 @@ mod tests {
                 "sprintf",
                 "filter_map",
                 "crypt",
+                "sin",
+                "cos",
+                "tan",
+                "asin",
+                "acos",
+                "atan",
+                "atan2",
+                "exp",
+                "log",
+                "pow",
+                "sqrt",
+                "floor",
+                "ceil",
             ]
         );
     }
