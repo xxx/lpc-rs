@@ -16,7 +16,10 @@
 
 use std::{path::PathBuf, sync::Arc};
 
-use tokio::{io::AsyncWriteExt, sync::mpsc::UnboundedSender};
+use tokio::{
+    io::{AsyncSeekExt, AsyncWriteExt},
+    sync::mpsc::UnboundedSender,
+};
 
 use crate::{
     interpreter::{lpc_ref::LpcRef, process::Process, vm::global_state::GlobalState},
@@ -118,6 +121,16 @@ pub(crate) enum Effect {
         contents: String,
     },
 
+    /// `write_bytes`'s overwrite of the file at `server` from byte `start`
+    /// with `contents`, once the attempt commits; `in_game` names it in the
+    /// log when the write fails.
+    WriteBytes {
+        in_game: String,
+        server: PathBuf,
+        start: u64,
+        contents: String,
+    },
+
     /// `rm`'s unlink of the file at `server`, once the attempt commits;
     /// `in_game` names it in the log when the unlink fails.
     RemoveFile { in_game: String, server: PathBuf },
@@ -199,6 +212,29 @@ impl Effect {
                         .await;
                 }
             }
+            Self::WriteBytes {
+                in_game,
+                server,
+                start,
+                contents,
+            } => {
+                let written = async {
+                    let mut file = tokio::fs::OpenOptions::new()
+                        .write(true)
+                        .open(&server)
+                        .await?;
+                    file.seek(std::io::SeekFrom::Start(start)).await?;
+                    file.write_all(contents.as_bytes()).await?;
+                    file.flush().await
+                }
+                .await;
+                if let Err(e) = written {
+                    global_state
+                        .config
+                        .debug_log(format!("write_bytes: {in_game}: {e}"))
+                        .await;
+                }
+            }
             Self::RemoveFile { in_game, server } => {
                 if let Err(e) = tokio::fs::remove_file(&server).await {
                     global_state
@@ -258,6 +294,7 @@ impl std::fmt::Debug for Effect {
             Self::Exec { .. } => f.debug_tuple("Exec").finish(),
             Self::Disconnect { message, .. } => f.debug_tuple("Disconnect").field(message).finish(),
             Self::AppendFile { in_game, .. } => f.debug_tuple("AppendFile").field(in_game).finish(),
+            Self::WriteBytes { in_game, .. } => f.debug_tuple("WriteBytes").field(in_game).finish(),
             Self::RemoveFile { in_game, .. } => f.debug_tuple("RemoveFile").field(in_game).finish(),
             Self::CreateDir { in_game, .. } => f.debug_tuple("CreateDir").field(in_game).finish(),
             Self::RemoveDir { in_game, .. } => f.debug_tuple("RemoveDir").field(in_game).finish(),

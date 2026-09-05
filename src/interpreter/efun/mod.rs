@@ -7,6 +7,7 @@ pub(crate) mod all_environment;
 pub(crate) mod all_inventory;
 pub(crate) mod allocate;
 pub(crate) mod bits;
+pub(crate) mod bytes;
 pub(crate) mod call_out;
 pub(crate) mod callback;
 pub(crate) mod case;
@@ -920,6 +921,16 @@ efuns! {
         arity: (3, 1),
         args: [LpcType::Mixed(true), LpcType::Function(false), LpcType::Mixed(false)],
     },
+    read_bytes [async in bytes] => {
+        returns: LpcType::Mixed(false),
+        arity: (3, 2),
+        args: [LpcType::String(false), LpcType::Int(false), LpcType::Int(false)],
+    },
+    write_bytes [async in bytes] => {
+        returns: LpcType::Int(false),
+        arity: 3,
+        args: [LpcType::String(false), LpcType::Int(false), LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1217,6 +1228,8 @@ mod tests {
                 "strftime",
                 "regexp",
                 "unique_array",
+                "read_bytes",
+                "write_bytes",
             ]
         );
     }
