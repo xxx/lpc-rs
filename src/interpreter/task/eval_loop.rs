@@ -340,6 +340,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Instruction::NewUpvalue(location) => {
                 self.stack.current_frame_mut()?.new_upvalue(location)?;
             }
+            Instruction::Negate(r1, r2) => {
+                self.unary_operation(r1, r2, |x, _| x.negate())?;
+            }
             Instruction::Not(r1, r2) => {
                 self.unary_operation(r1, r2, |x, txn| Ok(x.not(txn)))?;
             }

@@ -3483,6 +3483,69 @@ mod test_instructions {
         }
     }
 
+    mod test_negate {
+        use super::*;
+
+        #[tokio::test]
+        async fn negates_a_number() {
+            let code = indoc! { r##"
+                    int i = 5;
+                    int a = -i;
+                    int b = -a;
+                    float f = 1.5;
+                    int c = -f == -1.5;
+                    mixed m = 3;
+                    mixed d = -m;
+                    mixed g = 2.5;
+                    int e = -g == -2.5;
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::Int(-5)),
+                    ("b", BareVal::Int(5)),
+                    ("c", BareVal::Int(1)),
+                    ("d", BareVal::Int(-3)),
+                    ("e", BareVal::Int(1)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn the_minimum_int_wraps() {
+            let code = indoc! { r##"
+                    int i = -9223372036854775807 - 1;
+                    int a = -i;
+                "##};
+
+            check_committed_globals(code, &[("a", BareVal::Int(LpcIntInner::MIN))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_value_that_is_not_a_number_is_an_error() {
+            for (value, name) in [
+                (r#""ab""#, "string"),
+                ("({ 1 })", "array"),
+                ("([ ])", "mapping"),
+            ] {
+                let code = format!("mixed m = {value}; mixed a = -m;");
+
+                let error = try_run_prog(&code)
+                    .await
+                    .expect_err("negating a non-number must error");
+
+                let rendered = error.to_string();
+                assert!(
+                    rendered.starts_with("runtime error: mismatched types: -"),
+                    "{rendered}"
+                );
+                assert!(rendered.ends_with(&format!("({name})")), "{rendered}");
+            }
+        }
+    }
+
     mod test_not {
         use super::*;
 

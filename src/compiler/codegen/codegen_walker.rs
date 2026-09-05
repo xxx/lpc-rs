@@ -2291,10 +2291,9 @@ impl TreeWalker for CodegenWalker {
 
         self.current_result = match node.op {
             UnaryOperation::Negate => {
-                let minus_one = self.constant(LpcConstant::Int(-1), node.span)?;
                 let reg_result = self.register_counter.next().unwrap().as_local();
 
-                let instruction = Instruction::Mul(location, minus_one, reg_result);
+                let instruction = Instruction::Negate(location, reg_result);
                 push_instruction!(self, instruction, node.span);
 
                 reg_result
@@ -4774,10 +4773,10 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn a_negation_multiplies_by_a_pooled_minus_one() {
+        async fn a_negation_pools_nothing() {
             let f = function("int f(int x) { return -x; }", "f").await;
-            assert_eq!(f.instructions, vec![Mul(l(1), k(0), l(0)), Ret]);
-            assert_eq!(f.constants, vec![LpcConstant::Int(-1)]);
+            assert_eq!(f.instructions, vec![Negate(l(1), l(0)), Ret]);
+            assert!(f.constants.is_empty(), "{:?}", f.constants);
         }
 
         #[tokio::test]
@@ -5784,9 +5783,8 @@ mod tests {
             async fn populates_instructions() {
                 let mut walker = setup(UnaryOperation::Negate, false).await;
 
-                let expected = vec![Mul(
+                let expected = vec![Negate(
                     RegisterVariant::Constant(Register(0)),
-                    RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Local(Register(1)),
                 )];
 
