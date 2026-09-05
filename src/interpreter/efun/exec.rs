@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use if_chain::if_chain;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
@@ -28,72 +27,69 @@ pub(crate) const DISPLACED: &str =
 /// displaced (`Effect::Disconnect`) — is deferred to after this task
 /// commits, so a rejected attempt never touches the physical connection.
 pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    if_chain! {
-        let new_ref = context.arg(0);
-        if let LpcRef::Object(new_ob) = new_ref;
-        if let Some(new_ob) = new_ob.upgrade();
-        let old_ref = context.arg(1);
-        if let LpcRef::Object(old_ob) = old_ref;
-        if let Some(old_ob) = old_ob.upgrade();
-        then {
-            // One cell: the displaced holder would be the connection itself.
-            if Arc::ptr_eq(&new_ob, &old_ob) {
-                return Err(context.runtime_error("exec: `new` and `old` are the same object"));
-            }
-
-            let args = [
-                LpcRef::from(Arc::downgrade(context.process())),
-                LpcRef::from(Arc::downgrade(&new_ob)),
-                LpcRef::from(Arc::downgrade(&old_ob)),
-            ];
-            if !valid_apply(
-                context.task_context(),
-                Some(context.chain()),
-                VALID_EXEC,
-                &args,
-            )
-            .await?
-            {
-                context.return_efun_result(NULL);
-                return Ok(());
-            }
-
-            let txn = context.txn();
-
-            // The connection being moved, from the old body's cell.
-            // Changeset-first, so a prior uncommitted `exec` in this same
-            // task is seen.
-            let connection = txn.with(|t| t.read_connection(old_ob.connection.id));
-            let Some(connection) = connection else {
-                context.return_efun_result(NULL);
-                return Ok(());
-            };
-
-            // The connection the new body holds; the handover displaces it.
-            let previous = txn.with(|t| t.read_connection(new_ob.connection.id));
-
-            // Both writes land in the changeset and commit with this task.
-            txn.with(|t| t.write_connection(new_ob.connection.id, Some(connection.clone())));
-            txn.with(|t| t.write_connection(old_ob.connection.id, None));
-
-            context.record_effect(Effect::Exec {
-                new_process: new_ob.clone(),
-                connection,
-            });
-            if let Some(previous) = previous {
-                context.record_effect(Effect::Disconnect {
-                    connection: previous,
-                    message: Some(DISPLACED.to_owned()),
-                });
-            }
-
-            context.return_efun_result(LpcRef::from(1));
-            Ok(())
+    let new_ref = context.arg(0);
+    let old_ref = context.arg(1);
+    if let LpcRef::Object(new_ob) = new_ref
+        && let Some(new_ob) = new_ob.upgrade()
+        && let LpcRef::Object(old_ob) = old_ref
+        && let Some(old_ob) = old_ob.upgrade()
+    {
+        // One cell: the displaced holder would be the connection itself.
+        if Arc::ptr_eq(&new_ob, &old_ob) {
+            return Err(context.runtime_error("exec: `new` and `old` are the same object"));
         }
-        else {
+
+        let args = [
+            LpcRef::from(Arc::downgrade(context.process())),
+            LpcRef::from(Arc::downgrade(&new_ob)),
+            LpcRef::from(Arc::downgrade(&old_ob)),
+        ];
+        if !valid_apply(
+            context.task_context(),
+            Some(context.chain()),
+            VALID_EXEC,
+            &args,
+        )
+        .await?
+        {
             context.return_efun_result(NULL);
-            Ok(())
+            return Ok(());
         }
+
+        let txn = context.txn();
+
+        // The connection being moved, from the old body's cell.
+        // Changeset-first, so a prior uncommitted `exec` in this same
+        // task is seen.
+        let connection = txn.with(|t| t.read_connection(old_ob.connection.id));
+        let Some(connection) = connection else {
+            context.return_efun_result(NULL);
+            return Ok(());
+        };
+
+        // The connection the new body holds; the handover displaces it.
+        let previous = txn.with(|t| t.read_connection(new_ob.connection.id));
+
+        // Both writes land in the changeset and commit with this task.
+        txn.with(|t| t.write_connection(new_ob.connection.id, Some(connection.clone())));
+        txn.with(|t| t.write_connection(old_ob.connection.id, None));
+
+        context.record_effect(Effect::Exec {
+            new_process: new_ob.clone(),
+            connection,
+        });
+        if let Some(previous) = previous {
+            context.record_effect(Effect::Disconnect {
+                connection: previous,
+                message: Some(DISPLACED.to_owned()),
+            });
+        }
+
+        context.return_efun_result(LpcRef::from(1));
+        Ok(())
+    } else {
+        context.return_efun_result(NULL);
+        Ok(())
     }
 }
 

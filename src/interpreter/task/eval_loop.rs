@@ -1,4 +1,3 @@
-use async_recursion::async_recursion;
 use lpc_rs_asm::instruction::{ArgList, Instruction};
 use lpc_rs_core::{
     LpcIntInner,
@@ -64,40 +63,42 @@ pub(crate) enum Slice {
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Resume execution of a New or Paused Task. Assumes the stack has already been set up
     #[instrument(skip_all)]
-    #[async_recursion]
     pub async fn resume(&mut self) -> lpc_rs_errors::Result<()> {
-        let mut budget = SLICE;
+        Box::pin(async move {
+            let mut budget = SLICE;
 
-        loop {
-            let result = match self.run_slice(&mut budget) {
-                Ok(Slice::Budget) => {
-                    // Ensure infinite loops and the like don't monopolize the runtime.
-                    budget = SLICE;
-                    tokio::task::yield_now().await;
-                    continue;
-                }
-                Ok(Slice::Halt) => break,
-                Ok(Slice::Await(call)) => self.dispatch(call).await,
-                Err(e) => Err(e),
-            };
+            loop {
+                let result = match self.run_slice(&mut budget) {
+                    Ok(Slice::Budget) => {
+                        // Ensure infinite loops and the like don't monopolize the runtime.
+                        budget = SLICE;
+                        tokio::task::yield_now().await;
+                        continue;
+                    }
+                    Ok(Slice::Halt) => break,
+                    Ok(Slice::Await(call)) => self.dispatch(call).await,
+                    Err(e) => Err(e),
+                };
 
-            if let Err(e) = result {
-                if e.is_bug() {
-                    error!("{}", e.diagnostic_string());
-                }
+                if let Err(e) = result {
+                    if e.is_bug() {
+                        error!("{}", e.diagnostic_string());
+                    }
 
-                // `catch()` does not resume from a broken driver invariant.
-                if !e.is_bug() && !self.catch_points.is_empty() {
-                    self.catch_error(e)?;
-                } else {
-                    let stack_trace = self.stack.stack_trace();
-                    return Err(e.with_stack_trace(stack_trace));
+                    // `catch()` does not resume from a broken driver invariant.
+                    if !e.is_bug() && !self.catch_points.is_empty() {
+                        self.catch_error(e)?;
+                    } else {
+                        let stack_trace = self.stack.stack_trace();
+                        return Err(e.with_stack_trace(stack_trace));
+                    }
                 }
             }
-        }
 
-        assert!(self.stack.is_empty());
-        Ok(())
+            assert!(self.stack.is_empty());
+            Ok(())
+        })
+        .await
     }
 
     /// Step until an instruction awaits, the stack empties, or `budget` hits zero.

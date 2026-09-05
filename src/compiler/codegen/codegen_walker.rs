@@ -3,10 +3,8 @@ use std::{
     sync::Arc,
 };
 
-use async_recursion::async_recursion;
 use async_trait::async_trait;
 use bit_set::BitSet;
-use if_chain::if_chain;
 use indexmap::IndexMap;
 use lpc_rs_asm::{
     address::{Address, Label},
@@ -734,72 +732,74 @@ impl CodegenWalker {
     /// the expression's truth is `when` and falls through otherwise, leaving
     /// no value behind. `&&`, `||`, `!`, and integer literals become jumps
     /// alone; anything else is visited for its value and tested once.
-    #[async_recursion]
     async fn emit_condition(
         &mut self,
         node: &mut ExpressionNode,
         when: JumpWhen,
         label: &Label,
     ) -> Result<()> {
-        let span = node.span();
+        Box::pin(async move {
+            let span = node.span();
 
-        if let Some((kind, l, r)) = as_comparison(node) {
-            l.visit(self).await?;
-            let left = self.current_result;
-            r.visit(self).await?;
-            let right = self.current_result;
-            return self.emit_compare_jump(kind, left, right, when, label, span);
-        }
+            if let Some((kind, l, r)) = as_comparison(node) {
+                l.visit(self).await?;
+                let left = self.current_result;
+                r.visit(self).await?;
+                let right = self.current_result;
+                return self.emit_compare_jump(kind, left, right, when, label, span);
+            }
 
-        match node {
-            ExpressionNode::Int(IntNode { value, .. }) => {
-                if (*value != 0) == (when == JumpWhen::True) {
+            match node {
+                ExpressionNode::Int(IntNode { value, .. }) => {
+                    if (*value != 0) == (when == JumpWhen::True) {
+                        self.schedule_backpatch(label, self.current_address())?;
+                        push_instruction!(self, Instruction::Jmp(Address(0)), span);
+                    }
+                }
+                ExpressionNode::UnaryOp(UnaryOpNode {
+                    op: UnaryOperation::Bang,
+                    expr,
+                    ..
+                }) => {
+                    self.emit_condition(expr, when.flipped(), label).await?;
+                }
+                ExpressionNode::BinaryOp(BinaryOpNode {
+                    op: op @ (BinaryOperation::AndAnd | BinaryOperation::OrOr),
+                    l,
+                    r,
+                    ..
+                }) => {
+                    // The polarity a single operand can decide on its own.
+                    let direct = if *op == BinaryOperation::AndAnd {
+                        JumpWhen::False
+                    } else {
+                        JumpWhen::True
+                    };
+
+                    if when == direct {
+                        self.emit_condition(l, when, label).await?;
+                        self.emit_condition(r, when, label).await?;
+                    } else {
+                        let skip_label = self.new_label("condition-skip");
+                        self.emit_condition(l, direct, &skip_label).await?;
+                        self.emit_condition(r, when, label).await?;
+                        self.insert_label(skip_label, self.current_address());
+                    }
+                }
+                _ => {
+                    node.visit(self).await?;
                     self.schedule_backpatch(label, self.current_address())?;
-                    push_instruction!(self, Instruction::Jmp(Address(0)), span);
+                    let instruction = match when {
+                        JumpWhen::True => Instruction::Jnz(self.current_result, Address(0)),
+                        JumpWhen::False => Instruction::Jz(self.current_result, Address(0)),
+                    };
+                    push_instruction!(self, instruction, span);
                 }
             }
-            ExpressionNode::UnaryOp(UnaryOpNode {
-                op: UnaryOperation::Bang,
-                expr,
-                ..
-            }) => {
-                self.emit_condition(expr, when.flipped(), label).await?;
-            }
-            ExpressionNode::BinaryOp(BinaryOpNode {
-                op: op @ (BinaryOperation::AndAnd | BinaryOperation::OrOr),
-                l,
-                r,
-                ..
-            }) => {
-                // The polarity a single operand can decide on its own.
-                let direct = if *op == BinaryOperation::AndAnd {
-                    JumpWhen::False
-                } else {
-                    JumpWhen::True
-                };
 
-                if when == direct {
-                    self.emit_condition(l, when, label).await?;
-                    self.emit_condition(r, when, label).await?;
-                } else {
-                    let skip_label = self.new_label("condition-skip");
-                    self.emit_condition(l, direct, &skip_label).await?;
-                    self.emit_condition(r, when, label).await?;
-                    self.insert_label(skip_label, self.current_address());
-                }
-            }
-            _ => {
-                node.visit(self).await?;
-                self.schedule_backpatch(label, self.current_address())?;
-                let instruction = match when {
-                    JumpWhen::True => Instruction::Jnz(self.current_result, Address(0)),
-                    JumpWhen::False => Instruction::Jz(self.current_result, Address(0)),
-                };
-                push_instruction!(self, instruction, span);
-            }
-        }
-
-        Ok(())
+            Ok(())
+        })
+        .await
     }
 
     /// An unconditional jump to `label`, patched once the label is placed.
@@ -1361,36 +1361,32 @@ impl TreeWalker for CodegenWalker {
 
                 Instruction::CallOther(receiver, name_index, list)
             } else {
-                if_chain! {
-                    if calls_variable;
-                    then {
-                        Instruction::CallFp(self.location_of(name)?, list)
-                    } else {
-                        let Some(func) =
-                            self.context.lookup_function_complete(name, namespace) else {
-                            return Err(lpc_bug!(
-                                node.span,
-                                "Cannot find function during code gen: {}",
-                                name
-                            ));
-                        };
+                if calls_variable {
+                    Instruction::CallFp(self.location_of(name)?, list)
+                } else {
+                    let Some(func) = self.context.lookup_function_complete(name, namespace) else {
+                        return Err(lpc_bug!(
+                            node.span,
+                            "Cannot find function during code gen: {}",
+                            name
+                        ));
+                    };
 
-                        match func {
-                            Callee::Local(prototype) => {
-                                if prototype.kind == FunctionKind::Closure {
-                                    return Err(lpc_bug!(
-                                        node.span,
-                                        "closure `{}` called by name",
-                                        name
-                                    ));
-                                }
-                                Instruction::Call(ustr(&prototype.mangle()), list)
+                    match func {
+                        Callee::Local(prototype) => {
+                            if prototype.kind == FunctionKind::Closure {
+                                return Err(lpc_bug!(
+                                    node.span,
+                                    "closure `{}` called by name",
+                                    name
+                                ));
                             }
-                            Callee::SimulEfun(_) => Instruction::CallSimulEfun(*name, list),
-                            Callee::Efun(_) => {
-                                let idx = EFUN_PROTOTYPES.get_index_of(name.as_str()).unwrap();
-                                Instruction::CallEfun(u8::try_from(idx)?, list)
-                            }
+                            Instruction::Call(ustr(&prototype.mangle()), list)
+                        }
+                        Callee::SimulEfun(_) => Instruction::CallSimulEfun(*name, list),
+                        Callee::Efun(_) => {
+                            let idx = EFUN_PROTOTYPES.get_index_of(name.as_str()).unwrap();
+                            Instruction::CallEfun(u8::try_from(idx)?, list)
                         }
                     }
                 }
@@ -3284,15 +3280,13 @@ mod tests {
             let mut prog_node = lpc_parser::ProgramParser::new()
                 .parse(context, LexWrapper::new(code, 0).triples())
                 .unwrap();
-            if_chain! {
-                if let Some(AstNode::Decl(mut node)) = prog_node.body.pop();
-                if let Some(VarInitNode { value, .. }) = node.initializations.pop();
-                if let Some(ExpressionNode::Call(node)) = value;
-                then {
-                    node
-                } else {
-                    panic!("expected call node");
-                }
+            if let Some(AstNode::Decl(mut node)) = prog_node.body.pop()
+                && let Some(VarInitNode { value, .. }) = node.initializations.pop()
+                && let Some(ExpressionNode::Call(node)) = value
+            {
+                node
+            } else {
+                panic!("expected call node");
             }
         }
 
@@ -3732,15 +3726,13 @@ mod tests {
             let mut prog_node = lpc_parser::ProgramParser::new()
                 .parse(context, LexWrapper::new(code, 0).triples())
                 .unwrap();
-            if_chain! {
-                if let Some(AstNode::Decl(mut node)) = prog_node.body.pop();
-                if let Some(VarInitNode { value, .. }) = node.initializations.pop();
-                if let Some(ExpressionNode::Closure(node)) = value;
-                then {
-                    node
-                } else {
-                    panic!("expected call node");
-                }
+            if let Some(AstNode::Decl(mut node)) = prog_node.body.pop()
+                && let Some(VarInitNode { value, .. }) = node.initializations.pop()
+                && let Some(ExpressionNode::Closure(node)) = value
+            {
+                node
+            } else {
+                panic!("expected call node");
             }
         }
 

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use lpc_rs_asm::instruction::{Arg, ArgList, Instruction};
 use lpc_rs_core::{
@@ -12,8 +12,6 @@ use lpc_rs_function_support::{
     function_prototype::FunctionPrototypeBuilder,
     program_function::{ProgramFunction, ProgramFunctionBuilder},
 };
-// use logos::Span;
-use once_cell::sync::Lazy;
 use thin_vec::thin_vec;
 
 use crate::interpreter::{
@@ -29,7 +27,7 @@ use crate::interpreter::{
 ///     return f(papplyv(g, argv)());
 /// }
 /// ```
-pub static COMPOSE_EXECUTOR: Lazy<Arc<ProgramFunction>> = Lazy::new(|| {
+pub static COMPOSE_EXECUTOR: LazyLock<Arc<ProgramFunction>> = LazyLock::new(|| {
     let prototype = FunctionPrototypeBuilder::default()
         .name("compose-executor")
         .filename(Arc::new(Default::default()))

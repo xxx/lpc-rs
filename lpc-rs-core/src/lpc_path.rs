@@ -7,7 +7,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use bstr::ByteSlice;
 use path_absolutize::{Absolutize, path_dedot::ParseDot};
 
 use crate::mangle::Mangle;
@@ -126,12 +125,10 @@ impl LpcPath {
         P: AsRef<Path>,
     {
         match self {
-            LpcPath::Server(x) => {
-                let slice = <[u8]>::from_path(x).expect(
-                    "Path must be valid UTF-8 on Windows. This error should never occur on Unix.",
-                );
-                slice.starts_with_str(root.as_ref().as_os_str().as_bytes())
-            }
+            LpcPath::Server(x) => x
+                .as_os_str()
+                .as_bytes()
+                .starts_with(root.as_ref().as_os_str().as_bytes()),
             LpcPath::InGame(x) => !x.as_os_str().is_empty(),
         }
     }
@@ -247,8 +244,7 @@ where
     let mut lib_string = lib_dir.into();
 
     // turn relative paths into absolute
-    let slice = <[u8]>::from_os_str(path_ref).expect("Paths must be valid UTF-8 on Windows");
-    if !slice.starts_with_str(sep) {
+    if !path_ref.as_bytes().starts_with(sep.as_bytes()) {
         lib_string.push(&os_sep);
         lib_string.push(cwd.as_ref().as_os_str());
     }

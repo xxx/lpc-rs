@@ -1,6 +1,3 @@
-[build]
-rustflags = ["--cfg", "tokio_unstable"]
-
 # Test threads take the driver's `THREAD_STACK` (src/compile_time_config.rs);
 # `MAX_TASK_CHAIN` nested tasks overflow tokio's 2 MiB default.
 [env]

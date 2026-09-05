@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use if_chain::if_chain;
 use lpc_rs_core::{EFUN, ScopeId, call_namespace::CallNamespace, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result, lpc_error, lpc_warning, span::Span};
 use lpc_rs_utils::string::closure_arg_number;
@@ -763,18 +762,15 @@ impl TreeWalker for SemanticCheckWalker {
             self.context.diagnostics.record(e);
         }
 
-        if_chain! {
-            if node.name == ARGV;
-            if let Some(FunctionDefNode { flags, span, .. }) = self.current_function;
-            if flags.ellipsis();
-            then {
-                let e: LpcError = LpcError::new(
-                    "redeclaration of `argv` in a function with ellipsis arguments",
-                )
-                .with_span(node.span)
-                .with_label("Declared here", span);
-                return Err(self.context.diagnostics.fail(e));
-            }
+        if node.name == ARGV
+            && let Some(FunctionDefNode { flags, span, .. }) = self.current_function
+            && flags.ellipsis()
+        {
+            let e: LpcError =
+                LpcError::new("redeclaration of `argv` in a function with ellipsis arguments")
+                    .with_span(node.span)
+                    .with_label("Declared here", span);
+            return Err(self.context.diagnostics.fail(e));
         }
 
         walk_var_init(self, node).await?;

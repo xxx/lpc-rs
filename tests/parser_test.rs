@@ -1,5 +1,4 @@
 use claims::assert_ok;
-use if_chain::if_chain;
 use indoc::indoc;
 use lpc_rs::{
     compiler::{
@@ -443,18 +442,17 @@ async fn partial_application_argument_lists() {
     let program = parse_prog(prog).await.expect("Failed to parse");
 
     let get_args = |node: &AstNode| -> Option<Vec<Option<LpcIntInner>>> {
-        if_chain! {
-            if let AstNode::Decl(
-                DeclNode {
-                    type_: LpcType::Function(false),
-                    initializations
-                }
-            ) = node;
-            if let VarInitNode { value, .. } = &initializations[0];
-            if let Some(ExpressionNode::FunctionPtr(FunctionPtrNode { arguments, .. } )) = value;
-            then {
-                arguments.as_ref().map(|array| {
-                    array.iter().map(|arg| {
+        if let AstNode::Decl(DeclNode {
+            type_: LpcType::Function(false),
+            initializations,
+        }) = node
+            && let Some(ExpressionNode::FunctionPtr(FunctionPtrNode { arguments, .. })) =
+                &initializations[0].value
+        {
+            arguments.as_ref().map(|array| {
+                array
+                    .iter()
+                    .map(|arg| {
                         arg.as_ref().map(|expr| {
                             if let ExpressionNode::Int(IntNode { value, .. }) = expr {
                                 *value
@@ -462,11 +460,11 @@ async fn partial_application_argument_lists() {
                                 panic!("bad map?")
                             }
                         })
-                    }).collect()
-                })
-            } else {
-                panic!("panic? {node:?}")
-            }
+                    })
+                    .collect()
+            })
+        } else {
+            panic!("panic? {node:?}")
         }
     };
 

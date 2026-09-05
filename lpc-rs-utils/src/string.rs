@@ -1,4 +1,3 @@
-use if_chain::if_chain;
 use lpc_rs_core::{LpcIntInner, RegisterSize};
 use lpc_rs_errors::{Result, lpc_error};
 
@@ -12,14 +11,12 @@ pub const MAX_STRING_LENGTH: usize = 8192;
 pub fn repeat_string(s: &str, i: LpcIntInner) -> Result<String> {
     if i >= 0 {
         let new_capacity = (i as usize).checked_mul(s.len());
-        if_chain! {
-            if let Some(capacity) = new_capacity;
-            if capacity <= MAX_STRING_LENGTH;
-            then {
-                Ok(s.repeat(i as usize))
-            } else {
-                Err(lpc_error!("overflow in string repetition"))
-            }
+        if let Some(capacity) = new_capacity
+            && capacity <= MAX_STRING_LENGTH
+        {
+            Ok(s.repeat(i as usize))
+        } else {
+            Err(lpc_error!("overflow in string repetition"))
         }
     } else {
         Ok(String::from(""))

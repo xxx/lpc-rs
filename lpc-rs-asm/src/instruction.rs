@@ -692,7 +692,7 @@ impl Display for Instruction {
 // This type is used a lot. Make sure it doesn't unintentionally get bigger.
 // Note that if `RegisterSize` is changed, this will need to change as well.
 #[cfg(target_arch = "x86_64")]
-static_assertions::assert_eq_size!(Instruction, [u8; 24]);
+const _: () = assert!(size_of::<Instruction>() == 24);
 
 #[cfg(test)]
 mod tests {

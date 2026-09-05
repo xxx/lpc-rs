@@ -5,7 +5,6 @@ use std::{
 
 use async_trait::async_trait;
 use itertools::Itertools;
-use lazy_format::lazy_format;
 use lpc_rs_core::call_namespace::CallNamespace;
 use lpc_rs_errors::{Result, span::Span};
 use ustr::Ustr;
@@ -83,18 +82,12 @@ impl Display for CallNode {
                 name,
                 namespace,
             } => {
-                let fmt = lazy_format!(
-                    if let Some(rcvr) = receiver => ("{}->{}{}({})", rcvr, namespace, name, args)
-                    else => ("{}({})", name, args)
-                );
-
-                write!(f, "{fmt}")
+                if let Some(rcvr) = receiver {
+                    write!(f, "{rcvr}->{namespace}")?;
+                }
+                write!(f, "{name}({args})")
             }
-            CallChain::Node(node) => {
-                let fmt = lazy_format!("{}({})", node, args);
-
-                write!(f, "{fmt}")
-            }
+            CallChain::Node(node) => write!(f, "{node}({args})"),
         }
     }
 }

@@ -7,7 +7,6 @@ use chrono::{DateTime, Duration, Utc};
 use delegate::delegate;
 use derive_builder::Builder;
 use educe::Educe;
-use if_chain::if_chain;
 use stable_vec::StableVec;
 use tokio::{sync::mpsc::Sender, task::JoinHandle, time::Instant};
 
@@ -189,30 +188,28 @@ impl CallOuts {
         } = schedule;
         let tx = self.tx.clone();
 
-        let handle = if_chain! {
-            if let Some(repeat) = repeat;
-            if repeat.num_milliseconds() > 0;
-            then {
-                let start = if delay.num_milliseconds() <= 0 {
-                    Instant::now()
-                } else {
-                    Instant::now() + delay.to_std().unwrap()
-                };
-
-                tokio::spawn(async move {
-                    let mut i = tokio::time::interval_at(start, repeat.to_std().unwrap());
-
-                    loop {
-                        i.tick().await;
-                        let _ = tx.send(VmOp::PrioritizeCallOut(id)).await;
-                    }
-                })
+        let handle = if let Some(repeat) = repeat
+            && repeat.num_milliseconds() > 0
+        {
+            let start = if delay.num_milliseconds() <= 0 {
+                Instant::now()
             } else {
-                tokio::spawn(async move {
-                    tokio::time::sleep(delay.to_std().unwrap()).await;
+                Instant::now() + delay.to_std().unwrap()
+            };
+
+            tokio::spawn(async move {
+                let mut i = tokio::time::interval_at(start, repeat.to_std().unwrap());
+
+                loop {
+                    i.tick().await;
                     let _ = tx.send(VmOp::PrioritizeCallOut(id)).await;
-                })
-            }
+                }
+            })
+        } else {
+            tokio::spawn(async move {
+                tokio::time::sleep(delay.to_std().unwrap()).await;
+                let _ = tx.send(VmOp::PrioritizeCallOut(id)).await;
+            })
         };
 
         self.queue.push(CallOut {
