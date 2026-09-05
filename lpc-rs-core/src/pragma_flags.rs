@@ -6,6 +6,11 @@ pub const NO_SHADOW: &str = "no_shadow";
 pub const RESIDENT: &str = "resident";
 pub const STRICT_TYPES: &str = "strict_types";
 
+/// CD's binary-cache flag: accepted so its sources compile, ignored.
+pub const SAVE_BINARY: &str = "save_binary";
+/// CD's "may not be `#include`d" flag: accepted, ignored.
+pub const NO_INCLUDE: &str = "no_include";
+
 /// A struct to track which `pragma`s have been enabled in a `Program`
 #[bitfield(filled = false)]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

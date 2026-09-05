@@ -4,10 +4,12 @@ use define::{Define, ObjectMacro};
 use lpc_rs_core::{
     LpcIntInner,
     lpc_path::LpcPath,
-    pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
+    pragma_flags::{
+        NO_CLONE, NO_INCLUDE, NO_INHERIT, NO_SHADOW, RESIDENT, SAVE_BINARY, STRICT_TYPES,
+    },
 };
 use lpc_rs_errors::{
-    LpcError, Result, lpc_error,
+    LpcError, Result, lpc_error, lpc_warning,
     source_map::FileId,
     span::{HasSpan, Span},
 };
@@ -669,6 +671,11 @@ impl Preprocessor {
                 NO_SHADOW => self.context.pragmas.set_no_shadow(true),
                 RESIDENT => self.context.pragmas.set_resident(true),
                 STRICT_TYPES => self.context.pragmas.set_strict_types(true),
+                SAVE_BINARY | NO_INCLUDE => self.context.diagnostics.record(lpc_warning!(
+                    Some(span),
+                    "pragma `{}` has no effect in lpc-rs",
+                    arg
+                )),
                 x => {
                     return Err(lpc_error!(Some(span), "unknown pragma `{}`", x));
                 }
@@ -2555,6 +2562,31 @@ mod tests {
                 "unknown pragma `not_a_pragma`",
             )
             .await;
+        }
+
+        #[tokio::test]
+        async fn cd_pragmas_are_accepted_and_warned_about() {
+            let prog = indoc! { r##"
+                #pragma save_binary
+                #pragma no_include, strict_types
+                int x;
+            "## };
+            test_valid(prog, &["int", "x", ";"]).await;
+            assert_eq!(
+                warnings_of(prog).await,
+                [
+                    "pragma `save_binary` has no effect in lpc-rs",
+                    "pragma `no_include` has no effect in lpc-rs",
+                ]
+            );
+            let mut preprocessor = fixture();
+            preprocessor.scan("/test.c", prog).await.unwrap();
+            assert!(preprocessor.context.pragmas.strict_types());
+        }
+
+        #[tokio::test]
+        async fn an_unknown_pragma_is_still_an_error() {
+            test_invalid("#pragma frobnicate\n", "unknown pragma `frobnicate`").await;
         }
     }
 
