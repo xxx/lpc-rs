@@ -3279,6 +3279,17 @@ mod tests {
             let code = "void f() { function g = (: return 1; 2; :); g(); }";
             assert_eq!(warnings(code).await, ["unreachable statement"]);
         }
+
+        #[tokio::test]
+        async fn an_empty_statement_after_a_jump_is_not_a_statement() {
+            let code = indoc! { r#"
+                int f(int x) {
+                    return x;
+                    ;
+                }
+            "# };
+            assert!(warnings(code).await.is_empty());
+        }
     }
 
     mod references {

@@ -1160,6 +1160,34 @@ mod test_instructions {
         }
     }
 
+    mod test_empty_forms {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_void_parameter_list_takes_no_arguments() {
+            let code = indoc! { r##"
+                    int f(void) { return 3; }
+                    int a = f();
+                "##};
+
+            check_committed_globals(code, &[("a", BareVal::Int(3))]).await;
+        }
+
+        #[tokio::test]
+        async fn an_empty_statement_runs_nothing() {
+            let code = indoc! { r##"
+                    int a = 0;
+                    void create() {
+                        ;
+                        if (a) ; else a = 2;
+                        for (;;) { a++; break; };
+                    }
+                "##};
+
+            check_committed_globals(code, &[("a", BareVal::Int(3))]).await;
+        }
+    }
+
     mod test_call {
         use super::*;
 

@@ -321,6 +321,9 @@ Closure: ExpressionNode = {
 }
 
 DelimitedParameters<L_DELIM, R_DELIM>: (Vec<VarInitNode>, bool) = {
+    L_DELIM "void" R_DELIM => {
+        (vec![], false)
+    },
     L_DELIM <ellipsis:"..."?> R_DELIM => {
         (vec![], ellipsis.is_some())
     },
@@ -385,7 +388,8 @@ SimpleStatement: AstNode = {
     <Decl> ";" => AstNode::from(<>),
     <Block> => AstNode::from(<>),
     <DoWhile> => AstNode::from(<>),
-    <JumpStatement>
+    <JumpStatement>,
+    ";" => AstNode::NoOp,
 };
 
 JumpStatement: AstNode = {

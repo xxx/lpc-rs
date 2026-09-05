@@ -12,6 +12,7 @@ use lpc_rs::{
             float_node::FloatNode,
             function_def_node::FunctionDefNode,
             function_ptr_node::FunctionPtrNode,
+            if_node::IfNode,
             int_node::IntNode,
             program_node::ProgramNode,
             ref_node::RefNode,
@@ -681,4 +682,33 @@ fn ref_needs_a_bare_variable() {
             .is_err(),
         "int ref x; must not parse"
     );
+}
+
+#[tokio::test]
+async fn a_void_parameter_list_is_empty() {
+    let prog = parse_prog("int f(void) { return 1; }").await.unwrap();
+    let AstNode::FunctionDef(def) = &prog.body[0] else {
+        panic!("expected a function");
+    };
+    assert!(def.parameters.is_empty());
+    assert!(!def.flags.ellipsis());
+}
+
+#[tokio::test]
+async fn a_bare_semicolon_is_an_empty_statement() {
+    let prog = parse_prog("void create() { ; if (1) ; else ; }")
+        .await
+        .unwrap();
+    let AstNode::FunctionDef(def) = &prog.body[0] else {
+        panic!("expected a function");
+    };
+    assert!(matches!(def.body[0], AstNode::NoOp));
+    let AstNode::If(IfNode {
+        body, else_clause, ..
+    }) = &def.body[1]
+    else {
+        panic!("expected an if");
+    };
+    assert!(matches!(**body, AstNode::NoOp));
+    assert!(matches!(**else_clause, Some(AstNode::NoOp)));
 }
