@@ -55,7 +55,9 @@ pub(crate) enum Callee {
 /// An efun's walk over its callbacks, on the frame that called the efun.
 #[derive(Debug, Clone)]
 pub(crate) struct EfunContinuation {
+    /// The efun that installed this walk.
     pub efun: Efun,
+    /// The efun's own state: what to call next, or the answer.
     pub state: Box<dyn Continuation>,
     /// The efun's call site: the frame's pc has moved past it by the time
     /// an answer comes back.
