@@ -175,7 +175,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// The by-reference parameter no pointer call can satisfy, as the error.
-    fn refuse_ref_params(&self, efun: Efun, args: &[LpcRef]) -> lpc_rs_errors::Result<()> {
+    pub(super) fn refuse_ref_params(
+        &self,
+        efun: Efun,
+        args: &[LpcRef],
+    ) -> lpc_rs_errors::Result<()> {
         let prototype = efun.prototype();
         match (0..args.len()).find(|&i| prototype.is_ref_param(i)) {
             Some(i) => Err(self.runtime_error(format!(

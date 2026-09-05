@@ -108,7 +108,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         None => call.results.push(NULL),
                     }
                 }
-                Standing::Dead => call.results.push(NULL),
+                Standing::Dead | Standing::Removed(_) => call.results.push(NULL),
                 Standing::Uncreated(_) | Standing::Uninitialized(_) => {
                     call.remaining.push(receiver);
                     return Ok(Collected::Suspends);
