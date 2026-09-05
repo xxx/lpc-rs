@@ -196,8 +196,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::CallFp(location, list) => {
                 // A pointer into a resident object is called with no future built.
-                if !self.call_fp_local(location, list)? {
-                    return Ok(Step::Await(AsyncCall::FunctionPointer(location, list)));
+                if let Some(call) = self.call_fp_local(location, list)? {
+                    return Ok(Step::Await(call));
                 }
             }
             Instruction::CallOther(receiver, name, list) => {
