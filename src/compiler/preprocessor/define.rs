@@ -37,4 +37,19 @@ impl Define {
     pub fn new_function(tokens: Vec<Token>, args: Vec<String>) -> Self {
         Define::Function(FunctionMacro { tokens, args })
     }
+
+    /// A benign redefinition: same kind, same parameter names, same
+    /// token spelling. Spans and whitespace never count.
+    pub fn same_as(&self, other: &Define) -> bool {
+        fn spelling(tokens: &[Token]) -> Vec<String> {
+            tokens.iter().map(ToString::to_string).collect()
+        }
+        match (self, other) {
+            (Define::Object(a), Define::Object(b)) => spelling(&a.tokens) == spelling(&b.tokens),
+            (Define::Function(a), Define::Function(b)) => {
+                a.args == b.args && spelling(&a.tokens) == spelling(&b.tokens)
+            }
+            _ => false,
+        }
+    }
 }

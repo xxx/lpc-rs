@@ -361,12 +361,6 @@ impl Preprocessor {
         body: String,
         body_span: Span,
     ) -> Result<()> {
-        if self.defines.contains_key(&name) {
-            return Err(
-                LpcError::new(format!("duplicate `#define`: `{name}`")).with_span(Some(span))
-            );
-        }
-
         // Lex the body in place — tokens are born with their true
         // definition-site spans. A directive line inside a
         // body has no legal reading (LPC has no `#` operator).
@@ -396,6 +390,14 @@ impl Preprocessor {
             Define::new_object(tokens, expr)
         };
 
+        if let Some(existing) = self.defines.get(&name) {
+            if existing.same_as(&define) {
+                return Ok(());
+            }
+            return Err(
+                LpcError::new(format!("duplicate `#define`: `{name}`")).with_span(Some(span))
+            );
+        }
         self.defines.insert(name, define);
         Ok(())
     }
@@ -1186,6 +1188,55 @@ mod tests {
                     panic!("{e:?}")
                 }
             }
+        }
+
+        #[tokio::test]
+        async fn an_identical_redefinition_is_silent() {
+            // A header reached twice through two includes redefines every
+            // macro it holds, identically.
+            let input = indoc! { r#"
+                #define PATH "/d/Standard/login/"
+                #define PATH "/d/Standard/login/"
+                #define ADD(a, b) a + b
+                #define ADD(a, b) a + b
+                string p = PATH;
+                int s = ADD(1, 2);
+            "# };
+            test_valid(
+                input,
+                &[
+                    "string",
+                    "p",
+                    "=",
+                    "/d/Standard/login/",
+                    ";",
+                    "int",
+                    "s",
+                    "=",
+                    "1",
+                    "+",
+                    "2",
+                    ";",
+                ],
+            )
+            .await;
+            assert!(warnings_of(input).await.is_empty());
+        }
+
+        #[tokio::test]
+        async fn a_redefinition_that_differs_errors() {
+            test_invalid(
+                "#define ADD(a, b) a + b\n#define ADD(a, c) a + c\n",
+                "duplicate `#define`: `ADD`",
+            )
+            .await;
+            test_invalid(
+                "#define ADD(a, b) a + b\n#define ADD(a, b) a - b\n",
+                "duplicate `#define`: `ADD`",
+            )
+            .await;
+            test_invalid("#define X 1\n#define X(a) 1\n", "duplicate `#define`: `X`").await;
+            test_invalid("#define X\n#define X 1\n", "duplicate `#define`: `X`").await;
         }
 
         #[tokio::test]
