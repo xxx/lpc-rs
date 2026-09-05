@@ -7,14 +7,18 @@ use lpc_rs::{
             assignment_node::AssignmentNode,
             ast_node::AstNode,
             binary_op_node::{BinaryOpNode, BinaryOperation},
+            cast_node::CastNode,
             decl_node::DeclNode,
             expression_node::ExpressionNode,
             float_node::FloatNode,
+            for_each_node::ForEachInit,
             function_def_node::FunctionDefNode,
             function_ptr_node::FunctionPtrNode,
+            if_node::IfNode,
             int_node::IntNode,
             program_node::ProgramNode,
             ref_node::RefNode,
+            return_node::ReturnNode,
             string_node::StringNode,
             var_init_node::VarInitNode,
             var_node::VarNode,
@@ -318,6 +322,32 @@ fn compound_assignment_decompose() {
 }
 
 #[test]
+fn mod_and_xor_compound_assignments_desugar() {
+    for (source, op) in [
+        ("a %= 2;", BinaryOperation::Mod),
+        ("a ^= 2;", BinaryOperation::Xor),
+    ] {
+        let code = format!("void create() {{ {source} }}");
+        let lexer = LexWrapper::new(&code, 0).triples();
+        let prog_node = lpc_parser::ProgramParser::new()
+            .parse(&mut CompilationContext::default(), lexer)
+            .unwrap();
+        let AstNode::FunctionDef(FunctionDefNode { body, .. }) = prog_node.body[0].clone() else {
+            panic!("Expected a function def");
+        };
+        let AstNode::Expression(ExpressionNode::Assignment(AssignmentNode { rhs, .. })) =
+            body[0].clone()
+        else {
+            panic!("Expected an assignment");
+        };
+        let ExpressionNode::BinaryOp(BinaryOpNode { op: found, .. }) = *rhs else {
+            panic!("Expected a desugared binary op");
+        };
+        assert_eq!(found, op, "{source}");
+    }
+}
+
+#[test]
 fn typeless_functions_are_mixed() {
     let prog = r#"marfin() {
             return "hello, we're marfin'!";
@@ -584,6 +614,57 @@ async fn test_closure_bodies() {
     assert_ok!(parse_prog(prog).await);
 }
 
+#[tokio::test]
+async fn a_foreach_variable_may_be_typed() {
+    let code = "void f(mixed a) { foreach (string s : a) {} foreach (int *k, mixed v : a) {} }";
+    let prog = parse_prog(code).await.unwrap();
+    let AstNode::FunctionDef(def) = &prog.body[0] else {
+        panic!("expected a function");
+    };
+    let AstNode::ForEach(first) = &def.body[0] else {
+        panic!("expected a foreach");
+    };
+    let ForEachInit::Array(var) = &first.initializer else {
+        panic!("expected one variable");
+    };
+    assert_eq!(var.type_, LpcType::String(false));
+    assert_eq!(var.name.as_str(), "s");
+    let AstNode::ForEach(second) = &def.body[1] else {
+        panic!("expected a foreach");
+    };
+    let ForEachInit::Mapping { key, value } = &second.initializer else {
+        panic!("expected a key and a value");
+    };
+    assert_eq!(key.type_, LpcType::Int(true));
+    assert!(key.array);
+    assert_eq!(value.type_, LpcType::Mixed(false));
+}
+
+#[tokio::test]
+async fn an_untyped_foreach_variable_is_mixed() {
+    let prog = parse_prog("void f(mixed a) { foreach (x : a) {} }")
+        .await
+        .unwrap();
+    let AstNode::FunctionDef(def) = &prog.body[0] else {
+        panic!("expected a function");
+    };
+    let AstNode::ForEach(node) = &def.body[0] else {
+        panic!("expected a foreach");
+    };
+    let ForEachInit::Array(var) = &node.initializer else {
+        panic!("expected one variable");
+    };
+    assert_eq!(var.type_, LpcType::Mixed(false));
+}
+
+#[tokio::test]
+async fn a_void_foreach_variable_is_rejected() {
+    let err = parse_prog("void f(mixed a) { foreach (void x : a) {} }")
+        .await
+        .unwrap_err();
+    assert_eq!(err.to_string(), "a `foreach` variable cannot be `void`");
+}
+
 async fn parse_prog(prog: &str) -> Result<ProgramNode> {
     let compiler = Compiler::default();
     let (code, preprocessor) = compiler.preprocess_string("foo/bar.c", prog).await.unwrap();
@@ -655,4 +736,100 @@ fn ref_needs_a_bare_variable() {
             .is_err(),
         "int ref x; must not parse"
     );
+}
+
+#[tokio::test]
+async fn a_void_parameter_list_is_empty() {
+    let prog = parse_prog("int f(void) { return 1; }").await.unwrap();
+    let AstNode::FunctionDef(def) = &prog.body[0] else {
+        panic!("expected a function");
+    };
+    assert!(def.parameters.is_empty());
+    assert!(!def.flags.ellipsis());
+}
+
+#[tokio::test]
+async fn a_bare_semicolon_is_an_empty_statement() {
+    let prog = parse_prog("void create() { ; if (1) ; else ; }")
+        .await
+        .unwrap();
+    let AstNode::FunctionDef(def) = &prog.body[0] else {
+        panic!("expected a function");
+    };
+    assert!(matches!(def.body[0], AstNode::NoOp));
+    let AstNode::If(IfNode {
+        body, else_clause, ..
+    }) = &def.body[1]
+    else {
+        panic!("expected an if");
+    };
+    assert!(matches!(**body, AstNode::NoOp));
+    assert!(matches!(**else_clause, Some(AstNode::NoOp)));
+}
+
+fn first_return_value(prog: &ProgramNode) -> ExpressionNode {
+    let AstNode::FunctionDef(def) = &prog.body[0] else {
+        panic!("expected a function");
+    };
+    let AstNode::Return(ReturnNode {
+        value: Some(value), ..
+    }) = &def.body[0]
+    else {
+        panic!("expected a return with a value");
+    };
+    value.clone()
+}
+
+#[tokio::test]
+async fn a_cast_wraps_its_operand() {
+    let prog = parse_prog("mixed f(mixed a) { return (int) a; }")
+        .await
+        .unwrap();
+    let ExpressionNode::Cast(CastNode { expr, type_, .. }) = first_return_value(&prog) else {
+        panic!("expected a cast");
+    };
+    assert_eq!(type_, LpcType::Int(false));
+    assert!(matches!(*expr, ExpressionNode::Var(_)));
+}
+
+#[tokio::test]
+async fn an_array_cast_carries_the_star() {
+    let prog = parse_prog("mixed f(mixed a) { return (string *) a; }")
+        .await
+        .unwrap();
+    let ExpressionNode::Cast(CastNode { type_, .. }) = first_return_value(&prog) else {
+        panic!("expected a cast");
+    };
+    assert_eq!(type_, LpcType::String(true));
+}
+
+#[tokio::test]
+async fn a_cast_binds_tighter_than_a_binary_operator() {
+    let prog = parse_prog("mixed f(mixed a) { return (int) a + 1; }")
+        .await
+        .unwrap();
+    let ExpressionNode::BinaryOp(BinaryOpNode { l, op, .. }) = first_return_value(&prog) else {
+        panic!("expected a binary op");
+    };
+    assert_eq!(op, BinaryOperation::Add);
+    assert!(matches!(*l, ExpressionNode::Cast(_)));
+}
+
+#[tokio::test]
+async fn a_cast_applies_to_a_unary_operand() {
+    let prog = parse_prog("mixed f(mixed a) { return (int) -a; }")
+        .await
+        .unwrap();
+    let ExpressionNode::Cast(CastNode { expr, .. }) = first_return_value(&prog) else {
+        panic!("expected a cast");
+    };
+    assert!(matches!(*expr, ExpressionNode::UnaryOp(_)));
+}
+
+#[tokio::test]
+async fn a_cast_to_void_is_rejected() {
+    let err = parse_prog("mixed f(mixed a) { return (void) a; }")
+        .await
+        .unwrap_err();
+    assert_eq!(err.to_string(), "cannot cast to `void`");
 }

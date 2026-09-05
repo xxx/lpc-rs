@@ -411,7 +411,7 @@ impl TreeWalker for ScopeWalker {
         self.insert_symbol(make_sym(FOREACH_LENGTH));
 
         match &node.initializer {
-            ForEachInit::Array(init) | ForEachInit::String(init) => {
+            ForEachInit::Array(init) => {
                 self.referenced.insert((scope_id, init.name));
             }
             ForEachInit::Mapping { key, value } => {

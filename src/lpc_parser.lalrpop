@@ -8,6 +8,7 @@ use crate::compiler::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::compiler::ast::block_node::BlockNode;
 use crate::compiler::ast::break_node::BreakNode;
 use crate::compiler::ast::call_node::{CallChain, CallNode};
+use crate::compiler::ast::cast_node::CastNode;
 use crate::compiler::ast::closure_node::ClosureNode;
 use crate::compiler::ast::comma_expression_node::CommaExpressionNode;
 use crate::compiler::ast::continue_node::ContinueNode;
@@ -321,6 +322,9 @@ Closure: ExpressionNode = {
 }
 
 DelimitedParameters<L_DELIM, R_DELIM>: (Vec<VarInitNode>, bool) = {
+    L_DELIM "void" R_DELIM => {
+        (vec![], false)
+    },
     L_DELIM <ellipsis:"..."?> R_DELIM => {
         (vec![], ellipsis.is_some())
     },
@@ -385,7 +389,8 @@ SimpleStatement: AstNode = {
     <Decl> ";" => AstNode::from(<>),
     <Block> => AstNode::from(<>),
     <DoWhile> => AstNode::from(<>),
-    <JumpStatement>
+    <JumpStatement>,
+    ";" => AstNode::NoOp,
 };
 
 JumpStatement: AstNode = {
@@ -477,20 +482,28 @@ ForInit: AstNode = {
 };
 
 ForEachInit: ForEachInit = {
+    <var:ForEachVar> => ForEachInit::Array(var),
+    <key:ForEachVar> "," <value:ForEachVar> => ForEachInit::Mapping { key, value },
+};
+
+// A loop variable; untyped is `mixed`.
+ForEachVar: VarInitNode = {
     <name:"ID"> => {
         let mut node = VarInitNode::new(&name.1, LpcType::Mixed(false));
         node.span = Some(name.0);
-        
-        ForEachInit::Array(node)
+        node
     },
-    <key_name:"ID"> "," <value_name:"ID"> => {
-        let mut key = VarInitNode::new(&key_name.1, LpcType::Mixed(false));
-        key.span = Some(key_name.0);
-
-        let mut value = VarInitNode::new(&value_name.1, LpcType::Mixed(false));
-        value.span = Some(value_name.0);
-        
-        ForEachInit::Mapping { key, value }
+    <var_type:Type> <star:"*"?> <name:"ID"> =>? {
+        let span = Span::join(var_type.0, name.0);
+        if var_type.1 == "void" {
+            let error = lpc_error!(Some(span), "a `foreach` variable cannot be `void`");
+            return Err(ParseError::User { error });
+        }
+        let array = star.is_some();
+        let mut node = VarInitNode::new(&name.1, LpcType::from(var_type.1).as_array(array));
+        node.array = array;
+        node.span = Some(span);
+        Ok(node)
     },
 };
 
@@ -693,7 +706,17 @@ UnaryExpression: ExpressionNode = {
 
 CastExpression: ExpressionNode = {
     <UnaryExpression>,
-}
+    <l:"("> <cast_type:Type> <star:"*"?> ")" <expr:CastExpression> =>? {
+        let span = Span::combine(Some(l), expr.span());
+        if cast_type.1 == "void" {
+            let error = lpc_error!(span, "cannot cast to `void`");
+            return Err(ParseError::User { error });
+        }
+        let type_ = LpcType::from(cast_type.1).as_array(star.is_some());
+
+        Ok(guard(ExpressionNode::Cast(CastNode { expr: Box::new(expr), type_, span }), span)?)
+    },
+};
 
 MultiplicitiveExpression: ExpressionNode = {
     #[precedence(level="0")]
@@ -974,6 +997,8 @@ AssignmentOp: AssignmentOperation = {
     "-=" => AssignmentOperation::SubEq,
     "*=" => AssignmentOperation::MulEq,
     "/=" => AssignmentOperation::DivEq,
+    "%=" => AssignmentOperation::ModEq,
+    "^=" => AssignmentOperation::XorEq,
     "&&=" => AssignmentOperation::AndAndEq,
     "||=" => AssignmentOperation::OrOrEq,
     "&=" => AssignmentOperation::AndEq,

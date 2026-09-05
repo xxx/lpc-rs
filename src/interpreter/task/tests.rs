@@ -920,6 +920,35 @@ mod test_instructions {
         }
     }
 
+    mod test_typed_foreach {
+        use super::*;
+
+        #[tokio::test]
+        async fn typed_variables_receive_the_elements() {
+            let code = indoc! { r##"
+                    int total = 0;
+                    int keys = 0;
+                    void create() {
+                        foreach (int i : ({ 1, 2, 3 })) {
+                            total += i;
+                        }
+                        foreach (string k, int v : ([ "a": 10, "b": 20 ])) {
+                            if (k == "a" || k == "b") {
+                                keys += 1;
+                            }
+                            total += v;
+                        }
+                    }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[("total", BareVal::Int(36)), ("keys", BareVal::Int(2))],
+            )
+            .await;
+        }
+    }
+
     mod test_comparison_branches {
         use super::*;
 
@@ -1139,6 +1168,52 @@ mod test_instructions {
                 ],
             )
             .await;
+        }
+    }
+
+    mod test_compound_assignment {
+        use super::*;
+
+        #[tokio::test]
+        async fn mod_and_xor_assign_in_place() {
+            let code = indoc! { r##"
+                    int a = 7;
+                    int b = 6;
+                    void create() {
+                        a %= 3;
+                        b ^= 5;
+                    }
+                "##};
+
+            check_committed_globals(code, &[("a", BareVal::Int(1)), ("b", BareVal::Int(3))]).await;
+        }
+    }
+
+    mod test_empty_forms {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_void_parameter_list_takes_no_arguments() {
+            let code = indoc! { r##"
+                    int f(void) { return 3; }
+                    int a = f();
+                "##};
+
+            check_committed_globals(code, &[("a", BareVal::Int(3))]).await;
+        }
+
+        #[tokio::test]
+        async fn an_empty_statement_runs_nothing() {
+            let code = indoc! { r##"
+                    int a = 0;
+                    void create() {
+                        ;
+                        if (a) ; else a = 2;
+                        for (;;) { a++; break; };
+                    }
+                "##};
+
+            check_committed_globals(code, &[("a", BareVal::Int(3))]).await;
         }
     }
 
@@ -2017,6 +2092,95 @@ mod test_instructions {
                 "##};
 
             check_committed_globals(code, &[("q", BareVal::Int(0))]).await;
+        }
+    }
+
+    mod test_cast {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_value_of_the_type_passes_through() {
+            let code = indoc! { r##"
+                    mixed m = "x";
+                    string s = (string) m;
+                    mixed n = 5;
+                    int i = (int) n;
+                    mixed a = ({ 1 });
+                    int *ints = (int *) a;
+                    mixed z = 0;
+                    string none = (string) z;
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("s", BareVal::String("x".into())),
+                    ("i", BareVal::Int(5)),
+                    ("ints", BareVal::Array(vec![BareVal::Int(1)])),
+                    ("none", BareVal::Int(0)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_value_of_another_type_is_a_runtime_error() {
+            let code = indoc! { r##"
+                    mixed m = "x";
+                    int i = (int) m;
+                "##};
+            let error = try_run_prog(code).await.unwrap_err();
+            assert_eq!(error.to_string(), "runtime error: cast to int of string");
+        }
+
+        #[tokio::test]
+        async fn an_int_is_not_a_float() {
+            let code = indoc! { r##"
+                    mixed m = 2.5;
+                    int i = (int) m;
+                "##};
+            let error = try_run_prog(code).await.unwrap_err();
+            assert_eq!(error.to_string(), "runtime error: cast to int of float");
+        }
+
+        #[tokio::test]
+        async fn an_array_cast_checks_the_container_only() {
+            let code = indoc! { r##"
+                    mixed m = ({ "not an int" });
+                    int *a = (int *) m;
+                    mixed n = 1;
+                    int *b = (int *) n;
+                "##};
+            let error = try_run_prog(code).await.unwrap_err();
+            assert_eq!(error.to_string(), "runtime error: cast to int * of int");
+        }
+
+        #[tokio::test]
+        async fn an_array_value_is_not_a_scalar() {
+            let code = indoc! { r##"
+                    mixed m = ({ 1 });
+                    int i = (int) m;
+                "##};
+            let error = try_run_prog(code).await.unwrap_err();
+            assert_eq!(error.to_string(), "runtime error: cast to int of array");
+        }
+
+        #[tokio::test]
+        async fn a_destructed_object_passes_every_cast() {
+            let code = indoc! { r##"
+                    mixed ob;
+                    string s;
+                    object result;
+                    void create() {
+                        ob = clone_object("/clone_target");
+                        destruct(ob);
+                        s = (string) ob;
+                        result = (object) ob;
+                    }
+                "##};
+
+            check_committed_globals(code, &[("s", BareVal::Int(0)), ("result", BareVal::Int(0))])
+                .await;
         }
     }
 

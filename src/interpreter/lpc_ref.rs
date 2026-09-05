@@ -288,6 +288,13 @@ impl LpcRef {
         }
     }
 
+    /// Whether a cast to `target` admits this value: 0 passes every cast, a
+    /// destructed object passes like 0, anything else must already be of the
+    /// type (an array is checked as a container, not by element).
+    pub(crate) fn passes_cast(&self, target: LpcType, txn: &TxnHandle) -> bool {
+        self.is_null() || self.is_dead_object(txn) || target.matches_type(self.as_lpc_type())
+    }
+
     pub fn with_string<F, R>(&self, f: F) -> Result<R>
     where
         F: FnOnce(&LpcString) -> R,
@@ -913,6 +920,55 @@ mod tests {
             assert!(lpc_ref.live_object(&another).is_some());
             assert!(lpc_ref.is_truthy(&another));
             assert!(!lpc_ref.eq_in(&NULL, &another));
+        }
+    }
+
+    mod test_passes_cast {
+        use super::*;
+        use crate::interpreter::{program::Program, stm::VarId};
+
+        #[test]
+        fn zero_passes_every_cast() {
+            let txn = TxnHandle::empty();
+            let zero = LpcRef::from(0);
+            assert!(zero.passes_cast(LpcType::String(false), &txn));
+            assert!(zero.passes_cast(LpcType::Object(true), &txn));
+        }
+
+        #[test]
+        fn a_value_passes_only_its_own_type_or_mixed() {
+            let txn = TxnHandle::empty();
+            let five = LpcRef::from(5);
+            assert!(five.passes_cast(LpcType::Int(false), &txn));
+            assert!(five.passes_cast(LpcType::Mixed(false), &txn));
+            assert!(!five.passes_cast(LpcType::String(false), &txn));
+            assert!(!five.passes_cast(LpcType::Float(false), &txn));
+            assert!(!five.passes_cast(LpcType::Int(true), &txn));
+        }
+
+        #[test]
+        fn an_array_passes_any_array_type() {
+            let txn = TxnHandle::empty();
+            let array = test_array_ref(&txn, LpcArray::new(vec![LpcRef::from(1)]));
+            assert!(array.passes_cast(LpcType::String(true), &txn));
+            assert!(array.passes_cast(LpcType::Mixed(true), &txn));
+            assert!(!array.passes_cast(LpcType::String(false), &txn));
+        }
+
+        #[test]
+        fn a_destructed_object_passes_every_cast() {
+            let process = Arc::new(Process::new(Program::default()));
+            let cell = VarId::new();
+            process.cell.set(cell).unwrap();
+            let live_ref = LpcRef::from(Arc::downgrade(&process));
+
+            let live_txn = TxnHandle::empty();
+            assert!(!live_ref.passes_cast(LpcType::String(false), &live_txn));
+
+            let destructing = TxnHandle::empty();
+            destructing.with(|t| t.drop_var(cell));
+            assert!(live_ref.passes_cast(LpcType::String(false), &destructing));
+            assert!(live_ref.passes_cast(LpcType::Object(false), &destructing));
         }
     }
 

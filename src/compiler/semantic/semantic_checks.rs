@@ -11,6 +11,7 @@ use crate::compiler::{
         ast_node::SpannedNode,
         binary_op_node::{BinaryOpNode, BinaryOperation},
         call_node::CallChain,
+        cast_node::CastNode,
         comma_expression_node::CommaExpressionNode,
         expression_node::ExpressionNode,
         int_node::IntNode,
@@ -300,6 +301,54 @@ pub fn mismatch(
     }
 }
 
+/// Whether a value of static type `source` can be `target`: a union
+/// passes through any member, where `matches_type` alone would demand
+/// every one.
+pub fn cast_possible(source: LpcType, target: LpcType) -> bool {
+    match source {
+        LpcType::Union(members) => members
+            .types()
+            .into_iter()
+            .any(|member| target.matches_type(member)),
+        _ => target.matches_type(source),
+    }
+}
+
+/// The source type of a cast that can never hold, if this is one. A literal
+/// 0 is every type.
+pub fn impossible_cast(node: &CastNode, context: &CompilationContext) -> Result<Option<LpcType>> {
+    if is_literal_zero(&node.expr) {
+        return Ok(None);
+    }
+
+    let source = node_type(&node.expr, context)?;
+
+    Ok((!cast_possible(source, node.type_)).then_some(source))
+}
+
+/// The efun that converts to `target`, for the note on an impossible cast.
+pub fn conversion_efun(target: LpcType) -> Option<&'static str> {
+    match target {
+        LpcType::Int(false) => Some("to_int"),
+        LpcType::Float(false) => Some("to_float"),
+        LpcType::String(false) => Some("to_string"),
+        _ => None,
+    }
+}
+
+/// The element type a `foreach` over a collection of static type
+/// `collection` yields, when the type says: `T *` yields `T`, a string
+/// yields the character's code.
+pub fn element_type(collection: LpcType) -> Option<LpcType> {
+    match collection {
+        LpcType::String(false) => Some(LpcType::Int(false)),
+        // as_array(false) leaves a union a union, which would demand the variable match every member.
+        LpcType::Union(_) => None,
+        typed if typed.is_array() => Some(typed.as_array(false)),
+        _ => None,
+    }
+}
+
 /// The type of a binary operation on its operand types; a pair the operation
 /// check rejects is `mixed`.
 fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType {
@@ -382,6 +431,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
             }
         }
         ExpressionNode::Closure(_) => Ok(LpcType::Function(false)),
+        ExpressionNode::Cast(CastNode { type_, .. }) => Ok(*type_),
         ExpressionNode::CommaExpression(CommaExpressionNode { value, .. }) => {
             if !value.is_empty() {
                 let len = value.len();
@@ -2001,6 +2051,36 @@ mod tests {
             let found = mismatch(LpcType::String(false), &ExpressionNode::from(1), &context);
 
             assert_eq!(found.unwrap(), Some(LpcType::Int(false)));
+        }
+    }
+
+    mod test_cast_possible {
+        use super::*;
+
+        #[test]
+        fn mixed_and_equal_types_cast() {
+            assert!(cast_possible(LpcType::Mixed(false), LpcType::Int(false)));
+            assert!(cast_possible(LpcType::Mixed(false), LpcType::String(true)));
+            assert!(cast_possible(LpcType::Mixed(true), LpcType::String(true)));
+            assert!(cast_possible(LpcType::Int(false), LpcType::Int(false)));
+            assert!(cast_possible(LpcType::Int(true), LpcType::Mixed(true)));
+            assert!(cast_possible(LpcType::String(false), LpcType::Mixed(false)));
+        }
+
+        #[test]
+        fn a_concrete_type_never_casts_to_another() {
+            assert!(!cast_possible(LpcType::String(false), LpcType::Int(false)));
+            assert!(!cast_possible(LpcType::Int(false), LpcType::Float(false)));
+            assert!(!cast_possible(LpcType::Mixed(true), LpcType::String(false)));
+            assert!(!cast_possible(LpcType::Int(true), LpcType::Int(false)));
+        }
+
+        #[test]
+        fn a_union_casts_to_any_member() {
+            let int_or_string = LpcType::Int(false) | LpcType::String(false);
+            assert!(cast_possible(int_or_string, LpcType::String(false)));
+            assert!(cast_possible(int_or_string, LpcType::Int(false)));
+            assert!(!cast_possible(int_or_string, LpcType::Float(false)));
         }
     }
 

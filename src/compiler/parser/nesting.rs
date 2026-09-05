@@ -119,6 +119,7 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
                 out.push(Child::Expr(&n.else_clause));
             }
             ExpressionNode::UnaryOp(n) => out.push(Child::Expr(&n.expr)),
+            ExpressionNode::Cast(n) => out.push(Child::Expr(&n.expr)),
             ExpressionNode::Array(n) => out.extend(n.value.iter().map(Child::Expr)),
             ExpressionNode::Mapping(n) => {
                 for (key, value) in &n.value {
@@ -147,7 +148,7 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
             }
             AstNode::ForEach(n) => {
                 match &n.initializer {
-                    ForEachInit::Array(init) | ForEachInit::String(init) => {
+                    ForEachInit::Array(init) => {
                         out.push(Child::VarInit(init));
                     }
                     ForEachInit::Mapping { key, value } => {
@@ -430,6 +431,7 @@ mod tests {
             "range_l" => expr(nest("a[", "..]", "a")),
             "range_r" => expr(nest("a[..", "]", "a")),
             "unary" => expr(format!("{}a", rep("!"))),
+            "cast" => expr(format!("{}a", rep("(int) "))),
             "postfix_inc" => expr(format!("a{}", rep("++"))),
             "ternary_else" => expr(format!("{}a", rep("a ? a : "))),
             "ternary_body" => expr(nest("a ? ", " : a", "a")),
@@ -485,6 +487,7 @@ mod tests {
         ("range_l", 126),
         ("range_r", 126),
         ("unary", 252),
+        ("cast", 252),
         ("postfix_inc", 252),
         ("ternary_else", 252),
         ("ternary_body", 252),

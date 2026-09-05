@@ -3,7 +3,9 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use lpc_rs_core::{RegisterSize, function_receiver::FunctionReceiver, register::RegisterVariant};
+use lpc_rs_core::{
+    RegisterSize, function_receiver::FunctionReceiver, lpc_type::LpcType, register::RegisterVariant,
+};
 use lpc_rs_errors::{Result, lpc_bug};
 use ustr::Ustr;
 
@@ -140,6 +142,9 @@ pub enum Instruction {
     /// Call a function in another object.
     /// x.0 is the receiver, x.1 is the function name
     CallOther(RegisterVariant, RegisterVariant, ArgList),
+
+    /// x.2 = x.0, which must be 0 or of type x.1.
+    Cast(RegisterVariant, LpcType, RegisterVariant),
 
     /// Finish a block of instructions that can catch errors and continue
     /// execution.
@@ -291,6 +296,7 @@ impl Instruction {
         match *self {
             Self::AConst(d)
             | Self::BitwiseNot(_, d)
+            | Self::Cast(_, _, d)
             | Self::Copy(_, d)
             | Self::FunctionPtrConst { location: d, .. }
             | Self::Load(_, _, d)
@@ -349,6 +355,7 @@ impl Instruction {
             Self::CallSimulEfun(a0, a1) => Self::CallSimulEfun(a0, a1),
             Self::CallFp(a0, a1) => Self::CallFp(f(a0), a1),
             Self::CallOther(a0, a1, a2) => Self::CallOther(f(a0), f(a1), a2),
+            Self::Cast(a0, ty, a1) => Self::Cast(f(a0), ty, f(a1)),
             Self::CatchEnd => Self::CatchEnd,
             Self::CatchStart(a0, a1) => Self::CatchStart(f(a0), a1),
             Self::Cmp(kind, a0, a1, a2) => Self::Cmp(kind, f(a0), f(a1), f(a2)),
@@ -455,7 +462,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 42;
+    pub const COUNT: usize = 43;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -468,6 +475,7 @@ impl Instruction {
         "call_simul_efun",
         "call_fp",
         "call_other",
+        "cast",
         "catch_end",
         "catch_start",
         "cmp",
@@ -515,39 +523,40 @@ impl Instruction {
             Self::CallSimulEfun(..) => 6,
             Self::CallFp(..) => 7,
             Self::CallOther(..) => 8,
-            Self::CatchEnd => 9,
-            Self::CatchStart(..) => 10,
-            Self::Cmp(..) => 11,
-            Self::Copy(..) => 12,
-            Self::Dec(..) => 13,
-            Self::Div(..) => 14,
-            Self::FunctionPtrConst { .. } => 15,
-            Self::Inc(..) => 16,
-            Self::Jcmp(..) => 17,
-            Self::Jmp(..) => 18,
-            Self::Jncmp(..) => 19,
-            Self::Jnz(..) => 20,
-            Self::Jz(..) => 21,
-            Self::Load(..) => 22,
-            Self::LoadMappingKey(..) => 23,
-            Self::MapConst(..) => 24,
-            Self::Mod(..) => 25,
-            Self::Mul(..) => 26,
-            Self::Not(..) => 27,
-            Self::NewUpvalue(..) => 28,
-            Self::Or(..) => 29,
-            Self::PopulateArgv(..) => 30,
-            Self::PopulateDefaults => 31,
-            Self::PushArrayItem(..) => 32,
-            Self::PushPartialArg(..) => 33,
-            Self::Range(..) => 34,
-            Self::Ret => 35,
-            Self::Shl(..) => 36,
-            Self::Shr(..) => 37,
-            Self::Sizeof(..) => 38,
-            Self::Store(..) => 39,
-            Self::Sub(..) => 40,
-            Self::Xor(..) => 41,
+            Self::Cast(..) => 9,
+            Self::CatchEnd => 10,
+            Self::CatchStart(..) => 11,
+            Self::Cmp(..) => 12,
+            Self::Copy(..) => 13,
+            Self::Dec(..) => 14,
+            Self::Div(..) => 15,
+            Self::FunctionPtrConst { .. } => 16,
+            Self::Inc(..) => 17,
+            Self::Jcmp(..) => 18,
+            Self::Jmp(..) => 19,
+            Self::Jncmp(..) => 20,
+            Self::Jnz(..) => 21,
+            Self::Jz(..) => 22,
+            Self::Load(..) => 23,
+            Self::LoadMappingKey(..) => 24,
+            Self::MapConst(..) => 25,
+            Self::Mod(..) => 26,
+            Self::Mul(..) => 27,
+            Self::Not(..) => 28,
+            Self::NewUpvalue(..) => 29,
+            Self::Or(..) => 30,
+            Self::PopulateArgv(..) => 31,
+            Self::PopulateDefaults => 32,
+            Self::PushArrayItem(..) => 33,
+            Self::PushPartialArg(..) => 34,
+            Self::Range(..) => 35,
+            Self::Ret => 36,
+            Self::Shl(..) => 37,
+            Self::Shr(..) => 38,
+            Self::Sizeof(..) => 39,
+            Self::Store(..) => 40,
+            Self::Sub(..) => 41,
+            Self::Xor(..) => 42,
         }
     }
 
@@ -593,6 +602,9 @@ impl Display for Instruction {
             }
             Instruction::CallSimulEfun(name, list) => {
                 write!(f, "{} {name}, {list}", self.mnemonic())
+            }
+            Instruction::Cast(r1, ty, r2) => {
+                write!(f, "{} {r1}, {ty}, {r2}", self.mnemonic())
             }
             Instruction::Copy(r1, r2) => {
                 write!(f, "{} {r1}, {r2}", self.mnemonic())
@@ -846,6 +858,7 @@ mod tests {
             CallSimulEfun(ustr("f"), ArgList(0)),
             CallFp(r(), ArgList(0)),
             CallOther(r(), r(), ArgList(0)),
+            Cast(r(), LpcType::Int(false), r()),
             CatchEnd,
             CatchStart(r(), Address(0)),
             Cmp(Comparison::Lt, r(), r(), r()),
@@ -916,6 +929,7 @@ mod tests {
         assert_eq!(AConst(d).dest_register(), Some(d));
         assert_eq!(Add(r(), r(), d).dest_register(), Some(d));
         assert_eq!(BitwiseNot(r(), d).dest_register(), Some(d));
+        assert_eq!(Cast(r(), LpcType::Int(false), d).dest_register(), Some(d));
         assert_eq!(Copy(r(), d).dest_register(), Some(d));
         assert_eq!(Load(r(), r(), d).dest_register(), Some(d));
         assert_eq!(Range(r(), r(), r(), d).dest_register(), Some(d));

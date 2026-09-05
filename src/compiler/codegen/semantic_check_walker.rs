@@ -13,6 +13,7 @@ use crate::{
             block_node::BlockNode,
             break_node::BreakNode,
             call_node::{CallChain, CallNode},
+            cast_node::CastNode,
             closure_node::ClosureNode,
             continue_node::ContinueNode,
             do_while_node::DoWhileNode,
@@ -34,15 +35,15 @@ use crate::{
         callee::Callee,
         codegen::tree_walker::{
             ContextHolder, Pass, TreeWalker, walk_assignment, walk_binary_op, walk_block,
-            walk_closure, walk_do_while, walk_for, walk_foreach, walk_function_def,
+            walk_cast, walk_closure, walk_do_while, walk_for, walk_foreach, walk_function_def,
             walk_function_ptr, walk_label, walk_range, walk_return, walk_switch, walk_unary_op,
             walk_var_init,
         },
         compilation_context::CompilationContext,
         diagnostics::Diagnostics,
         semantic::semantic_checks::{
-            check_binary_operation_types, check_unary_operation_types, is_keyword, mismatch,
-            node_type,
+            check_binary_operation_types, check_unary_operation_types, conversion_efun,
+            element_type, impossible_cast, is_keyword, mismatch, node_type,
         },
     },
     interpreter::efun::CALL_OTHER,
@@ -516,12 +517,30 @@ impl TreeWalker for SemanticCheckWalker {
             self.context.diagnostics.record(e);
         }
 
-        if let ForEachInit::Mapping { key, value } = &node.initializer
-            && (key.type_ != LpcType::Mixed(false) || value.type_ != LpcType::Mixed(false))
+        if let ForEachInit::Array(init) = &node.initializer
+            && let Some(element) = element_type(collection_type)
+            && !init.type_.matches_type(element)
         {
             let e = lpc_error!(
-                node.span,
-                "the key and value types for iterating a mapping via `foreach` must be of type `mixed`"
+                init.span,
+                "mismatched types: `foreach` variable `{}` ({}) over `{}` ({} elements)",
+                init.name,
+                init.type_,
+                node.collection,
+                element
+            );
+            self.context.diagnostics.record(e);
+        }
+
+        // `LoadMappingKey` only runs on a mapping at codegen, so the two-variable form
+        // needs one; a plain string or any array can never provide it.
+        if matches!(node.initializer, ForEachInit::Mapping { .. })
+            && (collection_type.is_array() || collection_type == LpcType::String(false))
+        {
+            let e = lpc_error!(
+                node.collection.span(),
+                "a two-variable `foreach` needs a mapping, found {}",
+                collection_type
             );
             self.context.diagnostics.record(e);
         }
@@ -729,6 +748,25 @@ impl TreeWalker for SemanticCheckWalker {
             },
             Err(err) => Err(self.context.diagnostics.fail(err)),
         }
+    }
+
+    async fn visit_cast(&mut self, node: &mut CastNode) -> Result<()> {
+        walk_cast(self, node).await?;
+
+        if let Some(source) = impossible_cast(node, &self.context)? {
+            let mut e = lpc_error!(
+                node.span,
+                "cast from `{}` to `{}` can never succeed",
+                source,
+                node.type_
+            );
+            if let Some(efun) = conversion_efun(node.type_) {
+                e = e.with_note(format!("a cast converts nothing; `{efun}` does"));
+            }
+            self.context.diagnostics.record(e);
+        }
+
+        Ok(())
     }
 
     async fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
@@ -2026,7 +2064,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn allows_strings() {
+        async fn rejects_two_variables_over_a_string() {
             let code = indoc! { r#"
                 void create() {
                     string s = "hello, world!";
@@ -2037,7 +2075,112 @@ mod tests {
             "# };
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(context.diagnostics.errors().is_empty());
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "a two-variable `foreach` needs a mapping, found string"
+            );
+        }
+
+        #[tokio::test]
+        async fn rejects_two_variables_over_an_array() {
+            let code = indoc! { r#"
+                void create() {
+                    int *a = ({ 1, 2, 3 });
+                    foreach(key, value: a) {
+                        dump(key);
+                    }
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "a two-variable `foreach` needs a mapping, found int *"
+            );
+        }
+
+        #[tokio::test]
+        async fn allows_typed_variables_the_collection_can_fill() {
+            let code = indoc! { r#"
+                void create() {
+                    int *a = ({ 1, 2, 3 });
+                    string s = "abc";
+                    mapping m = ([ "a": 1 ]);
+                    foreach (int i : a) {
+                        dump(i);
+                    }
+                    foreach (int c : s) {
+                        dump(c);
+                    }
+                    foreach (string k, int v : m) {
+                        dump(k);
+                    }
+                    foreach (string *row : ({ ({ "x" }) })) {
+                        dump(row);
+                    }
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert!(
+                context.diagnostics.errors().is_empty(),
+                "{:?}",
+                context.diagnostics.errors()
+            );
+        }
+
+        #[tokio::test]
+        async fn rejects_a_variable_type_the_elements_cannot_be() {
+            let code = indoc! { r#"
+                void create() {
+                    int *a = ({ 1, 2, 3 });
+                    foreach (string s : a) {
+                        dump(s);
+                    }
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "mismatched types: `foreach` variable `s` (string) over `a` (int elements)"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_string_yields_ints() {
+            let code = indoc! { r#"
+                void create() {
+                    string s = "abc";
+                    foreach (string c : s) {
+                        dump(c);
+                    }
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "mismatched types: `foreach` variable `c` (string) over `s` (int elements)"
+            );
+        }
+
+        #[tokio::test]
+        async fn an_array_variable_over_a_flat_array_is_rejected() {
+            let code = indoc! { r#"
+                void create() {
+                    int *a = ({ 1, 2, 3 });
+                    foreach (int *row : a) {
+                        dump(row);
+                    }
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "mismatched types: `foreach` variable `row` (int *) over `a` (int elements)"
+            );
         }
 
         #[tokio::test]
@@ -2055,6 +2198,89 @@ mod tests {
             assert_eq!(
                 context.diagnostics.errors()[0].to_string(),
                 "`foreach` must iterate over an array or mapping, found int"
+            );
+        }
+    }
+
+    mod test_visit_cast {
+        use super::*;
+
+        #[tokio::test]
+        async fn allows_a_cast_from_mixed_and_from_a_call_other() {
+            let code = indoc! { r#"
+                void create() {
+                    mixed m = 1;
+                    object o;
+                    int i = (int) m;
+                    string *s = (string *) m;
+                    string name = (string) o->query_name();
+                    int *a = (int *) ({ });
+                    string z = (string) 0;
+                    dump(({ i, s, name, a, z }));
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert!(
+                context.diagnostics.errors().is_empty(),
+                "{:?}",
+                context.diagnostics.errors()
+            );
+        }
+
+        #[tokio::test]
+        async fn rejects_a_cast_between_concrete_types() {
+            let code = indoc! { r#"
+                void create() {
+                    string s = "1";
+                    int i = (int) s;
+                    dump(i);
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "cast from `string` to `int` can never succeed"
+            );
+            assert!(
+                context.diagnostics.errors()[0]
+                    .diagnostic_string()
+                    .contains("to_int")
+            );
+        }
+
+        #[tokio::test]
+        async fn rejects_a_scalar_cast_of_an_array() {
+            let code = indoc! { r#"
+                void create() {
+                    mixed *a = ({ 1 });
+                    string s = (string) a;
+                    dump(s);
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "cast from `mixed *` to `string` can never succeed"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_cast_retypes_the_expression() {
+            let code = indoc! { r#"
+                void create() {
+                    mixed m = 1;
+                    string s = (int) m;
+                    dump(s);
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "mismatched types: `s` (string) = `(int) m` (int)"
             );
         }
     }
@@ -3278,6 +3504,17 @@ mod tests {
         async fn a_closure_body_is_a_list_too() {
             let code = "void f() { function g = (: return 1; 2; :); g(); }";
             assert_eq!(warnings(code).await, ["unreachable statement"]);
+        }
+
+        #[tokio::test]
+        async fn an_empty_statement_after_a_jump_is_not_a_statement() {
+            let code = indoc! { r#"
+                int f(int x) {
+                    return x;
+                    ;
+                }
+            "# };
+            assert!(warnings(code).await.is_empty());
         }
     }
 
