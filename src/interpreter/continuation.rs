@@ -58,8 +58,8 @@ pub(crate) struct EfunContinuation {
     pub efun: Efun,
     /// The efun's own state: what to call next, or the answer.
     pub state: Box<dyn Continuation>,
-    /// The efun's call site: the frame's pc has moved past it by the time
-    /// an answer comes back.
+    /// The efun's call site, recorded when the continuation is installed: an
+    /// entry frame has no spans of its own to read it back from later.
     pub span: Option<Span>,
     /// The callee the async arm owes when a step suspended.
     pub suspended: Option<Callee>,

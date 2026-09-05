@@ -12,8 +12,10 @@ its value.
 
 The original is not changed. `f` runs as a call from the object calling
 `map`, so `previous_object()` inside it is that object, and an error it
-throws is `map`'s caller's. A first argument that is neither an array nor a
-mapping, or an `f` that is not a function, is an error.
+throws is `map`'s caller's. `f` runs on the calling task's own call stack,
+so nesting is bounded by the call stack rather than the task chain. A
+first argument that is neither an array nor a mapping, or an `f` that is
+not a function, is an error.
 
 ### Examples
 

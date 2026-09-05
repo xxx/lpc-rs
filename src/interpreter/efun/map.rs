@@ -25,7 +25,7 @@ pub fn map<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let items = items_arg(context, "map")?;
     let ptr = function_arg(context, "map", 1)?;
     let extra = extra_args(context, 2);
-    if items.len() == 0 {
+    if items.is_empty() {
         return_empty(context, &items);
         return Ok(());
     }
