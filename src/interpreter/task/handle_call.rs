@@ -174,6 +174,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.stack.push(frame)
     }
 
+    /// The by-reference parameter no pointer call can satisfy, as the error.
+    fn refuse_ref_params(&self, efun: Efun, args: &[LpcRef]) -> lpc_rs_errors::Result<()> {
+        let prototype = efun.prototype();
+        match (0..args.len()).find(|&i| prototype.is_ref_param(i)) {
+            Some(i) => Err(self.runtime_error(format!(
+                "argument {} of `{}` must be passed by reference",
+                i + 1,
+                prototype.name
+            ))),
+            None => Ok(()),
+        }
+    }
+
     /// Run `efun` fired through a pointer with `args`, as `owner`, written
     /// by `origin`, in the entry frame on top.
     pub(crate) async fn call_fired_efun(
@@ -183,17 +196,33 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         owner: Arc<Process>,
         origin: Option<Arc<LpcPath>>,
     ) -> lpc_rs_errors::Result<()> {
-        let prototype = efun.prototype();
-        if let Some(i) = (0..args.len()).find(|&i| prototype.is_ref_param(i)) {
-            return Err(self.runtime_error(format!(
-                "argument {} of `{}` must be passed by reference",
-                i + 1,
-                prototype.name
-            )));
-        }
+        self.refuse_ref_params(efun, &args)?;
 
         let mut ctx = EfunContext::fired(&mut self.stack, &self.context, efun, args, owner, origin);
         let result = call_efun(efun, &mut ctx).await;
+
+        #[cfg(test)]
+        if let Some(snap) = ctx.snapshot.take() {
+            self.snapshots.push(snap);
+        }
+
+        ctx.finish(result)
+    }
+
+    /// `call_fired_efun` for an efun that never suspends: no future built.
+    pub(crate) fn call_fired_efun_now(
+        &mut self,
+        efun: Efun,
+        args: Vec<LpcRef>,
+        owner: Arc<Process>,
+        origin: Option<Arc<LpcPath>>,
+    ) -> lpc_rs_errors::Result<()> {
+        self.refuse_ref_params(efun, &args)?;
+        let mut ctx = EfunContext::fired(&mut self.stack, &self.context, efun, args, owner, origin);
+        let result = match call_efun_sync(efun, &mut ctx) {
+            Some(result) => result,
+            None => Err(ctx.runtime_bug(format!("`{efun:?}` suspends but reached the sync door"))),
+        };
 
         #[cfg(test)]
         if let Some(snap) = ctx.snapshot.take() {
