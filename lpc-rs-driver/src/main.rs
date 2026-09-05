@@ -38,8 +38,11 @@ async fn run() {
 
     let mut vm = Vm::new(config);
 
-    vm.boot().await.unwrap_or_else(|e| {
+    let exit_code = vm.boot().await.unwrap_or_else(|e| {
         eprintln!("unable to boot VM: {}", e.diagnostic_string());
         std::process::exit(1);
     });
+    if exit_code != 0 {
+        std::process::exit(exit_code);
+    }
 }
