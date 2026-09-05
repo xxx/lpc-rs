@@ -9,7 +9,7 @@
 //! `not` mean something only inside a `#if` operand.
 
 use lpc_rs_errors::{
-    LpcError, Result, lpc_error,
+    LpcError, Result, lpc_error, lpc_warning,
     span::{HasSpan, Span},
 };
 
@@ -217,19 +217,35 @@ pub fn classify(line: &str) -> DirectiveKind {
     }
 }
 
+/// What a directive does with text left after its operands.
+#[derive(Clone, Copy)]
+enum Trailing {
+    /// C's rule: an error.
+    Error,
+    /// CD's headers carry `#endif NAME` and `#undef NAME junk`: the
+    /// directive applies, the text is warned about.
+    Warn,
+}
+
 /// A cursor over one directive line. Offsets are line-relative and map
 /// into the file through the directive's span.
 struct Cursor<'a> {
     text: &'a str,
     pos: usize,
     span: Span,
+    warnings: Vec<LpcError>,
 }
 
 impl<'a> Cursor<'a> {
     fn new(line: &'a str, span: Span) -> Self {
         let text = trim_directive_line(line);
         debug_assert!(text.starts_with('#'), "a directive line starts with `#`");
-        Self { text, pos: 1, span }
+        Self {
+            text,
+            pos: 1,
+            span,
+            warnings: vec![],
+        }
     }
 
     /// A span for `lo..hi` of this line, in file coordinates. A collapsed
@@ -265,21 +281,30 @@ impl<'a> Cursor<'a> {
         read_name_raw(self.text, &mut self.pos)
     }
 
-    /// Only whitespace and comments may remain.
-    fn end_of_line(&mut self, directive: &str) -> Result<()> {
+    /// Only whitespace and comments may remain; anything else is an
+    /// error or a warning, by `trailing`.
+    fn end_of_line(&mut self, directive: &str, trailing: Trailing) -> Result<()> {
         self.skip_ws()?;
         if self.at_end() {
-            Ok(())
-        } else {
-            Err(self.err(
-                self.pos,
-                self.text.len(),
-                format!("unexpected tokens after `#{directive}`"),
-            ))
+            return Ok(());
+        }
+        let (lo, hi) = (self.pos, self.text.len());
+        match trailing {
+            Trailing::Error => {
+                Err(self.err(lo, hi, format!("unexpected tokens after `#{directive}`")))
+            }
+            Trailing::Warn => {
+                self.warnings.push(lpc_warning!(
+                    Some(self.sub_span(lo, hi)),
+                    "extra tokens after `#{}`",
+                    directive
+                ));
+                Ok(())
+            }
         }
     }
 
-    fn include(mut self) -> Result<Directive> {
+    fn include(&mut self) -> Result<Directive> {
         self.skip_ws()?;
         let (close, sys) = match self.peek_char() {
             Some('"') => ('"', false),
@@ -311,14 +336,14 @@ impl<'a> Cursor<'a> {
             ));
         }
         self.pos = start + len + 1;
-        self.end_of_line("include")?;
+        self.end_of_line("include", Trailing::Error)?;
         Ok(Directive::Include {
             path: path.to_owned(),
             sys,
         })
     }
 
-    fn define(mut self) -> Result<Directive> {
+    fn define(&mut self) -> Result<Directive> {
         self.skip_ws()?;
         let Some(name) = self.read_name() else {
             return Err(self.err(
@@ -387,7 +412,12 @@ impl<'a> Cursor<'a> {
     }
 
     /// `#undef` / `#ifdef` / `#ifndef`: one identifier, then EOL.
-    fn named(mut self, ctor: fn(String) -> Directive, directive: &str) -> Result<Directive> {
+    fn named(
+        &mut self,
+        ctor: fn(String) -> Directive,
+        directive: &str,
+        trailing: Trailing,
+    ) -> Result<Directive> {
         self.skip_ws()?;
         let Some(name) = self.read_name() else {
             return Err(self.err(
@@ -397,18 +427,18 @@ impl<'a> Cursor<'a> {
             ));
         };
         let parsed = ctor(name.to_owned());
-        self.end_of_line(directive)?;
+        self.end_of_line(directive, trailing)?;
         Ok(parsed)
     }
 
     /// `#else` / `#endif`: nothing but EOL.
-    fn bare(mut self, directive: Directive, name: &str) -> Result<Directive> {
-        self.end_of_line(name)?;
+    fn bare(&mut self, directive: Directive, name: &str, trailing: Trailing) -> Result<Directive> {
+        self.end_of_line(name, trailing)?;
         Ok(directive)
     }
 
     /// `#elif expr` — the operand is stored raw, `#define`-body style.
-    fn elif(self) -> Result<Directive> {
+    fn elif(&mut self) -> Result<Directive> {
         let rest = &self.text[self.pos..];
         let operand = rest.trim();
         let start = self.pos + (rest.len() - rest.trim_start().len());
@@ -420,13 +450,13 @@ impl<'a> Cursor<'a> {
     }
 
     /// `#error text` — nothing to validate.
-    fn error_directive(self) -> Result<Directive> {
+    fn error_directive(&mut self) -> Result<Directive> {
         Ok(Directive::Error {
             text: self.text[self.pos..].trim().to_owned(),
         })
     }
 
-    fn if_expr(mut self) -> Result<Directive> {
+    fn if_expr(&mut self) -> Result<Directive> {
         self.skip_ws()?;
         if self.at_end() {
             return Err(self.err(
@@ -441,7 +471,7 @@ impl<'a> Cursor<'a> {
         Ok(Directive::If { expr })
     }
 
-    fn pragma(mut self) -> Result<Directive> {
+    fn pragma(&mut self) -> Result<Directive> {
         self.skip_ws()?;
         let mut names = vec![];
         loop {
@@ -462,47 +492,62 @@ impl<'a> Cursor<'a> {
                 break;
             }
         }
-        self.end_of_line("pragma")?;
+        self.end_of_line("pragma", Trailing::Error)?;
         Ok(Directive::Pragma { names })
+    }
+
+    /// Parse one directive line — the single grammar. `span` is the
+    /// [`Token::DirectiveLine`]'s span (its `l()` is the `#`'s file offset),
+    /// so every diagnostic points at the offending slice of the line.
+    fn parse_directive(&mut self) -> Result<Directive> {
+        self.skip_ws()?;
+        if self.at_end() {
+            return Ok(Directive::Null);
+        }
+        let start = self.pos;
+        let Some(name) = self.read_name() else {
+            return Err(self.err(
+                start,
+                self.text.len(),
+                "expected a directive name after `#`".into(),
+            ));
+        };
+        match kind_of(name) {
+            DirectiveKind::Include => self.include(),
+            DirectiveKind::Define => self.define(),
+            DirectiveKind::Undef => {
+                self.named(|name| Directive::Undef { name }, "undef", Trailing::Warn)
+            }
+            DirectiveKind::If => self.if_expr(),
+            DirectiveKind::IfDef => {
+                self.named(|name| Directive::IfDef { name }, "ifdef", Trailing::Error)
+            }
+            DirectiveKind::IfNDef => {
+                self.named(|name| Directive::IfNDef { name }, "ifndef", Trailing::Error)
+            }
+            DirectiveKind::Else => self.bare(Directive::Else, "else", Trailing::Warn),
+            DirectiveKind::Endif => self.bare(Directive::Endif, "endif", Trailing::Warn),
+            DirectiveKind::Elif => self.elif(),
+            DirectiveKind::Pragma => self.pragma(),
+            DirectiveKind::Error => self.error_directive(),
+            DirectiveKind::Null => unreachable!("a name was read"),
+            DirectiveKind::Unknown => Err(self.err(
+                start,
+                self.pos,
+                format!("unknown preprocessor directive `#{name}`"),
+            )),
+        }
     }
 }
 
-/// Parse one directive line — the single grammar. `span` is the
-/// [`Token::DirectiveLine`]'s span (its `l()` is the `#`'s file offset),
-/// so every diagnostic points at the offending slice of the line.
-pub fn parse(line: &str, span: Span) -> Result<Directive> {
+/// Parse one directive line, plus any warnings its trailing text raised, in
+/// order. `span` is the [`Token::DirectiveLine`]'s span (its `l()` is the
+/// `#`'s file offset), so every diagnostic points at the offending slice of
+/// the line.
+pub fn parse(line: &str, span: Span) -> Result<(Directive, Vec<LpcError>)> {
     let mut c = Cursor::new(line, span);
-    c.skip_ws()?;
-    if c.at_end() {
-        return Ok(Directive::Null);
-    }
-    let start = c.pos;
-    let Some(name) = c.read_name() else {
-        return Err(c.err(
-            start,
-            c.text.len(),
-            "expected a directive name after `#`".into(),
-        ));
-    };
-    match kind_of(name) {
-        DirectiveKind::Include => c.include(),
-        DirectiveKind::Define => c.define(),
-        DirectiveKind::Undef => c.named(|name| Directive::Undef { name }, "undef"),
-        DirectiveKind::If => c.if_expr(),
-        DirectiveKind::IfDef => c.named(|name| Directive::IfDef { name }, "ifdef"),
-        DirectiveKind::IfNDef => c.named(|name| Directive::IfNDef { name }, "ifndef"),
-        DirectiveKind::Else => c.bare(Directive::Else, "else"),
-        DirectiveKind::Endif => c.bare(Directive::Endif, "endif"),
-        DirectiveKind::Elif => c.elif(),
-        DirectiveKind::Pragma => c.pragma(),
-        DirectiveKind::Error => c.error_directive(),
-        DirectiveKind::Null => unreachable!("a name was read"),
-        DirectiveKind::Unknown => Err(c.err(
-            start,
-            c.pos,
-            format!("unknown preprocessor directive `#{name}`"),
-        )),
-    }
+    let directive = c.parse_directive()?;
+    Ok((directive, c.warnings))
 }
 
 /// Parse a `#if` operand (also an object-macro body, for `#if FOO`).
@@ -758,11 +803,23 @@ mod tests {
     use super::*;
 
     fn p(line: &str) -> Result<Directive> {
-        parse(line, Span::new(0, 0..line.len()))
+        parse(line, Span::new(0, 0..line.len())).map(|(d, _)| d)
+    }
+
+    /// The directive and its warning messages.
+    fn pw(line: &str) -> (Directive, Vec<String>) {
+        let (d, warnings) = parse(line, Span::new(0, 0..line.len())).unwrap();
+        (
+            d,
+            warnings.iter().map(|w| w.message().to_string()).collect(),
+        )
     }
 
     fn perr(line: &str) -> String {
-        p(line).expect_err("should not parse").to_string()
+        parse(line, Span::new(0, 0..line.len()))
+            .unwrap_err()
+            .message()
+            .to_string()
     }
 
     /// Parse `line` as a `#define`, panicking on anything else.
@@ -963,8 +1020,31 @@ mod tests {
         assert_eq!(perr("#undef"), "expected an identifier after `#undef`");
         assert_eq!(perr("#ifdef"), "expected an identifier after `#ifdef`");
         assert_eq!(perr("#ifndef 1"), "expected an identifier after `#ifndef`");
-        assert_eq!(perr("#undef FOO bar"), "unexpected tokens after `#undef`");
-        assert_eq!(perr("#ifdef FOO BAR"), "unexpected tokens after `#ifdef`");
+        assert_eq!(
+            pw("#undef FOO bar"),
+            (
+                Directive::Undef { name: "FOO".into() },
+                vec!["extra tokens after `#undef`".into()]
+            )
+        );
+        assert_eq!(perr("#ifdef FOO bar"), "unexpected tokens after `#ifdef`");
+    }
+
+    #[test]
+    fn else_and_endif_tolerate_trailing_text_with_a_warning() {
+        assert_eq!(
+            pw("#endif FILES_DEFINED"),
+            (Directive::Endif, vec!["extra tokens after `#endif`".into()])
+        );
+        assert_eq!(
+            pw("#else /* c */ x"),
+            (Directive::Else, vec!["extra tokens after `#else`".into()])
+        );
+        assert_eq!(pw("#endif // just a comment"), (Directive::Endif, vec![]));
+        let (_, warnings) = parse("#endif FILES_DEFINED", Span::new(3, 10..30)).unwrap();
+        // The caret covers the trailing text, in file coordinates.
+        assert_eq!(warnings[0].span(), Some(Span::new(3, 17..30)));
+        assert!(warnings[0].is_warning());
     }
 
     #[test]
@@ -973,8 +1053,6 @@ mod tests {
         assert_eq!(p("#endif").unwrap(), Directive::Endif);
         assert_eq!(p("#else /* the why */").unwrap(), Directive::Else);
         assert_eq!(p("#endif // FOO").unwrap(), Directive::Endif);
-        assert_eq!(perr("#else 1 + 4"), "unexpected tokens after `#else`");
-        assert_eq!(perr("#endif FOO"), "unexpected tokens after `#endif`");
     }
 
     #[test]

@@ -291,7 +291,12 @@ impl Preprocessor {
             }
         }
 
-        match directive::parse(&token.1, token.0)? {
+        let (directive, warnings) = directive::parse(&token.1, token.0)?;
+        for warning in warnings {
+            self.context.diagnostics.record(warning);
+        }
+
+        match directive {
             Directive::Include { path, sys } => {
                 let source = if sys {
                     IncludeSource::System { path: &path }
@@ -746,6 +751,23 @@ mod tests {
                 panic!("{e:?}")
             }
         }
+    }
+
+    /// Scan `input` and return its warnings' messages, in order.
+    async fn warnings_of(input: &str) -> Vec<String> {
+        let mut preprocessor = fixture();
+        preprocessor
+            .scan("/test.c", input)
+            .await
+            .expect("scans clean");
+        preprocessor
+            .context
+            .diagnostics
+            .errors()
+            .iter()
+            .filter(|e| e.is_warning())
+            .map(|e| e.message().to_string())
+            .collect()
     }
 
     // `expected` is converted to a Regex, for easier matching on errors.
@@ -1529,7 +1551,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn test_error_if_invalid() {
+        async fn trailing_tokens_after_else_warn() {
             let prog = indoc! { r#"
                 #ifdef ASD
                 #else 1 + 4
@@ -1537,18 +1559,16 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "unexpected tokens after `#else`").await;
+            test_valid(prog, &[]).await;
+            assert_eq!(warnings_of(prog).await, ["extra tokens after `#else`"]);
         }
 
         #[tokio::test]
-        async fn a_trailing_endif_operand_is_an_error() {
-            // Silently accepted before the directive grammar: the `#endif`
-            // re-check regex was commented out.
-            test_invalid(
-                "#ifdef FOO\n#endif garbage\n",
-                "unexpected tokens after `#endif`",
-            )
-            .await;
+        async fn a_trailing_endif_operand_warns() {
+            // The closing `#endif` is always parsed, dead region or not.
+            let prog = "#ifdef FOO\n#endif garbage\n";
+            test_valid(prog, &[]).await;
+            assert_eq!(warnings_of(prog).await, ["extra tokens after `#endif`"]);
         }
 
         #[tokio::test]
@@ -1562,6 +1582,42 @@ mod tests {
                 #endif
             "# };
             test_valid(prog, &["live"]).await;
+        }
+    }
+
+    mod test_trailing_tokens {
+        use super::*;
+
+        #[tokio::test]
+        async fn undef_else_and_endif_apply_and_warn() {
+            let prog = indoc! { r#"
+                #define FOO 1
+                #undef FOO junk
+                #ifdef FOO
+                int no;
+                #else FOO
+                int yes;
+                #endif FOO
+            "# };
+            test_valid(prog, &["int", "yes", ";"]).await;
+            assert_eq!(
+                warnings_of(prog).await,
+                [
+                    "extra tokens after `#undef`",
+                    "extra tokens after `#else`",
+                    "extra tokens after `#endif`",
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_dead_region_never_warns() {
+            let prog = indoc! { r#"
+                #if 0
+                #undef FOO junk
+                #endif FOO
+            "# };
+            assert_eq!(warnings_of(prog).await, ["extra tokens after `#endif`"]);
         }
     }
 
