@@ -118,9 +118,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Ok(());
                 }
             }
-            // `call_other_resident` installs every collection's pending call
-            // itself; the name check above already ran before it did, so a
-            // collection never reaches this door.
+            // A collection never reaches this door: `call_other_resident`
+            // installs its pending call first.
             LpcRef::Array(_) | LpcRef::Mapping(_) => {
                 return Err(
                     self.runtime_bug("a collection receiver is installed by the resident door")
