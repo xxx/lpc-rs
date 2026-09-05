@@ -12,6 +12,7 @@ use crate::command::{presence::forget_destruct, registry::VerbRules};
 use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,
+    continuation::{Continuation, EfunContinuation, Pending},
     efun::Efun,
     lpc_array::LpcArray,
     lpc_mapping::LpcMapping,
@@ -349,6 +350,21 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     {
         let result = self.mint_array(items);
         self.return_efun_result(result);
+    }
+
+    /// Hand the calling frame `state`, the callbacks this efun still needs;
+    /// the loop makes them and lands the answer in the frame's `r0`.
+    pub(crate) fn continue_with(&mut self, state: Box<dyn Continuation>) {
+        let span = self.call_site_span();
+        let efun = self.efun;
+        let frame = self.stack.last_mut().expect(NO_CALLING_FRAME);
+        debug_assert!(frame.pending.is_none(), "one pending call per frame");
+        frame.pending = Some(Box::new(Pending::Efun(EfunContinuation {
+            efun,
+            state,
+            span,
+            suspended: None,
+        })));
     }
 
     /// Resolve `path` against the current process's in-game directory.

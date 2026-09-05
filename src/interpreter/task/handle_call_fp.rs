@@ -20,7 +20,7 @@ use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
     process::{Liveness, Process},
     task::{
-        Task, eval_loop::AsyncCall, get_location, handle_call::check_arg_type,
+        Task, advance::Advance, eval_loop::AsyncCall, get_location, handle_call::check_arg_type,
         handle_call_other::Standing,
     },
 };
@@ -31,7 +31,6 @@ pub(crate) enum Passed<'a> {
     /// The calling instruction's list, read from the caller frame.
     List(ArgList),
     /// Values in hand.
-    #[expect(dead_code, reason = "the continuation door constructs this next")]
     Values(&'a [LpcRef]),
 }
 
@@ -44,6 +43,9 @@ pub(crate) enum Called {
     Unresolved,
     /// Loading, initializing, or an efun that suspends: the slow door's.
     Suspends,
+    /// The top frame holds a suspended pending call: the efun ran in its
+    /// entry frame and asked for a callback that needs the async arm.
+    Pending,
 }
 
 /// The error a pointer whose receiver was destructed gives.
@@ -79,6 +81,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 Ok(None)
             }
             Ok(Called::Suspends) => Ok(Some(AsyncCall::FunctionPointer(location, list))),
+            Ok(Called::Pending) => Ok(Some(AsyncCall::Pending)),
             Err(e) => Err(e.or_span(self.stack.current_frame()?.current_debug_span())),
         }
     }
@@ -139,8 +142,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let args = ptr.bound_args(&self.passed_values(passed)?);
                 self.refuse_ref_params(efun, &args)?;
                 self.push_entry_frame(owner.clone(), ptr.origin.clone())?;
-                self.call_fired_efun_now(efun, args, owner, ptr.origin.clone())?;
-                Ok(Called::Framed)
+                match self.call_fired_efun_now(efun, args, owner, ptr.origin.clone())? {
+                    Advance::Running => Ok(Called::Framed),
+                    Advance::Suspends => Ok(Called::Pending),
+                }
             }
             FunctionAddress::Dynamic(name) => {
                 let mut args = ptr.bound_args(&self.passed_values(passed)?);

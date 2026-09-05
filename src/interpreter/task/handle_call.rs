@@ -14,7 +14,7 @@ use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
     process::Process,
     stm::{TxnHandle, VarId},
-    task::Task,
+    task::{Task, advance::Advance},
 };
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
@@ -125,9 +125,31 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         })
     }
 
+    /// After an efun: drive the callbacks it asked for, if any.
+    fn settle_efun(&mut self) -> lpc_rs_errors::Result<Advance> {
+        if self.stack.current_frame()?.pending.is_some() {
+            self.advance_pending(false)
+        } else {
+            Ok(Advance::Running)
+        }
+    }
+
+    /// `settle_efun` with the async arm for a step that suspends.
+    async fn settle_efun_async(&mut self) -> lpc_rs_errors::Result<()> {
+        if self.stack.current_frame()?.pending.is_some() {
+            self.advance_pending_async(false).await
+        } else {
+            Ok(())
+        }
+    }
+
     /// Run `efun`, called by the top frame's instruction with `list`, in
     /// place; its result lands in that frame's register 0.
-    pub(crate) fn call_efun_now(&mut self, efun: Efun, list: ArgList) -> lpc_rs_errors::Result<()> {
+    pub(crate) fn call_efun_now(
+        &mut self,
+        efun: Efun,
+        list: ArgList,
+    ) -> lpc_rs_errors::Result<Advance> {
         let mut ctx = EfunContext::at_call(&mut self.stack, &self.context, efun, list)?;
         let result = match call_efun_sync(efun, &mut ctx) {
             Some(result) => result,
@@ -140,7 +162,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         ctx.finish(result)?;
-        Ok(())
+        self.settle_efun()
     }
 
     /// Run `efun`, one that can suspend, called by the top frame's
@@ -159,7 +181,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         ctx.finish(result)?;
-        Ok(())
+        self.settle_efun_async().await
     }
 
     /// Push the frame an efun fired through a pointer runs in: `owner`'s,
@@ -210,7 +232,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             self.snapshots.push(snap);
         }
 
-        ctx.finish(result)
+        ctx.finish(result)?;
+        self.settle_efun_async().await
     }
 
     /// `call_fired_efun` for an efun that never suspends: no future built.
@@ -220,7 +243,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         args: Vec<LpcRef>,
         owner: Arc<Process>,
         origin: Option<Arc<LpcPath>>,
-    ) -> lpc_rs_errors::Result<()> {
+    ) -> lpc_rs_errors::Result<Advance> {
         self.refuse_ref_params(efun, &args)?;
         let mut ctx = EfunContext::fired(&mut self.stack, &self.context, efun, args, owner, origin);
         let result = match call_efun_sync(efun, &mut ctx) {
@@ -233,7 +256,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             self.snapshots.push(snap);
         }
 
-        ctx.finish(result)
+        ctx.finish(result)?;
+        self.settle_efun()
     }
 
     /// The efun a function with an efun prototype names; none is the

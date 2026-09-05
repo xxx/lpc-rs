@@ -39,7 +39,7 @@ enum Step {
 }
 
 /// The instructions that await, each because it can start a nested task.
-pub(super) enum AsyncCall {
+pub(crate) enum AsyncCall {
     /// An efun that can suspend, with the calling instruction's list.
     Efun(Efun, ArgList),
     FunctionPointer(RegisterVariant, ArgList),
@@ -52,7 +52,7 @@ pub(super) enum AsyncCall {
 const SLICE: u32 = 1000;
 
 /// What ended a run of [`Task::step`]s.
-pub(super) enum Slice {
+pub(crate) enum Slice {
     /// The budget ran out.
     Budget,
     /// The stack is empty.
@@ -104,7 +104,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ///
     /// Keep the count out of the `resume` future: there it was loaded and
     /// stored on every instruction.
-    pub(super) fn run_slice(&mut self, budget: &mut u32) -> lpc_rs_errors::Result<Slice> {
+    pub(crate) fn run_slice(&mut self, budget: &mut u32) -> lpc_rs_errors::Result<Slice> {
         let mut left = *budget;
         let slice = loop {
             if left == 0 {
@@ -192,7 +192,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 if efun.suspends() {
                     return Ok(Step::Await(AsyncCall::Efun(efun, list)));
                 }
-                self.call_efun_now(efun, list)?;
+                if let Advance::Suspends = self.call_efun_now(efun, list)? {
+                    return Ok(Step::Await(AsyncCall::Pending));
+                }
             }
             Instruction::CallFp(location, list) => {
                 // A pointer into a resident object is called with no future built.

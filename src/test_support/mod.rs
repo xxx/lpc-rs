@@ -2,9 +2,11 @@
 
 use std::{net::ToSocketAddrs, sync::Arc};
 
+use lpc_rs_asm::instruction::Instruction;
 use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
 use lpc_rs_errors::Result;
 use lpc_rs_utils::config::{Config, ConfigBuilder};
+use thin_vec::ThinVec;
 use tokio::sync::mpsc::{Receiver, UnboundedReceiver};
 
 use async_trait::async_trait;
@@ -27,10 +29,12 @@ use crate::{
     },
     interpreter::{
         CommittedReader,
+        call_frame::CallFrame,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
         program::Program,
+        stm::{LiveSnapshot, Transaction, TxnHandle, VarId, start_txn},
         task::{Task, task_template::TaskTemplate},
         vm::{Vm, global_state::GlobalState, vm_op::VmOp},
     },
@@ -160,6 +164,40 @@ pub fn committed_global(task: &Task<MAX_CALL_STACK_SIZE>, name: &str) -> LpcRef 
     task.context
         .global_state
         .committed_global(process, reg.index())
+}
+
+/// `code` as `/main.c` on `vm`, its `create` stepped under a live snapshot
+/// to the first instruction `at` accepts (an empty handle reads every
+/// receiver as absent); the object counts as initialized.
+pub(crate) async fn task_at(
+    vm: &Vm,
+    code: &str,
+    at: impl Fn(&Instruction) -> bool,
+) -> (Task<MAX_CALL_STACK_SIZE>, LiveSnapshot) {
+    let process = vm.create_process_from_code("/main.c", code).await.unwrap();
+    let live = start_txn(&vm.global_state.committer_tx).await.unwrap();
+    let mut context =
+        TaskTemplate::from(vm.global_state.clone()).into_task_context(process.clone());
+    context.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+    process.claim_init(&context.txn);
+    let mut task = Task::new(context);
+    let create = process.program.lookup_function("create").unwrap().clone();
+    task.stack
+        .push(CallFrame::new(process, create, 0, None::<ThinVec<VarId>>))
+        .unwrap();
+    for _ in 0..64 {
+        if task
+            .stack
+            .current_frame()
+            .unwrap()
+            .instruction()
+            .is_some_and(|i| at(&i))
+        {
+            return (task, live);
+        }
+        task.run_slice(&mut 1).unwrap();
+    }
+    panic!("no such instruction in {code}");
 }
 
 async fn compile_simul_efuns(config: &Arc<Config>) -> Program {
