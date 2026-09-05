@@ -83,6 +83,7 @@ pub(crate) mod rmdir;
 pub(crate) mod send_gmcp;
 pub(crate) mod send_mxp;
 pub(crate) mod set_this_player;
+pub(crate) mod shutdown;
 pub(crate) mod sort_array;
 pub(crate) mod sprintf;
 pub(crate) mod sscanf;
@@ -931,6 +932,16 @@ efuns! {
         arity: 3,
         args: [LpcType::String(false), LpcType::Int(false), LpcType::String(false)],
     },
+    query_ip_name [in query_ip_number] => {
+        returns: LpcType::String(false),
+        arity: (1, 1),
+        args: [LpcType::Object(false)],
+    },
+    shutdown [async] => {
+        returns: LpcType::Void,
+        arity: (1, 1),
+        args: [LpcType::Int(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1230,6 +1241,8 @@ mod tests {
                 "unique_array",
                 "read_bytes",
                 "write_bytes",
+                "query_ip_name",
+                "shutdown",
             ]
         );
     }

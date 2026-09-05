@@ -67,7 +67,7 @@ impl Vm {
     /// This method will load the master object and simul_efun file, add
     /// the master object to the object space, start networking,
     /// and then start the main loop.
-    pub async fn boot(&mut self) -> lpc_rs_errors::Result<()> {
+    pub async fn boot(&mut self) -> lpc_rs_errors::Result<i32> {
         self.bootstrap().await?;
 
         let config = &self.global_state.config;
@@ -101,8 +101,10 @@ impl Vm {
     /// Assumes `bootstrap()` has already been called.
     /// This runs on the main execution thread, and should never do any work itself.
     /// Spawn a task to do anything beyond message handling, or logging.
+    /// Returns the process exit code: `shutdown(code)`'s, 0 on a signal.
     #[instrument(skip_all)]
-    pub async fn run(&mut self) -> lpc_rs_errors::Result<()> {
+    pub async fn run(&mut self) -> lpc_rs_errors::Result<i32> {
+        let mut exit_code = 0;
         let gc_interval = self.global_state.config.gc_interval;
         // `interval` panics on a zero period; a disabled collector is gated off at the arm.
         let mut gc_ticks = tokio::time::interval(Duration::from_secs(gc_interval.max(1)));
@@ -143,13 +145,19 @@ impl Vm {
                         VmOp::PrioritizeCallOut(id) => {
                             self.global_state.prioritize_call_out(id).await;
                         }
+                        VmOp::Shutdown(code) => {
+                            info!("shutdown({code}) committed... shutting down");
+                            exit_code = code;
+                            break;
+                        }
                     }
                 }
             }
         }
 
         // Only the VM shuts down on its own. Everything else shuts down only at the behest of the VM.
-        self.shutdown().await
+        self.shutdown().await?;
+        Ok(exit_code)
     }
 
     /// Shut down the [`Vm`], and all subsystems: stop accepting, tell every

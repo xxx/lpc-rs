@@ -144,6 +144,20 @@ impl Telnet {
         Ok(())
     }
 
+    /// Look the client's name up on the blocking pool and record it on
+    /// `connection`; an address with no PTR record leaves it unnamed.
+    fn resolve_host_name(connection: Arc<Connection>) {
+        let ip = connection.address.ip();
+        tokio::spawn(async move {
+            let looked_up = tokio::task::spawn_blocking(move || dns_lookup::lookup_addr(&ip)).await;
+            if let Ok(Ok(name)) = looked_up
+                && name != ip.to_string()
+            {
+                connection.set_host_name(name);
+            }
+        });
+    }
+
     /// Start the main loop for a single user's connection. Handles sends and receives.
     #[instrument(skip(stream, template))]
     async fn connection_loop<S>(stream: S, remote_ip: SocketAddr, template: TaskTemplate)
@@ -154,6 +168,7 @@ impl Telnet {
         let mut session = Session::new();
         let (connection_tx, mut connection_rx) = mpsc::unbounded_channel::<ConnectionOp>();
         let connection = Arc::new(Connection::new(remote_ip, connection_tx));
+        Self::resolve_host_name(connection.clone());
         let global_state = template.global_state.clone();
         let mut outbox = Outbox::new(connection.clone(), global_state.config.max_pending_output);
         let max_idle_time = global_state.config.max_idle_time;
