@@ -1,19 +1,25 @@
-use std::sync::Arc;
+//! `present(id | object [, env])`: the `n`th object answering `id("name")`
+//! in `env`'s inventory (default: the caller's own, then its
+//! environment's), or whether `object` is there.
+
+use std::{sync::Arc, vec};
 
 use lpc_rs_errors::Result;
+use smallvec::SmallVec;
 
 use crate::interpreter::{
-    apply::{apply_nested, as_actor},
+    continuation::{Callee, Continuation, Next},
     efun::efun_context::EfunContext,
     lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL},
     process::Process,
+    stm::TxnHandle,
 };
 
-/// `present(id | ob [, env])`: the object answering `id(id)` — the `n`th
-/// for `"id n"` — or `ob` itself, when it is in `env`'s inventory, or in
-/// the caller's and then its environment's; 0 when there is none.
-pub async fn present<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+/// `present(id | object [, env])`: the `n`th object answering `id("name")`
+/// in `env`'s inventory (default: the caller's own, then its
+/// environment's), or whether `object` is there.
+pub fn present<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let txn = context.txn();
     let this = context.process().clone();
     let env = match context.arg(1) {
@@ -31,7 +37,7 @@ pub async fn present<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
             );
         }
     };
-    let result = match context.arg(0) {
+    match context.arg(0) {
         LpcRef::String(s) => {
             let (id, n) = numbered(s.to_str());
             let candidates = match &env {
@@ -44,32 +50,43 @@ pub async fn present<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
                     own
                 }
             };
-            nth_answering(context, &candidates, LpcRef::from(id), n).await?
-        }
-        arg @ LpcRef::Object(_) => match arg.live_object(txn) {
-            Some(ob) => {
-                let holder = Process::environment_of(txn, &ob);
-                let here = match &env {
-                    Some(env) => holder.as_ref().is_some_and(|h| Arc::ptr_eq(h, env)),
-                    None => holder.as_ref().is_some_and(|h| {
-                        Arc::ptr_eq(h, &this)
-                            || Process::environment_of(txn, &this)
-                                .is_some_and(|around| Arc::ptr_eq(h, &around))
-                    }),
-                };
-                if here { arg.clone() } else { NULL }
+            if n == 0 || candidates.is_empty() {
+                context.return_efun_result(NULL);
+                return Ok(());
             }
-            None => NULL,
-        },
-        other => {
-            return Err(context.runtime_error(format!(
-                "present: {} is not a string or object",
-                other.type_name()
-            )));
+            context.continue_with(Box::new(Present {
+                candidates: candidates.into_iter(),
+                id: LpcRef::from(id),
+                n,
+                seen: 0,
+                asked: None,
+            }));
+            Ok(())
         }
-    };
-    context.return_efun_result(result);
-    Ok(())
+        arg @ LpcRef::Object(_) => {
+            let result = match arg.live_object(txn) {
+                Some(ob) => {
+                    let holder = Process::environment_of(txn, &ob);
+                    let here = match &env {
+                        Some(env) => holder.as_ref().is_some_and(|h| Arc::ptr_eq(h, env)),
+                        None => holder.as_ref().is_some_and(|h| {
+                            Arc::ptr_eq(h, &this)
+                                || Process::environment_of(txn, &this)
+                                    .is_some_and(|around| Arc::ptr_eq(h, &around))
+                        }),
+                    };
+                    if here { arg.clone() } else { NULL }
+                }
+                None => NULL,
+            };
+            context.return_efun_result(result);
+            Ok(())
+        }
+        other => Err(context.runtime_error(format!(
+            "present: {} is not a string or object",
+            other.type_name()
+        ))),
+    }
 }
 
 /// `"sword 2"` as `("sword", 2)`; a string with no trailing number is
@@ -84,34 +101,44 @@ fn numbered(s: &str) -> (&str, usize) {
     }
 }
 
-/// The `n`th (from 1) of `candidates` whose `id(id)` answers true; each
-/// `id` is a call from the caller of `present`.
-async fn nth_answering<const N: usize>(
-    context: &EfunContext<'_, N>,
-    candidates: &[Arc<Process>],
+/// The walk: each candidate defining `id` is asked in turn; the `n`th to
+/// answer true is the result.
+#[derive(Debug, Clone)]
+struct Present {
+    candidates: vec::IntoIter<Arc<Process>>,
     id: LpcRef,
     n: usize,
-) -> Result<LpcRef> {
-    if n == 0 {
-        return Ok(NULL);
-    }
-    let ctx = context.task_context();
-    let mut seen = 0;
-    for candidate in candidates {
-        let Some(function) = candidate.program.unmangled_functions.get("id").cloned() else {
-            continue;
-        };
-        let callers = as_actor(ctx, context.process());
-        let verdict =
-            apply_nested(ctx, callers, candidate, function, std::slice::from_ref(&id)).await?;
-        if verdict.is_truthy(context.txn()) {
-            seen += 1;
-            if seen == n {
-                return Ok(LpcRef::from(Arc::downgrade(candidate)));
+    seen: usize,
+    asked: Option<Arc<Process>>,
+}
+
+impl Continuation for Present {
+    fn advance(&mut self, result: Option<LpcRef>, txn: &TxnHandle) -> Result<Next> {
+        if let (Some(verdict), Some(asked)) = (result, self.asked.take())
+            && verdict.is_truthy(txn)
+        {
+            self.seen += 1;
+            if self.seen == self.n {
+                return Ok(Next::Done(LpcRef::from(Arc::downgrade(&asked))));
             }
         }
+        for candidate in self.candidates.by_ref() {
+            let Some(function) = candidate.program.unmangled_functions.get("id").cloned() else {
+                continue;
+            };
+            self.asked = Some(candidate.clone());
+            return Ok(Next::Call(Callee::Function {
+                process: candidate,
+                function,
+                args: SmallVec::from_vec(vec![self.id.clone()]),
+            }));
+        }
+        Ok(Next::Done(NULL))
     }
-    Ok(NULL)
+
+    fn clone_box(&self) -> Box<dyn Continuation> {
+        Box::new(self.clone())
+    }
 }
 
 #[cfg(test)]
@@ -161,7 +188,7 @@ mod tests {
         .await;
         let hand_sword = init(
             "/hand_sword.c",
-            r#"int id(string s) { return s == "sword"; } void create() { move_object("/finder"); }"#,
+            r#"int id(string s) { return s == "sword" || (s == "asker" && previous_object() == find_object("/finder")); } void create() { move_object("/finder"); }"#,
         )
         .await;
         init("/rock.c", r#"void create() { move_object("/room"); }"#).await;
@@ -260,6 +287,13 @@ mod tests {
         )
         .await;
         assert_eq!(r, object(&w.room_sword));
+    }
+
+    #[tokio::test]
+    async fn id_is_asked_with_the_caller_of_present_as_previous_object() {
+        let w = world().await;
+        let r = found(&w, r#""/finder"->find("asker")"#).await;
+        assert_eq!(r, object(&w.hand_sword));
     }
 
     #[tokio::test]

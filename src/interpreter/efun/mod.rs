@@ -773,7 +773,7 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false)],
     },
-    filter [async] => {
+    filter => {
         returns: LpcType::Mixed(false),
         arity: (2, 0, ellipsis),
         args: [LpcType::Mixed(true) | LpcType::Mapping(false), LpcType::Function(false)],
@@ -783,12 +783,12 @@ efuns! {
         arity: (2, 0, ellipsis),
         args: [LpcType::Mixed(true) | LpcType::Mapping(false), LpcType::Function(false)],
     },
-    sort_array [async] => {
+    sort_array => {
         returns: LpcType::Mixed(true),
         arity: 2,
         args: [LpcType::Mixed(true), LpcType::Function(false) | LpcType::Int(false)],
     },
-    present [async] => {
+    present => {
         returns: LpcType::Object(false),
         arity: (2, 1),
         args: [LpcType::String(false) | LpcType::Object(false), LpcType::Object(false)],

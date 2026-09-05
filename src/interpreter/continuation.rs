@@ -44,7 +44,6 @@ pub(crate) enum Callee {
         args: SmallVec<[LpcRef; 4]>,
     },
     /// `function` on `process` with `args`, entered through a door.
-    #[expect(dead_code, reason = "no continuation constructs this yet")]
     Function {
         process: Arc<Process>,
         function: Arc<ProgramFunction>,
