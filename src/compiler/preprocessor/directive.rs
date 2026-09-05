@@ -131,8 +131,13 @@ pub enum Directive {
 /// have consumed, plus a backslash left dangling by a splice with nothing
 /// after it.
 fn trim_directive_line(line: &str) -> &str {
-    let line = line.trim_end_matches('\n').trim_end_matches('\r');
-    line.strip_suffix('\\').unwrap_or(line)
+    let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
+    if trimmed.len() == line.len() {
+        // No line terminator was here to splice away, so a trailing
+        // backslash is literal text, not a dangling half of a pair.
+        return trimmed;
+    }
+    trimmed.strip_suffix('\\').unwrap_or(trimmed)
 }
 
 /// Skip spaces, tabs, and comments (a comment is whitespace here).
@@ -930,6 +935,15 @@ mod tests {
             p("#undef \\\r\n FOO").unwrap(),
             Directive::Undef { name: "FOO".into() }
         );
+    }
+
+    #[test]
+    fn a_dangling_backslash_needs_an_actual_newline_to_splice() {
+        // No newline follows, so the backslash is body text, not a splice.
+        let (_, _, body, _) = define_of("#define X \\");
+        assert_eq!(body, "\\");
+        // The splice case still works alongside it.
+        assert_eq!(p("#endif \\\n").unwrap(), Directive::Endif);
     }
 
     #[test]

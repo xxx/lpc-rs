@@ -744,6 +744,16 @@ mod tests {
     }
 
     #[test]
+    fn a_backslash_newline_inside_a_string_literal_is_not_spliced() {
+        let vec = lex_vec("\"a\\\nb\"");
+        assert_eq!(vec.len(), 1, "the pair stays in the string, not skipped");
+        let Ok(Token::StringLiteral(st)) = &vec[0] else {
+            panic!("expected a string literal");
+        };
+        assert_eq!(st.0, Span::new(0, 0..6));
+    }
+
+    #[test]
     fn a_directive_line_span_excludes_its_trailing_newline() {
         let vec = lex_vec("#define FOO 1\n");
         let Ok(Token::DirectiveLine(st)) = &vec[0] else {
