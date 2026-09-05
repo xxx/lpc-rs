@@ -5,7 +5,6 @@ use std::{
 
 use async_trait::async_trait;
 use itertools::Itertools;
-use lazy_format::lazy_format;
 use lpc_rs_errors::{Result, span::Span};
 use ustr::Ustr;
 
@@ -69,14 +68,14 @@ impl Display for FunctionPtrNode {
                 })
                 .join(" ,"),
         };
-        let arg_fmt = lazy_format!(
-            if args.is_empty() => ("")
-            else => ("({})", args)
-        );
-        let fmt = lazy_format!(
-            if let Some(e) = &self.receiver => ("{}->{}{}", e, self.name, arg_fmt)
-            else => ("{}{}", self.name, arg_fmt)
-        );
-        write!(f, "&{fmt}")
+        write!(f, "&")?;
+        if let Some(e) = &self.receiver {
+            write!(f, "{e}->")?;
+        }
+        write!(f, "{}", self.name)?;
+        if !args.is_empty() {
+            write!(f, "({args})")?;
+        }
+        Ok(())
     }
 }

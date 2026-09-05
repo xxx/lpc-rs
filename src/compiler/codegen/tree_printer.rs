@@ -47,7 +47,8 @@ use crate::compiler::{
 ///
 /// # Examples
 /// ```
-/// # tokio_test::block_on(async {
+/// # #[tokio::main(flavor = "current_thread")]
+/// # async fn main() {
 /// use lpc_rs::{
 ///     compiler::{
 ///         codegen::{tree_printer::TreePrinter, tree_walker::TreeWalker},
@@ -68,7 +69,7 @@ use crate::compiler::{
 ///     .await
 ///     .expect("error walking the tree");
 /// print!("{}", walker.into_output());
-/// # });
+/// # }
 /// ```
 #[derive(Debug)]
 pub struct TreePrinter {

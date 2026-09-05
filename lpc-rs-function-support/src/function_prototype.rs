@@ -6,7 +6,6 @@ use std::{
 
 use derive_builder::Builder;
 use itertools::Itertools;
-use lazy_format::lazy_format;
 use lpc_rs_core::{
     RegisterSize, function_arity::FunctionArity, function_flags::FunctionFlags, lpc_path::LpcPath,
     lpc_type::LpcType, mangle::Mangle,
@@ -139,29 +138,20 @@ impl Mangle for FunctionPrototype {
 impl Display for FunctionPrototype {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let flags = self.flags;
-
-        let nomask = lazy_format!(
-            if flags.nomask() => ("{}", "nomask ")
-            else => ""
-        );
-
-        let varargs = lazy_format!(
-            if flags.varargs() => ("{}", "varargs ")
-            else => ""
-        );
-
-        let visibility = lazy_format!("{} ", self.flags.visibility());
+        let nomask = if flags.nomask() { "nomask " } else { "" };
+        let varargs = if flags.varargs() { "varargs " } else { "" };
 
         let mut args = self.arg_types.iter().map(|t| t.to_string()).join(", ");
-
-        if self.flags.ellipsis() {
+        if flags.ellipsis() {
             args.push_str(", ...");
         }
 
         write!(
             f,
-            "{}{}{}{} {}({})",
-            nomask, varargs, visibility, self.return_type, self.name, args
+            "{nomask}{varargs}{} {} {}({args})",
+            flags.visibility(),
+            self.return_type,
+            self.name
         )
     }
 }

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use if_chain::if_chain;
 use lpc_rs_asm::instruction::{Arg, ArgList};
 use lpc_rs_core::{RegisterSize, lpc_path::LpcPath, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, span::Span};
@@ -45,19 +44,21 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ) -> lpc_rs_errors::Result<()> {
         let num_args = RegisterSize::try_from(self.args_of(list)?.len())?;
         // A simul_efun's prototype can change after a cached caller was compiled against it.
-        if_chain! {
-            if num_args < func.arity().num_args;
-            if let Some(i) = func.prototype.first_ref_param();
-            if i >= usize::from(num_args);
-            then {
-                let caller_span = self.stack.current_frame().ok().and_then(CallFrame::current_debug_span);
-                return Err(LpcError::runtime(format!(
-                    "argument {} of `{}` must be passed by reference",
-                    i + 1,
-                    func.name()
-                ))
-                .or_span(caller_span));
-            }
+        if num_args < func.arity().num_args
+            && let Some(i) = func.prototype.first_ref_param()
+            && i >= usize::from(num_args)
+        {
+            let caller_span = self
+                .stack
+                .current_frame()
+                .ok()
+                .and_then(CallFrame::current_debug_span);
+            return Err(LpcError::runtime(format!(
+                "argument {} of `{}` must be passed by reference",
+                i + 1,
+                func.name()
+            ))
+            .or_span(caller_span));
         }
 
         trace!("pushing new frame; copying arguments: {num_args}");

@@ -16,7 +16,6 @@ use lpc_rs_core::{
     register::RegisterVariant,
 };
 use lpc_rs_errors::span::Span;
-use multimap::MultiMap;
 use tracing::trace;
 
 use crate::{
@@ -207,21 +206,15 @@ impl ProgramFunction {
             v.push(format!("    a{index} = ({})", args.join(", ")));
         }
 
-        // use MultiMap as multiple labels can be at the same address
-        let labels_by_pc = self
-            .labels
-            .as_ref()
-            .map(|labels| {
-                labels
-                    .values()
-                    .zip(labels.keys())
-                    .collect::<MultiMap<_, _>>()
-            })
-            .unwrap_or_default();
+        // Several labels can share an address.
+        let mut labels_by_pc: HashMap<Address, Vec<&Label>> = HashMap::new();
+        for (label, address) in self.labels.iter().flatten() {
+            labels_by_pc.entry(*address).or_default().push(label);
+        }
 
         for (counter, instruction) in self.instructions.iter().enumerate() {
-            if let Some(vec) = labels_by_pc.get_vec(&Address(counter)) {
-                for label in vec {
+            if let Some(labels) = labels_by_pc.get(&Address(counter)) {
+                for label in labels {
                     v.push(format!("  {label}:"));
                 }
             }

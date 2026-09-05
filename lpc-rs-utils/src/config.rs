@@ -1,7 +1,6 @@
-use std::{borrow::Cow, collections::HashMap, fmt::Debug, path::Path};
+use std::{borrow::Cow, collections::HashMap, fmt::Debug, fs, path::Path};
 
 use derive_builder::Builder;
-use fs_err as fs;
 use lpc_rs_core::lpc_path::{LpcPath, canonicalize_in_game_path};
 use lpc_rs_errors::{Result, lpc_error, span::Span};
 use tracing::{info, warn};
@@ -279,7 +278,7 @@ impl Config {
                 .with(fmt::Layer::default().with_writer(std::io::stderr))
                 .init(),
             s => registry
-                .with(fmt::Layer::default().with_writer(std::fs::File::create(s).unwrap()))
+                .with(fmt::Layer::default().with_writer(fs::File::create(s).unwrap()))
                 .init(),
         }
     }
@@ -307,9 +306,13 @@ fn canonicalized_path<P>(path: P) -> Result<Ustr>
 where
     P: AsRef<Path>,
 {
+    let path = path.as_ref();
     match fs::canonicalize(path) {
         Ok(y) => Ok(ustr(&y.to_string_lossy())),
-        Err(e) => Err(lpc_error!(e.to_string())),
+        Err(e) => Err(lpc_error!(
+            "failed to canonicalize `{}`: {e}",
+            path.display()
+        )),
     }
 }
 

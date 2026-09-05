@@ -171,17 +171,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-recursion"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b43422f69d8ff38f95f1b2bb76517c91589a924d1559a0e935d7c8ce0274c11"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "async-trait"
 version = "0.1.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -316,17 +305,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "bstr"
-version = "1.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bb31b46c14244e20ee9984b11bf5c992b91fb6939fea616e3512c8baecdbe5f"
-dependencies = [
- "memchr",
- "regex-automata",
- "serde_core",
 ]
 
 [[package]]
@@ -927,15 +905,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
-name = "fs-err"
-version = "3.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b91aa448ca50d7e79433bdf3ee8d99215430d2ec02ade5aefab2a073a1822e8a"
-dependencies = [
- "autocfg",
-]
-
-[[package]]
 name = "futures-core"
 version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1106,12 +1075,6 @@ name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
-
-[[package]]
-name = "if_chain"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd62e6b5e86ea8eeeb8db1de02880a6abc01a397b2ebb64b5d74ac255318f5cb"
 
 [[package]]
 name = "imbl"
@@ -1333,12 +1296,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lazy_format"
-version = "2.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e479e99b287d578ed5f6cd4c92cdf48db219088adb9c5b14f7c155b71dfba792"
-
-[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1409,7 +1366,6 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "arc-swap",
- "async-recursion",
  "async-trait",
  "bit-set 0.11.1",
  "bytes",
@@ -1426,7 +1382,6 @@ dependencies = [
  "fake",
  "fastrand",
  "flume",
- "if_chain",
  "imbl",
  "indexmap",
  "indextree",
@@ -1436,7 +1391,6 @@ dependencies = [
  "jemallocator",
  "lalrpop",
  "lalrpop-util",
- "lazy_format",
  "logos",
  "lpc-rs-asm",
  "lpc-rs-core",
@@ -1445,7 +1399,6 @@ dependencies = [
  "lpc-rs-telnet",
  "lpc-rs-utils",
  "lru",
- "once_cell",
  "parking_lot",
  "path-dedot",
  "phf",
@@ -1462,7 +1415,6 @@ dependencies = [
  "syn 1.0.109",
  "thin-vec",
  "tokio",
- "tokio-test",
  "tracing",
  "ustr",
 ]
@@ -1473,7 +1425,6 @@ version = "0.1.0"
 dependencies = [
  "lpc-rs-core",
  "lpc-rs-errors",
- "static_assertions",
  "ustr",
 ]
 
@@ -1481,12 +1432,10 @@ dependencies = [
 name = "lpc-rs-core"
 version = "0.1.0"
 dependencies = [
- "bstr",
  "decorum",
  "derive_builder",
  "indextree",
  "modular-bitfield",
- "once_cell",
  "path-absolutize",
  "ustr",
 ]
@@ -1496,11 +1445,8 @@ name = "lpc-rs-driver"
 version = "0.1.0"
 dependencies = [
  "clap",
- "if_chain",
  "lpc-rs",
  "lpc-rs-utils",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -1519,13 +1465,10 @@ version = "0.1.0"
 dependencies = [
  "derive_builder",
  "itertools 0.15.0",
- "lazy_format",
  "lpc-rs-asm",
  "lpc-rs-core",
  "lpc-rs-errors",
  "lpc-rs-utils",
- "multimap",
- "once_cell",
  "readonly",
  "tracing",
  "ustr",
@@ -1539,7 +1482,6 @@ dependencies = [
  "lpc-rs",
  "lpc-rs-core",
  "lpc-rs-utils",
- "tokio",
 ]
 
 [[package]]
@@ -1556,8 +1498,6 @@ dependencies = [
  "claims",
  "derive_builder",
  "dotenvy",
- "fs-err",
- "if_chain",
  "lpc-rs-core",
  "lpc-rs-errors",
  "readonly",
@@ -1650,15 +1590,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "multimap"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
-dependencies = [
- "serde",
 ]
 
 [[package]]
@@ -2512,7 +2443,6 @@ dependencies = [
  "signal-hook-registry",
  "socket2",
  "tokio-macros",
- "tracing",
  "windows-sys",
 ]
 
@@ -2525,28 +2455,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.3",
-]
-
-[[package]]
-name = "tokio-stream"
-version = "0.1.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3d06f0b082ba57c26b79407372e57cf2a1e28124f78e9479fe80322cf53420b"
-dependencies = [
- "futures-core",
- "pin-project-lite",
- "tokio",
-]
-
-[[package]]
-name = "tokio-test"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f6d24790a10a7af737693a3e8f1d03faef7e6ca0cc99aae5066f533766de545"
-dependencies = [
- "futures-core",
- "tokio",
- "tokio-stream",
 ]
 
 [[package]]

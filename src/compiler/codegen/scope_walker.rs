@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
 use async_trait::async_trait;
-use if_chain::if_chain;
 use itertools::Itertools;
 use lpc_rs_core::{
     ScopeId, call_namespace::CallNamespace, global_var_flags::GlobalVarFlags, lpc_type::LpcType,
@@ -246,19 +245,18 @@ impl ScopeWalker {
     }
 
     fn should_upvalue_symbol(&self, symbol: &Symbol) -> bool {
-        if_chain! {
-            if !symbol.is_global();
-            if let Some(closure_scope_id) = self.closure_scope_stack.last().copied();
-            if let Some(symbol_scope_id) = symbol.scope_id;
-            if symbol_scope_id != closure_scope_id;
-            let mut ancestors = symbol_scope_id.ancestors(&self.context.scopes.scopes);
-            if !ancestors.contains(&closure_scope_id);
-            then {
-                true
-            } else {
-                false
-            }
+        if symbol.is_global() {
+            return false;
         }
+        let (Some(closure_scope_id), Some(symbol_scope_id)) =
+            (self.closure_scope_stack.last().copied(), symbol.scope_id)
+        else {
+            return false;
+        };
+        symbol_scope_id != closure_scope_id
+            && !symbol_scope_id
+                .ancestors(&self.context.scopes.scopes)
+                .contains(&closure_scope_id)
     }
 }
 

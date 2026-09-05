@@ -174,7 +174,8 @@ impl Program {
     ///
     /// # Examples
     /// ```
-    /// # tokio_test::block_on(async {
+    /// # #[tokio::main(flavor = "current_thread")]
+    /// # async fn main() {
     /// use lpc_rs::compiler::{
     ///     Compiler,
     ///     ast::{
@@ -202,7 +203,7 @@ impl Program {
     /// for instruction in program.listing() {
     ///     println!("{}", instruction);
     /// }
-    /// # });
+    /// # }
     /// ```
     pub fn listing(&self) -> Vec<String> {
         let functions = self

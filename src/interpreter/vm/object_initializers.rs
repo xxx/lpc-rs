@@ -106,7 +106,8 @@ impl Vm {
     /// # Examples
     ///
     /// ```
-    /// # tokio_test::block_on(async {
+    /// # #[tokio::main(flavor = "current_thread")]
+    /// # async fn main() {
     /// use lpc_rs::interpreter::{CommittedReader, lpc_int::LpcInt, lpc_ref::LpcRef, vm::Vm};
     /// use lpc_rs_utils::config::Config;
     ///
@@ -117,7 +118,7 @@ impl Vm {
     /// assert_eq!(value, LpcRef::Int(LpcInt(5)));
     ///
     /// assert!(vm.global_state.object_space.lookup("/test").is_some());
-    /// # })
+    /// # }
     /// ```
     pub async fn initialize_string<P, S>(&self, code: S, filename: P) -> Result<TaskContext>
     where

@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 
-use async_recursion::async_recursion;
 use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
@@ -208,58 +207,67 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ///
     /// Boxed: an efun fired through the slow door can itself settle a new
     /// pending call, cycling back here.
-    #[async_recursion]
     async fn resolve_suspended(&mut self) -> Result<Resolved> {
-        let owner = self.stack.len().saturating_sub(1);
-        let frame = self.stack.current_frame_mut()?;
-        let Some(mut pending) = frame.pending.take() else {
-            return Err(self.runtime_bug("resolve_suspended on a frame with no pending call"));
-        };
-        let resolved = match &mut *pending {
-            Pending::Collection(call) => {
-                let Some(receiver) = call.remaining.pop() else {
-                    return Err(self.runtime_bug("a suspended collection with no receiver left"));
-                };
-                let name = call.name.clone();
-                let callee =
-                    Self::resolve_call_other_receiver(&receiver, &name, &self.context, || {
-                        self.loader()
-                    })
-                    .await?
-                    .filter(|(_, function)| function.public());
-                match callee {
-                    Some((process, function)) => {
-                        debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
-                        let args = call.args.clone();
-                        self.push_external_frame(process, function, args.into_iter(), None)?;
-                        Resolved::Framed
-                    }
-                    None => {
-                        call.results.push(NULL);
-                        Resolved::Continue { answered: false }
-                    }
-                }
-            }
-            Pending::Efun(cont) => {
-                let (efun, span) = (cont.efun, cont.span);
-                let Some(Callee::Pointer { ptr, args }) = cont.suspended.take() else {
-                    return Err(self.runtime_bug("a suspended callback with no pointer to call"));
-                };
-                match self
-                    .call_pointer_slow(&ptr, args.to_vec())
-                    .await
-                    .map_err(|e| e.or_span(span))?
-                {
-                    Called::Framed => Resolved::Framed,
-                    Called::Unresolved => return Err(unresolved(efun, span)),
-                    Called::Suspends | Called::Pending => {
-                        return Err(self.runtime_bug("the slow pointer door suspended"));
+        Box::pin(async move {
+            let owner = self.stack.len().saturating_sub(1);
+            let frame = self.stack.current_frame_mut()?;
+            let Some(mut pending) = frame.pending.take() else {
+                return Err(self.runtime_bug("resolve_suspended on a frame with no pending call"));
+            };
+            let resolved = match &mut *pending {
+                Pending::Collection(call) => {
+                    let Some(receiver) = call.remaining.pop() else {
+                        return Err(
+                            self.runtime_bug("a suspended collection with no receiver left")
+                        );
+                    };
+                    let name = call.name.clone();
+                    let callee =
+                        Self::resolve_call_other_receiver(&receiver, &name, &self.context, || {
+                            self.loader()
+                        })
+                        .await?
+                        .filter(|(_, function)| function.public());
+                    match callee {
+                        Some((process, function)) => {
+                            debug_assert!(
+                                !function.prototype.is_efun(),
+                                "a `->` callee has a body"
+                            );
+                            let args = call.args.clone();
+                            self.push_external_frame(process, function, args.into_iter(), None)?;
+                            Resolved::Framed
+                        }
+                        None => {
+                            call.results.push(NULL);
+                            Resolved::Continue { answered: false }
+                        }
                     }
                 }
-            }
-        };
-        self.restore_pending(owner, pending)?;
-        Ok(resolved)
+                Pending::Efun(cont) => {
+                    let (efun, span) = (cont.efun, cont.span);
+                    let Some(Callee::Pointer { ptr, args }) = cont.suspended.take() else {
+                        return Err(
+                            self.runtime_bug("a suspended callback with no pointer to call")
+                        );
+                    };
+                    match self
+                        .call_pointer_slow(&ptr, args.to_vec())
+                        .await
+                        .map_err(|e| e.or_span(span))?
+                    {
+                        Called::Framed => Resolved::Framed,
+                        Called::Unresolved => return Err(unresolved(efun, span)),
+                        Called::Suspends | Called::Pending => {
+                            return Err(self.runtime_bug("the slow pointer door suspended"));
+                        }
+                    }
+                }
+            };
+            self.restore_pending(owner, pending)?;
+            Ok(resolved)
+        })
+        .await
     }
 
     /// `advance_pending`, taking the async arm whenever a step suspends.

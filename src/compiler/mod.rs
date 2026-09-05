@@ -1,7 +1,6 @@
 use std::{ffi::OsStr, fmt::Debug, io::ErrorKind, sync::Arc};
 
 use ast::program_node::ProgramNode;
-use async_recursion::async_recursion;
 use codegen::{
     codegen_walker::CodegenWalker,
     function_prototype_walker::FunctionPrototypeWalker,
@@ -102,7 +101,8 @@ impl Compiler {
     ///
     /// # Examples
     /// ```
-    /// # tokio_test::block_on(async {
+    /// # #[tokio::main(flavor = "current_thread")]
+    /// # async fn main() {
     /// use lpc_rs::compiler::Compiler;
     /// use lpc_rs_core::lpc_path::LpcPath;
     ///
@@ -110,43 +110,45 @@ impl Compiler {
     ///     .compile_file(LpcPath::new_server("tests/fixtures/code/example.c"))
     ///     .await
     ///     .expect("Unable to compile.");
-    /// # });
+    /// # }
     /// ```
     #[instrument(skip(self))]
-    #[async_recursion]
     pub async fn compile_file<T>(&self, path: T) -> Result<Compiled>
     where
         T: Into<LpcPath> + Debug + Send,
     {
-        let lpc_path = path.into();
-        let absolute = lpc_path.as_server(&*self.config.lib_dir);
+        Box::pin(async move {
+            let lpc_path = path.into();
+            let absolute = lpc_path.as_server(&*self.config.lib_dir);
 
-        let file_content = match read_lpc_file(&*absolute).await {
-            Ok(s) => s,
-            Err(e) => {
-                return match e.kind() {
-                    ErrorKind::NotFound => {
-                        if matches!(absolute.extension().and_then(OsStr::to_str), Some("c")) {
-                            return Err(lpc_error!(
-                                "Cannot read file `{}`: {}",
-                                lpc_path.as_in_game(&*self.config.lib_dir).display(),
-                                e
-                            ));
+            let file_content = match read_lpc_file(&*absolute).await {
+                Ok(s) => s,
+                Err(e) => {
+                    return match e.kind() {
+                        ErrorKind::NotFound => {
+                            if matches!(absolute.extension().and_then(OsStr::to_str), Some("c")) {
+                                return Err(lpc_error!(
+                                    "Cannot read file `{}`: {}",
+                                    lpc_path.as_in_game(&*self.config.lib_dir).display(),
+                                    e
+                                ));
+                            }
+
+                            let dot_c = lpc_path.with_extension("c");
+                            self.compile_file(dot_c).await
                         }
+                        _ => Err(lpc_error!(
+                            "Cannot read file `{}`: {}",
+                            lpc_path.as_in_game(&*self.config.lib_dir).display(),
+                            e
+                        )),
+                    };
+                }
+            };
 
-                        let dot_c = lpc_path.with_extension("c");
-                        self.compile_file(dot_c).await
-                    }
-                    _ => Err(lpc_error!(
-                        "Cannot read file `{}`: {}",
-                        lpc_path.as_in_game(&*self.config.lib_dir).display(),
-                        e
-                    )),
-                };
-            }
-        };
-
-        self.compile_string(lpc_path, file_content).await
+            self.compile_string(lpc_path, file_content).await
+        })
+        .await
     }
 
     /// Compile the object an in-game path names: its `.c` source
@@ -171,7 +173,8 @@ impl Compiler {
     ///
     /// # Examples
     /// ```
-    /// # tokio_test::block_on(async {
+    /// # #[tokio::main(flavor = "current_thread")]
+    /// # async fn main() {
     /// use lpc_rs::compiler::Compiler;
     ///
     /// let code = r#"
@@ -188,7 +191,7 @@ impl Compiler {
     ///     .preprocess_string("~/my_file.c", code)
     ///     .await
     ///     .expect("Failed to preprocess.");
-    /// # });
+    /// # }
     /// ```
     #[instrument(skip(self, code))]
     pub async fn preprocess_string<P, S>(
@@ -226,7 +229,8 @@ impl Compiler {
     /// `code` - The actual code to be compiled.
     /// # Examples
     /// ```
-    /// # tokio_test::block_on(async {
+    /// # #[tokio::main(flavor = "current_thread")]
+    /// # async fn main() {
     /// use lpc_rs::compiler::Compiler;
     ///
     /// let code = r#"
@@ -242,7 +246,7 @@ impl Compiler {
     ///     .compile_string("~/my_file.c", code)
     ///     .await
     ///     .expect("Failed to compile.");
-    /// # });
+    /// # }
     /// ```
     #[instrument(skip_all)]
     pub async fn compile_string<T, U>(&self, path: T, code: U) -> Result<Compiled>

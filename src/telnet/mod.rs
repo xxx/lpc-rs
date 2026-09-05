@@ -3,14 +3,17 @@ pub mod ops;
 
 mod outbox;
 
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 
 use indexmap::IndexMap;
 use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::lpc_error;
 use lpc_rs_telnet::{Event, MAX_LINE, Op, Session};
 use lpc_rs_utils::lpc_string::LpcString;
-use once_cell::sync::OnceCell;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, ToSocketAddrs},
@@ -45,7 +48,7 @@ use crate::{
 #[derive(Debug, Default)]
 pub struct Telnet {
     /// The acceptor task; dropping it stops new connections, not existing ones.
-    handle: OnceCell<JoinHandle<()>>,
+    handle: OnceLock<JoinHandle<()>>,
 }
 
 /// Which side ended a connection.

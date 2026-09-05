@@ -101,7 +101,7 @@ pub(crate) mod write;
 pub(crate) mod write_file;
 pub(crate) mod write_socket;
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use indexmap::IndexMap;
 use lpc_rs_core::{
@@ -113,7 +113,6 @@ use lpc_rs_function_support::{
     function_prototype::{FunctionKind, FunctionPrototype, FunctionPrototypeBuilder},
     program_function::ProgramFunction,
 };
-use once_cell::sync::Lazy;
 use tracing::trace;
 
 use crate::{
@@ -265,7 +264,7 @@ macro_rules! efuns {
         /// Every efun prototype, in table order.
         /// [`Instruction::CallEfun`](lpc_rs_asm::instruction::Instruction::CallEfun)
         /// indexes into this map; a reorder invalidates compiled code.
-        pub static EFUN_PROTOTYPES: Lazy<IndexMap<&'static str, FunctionPrototype>> = Lazy::new(|| {
+        pub static EFUN_PROTOTYPES: LazyLock<IndexMap<&'static str, FunctionPrototype>> = LazyLock::new(|| {
             let mut m = IndexMap::new();
             $( m.insert(efun_name(stringify!($name)), efuns!(@prototype $name { $($row)* })); )+
             m
@@ -945,15 +944,16 @@ efuns! {
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
-pub static EFUN_FUNCTIONS: Lazy<IndexMap<&'static str, Arc<ProgramFunction>>> = Lazy::new(|| {
-    EFUN_PROTOTYPES
-        .iter()
-        .map(|(k, v)| {
-            let f = ProgramFunction::new(v.clone(), 0);
-            (*k, Arc::new(f))
-        })
-        .collect()
-});
+pub static EFUN_FUNCTIONS: LazyLock<IndexMap<&'static str, Arc<ProgramFunction>>> =
+    LazyLock::new(|| {
+        EFUN_PROTOTYPES
+            .iter()
+            .map(|(k, v)| {
+                let f = ProgramFunction::new(v.clone(), 0);
+                (*k, Arc::new(f))
+            })
+            .collect()
+    });
 
 impl Efun {
     /// The efun at a

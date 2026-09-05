@@ -23,7 +23,6 @@ lpc-rs-telnet = { version = "0.1", path = "./lpc-rs-telnet"}
 lpc-rs-utils = { version = "0.1", path = "./lpc-rs-utils"}
 
 arc-swap = { version = "1.6.0", features = ["weak"] }
-async-recursion = "1.0.4"
 async-trait = "0.1.68"
 bit-set = "0.11.1"
 bytes = "1.4.0"
@@ -36,17 +35,14 @@ derive_builder = "0.20.2"
 dns-lookup = "4.0.1"
 educe = "0.7.6"
 flume = "0.12.0"
-if_chain = "1.0.1"
 imbl = "7.0.1"
 fastrand = "2.5.0"
 indexmap = "2.14.0"
 indextree = { version = "4.3.1", features = ["deser"] }
 itertools = "0.15.0"
 lalrpop-util = "0.23.1"
-lazy_format = "2.0.0"
 logos = "0.16.1"
 lru = "0.18.3"
-once_cell = "1.10.0"
 parking_lot = "0.12.1"
 spin = "0.10"
 path-dedot = "4.0.1"
@@ -59,7 +55,7 @@ serde_json = { version = "1", features = ["preserve_order"] }
 stable-vec = "0.4.0"
 smallvec = "1.15"
 thin-vec = "0.2.12"
-tokio = { version = "1", features = ["io-std", "io-util", "sync", "fs", "tracing", "rt-multi-thread", "signal", "parking_lot", "net", "time", "macros"] }
+tokio = { version = "1", features = ["io-std", "io-util", "sync", "fs", "rt-multi-thread", "signal", "parking_lot", "net", "time", "macros"] }
 tracing = "~0.1"
 ustr = "1.1.0"
 
@@ -73,7 +69,6 @@ pprof = { version = "0.15.0", default-features = false, features = ["flamegraph"
 rpds = "1.2.1"
 # Adds test-util (the paused clock) to test builds; production builds carry no dev-deps.
 tokio = { version = "1", features = ["test-util"] }
-tokio-test = "0.4.2"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"

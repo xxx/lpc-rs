@@ -17,7 +17,6 @@ use std::{
     time::Duration,
 };
 
-use async_recursion::async_recursion;
 use educe::Educe;
 pub(crate) use location::{bump_in_location, get_location, set_location};
 use lpc_rs_asm::{
@@ -336,33 +335,37 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Evaluate `f` to completion, or an error; a `timeout_ms` of 0 means
     /// no timeout.
     #[instrument(skip_all)]
-    #[async_recursion]
     pub async fn timed_eval(
         &mut self,
         f: Arc<ProgramFunction>,
         args: &[LpcRef],
         timeout_ms: u64,
     ) -> Result<()> {
-        let seed = TaskSeed {
-            process: self.context.process().clone(),
-            function: f,
-            args: args.iter().cloned().map(SeedArg::Value).collect(),
-            initializes: false,
-        };
-        self.timed_eval_seed(seed, timeout_ms).await
+        Box::pin(async move {
+            let seed = TaskSeed {
+                process: self.context.process().clone(),
+                function: f,
+                args: args.iter().cloned().map(SeedArg::Value).collect(),
+                initializes: false,
+            };
+            self.timed_eval_seed(seed, timeout_ms).await
+        })
+        .await
     }
 
     /// Run `seed` to completion through the committer's retry loop, or an
     /// error; a `timeout_ms` of 0 means no timeout.
-    #[async_recursion]
     pub(crate) async fn timed_eval_seed(&mut self, seed: TaskSeed, timeout_ms: u64) -> Result<()> {
-        self.timeout_ms = (timeout_ms != 0).then_some(timeout_ms);
-        self.seed = Some(seed);
-        let tx = self.context.global_state.committer_tx.clone();
-        let telemetry = self.context.global_state.attempt_telemetry.clone();
-        let commit_watch = self.context.global_state.commit_watch.clone();
-        let (res, _) = run_attempts(&tx, &telemetry, Some(commit_watch), self).await;
-        res
+        Box::pin(async move {
+            self.timeout_ms = (timeout_ms != 0).then_some(timeout_ms);
+            self.seed = Some(seed);
+            let tx = self.context.global_state.committer_tx.clone();
+            let telemetry = self.context.global_state.attempt_telemetry.clone();
+            let commit_watch = self.context.global_state.commit_watch.clone();
+            let (res, _) = run_attempts(&tx, &telemetry, Some(commit_watch), self).await;
+            res
+        })
+        .await
     }
 
     /// Set the state to handle a caught error.

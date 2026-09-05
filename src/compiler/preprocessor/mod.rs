@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use async_recursion::async_recursion;
 use define::{Define, ObjectMacro};
 use lpc_rs_core::{
     LpcIntInner,
@@ -179,7 +178,6 @@ impl Preprocessor {
     }
 
     /// The recursive function that takes care of scanning everything.
-    #[async_recursion]
     async fn internal_scan<C>(
         &mut self,
         code: C,
@@ -189,63 +187,66 @@ impl Preprocessor {
     where
         C: AsRef<str> + Send,
     {
-        let mut output = existing_output.unwrap_or_default();
+        Box::pin(async move {
+            let mut output = existing_output.unwrap_or_default();
 
-        let src = code.as_ref();
-        let token_stream = LexWrapper::new(src, file_id);
+            let src = code.as_ref();
+            let token_stream = LexWrapper::new(src, file_id);
 
-        let mut iter = token_stream.peekable();
-        // The end of the last token this loop drew — the placement
-        // check's anchor.
-        let mut prev_end: usize = 0;
+            let mut iter = token_stream.peekable();
+            // The end of the last token this loop drew — the placement
+            // check's anchor.
+            let mut prev_end: usize = 0;
 
-        while let Some(next) = iter.next() {
-            match next {
-                Ok(token) => {
-                    let mut end = token.span().r();
+            while let Some(next) = iter.next() {
+                match next {
+                    Ok(token) => {
+                        let mut end = token.span().r();
 
-                    match &token {
-                        Token::DirectiveLine(t) => {
-                            self.handle_directive(t, prev_end, src, &mut output).await?;
-                        }
+                        match &token {
+                            Token::DirectiveLine(t) => {
+                                self.handle_directive(t, prev_end, src, &mut output).await?;
+                            }
 
-                        // Handle macro expansion
-                        Token::Id(st) => {
-                            if self.conditionals.live() {
-                                let appends = expand::Expander::new(&self.defines)
-                                    .expand_use(st, &mut iter)?;
+                            // Handle macro expansion
+                            Token::Id(st) => {
+                                if self.conditionals.live() {
+                                    let appends = expand::Expander::new(&self.defines)
+                                        .expand_use(st, &mut iter)?;
 
-                                match appends {
-                                    Some(mut expanded) => {
-                                        output.append(&mut expanded.tokens);
-                                        // Anchor placement past the whole use — the Id, or
-                                        // through the top-level `)` the capture consumed.
-                                        end = expanded.use_span.r();
+                                    match appends {
+                                        Some(mut expanded) => {
+                                            output.append(&mut expanded.tokens);
+                                            // Anchor placement past the whole use — the Id, or
+                                            // through the top-level `)` the capture consumed.
+                                            end = expanded.use_span.r();
+                                        }
+                                        None => self.append(&mut output, token),
                                     }
-                                    None => self.append(&mut output, token),
                                 }
                             }
+                            _ => self.append(&mut output, token),
                         }
-                        _ => self.append(&mut output, token),
-                    }
 
-                    prev_end = end;
-                }
-                Err(e) => {
-                    if self.conditionals.live() {
-                        return Err(e);
+                        prev_end = end;
                     }
-                    // Dead region: drop it — logos recovers per-token —
-                    // but keep the anchor honest so a later mid-line
-                    // directive on the same line isn't over-credited.
-                    prev_end = e.span().map_or(prev_end, |s| s.r());
+                    Err(e) => {
+                        if self.conditionals.live() {
+                            return Err(e);
+                        }
+                        // Dead region: drop it — logos recovers per-token —
+                        // but keep the anchor honest so a later mid-line
+                        // directive on the same line isn't over-credited.
+                        prev_end = e.span().map_or(prev_end, |s| s.r());
+                    }
                 }
             }
-        }
 
-        self.conditionals.finish()?;
+            self.conditionals.finish()?;
 
-        Ok(output)
+            Ok(output)
+        })
+        .await
     }
 
     /// One directive line: judge placement, classify when dead, parse and
