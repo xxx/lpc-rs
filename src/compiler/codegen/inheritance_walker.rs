@@ -132,19 +132,21 @@ impl TreeWalker for InheritanceWalker {
                     node.path
                 )
             })?;
-        // The driver's own inherit of the auto file, told apart from an
-        // explicit one naming it by its missing span, is exempt from the
-        // loading gate and the file's `no_inherit`.
-        let configured = node.span.is_none()
-            && self
-                .context
-                .config
-                .auto_inherit_file
-                .map(|auto| {
-                    LpcPath::new_in_game(auto.as_str(), "/", lib_dir).source_file()
-                        == full_path.source_file()
-                })
-                .unwrap_or(false);
+        // Any inherit naming the configured auto path, explicit or not, is
+        // exempt from the loading gate.
+        let configured = self
+            .context
+            .config
+            .auto_inherit_file
+            .map(|auto| {
+                LpcPath::new_in_game(auto.as_str(), "/", lib_dir).source_file()
+                    == full_path.source_file()
+            })
+            .unwrap_or(false);
+        // Only `Compiler::compile_string`'s own injected inherit carries no
+        // span, so that's what tells it apart from an explicit `inherit` of
+        // the same file for the `no_inherit` exemption below.
+        let driver_injected = configured && node.span.is_none();
         if let Some(gate) = &self.context.gate
             && !configured
         {
@@ -186,7 +188,7 @@ impl TreeWalker for InheritanceWalker {
                         .filter(|w| held.iter().all(|r| r.filename != w.filename)),
                 );
 
-                if program.pragmas.no_inherit() && !configured {
+                if program.pragmas.no_inherit() && !driver_injected {
                     return Err(lpc_error!(
                         node.span,
                         "`pragma #no_inherit` is set on {}",
