@@ -805,6 +805,13 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn crlf_directives_and_code_preprocess() {
+        let input = "#define X 1\r\n#if X\r\nint a = X;\r\n#else\r\nint b;\r\n#endif\r\n";
+
+        test_valid(input, &["int", "a", "=", "1", ";"]).await;
+    }
+
+    #[tokio::test]
     async fn test_auto_include() {
         let input = indoc! { r#"
                 string marf = MY_FN;

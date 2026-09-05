@@ -131,7 +131,7 @@ impl Iterator for TokenTriples<'_> {
 #[derive(Logos, Debug, PartialEq, Clone)]
 #[logos(extras = LexState)]
 // Strip whitespace and comments
-#[logos(skip r"[ \t\f\v]+|//[^\n\r]*?[\n\r]*|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/")]
+#[logos(skip r"[ \t\f\v\r]+|//[^\n\r]*?[\n\r]*|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/")]
 #[logos(skip r"\n")]
 // A backslash-newline pair is a line splice (C99 5.1.1.2): whitespace
 // between tokens, never part of one.
@@ -787,6 +787,18 @@ mod tests {
             .collect();
         assert_eq!(spelled, ["x"]);
         assert!(lex_vec("x \\ y").into_iter().any(|t| t.is_err()));
+    }
+
+    #[test]
+    fn a_carriage_return_is_whitespace() {
+        let spelled: Vec<String> = lex_vec("int a;\r\nint b = a\r\n  + 1;\r\n")
+            .into_iter()
+            .map(|t| t.unwrap().to_string())
+            .collect();
+        assert_eq!(
+            spelled,
+            ["int", "a", ";", "int", "b", "=", "a", "+", "1", ";"]
+        );
     }
 
     #[test]
