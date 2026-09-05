@@ -107,7 +107,7 @@ pub struct CallFrame {
 
     /// The call this frame has in flight, advanced by every `Ret` into it.
     #[builder(default)]
-    pub pending: Option<Box<Pending>>,
+    pub(crate) pending: Option<Box<Pending>>,
 
     /// For an efun frame fired through a pointer: the file that wrote the
     /// pointer, which is the code the efun acts for.

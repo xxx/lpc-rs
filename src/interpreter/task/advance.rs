@@ -3,19 +3,25 @@
 
 use std::sync::Arc;
 
+use async_recursion::async_recursion;
 use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::interpreter::{
     call_frame::{CallFrame, CollectionCall},
-    continuation::Pending,
+    continuation::{Callee, Next, Pending},
+    efun::Efun,
     lpc_array::LpcArray,
     lpc_mapping::LpcMapping,
     lpc_ref::{LpcRef, NULL},
     process::Process,
     stm::VarId,
-    task::{Task, handle_call_other::Standing},
+    task::{
+        Task,
+        handle_call_fp::{Called, Passed},
+        handle_call_other::Standing,
+    },
 };
 
 /// What `advance_pending` left: a callee frame on top or the slot empty,
@@ -60,6 +66,57 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     Ok(Advance::Suspends)
                 }
             },
+            Pending::Efun(cont) => {
+                let (efun, span) = (cont.efun, cont.span);
+                let next = cont
+                    .state
+                    .advance(result, &self.context.txn)
+                    .map_err(|e| e.or_span(span))?;
+                match next {
+                    Next::Done(value) => {
+                        self.stack.current_frame_mut()?.registers[0] = value;
+                        Ok(Advance::Running)
+                    }
+                    Next::Call(callee) => {
+                        match self.call_callee_now(&callee).map_err(|e| e.or_span(span))? {
+                            Called::Framed => {
+                                self.restore_pending(owner, pending)?;
+                                Ok(Advance::Running)
+                            }
+                            Called::Pending => {
+                                self.restore_pending(owner, pending)?;
+                                Ok(Advance::Suspends)
+                            }
+                            Called::Unresolved => Err(unresolved(efun, span)),
+                            Called::Suspends => {
+                                cont.suspended = Some(callee);
+                                self.restore_pending(owner, pending)?;
+                                Ok(Advance::Suspends)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Make `callee`'s call where no loading is needed.
+    fn call_callee_now(&mut self, callee: &Callee) -> Result<Called> {
+        match callee {
+            Callee::Pointer { ptr, args } => self.call_pointer_now(ptr, Passed::Values(args)),
+            Callee::Function {
+                process,
+                function,
+                args,
+            } => {
+                self.push_external_frame(
+                    process.clone(),
+                    function.clone(),
+                    args.iter().cloned(),
+                    None,
+                )?;
+                Ok(Called::Framed)
+            }
         }
     }
 
@@ -138,6 +195,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// The async arm of a suspended step: load or initialize the receiver,
     /// then push its frame or record 0. On an error the slot stays empty:
     /// the frame is unwound, or its `catch` clears it.
+    ///
+    /// Boxed: an efun fired through the slow door can itself settle a new
+    /// pending call, cycling back here.
+    #[async_recursion]
     async fn resolve_suspended(&mut self) -> Result<Resolved> {
         let owner = self.stack.len().saturating_sub(1);
         let frame = self.stack.current_frame_mut()?;
@@ -166,6 +227,23 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     None => {
                         call.results.push(NULL);
                         Resolved::Continue { answered: false }
+                    }
+                }
+            }
+            Pending::Efun(cont) => {
+                let (efun, span) = (cont.efun, cont.span);
+                let Some(Callee::Pointer { ptr, args }) = cont.suspended.take() else {
+                    return Err(self.runtime_bug("a suspended callback with no pointer to call"));
+                };
+                match self
+                    .call_pointer_slow(&ptr, args.to_vec())
+                    .await
+                    .map_err(|e| e.or_span(span))?
+                {
+                    Called::Framed => Resolved::Framed,
+                    Called::Unresolved => return Err(unresolved(efun, span)),
+                    Called::Suspends | Called::Pending => {
+                        return Err(self.runtime_bug("the slow pointer door suspended"));
                     }
                 }
             }
@@ -225,6 +303,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         frame.external = true;
         self.stack.push(frame)
     }
+}
+
+/// The error for a callback pointer that names no function.
+fn unresolved(efun: Efun, span: Option<Span>) -> LpcError {
+    LpcError::runtime(format!("{}: the function no longer resolves", efun.name())).with_span(span)
 }
 
 /// What one collection step produced.

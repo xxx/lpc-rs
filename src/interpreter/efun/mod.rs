@@ -778,7 +778,7 @@ efuns! {
         arity: (2, 0, ellipsis),
         args: [LpcType::Mixed(true) | LpcType::Mapping(false), LpcType::Function(false)],
     },
-    map [async] => {
+    map => {
         returns: LpcType::Mixed(false),
         arity: (2, 0, ellipsis),
         args: [LpcType::Mixed(true) | LpcType::Mapping(false), LpcType::Function(false)],
