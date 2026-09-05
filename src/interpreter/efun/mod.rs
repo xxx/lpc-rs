@@ -6,6 +6,7 @@ pub(crate) mod add_rule;
 pub(crate) mod all_environment;
 pub(crate) mod all_inventory;
 pub(crate) mod allocate;
+pub(crate) mod bits;
 pub(crate) mod call_out;
 pub(crate) mod callback;
 pub(crate) mod case;
@@ -39,6 +40,7 @@ pub(crate) mod json_decode;
 pub(crate) mod json_encode;
 pub(crate) mod keys_values;
 pub(crate) mod living;
+pub(crate) mod localtime;
 pub(crate) mod m_delete;
 pub(crate) mod map;
 pub(crate) mod math;
@@ -881,6 +883,31 @@ efuns! {
         arity: 1,
         args: [number()],
     },
+    set_bit [in bits] => {
+        returns: LpcType::String(false),
+        arity: 2,
+        args: [LpcType::String(false), LpcType::Int(false)],
+    },
+    clear_bit [in bits] => {
+        returns: LpcType::String(false),
+        arity: 2,
+        args: [LpcType::String(false), LpcType::Int(false)],
+    },
+    test_bit [in bits] => {
+        returns: LpcType::Int(false),
+        arity: 2,
+        args: [LpcType::String(false), LpcType::Int(false)],
+    },
+    localtime => {
+        returns: LpcType::Int(true),
+        arity: (1, 1),
+        args: [LpcType::Int(false)],
+    },
+    strftime [in localtime] => {
+        returns: LpcType::String(false),
+        arity: (2, 1),
+        args: [LpcType::String(false), LpcType::Int(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1171,6 +1198,11 @@ mod tests {
                 "sqrt",
                 "floor",
                 "ceil",
+                "set_bit",
+                "clear_bit",
+                "test_bit",
+                "localtime",
+                "strftime",
             ]
         );
     }
