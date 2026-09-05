@@ -1142,6 +1142,24 @@ mod test_instructions {
         }
     }
 
+    mod test_compound_assignment {
+        use super::*;
+
+        #[tokio::test]
+        async fn mod_and_xor_assign_in_place() {
+            let code = indoc! { r##"
+                    int a = 7;
+                    int b = 6;
+                    void create() {
+                        a %= 3;
+                        b ^= 5;
+                    }
+                "##};
+
+            check_committed_globals(code, &[("a", BareVal::Int(1)), ("b", BareVal::Int(3))]).await;
+        }
+    }
+
     mod test_call {
         use super::*;
 

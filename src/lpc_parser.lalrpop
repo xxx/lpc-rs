@@ -974,6 +974,8 @@ AssignmentOp: AssignmentOperation = {
     "-=" => AssignmentOperation::SubEq,
     "*=" => AssignmentOperation::MulEq,
     "/=" => AssignmentOperation::DivEq,
+    "%=" => AssignmentOperation::ModEq,
+    "^=" => AssignmentOperation::XorEq,
     "&&=" => AssignmentOperation::AndAndEq,
     "||=" => AssignmentOperation::OrOrEq,
     "&=" => AssignmentOperation::AndEq,

@@ -318,6 +318,32 @@ fn compound_assignment_decompose() {
 }
 
 #[test]
+fn mod_and_xor_compound_assignments_desugar() {
+    for (source, op) in [
+        ("a %= 2;", BinaryOperation::Mod),
+        ("a ^= 2;", BinaryOperation::Xor),
+    ] {
+        let code = format!("void create() {{ {source} }}");
+        let lexer = LexWrapper::new(&code, 0).triples();
+        let prog_node = lpc_parser::ProgramParser::new()
+            .parse(&mut CompilationContext::default(), lexer)
+            .unwrap();
+        let AstNode::FunctionDef(FunctionDefNode { body, .. }) = prog_node.body[0].clone() else {
+            panic!("Expected a function def");
+        };
+        let AstNode::Expression(ExpressionNode::Assignment(AssignmentNode { rhs, .. })) =
+            body[0].clone()
+        else {
+            panic!("Expected an assignment");
+        };
+        let ExpressionNode::BinaryOp(BinaryOpNode { op: found, .. }) = *rhs else {
+            panic!("Expected a desugared binary op");
+        };
+        assert_eq!(found, op, "{source}");
+    }
+}
+
+#[test]
 fn typeless_functions_are_mixed() {
     let prog = r#"marfin() {
             return "hello, we're marfin'!";
