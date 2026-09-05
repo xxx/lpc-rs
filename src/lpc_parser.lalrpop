@@ -26,6 +26,7 @@ use crate::compiler::ast::int_node::IntNode;
 use crate::compiler::ast::labeled_statement_node::LabeledStatementNode;
 use crate::compiler::ast::label_node::LabelNode;
 use crate::compiler::ast::mapping_node::MappingNode;
+use crate::compiler::ast::operator_node::{Operator, OperatorNode};
 use crate::compiler::ast::program_node::ProgramNode;
 use crate::compiler::ast::range_node::RangeNode;
 use crate::compiler::ast::ref_node::RefNode;
@@ -104,6 +105,7 @@ extern {
         "while" => Token::While(<Span>),
         "for" => Token::For(<Span>),
         "foreach" => Token::ForEach(<Span>),
+        "operator" => Token::Operator(<Span>),
         "inherit" => Token::Inherit(<Span>),
         "break" => Token::Break(<Span>),
         "continue" => Token::Continue(<Span>),
@@ -306,11 +308,10 @@ Closure: ExpressionNode = {
         // closures are private to ensure they can't be called directly via the actual `call_other` efun
         let flags = FunctionFlags::from(&["private"][..]).with_ellipsis(ellipsis);
 
-        let name = format!("closure-{}", context.closure_count);
-        context.closure_count += 1;
+        let name = context.next_closure_name();
 
         Ok(guard(ExpressionNode::Closure(ClosureNode {
-            name: ustr(&name),
+            name,
             return_type: LpcType::Mixed(false),
             parameters,
             flags,
@@ -589,6 +590,7 @@ PrimaryExpression: ExpressionNode = {
     <String>,
     <Var>,
     <FunctionPointer>,
+    <OperatorFunction>,
     <Closure>,
     "(" <Expression> ")",
     <l:"("> "{" <list:(ExpressionList ","?)?>  "}" <r:")"> =>? {
@@ -1126,6 +1128,43 @@ FunctionPointer: ExpressionNode = {
 FunctionPointerReceiver: FunctionPtrReceiver = {
     "(" <expr:PostfixExpression> ")" "->" => FunctionPtrReceiver::Static(Box::new(expr)),
     "->" => FunctionPtrReceiver::Dynamic,
+};
+
+OperatorFunction: ExpressionNode = {
+    <l:"operator"> "(" <op:OperatorSymbol> <r:")"> =>? {
+        let span = Span::join(l, r);
+        let node = OperatorNode::new(op, None, context.next_closure_name(), Some(span));
+
+        Ok(guard(ExpressionNode::Operator(node), Some(span))?)
+    },
+    <l:"&"> "operator" "(" <op:OperatorSymbol> ")" "(" <arguments:PartialArgumentExpressionList?> <r:")"> =>? {
+        let span = Span::join(l, r);
+        let node = OperatorNode::new(op, arguments, context.next_closure_name(), Some(span));
+
+        Ok(guard(ExpressionNode::Operator(node), Some(span))?)
+    },
+};
+
+OperatorSymbol: Operator = {
+    "+" => Operator::Binary(BinaryOperation::Add),
+    "-" => Operator::Binary(BinaryOperation::Sub),
+    "*" => Operator::Binary(BinaryOperation::Mul),
+    "/" => Operator::Binary(BinaryOperation::Div),
+    "%" => Operator::Binary(BinaryOperation::Mod),
+    ">" => Operator::Binary(BinaryOperation::Gt),
+    "<" => Operator::Binary(BinaryOperation::Lt),
+    ">=" => Operator::Binary(BinaryOperation::Gte),
+    "<=" => Operator::Binary(BinaryOperation::Lte),
+    "==" => Operator::Binary(BinaryOperation::EqEq),
+    "!=" => Operator::Binary(BinaryOperation::NotEq),
+    "&" => Operator::Binary(BinaryOperation::And),
+    "^" => Operator::Binary(BinaryOperation::Xor),
+    "|" => Operator::Binary(BinaryOperation::Or),
+    "<<" => Operator::Binary(BinaryOperation::Shl),
+    ">>" => Operator::Binary(BinaryOperation::Shr),
+    "[" "]" => Operator::Binary(BinaryOperation::Index),
+    "!" => Operator::Unary(UnaryOperation::Bang),
+    "~" => Operator::Unary(UnaryOperation::BitwiseNot),
 };
 
 PartialArgumentExpressionList: Vec<Option<ExpressionNode>> = {

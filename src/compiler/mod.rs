@@ -420,7 +420,7 @@ mod tests {
             "# };
             assert_eq!(
                 rendered_error(code).await,
-                "error: Unrecognized Token: ;\n  ┌─ /include/bad_token.h:1:9\n  │\n1 │ int x = ;\n  │         ^\n  │\n  = expected one of: \"-\", \"!\", \"~\", \"&\", \"++\", \"--\", \"efun\", \"(\", \"::\", \"StringLiteral\", \"IntLiteral\", \"FloatLiteral\", \"ID\", \"ClosureArgVar\"\n\n"
+                "error: Unrecognized Token: ;\n  ┌─ /include/bad_token.h:1:9\n  │\n1 │ int x = ;\n  │         ^\n  │\n  = expected one of: \"-\", \"!\", \"~\", \"&\", \"++\", \"--\", \"operator\", \"efun\", \"(\", \"::\", \"StringLiteral\", \"IntLiteral\", \"FloatLiteral\", \"ID\", \"ClosureArgVar\"\n\n"
             );
         }
 

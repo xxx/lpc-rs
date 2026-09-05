@@ -30,6 +30,7 @@ use crate::compiler::{
         int_node::IntNode,
         label_node::LabelNode,
         mapping_node::MappingNode,
+        operator_node::OperatorNode,
         program_node::ProgramNode,
         range_node::RangeNode,
         return_node::ReturnNode,
@@ -457,6 +458,26 @@ impl TreeWalker for TreePrinter {
         }
         self.indent -= 2;
         self.println_indented("])");
+
+        Ok(())
+    }
+
+    async fn visit_operator(&mut self, node: &mut OperatorNode) -> Result<()> {
+        self.println_indented(&format!("Operator {}", node.op));
+        self.indent += 2;
+        self.println_indented("arguments:");
+        self.indent += 2;
+        if let Some(args) = &mut node.arguments {
+            for argument in args {
+                match argument {
+                    Some(n) => n.visit(self).await?,
+                    None => self.println_indented("None"),
+                }
+            }
+        }
+        self.indent -= 2;
+        node.closure.visit(self).await?;
+        self.indent -= 2;
 
         Ok(())
     }

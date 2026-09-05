@@ -22,6 +22,7 @@ pub mod inherit_node;
 pub mod int_node;
 pub mod label_node;
 pub mod mapping_node;
+pub mod operator_node;
 pub mod program_node;
 pub mod range_node;
 pub mod ref_node;

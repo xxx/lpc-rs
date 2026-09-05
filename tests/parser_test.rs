@@ -16,10 +16,12 @@ use lpc_rs::{
             function_ptr_node::FunctionPtrNode,
             if_node::IfNode,
             int_node::IntNode,
+            operator_node::{Operator, OperatorNode},
             program_node::ProgramNode,
             ref_node::RefNode,
             return_node::ReturnNode,
             string_node::StringNode,
+            unary_op_node::UnaryOperation,
             var_init_node::VarInitNode,
             var_node::VarNode,
         },
@@ -522,6 +524,155 @@ async fn partial_application_argument_lists() {
         Some(vec![None, None, None, None])
     );
     assert_eq!(get_args(&program.body[8]), Some(vec![None, None]));
+}
+
+/// The operator node a one-declaration program initializes `f` with.
+fn operator_of(prog: &ProgramNode) -> &OperatorNode {
+    let AstNode::Decl(DeclNode {
+        initializations, ..
+    }) = &prog.body[0]
+    else {
+        panic!("expected a declaration");
+    };
+    let Some(ExpressionNode::Operator(node)) = &initializations[0].value else {
+        panic!("expected an operator function");
+    };
+    node
+}
+
+#[tokio::test]
+async fn an_operator_is_the_closure_over_its_positional_arguments() {
+    let prog = parse_prog("function f = operator(+);").await.unwrap();
+    let node = operator_of(&prog);
+
+    assert_eq!(node.op, Operator::Binary(BinaryOperation::Add));
+    assert!(node.arguments.is_none());
+    assert_eq!(node.closure.name.as_str(), "closure-0");
+    assert!(node.closure.parameters.is_none());
+    let [AstNode::Expression(ExpressionNode::BinaryOp(body))] = node.closure.body.as_slice() else {
+        panic!("expected one binary operation");
+    };
+    assert_eq!(body.op, BinaryOperation::Add);
+    assert_eq!(body.span, node.span);
+    let positional = |name: &str| {
+        let mut var = VarNode::new(name);
+        var.span = node.span;
+        ExpressionNode::Var(var)
+    };
+    assert_eq!(*body.l, positional("$1"));
+    assert_eq!(*body.r, positional("$2"));
+    assert_eq!(node.to_string(), "operator(+)");
+    assert_eq!(node.closure.to_string(), "(: $1 + $2 :)");
+}
+
+#[tokio::test]
+async fn a_unary_operator_takes_one_positional() {
+    let prog = parse_prog("function f = operator(!);").await.unwrap();
+    let node = operator_of(&prog);
+
+    assert_eq!(node.op, Operator::Unary(UnaryOperation::Bang));
+    let [AstNode::Expression(ExpressionNode::UnaryOp(body))] = node.closure.body.as_slice() else {
+        panic!("expected one unary operation");
+    };
+    assert_eq!(body.op, UnaryOperation::Bang);
+    assert!(!body.is_post);
+    assert_eq!(node.closure.to_string(), "(: !$1 :)");
+}
+
+#[tokio::test]
+async fn an_index_operator_indexes_its_first_positional_by_its_second() {
+    let prog = parse_prog("function f = operator([]);").await.unwrap();
+    let node = operator_of(&prog);
+
+    assert_eq!(node.op, Operator::Binary(BinaryOperation::Index));
+    assert_eq!(node.to_string(), "operator([])");
+    assert_eq!(node.closure.to_string(), "(: $1 [] $2 :)");
+}
+
+#[tokio::test]
+async fn a_partially_applied_operator_keeps_its_holes() {
+    let prog = parse_prog("function f = &operator(-)(, 1);").await.unwrap();
+    let node = operator_of(&prog);
+
+    assert_eq!(node.op, Operator::Binary(BinaryOperation::Sub));
+    let Some(args) = &node.arguments else {
+        panic!("expected bound arguments");
+    };
+    assert_eq!(args.len(), 2);
+    assert!(args[0].is_none());
+    assert!(matches!(
+        args[1],
+        Some(ExpressionNode::Int(IntNode { value: 1, .. }))
+    ));
+    assert_eq!(node.to_string(), "&operator(-)(, 1)");
+    assert_eq!(node.closure.name.as_str(), "closure-0");
+}
+
+#[tokio::test]
+async fn every_operator_symbol_parses_in_both_forms() {
+    let symbols = [
+        "+", "-", "*", "/", "%", ">", "<", ">=", "<=", "==", "!=", "&", "^", "|", "<<", ">>", "[]",
+        "!", "~",
+    ];
+    for symbol in symbols {
+        let bare = format!("function f = operator({symbol});");
+        assert_ok!(parse_prog(&bare).await, "{symbol}");
+        let partial = format!("function g = &operator({symbol})(1);");
+        assert_ok!(parse_prog(&partial).await, "{symbol}");
+    }
+}
+
+#[tokio::test]
+async fn an_operator_the_form_lacks_is_rejected() {
+    for symbol in ["&&", "||", "=", "+=", "++", "--", "@", "?", ",", "", "-1"] {
+        let code = format!("function f = operator({symbol});");
+        assert!(parse_prog(&code).await.is_err(), "{symbol}");
+    }
+}
+
+#[tokio::test]
+async fn operator_is_a_keyword() {
+    assert!(parse_prog("int operator;").await.is_err());
+    assert!(parse_prog("void operator() {}").await.is_err());
+    assert!(parse_prog("void f() { operator = 1; }").await.is_err());
+}
+
+#[tokio::test]
+async fn the_partial_form_needs_its_argument_list() {
+    assert!(parse_prog("function f = &operator(+);").await.is_err());
+    assert_ok!(parse_prog("function f = &operator(+)();").await);
+}
+
+#[tokio::test]
+async fn operator_functions_and_closures_share_one_numbering() {
+    let code = "function f = operator(+);\nfunction g = (: 1 :);\nfunction h = &operator(<)(1);";
+    let prog = parse_prog(code).await.unwrap();
+
+    let names = prog
+        .body
+        .iter()
+        .map(|node| {
+            let AstNode::Decl(DeclNode {
+                initializations, ..
+            }) = node
+            else {
+                panic!("expected a declaration");
+            };
+            match &initializations[0].value {
+                Some(ExpressionNode::Operator(node)) => node.closure.name.to_string(),
+                Some(ExpressionNode::Closure(node)) => node.name.to_string(),
+                other => panic!("unexpected {other:?}"),
+            }
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["closure-0", "closure-1", "closure-2"]);
+}
+
+#[tokio::test]
+async fn an_operator_function_is_an_ordinary_argument_and_operand() {
+    assert_ok!(parse_prog("void f(mixed a) { map(a, operator(+)); }").await);
+    assert_ok!(parse_prog("void f(mixed a, mixed b) { b = a & operator(+); }").await);
+    assert_ok!(parse_prog("void f(mixed a, mixed b) { b = a & &operator(+)(1); }").await);
 }
 
 #[tokio::test]

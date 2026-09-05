@@ -12,6 +12,7 @@ use crate::{
         ast_node::{AstNode, SpannedNode},
         block_node::BlockNode,
         call_node::{CallChain, CallNode},
+        closure_node::ClosureNode,
         decl_node::DeclNode,
         do_while_node::DoWhileNode,
         expression_node::ExpressionNode,
@@ -30,6 +31,7 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 pub enum Child<'a> {
     Expr(&'a ExpressionNode),
+    Closure(&'a ClosureNode),
     Stmt(&'a AstNode),
     Block(&'a BlockNode),
     FunctionDef(&'a FunctionDefNode),
@@ -54,6 +56,7 @@ macro_rules! child_from {
 
 child_from!(
     Expr => ExpressionNode,
+    Closure => ClosureNode,
     Stmt => AstNode,
     Block => BlockNode,
     FunctionDef => FunctionDefNode,
@@ -71,6 +74,7 @@ impl Child<'_> {
     fn span(self) -> Option<Span> {
         match self {
             Child::Expr(e) => e.span(),
+            Child::Closure(n) => n.span,
             Child::Stmt(s) => s.span(),
             Child::Block(_) | Child::Decl(_) | Child::Program(_) => None,
             Child::FunctionDef(n) => n.span,
@@ -98,16 +102,17 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
                 out.push(Child::Expr(&n.r));
             }
             ExpressionNode::Call(n) => push_children(Child::Call(n), out),
-            ExpressionNode::Closure(n) => {
-                out.extend(n.parameters.iter().flatten().map(Child::VarInit));
-                out.extend(n.body.iter().map(Child::Stmt));
-            }
+            ExpressionNode::Closure(n) => push_children(Child::Closure(n), out),
             ExpressionNode::CommaExpression(n) => out.extend(n.value.iter().map(Child::Expr)),
             ExpressionNode::FunctionPtr(n) => {
                 if let Some(FunctionPtrReceiver::Static(rcvr)) = &n.receiver {
                     out.push(Child::Expr(rcvr));
                 }
                 out.extend(n.arguments.iter().flatten().flatten().map(Child::Expr));
+            }
+            ExpressionNode::Operator(n) => {
+                out.extend(n.arguments.iter().flatten().flatten().map(Child::Expr));
+                out.push(Child::Closure(&n.closure));
             }
             ExpressionNode::Range(n) => {
                 out.extend(n.l.iter().map(Child::Expr));
@@ -183,6 +188,10 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
             AstNode::Break(_) | AstNode::Continue(_) | AstNode::NoOp => {}
         },
         Child::Block(n) => out.extend(n.body.iter().map(Child::Stmt)),
+        Child::Closure(n) => {
+            out.extend(n.parameters.iter().flatten().map(Child::VarInit));
+            out.extend(n.body.iter().map(Child::Stmt));
+        }
         Child::FunctionDef(n) => {
             out.extend(n.parameters.iter().map(Child::VarInit));
             out.extend(n.body.iter().map(Child::Stmt));
@@ -338,6 +347,15 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_operator_function_is_four_levels() {
+        // The node, its closure, the operation, the positional.
+        assert_eq!(height_of("mixed f() { return operator(+); }").await, 7);
+        assert_eq!(height_of("mixed f() { return operator(!); }").await, 7);
+        // A bound argument sits beside the closure, never above it.
+        assert_eq!(height_of("mixed f() { return &operator(+)(1); }").await, 7);
+    }
+
+    #[tokio::test]
     async fn statement_children_each_count_a_level() {
         // Program, FunctionDef, then the statement.
         assert_eq!(height_of("void f(mixed a) { a; }").await, 3); // AstNode::Expression is transparent
@@ -446,6 +464,7 @@ mod tests {
             "closure_param" => expr(nest("(: [mixed p = ", "] :)", "1")),
             "fptr_args" => expr(nest("&f(", ")", "1")),
             "fptr_receiver" => expr(nest("&(", ")->f()", "a")),
+            "operator_args" => expr(nest("&operator(+)(", ")", "1")),
             "array" => expr(nest("({ ", " })", "1")),
             "mapping_value" => expr(nest("([ 1 : ", " ])", "1")),
             "mapping_key" => expr(nest("([ ", " : 1 ])", "1")),
@@ -502,6 +521,7 @@ mod tests {
         ("closure_param", 126),
         ("fptr_args", 252),
         ("fptr_receiver", 252),
+        ("operator_args", 250),
         ("array", 252),
         ("mapping_value", 252),
         ("mapping_key", 252),

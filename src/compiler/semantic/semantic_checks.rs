@@ -527,6 +527,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         }
         ExpressionNode::Mapping(_) => Ok(LpcType::Mapping(false)),
         ExpressionNode::FunctionPtr(_) => Ok(LpcType::Function(false)),
+        ExpressionNode::Operator(_) => Ok(LpcType::Function(false)),
     }
 }
 

@@ -12,7 +12,7 @@ use lpc_rs_function_support::{
     function_prototype::FunctionPrototype, program_function::ProgramFunction, symbol::Symbol,
 };
 use lpc_rs_utils::config::Config;
-use ustr::Ustr;
+use ustr::{Ustr, ustr};
 
 use crate::{
     compiler::semantic::scope_tree::ScopeTree,
@@ -98,6 +98,13 @@ impl CompilationContext {
     /// config's system include directories
     pub fn system_include_dirs(&self) -> &Vec<Ustr> {
         &self.config.system_include_dirs
+    }
+
+    /// The name of the next closure this compilation defines.
+    pub fn next_closure_name(&mut self) -> Ustr {
+        let name = ustr(&format!("closure-{}", self.closure_count));
+        self.closure_count += 1;
+        name
     }
 
     /// Look-up a function by name, then check inherited parents if not found
