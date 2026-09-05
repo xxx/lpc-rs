@@ -19,6 +19,8 @@ use crate::interpreter::{
     stm::TxnHandle,
 };
 
+/// `map(collection, f, extra...)`: `f(element, extra...)` per element, the
+/// results in a fresh array or mapping.
 pub fn map<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let items = items_arg(context, "map")?;
     let ptr = function_arg(context, "map", 1)?;
@@ -235,6 +237,37 @@ mod tests {
         let code =
             r#"mixed *create() { return map(({ "/nowhere", "/nowhere" }), &find_object()); }"#;
         assert_eq!(strings_of(code).await, ["0", "0"]);
+    }
+
+    #[tokio::test]
+    async fn a_callback_efun_whose_own_callback_suspends_awaits_the_pending_call() {
+        let vm = Vm::new(test_config());
+        let code = indoc! { r#"
+            int *got;
+            void create() { got = map(({ ({ "/nowhere" }) }), &map(, &find_object())); }
+        "# };
+        let (mut task, _live) =
+            task_at(&vm, code, |at| matches!(at, Instruction::CallEfun(..))).await;
+
+        let slice = task.run_slice(&mut 1).unwrap();
+
+        assert!(matches!(slice, Slice::Await(AsyncCall::Pending)));
+        assert_eq!(task.stack.len(), 2);
+        let top = task.stack.current_frame().unwrap();
+        assert!(top.is_entry());
+        assert!(top.pending.is_some());
+        assert!(task.stack.get(0).unwrap().pending.is_some());
+    }
+
+    #[tokio::test]
+    async fn a_callback_efun_whose_own_callback_suspends_answers() {
+        let code = indoc! { r#"
+            int create() {
+                mixed *r = map(({ ({ "/nowhere", "/nowhere" }) }), &map(, &find_object()));
+                return sizeof(r[0]);
+            }
+        "# };
+        assert_eq!(run_prog(code).await.result(), Some(LpcRef::from(2)));
     }
 
     #[tokio::test]
