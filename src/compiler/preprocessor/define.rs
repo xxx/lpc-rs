@@ -38,16 +38,22 @@ impl Define {
         Define::Function(FunctionMacro { tokens, args })
     }
 
-    /// A benign redefinition: same kind, same parameter names, same
-    /// token spelling. Spans and whitespace never count.
+    /// A benign redefinition: same kind, same parameter names, same token kinds
+    /// and spelling. Spans and whitespace never count.
     pub fn same_as(&self, other: &Define) -> bool {
-        fn spelling(tokens: &[Token]) -> Vec<String> {
-            tokens.iter().map(ToString::to_string).collect()
+        fn token_signature(tokens: &[Token]) -> Vec<(std::mem::Discriminant<Token>, String)> {
+            tokens
+                .iter()
+                .map(|t| (std::mem::discriminant(t), t.to_string()))
+                .collect()
+        }
+        fn same_tokens(a_tokens: &[Token], b_tokens: &[Token]) -> bool {
+            token_signature(a_tokens) == token_signature(b_tokens)
         }
         match (self, other) {
-            (Define::Object(a), Define::Object(b)) => spelling(&a.tokens) == spelling(&b.tokens),
+            (Define::Object(a), Define::Object(b)) => same_tokens(&a.tokens, &b.tokens),
             (Define::Function(a), Define::Function(b)) => {
-                a.args == b.args && spelling(&a.tokens) == spelling(&b.tokens)
+                a.args == b.args && same_tokens(&a.tokens, &b.tokens)
             }
             _ => false,
         }

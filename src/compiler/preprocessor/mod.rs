@@ -1237,6 +1237,12 @@ mod tests {
             .await;
             test_invalid("#define X 1\n#define X(a) 1\n", "duplicate `#define`: `X`").await;
             test_invalid("#define X\n#define X 1\n", "duplicate `#define`: `X`").await;
+            test_invalid("#define X 5\n#define X \"5\"\n", "duplicate `#define`: `X`").await;
+            test_invalid(
+                "#define X FOO\n#define X \"FOO\"\n",
+                "duplicate `#define`: `X`",
+            )
+            .await;
         }
 
         #[tokio::test]
