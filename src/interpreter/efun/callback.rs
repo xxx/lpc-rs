@@ -60,6 +60,24 @@ pub(crate) fn items_arg<const N: usize>(context: &EfunContext<'_, N>, name: &str
     }
 }
 
+/// Argument 0 as the array to walk; a mapping is not one here.
+pub(crate) fn array_arg<const N: usize>(
+    context: &EfunContext<'_, N>,
+    name: &str,
+) -> Result<vec::IntoIter<LpcRef>> {
+    let arg = context.arg(0);
+    match arg {
+        LpcRef::Array(_) => arg
+            .with_array(context.txn(), |a| {
+                a.iter().cloned().collect::<Vec<_>>().into_iter()
+            })
+            .map_err(|e| e.with_span(context.call_site_span())),
+        other => {
+            Err(context.runtime_error(format!("{name}: {} is not an array", other.type_name())))
+        }
+    }
+}
+
 /// Argument `i` as the pointer to call back.
 pub(crate) fn function_arg<const N: usize>(
     context: &EfunContext<'_, N>,

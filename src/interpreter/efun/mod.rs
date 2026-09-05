@@ -72,6 +72,7 @@ pub(crate) mod query_resident_memory;
 pub(crate) mod query_verb;
 pub(crate) mod random;
 pub(crate) mod read_file;
+pub(crate) mod regexp;
 pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
 pub(crate) mod remove_rule;
@@ -92,6 +93,7 @@ pub(crate) mod throw;
 pub(crate) mod time;
 pub(crate) mod type_of;
 pub(crate) mod type_predicates;
+pub(crate) mod unique_array;
 pub(crate) mod users;
 pub(crate) mod write;
 pub(crate) mod write_file;
@@ -908,6 +910,16 @@ efuns! {
         arity: (2, 1),
         args: [LpcType::String(false), LpcType::Int(false)],
     },
+    regexp => {
+        returns: LpcType::Mixed(true),
+        arity: (3, 1),
+        args: [LpcType::Mixed(true), LpcType::String(false), LpcType::Int(false)],
+    },
+    unique_array => {
+        returns: LpcType::Mixed(true),
+        arity: (3, 1),
+        args: [LpcType::Mixed(true), LpcType::Function(false), LpcType::Mixed(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1203,6 +1215,8 @@ mod tests {
                 "test_bit",
                 "localtime",
                 "strftime",
+                "regexp",
+                "unique_array",
             ]
         );
     }
