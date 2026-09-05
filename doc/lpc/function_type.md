@@ -61,7 +61,7 @@ Breaking it down by syntax, functions can take the following forms:
   `&operator(-)(1)` subtracts its argument from 1, and
   `&operator(==)(name)` tests its argument against `name`, which is
   evaluated when the pointer is made. Binding more arguments than the
-  operator takes is a compile error.
+  operator takes is a compile error. `operator` is a reserved word.
 
 * `(: function_name() :)` - A closure. Closures are functions that are defined
   inline, and capture any variables they reference from their environment.

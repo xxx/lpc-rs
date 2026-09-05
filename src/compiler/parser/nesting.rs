@@ -353,6 +353,11 @@ mod tests {
         assert_eq!(height_of("mixed f() { return operator(!); }").await, 7);
         // A bound argument sits beside the closure, never above it.
         assert_eq!(height_of("mixed f() { return &operator(+)(1); }").await, 7);
+        // A nested argument adds its own level under the outer node.
+        assert_eq!(
+            height_of("mixed f() { return &operator(+)(&operator(-)(1)); }").await,
+            8
+        );
     }
 
     #[tokio::test]

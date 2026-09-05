@@ -474,6 +474,8 @@ impl TreeWalker for TreePrinter {
                     None => self.println_indented("None"),
                 }
             }
+        } else {
+            self.println_indented("None");
         }
         self.indent -= 2;
         node.closure.visit(self).await?;

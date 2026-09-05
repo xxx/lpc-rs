@@ -627,10 +627,10 @@ impl TreeWalker for SemanticCheckWalker {
     }
 
     async fn visit_operator(&mut self, node: &mut OperatorNode) -> Result<()> {
+        let arity = node.op.arity();
         if let Some(args) = &node.arguments
-            && args.len() > node.op.arity()
+            && args.len() > arity
         {
-            let arity = node.op.arity();
             let e = lpc_error!(
                 node.span,
                 "`operator({})` takes {} argument{}, found {}",
@@ -2580,6 +2580,14 @@ mod tests {
                 err.to_string(),
                 "Invalid Type: `~` `s` (string). Expected `int`"
             );
+        }
+
+        #[tokio::test]
+        async fn bitwise_not_takes_a_closure_positional() {
+            let code = "function f; void create() { f = (: ~$1 :); }";
+            let context = walk_code(code).await.unwrap();
+
+            assert!(messages(&context).is_empty(), "{:?}", messages(&context));
         }
     }
 

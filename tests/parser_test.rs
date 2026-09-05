@@ -640,7 +640,8 @@ async fn operator_is_a_keyword() {
 #[tokio::test]
 async fn the_partial_form_needs_its_argument_list() {
     assert!(parse_prog("function f = &operator(+);").await.is_err());
-    assert_ok!(parse_prog("function f = &operator(+)();").await);
+    let prog = assert_ok!(parse_prog("function f = &operator(+)();").await);
+    assert!(operator_of(&prog).arguments.is_none());
 }
 
 #[tokio::test]

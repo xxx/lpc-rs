@@ -24,8 +24,8 @@ use crate::compiler::{
     codegen::tree_walker::TreeWalker,
 };
 
-/// An operator `operator(...)` admits; the grammar's `OperatorSymbol` rule
-/// is its only source and admits CD's set.
+/// An operator that `operator(...)` admits. The grammar's `OperatorSymbol`
+/// rule is its only source, and carries CD's set.
 #[derive(Hash, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
 pub enum Operator {
     Binary(BinaryOperation),

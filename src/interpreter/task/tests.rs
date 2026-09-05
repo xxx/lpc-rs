@@ -2877,6 +2877,23 @@ mod test_instructions {
             assert!(rendered.contains("Division by zero"), "{rendered}");
             assert!(rendered.contains("operator(/)"), "{rendered}");
         }
+
+        #[tokio::test]
+        async fn a_pointer_made_inside_a_bound_argument_keeps_its_own_slots() {
+            let code = indoc! { r##"
+                int r, s;
+                int apply2(function f, int a, int b) { return f(a, b); }
+                void create() {
+                    function g = &apply2(operator(+), 3);
+                    r = g(4);
+                    function h = &operator([])(({ &operator(*)(2, 3) }), 0);
+                    function inner = h();
+                    s = inner(1);
+                }
+            "##};
+
+            check_committed_globals(code, &[("r", BareVal::Int(7)), ("s", BareVal::Int(6))]).await;
+        }
     }
 
     mod test_gt {
