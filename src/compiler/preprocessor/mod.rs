@@ -2445,6 +2445,78 @@ mod tests {
         }
     }
 
+    mod test_line_continuation {
+        use super::*;
+
+        #[tokio::test]
+        async fn an_object_macro_body_continues() {
+            let prog = indoc! { r#"
+                #define SUM 1 + \
+                    2
+                int x = SUM;
+            "# };
+            test_valid(prog, &["int", "x", "=", "1", "+", "2", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn a_function_macro_continues_in_its_parameters_and_body() {
+            let prog = indoc! { r#"
+                #define ADD(a, \
+                            b) (a + \
+                                b)
+                int x = ADD(1, 2);
+            "# };
+            test_valid(prog, &["int", "x", "=", "(", "1", "+", "2", ")", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn an_if_expression_continues() {
+            let prog = indoc! { r#"
+                #if 1 + \
+                    1 == 2
+                int yes;
+                #else
+                int no;
+                #endif
+            "# };
+            test_valid(prog, &["int", "yes", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn code_continues_too() {
+            let prog = "int x = 1 + \\\n    2;\n";
+            test_valid(prog, &["int", "x", "=", "1", "+", "2", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn a_continued_macro_s_body_tokens_are_born_at_their_true_positions() {
+            // Expansion respans every body token to the use site
+            // (`Expansion::substitute`), so a continued definition's
+            // per-token spans are only observable in the stored `Define`.
+            let prog = indoc! { r#"
+                #define TWO 1 + \
+                    1
+                int x = TWO;
+            "# };
+            let mut preprocessor = fixture();
+            preprocessor.scan("/test.c", prog).await.unwrap();
+            let Define::Object(o) = &preprocessor.defines["TWO"] else {
+                panic!("expected an object macro");
+            };
+            let ones: Vec<Span> = o
+                .tokens
+                .iter()
+                .filter(|t| t.to_string() == "1")
+                .map(|t| t.span())
+                .collect();
+            assert_eq!(ones.len(), 2);
+            assert!(
+                ones[1].l() > ones[0].l() + 4,
+                "the second `1` is on the continued line"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn a_bare_undef_is_an_error() {
         test_invalid("#undef\n", "expected an identifier after `#undef`").await;

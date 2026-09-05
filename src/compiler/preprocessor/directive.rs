@@ -128,9 +128,11 @@ pub enum Directive {
 }
 
 /// Strip the trailing newline (and a Windows `\r`) the lexer's grab may
-/// have consumed.
+/// have consumed, plus a backslash left dangling by a splice with nothing
+/// after it.
 fn trim_directive_line(line: &str) -> &str {
-    line.trim_end_matches('\n').trim_end_matches('\r')
+    let line = line.trim_end_matches('\n').trim_end_matches('\r');
+    line.strip_suffix('\\').unwrap_or(line)
 }
 
 /// Skip spaces, tabs, and comments (a comment is whitespace here).
@@ -140,6 +142,10 @@ fn skip_ws_raw(text: &str, pos: &mut usize) -> std::result::Result<(), (usize, u
         let rest = &text[*pos..];
         if rest.starts_with([' ', '\t', '\x0b', '\x0c', '\r']) {
             *pos += 1;
+        } else if rest.starts_with("\\\n") {
+            *pos += 2;
+        } else if rest.starts_with("\\\r\n") {
+            *pos += 3;
         } else if rest.starts_with("//") {
             *pos = text.len();
         } else if let Some(inner) = rest.strip_prefix("/*") {
@@ -904,6 +910,25 @@ mod tests {
         assert_eq!(
             perr("#define F(a b) x"),
             "unterminated parameter list in `#define`"
+        );
+    }
+
+    #[test]
+    fn a_continued_line_reads_as_one_directive() {
+        // The pair is whitespace to the cursor, wherever it falls.
+        assert_eq!(
+            define_of("#define ADD(a, \\\n            b) a + \\\n b\n"),
+            (
+                "ADD".into(),
+                Some(vec!["a".into(), "b".into()]),
+                "a + \\\n b".into(),
+                Span::new(0, 32..40)
+            )
+        );
+        assert_eq!(p("#endif \\\n").unwrap(), Directive::Endif);
+        assert_eq!(
+            p("#undef \\\r\n FOO").unwrap(),
+            Directive::Undef { name: "FOO".into() }
         );
     }
 

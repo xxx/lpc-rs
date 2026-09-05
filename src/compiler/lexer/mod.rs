@@ -126,6 +126,9 @@ impl Iterator for TokenTriples<'_> {
 // Strip whitespace and comments
 #[logos(skip r"[ \t\f\v]+|//[^\n\r]*?[\n\r]*|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/")]
 #[logos(skip r"\n")]
+// A backslash-newline pair is a line splice (C99 5.1.1.2): whitespace
+// between tokens, never part of one.
+#[logos(skip r"\\\r?\n")]
 pub enum Token {
     #[token("+", track_slice)]
     Plus(Span),
@@ -369,11 +372,12 @@ pub enum Token {
     #[regex(r"\$[1-9]\d*", string_token, priority = 2)]
     ClosureArgVar(StringToken),
 
-    // A `#` grabs the whole line: one token, and the directive grammar
-    // (`preprocessor::directive`) owns everything after the `#`. Whether
-    // it is actually a directive is positional — the scan loop judges
-    // placement — mid-line and dead it is plain text.
-    #[regex("#[^\n]*\n?", string_token, allow_greedy = true)]
+    // A `#` grabs the whole logical line: one token, and the directive
+    // grammar (`preprocessor::directive`) owns everything after the `#`.
+    // A backslash-newline pair continues the line. Whether it is actually
+    // a directive is positional — the scan loop judges placement —
+    // mid-line and dead it is plain text.
+    #[regex(r"#(?:[^\\\n]|\\\r?\n|\\)*\n?", string_token, allow_greedy = true)]
     DirectiveLine(StringToken),
 }
 
@@ -746,6 +750,38 @@ mod tests {
             panic!("expected a directive line");
         };
         assert_eq!(st.0, Span::new(0, 0..13));
+    }
+
+    #[test]
+    fn a_backslash_newline_is_whitespace() {
+        let spelled: Vec<String> = lex_vec("x \\\n+ \\\r\ny")
+            .into_iter()
+            .map(|t| t.unwrap().to_string())
+            .collect();
+        assert_eq!(spelled, ["x", "+", "y"]);
+    }
+
+    #[test]
+    fn a_directive_line_continues_past_a_backslash_newline() {
+        let vec = lex_vec("#define FOO 1 + \\\n  2\nint");
+        assert_eq!(vec.len(), 2, "one directive line, then `int`");
+        let Ok(Token::DirectiveLine(st)) = &vec[0] else {
+            panic!("expected a directive line");
+        };
+        assert_eq!(st.1, "#define FOO 1 + \\\n  2\n");
+        // The span still trims only the final newline.
+        assert_eq!(st.0, Span::new(0, 0..21));
+        assert_eq!(vec[1].as_ref().unwrap().to_string(), "int");
+    }
+
+    #[test]
+    fn a_backslash_before_other_text_does_not_continue_a_directive() {
+        let vec = lex_vec("#define S \"a\\n\"\nint");
+        assert_eq!(vec.len(), 2);
+        let Ok(Token::DirectiveLine(st)) = &vec[0] else {
+            panic!("expected a directive line");
+        };
+        assert_eq!(st.1, "#define S \"a\\n\"\n");
     }
 
     #[test]
