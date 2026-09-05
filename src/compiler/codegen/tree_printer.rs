@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use lpc_rs_errors::Result;
 use tree_walker::{
-    TreeWalker, walk_array, walk_block, walk_comma_expression, walk_decl, walk_label, walk_program,
-    walk_return, walk_unary_op,
+    TreeWalker, walk_array, walk_block, walk_cast, walk_comma_expression, walk_decl, walk_label,
+    walk_program, walk_return, walk_unary_op,
 };
 
 use crate::compiler::{
@@ -14,6 +14,7 @@ use crate::compiler::{
         block_node::BlockNode,
         break_node::BreakNode,
         call_node::{CallChain, CallNode},
+        cast_node::CastNode,
         closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         continue_node::ContinueNode,
@@ -550,6 +551,18 @@ impl TreeWalker for TreePrinter {
         self.println_indented("expr: ");
         self.indent += 2;
         walk_unary_op(self, node).await?;
+        self.indent -= 4;
+
+        Ok(())
+    }
+
+    async fn visit_cast(&mut self, node: &mut CastNode) -> Result<()> {
+        self.println_indented("Cast");
+        self.indent += 2;
+        self.println_indented(&format!("type: {}", node.type_));
+        self.println_indented("expr: ");
+        self.indent += 2;
+        walk_cast(self, node).await?;
         self.indent -= 4;
 
         Ok(())

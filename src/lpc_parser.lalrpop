@@ -8,6 +8,7 @@ use crate::compiler::ast::binary_op_node::{BinaryOpNode, BinaryOperation};
 use crate::compiler::ast::block_node::BlockNode;
 use crate::compiler::ast::break_node::BreakNode;
 use crate::compiler::ast::call_node::{CallChain, CallNode};
+use crate::compiler::ast::cast_node::CastNode;
 use crate::compiler::ast::closure_node::ClosureNode;
 use crate::compiler::ast::comma_expression_node::CommaExpressionNode;
 use crate::compiler::ast::continue_node::ContinueNode;
@@ -705,7 +706,17 @@ UnaryExpression: ExpressionNode = {
 
 CastExpression: ExpressionNode = {
     <UnaryExpression>,
-}
+    <l:"("> <cast_type:Type> <star:"*"?> ")" <expr:CastExpression> =>? {
+        let span = Span::combine(Some(l), expr.span());
+        if cast_type.1 == "void" {
+            let error = lpc_error!(span, "cannot cast to `void`");
+            return Err(ParseError::User { error });
+        }
+        let type_ = LpcType::from(cast_type.1).as_array(star.is_some());
+
+        Ok(guard(ExpressionNode::Cast(CastNode { expr: Box::new(expr), type_, span }), span)?)
+    },
+};
 
 MultiplicitiveExpression: ExpressionNode = {
     #[precedence(level="0")]

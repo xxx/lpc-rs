@@ -13,6 +13,7 @@ use crate::{
             block_node::BlockNode,
             break_node::BreakNode,
             call_node::{CallChain, CallNode},
+            cast_node::CastNode,
             closure_node::ClosureNode,
             continue_node::ContinueNode,
             do_while_node::DoWhileNode,
@@ -34,15 +35,15 @@ use crate::{
         callee::Callee,
         codegen::tree_walker::{
             ContextHolder, Pass, TreeWalker, walk_assignment, walk_binary_op, walk_block,
-            walk_closure, walk_do_while, walk_for, walk_foreach, walk_function_def,
+            walk_cast, walk_closure, walk_do_while, walk_for, walk_foreach, walk_function_def,
             walk_function_ptr, walk_label, walk_range, walk_return, walk_switch, walk_unary_op,
             walk_var_init,
         },
         compilation_context::CompilationContext,
         diagnostics::Diagnostics,
         semantic::semantic_checks::{
-            check_binary_operation_types, check_unary_operation_types, element_type, is_keyword,
-            mismatch, node_type,
+            check_binary_operation_types, check_unary_operation_types, conversion_efun,
+            element_type, impossible_cast, is_keyword, mismatch, node_type,
         },
     },
     interpreter::efun::CALL_OTHER,
@@ -734,6 +735,25 @@ impl TreeWalker for SemanticCheckWalker {
             },
             Err(err) => Err(self.context.diagnostics.fail(err)),
         }
+    }
+
+    async fn visit_cast(&mut self, node: &mut CastNode) -> Result<()> {
+        walk_cast(self, node).await?;
+
+        if let Some(source) = impossible_cast(node, &self.context)? {
+            let mut e = lpc_error!(
+                node.span,
+                "cast from `{}` to `{}` can never succeed",
+                source,
+                node.type_
+            );
+            if let Some(efun) = conversion_efun(node.type_) {
+                e = e.with_note(format!("a cast converts nothing; `{efun}` does"));
+            }
+            self.context.diagnostics.record(e);
+        }
+
+        Ok(())
     }
 
     async fn visit_var(&mut self, node: &mut VarNode) -> Result<()> {
@@ -2144,6 +2164,84 @@ mod tests {
             assert_eq!(
                 context.diagnostics.errors()[0].to_string(),
                 "`foreach` must iterate over an array or mapping, found int"
+            );
+        }
+    }
+
+    mod test_visit_cast {
+        use super::*;
+
+        #[tokio::test]
+        async fn allows_a_cast_from_mixed_and_from_a_call_other() {
+            let code = indoc! { r#"
+                void create() {
+                    mixed m = 1;
+                    object o;
+                    int i = (int) m;
+                    string *s = (string *) m;
+                    string name = (string) o->query_name();
+                    int *a = (int *) ({ });
+                    string z = (string) 0;
+                    dump(({ i, s, name, a, z }));
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert!(
+                context.diagnostics.errors().is_empty(),
+                "{:?}",
+                context.diagnostics.errors()
+            );
+        }
+
+        #[tokio::test]
+        async fn rejects_a_cast_between_concrete_types() {
+            let code = indoc! { r#"
+                void create() {
+                    string s = "1";
+                    int i = (int) s;
+                    dump(i);
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "cast from `string` to `int` can never succeed"
+            );
+        }
+
+        #[tokio::test]
+        async fn rejects_a_scalar_cast_of_an_array() {
+            let code = indoc! { r#"
+                void create() {
+                    mixed *a = ({ 1 });
+                    string s = (string) a;
+                    dump(s);
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "cast from `mixed *` to `string` can never succeed"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_cast_retypes_the_expression() {
+            let code = indoc! { r#"
+                void create() {
+                    mixed m = 1;
+                    string s = (int) m;
+                    dump(s);
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "mismatched types: `s` (string) = `(int) m` (int)"
             );
         }
     }

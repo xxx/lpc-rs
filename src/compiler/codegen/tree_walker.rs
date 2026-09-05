@@ -11,6 +11,7 @@ use crate::compiler::{
         block_node::BlockNode,
         break_node::BreakNode,
         call_node::{CallChain, CallNode},
+        cast_node::CastNode,
         closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         continue_node::ContinueNode,
@@ -443,6 +444,14 @@ where
     Ok(())
 }
 
+/// Visit a cast's operand.
+pub async fn walk_cast<W>(walker: &mut W, node: &mut CastNode) -> Result<()>
+where
+    W: TreeWalker + Send,
+{
+    node.expr.visit(walker).await
+}
+
 /// Visit a variable initialization's value, if it has one.
 pub async fn walk_var_init<W>(walker: &mut W, node: &mut VarInitNode) -> Result<()>
 where
@@ -714,6 +723,14 @@ pub trait TreeWalker {
         Self: Sized,
     {
         walk_unary_op(self, node).await
+    }
+
+    /// Visit a cast node
+    async fn visit_cast(&mut self, node: &mut CastNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        walk_cast(self, node).await
     }
 
     /// Visit a variable use node

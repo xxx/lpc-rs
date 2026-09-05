@@ -15,6 +15,7 @@ use crate::compiler::{
         ast_node::{AstNodeTrait, SpannedNode},
         binary_op_node::BinaryOpNode,
         call_node::CallNode,
+        cast_node::CastNode,
         closure_node::ClosureNode,
         comma_expression_node::CommaExpressionNode,
         float_node::FloatNode,
@@ -38,6 +39,7 @@ pub enum ExpressionNode {
     Assignment(AssignmentNode),
     BinaryOp(BinaryOpNode),
     Call(CallNode),
+    Cast(CastNode),
     Closure(ClosureNode),
     CommaExpression(CommaExpressionNode),
     Float(FloatNode),
@@ -92,6 +94,7 @@ delegated_traits!(
     ExpressionNode::Assignment,
     ExpressionNode::BinaryOp,
     ExpressionNode::Call,
+    ExpressionNode::Cast,
     ExpressionNode::Closure,
     ExpressionNode::CommaExpression,
     ExpressionNode::Float,
@@ -146,6 +149,12 @@ impl From<AssignmentNode> for ExpressionNode {
 impl From<CallNode> for ExpressionNode {
     fn from(node: CallNode) -> Self {
         Self::Call(node)
+    }
+}
+
+impl From<CastNode> for ExpressionNode {
+    fn from(node: CastNode) -> Self {
+        Self::Cast(node)
     }
 }
 
