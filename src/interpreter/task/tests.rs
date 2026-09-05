@@ -2669,6 +2669,216 @@ mod test_instructions {
         }
     }
 
+    mod test_operator {
+        use super::*;
+
+        #[tokio::test]
+        async fn every_binary_operator_applies_as_written() {
+            let code = indoc! { r##"
+                mixed *r;
+                mixed apply(function f, mixed a, mixed b) { return f(a, b); }
+                void create() {
+                    r = ({
+                        apply(operator(+), 7, 2), apply(operator(-), 7, 2),
+                        apply(operator(*), 7, 2), apply(operator(/), 7, 2),
+                        apply(operator(%), 7, 2),
+                        apply(operator(>), 7, 2), apply(operator(<), 7, 2),
+                        apply(operator(>=), 7, 2), apply(operator(<=), 7, 2),
+                        apply(operator(==), 7, 2), apply(operator(!=), 7, 2),
+                        apply(operator(&), 7, 2), apply(operator(^), 7, 2),
+                        apply(operator(|), 7, 2),
+                        apply(operator(<<), 7, 2), apply(operator(>>), 7, 2),
+                    });
+                }
+            "##};
+            let expected = [9, 5, 14, 3, 1, 1, 0, 1, 0, 0, 1, 2, 5, 7, 28, 1]
+                .into_iter()
+                .map(BareVal::Int)
+                .collect::<Vec<_>>();
+
+            check_committed_globals(code, &[("r", BareVal::Array(expected))]).await;
+        }
+
+        #[tokio::test]
+        async fn the_unary_operators_take_one_argument() {
+            let code = indoc! { r##"
+                int a, b, c, d;
+                mixed apply(function f, mixed x) { return f(x); }
+                void create() {
+                    a = apply(operator(!), 0);
+                    b = apply(operator(!), 5);
+                    c = apply(operator(~), 0);
+                    d = apply(operator(~), 5);
+                }
+            "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::Int(1)),
+                    ("b", BareVal::Int(0)),
+                    ("c", BareVal::Int(-1)),
+                    ("d", BareVal::Int(-6)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn index_applies_to_arrays_strings_and_mappings() {
+            let code = indoc! { r##"
+                mixed a, s, m;
+                mixed apply(function f, mixed x, mixed y) { return f(x, y); }
+                void create() {
+                    a = apply(operator([]), ({ 10, 20 }), 1);
+                    s = apply(operator([]), "abc", 1);
+                    m = apply(operator([]), ([ "k": 3 ]), "k");
+                }
+            "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::Int(20)),
+                    ("s", BareVal::Int(98)),
+                    ("m", BareVal::Int(3)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn plus_concatenates_strings_and_arrays() {
+            let code = indoc! { r##"
+                string s;
+                mixed *a;
+                mixed apply(function f, mixed x, mixed y) { return f(x, y); }
+                void create() {
+                    s = apply(operator(+), "foo", "bar");
+                    a = apply(operator(+), ({ 1 }), ({ 2 }));
+                }
+            "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("s", BareVal::String("foobar".into())),
+                    ("a", BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2)])),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn partial_application_fills_the_slots_in_order() {
+            let code = indoc! { r##"
+                function sub_one, from_one;
+                int a, b;
+                void create() {
+                    sub_one = &operator(-)(, 1);
+                    from_one = &operator(-)(1);
+                    a = sub_one(5);
+                    b = from_one(5);
+                }
+            "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    (
+                        "sub_one",
+                        BareVal::Function("closure-0".into(), vec![None, Some(BareVal::Int(1))]),
+                    ),
+                    (
+                        "from_one",
+                        BareVal::Function("closure-1".into(), vec![Some(BareVal::Int(1))]),
+                    ),
+                    ("a", BareVal::Int(4)),
+                    ("b", BareVal::Int(-4)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_bound_argument_is_evaluated_when_the_pointer_is_made() {
+            let code = indoc! { r##"
+                int r;
+                void create() {
+                    int x = 1;
+                    function f = &operator(+)(, x);
+                    x = 100;
+                    r = f(1);
+                }
+            "##};
+
+            check_committed_globals(code, &[("r", BareVal::Int(2))]).await;
+        }
+
+        #[tokio::test]
+        async fn operators_drive_the_callback_efuns() {
+            let code = indoc! { r##"
+                mixed *bigger, *scaled, *sorted;
+                void create() {
+                    bigger = filter(({ 1, 2, 3 }), &operator(<)(1));
+                    scaled = map(({ 1, 2 }), &operator(*)(, 10));
+                    sorted = sort_array(({ 3, 1, 2 }), operator(-));
+                }
+            "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    (
+                        "bigger",
+                        BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)]),
+                    ),
+                    (
+                        "scaled",
+                        BareVal::Array(vec![BareVal::Int(10), BareVal::Int(20)]),
+                    ),
+                    (
+                        "sorted",
+                        BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2), BareVal::Int(3)]),
+                    ),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_missing_argument_is_zero_and_an_extra_is_dropped() {
+            let code = indoc! { r##"
+                int a, b;
+                mixed apply1(function f, mixed x) { return f(x); }
+                mixed apply3(function f, mixed x, mixed y, mixed z) { return f(x, y, z); }
+                void create() {
+                    a = apply1(operator(+), 5);
+                    b = apply3(operator(+), 1, 2, 100);
+                }
+            "##};
+
+            check_committed_globals(code, &[("a", BareVal::Int(5)), ("b", BareVal::Int(3))]).await;
+        }
+
+        #[tokio::test]
+        async fn an_error_inside_an_operator_points_at_its_source() {
+            let code = indoc! { r##"
+                int r;
+                void create() {
+                    function d = operator(/);
+                    r = d(1, 0);
+                }
+            "##};
+
+            let e = try_run_prog(code).await.unwrap_err();
+
+            let rendered = e.diagnostic_string();
+            assert!(rendered.contains("Division by zero"), "{rendered}");
+            assert!(rendered.contains("operator(/)"), "{rendered}");
+        }
+    }
+
     mod test_gt {
         use super::*;
 

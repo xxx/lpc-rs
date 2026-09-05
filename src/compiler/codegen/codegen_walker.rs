@@ -57,6 +57,7 @@ use crate::{
             int_node::IntNode,
             label_node::LabelNode,
             mapping_node::MappingNode,
+            operator_node::OperatorNode,
             program_node::ProgramNode,
             range_node::RangeNode,
             ref_node::RefNode,
@@ -1041,6 +1042,36 @@ impl CodegenWalker {
 
         Ok(result)
     }
+
+    /// Visit the present arguments of a partial application, in order;
+    /// the register each landed in, `None` for a hole.
+    async fn visit_partial_arguments(
+        &mut self,
+        arguments: &mut Option<Vec<Option<ExpressionNode>>>,
+    ) -> Result<Vec<Option<RegisterVariant>>> {
+        let mut applied = vec![];
+        if let Some(args) = arguments {
+            for argument in args {
+                if let Some(n) = argument {
+                    n.visit(self).await?;
+                    applied.push(Some(self.current_result));
+                } else {
+                    applied.push(None);
+                }
+            }
+        }
+        Ok(applied)
+    }
+
+    /// Stage every slot for the pointer constant that follows; only after
+    /// every argument and the receiver ran, so a pointer made inside one
+    /// of them consumes its own slots.
+    fn stage_partial_arguments(&mut self, applied: &[Option<RegisterVariant>], span: Option<Span>) {
+        for a in applied {
+            let instruction = Instruction::PushPartialArg(*a);
+            push_instruction!(self, instruction, span);
+        }
+    }
 }
 
 impl ContextHolder for CodegenWalker {
@@ -1876,17 +1907,7 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
-        let mut applied_arguments = vec![];
-        if let Some(args) = &mut node.arguments {
-            for argument in args {
-                if let Some(n) = argument {
-                    n.visit(self).await?;
-                    applied_arguments.push(Some(self.current_result));
-                } else {
-                    applied_arguments.push(None);
-                }
-            }
-        }
+        let applied_arguments = self.visit_partial_arguments(&mut node.arguments).await?;
 
         let receiver = if let Some(rcvr) = &mut node.receiver {
             // remote receiver, i.e. `call_other`
@@ -1917,11 +1938,7 @@ impl TreeWalker for CodegenWalker {
             }
         };
 
-        // prepare the partially-applied arguments
-        for a in &applied_arguments {
-            let instruction = Instruction::PushPartialArg(*a);
-            push_instruction!(self, instruction, node.span);
-        }
+        self.stage_partial_arguments(&applied_arguments, node.span);
 
         let location = self.register_counter.next().unwrap().as_local();
         self.current_result = location;
@@ -2012,6 +2029,14 @@ impl TreeWalker for CodegenWalker {
         push_instruction!(self, Instruction::MapConst(register), node.span);
 
         Ok(())
+    }
+
+    #[instrument(skip_all)]
+    async fn visit_operator(&mut self, node: &mut OperatorNode) -> Result<()> {
+        let applied_arguments = self.visit_partial_arguments(&mut node.arguments).await?;
+        self.stage_partial_arguments(&applied_arguments, node.span);
+
+        node.closure.visit(self).await
     }
 
     #[instrument(skip_all)]
@@ -4495,6 +4520,56 @@ mod tests {
             }];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
+        }
+    }
+
+    mod test_visit_operator {
+        use super::*;
+
+        #[tokio::test]
+        async fn stages_the_slots_in_order_before_the_closure_pointer() {
+            let mut walker = walk_prog("void create() { function f = &operator(-)(, 1); }").await;
+            let instructions = walker_function_instructions(&mut walker, "create");
+
+            let hole = instructions
+                .iter()
+                .position(|i| matches!(i, Instruction::PushPartialArg(None)))
+                .expect("the hole is staged");
+            let bound = instructions
+                .iter()
+                .position(|i| matches!(i, Instruction::PushPartialArg(Some(_))))
+                .expect("the bound argument is staged");
+            let pointer = instructions
+                .iter()
+                .position(|i| {
+                    matches!(
+                        i,
+                        Instruction::FunctionPtrConst {
+                            receiver: FunctionReceiver::Local,
+                            name,
+                            ..
+                        } if name.starts_with("closure-0")
+                    )
+                })
+                .expect("the closure's pointer");
+            assert!(hole < bound && bound < pointer, "{instructions:?}");
+            assert!(
+                walker.functions.keys().any(|k| k.starts_with("closure-0")),
+                "the operator's closure is a function of the program"
+            );
+        }
+
+        #[tokio::test]
+        async fn the_bare_form_stages_nothing() {
+            let mut walker = walk_prog("void create() { function f = operator(+); }").await;
+            let instructions = walker_function_instructions(&mut walker, "create");
+
+            assert!(
+                !instructions
+                    .iter()
+                    .any(|i| matches!(i, Instruction::PushPartialArg(_))),
+                "{instructions:?}"
+            );
         }
     }
 
