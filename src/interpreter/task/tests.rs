@@ -2154,6 +2154,24 @@ mod test_instructions {
             let error = try_run_prog(code).await.unwrap_err();
             assert_eq!(error.to_string(), "runtime error: cast to int * of int");
         }
+
+        #[tokio::test]
+        async fn a_destructed_object_passes_every_cast() {
+            let code = indoc! { r##"
+                    mixed ob;
+                    string s;
+                    object result;
+                    void create() {
+                        ob = clone_object("/clone_target");
+                        destruct(ob);
+                        s = (string) ob;
+                        result = (object) ob;
+                    }
+                "##};
+
+            check_committed_globals(code, &[("s", BareVal::Int(0)), ("result", BareVal::Int(0))])
+                .await;
+        }
     }
 
     mod test_catch {

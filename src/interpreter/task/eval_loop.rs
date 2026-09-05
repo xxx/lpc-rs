@@ -217,8 +217,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             }
             Instruction::Cast(r1, target, r2) => {
-                self.unary_operation(r1, r2, |value, _| {
-                    if value.passes_cast(target) {
+                self.unary_operation(r1, r2, |value, txn| {
+                    if value.passes_cast(target, txn) {
                         Ok(value.clone())
                     } else {
                         Err(LpcError::runtime(format!(
