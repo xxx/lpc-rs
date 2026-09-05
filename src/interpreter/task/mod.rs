@@ -764,8 +764,7 @@ mod stm_retry_tests {
     #[tokio::test]
     async fn a_callback_efun_seed_walks_its_callbacks_through_the_entry_frame() {
         // Committed globals, not a value minted here: `eval_efun_seed`'s
-        // throwaway committer starts from an empty world, so only the real
-        // committer behind `task` has the array and the pointer's callee.
+        // committer starts from an empty world.
         let code = indoc! { r#"
             int one(int x) { return x; }
             function f;
