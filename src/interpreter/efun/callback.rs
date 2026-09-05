@@ -8,8 +8,8 @@ use lpc_rs_errors::Result;
 use smallvec::SmallVec;
 
 use crate::interpreter::{
-    apply::call_pointer, efun::efun_context::EfunContext, function_type::function_ptr::FunctionPtr,
-    lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, stm::TxnHandle,
+    efun::efun_context::EfunContext, function_type::function_ptr::FunctionPtr, lpc_array::LpcArray,
+    lpc_mapping::LpcMapping, lpc_ref::LpcRef, stm::TxnHandle,
 };
 
 /// The collection an efun walks, its elements still to visit.
@@ -101,25 +101,4 @@ pub(crate) fn return_empty<const N: usize>(context: &mut EfunContext<'_, N>, ite
         Items::Array(_) => context.return_array(Vec::new()),
         Items::Mapping(_) => context.return_mapping(LpcMapping::new(IndexMap::new())),
     }
-}
-
-/// `element` then `extra`, as one call's arguments.
-pub(crate) fn call_args(element: &[LpcRef], extra: &[LpcRef]) -> Vec<LpcRef> {
-    let mut args = Vec::with_capacity(element.len() + extra.len());
-    args.extend_from_slice(element);
-    args.extend_from_slice(extra);
-    args
-}
-
-/// Call `pointer` from the object running `name` with `args`; a pointer
-/// that no longer resolves is an error.
-pub(crate) async fn call_back<const N: usize>(
-    context: &EfunContext<'_, N>,
-    name: &str,
-    pointer: &FunctionPtr,
-    args: &[LpcRef],
-) -> Result<LpcRef> {
-    call_pointer(context.task_context(), context.process(), pointer, args)
-        .await?
-        .ok_or_else(|| context.runtime_error(format!("{name}: the function no longer resolves")))
 }

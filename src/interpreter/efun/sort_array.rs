@@ -1,109 +1,86 @@
-use std::cmp::Ordering;
+//! `sort_array(array, f | direction)`: a fresh array ordered by the
+//! comparator `f(a, b)` (positive when `a` goes after `b`), or naturally,
+//! `1` ascending and `-1` descending. Binary insertion: stable.
 
-use lpc_rs_errors::Result;
+use std::{cmp::Ordering, sync::Arc, vec};
+
+use lpc_rs_errors::{LpcError, Result};
+use smallvec::SmallVec;
 
 use crate::interpreter::{
+    continuation::{Callee, Continuation, Next},
     efun::{
-        callback::{call_back, function_arg},
+        callback::{function_arg, mint_array},
         efun_context::EfunContext,
     },
     function_type::function_ptr::FunctionPtr,
     lpc_ref::LpcRef,
+    stm::TxnHandle,
 };
 
-/// How two items are ranked.
-enum Order<'a> {
-    /// The comparator `f(a, b)`: negative puts `a` first, positive `b`.
-    By(&'a FunctionPtr),
-    /// `LpcRef::natural_cmp`, reversed when descending.
-    Natural { descending: bool },
-}
-
-/// `sort_array(arr, f | direction)`: a new array of `arr`'s items ordered by
-/// the comparator `f(a, b)` (negative puts `a` first, positive `b`), or in
-/// natural order, descending for a direction of -1. Stable.
-pub async fn sort_array<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+/// `sort_array(array, f | direction)`: a fresh array ordered by the
+/// comparator `f(a, b)` (positive when `a` goes after `b`), or naturally,
+/// `1` ascending and `-1` descending. Binary insertion: stable.
+pub fn sort_array<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let items: Vec<LpcRef> = match context.arg(0) {
-        array @ LpcRef::Array(_) => {
-            array.with_array(context.txn(), |a| a.iter().cloned().collect())?
-        }
+        array @ LpcRef::Array(_) => array.with_array(context.txn(), |a| a.to_vec())?,
         other => {
             return Err(
                 context.runtime_error(format!("sort_array: {} is not an array", other.type_name()))
             );
         }
     };
-    let sorted = match context.arg(1) {
+    match context.arg(1) {
         LpcRef::Function(_) => {
-            let f = function_arg(context, "sort_array", 1)?;
-            insertion_sort(context, &Order::By(&f), items).await?
+            let ptr = function_arg(context, "sort_array", 1)?;
+            if items.len() < 2 {
+                context.return_array(items);
+                return Ok(());
+            }
+            context.continue_with(Box::new(Sort {
+                ptr,
+                remaining: items.into_iter(),
+                sorted: Vec::new(),
+                placing: None,
+            }));
+            Ok(())
         }
         LpcRef::Int(direction) => {
-            let order = Order::Natural {
-                descending: direction.0 == -1,
-            };
-            insertion_sort(context, &order, items).await?
+            let sorted = natural_sort(context, items, direction.0 == -1)?;
+            context.return_array(sorted);
+            Ok(())
         }
-        other => {
-            return Err(context.runtime_error(format!(
-                "sort_array: {} is not a function or an int",
-                other.type_name()
-            )));
-        }
-    };
-    context.return_array(sorted);
-    Ok(())
-}
-
-/// `a` against `b` under `order`.
-async fn compare<const N: usize>(
-    context: &EfunContext<'_, N>,
-    order: &Order<'_>,
-    a: &LpcRef,
-    b: &LpcRef,
-) -> Result<Ordering> {
-    match order {
-        Order::By(f) => {
-            let verdict = call_back(context, "sort_array", f, &[a.clone(), b.clone()]).await?;
-            match verdict {
-                LpcRef::Int(i) => Ok(i.0.cmp(&0)),
-                other => Err(context.runtime_error(format!(
-                    "sort_array: the comparator returned {}, not an int",
-                    other.type_name()
-                ))),
-            }
-        }
-        Order::Natural { descending } => {
-            let Some(ordering) = a.natural_cmp(b) else {
-                return Err(context.runtime_error(format!(
-                    "sort_array: cannot order {} and {}",
-                    a.type_name(),
-                    b.type_name()
-                )));
-            };
-            Ok(if *descending {
-                ordering.reverse()
-            } else {
-                ordering
-            })
-        }
+        other => Err(context.runtime_error(format!(
+            "sort_array: {} is not a function or an int",
+            other.type_name()
+        ))),
     }
 }
 
-/// Stable binary insertion: each item lands after every item `order` does
-/// not put it before, so equal items keep their order. Comparisons are
-/// N log N; each may be an LPC call.
-async fn insertion_sort<const N: usize>(
+/// `items` by `LpcRef::natural_cmp`, reversed when `descending`.
+fn natural_sort<const N: usize>(
     context: &EfunContext<'_, N>,
-    order: &Order<'_>,
     items: Vec<LpcRef>,
+    descending: bool,
 ) -> Result<Vec<LpcRef>> {
     let mut sorted: Vec<LpcRef> = Vec::with_capacity(items.len());
     for item in items {
         let (mut low, mut high) = (0, sorted.len());
         while low < high {
             let mid = low + (high - low) / 2;
-            if compare(context, order, &sorted[mid], &item).await? == Ordering::Greater {
+            let Some(ordering) = sorted[mid].natural_cmp(&item) else {
+                return Err(context.runtime_error(format!(
+                    "sort_array: cannot order {} and {}",
+                    sorted[mid].type_name(),
+                    item.type_name()
+                )));
+            };
+            let ordering = if descending {
+                ordering.reverse()
+            } else {
+                ordering
+            };
+            if ordering == Ordering::Greater {
                 high = mid;
             } else {
                 low = mid + 1;
@@ -114,11 +91,75 @@ async fn insertion_sort<const N: usize>(
     Ok(sorted)
 }
 
+/// The walk: the item being placed and the open range of `sorted` it
+/// belongs in; each compare narrows it.
+#[derive(Debug, Clone)]
+struct Sort {
+    ptr: Arc<FunctionPtr>,
+    remaining: vec::IntoIter<LpcRef>,
+    sorted: Vec<LpcRef>,
+    placing: Option<(LpcRef, usize, usize)>,
+}
+
+impl Continuation for Sort {
+    fn advance(&mut self, result: Option<LpcRef>, txn: &TxnHandle) -> Result<Next> {
+        if let Some(verdict) = result {
+            let Some((_, low, high)) = &mut self.placing else {
+                return Err(LpcError::runtime_bug(
+                    "a compare answered with nothing placed",
+                ));
+            };
+            let LpcRef::Int(answer) = verdict else {
+                return Err(LpcError::runtime(format!(
+                    "sort_array: the comparator returned {}, not an int",
+                    verdict.type_name()
+                )));
+            };
+            let mid = *low + (*high - *low) / 2;
+            if answer.0 > 0 {
+                *high = mid;
+            } else {
+                *low = mid + 1;
+            }
+        }
+        loop {
+            match self.placing.take() {
+                Some((item, low, high)) if low < high => {
+                    let mid = low + (high - low) / 2;
+                    let args = SmallVec::from_vec(vec![self.sorted[mid].clone(), item.clone()]);
+                    self.placing = Some((item, low, high));
+                    return Ok(Next::Call(Callee::Pointer {
+                        ptr: self.ptr.clone(),
+                        args,
+                    }));
+                }
+                Some((item, low, _)) => self.sorted.insert(low, item),
+                None => match self.remaining.next() {
+                    Some(item) => self.placing = Some((item, 0, self.sorted.len())),
+                    None => {
+                        return Ok(Next::Done(mint_array(
+                            txn,
+                            std::mem::take(&mut self.sorted),
+                        )));
+                    }
+                },
+            }
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn Continuation> {
+        Box::new(self.clone())
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+    use lpc_rs_asm::instruction::Instruction;
+
     use crate::{
-        interpreter::lpc_ref::LpcRef,
-        test_support::{run_prog, try_run_prog},
+        interpreter::{lpc_ref::LpcRef, task::eval_loop::Slice, vm::Vm},
+        test_support::{run_prog, task_at, test_config, try_run_prog},
     };
 
     async fn strings_of(code: &str) -> Vec<String> {
@@ -209,5 +250,51 @@ mod tests {
         let code = "mixed create() { mixed x = 1; return sort_array(x, 1); }";
         let err = try_run_prog(code).await.unwrap_err().to_string();
         assert!(err.contains("sort_array: int is not an array"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn sort_array_runs_its_first_compare_with_no_await() {
+        let vm = Vm::new(test_config());
+        let code = indoc! { r#"
+            int cmp(int a, int b) { return a - b; }
+            int *got;
+            void create() { got = sort_array(({ 2, 1 }), &cmp()); }
+        "# };
+        let (mut task, _live) =
+            task_at(&vm, code, |at| matches!(at, Instruction::CallEfun(..))).await;
+
+        let slice = task.run_slice(&mut 1).unwrap();
+
+        assert!(matches!(slice, Slice::Budget));
+        let frame = task.stack.current_frame().unwrap();
+        assert_eq!(frame.function.name(), "cmp");
+        assert_eq!(frame.registers[1], LpcRef::from(2));
+        assert_eq!(frame.registers[2], LpcRef::from(1));
+    }
+
+    #[tokio::test]
+    async fn a_comparator_answering_a_non_int_fails_at_the_call_site() {
+        let code = r#"mixed create() { return sort_array(({ 2, 1 }), (: "x" :)); }"#;
+        let err = try_run_prog(code).await.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "runtime error: sort_array: the comparator returned string, not an int"
+        );
+        assert!(err.span().is_some());
+    }
+
+    #[tokio::test]
+    async fn a_thousand_items_sort_through_the_comparator() {
+        let code = indoc! { r#"
+            int cmp(int a, int b) { return a - b; }
+            int create() {
+                int *a = allocate(1000);
+                int i;
+                for (i = 0; i < 1000; i++) a[i] = (i * 7919) % 1000;
+                a = sort_array(a, &cmp());
+                return a[0] == 0 && a[999] == 999 && a[500] == 500;
+            }
+        "# };
+        assert_eq!(run_prog(code).await.result(), Some(LpcRef::from(1)));
     }
 }

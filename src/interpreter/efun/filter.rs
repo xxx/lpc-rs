@@ -1,53 +1,108 @@
-use indexmap::IndexMap;
+//! `filter(collection, f, extra...)`: the elements for which
+//! `f(element, extra...)` is true, in order, in a fresh array or mapping.
+
+use std::sync::Arc;
+
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
+    continuation::{Callee, Continuation, Next},
     efun::{
-        callback::{Items, call_args, call_back, extra_args, function_arg, items_arg},
+        callback::{
+            Items, callback_args, extra_args, function_arg, items_arg, mint_array, mint_mapping,
+            return_empty,
+        },
         efun_context::EfunContext,
     },
-    lpc_mapping::LpcMapping,
+    function_type::function_ptr::FunctionPtr,
+    lpc_ref::LpcRef,
+    stm::TxnHandle,
 };
 
-/// `filter(coll, f, extra...)`: a new array of the items `f(item, extra...)`
-/// accepts, or a new mapping of the entries `f(key, value, extra...)`
-/// accepts, in their order.
-pub async fn filter<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+/// `filter(collection, f, extra...)`: the elements for which
+/// `f(element, extra...)` is true, in order, in a fresh array or mapping.
+pub fn filter<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let items = items_arg(context, "filter")?;
-    let f = function_arg(context, "filter", 1)?;
+    let ptr = function_arg(context, "filter", 1)?;
     let extra = extra_args(context, 2);
-    match items {
-        Items::Array(items) => {
-            let mut kept = Vec::new();
-            for item in items {
-                let args = call_args(std::slice::from_ref(&item), &extra);
-                let verdict = call_back(context, "filter", &f, &args).await?;
-                if verdict.is_truthy(context.txn()) {
-                    kept.push(item);
-                }
-            }
-            context.return_array(kept);
-        }
-        Items::Mapping(entries) => {
-            let mut kept = IndexMap::new();
-            for (key, value) in entries {
-                let args = call_args(&[key.clone(), value.clone()], &extra);
-                let verdict = call_back(context, "filter", &f, &args).await?;
-                if verdict.is_truthy(context.txn()) {
-                    kept.insert(key, value);
-                }
-            }
-            context.return_mapping(LpcMapping::new(kept));
-        }
+    if items.len() == 0 {
+        return_empty(context, &items);
+        return Ok(());
     }
+    context.continue_with(Box::new(Filter {
+        ptr,
+        items,
+        extra,
+        asked: None,
+        kept_keys: Vec::new(),
+        kept: Vec::new(),
+    }));
     Ok(())
+}
+
+/// The walk: the element whose verdict is in flight, and the ones kept.
+#[derive(Debug, Clone)]
+struct Filter {
+    ptr: Arc<FunctionPtr>,
+    items: Items,
+    extra: Vec<LpcRef>,
+    /// The element asked about, with its key for a mapping.
+    asked: Option<(Option<LpcRef>, LpcRef)>,
+    kept_keys: Vec<LpcRef>,
+    kept: Vec<LpcRef>,
+}
+
+impl Continuation for Filter {
+    fn advance(&mut self, result: Option<LpcRef>, txn: &TxnHandle) -> Result<Next> {
+        if let (Some(verdict), Some((key, value))) = (result, self.asked.take())
+            && verdict.is_truthy(txn)
+        {
+            if let Some(key) = key {
+                self.kept_keys.push(key);
+            }
+            self.kept.push(value);
+        }
+        let args = match &mut self.items {
+            Items::Array(items) => match items.next() {
+                Some(item) => {
+                    self.asked = Some((None, item.clone()));
+                    callback_args(&[item], &self.extra)
+                }
+                None => return Ok(Next::Done(mint_array(txn, std::mem::take(&mut self.kept)))),
+            },
+            Items::Mapping(entries) => match entries.next() {
+                Some((key, value)) => {
+                    self.asked = Some((Some(key.clone()), value.clone()));
+                    callback_args(&[key, value], &self.extra)
+                }
+                None => {
+                    return Ok(Next::Done(mint_mapping(
+                        txn,
+                        std::mem::take(&mut self.kept_keys),
+                        std::mem::take(&mut self.kept),
+                    )));
+                }
+            },
+        };
+        Ok(Next::Call(Callee::Pointer {
+            ptr: self.ptr.clone(),
+            args,
+        }))
+    }
+
+    fn clone_box(&self) -> Box<dyn Continuation> {
+        Box::new(self.clone())
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+    use lpc_rs_asm::instruction::Instruction;
+
     use crate::{
-        interpreter::lpc_ref::LpcRef,
-        test_support::{run_prog, try_run_prog},
+        interpreter::{lpc_ref::LpcRef, task::eval_loop::Slice, vm::Vm},
+        test_support::{run_prog, task_at, test_config, try_run_prog},
     };
 
     async fn strings_of(code: &str) -> Vec<String> {
@@ -110,5 +165,33 @@ mod tests {
         let code = "mixed create() { mixed f = 1; return filter(({ 1 }), f); }";
         let err = try_run_prog(code).await.unwrap_err().to_string();
         assert!(err.contains("filter: int is not a function"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn filter_runs_its_first_callback_with_no_await() {
+        let vm = Vm::new(test_config());
+        let code = indoc! { r#"
+            int one(int x) { return x; }
+            int *got;
+            void create() { got = filter(({ 1, 2 }), &one()); }
+        "# };
+        let (mut task, _live) =
+            task_at(&vm, code, |at| matches!(at, Instruction::CallEfun(..))).await;
+
+        let slice = task.run_slice(&mut 1).unwrap();
+
+        assert!(matches!(slice, Slice::Budget));
+        assert_eq!(task.stack.current_frame().unwrap().function.name(), "one");
+        assert!(task.stack.get(0).unwrap().pending.is_some());
+    }
+
+    #[tokio::test]
+    async fn filter_of_a_mapping_keeps_the_kept_keys_values() {
+        let code = r#"
+            mixed *create() {
+                return values(filter(([ "a": 1, "b": 2, "c": 3 ]), (: $2 != 2 :)));
+            }
+        "#;
+        assert_eq!(strings_of(code).await, ["1", "3"]);
     }
 }

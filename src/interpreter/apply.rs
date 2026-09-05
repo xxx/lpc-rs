@@ -88,19 +88,6 @@ pub(crate) async fn apply_pointer(
     fire(ctx, handler_ctx, callers, pointer, args).await
 }
 
-/// Call `pointer` from `caller` with `args`, `this_player` as it was: what
-/// `filter` does per element. `None` when the pointer no longer resolves.
-pub(crate) async fn call_pointer(
-    ctx: &TaskContext,
-    caller: &Arc<Process>,
-    pointer: &FunctionPtr,
-    args: &[LpcRef],
-) -> Result<Option<LpcRef>> {
-    let callers = as_actor(ctx, caller);
-    let handler_ctx = ctx.nested(callers.clone(), caller.clone())?;
-    fire(ctx, handler_ctx, callers, pointer, args).await
-}
-
 /// Resolve `pointer` in `handler_ctx` and run it there.
 async fn fire(
     ctx: &TaskContext,
