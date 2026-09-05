@@ -63,7 +63,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     .filter(|function| function.public())
                     .cloned()
                     .map(|function| (process, function)),
-                Standing::Dead => None,
+                Standing::Dead | Standing::Removed(_) => None,
                 Standing::Uncreated(_) | Standing::Uninitialized(_) => return Ok(false),
             }
         };
@@ -205,7 +205,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 match context.find_object(&path) {
                     ObjectLookup::Found(process) => process,
                     // Creating a destructed object here would resurrect it.
-                    ObjectLookup::Removed => return Ok(Standing::Dead),
+                    ObjectLookup::Removed => return Ok(Standing::Removed(path)),
                     ObjectLookup::NotCreated => return Ok(Standing::Uncreated(path)),
                 }
             }
@@ -242,7 +242,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         // an object.
         let process = match Self::standing(receiver_ref, context)? {
             Standing::Ready(process) => process,
-            Standing::Dead => return Ok(None),
+            Standing::Dead | Standing::Removed(_) => return Ok(None),
             Standing::Uncreated(path) => {
                 let loader = loader()?;
                 let process = context.compile_process(&path, &loader).await?;
@@ -271,6 +271,8 @@ pub(super) enum Standing {
     Ready(Arc<Process>),
     /// Destructed, or not an object: the call is 0.
     Dead,
+    /// Destructed at this path: the call is 0.
+    Removed(LpcPath),
     /// No object at this path yet.
     Uncreated(LpcPath),
     /// Resident, its `create` not yet run.

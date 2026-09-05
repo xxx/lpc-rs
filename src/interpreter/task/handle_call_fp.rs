@@ -137,6 +137,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Ok(Called::Suspends);
                 }
                 let args = ptr.bound_args(&self.passed_values(passed)?);
+                self.refuse_ref_params(efun, &args)?;
                 self.push_entry_frame(owner.clone(), ptr.origin.clone())?;
                 self.call_fired_efun_now(efun, args, owner, ptr.origin.clone())?;
                 Ok(Called::Framed)
@@ -155,6 +156,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             Standing::Dead => {
                                 return Err(LpcError::runtime(format!(
                                     "attempted to call `{name}` on a destructed object"
+                                )));
+                            }
+                            Standing::Removed(path) => {
+                                return Err(LpcError::runtime(format!(
+                                    "attempted to call `{name}` on a destructed object `{path}`"
                                 )));
                             }
                             Standing::Uncreated(_) | Standing::Uninitialized(_) => {
@@ -328,6 +334,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         if function.prototype.is_efun() {
             let efun = self.efun_of(&function)?;
+            self.refuse_ref_params(efun, &args)?;
             self.push_entry_frame(process.clone(), ptr.origin.clone())?;
             self.call_fired_efun(efun, args, process, ptr.origin.clone())
                 .await?;
@@ -392,6 +399,11 @@ mod tests {
         },
         test_support::test_config,
     };
+
+    const OTHER: &str = indoc! { r#"
+        int two() { return 2; }
+        int three() { return 3; }
+    "# };
 
     /// `code`'s `create`, stepped to its first pointer call under a live
     /// snapshot (an empty handle reads every receiver as absent).
@@ -561,6 +573,54 @@ mod tests {
         assert_eq!(
             err.span(),
             task.stack.current_frame().unwrap().current_debug_span()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_by_reference_efun_pointer_fails_at_the_call_site_with_no_frame_left() {
+        let code = indoc! { r#"
+            mixed got;
+            void create() { function f = &sscanf(); got = f("1", "%d", 0); }
+        "# };
+        let (mut task, _live) = task_at_first_call_fp(code).await;
+
+        let Err(err) = task.run_slice(&mut 1) else {
+            panic!("the call is refused");
+        };
+
+        let msg = err.to_string();
+        assert!(msg.contains("sscanf"), "{msg}");
+        assert!(msg.contains("must be passed by reference"), "{msg}");
+        assert_eq!(task.stack.len(), 1);
+        assert_eq!(
+            err.span(),
+            task.stack.current_frame().unwrap().current_debug_span()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_dynamic_pointer_to_a_destructed_string_receiver_names_the_path() {
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code("/other.c", OTHER)
+            .await
+            .unwrap();
+        let code = indoc! { r#"
+            mixed got;
+            void create() {
+                function f = &->two();
+                destruct(find_object("/other"));
+                got = f("/other");
+            }
+        "# };
+
+        let err = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "runtime error: attempted to call `two` on a destructed object `/other`"
         );
     }
 }
