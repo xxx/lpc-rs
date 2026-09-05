@@ -264,6 +264,23 @@ async fn an_efun_pointer_from_call_out_reports_zero() {
     assert_eq!(committed_string(&vm, &master, SEEN_CALLER), "/timer");
 }
 
+/// `map` runs its callback efun as a frame on the calling task's stack; the
+/// master still hears the pointer's own origin, not `map`'s frame.
+#[tokio::test]
+async fn an_efun_pointer_callback_reports_the_pointers_origin() {
+    let root = TempLib::new("prov-callback");
+    let vm = Vm::new(temp_lib_config(&root));
+    let master = recording_master(&vm, &root).await;
+    run(
+        &vm,
+        "/timer.c",
+        r#"void create() { map(({ "/data.txt" }), &read_file()); }"#,
+    )
+    .await;
+    assert_eq!(committed_string(&vm, &master, SEEN_PROGRAM), "/timer.c");
+    assert_eq!(committed_string(&vm, &master, SEEN_CALLER), "/timer");
+}
+
 #[tokio::test]
 async fn a_relative_path_resolves_against_the_callers_directory() {
     let root = TempLib::new("path-relative");

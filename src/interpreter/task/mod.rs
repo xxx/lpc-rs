@@ -320,6 +320,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     async fn run_entry(&mut self, seed: &TaskSeed) -> Result<()> {
         if seed.function.prototype.is_efun() {
             let efun = self.efun_of(&seed.function)?;
+            self.refuse_ref_params(efun)?;
             let args = seed.arg_values(&self.context.txn);
             self.push_entry_frame(seed.process.clone(), None)?;
             self.call_fired_efun(efun, args, seed.process.clone(), None)
@@ -758,6 +759,40 @@ mod stm_retry_tests {
             .unwrap();
 
         assert_eq!(task.result(), Some(LpcRef::from(0)));
+    }
+
+    #[tokio::test]
+    async fn a_callback_efun_seed_walks_its_callbacks_through_the_entry_frame() {
+        // Committed globals, not a value minted here: `eval_efun_seed`'s
+        // throwaway committer starts from an empty world, so only the real
+        // committer behind `task` has the array and the pointer's callee.
+        let code = indoc! { r#"
+            int one(int x) { return x; }
+            function f;
+            mixed *arr;
+            void create() { f = &one(); arr = ({ 1, 2 }); }
+        "# };
+        let mut task = run_prog(code).await;
+        let pointer = crate::test_support::committed_global(&task, "f");
+        let array = crate::test_support::committed_global(&task, "arr");
+        let tx = task.context.global_state.committer_tx.clone();
+        let seed = TaskSeed {
+            process: task.context.process().clone(),
+            function: crate::interpreter::efun::EFUN_FUNCTIONS["map"].clone(),
+            args: vec![SeedArg::Value(array), SeedArg::Value(pointer)],
+            initializes: false,
+        };
+
+        let (res, _) = task.eval_with_committer(&tx, &seed).await;
+        res.unwrap();
+
+        let got = task
+            .result()
+            .unwrap()
+            .with_array(task.context.txn(), |arr| arr.to_vec())
+            .unwrap();
+        assert_eq!(got, vec![LpcRef::from(1), LpcRef::from(2)]);
+        assert!(task.stack.is_empty());
     }
 
     const CODE: &str = indoc! { r##"

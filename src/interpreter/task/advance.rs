@@ -51,7 +51,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Err(self.runtime_bug("advance_pending on a frame with no pending call"));
         };
         let result = answered.then(|| std::mem::take(&mut frame.registers[0]));
-        match &mut *pending {
+        let outcome = match &mut *pending {
             Pending::Collection(call) => match self.advance_collection(call, result)? {
                 Collected::Framed => {
                     self.restore_pending(owner, pending)?;
@@ -63,7 +63,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
                 Collected::Suspends => {
                     self.restore_pending(owner, pending)?;
-                    Ok(Advance::Suspends)
+                    return Ok(Advance::Suspends);
                 }
             },
             Pending::Efun(cont) => {
@@ -85,19 +85,27 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             }
                             Called::Pending => {
                                 self.restore_pending(owner, pending)?;
-                                Ok(Advance::Suspends)
+                                return Ok(Advance::Suspends);
                             }
                             Called::Unresolved => Err(unresolved(efun, span)),
                             Called::Suspends => {
                                 cont.suspended = Some(callee);
                                 self.restore_pending(owner, pending)?;
-                                Ok(Advance::Suspends)
+                                return Ok(Advance::Suspends);
                             }
                         }
                     }
                 }
             }
+        };
+        if outcome.is_ok() {
+            debug_assert!(
+                self.stack.len() - 1 > owner
+                    || self.stack.get(owner).is_none_or(|f| f.pending.is_none()),
+                "a frame with a pending call is never stepped"
+            );
         }
+        outcome
     }
 
     /// Make `callee`'s call where no loading is needed.

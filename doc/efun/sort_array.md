@@ -11,7 +11,8 @@ With a function, `compare(a, b)` is called for pairs of items and must
 return an int: negative to put `a` before `b`, positive to put `a` after
 `b`, zero for either order. A non-int result is an error, and an error the
 function throws is `sort_array`'s caller's. The function runs as a call
-from the object calling `sort_array`.
+from the object calling `sort_array`, on that task's own call stack, so
+nesting is bounded by the call stack rather than the task chain.
 
 With an int, the items are sorted in their natural order: ints and floats
 by value, together, and strings by content. A `direction` of `-1` sorts

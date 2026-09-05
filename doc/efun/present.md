@@ -11,7 +11,9 @@ inventory, in that order; with `env`, only `env`'s inventory. A trailing
 number picks a later match, counted across both places: `"sword 2"` is the
 second object answering `id("sword")`. An object that defines no `id()`
 never matches. Each `id()` runs as a call from the calling object, so
-`previous_object()` inside it is that object.
+`previous_object()` inside it is that object. It runs on the calling
+task's own call stack, so nesting is bounded by the call stack rather than
+the task chain.
 
 With an object, return `ob` when it is in the calling object's inventory or
 in its environment's inventory; with `env`, when it is in `env`'s inventory.

@@ -196,14 +196,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.stack.push(frame)
     }
 
-    /// The by-reference parameter no pointer call can satisfy, as the error.
-    pub(super) fn refuse_ref_params(
-        &self,
-        efun: Efun,
-        args: &[LpcRef],
-    ) -> lpc_rs_errors::Result<()> {
+    /// The by-reference parameter no pointer call can satisfy, as the error;
+    /// the same rule `FunctionPtr::prepare_call` applies to a loaded callee.
+    pub(super) fn refuse_ref_params(&self, efun: Efun) -> lpc_rs_errors::Result<()> {
         let prototype = efun.prototype();
-        match (0..args.len()).find(|&i| prototype.is_ref_param(i)) {
+        match prototype.first_ref_param() {
             Some(i) => Err(self.runtime_error(format!(
                 "argument {} of `{}` must be passed by reference",
                 i + 1,
@@ -222,8 +219,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         owner: Arc<Process>,
         origin: Option<Arc<LpcPath>>,
     ) -> lpc_rs_errors::Result<()> {
-        self.refuse_ref_params(efun, &args)?;
-
         let mut ctx = EfunContext::fired(&mut self.stack, &self.context, efun, args, owner, origin);
         let result = call_efun(efun, &mut ctx).await;
 
@@ -244,7 +239,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         owner: Arc<Process>,
         origin: Option<Arc<LpcPath>>,
     ) -> lpc_rs_errors::Result<Advance> {
-        self.refuse_ref_params(efun, &args)?;
         let mut ctx = EfunContext::fired(&mut self.stack, &self.context, efun, args, owner, origin);
         let result = match call_efun_sync(efun, &mut ctx) {
             Some(result) => result,

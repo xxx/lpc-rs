@@ -20,11 +20,17 @@ pub(crate) enum Items {
 }
 
 impl Items {
+    /// The elements still to visit.
     pub(crate) fn len(&self) -> usize {
         match self {
             Items::Array(items) => items.len(),
             Items::Mapping(entries) => entries.len(),
         }
+    }
+
+    /// Whether every element has been visited.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 

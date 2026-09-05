@@ -280,13 +280,22 @@ mod tests {
 
     #[tokio::test]
     async fn a_comparator_answering_a_non_int_fails_at_the_call_site() {
+        let vm = Vm::new(test_config());
         let code = r#"mixed create() { return sort_array(({ 2, 1 }), (: "x" :)); }"#;
-        let err = try_run_prog(code).await.unwrap_err();
+        let (mut task, _live) =
+            task_at(&vm, code, |at| matches!(at, Instruction::CallEfun(..))).await;
+        task.run_slice(&mut 1).unwrap();
+        let site = task.stack.get(0).unwrap().current_debug_span();
+
+        let Err(err) = task.run_slice(&mut 1000) else {
+            panic!("the comparator's answer is refused");
+        };
+
         assert_eq!(
             err.to_string(),
             "runtime error: sort_array: the comparator returned string, not an int"
         );
-        assert!(err.span().is_some());
+        assert_eq!(err.span(), site);
     }
 
     #[tokio::test]

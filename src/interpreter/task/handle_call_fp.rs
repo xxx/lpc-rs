@@ -140,7 +140,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     return Ok(Called::Suspends);
                 }
                 let args = ptr.bound_args(&self.passed_values(passed)?);
-                self.refuse_ref_params(efun, &args)?;
+                self.refuse_ref_params(efun)?;
                 self.push_entry_frame(owner.clone(), ptr.origin.clone())?;
                 match self.call_fired_efun_now(efun, args, owner, ptr.origin.clone())? {
                     Advance::Running => Ok(Called::Framed),
@@ -182,6 +182,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let Some(function) = process.program.lookup_function(name).cloned() else {
                     return Ok(Called::Unresolved);
                 };
+                if let Some(i) = function.prototype.first_ref_param() {
+                    return Err(LpcError::runtime(format!(
+                        "`{}` takes argument {} by reference; call it directly",
+                        function.name(),
+                        i + 1
+                    )));
+                }
                 let prototype = &function.prototype;
                 for (i, arg) in args.iter().enumerate() {
                     check_arg_type(
@@ -339,7 +346,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         if function.prototype.is_efun() {
             let efun = self.efun_of(&function)?;
-            self.refuse_ref_params(efun, &args)?;
+            self.refuse_ref_params(efun)?;
             self.push_entry_frame(process.clone(), ptr.origin.clone())?;
             self.call_fired_efun(efun, args, process, ptr.origin.clone())
                 .await?;

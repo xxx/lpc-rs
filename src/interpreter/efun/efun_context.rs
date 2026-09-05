@@ -190,13 +190,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// The frame whose code called this efun: the calling frame, or the one
     /// below it when the efun runs in an entry frame; none for a task entry.
     fn caller_frame(&self) -> Option<&CallFrame> {
-        let top = self.stack.len().checked_sub(1)?;
-        let frame = self.stack.get(top)?;
-        if frame.is_entry() {
-            self.stack.get(top.checked_sub(1)?)
-        } else {
-            Some(frame)
-        }
+        self.caller_index().and_then(|index| self.stack.get(index))
     }
 
     /// The index of `caller_frame`.
