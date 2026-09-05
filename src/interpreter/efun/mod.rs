@@ -27,6 +27,7 @@ pub(crate) mod file_access;
 pub(crate) mod file_name;
 pub(crate) mod file_size;
 pub(crate) mod filter;
+pub(crate) mod filter_map;
 pub(crate) mod find_object;
 pub(crate) mod function_exists;
 pub(crate) mod get_dir;
@@ -798,6 +799,11 @@ efuns! {
         arity: (1, 0, ellipsis),
         args: [LpcType::String(false)],
     },
+    filter_map => {
+        returns: LpcType::Mixed(false),
+        arity: (2, 0, ellipsis),
+        args: [LpcType::Mixed(true) | LpcType::Mapping(false), LpcType::Function(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1073,6 +1079,7 @@ mod tests {
                 "sort_array",
                 "present",
                 "sprintf",
+                "filter_map",
             ]
         );
     }
