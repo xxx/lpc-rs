@@ -705,6 +705,35 @@ mod tests {
                 .expect("does not inherit itself");
         }
 
+        /// The driver's own inherit of the auto file is exempt from the
+        /// file's `no_inherit`; an explicit `inherit` of it is not.
+        #[tokio::test]
+        async fn the_auto_inherit_file_may_forbid_explicit_inherits() {
+            let config: Arc<Config> = ConfigBuilder::default()
+                .lib_dir("tests/fixtures/code")
+                .auto_inherit_file("/std/auto_no_inherit.c")
+                .build()
+                .unwrap()
+                .into();
+            let compiler = CompilerBuilder::default().config(config).build().unwrap();
+
+            let prog = compiler
+                .compile_string("implicit.c", "int f() { return from_auto(); }")
+                .await
+                .expect("the implicit inherit is allowed")
+                .program;
+            assert!(prog.functions.iter().any(|(_, f)| f.name() == "from_auto"));
+
+            let err = compiler
+                .compile_string("explicit.c", "inherit \"/std/auto_no_inherit\";")
+                .await
+                .expect_err("naming the auto file in an inherit is refused");
+            assert_eq!(
+                err.message(),
+                "`pragma #no_inherit` is set on /std/auto_no_inherit.c"
+            );
+        }
+
         #[tokio::test]
         async fn skips_auto_inherit_if_not_specified() {
             let config: Arc<Config> = ConfigBuilder::default()

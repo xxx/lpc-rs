@@ -132,35 +132,39 @@ impl TreeWalker for InheritanceWalker {
                     node.path
                 )
             })?;
-        if let Some(gate) = &self.context.gate {
-            let configured = self
+        // Any inherit naming the configured auto path, explicit or not, is
+        // exempt from the loading gate.
+        let configured = self
+            .context
+            .config
+            .auto_inherit_file
+            .map(|auto| {
+                LpcPath::new_in_game(auto.as_str(), "/", lib_dir).source_file()
+                    == full_path.source_file()
+            })
+            .unwrap_or(false);
+        // Only the driver's injected inherit (`Compiler::compile_string`) carries no span.
+        let driver_injected = configured && node.span.is_none();
+        if let Some(gate) = &self.context.gate
+            && !configured
+        {
+            let parent = full_path
+                .source_file()
+                .as_in_game(lib_dir)
+                .display()
+                .to_string();
+            let child = self
                 .context
-                .config
-                .auto_inherit_file
-                .map(|auto| {
-                    LpcPath::new_in_game(auto.as_str(), "/", lib_dir).source_file()
-                        == full_path.source_file()
-                })
-                .unwrap_or(false);
-            if !configured {
-                let parent = full_path
-                    .source_file()
-                    .as_in_game(lib_dir)
-                    .display()
-                    .to_string();
-                let child = self
-                    .context
-                    .filename
-                    .as_in_game(lib_dir)
-                    .display()
-                    .to_string();
-                if !gate.inherit(&parent, &child).await? {
-                    return Err(lpc_error!(
-                        node.span,
-                        "inherit \"{}\": permission denied",
-                        parent
-                    ));
-                }
+                .filename
+                .as_in_game(lib_dir)
+                .display()
+                .to_string();
+            if !gate.inherit(&parent, &child).await? {
+                return Err(lpc_error!(
+                    node.span,
+                    "inherit \"{}\": permission denied",
+                    parent
+                ));
             }
         }
 
@@ -182,7 +186,7 @@ impl TreeWalker for InheritanceWalker {
                         .filter(|w| held.iter().all(|r| r.filename != w.filename)),
                 );
 
-                if program.pragmas.no_inherit() {
+                if program.pragmas.no_inherit() && !driver_injected {
                     return Err(lpc_error!(
                         node.span,
                         "`pragma #no_inherit` is set on {}",

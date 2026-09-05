@@ -4,10 +4,12 @@ use define::{Define, ObjectMacro};
 use lpc_rs_core::{
     LpcIntInner,
     lpc_path::LpcPath,
-    pragma_flags::{NO_CLONE, NO_INHERIT, NO_SHADOW, RESIDENT, STRICT_TYPES},
+    pragma_flags::{
+        NO_CLONE, NO_INCLUDE, NO_INHERIT, NO_SHADOW, RESIDENT, SAVE_BINARY, STRICT_TYPES,
+    },
 };
 use lpc_rs_errors::{
-    LpcError, Result, lpc_error,
+    LpcError, Result, lpc_error, lpc_warning,
     source_map::FileId,
     span::{HasSpan, Span},
 };
@@ -291,7 +293,12 @@ impl Preprocessor {
             }
         }
 
-        match directive::parse(&token.1, token.0)? {
+        let (directive, warnings) = directive::parse(&token.1, token.0)?;
+        for warning in warnings {
+            self.context.diagnostics.record(warning);
+        }
+
+        match directive {
             Directive::Include { path, sys } => {
                 let source = if sys {
                     IncludeSource::System { path: &path }
@@ -356,12 +363,6 @@ impl Preprocessor {
         body: String,
         body_span: Span,
     ) -> Result<()> {
-        if self.defines.contains_key(&name) {
-            return Err(
-                LpcError::new(format!("duplicate `#define`: `{name}`")).with_span(Some(span))
-            );
-        }
-
         // Lex the body in place — tokens are born with their true
         // definition-site spans. A directive line inside a
         // body has no legal reading (LPC has no `#` operator).
@@ -391,6 +392,14 @@ impl Preprocessor {
             Define::new_object(tokens, expr)
         };
 
+        if let Some(existing) = self.defines.get(&name) {
+            if existing.same_as(&define) {
+                return Ok(());
+            }
+            return Err(
+                LpcError::new(format!("duplicate `#define`: `{name}`")).with_span(Some(span))
+            );
+        }
         self.defines.insert(name, define);
         Ok(())
     }
@@ -662,6 +671,11 @@ impl Preprocessor {
                 NO_SHADOW => self.context.pragmas.set_no_shadow(true),
                 RESIDENT => self.context.pragmas.set_resident(true),
                 STRICT_TYPES => self.context.pragmas.set_strict_types(true),
+                SAVE_BINARY | NO_INCLUDE => self.context.diagnostics.record(lpc_warning!(
+                    Some(span),
+                    "pragma `{}` has no effect in lpc-rs",
+                    arg
+                )),
                 x => {
                     return Err(lpc_error!(Some(span), "unknown pragma `{}`", x));
                 }
@@ -746,6 +760,23 @@ mod tests {
                 panic!("{e:?}")
             }
         }
+    }
+
+    /// Scan `input` and return its warnings' messages, in order.
+    async fn warnings_of(input: &str) -> Vec<String> {
+        let mut preprocessor = fixture();
+        preprocessor
+            .scan("/test.c", input)
+            .await
+            .expect("scans clean");
+        preprocessor
+            .context
+            .diagnostics
+            .errors()
+            .iter()
+            .filter(|e| e.is_warning())
+            .map(|e| e.message().to_string())
+            .collect()
     }
 
     // `expected` is converted to a Regex, for easier matching on errors.
@@ -1167,6 +1198,61 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn an_identical_redefinition_is_silent() {
+            // A header reached twice through two includes redefines every
+            // macro it holds, identically.
+            let input = indoc! { r#"
+                #define PATH "/d/Standard/login/"
+                #define PATH "/d/Standard/login/"
+                #define ADD(a, b) a + b
+                #define ADD(a, b) a + b
+                string p = PATH;
+                int s = ADD(1, 2);
+            "# };
+            test_valid(
+                input,
+                &[
+                    "string",
+                    "p",
+                    "=",
+                    "/d/Standard/login/",
+                    ";",
+                    "int",
+                    "s",
+                    "=",
+                    "1",
+                    "+",
+                    "2",
+                    ";",
+                ],
+            )
+            .await;
+            assert!(warnings_of(input).await.is_empty());
+        }
+
+        #[tokio::test]
+        async fn a_redefinition_that_differs_errors() {
+            test_invalid(
+                "#define ADD(a, b) a + b\n#define ADD(a, c) a + c\n",
+                "duplicate `#define`: `ADD`",
+            )
+            .await;
+            test_invalid(
+                "#define ADD(a, b) a + b\n#define ADD(a, b) a - b\n",
+                "duplicate `#define`: `ADD`",
+            )
+            .await;
+            test_invalid("#define X 1\n#define X(a) 1\n", "duplicate `#define`: `X`").await;
+            test_invalid("#define X\n#define X 1\n", "duplicate `#define`: `X`").await;
+            test_invalid("#define X 5\n#define X \"5\"\n", "duplicate `#define`: `X`").await;
+            test_invalid(
+                "#define X FOO\n#define X \"FOO\"\n",
+                "duplicate `#define`: `X`",
+            )
+            .await;
+        }
+
+        #[tokio::test]
         async fn test_duplicate_ifdefed_out() {
             let input = indoc! { r#"
                 #define HELLO 123
@@ -1529,7 +1615,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn test_error_if_invalid() {
+        async fn trailing_tokens_after_else_warn() {
             let prog = indoc! { r#"
                 #ifdef ASD
                 #else 1 + 4
@@ -1537,18 +1623,16 @@ mod tests {
             "#
             };
 
-            test_invalid(prog, "unexpected tokens after `#else`").await;
+            test_valid(prog, &[]).await;
+            assert_eq!(warnings_of(prog).await, ["extra tokens after `#else`"]);
         }
 
         #[tokio::test]
-        async fn a_trailing_endif_operand_is_an_error() {
-            // Silently accepted before the directive grammar: the `#endif`
-            // re-check regex was commented out.
-            test_invalid(
-                "#ifdef FOO\n#endif garbage\n",
-                "unexpected tokens after `#endif`",
-            )
-            .await;
+        async fn a_trailing_endif_operand_warns() {
+            // The closing `#endif` is always parsed, dead region or not.
+            let prog = "#ifdef FOO\n#endif garbage\n";
+            test_valid(prog, &[]).await;
+            assert_eq!(warnings_of(prog).await, ["extra tokens after `#endif`"]);
         }
 
         #[tokio::test]
@@ -1562,6 +1646,42 @@ mod tests {
                 #endif
             "# };
             test_valid(prog, &["live"]).await;
+        }
+    }
+
+    mod test_trailing_tokens {
+        use super::*;
+
+        #[tokio::test]
+        async fn undef_else_and_endif_apply_and_warn() {
+            let prog = indoc! { r#"
+                #define FOO 1
+                #undef FOO junk
+                #ifdef FOO
+                int no;
+                #else FOO
+                int yes;
+                #endif FOO
+            "# };
+            test_valid(prog, &["int", "yes", ";"]).await;
+            assert_eq!(
+                warnings_of(prog).await,
+                [
+                    "extra tokens after `#undef`",
+                    "extra tokens after `#else`",
+                    "extra tokens after `#endif`",
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_dead_region_never_warns() {
+            let prog = indoc! { r#"
+                #if 0
+                #undef FOO junk
+                #endif FOO
+            "# };
+            assert_eq!(warnings_of(prog).await, ["extra tokens after `#endif`"]);
         }
     }
 
@@ -2442,6 +2562,103 @@ mod tests {
                 "unknown pragma `not_a_pragma`",
             )
             .await;
+        }
+
+        #[tokio::test]
+        async fn cd_pragmas_are_accepted_and_warned_about() {
+            let prog = indoc! { r##"
+                #pragma save_binary
+                #pragma no_include, strict_types
+                int x;
+            "## };
+            test_valid(prog, &["int", "x", ";"]).await;
+            assert_eq!(
+                warnings_of(prog).await,
+                [
+                    "pragma `save_binary` has no effect in lpc-rs",
+                    "pragma `no_include` has no effect in lpc-rs",
+                ]
+            );
+            let mut preprocessor = fixture();
+            preprocessor.scan("/test.c", prog).await.unwrap();
+            assert!(preprocessor.context.pragmas.strict_types());
+        }
+
+        #[tokio::test]
+        async fn an_unknown_pragma_is_still_an_error() {
+            test_invalid("#pragma frobnicate\n", "unknown pragma `frobnicate`").await;
+        }
+    }
+
+    mod test_line_continuation {
+        use super::*;
+
+        #[tokio::test]
+        async fn an_object_macro_body_continues() {
+            let prog = indoc! { r#"
+                #define SUM 1 + \
+                    2
+                int x = SUM;
+            "# };
+            test_valid(prog, &["int", "x", "=", "1", "+", "2", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn a_function_macro_continues_in_its_parameters_and_body() {
+            let prog = indoc! { r#"
+                #define ADD(a, \
+                            b) (a + \
+                                b)
+                int x = ADD(1, 2);
+            "# };
+            test_valid(prog, &["int", "x", "=", "(", "1", "+", "2", ")", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn an_if_expression_continues() {
+            let prog = indoc! { r#"
+                #if 1 + \
+                    1 == 2
+                int yes;
+                #else
+                int no;
+                #endif
+            "# };
+            test_valid(prog, &["int", "yes", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn code_continues_too() {
+            let prog = "int x = 1 + \\\n    2;\n";
+            test_valid(prog, &["int", "x", "=", "1", "+", "2", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn a_continued_macro_s_body_tokens_are_born_at_their_true_positions() {
+            // Expansion respans every body token to the use site
+            // (`Expansion::substitute`), so a continued definition's
+            // per-token spans are only observable in the stored `Define`.
+            let prog = indoc! { r#"
+                #define TWO 1 + \
+                    1
+                int x = TWO;
+            "# };
+            let mut preprocessor = fixture();
+            preprocessor.scan("/test.c", prog).await.unwrap();
+            let Define::Object(o) = &preprocessor.defines["TWO"] else {
+                panic!("expected an object macro");
+            };
+            let ones: Vec<Span> = o
+                .tokens
+                .iter()
+                .filter(|t| t.to_string() == "1")
+                .map(|t| t.span())
+                .collect();
+            assert_eq!(ones.len(), 2);
+            assert!(
+                ones[1].l() > ones[0].l() + 4,
+                "the second `1` is on the continued line"
+            );
         }
     }
 

@@ -75,21 +75,28 @@ impl Iterator for LexWrapper<'_> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let token = self.lexer.next()?;
+        loop {
+            let token = self.lexer.next()?;
 
-        match token {
-            Ok(t) => Some(Ok(t)),
-            Err(_) => {
-                let span = self.lexer.span();
-                let base = self.lexer.extras.base_offset;
-                Some(Err(lpc_error!(
-                    Some(Span::new(
-                        self.lexer.extras.current_file_id,
-                        base + span.start..base + span.end,
-                    )),
-                    "Lex Error: Invalid Token `{}`",
-                    self.lexer.slice(),
-                )))
+            match token {
+                Ok(t) => return Some(Ok(t)),
+                Err(_) => {
+                    // A lone backslash with nothing left in the input is an
+                    // empty splice, not an error.
+                    if self.lexer.slice() == "\\" && self.lexer.remainder().is_empty() {
+                        continue;
+                    }
+                    let span = self.lexer.span();
+                    let base = self.lexer.extras.base_offset;
+                    return Some(Err(lpc_error!(
+                        Some(Span::new(
+                            self.lexer.extras.current_file_id,
+                            base + span.start..base + span.end,
+                        )),
+                        "Lex Error: Invalid Token `{}`",
+                        self.lexer.slice(),
+                    )));
+                }
             }
         }
     }
@@ -126,6 +133,9 @@ impl Iterator for TokenTriples<'_> {
 // Strip whitespace and comments
 #[logos(skip r"[ \t\f\v]+|//[^\n\r]*?[\n\r]*|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/")]
 #[logos(skip r"\n")]
+// A backslash-newline pair is a line splice (C99 5.1.1.2): whitespace
+// between tokens, never part of one.
+#[logos(skip r"\\\r?\n")]
 pub enum Token {
     #[token("+", track_slice)]
     Plus(Span),
@@ -369,11 +379,11 @@ pub enum Token {
     #[regex(r"\$[1-9]\d*", string_token, priority = 2)]
     ClosureArgVar(StringToken),
 
-    // A `#` grabs the whole line: one token, and the directive grammar
-    // (`preprocessor::directive`) owns everything after the `#`. Whether
-    // it is actually a directive is positional — the scan loop judges
-    // placement — mid-line and dead it is plain text.
-    #[regex("#[^\n]*\n?", string_token, allow_greedy = true)]
+    // A `#` grabs the whole logical line: one token, and the directive
+    // grammar (`preprocessor::directive`) owns everything after the `#`.
+    // Whether it is actually a directive is positional — the scan loop
+    // judges placement — mid-line and dead it is plain text.
+    #[regex(r"#(?:[^\\\n]|\\\r?\n|\\)*\n?", string_token, allow_greedy = true)]
     DirectiveLine(StringToken),
 }
 
@@ -383,8 +393,8 @@ fn track_slice(lex: &mut Lexer<Token>) -> Span {
     let span = lex.span();
     let base = lex.extras.base_offset;
 
-    // A trailing newline never belongs in a caret; only `DirectiveLine`'s
-    // grab can consume one, and its regex admits exactly one.
+    // Exactly one trailing newline is trimmed here, so a directive grab's
+    // last newline is always left as gap for the placement check.
     let end = span.end - usize::from(slice.ends_with('\n'));
 
     lex.extras.last_slice = slice.to_string();
@@ -740,12 +750,66 @@ mod tests {
     }
 
     #[test]
+    fn a_backslash_newline_inside_a_string_literal_is_not_spliced() {
+        let vec = lex_vec("\"a\\\nb\"");
+        assert_eq!(vec.len(), 1, "the pair stays in the string, not skipped");
+        let Ok(Token::StringLiteral(st)) = &vec[0] else {
+            panic!("expected a string literal");
+        };
+        assert_eq!(st.0, Span::new(0, 0..6));
+    }
+
+    #[test]
     fn a_directive_line_span_excludes_its_trailing_newline() {
         let vec = lex_vec("#define FOO 1\n");
         let Ok(Token::DirectiveLine(st)) = &vec[0] else {
             panic!("expected a directive line");
         };
         assert_eq!(st.0, Span::new(0, 0..13));
+    }
+
+    #[test]
+    fn a_backslash_newline_is_whitespace() {
+        let spelled: Vec<String> = lex_vec("x \\\n+ \\\r\ny")
+            .into_iter()
+            .map(|t| t.unwrap().to_string())
+            .collect();
+        assert_eq!(spelled, ["x", "+", "y"]);
+    }
+
+    #[test]
+    fn a_lone_backslash_at_end_of_input_is_an_empty_splice() {
+        // A splice with nothing after it is still a splice, not an error
+        // (C's reading; GCC warns).
+        let spelled: Vec<String> = lex_vec("x \\")
+            .into_iter()
+            .map(|t| t.unwrap().to_string())
+            .collect();
+        assert_eq!(spelled, ["x"]);
+        assert!(lex_vec("x \\ y").into_iter().any(|t| t.is_err()));
+    }
+
+    #[test]
+    fn a_directive_line_continues_past_a_backslash_newline() {
+        let vec = lex_vec("#define FOO 1 + \\\n  2\nint");
+        assert_eq!(vec.len(), 2, "one directive line, then `int`");
+        let Ok(Token::DirectiveLine(st)) = &vec[0] else {
+            panic!("expected a directive line");
+        };
+        assert_eq!(st.1, "#define FOO 1 + \\\n  2\n");
+        // The span still trims only the final newline.
+        assert_eq!(st.0, Span::new(0, 0..21));
+        assert_eq!(vec[1].as_ref().unwrap().to_string(), "int");
+    }
+
+    #[test]
+    fn a_backslash_before_other_text_does_not_continue_a_directive() {
+        let vec = lex_vec("#define S \"a\\n\"\nint");
+        assert_eq!(vec.len(), 2);
+        let Ok(Token::DirectiveLine(st)) = &vec[0] else {
+            panic!("expected a directive line");
+        };
+        assert_eq!(st.1, "#define S \"a\\n\"\n");
     }
 
     #[test]
