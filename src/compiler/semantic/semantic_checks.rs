@@ -264,8 +264,12 @@ pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationCont
             _ => Err(create_error("`int`, or `float`")),
         },
         UnaryOperation::Bang => Ok(()),
-        UnaryOperation::Inc | UnaryOperation::Dec | UnaryOperation::BitwiseNot => match expr_type {
+        UnaryOperation::Inc | UnaryOperation::Dec => match expr_type {
             LpcType::Int(false) => Ok(()),
+            _ => Err(create_error("`int`")),
+        },
+        UnaryOperation::BitwiseNot => match expr_type {
+            LpcType::Int(false) | LpcType::Mixed(false) => Ok(()),
             _ => Err(create_error("`int`")),
         },
     }
