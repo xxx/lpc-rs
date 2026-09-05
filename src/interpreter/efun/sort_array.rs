@@ -226,6 +226,12 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_one_element_array_sorts_with_no_callback() {
+        let code = "int *create() { return sort_array(({ 7 }), (: 1 / 0 :)); }";
+        assert_eq!(strings_of(code).await, ["7"]);
+    }
+
+    #[tokio::test]
     async fn a_non_int_comparator_result_is_an_error() {
         let code = r#"mixed create() { return sort_array(({ 1, 2 }), (: "x" :)); }"#;
         let err = try_run_prog(code).await.unwrap_err().to_string();

@@ -194,4 +194,10 @@ mod tests {
         "#;
         assert_eq!(strings_of(code).await, ["1", "3"]);
     }
+
+    #[tokio::test]
+    async fn filter_of_an_empty_array_needs_no_callback() {
+        let code = "int create() { return sizeof(filter(({ }), (: 1 / 0 :))); }";
+        assert_eq!(run_prog(code).await.result(), Some(LpcRef::from(0)));
+    }
 }
