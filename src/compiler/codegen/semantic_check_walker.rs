@@ -904,6 +904,26 @@ mod tests {
             .into_context())
     }
 
+    /// The messages a snippet earns, warnings aside. A checker `fail` stops
+    /// the walk outright, so its diagnostics arrive via `Err` rather than the
+    /// context.
+    async fn messages(code: &str) -> Vec<String> {
+        match walk_code(code).await {
+            Ok(context) => context
+                .diagnostics
+                .errors()
+                .iter()
+                .filter(|e| !e.is_warning())
+                .map(ToString::to_string)
+                .collect(),
+            Err(e) => std::iter::once(e.clone())
+                .chain(e.additional_errors().iter().cloned())
+                .filter(|e| !e.is_warning())
+                .map(|e| e.to_string())
+                .collect(),
+        }
+    }
+
     mod test_visit_assignment {
         use super::*;
         use crate::compiler::ast::binary_op_node::BinaryOperation;
@@ -3323,18 +3343,6 @@ mod tests {
     mod test_expression_type {
         use super::*;
 
-        /// The messages a snippet earns, warnings aside.
-        async fn messages(code: &str) -> Vec<String> {
-            let context = walk_code(code).await.expect("failed to parse?");
-            context
-                .diagnostics
-                .errors()
-                .iter()
-                .filter(|e| !e.is_warning())
-                .map(ToString::to_string)
-                .collect()
-        }
-
         #[tokio::test]
         async fn a_mixed_right_operand_absorbs() {
             let code = r#"
@@ -3513,6 +3521,64 @@ mod tests {
             assert_eq!(
                 messages(code).await,
                 vec!["mismatched types: `i` (int) = `1 + x` (string)".to_string()]
+            );
+        }
+    }
+
+    /// `mixed` is taken in every operand and index position; the runtime
+    /// checks the value.
+    mod mixed_operands {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_unary_operator_takes_mixed() {
+            let code = r#"
+                mixed m = 1;
+                mixed a; mixed b; mixed c; mixed d; mixed e;
+                void create() {
+                    a = -m;
+                    b = m++;
+                    c = ++m;
+                    d = m--;
+                    e = --m;
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn an_element_and_a_positional_argument_take_a_step() {
+            let code = r#"
+                mapping counts = ([ "a": 1 ]);
+                mixed *list = ({ 1 });
+                function f;
+                void create() {
+                    counts["a"]++;
+                    list[0]--;
+                    f = (: $1++ :);
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_mixed_array_is_not_negated() {
+            let code = r#"
+                mixed *ma = ({ 1 });
+                mixed a;
+                void create() { a = -ma; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["Invalid Type: `-` `ma` (mixed *). Expected `int`, or `float`".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_mixed_array_is_not_stepped() {
+            let code = r#"
+                mixed *ma = ({ 1 });
+                void create() { ma++; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["Invalid Type: `++` `ma` (mixed *). Expected `int`".to_string()]
             );
         }
     }

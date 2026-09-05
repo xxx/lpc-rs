@@ -2406,6 +2406,27 @@ mod test_instructions {
 
             check_committed_globals(code, &[("j", BareVal::Int(4)), ("k", BareVal::Int(5))]).await;
         }
+
+        #[tokio::test]
+        async fn steps_a_mixed_holding_an_int() {
+            let code = indoc! { r##"
+                    mixed m = 4;
+                    mixed k = m--;
+                    mixed n = 4;
+                    mixed j = --n;
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("m", BareVal::Int(3)),
+                    ("k", BareVal::Int(4)),
+                    ("n", BareVal::Int(3)),
+                    ("j", BareVal::Int(3)),
+                ],
+            )
+            .await;
+        }
     }
 
     mod test_eq_eq {
@@ -3184,6 +3205,40 @@ mod test_instructions {
                 "##};
 
             check_committed_globals(code, &[("j", BareVal::Int(6)), ("k", BareVal::Int(5))]).await;
+        }
+
+        #[tokio::test]
+        async fn steps_a_mixed_holding_an_int() {
+            let code = indoc! { r##"
+                    mixed m = 4;
+                    mixed k = m++;
+                    mixed n = 4;
+                    mixed j = ++n;
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("m", BareVal::Int(5)),
+                    ("k", BareVal::Int(4)),
+                    ("n", BareVal::Int(5)),
+                    ("j", BareVal::Int(5)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn errors_on_a_mixed_holding_a_string() {
+            let code = indoc! { r##"
+                    mixed m = "x";
+                    void create() { m++; }
+                "##};
+
+            let error = try_run_prog(code)
+                .await
+                .expect_err("++ on a string must error");
+            assert_eq!(error.to_string(), "runtime error: invalid increment");
         }
     }
 

@@ -260,12 +260,12 @@ pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationCont
 
     match node.op {
         UnaryOperation::Negate => match expr_type {
-            LpcType::Int(false) | LpcType::Float(false) => Ok(()),
+            LpcType::Int(false) | LpcType::Float(false) | LpcType::Mixed(false) => Ok(()),
             _ => Err(create_error("`int`, or `float`")),
         },
         UnaryOperation::Bang => Ok(()),
         UnaryOperation::Inc | UnaryOperation::Dec => match expr_type {
-            LpcType::Int(false) => Ok(()),
+            LpcType::Int(false) | LpcType::Mixed(false) => Ok(()),
             _ => Err(create_error("`int`")),
         },
         UnaryOperation::BitwiseNot => match expr_type {
@@ -1742,6 +1742,16 @@ mod tests {
                 type_: LpcType::Mapping(false),
                 ..Default::default()
             };
+            let mixed1 = Symbol {
+                name: "mixed1".to_string(),
+                type_: LpcType::Mixed(false),
+                ..Default::default()
+            };
+            let mixed_array1 = Symbol {
+                name: "mixed_array1".to_string(),
+                type_: LpcType::Mixed(true),
+                ..Default::default()
+            };
 
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
@@ -1751,6 +1761,8 @@ mod tests {
             scope.insert(array1);
             scope.insert(float1);
             scope.insert(mapping1);
+            scope.insert(mixed1);
+            scope.insert(mixed_array1);
 
             CompilationContext {
                 scopes: scope_tree,
@@ -1812,6 +1824,18 @@ mod tests {
             to_result(op, ExpressionNode::from(VarNode::new("mapping1")), context)
         }
 
+        fn mixed_var(op: UnaryOperation, context: &CompilationContext) -> Result<()> {
+            to_result(op, ExpressionNode::from(VarNode::new("mixed1")), context)
+        }
+
+        fn mixed_array_var(op: UnaryOperation, context: &CompilationContext) -> Result<()> {
+            to_result(
+                op,
+                ExpressionNode::from(VarNode::new("mixed_array1")),
+                context,
+            )
+        }
+
         #[test]
         fn test_negate() {
             let context = setup();
@@ -1826,6 +1850,8 @@ mod tests {
             assert!(array_var(UnaryOperation::Negate, &context).is_err());
             assert!(mapping_literal(UnaryOperation::Negate, &context).is_err());
             assert!(mapping_var(UnaryOperation::Negate, &context).is_err());
+            assert!(mixed_var(UnaryOperation::Negate, &context).is_ok());
+            assert!(mixed_array_var(UnaryOperation::Negate, &context).is_err());
         }
 
         #[test]
@@ -1842,6 +1868,8 @@ mod tests {
             assert!(array_var(UnaryOperation::Inc, &context).is_err());
             assert!(mapping_literal(UnaryOperation::Inc, &context).is_err());
             assert!(mapping_var(UnaryOperation::Inc, &context).is_err());
+            assert!(mixed_var(UnaryOperation::Inc, &context).is_ok());
+            assert!(mixed_array_var(UnaryOperation::Inc, &context).is_err());
         }
 
         #[test]
@@ -1858,6 +1886,8 @@ mod tests {
             assert!(array_var(UnaryOperation::Dec, &context).is_err());
             assert!(mapping_literal(UnaryOperation::Dec, &context).is_err());
             assert!(mapping_var(UnaryOperation::Dec, &context).is_err());
+            assert!(mixed_var(UnaryOperation::Dec, &context).is_ok());
+            assert!(mixed_array_var(UnaryOperation::Dec, &context).is_err());
         }
 
         #[test]
@@ -1874,6 +1904,8 @@ mod tests {
             assert!(array_var(UnaryOperation::BitwiseNot, &context).is_err());
             assert!(mapping_literal(UnaryOperation::BitwiseNot, &context).is_err());
             assert!(mapping_var(UnaryOperation::BitwiseNot, &context).is_err());
+            assert!(mixed_var(UnaryOperation::BitwiseNot, &context).is_ok());
+            assert!(mixed_array_var(UnaryOperation::BitwiseNot, &context).is_err());
         }
     }
 
