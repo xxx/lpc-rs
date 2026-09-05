@@ -143,9 +143,7 @@ impl TreeWalker for InheritanceWalker {
                     == full_path.source_file()
             })
             .unwrap_or(false);
-        // Only `Compiler::compile_string`'s own injected inherit carries no
-        // span, so that's what tells it apart from an explicit `inherit` of
-        // the same file for the `no_inherit` exemption below.
+        // Only the driver's injected inherit (`Compiler::compile_string`) carries no span.
         let driver_injected = configured && node.span.is_none();
         if let Some(gate) = &self.context.gate
             && !configured

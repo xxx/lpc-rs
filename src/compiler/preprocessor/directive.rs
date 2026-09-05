@@ -133,8 +133,8 @@ pub enum Directive {
 fn trim_directive_line(line: &str) -> &str {
     let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
     if trimmed.len() == line.len() {
-        // No line terminator was here to splice away, so a trailing
-        // backslash is literal text, not a dangling half of a pair.
+        // Without a line terminator a trailing backslash is literal text,
+        // not a splice remnant.
         return trimmed;
     }
     trimmed.strip_suffix('\\').unwrap_or(trimmed)
@@ -222,8 +222,8 @@ pub fn classify(line: &str) -> DirectiveKind {
 enum Trailing {
     /// C's rule: an error.
     Error,
-    /// CD's headers carry `#endif NAME` and `#undef NAME junk`: the
-    /// directive applies, the text is warned about.
+    /// CD's headers carry `#endif NAME`, `#else NAME` and `#undef NAME
+    /// junk`: the directive applies, the text is warned about.
     Warn,
 }
 
@@ -496,9 +496,7 @@ impl<'a> Cursor<'a> {
         Ok(Directive::Pragma { names })
     }
 
-    /// Parse one directive line — the single grammar. `span` is the
-    /// [`Token::DirectiveLine`]'s span (its `l()` is the `#`'s file offset),
-    /// so every diagnostic points at the offending slice of the line.
+    /// The single grammar behind [`parse`].
     fn parse_directive(&mut self) -> Result<Directive> {
         self.skip_ws()?;
         if self.at_end() {
@@ -999,7 +997,6 @@ mod tests {
         // No newline follows, so the backslash is body text, not a splice.
         let (_, _, body, _) = define_of("#define X \\");
         assert_eq!(body, "\\");
-        // The splice case still works alongside it.
         assert_eq!(p("#endif \\\n").unwrap(), Directive::Endif);
     }
 

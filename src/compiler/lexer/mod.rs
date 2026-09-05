@@ -75,21 +75,28 @@ impl Iterator for LexWrapper<'_> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let token = self.lexer.next()?;
+        loop {
+            let token = self.lexer.next()?;
 
-        match token {
-            Ok(t) => Some(Ok(t)),
-            Err(_) => {
-                let span = self.lexer.span();
-                let base = self.lexer.extras.base_offset;
-                Some(Err(lpc_error!(
-                    Some(Span::new(
-                        self.lexer.extras.current_file_id,
-                        base + span.start..base + span.end,
-                    )),
-                    "Lex Error: Invalid Token `{}`",
-                    self.lexer.slice(),
-                )))
+            match token {
+                Ok(t) => return Some(Ok(t)),
+                Err(_) => {
+                    // A lone backslash with nothing left in the input is an
+                    // empty splice, not an error.
+                    if self.lexer.slice() == "\\" && self.lexer.remainder().is_empty() {
+                        continue;
+                    }
+                    let span = self.lexer.span();
+                    let base = self.lexer.extras.base_offset;
+                    return Some(Err(lpc_error!(
+                        Some(Span::new(
+                            self.lexer.extras.current_file_id,
+                            base + span.start..base + span.end,
+                        )),
+                        "Lex Error: Invalid Token `{}`",
+                        self.lexer.slice(),
+                    )));
+                }
             }
         }
     }
@@ -374,9 +381,8 @@ pub enum Token {
 
     // A `#` grabs the whole logical line: one token, and the directive
     // grammar (`preprocessor::directive`) owns everything after the `#`.
-    // A backslash-newline pair continues the line. Whether it is actually
-    // a directive is positional — the scan loop judges placement —
-    // mid-line and dead it is plain text.
+    // Whether it is actually a directive is positional — the scan loop
+    // judges placement — mid-line and dead it is plain text.
     #[regex(r"#(?:[^\\\n]|\\\r?\n|\\)*\n?", string_token, allow_greedy = true)]
     DirectiveLine(StringToken),
 }
@@ -387,8 +393,8 @@ fn track_slice(lex: &mut Lexer<Token>) -> Span {
     let span = lex.span();
     let base = lex.extras.base_offset;
 
-    // A trailing newline never belongs in a caret; only `DirectiveLine`'s
-    // grab can consume one, and its regex admits exactly one.
+    // Exactly one trailing newline is trimmed here, so a directive grab's
+    // last newline is always left as gap for the placement check.
     let end = span.end - usize::from(slice.ends_with('\n'));
 
     lex.extras.last_slice = slice.to_string();
@@ -769,6 +775,18 @@ mod tests {
             .map(|t| t.unwrap().to_string())
             .collect();
         assert_eq!(spelled, ["x", "+", "y"]);
+    }
+
+    #[test]
+    fn a_lone_backslash_at_end_of_input_is_an_empty_splice() {
+        // A splice with nothing after it is still a splice, not an error
+        // (C's reading; GCC warns).
+        let spelled: Vec<String> = lex_vec("x \\")
+            .into_iter()
+            .map(|t| t.unwrap().to_string())
+            .collect();
+        assert_eq!(spelled, ["x"]);
+        assert!(lex_vec("x \\ y").into_iter().any(|t| t.is_err()));
     }
 
     #[test]

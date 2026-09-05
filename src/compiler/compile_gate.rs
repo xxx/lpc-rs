@@ -205,6 +205,23 @@ mod gate_tests {
     }
 
     #[tokio::test]
+    async fn an_explicit_inherit_of_the_auto_file_skips_the_gate_too() {
+        let root = TempLib::new("gate-auto-explicit");
+        write(&root, "auto.c", "int auto_var;\n");
+        write(&root, "child.c", "inherit \"/auto\";\n");
+        let config: Arc<Config> = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .auto_inherit_file("/auto.c")
+            .build()
+            .unwrap()
+            .into();
+        let (result, gate) = compile_under(config, RecordingGate::denying()).await;
+        let e = result.map(|_| ()).unwrap_err();
+        assert_eq!(e.to_string(), "`/auto.c` is already being inherited from");
+        assert!(gate.inherits().is_empty());
+    }
+
+    #[tokio::test]
     async fn a_denied_inherit_is_a_compile_error_at_the_directive() {
         let root = TempLib::new("gate-inherit-deny");
         write(&root, "parent.c", "int p;\n");
