@@ -39,6 +39,8 @@ pub const CATCH_TELL: &str = "catch_tell";
 pub const COMMAND_NOT_FOUND: &str = "command_not_found";
 /// Master apply: whether the calling object may `exec` (`doc/apply/master/valid_exec.md`).
 pub const VALID_EXEC: &str = "valid_exec";
+/// Master apply: whether the calling code may `shutdown` (`doc/apply/master/valid_shutdown.md`).
+pub const VALID_SHUTDOWN: &str = "valid_shutdown";
 /// Master apply: whether the calling code may read a lib file (`doc/apply/master/valid_read.md`).
 pub const VALID_READ: &str = "valid_read";
 /// Master apply: whether the calling code may write a lib file (`doc/apply/master/valid_write.md`).

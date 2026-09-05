@@ -732,6 +732,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "dns-lookup"
+version = "4.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6120e7e5dcd1c90098e349def389e2797377cdbe6b465ad8fdd115c0c99d5cf2"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "socket2",
+ "windows-sys",
+]
+
+[[package]]
 name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1408,6 +1420,7 @@ dependencies = [
  "decorum",
  "delegate",
  "derive_builder",
+ "dns-lookup",
  "educe",
  "factori",
  "fake",

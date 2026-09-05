@@ -1,7 +1,7 @@
 use std::{
     net::SocketAddr,
     sync::{
-        Arc,
+        Arc, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Instant,
@@ -74,6 +74,9 @@ pub struct Connection {
     /// The address of the client.
     pub address: SocketAddr,
 
+    /// The client's host name, once reverse DNS answers.
+    host_name: OnceLock<String>,
+
     /// The body the loop dispatches lines to.
     process: ArcSwapOption<Process>,
 
@@ -108,6 +111,7 @@ impl Connection {
     pub fn new(address: SocketAddr, connection_tx: UnboundedSender<ConnectionOp>) -> Self {
         Self {
             address,
+            host_name: OnceLock::new(),
             process: ArcSwapOption::from(None),
             tx: connection_tx,
             input_to: ArcSwapOption::from(None),
@@ -118,6 +122,17 @@ impl Connection {
             epoch: Instant::now(),
             last_line: AtomicU64::new(0),
         }
+    }
+
+    /// The client's host name; `None` until reverse DNS answers, or ever
+    /// when it has no name.
+    pub fn host_name(&self) -> Option<&str> {
+        self.host_name.get().map(String::as_str)
+    }
+
+    /// Record the reverse-DNS answer; the first answer stands.
+    pub fn set_host_name(&self, name: String) {
+        let _ = self.host_name.set(name);
     }
 
     /// The body the loop dispatches to; `None` between bindings.

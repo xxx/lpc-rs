@@ -21,8 +21,14 @@ use tokio::{
     sync::mpsc::UnboundedSender,
 };
 
+use tracing::debug;
+
 use crate::{
-    interpreter::{lpc_ref::LpcRef, process::Process, vm::global_state::GlobalState},
+    interpreter::{
+        lpc_ref::LpcRef,
+        process::Process,
+        vm::{global_state::GlobalState, vm_op::VmOp},
+    },
     telnet::{connection::Connection, ops::ConnectionOp},
 };
 
@@ -131,6 +137,10 @@ pub(crate) enum Effect {
         contents: String,
     },
 
+    /// `shutdown(code)` committed: the main loop is told to leave with
+    /// `code`.
+    Shutdown { code: i32 },
+
     /// `rm`'s unlink of the file at `server`, once the attempt commits;
     /// `in_game` names it in the log when the unlink fails.
     RemoveFile { in_game: String, server: PathBuf },
@@ -210,6 +220,11 @@ impl Effect {
                         .config
                         .debug_log(format!("write_file: {in_game}: {e}"))
                         .await;
+                }
+            }
+            Self::Shutdown { code } => {
+                if global_state.tx.send(VmOp::Shutdown(code)).await.is_err() {
+                    debug!("shutdown({code}) committed after the main loop left");
                 }
             }
             Self::WriteBytes {
@@ -295,6 +310,7 @@ impl std::fmt::Debug for Effect {
             Self::Disconnect { message, .. } => f.debug_tuple("Disconnect").field(message).finish(),
             Self::AppendFile { in_game, .. } => f.debug_tuple("AppendFile").field(in_game).finish(),
             Self::WriteBytes { in_game, .. } => f.debug_tuple("WriteBytes").field(in_game).finish(),
+            Self::Shutdown { code } => f.debug_tuple("Shutdown").field(code).finish(),
             Self::RemoveFile { in_game, .. } => f.debug_tuple("RemoveFile").field(in_game).finish(),
             Self::CreateDir { in_game, .. } => f.debug_tuple("CreateDir").field(in_game).finish(),
             Self::RemoveDir { in_game, .. } => f.debug_tuple("RemoveDir").field(in_game).finish(),

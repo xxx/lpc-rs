@@ -10,6 +10,9 @@ pub enum VmOp {
 
     /// Run a scheduled [`CallOut`](crate::interpreter::call_outs::CallOut), identified by its ID.
     PrioritizeCallOut(u64),
+
+    /// `shutdown(code)` committed: leave the main loop with this exit code.
+    Shutdown(i32),
 }
 
 impl PartialEq for VmOp {
@@ -17,6 +20,7 @@ impl PartialEq for VmOp {
         match (self, other) {
             (Self::InitiateLogin(a), Self::InitiateLogin(b)) => a.address == b.address,
             (Self::PrioritizeCallOut(a), Self::PrioritizeCallOut(b)) => a == b,
+            (Self::Shutdown(a), Self::Shutdown(b)) => a == b,
             _ => false,
         }
     }
