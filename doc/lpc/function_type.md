@@ -49,6 +49,20 @@ Breaking it down by syntax, functions can take the following forms:
   The object is filled-in when the function is called, with the first argument.
   Subsequent arguments are passed to the function. Partial application can be used.
 
+* `operator(op)` - An operator as a function. `operator(+)` is the function
+  that adds its two arguments exactly as `a + b` would, for every operand
+  type `+` takes; it is the closure `(: $1 + $2 :)`. The operators are
+  `+ - * / % > < >= <= == != & ^ | << >> []`, each taking two arguments,
+  and `! ~`, taking one. Called with fewer arguments the missing ones are
+  `0`, with more the extras are dropped, as for any closure.
+
+* `&operator(op)(arg1,,arg3)` - Partial application of an operator, as for
+  a named function: `&operator(-)(, 1)` subtracts 1 from its argument,
+  `&operator(-)(1)` subtracts its argument from 1, and
+  `&operator(==)(name)` tests its argument against `name`, which is
+  evaluated when the pointer is made. Binding more arguments than the
+  operator takes is a compile error. `operator` is a reserved word.
+
 * `(: function_name() :)` - A closure. Closures are functions that are defined
   inline, and capture any variables they reference from their environment.
   * When called, closures without an explicit `return` will return their last 

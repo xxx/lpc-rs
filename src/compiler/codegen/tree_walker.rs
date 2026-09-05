@@ -28,6 +28,7 @@ use crate::compiler::{
         label_node::LabelNode,
         labeled_statement_node::LabeledStatementNode,
         mapping_node::MappingNode,
+        operator_node::OperatorNode,
         program_node::ProgramNode,
         range_node::RangeNode,
         ref_node::RefNode,
@@ -369,6 +370,21 @@ where
     Ok(())
 }
 
+/// Visit an operator function's bound arguments, then the closure it
+/// stands for.
+pub async fn walk_operator<W>(walker: &mut W, node: &mut OperatorNode) -> Result<()>
+where
+    W: TreeWalker + Send,
+{
+    if let Some(args) = &mut node.arguments {
+        for argument in args.iter_mut().flatten() {
+            argument.visit(walker).await?;
+        }
+    }
+
+    node.closure.visit(walker).await
+}
+
 /// Visit a program's inherits, then its body.
 pub async fn walk_program<W>(walker: &mut W, node: &mut ProgramNode) -> Result<()>
 where
@@ -670,6 +686,14 @@ pub trait TreeWalker {
         Self: Sized,
     {
         walk_mapping(self, node).await
+    }
+
+    /// Visit an operator function
+    async fn visit_operator(&mut self, node: &mut OperatorNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        walk_operator(self, node).await
     }
 
     /// Visit a program node. This is the top-level translation unit.

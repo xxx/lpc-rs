@@ -23,6 +23,7 @@ use crate::{
             function_def_node::{ARGV, FunctionDefNode},
             function_ptr_node::FunctionPtrNode,
             label_node::LabelNode,
+            operator_node::OperatorNode,
             program_node::ProgramNode,
             range_node::RangeNode,
             return_node::ReturnNode,
@@ -36,8 +37,8 @@ use crate::{
         codegen::tree_walker::{
             ContextHolder, Pass, TreeWalker, walk_assignment, walk_binary_op, walk_block,
             walk_cast, walk_closure, walk_do_while, walk_for, walk_foreach, walk_function_def,
-            walk_function_ptr, walk_label, walk_range, walk_return, walk_switch, walk_unary_op,
-            walk_var_init,
+            walk_function_ptr, walk_label, walk_operator, walk_range, walk_return, walk_switch,
+            walk_unary_op, walk_var_init,
         },
         compilation_context::CompilationContext,
         diagnostics::Diagnostics,
@@ -623,6 +624,25 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         walk_label(self, node).await
+    }
+
+    async fn visit_operator(&mut self, node: &mut OperatorNode) -> Result<()> {
+        let arity = node.op.arity();
+        if let Some(args) = &node.arguments
+            && args.len() > arity
+        {
+            let e = lpc_error!(
+                node.span,
+                "`operator({})` takes {} argument{}, found {}",
+                node.op,
+                arity,
+                if arity == 1 { "" } else { "s" },
+                args.len()
+            );
+            self.context.diagnostics.record(e);
+        }
+
+        walk_operator(self, node).await
     }
 
     async fn visit_program(&mut self, node: &mut ProgramNode) -> Result<()> {
@@ -2496,6 +2516,78 @@ mod tests {
             let _ = node.visit(&mut walker).await;
 
             assert!(walker.context.diagnostics.errors().is_empty());
+        }
+    }
+
+    mod test_visit_operator {
+        use super::*;
+
+        fn messages(context: &CompilationContext) -> Vec<String> {
+            context
+                .diagnostics
+                .errors()
+                .iter()
+                .map(ToString::to_string)
+                .collect()
+        }
+
+        #[tokio::test]
+        async fn refuses_more_bound_arguments_than_the_operator_takes() {
+            let code = "function f; void create() { f = &operator(+)(1, 2, 3); }";
+            let context = walk_code(code).await.unwrap();
+
+            assert_eq!(
+                messages(&context),
+                ["`operator(+)` takes 2 arguments, found 3"]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_hole_counts_as_a_bound_argument() {
+            let code = "function f; void create() { f = &operator(!)(, 1); }";
+            let context = walk_code(code).await.unwrap();
+
+            assert_eq!(
+                messages(&context),
+                ["`operator(!)` takes 1 argument, found 2"]
+            );
+        }
+
+        #[tokio::test]
+        async fn accepts_every_slot_bound_or_none() {
+            let code = "function f, g, h, i; void create() { f = &operator(+)(1, 2); g = &operator(!)(0); h = operator([]); i = &operator(-)(); }";
+            let context = walk_code(code).await.unwrap();
+
+            assert!(messages(&context).is_empty(), "{:?}", messages(&context));
+        }
+
+        #[tokio::test]
+        async fn bitwise_not_takes_a_mixed_operand() {
+            let code = "mixed m; int r; void create() { r = ~m; }";
+            let context = walk_code(code).await.unwrap();
+
+            assert!(messages(&context).is_empty(), "{:?}", messages(&context));
+        }
+
+        #[tokio::test]
+        async fn bitwise_not_still_refuses_a_string() {
+            let code = "string s; int r; void create() { r = ~s; }";
+            let err = walk_code(code)
+                .await
+                .expect_err("a string operand is refused");
+
+            assert_eq!(
+                err.to_string(),
+                "Invalid Type: `~` `s` (string). Expected `int`"
+            );
+        }
+
+        #[tokio::test]
+        async fn bitwise_not_takes_a_closure_positional() {
+            let code = "function f; void create() { f = (: ~$1 :); }";
+            let context = walk_code(code).await.unwrap();
+
+            assert!(messages(&context).is_empty(), "{:?}", messages(&context));
         }
     }
 

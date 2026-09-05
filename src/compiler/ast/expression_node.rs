@@ -22,6 +22,7 @@ use crate::compiler::{
         function_ptr_node::FunctionPtrNode,
         int_node::IntNode,
         mapping_node::MappingNode,
+        operator_node::OperatorNode,
         range_node::RangeNode,
         ref_node::RefNode,
         string_node::StringNode,
@@ -53,6 +54,7 @@ pub enum ExpressionNode {
     Ref(RefNode),
     Array(ArrayNode),
     Mapping(MappingNode),
+    Operator(OperatorNode),
 }
 
 macro_rules! delegated_traits {
@@ -107,7 +109,8 @@ delegated_traits!(
     ExpressionNode::Var,
     ExpressionNode::Ref,
     ExpressionNode::Array,
-    ExpressionNode::Mapping
+    ExpressionNode::Mapping,
+    ExpressionNode::Operator
 );
 
 impl From<BinaryOpNode> for ExpressionNode {
@@ -173,6 +176,12 @@ impl From<TernaryNode> for ExpressionNode {
 impl From<FunctionPtrNode> for ExpressionNode {
     fn from(node: FunctionPtrNode) -> Self {
         Self::FunctionPtr(node)
+    }
+}
+
+impl From<OperatorNode> for ExpressionNode {
+    fn from(node: OperatorNode) -> Self {
+        Self::Operator(node)
     }
 }
 

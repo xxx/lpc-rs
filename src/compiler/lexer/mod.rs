@@ -260,6 +260,8 @@ pub enum Token {
     Default(Span),
     #[token("foreach", track_slice)]
     ForEach(Span),
+    #[token("operator", track_slice)]
+    Operator(Span),
     #[token("function", track_slice)]
     Function(Span),
     #[token("private", track_slice)]
@@ -513,6 +515,7 @@ impl HasSpan for Token {
             | Token::Switch(x)
             | Token::Default(x)
             | Token::ForEach(x)
+            | Token::Operator(x)
             | Token::Function(x)
             | Token::Private(x)
             | Token::Public(x)
@@ -608,6 +611,7 @@ impl Token {
             | Token::Switch(x)
             | Token::Default(x)
             | Token::ForEach(x)
+            | Token::Operator(x)
             | Token::Function(x)
             | Token::Private(x)
             | Token::Public(x)
@@ -691,6 +695,7 @@ impl Display for Token {
             Token::Switch(_) => "switch",
             Token::Default(_) => "default",
             Token::ForEach(_) => "foreach",
+            Token::Operator(_) => "operator",
             Token::Function(_) => "function",
             Token::Private(_) => "private",
             Token::Public(_) => "public",
