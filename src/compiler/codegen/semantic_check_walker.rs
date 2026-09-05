@@ -532,6 +532,19 @@ impl TreeWalker for SemanticCheckWalker {
             self.context.diagnostics.record(e);
         }
 
+        // `LoadMappingKey` only runs on a mapping at codegen, so the two-variable form
+        // needs one; a plain string or any array can never provide it.
+        if matches!(node.initializer, ForEachInit::Mapping { .. })
+            && (collection_type.is_array() || collection_type == LpcType::String(false))
+        {
+            let e = lpc_error!(
+                node.collection.span(),
+                "a two-variable `foreach` needs a mapping, found {}",
+                collection_type
+            );
+            self.context.diagnostics.record(e);
+        }
+
         walk_foreach(self, node).await?;
 
         self.prevent_jumps();
@@ -2051,7 +2064,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn allows_strings() {
+        async fn rejects_two_variables_over_a_string() {
             let code = indoc! { r#"
                 void create() {
                     string s = "hello, world!";
@@ -2062,7 +2075,28 @@ mod tests {
             "# };
             let context = walk_code(code).await.expect("failed to parse?");
 
-            assert!(context.diagnostics.errors().is_empty());
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "a two-variable `foreach` needs a mapping, found string"
+            );
+        }
+
+        #[tokio::test]
+        async fn rejects_two_variables_over_an_array() {
+            let code = indoc! { r#"
+                void create() {
+                    int *a = ({ 1, 2, 3 });
+                    foreach(key, value: a) {
+                        dump(key);
+                    }
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "a two-variable `foreach` needs a mapping, found int *"
+            );
         }
 
         #[tokio::test]
@@ -2208,6 +2242,11 @@ mod tests {
             assert_eq!(
                 context.diagnostics.errors()[0].to_string(),
                 "cast from `string` to `int` can never succeed"
+            );
+            assert!(
+                context.diagnostics.errors()[0]
+                    .diagnostic_string()
+                    .contains("to_int")
             );
         }
 

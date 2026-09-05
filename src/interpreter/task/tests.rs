@@ -2156,6 +2156,16 @@ mod test_instructions {
         }
 
         #[tokio::test]
+        async fn an_array_value_is_not_a_scalar() {
+            let code = indoc! { r##"
+                    mixed m = ({ 1 });
+                    int i = (int) m;
+                "##};
+            let error = try_run_prog(code).await.unwrap_err();
+            assert_eq!(error.to_string(), "runtime error: cast to int of array");
+        }
+
+        #[tokio::test]
         async fn a_destructed_object_passes_every_cast() {
             let code = indoc! { r##"
                     mixed ob;

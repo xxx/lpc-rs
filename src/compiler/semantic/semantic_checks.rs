@@ -301,9 +301,9 @@ pub fn mismatch(
     }
 }
 
-/// Whether a value of static type `source` can be of type `target`: `mixed`
-/// and an equal type can, a union can through any member, a different
-/// concrete type never.
+/// Whether a value of static type `source` can be `target`: a union
+/// passes through any member, where `matches_type` alone would demand
+/// every one.
 pub fn cast_possible(source: LpcType, target: LpcType) -> bool {
     match source {
         LpcType::Union(members) => members
@@ -342,7 +342,8 @@ pub fn conversion_efun(target: LpcType) -> Option<&'static str> {
 pub fn element_type(collection: LpcType) -> Option<LpcType> {
     match collection {
         LpcType::String(false) => Some(LpcType::Int(false)),
-        LpcType::Mixed(_) | LpcType::Mapping(false) | LpcType::Union(_) | LpcType::Void => None,
+        // as_array(false) leaves a union a union, which would demand the variable match every member.
+        LpcType::Union(_) => None,
         typed if typed.is_array() => Some(typed.as_array(false)),
         _ => None,
     }
