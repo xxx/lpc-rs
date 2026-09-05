@@ -2095,6 +2095,67 @@ mod test_instructions {
         }
     }
 
+    mod test_cast {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_value_of_the_type_passes_through() {
+            let code = indoc! { r##"
+                    mixed m = "x";
+                    string s = (string) m;
+                    mixed n = 5;
+                    int i = (int) n;
+                    mixed a = ({ 1 });
+                    int *ints = (int *) a;
+                    mixed z = 0;
+                    string none = (string) z;
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("s", BareVal::String("x".into())),
+                    ("i", BareVal::Int(5)),
+                    ("ints", BareVal::Array(vec![BareVal::Int(1)])),
+                    ("none", BareVal::Int(0)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_value_of_another_type_is_a_runtime_error() {
+            let code = indoc! { r##"
+                    mixed m = "x";
+                    int i = (int) m;
+                "##};
+            let error = try_run_prog(code).await.unwrap_err();
+            assert_eq!(error.to_string(), "runtime error: cast to int of string");
+        }
+
+        #[tokio::test]
+        async fn an_int_is_not_a_float() {
+            let code = indoc! { r##"
+                    mixed m = 2.5;
+                    int i = (int) m;
+                "##};
+            let error = try_run_prog(code).await.unwrap_err();
+            assert_eq!(error.to_string(), "runtime error: cast to int of float");
+        }
+
+        #[tokio::test]
+        async fn an_array_cast_checks_the_container_only() {
+            let code = indoc! { r##"
+                    mixed m = ({ "not an int" });
+                    int *a = (int *) m;
+                    mixed n = 1;
+                    int *b = (int *) n;
+                "##};
+            let error = try_run_prog(code).await.unwrap_err();
+            assert_eq!(error.to_string(), "runtime error: cast to int * of int");
+        }
+    }
+
     mod test_catch {
         use super::*;
 

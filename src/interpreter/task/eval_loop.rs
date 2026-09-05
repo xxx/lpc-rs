@@ -3,7 +3,7 @@ use lpc_rs_core::{
     LpcIntInner,
     register::{Register, RegisterVariant},
 };
-use lpc_rs_errors::lpc_error;
+use lpc_rs_errors::{LpcError, lpc_error};
 use lpc_rs_utils::lpc_string::LpcString;
 use thin_vec::ThinVec;
 use tracing::{error, instrument, trace, warn};
@@ -215,6 +215,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     };
                     return Ok(Step::Await(call));
                 }
+            }
+            Instruction::Cast(r1, target, r2) => {
+                self.unary_operation(r1, r2, |value, _| {
+                    if value.passes_cast(target) {
+                        Ok(value.clone())
+                    } else {
+                        Err(LpcError::runtime(format!(
+                            "cast to {target} of {}",
+                            value.type_name()
+                        )))
+                    }
+                })?;
             }
             Instruction::CallSimulEfun(name, list) => {
                 self.handle_call_simul_efun(name, list)?;

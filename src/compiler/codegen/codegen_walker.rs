@@ -42,6 +42,7 @@ use crate::{
             binary_op_node::{BinaryOpNode, BinaryOperation},
             break_node::BreakNode,
             call_node::{CallChain, CallNode},
+            cast_node::CastNode,
             closure_node::ClosureNode,
             continue_node::ContinueNode,
             decl_node::DeclNode,
@@ -2242,6 +2243,19 @@ impl TreeWalker for CodegenWalker {
         self.insert_label(end_label, end_addr);
 
         self.current_result = result_reg;
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
+    async fn visit_cast(&mut self, node: &mut CastNode) -> Result<()> {
+        node.expr.visit(self).await?;
+        let location = self.current_result;
+
+        let reg_result = self.register_counter.next().unwrap().as_local();
+        let instruction = Instruction::Cast(location, node.type_, reg_result);
+        push_instruction!(self, instruction, node.span);
+
+        self.current_result = reg_result;
         Ok(())
     }
 
@@ -5791,6 +5805,43 @@ mod tests {
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);
             }
+        }
+    }
+
+    mod test_cast {
+        use super::*;
+        use crate::compiler::ast::cast_node::CastNode;
+
+        #[tokio::test]
+        async fn asserts_the_type_into_a_fresh_register() {
+            let mut context = CompilationContext::default();
+            context.scopes.push_new();
+            let mut sym = Symbol::new("x", LpcType::Mixed(false));
+            sym.location = Some(RegisterVariant::Local(Register(9)));
+            context.scopes.current_mut().unwrap().insert(sym);
+            let mut walker = CodegenWalker::new(context);
+
+            let mut node = CastNode {
+                expr: Box::new(ExpressionNode::Var(VarNode {
+                    name: ustr("x"),
+                    span: None,
+                    global: false,
+                    function_name: false,
+                })),
+                type_: LpcType::String(true),
+                span: None,
+            };
+            walker.visit_cast(&mut node).await.unwrap();
+
+            let instructions = walker_init_instructions(&mut walker);
+            let Some(Instruction::Cast(source, LpcType::String(true), dest)) =
+                instructions.last().copied()
+            else {
+                panic!("expected a cast, got {instructions:?}");
+            };
+            assert_eq!(source, RegisterVariant::Local(Register(9)));
+            assert_eq!(dest, walker.current_result);
+            assert_ne!(source, dest);
         }
     }
 

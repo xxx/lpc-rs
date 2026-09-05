@@ -288,6 +288,16 @@ impl LpcRef {
         }
     }
 
+    /// Whether a cast to `target` admits this value: 0 and a destructed
+    /// object pass every cast, anything else must already be of the type
+    /// (an array is checked as a container, not by element).
+    pub fn passes_cast(&self, target: LpcType) -> bool {
+        match self.as_lpc_type() {
+            LpcType::Int(false) if self.is_null() || matches!(self, LpcRef::Object(_)) => true,
+            value_type => target.matches_type(value_type),
+        }
+    }
+
     pub fn with_string<F, R>(&self, f: F) -> Result<R>
     where
         F: FnOnce(&LpcString) -> R,
@@ -913,6 +923,36 @@ mod tests {
             assert!(lpc_ref.live_object(&another).is_some());
             assert!(lpc_ref.is_truthy(&another));
             assert!(!lpc_ref.eq_in(&NULL, &another));
+        }
+    }
+
+    mod test_passes_cast {
+        use super::*;
+
+        #[test]
+        fn zero_passes_every_cast() {
+            let zero = LpcRef::from(0);
+            assert!(zero.passes_cast(LpcType::String(false)));
+            assert!(zero.passes_cast(LpcType::Object(true)));
+        }
+
+        #[test]
+        fn a_value_passes_only_its_own_type_or_mixed() {
+            let five = LpcRef::from(5);
+            assert!(five.passes_cast(LpcType::Int(false)));
+            assert!(five.passes_cast(LpcType::Mixed(false)));
+            assert!(!five.passes_cast(LpcType::String(false)));
+            assert!(!five.passes_cast(LpcType::Float(false)));
+            assert!(!five.passes_cast(LpcType::Int(true)));
+        }
+
+        #[test]
+        fn an_array_passes_any_array_type() {
+            let txn = TxnHandle::empty();
+            let array = test_array_ref(&txn, LpcArray::new(vec![LpcRef::from(1)]));
+            assert!(array.passes_cast(LpcType::String(true)));
+            assert!(array.passes_cast(LpcType::Mixed(true)));
+            assert!(!array.passes_cast(LpcType::String(false)));
         }
     }
 

@@ -174,3 +174,14 @@
         string *y = ({ "foo", "bar", "baz" });
         mixed *z = ({ 1, "foo", ({ 1, 2, 3 }) });
         ```
+
+* Casts
+    - `(type) expr` asserts that the value is `type` or `0`: the expression's static type
+      becomes `type`, and at runtime a value of another type is an error
+      (`runtime error: cast to int of string`). Arrays take the `*` form: `(string *) list`
+      checks that the value is an array, not its elements.
+    - A cast converts nothing; an `int` is never a `float` through one. `to_int`, `to_float`
+      and `to_string` convert.
+    - A cast whose source can never be the target is a compile error: `(int) some_string`.
+      `mixed`, an equal type, a union with the target among its members, and a literal `0`
+      are the sources a cast accepts.
