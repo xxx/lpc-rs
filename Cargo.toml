@@ -50,6 +50,7 @@ parking_lot = "0.12.1"
 spin = "0.10"
 path-dedot = "4.0.1"
 phf = { version = "0.14.0", features = ["macros"] }
+pwhash = "1.0.0"
 readonly = "0.2.3"
 regex = "1"
 regex-automata = "0.4"

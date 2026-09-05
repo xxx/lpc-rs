@@ -13,6 +13,7 @@ pub(crate) mod clone_object;
 pub(crate) mod command;
 pub(crate) mod compose;
 pub(crate) mod conversions;
+pub(crate) mod crypt;
 pub(crate) mod ctime;
 pub(crate) mod debug;
 pub(crate) mod deep_inventory;
@@ -804,6 +805,11 @@ efuns! {
         arity: (2, 0, ellipsis),
         args: [LpcType::Mixed(true) | LpcType::Mapping(false), LpcType::Function(false)],
     },
+    crypt => {
+        returns: LpcType::String(false),
+        arity: (2, 1),
+        args: [LpcType::String(false), LpcType::String(false) | LpcType::Int(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1080,6 +1086,7 @@ mod tests {
                 "present",
                 "sprintf",
                 "filter_map",
+                "crypt",
             ]
         );
     }
