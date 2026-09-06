@@ -29,6 +29,7 @@ pub(crate) mod explode;
 pub(crate) mod file_access;
 pub(crate) mod file_name;
 pub(crate) mod file_size;
+pub(crate) mod file_time;
 pub(crate) mod filter;
 pub(crate) mod filter_map;
 pub(crate) mod find_object;
@@ -50,6 +51,7 @@ pub(crate) mod min_max;
 pub(crate) mod mkdir;
 pub(crate) mod move_object;
 pub(crate) mod notify_fail;
+pub(crate) mod object_time;
 pub(crate) mod papplyv;
 pub(crate) mod parse_add_rule;
 pub(crate) mod parse_add_synonym;
@@ -941,6 +943,16 @@ efuns! {
         arity: (1, 1),
         args: [LpcType::Int(false)],
     },
+    file_time [async] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
+    object_time [async] => {
+        returns: LpcType::Int(false),
+        arity: (1, 1),
+        args: [LpcType::Object(false) | LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1243,6 +1255,8 @@ mod tests {
                 "write_bytes",
                 "query_ip_name",
                 "shutdown",
+                "file_time",
+                "object_time",
             ]
         );
     }

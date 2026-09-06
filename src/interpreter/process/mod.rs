@@ -71,6 +71,9 @@ pub struct Process {
     /// The [`Program`] that this process is running.
     pub program: Arc<Program>,
 
+    /// The second this process was constructed: what `object_time` answers.
+    pub created: i64,
+
     /// One slot per program global; fixed size at construction. The slot is a
     /// pure identity cell (a `VarId`); the *committed value* lives only in
     /// the committer's world.
@@ -118,6 +121,7 @@ impl Default for Process {
     fn default() -> Self {
         Self {
             program: Arc::default(),
+            created: 0,
             globals: Vec::new().into_boxed_slice(),
             name: ObjectName::File,
             connection: SVar::new(),
@@ -148,6 +152,7 @@ impl Process {
         let num_globals = program.num_globals;
         Self {
             program,
+            created: chrono::Utc::now().timestamp(),
             globals: (0..num_globals as usize)
                 .map(|_| SVar::new())
                 .collect::<Vec<_>>()
