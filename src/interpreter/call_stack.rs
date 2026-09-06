@@ -164,7 +164,8 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
     }
 
     /// The defining file of the top frame's code, as an in-game path with
-    /// its extension (`/secure/master.c`); `NULL` on an empty stack.
+    /// its extension (`/secure/master.c`); `NULL` on an empty stack. The
+    /// `calling_program` efun answers the caller's file, not this one.
     pub fn calling_program(&self, lib_dir: &str) -> LpcRef {
         match self.last() {
             Some(frame) => {

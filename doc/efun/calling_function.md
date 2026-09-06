@@ -10,7 +10,8 @@ A local call, own or inherited, is not a door: inside one
 `calling_function()` answers what it answered in the caller. Where the
 driver fired the call — a `call_out` or `input_to` callback, a command
 handler, an apply, boot — the answer is 0 although `previous_object()`
-still names the object.
+still names the object. A destructed caller still names its function,
+where `previous_object()` answers 0.
 
 `step` counts back exactly as `previous_object(step)` does:
 `calling_function(1)` is the function `previous_object(1)` called from,
