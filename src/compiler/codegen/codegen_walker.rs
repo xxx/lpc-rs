@@ -2334,6 +2334,7 @@ impl TreeWalker for CodegenWalker {
                 r,
                 ..
             }) = &mut *node.expr
+            && !matches!(**r, ExpressionNode::Range(_))
         {
             return self
                 .step_element(l, r, node.op, node.is_post, node.span)

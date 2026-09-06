@@ -140,7 +140,7 @@
       (`m[1..2]`) is `mixed`, since the value may be a string. The runtime checks the
       value: `-m` on a string, `m++` on an array and `a[m]` with a string in `m` are
       runtime errors. A `mixed *` is an array, so `-ma`, `ma++` and `a[ma]` are compile
-      errors.
+      errors. A slice is a value, so `m[1..2]++` is a compile error.
     - Whether the value is a reference or value type depends on the underlying type.
     - Examples:
         ```c

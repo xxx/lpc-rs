@@ -9,7 +9,7 @@ use crate::{
         ast::{
             assignment_node::AssignmentNode,
             ast_node::{AstNode, AstNodeTrait, SpannedNode},
-            binary_op_node::BinaryOpNode,
+            binary_op_node::{BinaryOpNode, BinaryOperation},
             block_node::BlockNode,
             break_node::BreakNode,
             call_node::{CallChain, CallNode},
@@ -759,10 +759,27 @@ impl TreeWalker for SemanticCheckWalker {
                 UnaryOperation::Inc | UnaryOperation::Dec => {
                     if matches!(*node.expr, ExpressionNode::Int(_)) {
                         let err: LpcError = lpc_error!("Invalid operation on `int` literal");
-                        Err(self.context.diagnostics.fail(err))
-                    } else {
-                        Ok(())
+                        return Err(self.context.diagnostics.fail(err));
                     }
+
+                    // A slice is a value, not a place.
+                    if let ExpressionNode::BinaryOp(BinaryOpNode {
+                        op: BinaryOperation::Index,
+                        r,
+                        ..
+                    }) = &*node.expr
+                        && matches!(**r, ExpressionNode::Range(_))
+                    {
+                        let err: LpcError = lpc_error!(
+                            node.span,
+                            "`{}` cannot step a slice: `{}`",
+                            node.op,
+                            node.expr
+                        );
+                        return Err(self.context.diagnostics.fail(err));
+                    }
+
+                    Ok(())
                 }
                 _ => Ok(()),
             },
@@ -3638,6 +3655,28 @@ mod tests {
             assert_eq!(
                 messages(code).await,
                 vec![r#"Mismatched types: `a` (int *) [] `"x"` (string)"#.to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_slice_of_an_array_is_not_stepped() {
+            let code = r#"
+                mixed m = ({ 10, 20, 30 });
+                void create() { m[1..2]++; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["`++` cannot step a slice: `m [] 1..2`".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_slice_of_a_mapping_is_not_stepped() {
+            let code = r#"
+                mapping mm = ([ 2: 7 ]);
+                void create() { mm[1..2]--; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["`--` cannot step a slice: `mm [] 1..2`".to_string()]
             );
         }
     }
