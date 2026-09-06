@@ -189,7 +189,7 @@ pub fn check_binary_operation_types(
         BinaryOperation::Index => {
             if matches!(left_type, LpcType::Mapping(_) | LpcType::Mixed(_))
                 || ((left_type.is_array() || matches!(left_type, LpcType::String(false)))
-                    && (right_type == LpcType::Int(false)
+                    && (LpcType::Int(false).matches_type(right_type)
                         || matches!(*node.r, ExpressionNode::Range(_))))
             {
                 Ok(())
@@ -462,6 +462,12 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                     return Ok(LpcType::Mixed(false));
                 }
 
+                // A `mixed` may hold a string, whose slice is a string, so
+                // neither an index nor a slice of one is an array.
+                if left_type == LpcType::Mixed(false) {
+                    return Ok(LpcType::Mixed(false));
+                }
+
                 let ranged = matches!(**r, ExpressionNode::Range(_));
 
                 // A string slice is a string; a string index is the character's code.
@@ -650,6 +656,11 @@ mod tests {
                 type_: LpcType::Mixed(false),
                 ..Default::default()
             };
+            let mixed_array1 = Symbol {
+                name: "mixed_array1".to_string(),
+                type_: LpcType::Mixed(true),
+                ..Default::default()
+            };
 
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
@@ -665,6 +676,7 @@ mod tests {
             scope.insert(mapping1);
             scope.insert(mapping2);
             scope.insert(mixed1);
+            scope.insert(mixed_array1);
 
             CompilationContext {
                 scopes: scope_tree,
@@ -920,6 +932,33 @@ mod tests {
                 op,
                 ExpressionNode::from(VarNode::new("mixed1")),
                 ExpressionNode::from(VarNode::new("float1")),
+                context,
+            )
+        }
+
+        fn array_mixed_vars(op: BinaryOperation, context: &CompilationContext) -> Result<()> {
+            get_result(
+                op,
+                ExpressionNode::from(VarNode::new("array1")),
+                ExpressionNode::from(VarNode::new("mixed1")),
+                context,
+            )
+        }
+
+        fn string_mixed_vars(op: BinaryOperation, context: &CompilationContext) -> Result<()> {
+            get_result(
+                op,
+                ExpressionNode::from(VarNode::new("string1")),
+                ExpressionNode::from(VarNode::new("mixed1")),
+                context,
+            )
+        }
+
+        fn array_mixed_array_vars(op: BinaryOperation, context: &CompilationContext) -> Result<()> {
+            get_result(
+                op,
+                ExpressionNode::from(VarNode::new("array1")),
+                ExpressionNode::from(VarNode::new("mixed_array1")),
                 context,
             )
         }
@@ -1355,6 +1394,9 @@ mod tests {
             assert!(string_range_vars(BinaryOperation::Index, &context).is_ok());
             assert!(mapping_mapping_vars(BinaryOperation::Index, &context).is_ok());
             assert!(mixed_any_vars(BinaryOperation::Index, &context).is_ok());
+            assert!(array_mixed_vars(BinaryOperation::Index, &context).is_ok());
+            assert!(string_mixed_vars(BinaryOperation::Index, &context).is_ok());
+            assert!(array_mixed_array_vars(BinaryOperation::Index, &context).is_err());
 
             // valid complex tree
             assert!(
@@ -2422,6 +2464,71 @@ mod tests {
 
                 let nt = node_type(&node, &CompilationContext::default()).unwrap();
                 assert_eq!(nt, LpcType::String(false));
+            }
+
+            /// The scope of one variable `foo` of `type_`.
+            fn context_with_foo(type_: LpcType) -> CompilationContext {
+                let mut scope_tree = ScopeTree::default();
+                let id = scope_tree.push_new();
+                scope_tree.get_mut(id).unwrap().insert(Symbol {
+                    name: "foo".to_string(),
+                    type_,
+                    ..Default::default()
+                });
+                CompilationContext {
+                    scopes: scope_tree,
+                    ..Default::default()
+                }
+            }
+
+            fn foo_indexed_by(r: ExpressionNode) -> ExpressionNode {
+                ExpressionNode::BinaryOp(BinaryOpNode {
+                    l: Box::new(ExpressionNode::Var(VarNode {
+                        name: ustr("foo"),
+                        span: None,
+                        global: true,
+                        function_name: false,
+                    })),
+                    r: Box::new(r),
+                    op: BinaryOperation::Index,
+                    span: None,
+                })
+            }
+
+            fn one_to_three() -> ExpressionNode {
+                ExpressionNode::Range(RangeNode {
+                    l: Box::new(Some(ExpressionNode::from(1))),
+                    r: Box::new(Some(ExpressionNode::from(3))),
+                    span: None,
+                })
+            }
+
+            #[test]
+            fn test_index_mixed_is_mixed_with_or_without_a_range() {
+                let context = context_with_foo(LpcType::Mixed(false));
+
+                let indexed = foo_indexed_by(ExpressionNode::from(1));
+                assert_eq!(
+                    node_type(&indexed, &context).unwrap(),
+                    LpcType::Mixed(false)
+                );
+
+                let sliced = foo_indexed_by(one_to_three());
+                assert_eq!(node_type(&sliced, &context).unwrap(), LpcType::Mixed(false));
+            }
+
+            #[test]
+            fn test_index_mixed_array_with_range_is_mixed_array() {
+                let context = context_with_foo(LpcType::Mixed(true));
+
+                let sliced = foo_indexed_by(one_to_three());
+                assert_eq!(node_type(&sliced, &context).unwrap(), LpcType::Mixed(true));
+
+                let indexed = foo_indexed_by(ExpressionNode::from(1));
+                assert_eq!(
+                    node_type(&indexed, &context).unwrap(),
+                    LpcType::Mixed(false)
+                );
             }
 
             #[test]

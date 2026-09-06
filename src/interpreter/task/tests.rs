@@ -3389,6 +3389,45 @@ mod test_instructions {
             )
             .await;
         }
+
+        #[tokio::test]
+        async fn a_mixed_index_reads_the_element() {
+            let code = indoc! { r##"
+                    mixed m = 1;
+                    int *a = ({ 5, 6 });
+                    string s = "hey";
+                    int i = a[m];
+                    int c = s[m];
+                    mixed t = "hello";
+                    string u = t[1..2];
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("i", BareVal::Int(6)),
+                    ("c", BareVal::Int('e' as LpcIntInner)),
+                    ("u", BareVal::String("el".into())),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_string_in_a_mixed_is_not_an_array_index() {
+            let code = r#"mixed m = "x"; int *a = ({ 1 }); int i = a[m];"#;
+
+            let error = try_run_prog(code)
+                .await
+                .expect_err("a string index needs a mapping");
+
+            assert!(
+                error
+                    .to_string()
+                    .starts_with("runtime error: Attempting to access index"),
+                "{error}"
+            );
+        }
     }
 
     mod test_lt {

@@ -3581,6 +3581,65 @@ mod tests {
                 vec!["Invalid Type: `++` `ma` (mixed *). Expected `int`".to_string()]
             );
         }
+
+        #[tokio::test]
+        async fn an_array_and_a_string_take_a_mixed_index() {
+            let code = r#"
+                mixed m = 1;
+                int *a = ({ 1, 2 });
+                string s = "ab";
+                int i; int c; mixed x;
+                void create() {
+                    i = a[m];
+                    c = s[m];
+                    a[m] = 3;
+                    a[m] += 1;
+                    a[m]++;
+                    x = m[i];
+                    x = m[s];
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_slice_of_mixed_is_mixed() {
+            let code = r#"
+                mixed m = "hello";
+                mixed *ma = ({ 1, 2 });
+                string s; int *a; int *b; mixed x;
+                void create() {
+                    s = m[1..2];
+                    a = m[1..];
+                    b = ma[0..1];
+                    x = m[..m];
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_mixed_array_is_not_an_index() {
+            let code = r#"
+                mixed *ma = ({ 1 });
+                int *a = ({ 1, 2 });
+                int i;
+                void create() { i = a[ma]; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["Mismatched types: `a` (int *) [] `ma` (mixed *)".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_string_is_still_not_an_array_index() {
+            let code = r#"
+                int *a = ({ 1, 2 });
+                int i;
+                void create() { i = a["x"]; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec![r#"Mismatched types: `a` (int *) [] `"x"` (string)"#.to_string()]
+            );
+        }
     }
 
     mod test_visit_ternary {
