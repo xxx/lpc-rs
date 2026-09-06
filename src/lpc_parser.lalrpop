@@ -1142,6 +1142,16 @@ FunctionPointer: ExpressionNode = {
 
 FunctionPointerReceiver: FunctionPtrReceiver = {
     "(" <expr:PostfixExpression> ")" "->" => FunctionPtrReceiver::Static(Box::new(expr)),
+    <name:"ID"> "->" => {
+        FunctionPtrReceiver::Static(Box::new(ExpressionNode::Var(
+            VarNode {
+                name: ustr(&name.1),
+                span: Some(name.0),
+                global: false,
+                function_name: false,
+            }
+        )))
+    },
     "->" => FunctionPtrReceiver::Dynamic,
 };
 

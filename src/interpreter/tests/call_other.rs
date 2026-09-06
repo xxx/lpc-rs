@@ -104,3 +104,20 @@ async fn a_string_receiver_and_name_without_parens_is_a_function_value() {
     .await;
     assert_eq!(r, vec![LpcRef::from(8), LpcRef::from(8)]);
 }
+
+#[tokio::test]
+async fn a_bare_variable_receiver_with_ampersand_is_a_function_pointer() {
+    let r = run(
+        "",
+        &[("/x.c", "int twice(int n) { return 2 * n; }")],
+        indoc! { r#"
+            mixed *create() {
+                object o = find_object("/x");
+                function f = &o->twice();
+                return ({ f(4) });
+            }
+        "# },
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(8)]);
+}
