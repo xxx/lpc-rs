@@ -267,8 +267,10 @@ pub(crate) async fn commit_changeset(
     .await
 }
 
-/// A sync "read the latest committed world" API for consistency-agnostic
-/// readers (test/debug/tooling). Do not use from an interpreter transaction.
+/// A sync read of the latest committed world for readers outside any
+/// transaction: tests, debug and tooling. Never for a task's result: a GC
+/// pass can reclaim an answer nothing roots before the read, so the driver
+/// reads one through `Applied`. Do not use from an interpreter transaction.
 pub trait CommittedReader {
     /// Number of global slots on `process`.
     fn global_slot_count(&self, process: &Process) -> usize;

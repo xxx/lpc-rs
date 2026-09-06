@@ -8,11 +8,11 @@ use lpc_rs_errors::LpcError;
 use tracing::info;
 
 use crate::interpreter::{
-    CommittedReader, EPILOG, PRELOAD,
+    EPILOG, PRELOAD,
     lpc_ref::{LpcRef, NULL},
     process::Process,
     task::{
-        apply_function::{apply_function_by_name, apply_function_in_master, report_runtime_error},
+        apply_function::{applied_in_master, apply_function_by_name, report_runtime_error},
         task_template::TaskTemplate,
     },
     vm::{Vm, global_state::GlobalState},
@@ -63,29 +63,24 @@ impl GlobalState {
     async fn preload_list(self: &Arc<Self>) -> Vec<LpcRef> {
         let template = TaskTemplate::from(self.clone());
         let timeout = Some(self.config.max_execution_time);
-        let cell =
-            match apply_function_in_master(EPILOG, &[LpcRef::from(0)], template, timeout).await {
-                Some(Ok(LpcRef::Array(cell))) => cell,
-                None => return Vec::new(),
-                Some(Ok(other)) if other == NULL => return Vec::new(),
-                Some(Ok(other)) => {
-                    self.config
-                        .debug_log(format!(
-                            "epilog answered a {}; nothing preloaded",
-                            other.type_name()
-                        ))
-                        .await;
-                    return Vec::new();
-                }
-                Some(Err(e)) => {
-                    self.report_boot_error(&e, self.object_space.master_object())
-                        .await;
-                    return Vec::new();
-                }
-            };
-        // Nothing collects before the main loop, so the cell `epilog`
-        // answered is still in the world.
-        let Some(array) = self.committed_array(cell.id) else {
+        let applied = match applied_in_master(EPILOG, &[LpcRef::from(0)], template, timeout).await {
+            Some(Ok(applied)) => applied,
+            None => return Vec::new(),
+            Some(Err(e)) => {
+                self.report_boot_error(&e, self.object_space.master_object())
+                    .await;
+                return Vec::new();
+            }
+        };
+        let Some(array) = applied.array() else {
+            if *applied.value() != NULL {
+                self.config
+                    .debug_log(format!(
+                        "epilog answered a {}; nothing preloaded",
+                        applied.value().type_name()
+                    ))
+                    .await;
+            }
             return Vec::new();
         };
 
