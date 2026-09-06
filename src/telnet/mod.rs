@@ -25,13 +25,12 @@ use tracing::{error, info, instrument, trace, warn};
 use crate::{
     command::command_task::run_command_line,
     interpreter::{
-        CommittedReader, GET_MUD_STATS, GMCP, NET_DEAD, WINDOW_SIZE, WRITE_PROMPT,
+        GET_MUD_STATS, GMCP, NET_DEAD, WINDOW_SIZE, WRITE_PROMPT,
         lpc_ref::LpcRef,
         process::Process,
         task::{
             apply_function::{
-                apply_function, apply_function_by_name, apply_function_in_master,
-                report_runtime_error,
+                applied_in_master, apply_function, apply_function_by_name, report_runtime_error,
             },
             task_template::TaskTemplate,
         },
@@ -541,37 +540,32 @@ impl Telnet {
     async fn mud_stats_into(vars: &mut IndexMap<String, Vec<String>>, template: &TaskTemplate) {
         let global_state = &template.global_state;
         let timeout = global_state.config.max_execution_time;
-        let mapping =
-            match apply_function_in_master(GET_MUD_STATS, &[], template.clone(), Some(timeout))
-                .await
-            {
-                Some(Ok(LpcRef::Mapping(cell))) => global_state.committed_mapping(cell.id),
-                Some(Ok(other)) => {
-                    global_state
-                        .config
-                        .debug_log(format!(
-                            "get_mud_stats returned a {}; defaults only",
-                            other.type_name()
-                        ))
-                        .await;
-                    None
-                }
+        let applied =
+            match applied_in_master(GET_MUD_STATS, &[], template.clone(), Some(timeout)).await {
+                Some(Ok(applied)) => applied,
                 Some(Err(e)) => {
                     global_state
                         .config
                         .debug_log(format!("get_mud_stats failed: {}", e.diagnostic_string()))
                         .await;
-                    None
+                    return;
                 }
-                None => None,
+                None => return,
             };
-        let Some(mapping) = mapping else {
+        let Some(mapping) = applied.mapping() else {
+            global_state
+                .config
+                .debug_log(format!(
+                    "get_mud_stats returned a {}; defaults only",
+                    applied.value().type_name()
+                ))
+                .await;
             return;
         };
         for (key, value) in mapping.iter() {
             let values = match value {
                 LpcRef::String(_) | LpcRef::Int(_) => vec![value.to_string()],
-                LpcRef::Array(cell) => match global_state.committed_array(cell.id) {
+                LpcRef::Array(_) => match applied.read_array(value) {
                     Some(array) => {
                         let mut elements = Vec::new();
                         for element in array.iter() {

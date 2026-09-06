@@ -11,13 +11,59 @@ use crate::{
     interpreter::{
         ERROR_HANDLER,
         apply::in_game_location,
+        lpc_array::LpcArray,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
         process::Process,
+        stm::TxnHandle,
         task::{Task, task_template::TaskTemplate},
         task_context::{Caller, TaskContext},
     },
 };
+
+/// A function's result with the transaction it was computed in: the
+/// pre-commit snapshot plus the task's own writes, which no GC pass touches.
+/// A committed read of the same result can find it reclaimed, since nothing
+/// roots a bare answer.
+#[derive(Debug)]
+pub(crate) struct Applied {
+    value: LpcRef,
+    txn: TxnHandle,
+}
+
+impl Applied {
+    /// The function's result.
+    pub(crate) fn value(&self) -> &LpcRef {
+        &self.value
+    }
+
+    /// The function's result, without its transaction.
+    pub(crate) fn into_value(self) -> LpcRef {
+        self.value
+    }
+
+    /// The result as an array; `None` for any other type.
+    pub(crate) fn array(&self) -> Option<LpcArray> {
+        self.read_array(&self.value)
+    }
+
+    /// The result as a mapping; `None` for any other type.
+    pub(crate) fn mapping(&self) -> Option<LpcMapping> {
+        self.read_mapping(&self.value)
+    }
+
+    /// The array named by `value`, a member of the result; `None` for any
+    /// other type.
+    pub(crate) fn read_array(&self, value: &LpcRef) -> Option<LpcArray> {
+        value.with_array(&self.txn, LpcArray::clone).ok()
+    }
+
+    /// The mapping named by `value`, a member of the result; `None` for any
+    /// other type.
+    pub(crate) fn read_mapping(&self, value: &LpcRef) -> Option<LpcMapping> {
+        value.with_mapping(&self.txn, LpcMapping::clone).ok()
+    }
+}
 
 /// Apply function `f` in `ctx` (whose `process` is the object the function
 /// runs in), to arguments `args`.
@@ -40,11 +86,27 @@ pub async fn apply_function(
     ctx: TaskContext,
     timeout: Option<u64>,
 ) -> Result<LpcRef> {
+    applied(f, args, ctx, timeout)
+        .await
+        .map(Applied::into_value)
+}
+
+/// As [`apply_function`], with the result readable through the returned
+/// [`Applied`].
+pub(crate) async fn applied(
+    f: Arc<ProgramFunction>,
+    args: &[LpcRef],
+    ctx: TaskContext,
+    timeout: Option<u64>,
+) -> Result<Applied> {
     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(ctx);
 
     task.timed_eval(f, args, timeout.unwrap_or(0))
         .await
-        .map(|_| task.result().unwrap())
+        .map(|_| Applied {
+            value: task.result().unwrap(),
+            txn: task.context.txn().clone(),
+        })
 }
 
 /// As [`apply_function`], with [`SeedArg`] arguments: a
@@ -96,9 +158,26 @@ pub async fn apply_function_by_name<S>(
 where
     S: AsRef<str>,
 {
+    applied_by_name(name, args, proc, template, timeout)
+        .await
+        .map(|result| result.map(Applied::into_value))
+}
+
+/// As [`apply_function_by_name`], with the result readable through the
+/// returned [`Applied`].
+pub(crate) async fn applied_by_name<S>(
+    name: S,
+    args: &[LpcRef],
+    proc: Arc<Process>,
+    template: TaskTemplate,
+    timeout: Option<u64>,
+) -> Option<Result<Applied>>
+where
+    S: AsRef<str>,
+{
     let f = proc.program.unmangled_functions.get(name.as_ref())?.clone();
 
-    Some(apply_function(f, args, template.into_task_context(proc), timeout).await)
+    Some(applied(f, args, template.into_task_context(proc), timeout).await)
 }
 
 /// Apply function named `name`, in the master object, to arguments `args`, using context
@@ -127,11 +206,27 @@ pub async fn apply_function_in_master<S>(
 where
     S: AsRef<str>,
 {
+    applied_in_master(name, args, template, timeout)
+        .await
+        .map(|result| result.map(Applied::into_value))
+}
+
+/// As [`apply_function_in_master`], with the result readable through the
+/// returned [`Applied`].
+pub(crate) async fn applied_in_master<S>(
+    name: S,
+    args: &[LpcRef],
+    template: TaskTemplate,
+    timeout: Option<u64>,
+) -> Option<Result<Applied>>
+where
+    S: AsRef<str>,
+{
     let Some(master) = template.global_state.object_space.master_object() else {
         return Some(Err(lpc_error!("No master object defined.")));
     };
 
-    apply_function_by_name(name, args, master, template, timeout).await
+    applied_by_name(name, args, master, template, timeout).await
 }
 
 /// Send a runtime error to the master object's `error_handler` function.
@@ -244,6 +339,43 @@ mod tests {
         .unwrap();
 
         assert_eq!(result, LpcRef::from(420));
+    }
+
+    #[tokio::test]
+    async fn an_applied_answer_is_readable_after_a_gc_pass() {
+        let vm = Vm::new(test_config());
+        let process = vm
+            .initialize_process_from_code(
+                "/stats.c",
+                r#"mapping stats() { return ([ "PORTS": ({ "4000", 4001 }) ]); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let template = TaskTemplate::from(vm.global_state.clone());
+        let applied = applied_by_name("stats", &[], process, template, None)
+            .await
+            .unwrap()
+            .unwrap();
+        let LpcRef::Mapping(cell) = applied.value().clone() else {
+            panic!("stats() answers a mapping, got {:?}", applied.value());
+        };
+
+        vm.global_state.gc().await.unwrap().unwrap();
+
+        assert!(
+            vm.global_state.committed_mapping(cell.id).is_none(),
+            "nothing roots a bare answer, so the pass reclaims it"
+        );
+        let mapping = applied.mapping().unwrap();
+        let ports = applied
+            .read_array(mapping.get(&LpcRef::from("PORTS")).unwrap())
+            .unwrap();
+        assert_eq!(
+            ports.to_vec(),
+            vec![LpcRef::from("4000"), LpcRef::from(4001)]
+        );
     }
 
     #[tokio::test]
