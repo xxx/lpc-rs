@@ -7,7 +7,8 @@ returned, in order, after the master is initialized and before it listens.
 Each call is its own task: what one commits stays committed when a later
 one fails, and a failing one commits nothing of its own. Its error goes to
 `error_handler` with the master as `error["object"]`, and the next file is
-preloaded regardless.
+preloaded regardless. If a preload destructs the master, the list ends
+there.
 
 `file` is the entry exactly as `epilog` listed it; the driver does not load
 it. Loading is the master's job, usually by calling through the path, and a

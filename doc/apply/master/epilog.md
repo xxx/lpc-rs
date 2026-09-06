@@ -6,10 +6,11 @@ The driver applies `epilog` on the master once the master is initialized
 and before it listens for connections. The array it returns is the preload
 list: the driver then applies `preload(file)` for each string in it, in
 order, one task per file, and a file whose preload fails does not stop the
-rest. Anything but an array, or no `epilog` at all, preloads nothing. An
-error thrown by `epilog` goes to `error_handler` and boot continues without
-preloads. An entry that is not a string is skipped, with a line in the
-debug log naming its type.
+rest. An answer of 0, or no `epilog` at all, preloads nothing; any other
+answer that is not an array preloads nothing and is noted in the debug log
+with its type. An error thrown by `epilog` goes to `error_handler` and
+boot continues without preloads. An entry that is not a string is
+skipped, with a line in the debug log naming its type.
 
 `load_empty` is always 0. It is the flag other drivers pass when started
 with a "load empty" option; lpc-rs has no such option.

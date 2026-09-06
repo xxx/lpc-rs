@@ -9,7 +9,7 @@ use tracing::info;
 
 use crate::interpreter::{
     CommittedReader, EPILOG, PRELOAD,
-    lpc_ref::LpcRef,
+    lpc_ref::{LpcRef, NULL},
     process::Process,
     task::{
         apply_function::{apply_function_by_name, apply_function_in_master, report_runtime_error},
@@ -32,9 +32,10 @@ impl GlobalState {
             return;
         };
         if !master.program.unmangled_functions.contains_key(PRELOAD) {
+            let noun = if files.len() == 1 { "file" } else { "files" };
             self.config
                 .debug_log(format!(
-                    "epilog listed {} files but the master defines no `preload`",
+                    "epilog listed {} {noun} but the master defines no `preload`",
                     files.len()
                 ))
                 .await;
@@ -57,20 +58,33 @@ impl GlobalState {
     }
 
     /// The string members of the array `epilog(0)` answers; empty without
-    /// the apply, for any other answer, or when it throws (reported).
+    /// the apply, on 0, on any other non-array answer (logged with its
+    /// type), or when it throws (reported).
     async fn preload_list(self: &Arc<Self>) -> Vec<LpcRef> {
         let template = TaskTemplate::from(self.clone());
         let timeout = Some(self.config.max_execution_time);
         let cell =
             match apply_function_in_master(EPILOG, &[LpcRef::from(0)], template, timeout).await {
                 Some(Ok(LpcRef::Array(cell))) => cell,
-                Some(Ok(_)) | None => return Vec::new(),
+                None => return Vec::new(),
+                Some(Ok(other)) if other == NULL => return Vec::new(),
+                Some(Ok(other)) => {
+                    self.config
+                        .debug_log(format!(
+                            "epilog answered a {}; nothing preloaded",
+                            other.type_name()
+                        ))
+                        .await;
+                    return Vec::new();
+                }
                 Some(Err(e)) => {
                     self.report_boot_error(&e, self.object_space.master_object())
                         .await;
                     return Vec::new();
                 }
             };
+        // Nothing collects before the main loop, so the cell `epilog`
+        // answered is still in the world.
         let Some(array) = self.committed_array(cell.id) else {
             return Vec::new();
         };
@@ -92,7 +106,8 @@ impl GlobalState {
         files
     }
 
-    /// `error` to `error_handler` with `master` as the erring object.
+    /// `error` to `error_handler` with `master` as the erring object, or to
+    /// the debug log when the master has no handler or it throws.
     async fn report_boot_error(self: &Arc<Self>, error: &LpcError, master: Option<Arc<Process>>) {
         report_runtime_error(error, master, TaskTemplate::from(self.clone())).await;
     }
@@ -211,7 +226,10 @@ void preload(string file) { loaded += file + ";"; file->ping(); }
     #[tokio::test]
     async fn preload_is_driver_fired() {
         let master_source = r#"
-string *epilog(int load_empty) { return ({ "/good" }); }
+string *epilog(int load_empty) {
+    loaded += sprintf("%d%d;", objectp(previous_object()), objectp(this_player()));
+    return ({ "/good" });
+}
 void preload(string file) {
     loaded += sprintf("%d%d;", objectp(previous_object()), objectp(this_player()));
 }
@@ -220,7 +238,7 @@ void preload(string file) {
 
         vm.preload().await;
 
-        assert_eq!(string_global(&vm, &master, "loaded"), "00;");
+        assert_eq!(string_global(&vm, &master, "loaded"), "00;00;");
     }
 
     #[tokio::test]
@@ -308,12 +326,18 @@ void preload(string file) { loaded += file + ";"; }
 
         vm.preload().await;
 
-        let mut buf = vec![0u8; 4096];
-        let n = tokio::time::timeout(Duration::from_secs(1), reader.read(&mut buf))
-            .await
-            .expect("the log line arrives")
-            .unwrap();
-        let logged = String::from_utf8_lossy(&buf[..n]);
+        let logged = tokio::time::timeout(Duration::from_secs(1), async {
+            let mut logged = String::new();
+            let mut chunk = [0u8; 4096];
+            while !logged.contains("no `preload`") {
+                let n = reader.read(&mut chunk).await.unwrap();
+                assert!(n > 0, "the log closed before the line arrived: {logged}");
+                logged.push_str(&String::from_utf8_lossy(&chunk[..n]));
+            }
+            logged
+        })
+        .await
+        .expect("the log line arrives");
         assert!(logged.contains("no `preload`"), "{logged}");
         assert!(!is_loaded(&vm, "/good"));
     }

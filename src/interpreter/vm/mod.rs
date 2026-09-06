@@ -71,7 +71,7 @@ impl Vm {
     /// then start the main loop.
     pub async fn boot(&mut self) -> lpc_rs_errors::Result<i32> {
         self.bootstrap().await?;
-        self.global_state.preload().await;
+        self.preload().await;
 
         let config = &self.global_state.config;
         let address = format!("{}:{}", config.bind_address, config.port);
