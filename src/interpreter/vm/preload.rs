@@ -31,8 +31,8 @@ impl GlobalState {
         let Some(master) = self.object_space.master_object() else {
             return;
         };
+        let noun = if files.len() == 1 { "file" } else { "files" };
         if !master.program.unmangled_functions.contains_key(PRELOAD) {
-            let noun = if files.len() == 1 { "file" } else { "files" };
             self.config
                 .debug_log(format!(
                     "epilog listed {} {noun} but the master defines no `preload`",
@@ -41,7 +41,7 @@ impl GlobalState {
                 .await;
             return;
         }
-        info!("preloading {} files", files.len());
+        info!("preloading {} {noun}", files.len());
 
         for file in files {
             let Some(master) = self.object_space.master_object() else {
