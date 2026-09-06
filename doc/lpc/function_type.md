@@ -104,5 +104,7 @@ that object can create a `function` variable pointing to it, and it will be call
 
 All `function` variables can be used in compositions with the `@` operator, or the `compose` efun.
 
-`&f(a, , b)` partially applies an existing `function` variable, as above; the `papplyv` efun does the same
-from an array of arguments computed at runtime rather than written out in the call.
+`&f(a, , b)` builds a new value over an existing `function` variable, appending `a`, a hole and `b` after
+`f`'s own bound arguments; `f`'s existing holes are left open. `papplyv(f, args)` instead fills `f`'s
+existing holes from `args` first, then appends any left over, so `papplyv(&add3(, 2), ({ 1 }))` binds
+`1` into the hole while `&f(1)` (over the same `f`) would leave the hole and append `1` after it.
