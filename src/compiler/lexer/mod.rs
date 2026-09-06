@@ -312,9 +312,7 @@ pub enum Token {
     let c = if slice == "'''" {
         Some('\'')
     } else if slice.as_bytes().get(1) == Some(&b'\\') {
-        // A small local table, not `convert_escapes`: that table has no
-        // `\0` -> NUL mapping (an unhandled escape there keeps the digit
-        // `0`), and adds `\v`/`\f`/`\a`/`\b`, which char literals don't.
+        // Not convert_escapes: a char literal's \0 is NUL, while that table keeps the digit.
         Some(match slice.chars().nth(2) {
             Some('n') => '\n',
             Some('t') => '\t',
