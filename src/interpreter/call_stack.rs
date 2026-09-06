@@ -175,28 +175,29 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
         }
     }
 
-    /// The objects that crossed a door to reach the frame at `index`,
-    /// innermost first: beneath each external frame at or below it is the
-    /// frame that called through. Ends at the entry frame; the task's
-    /// context has the rest.
-    pub fn door_crossers(&self, index: usize) -> impl Iterator<Item = &Arc<Process>> {
+    /// The frames that called through a door to reach the frame at
+    /// `index`, innermost first: beneath each external frame at or below
+    /// it is the frame that called through. Ends at the entry frame; the
+    /// task's context has the rest.
+    pub fn door_crossers(&self, index: usize) -> impl Iterator<Item = &CallFrame> {
         self.stack[..=index]
             .iter()
             .enumerate()
             .rev()
             .filter(|(_, frame)| frame.external)
-            .filter_map(|(i, _)| Some(&self.stack[i.checked_sub(1)?].process))
+            .filter_map(|(i, _)| self.stack.get(i.checked_sub(1)?))
     }
 
     /// The chain a task started by the code in the frame at `index` is
-    /// entered with: that frame's object, the door crossers beneath it,
-    /// then `tail` — this task's own chain.
+    /// entered with: that frame, the door crossers beneath it, then
+    /// `tail` — this task's own chain.
     pub fn chain(&self, index: usize, tail: Callers) -> Arc<Caller> {
-        let crossers: Vec<&Arc<Process>> = self.door_crossers(index).collect();
-        let rest = crossers.into_iter().rev().fold(tail, |rest, object| {
-            Some(Caller::link(object.clone(), rest))
-        });
-        Caller::link(self.stack[index].process.clone(), rest)
+        let crossers: Vec<&CallFrame> = self.door_crossers(index).collect();
+        let rest = crossers
+            .into_iter()
+            .rev()
+            .fold(tail, |rest, frame| Some(Caller::link_frame(frame, rest)));
+        Caller::link_frame(&self.stack[index], rest)
     }
 
     /// Get the stack trace information for the stack

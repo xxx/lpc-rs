@@ -7,6 +7,7 @@ use arc_swap::ArcSwapAny;
 use chrono::Duration;
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result, lpc_bug};
+use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use thin_vec::ThinVec;
 use tokio::sync::mpsc::Sender;
@@ -16,6 +17,7 @@ use crate::{
     interpreter::{
         COMPILE_OBJECT, VALID_LOAD,
         apply::{master_apply, report_warnings, valid_apply},
+        call_frame::CallFrame,
         compile_gate::MasterGate,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
@@ -113,6 +115,9 @@ pub enum ObjectLookup {
 pub struct Caller {
     /// The object that called through.
     pub object: Arc<Process>,
+    /// The function it called through from; `None` where the driver fired
+    /// the call (a pointer, a command, an apply).
+    pub function: Option<Arc<ProgramFunction>>,
     /// The chain behind it.
     pub rest: Callers,
 }
@@ -121,15 +126,33 @@ pub struct Caller {
 pub type Callers = Option<Arc<Caller>>;
 
 impl Caller {
-    /// `object` in front of `rest`.
+    /// `object` in front of `rest`, no calling function known.
     pub fn link(object: Arc<Process>, rest: Callers) -> Arc<Self> {
-        Arc::new(Self { object, rest })
+        Arc::new(Self {
+            object,
+            function: None,
+            rest,
+        })
+    }
+
+    /// `frame`'s object in front of `rest`, called through from `frame`'s
+    /// function.
+    pub fn link_frame(frame: &CallFrame, rest: Callers) -> Arc<Self> {
+        Arc::new(Self {
+            object: frame.process.clone(),
+            function: Some(frame.function.clone()),
+            rest,
+        })
+    }
+
+    /// The links of `chain`, innermost first.
+    pub fn links(chain: &Callers) -> impl Iterator<Item = &Caller> {
+        std::iter::successors(chain.as_deref(), |caller| caller.rest.as_deref())
     }
 
     /// The objects of `chain`, innermost first.
     pub fn objects(chain: &Callers) -> impl Iterator<Item = &Arc<Process>> {
-        std::iter::successors(chain.as_deref(), |caller| caller.rest.as_deref())
-            .map(|caller| &caller.object)
+        Self::links(chain).map(|caller| &caller.object)
     }
 }
 

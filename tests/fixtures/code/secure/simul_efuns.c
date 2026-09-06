@@ -4,3 +4,6 @@ string simul_efun(string s) {
 mixed simul_previous() {
     return previous_object();
 }
+mixed simul_calling() {
+    return calling_function();
+}

@@ -10,6 +10,7 @@ pub(crate) mod bits;
 pub(crate) mod bytes;
 pub(crate) mod call_out;
 pub(crate) mod callback;
+pub(crate) mod calling;
 pub(crate) mod case;
 pub(crate) mod clone_object;
 pub(crate) mod command;
@@ -972,6 +973,16 @@ efuns! {
             LpcType::Int(false) | LpcType::String(false),
         ],
     },
+    calling_function [in calling] => {
+        returns: LpcType::Mixed(false),
+        arity: (1, 1),
+        args: [LpcType::Int(false)],
+    },
+    calling_program [in calling] => {
+        returns: LpcType::Mixed(false),
+        arity: (1, 1),
+        args: [LpcType::Int(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1278,6 +1289,8 @@ mod tests {
                 "object_time",
                 "wildmatch",
                 "break_string",
+                "calling_function",
+                "calling_program",
             ]
         );
     }
