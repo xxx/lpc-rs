@@ -1072,6 +1072,47 @@ impl CodegenWalker {
             push_instruction!(self, instruction, span);
         }
     }
+
+    /// `++`/`--` on `container[index]`: the element is loaded, stepped and
+    /// stored back — `Inc` on the loaded copy left the container as it was.
+    async fn step_element(
+        &mut self,
+        container: &mut ExpressionNode,
+        index: &mut ExpressionNode,
+        op: UnaryOperation,
+        is_post: bool,
+        span: Option<Span>,
+    ) -> Result<()> {
+        container.visit(self).await?;
+        let container_result = self.current_result;
+        index.visit(self).await?;
+        let index_result = self.current_result;
+
+        let element = self.register_counter.next().unwrap().as_local();
+        let load = Instruction::Load(container_result, index_result, element);
+        push_instruction!(self, load, span);
+
+        let result = if is_post {
+            let before = self.register_counter.next().unwrap().as_local();
+            let copy = Instruction::Copy(element, before);
+            push_instruction!(self, copy, span);
+            before
+        } else {
+            element
+        };
+
+        let step = if op == UnaryOperation::Inc {
+            Instruction::Inc(element)
+        } else {
+            Instruction::Dec(element)
+        };
+        push_instruction!(self, step, span);
+        let store = Instruction::Store(element, container_result, index_result);
+        push_instruction!(self, store, span);
+
+        self.current_result = result;
+        Ok(())
+    }
 }
 
 impl ContextHolder for CodegenWalker {
@@ -2286,6 +2327,19 @@ impl TreeWalker for CodegenWalker {
 
     #[instrument(skip_all)]
     async fn visit_unary_op(&mut self, node: &mut UnaryOpNode) -> Result<()> {
+        if matches!(node.op, UnaryOperation::Inc | UnaryOperation::Dec)
+            && let ExpressionNode::BinaryOp(BinaryOpNode {
+                op: BinaryOperation::Index,
+                l,
+                r,
+                ..
+            }) = &mut *node.expr
+        {
+            return self
+                .step_element(l, r, node.op, node.is_post, node.span)
+                .await;
+        }
+
         node.expr.visit(self).await?;
         let location = self.current_result;
 
@@ -5877,6 +5931,70 @@ mod tests {
                 )];
 
                 assert_eq!(walker_init_instructions(&mut walker), expected);
+            }
+        }
+
+        mod element_step {
+            use super::*;
+
+            /// `x[1]` stepped, `x` an `int *` in local register 9.
+            async fn stepped_element(op: UnaryOperation, is_post: bool) -> Vec<Instruction> {
+                let mut context = CompilationContext::default();
+                context.scopes.push_new();
+                let mut sym = Symbol::new("x", LpcType::Int(true));
+                sym.location = Some(RegisterVariant::Local(Register(9)));
+                context.scopes.current_mut().unwrap().insert(sym);
+                let mut walker = CodegenWalker::new(context);
+
+                let mut node = UnaryOpNode {
+                    op,
+                    expr: Box::new(ExpressionNode::from(BinaryOpNode {
+                        l: Box::new(ExpressionNode::Var(VarNode {
+                            name: ustr("x"),
+                            span: None,
+                            global: false,
+                            function_name: false,
+                        })),
+                        r: Box::new(ExpressionNode::from(1)),
+                        op: BinaryOperation::Index,
+                        span: None,
+                    })),
+                    span: None,
+                    is_post,
+                };
+
+                walker.visit_unary_op(&mut node).await.unwrap();
+                walker_init_instructions(&mut walker)
+            }
+
+            #[tokio::test]
+            async fn a_pre_step_loads_bumps_and_stores() {
+                let x = RegisterVariant::Local(Register(9));
+                let one = RegisterVariant::Constant(Register(0));
+                let element = RegisterVariant::Local(Register(1));
+
+                assert_eq!(
+                    stepped_element(UnaryOperation::Inc, false).await,
+                    vec![Load(x, one, element), Inc(element), Store(element, x, one)]
+                );
+            }
+
+            #[tokio::test]
+            async fn a_post_step_keeps_the_old_value_first() {
+                let x = RegisterVariant::Local(Register(9));
+                let one = RegisterVariant::Constant(Register(0));
+                let element = RegisterVariant::Local(Register(1));
+                let before = RegisterVariant::Local(Register(2));
+
+                assert_eq!(
+                    stepped_element(UnaryOperation::Dec, true).await,
+                    vec![
+                        Load(x, one, element),
+                        Copy(element, before),
+                        Dec(element),
+                        Store(element, x, one),
+                    ]
+                );
             }
         }
     }

@@ -3240,6 +3240,54 @@ mod test_instructions {
                 .expect_err("++ on a string must error");
             assert_eq!(error.to_string(), "runtime error: invalid increment");
         }
+
+        #[tokio::test]
+        async fn steps_an_element_in_place() {
+            let code = indoc! { r##"
+                    int *a = ({ 1, 2 });
+                    mapping counts = ([ "k": 10 ]);
+                    mixed m = ({ 7 });
+                    int first; int second; int third;
+                    void create() {
+                        first = a[0]++;
+                        second = ++a[1];
+                        counts["k"]++;
+                        third = counts["k"];
+                        m[0]--;
+                    }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)])),
+                    ("first", BareVal::Int(1)),
+                    ("second", BareVal::Int(3)),
+                    ("third", BareVal::Int(11)),
+                    ("m", BareVal::Array(vec![BareVal::Int(6)])),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn steps_an_element_of_a_local_array() {
+            let code = indoc! { r##"
+                    void create() {
+                        int *a = ({ 1 });
+                        int old = a[0]++;
+                    }
+                "##};
+
+            check_popped_vars(
+                code,
+                &[
+                    ("a", BareVal::Array(vec![BareVal::Int(2)])),
+                    ("old", BareVal::Int(1)),
+                ],
+            )
+            .await;
+        }
     }
 
     mod test_isub {
