@@ -173,6 +173,7 @@ impl TreeWalker for InheritanceWalker {
             .config(self.context.config.clone())
             .inherit_depth(depth + 1)
             .gate(self.context.gate.clone())
+            .simul_efuns(self.context.simul_efuns.clone())
             .build()?;
 
         match compiler.compile_in_game_file(&full_path, node.span).await {
