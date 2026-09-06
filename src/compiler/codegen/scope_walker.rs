@@ -313,7 +313,13 @@ impl TreeWalker for ScopeWalker {
             let mut to_mark: Vec<Ustr> = Vec::new();
             if let Some(callee) = self.context.lookup_function_complete(*name, namespace) {
                 let prototype = callee.as_ref();
-                for (index, argument) in node.arguments.iter().enumerate() {
+                // Positions past a spread are unknown until runtime, so none of them are promoted.
+                let fixed = node
+                    .arguments
+                    .iter()
+                    .position(|a| matches!(a, ExpressionNode::Spread(_)))
+                    .unwrap_or(node.arguments.len());
+                for (index, argument) in node.arguments.iter().take(fixed).enumerate() {
                     if prototype.is_ref_param(index)
                         && let ExpressionNode::Var(var) = argument
                     {
