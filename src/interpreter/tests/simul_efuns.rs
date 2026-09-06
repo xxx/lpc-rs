@@ -355,6 +355,21 @@ async fn a_name_the_reloaded_simul_efun_file_dropped_fails_at_the_call() {
     );
 }
 
+/// A simul efun summing three ints, for a spread call from a program.
+const ADD3: &str = "int add3(int a, int b, int c) { return a + b + c; }\n";
+
+#[tokio::test]
+async fn a_spread_argument_reaches_a_simul_efun() {
+    let got = got_from_user(
+        "simul-spread",
+        "/secure/simul_efuns",
+        &[("secure/simul_efuns.c", ADD3)],
+        "string got; void create() { int *xs = ({ 2, 3 }); got = \"\" + add3(1, xs...); }",
+    )
+    .await;
+    assert_eq!(got, "6");
+}
+
 #[tokio::test]
 async fn the_simul_efun_object_is_the_resident_for_its_own_initializer() {
     let vm = Vm::new(test_config());

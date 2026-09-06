@@ -381,6 +381,22 @@ impl CallFrame {
         self.runtime_bug(format!("write through constant {location}"))
     }
 
+    /// The elements of the array in `location`, for a spread argument.
+    pub(crate) fn spread_elements(
+        &self,
+        txn: &TxnHandle,
+        location: RegisterVariant,
+    ) -> Result<Vec<LpcRef>> {
+        let value = self.get_location(txn, location)?;
+        if !matches!(*value, LpcRef::Array(_)) {
+            return Err(self.runtime_error(format!(
+                "cannot spread {}: `...` takes an array",
+                value.type_name()
+            )));
+        }
+        value.with_array(txn, |array| array.iter().cloned().collect())
+    }
+
     /// Read the [`LpcRef`] at `location`; an unwritten cell reads `NULL`.
     #[inline(always)]
     pub(crate) fn get_location(
