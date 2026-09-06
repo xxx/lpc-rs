@@ -54,6 +54,23 @@ pub type LpcFloatInner = Total<BaseFloat>;
 
 pub type ScopeId = NodeId;
 
+/// Decode one escape character (the letter after a backslash) into the character it stands for, answering itself if the escape is unknown.
+pub fn escape_char(c: char) -> char {
+    match c {
+        'n' => '\n',
+        'r' => '\r',
+        't' => '\t',
+        'v' => '\x0B',
+        'f' => '\x0C',
+        'a' => '\x07',
+        'b' => '\x08',
+        '"' => '"',
+        '\\' => '\\',
+        '\'' => '\'',
+        other => other,
+    }
+}
+
 /// Decode an LPC string literal's backslash escapes into their real characters.
 pub fn convert_escapes<T>(s: T) -> String
 where
@@ -68,17 +85,7 @@ where
             continue;
         }
         match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('r') => out.push('\r'),
-            Some('t') => out.push('\t'),
-            Some('v') => out.push('\x0B'),
-            Some('f') => out.push('\x0C'),
-            Some('a') => out.push('\x07'),
-            Some('b') => out.push('\x08'),
-            Some('"') => out.push('"'),
-            Some('\\') => out.push('\\'),
-            Some('\'') => out.push('\''),
-            Some(other) => out.push(other),
+            Some(escape) => out.push(escape_char(escape)),
             None => out.push('\\'),
         }
     }
@@ -107,6 +114,11 @@ mod tests {
     #[test]
     fn it_decodes_vertical_tab_as_0x0b() {
         assert_eq!(convert_escapes(r"\v"), "\x0B");
+    }
+
+    #[test]
+    fn it_decodes_alert_as_0x07() {
+        assert_eq!(convert_escapes(r"\a"), "\x07");
     }
 
     #[test]

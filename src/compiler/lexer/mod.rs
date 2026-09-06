@@ -5,7 +5,7 @@ use std::{
 };
 
 use logos::{Lexer, Logos};
-use lpc_rs_core::{BaseFloat, LpcIntInner, convert_escapes};
+use lpc_rs_core::{BaseFloat, LpcIntInner, convert_escapes, escape_char};
 use lpc_rs_errors::{
     Result, lpc_error,
     source_map::FileId,
@@ -313,16 +313,10 @@ pub enum Token {
         Some('\'')
     } else if slice.as_bytes().get(1) == Some(&b'\\') {
         // Not convert_escapes: a char literal's \0 is NUL, while that table keeps the digit.
-        Some(match slice.chars().nth(2) {
-            Some('n') => '\n',
-            Some('t') => '\t',
-            Some('r') => '\r',
-            Some('0') => '\0',
-            Some('\\') => '\\',
-            Some('\'') => '\'',
-            Some('"') => '"',
-            Some(other) => other,
-            None => '\\',
+        let escaped = slice.chars().nth(2).expect("`\\.` in the token regex guarantees a char here");
+        Some(match escaped {
+            '0' => '\0',
+            other => escape_char(other),
         })
     } else {
         slice.chars().nth(1)
@@ -682,6 +676,10 @@ impl Token {
 
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if let Some(kw) = self.keyword_text() {
+            return write!(f, "{kw}");
+        }
+
         let _s: String;
 
         let out = match self {
@@ -723,37 +721,6 @@ impl Display for Token {
             Token::RightShiftEq(_) => ">>=",
             Token::Compose(_) => "@",
 
-            Token::If(_) => "if",
-            Token::Else(_) => "else",
-            Token::While(_) => "while",
-            Token::For(_) => "for",
-            Token::Inherit(_) => "inherit",
-            Token::Break(_) => "break",
-            Token::Continue(_) => "continue",
-            Token::Case(_) => "case",
-            Token::Do(_) => "do",
-            Token::Int(_) => "int",
-            Token::Float(_) => "float",
-            Token::String(_) => "string",
-            Token::Object(_) => "object",
-            Token::Mapping(_) => "mapping",
-            Token::Mixed(_) => "mixed",
-            Token::Void(_) => "void",
-            Token::Return(_) => "return",
-            Token::Static(_) => "static",
-            Token::Varargs(_) => "varargs",
-            Token::Nomask(_) => "nomask",
-            Token::Ref(_) => "ref",
-            Token::Efun(_) => "efun",
-            Token::Switch(_) => "switch",
-            Token::Default(_) => "default",
-            Token::ForEach(_) => "foreach",
-            Token::Operator(_) => "operator",
-            Token::Function(_) => "function",
-            Token::Private(_) => "private",
-            Token::Public(_) => "public",
-            Token::Protected(_) => "protected",
-
             Token::LParen(_) => "(",
             Token::RParen(_) => ")",
             Token::LBracket(_) => "[",
@@ -775,6 +742,9 @@ impl Display for Token {
             | Token::Id(s)
             | Token::ClosureArgVar(s)
             | Token::DirectiveLine(s) => &s.1,
+
+            // Every keyword variant returned above via `keyword_text`.
+            _ => unreachable!("{self:?} is a keyword, handled by keyword_text above"),
         };
 
         write!(f, "{out}")
@@ -818,7 +788,15 @@ mod tests {
 
     #[test]
     fn an_escaped_char_literal_is_the_escaped_character() {
-        for (src, expected) in [(r"'\n'", 10), (r"'\''", 39), (r"'\\'", 92)] {
+        for (src, expected) in [
+            (r"'\n'", 10),
+            (r"'\''", 39),
+            (r"'\\'", 92),
+            (r"'\t'", 9),
+            (r"'\r'", 13),
+            (r"'\0'", 0),
+            (r"'\a'", 7),
+        ] {
             let vec = lex_vec(src);
             let Ok(Token::IntLiteral(IntToken(_, i))) = &vec[0] else {
                 panic!("expected an int literal for `{src}`");
