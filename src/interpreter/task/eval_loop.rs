@@ -358,7 +358,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.unary_operation(r1, r2, |x, txn| Ok(x.not(txn)))?;
             }
             Instruction::Or(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| Some(x | y), |x, y, _| x.bitor(y))?;
+                self.binary_operation(r1, r2, r3, |x, y| Some(x | y), |x, y, txn| x.bitor(y, txn))?;
             }
             Instruction::PopulateArgv(r, num_args, num_locals) => {
                 let frame = self.stack.current_frame()?;

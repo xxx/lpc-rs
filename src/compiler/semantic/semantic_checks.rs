@@ -205,15 +205,12 @@ pub fn check_binary_operation_types(
         }
         BinaryOperation::AndAnd => Ok(()),
         BinaryOperation::OrOr => Ok(()),
-        BinaryOperation::And => match tuple {
+        BinaryOperation::And | BinaryOperation::Or => match tuple {
             (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
             (l, r) if l.is_array() && r.is_array() => Ok(()),
             (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
         },
-        BinaryOperation::Or
-        | BinaryOperation::Xor
-        | BinaryOperation::Shl
-        | BinaryOperation::Shr => match tuple {
+        BinaryOperation::Xor | BinaryOperation::Shl | BinaryOperation::Shr => match tuple {
             (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
             (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
         },
@@ -1658,7 +1655,7 @@ mod tests {
             assert!(string_string_literals(BinaryOperation::Or, &context).is_err());
             assert!(string_int_literals(BinaryOperation::Or, &context).is_err());
             assert!(int_string_literals(BinaryOperation::Or, &context).is_err());
-            assert!(array_array_literals(BinaryOperation::Or, &context).is_err());
+            assert!(array_array_literals(BinaryOperation::Or, &context).is_ok());
             assert!(array_int_literals(BinaryOperation::Or, &context).is_err());
             assert!(array_range_literals(BinaryOperation::Or, &context).is_err());
             assert!(mapping_mapping_literals(BinaryOperation::Or, &context).is_err());
@@ -1668,7 +1665,7 @@ mod tests {
             assert!(string_string_vars(BinaryOperation::Or, &context).is_err());
             assert!(string_int_vars(BinaryOperation::Or, &context).is_err());
             assert!(int_string_vars(BinaryOperation::Or, &context).is_err());
-            assert!(array_array_vars(BinaryOperation::Or, &context).is_err());
+            assert!(array_array_vars(BinaryOperation::Or, &context).is_ok());
             assert!(array_int_vars(BinaryOperation::Or, &context).is_err());
             assert!(array_range_vars(BinaryOperation::Or, &context).is_err());
             assert!(mapping_mapping_vars(BinaryOperation::Or, &context).is_err());
