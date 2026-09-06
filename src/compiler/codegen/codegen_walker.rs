@@ -6212,6 +6212,13 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn a_bare_receiver_name_emits_the_same_pointer_as_the_ampersand_form() {
+            let a = function_f("void f(object o) { function g = o->twice; }").await;
+            let b = function_f("void f(object o) { function g = &(o)->twice(); }").await;
+            assert_eq!(a.instructions, b.instructions);
+        }
+
+        #[tokio::test]
         async fn a_spread_argument_names_its_array() {
             let f = function_f("void g() {} void f(int a, int *xs) { g(a, xs...); }").await;
             assert!(matches!(

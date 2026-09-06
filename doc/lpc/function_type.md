@@ -45,6 +45,8 @@ Breaking it down by syntax, functions can take the following forms:
     the second argument, where it was empty in the declaration. Again, this is referred to
   as "partial application".
 
+* `ob->name` without an argument list is the function value `&(ob)->name()`.
+
 * `&->function_name()` - This is a reference to a function defined in another object.
   The object is filled-in when the function is called, with the first argument.
   Subsequent arguments are passed to the function. Partial application can be used.
