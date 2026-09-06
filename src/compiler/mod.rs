@@ -121,8 +121,8 @@ impl Compiler {
             let lpc_path = path.into();
             let absolute = lpc_path.as_server(&*self.config.lib_dir);
 
-            let file_content = match read_lpc_file(&*absolute).await {
-                Ok(s) => s,
+            let source = match read_lpc_file(&*absolute).await {
+                Ok(source) => source,
                 Err(e) => {
                     return match e.kind() {
                         ErrorKind::NotFound => {
@@ -146,7 +146,16 @@ impl Compiler {
                 }
             };
 
-            self.compile_string(lpc_path, file_content).await
+            // A root file has no preprocessor yet to record its warning, so it is seeded here.
+            let warning = source.latin1.then(|| {
+                let in_game = lpc_path
+                    .as_in_game(&*self.config.lib_dir)
+                    .display()
+                    .to_string();
+                diagnostics::latin1_warning(&in_game, None)
+            });
+
+            self.compile_source(lpc_path, &source.text, warning).await
         })
         .await
     }
@@ -203,8 +212,18 @@ impl Compiler {
         P: Into<LpcPath> + Debug,
         S: AsRef<str> + Send + Sync,
     {
-        let lpc_path = path.into();
+        self.preprocess_source(path.into(), code.as_ref(), None)
+            .await
+    }
 
+    /// [`preprocess_string`](Self::preprocess_string), with `warning` recorded before the scan.
+    #[instrument(skip(self, code, warning))]
+    async fn preprocess_source(
+        &self,
+        lpc_path: LpcPath,
+        code: &str,
+        warning: Option<LpcError>,
+    ) -> Result<(Vec<Token>, Preprocessor)> {
         let context = CompilationContextBuilder::default()
             .filename(Arc::new(lpc_path.clone()))
             .config(self.config.clone())
@@ -214,9 +233,12 @@ impl Compiler {
             .build()?;
 
         let mut preprocessor = Preprocessor::new(context);
+        if let Some(warning) = warning {
+            preprocessor.record(warning);
+        }
 
         preprocessor
-            .scan(lpc_path, &code)
+            .scan(lpc_path, code)
             .await
             .map(|tokens| (tokens, preprocessor))
     }
@@ -254,8 +276,19 @@ impl Compiler {
         T: Into<LpcPath>,
         U: AsRef<str> + Send + Sync,
     {
-        let lpc_path = path.into();
-        let (mut program_node, context) = self.parse_string(&lpc_path, code).await?;
+        self.compile_source(path.into(), code.as_ref(), None).await
+    }
+
+    /// [`compile_string`](Self::compile_string), with `warning` seeded
+    /// before the scan; see [`preprocess_source`](Self::preprocess_source).
+    #[instrument(skip_all)]
+    async fn compile_source(
+        &self,
+        lpc_path: LpcPath,
+        code: &str,
+        warning: Option<LpcError>,
+    ) -> Result<Compiled> {
+        let (mut program_node, context) = self.parse_source(&lpc_path, code, warning).await?;
 
         // inject the auto-inherit if it's to be used.
         if let Some(dir) = &self.config.auto_inherit_file {
@@ -310,7 +343,19 @@ impl Compiler {
     where
         T: AsRef<str> + Send + Sync,
     {
-        let (tokens, preprocessor) = self.preprocess_string(path.clone(), code).await?;
+        self.parse_source(path, code.as_ref(), None).await
+    }
+
+    /// [`parse_string`](Self::parse_string), with `warning` seeded before
+    /// the scan; see [`preprocess_source`](Self::preprocess_source).
+    #[instrument(skip(self, code, warning))]
+    async fn parse_source(
+        &self,
+        path: &LpcPath,
+        code: &str,
+        warning: Option<LpcError>,
+    ) -> Result<(ProgramNode, CompilationContext)> {
+        let (tokens, preprocessor) = self.preprocess_source(path.clone(), code, warning).await?;
 
         let wrapper = TokenTriples::new(&tokens);
         let mut context = preprocessor.into_context();
@@ -366,6 +411,32 @@ mod tests {
 
             assert!(rendered.contains("int x = ;"), "{rendered}");
             assert!(!rendered.contains("rewritten"), "{rendered}");
+        }
+
+        #[tokio::test]
+        async fn a_non_utf8_root_file_compiles_with_one_warning() {
+            use lpc_rs_utils::config::ConfigBuilder;
+
+            use crate::test_support::TempLib;
+
+            let root = TempLib::new("latin1-root");
+            std::fs::write(root.join("caf.c"), b"int x = 1; // caf\xe9\n").unwrap();
+
+            let config: Arc<Config> = ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .build()
+                .unwrap()
+                .into();
+            let compiler = CompilerBuilder::default().config(config).build().unwrap();
+            let compiled = compiler.compile_file("/caf.c").await.unwrap();
+
+            let warnings: Vec<String> = compiled
+                .warnings
+                .iter()
+                .flat_map(|w| w.warnings.iter().map(|e| e.message().to_string()))
+                .collect();
+
+            assert_eq!(warnings, ["`/caf.c` is not UTF-8; read as Latin-1"]);
         }
     }
 

@@ -70,7 +70,31 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         receiver: FunctionReceiver,
         func_name: Ustr,
     ) -> lpc_rs_errors::Result<()> {
+        let staged = self
+            .partial_args
+            .iter()
+            .map(|arg| {
+                arg.map(|register| {
+                    Ok(get_location(&self.stack, &self.context.txn, register)?.into_owned())
+                })
+                .transpose()
+            })
+            .collect::<lpc_rs_errors::Result<ThinVec<Option<LpcRef>>>>()?;
+
         let address = match receiver {
+            FunctionReceiver::Value(value_location) => {
+                let value_ref =
+                    get_location(&self.stack, &self.context.txn, value_location)?.into_owned();
+                let LpcRef::Function(ptr) = value_ref else {
+                    return Err(self.runtime_error(format!(
+                        "cannot apply arguments to {}",
+                        value_ref.type_name()
+                    )));
+                };
+                let new_fp = ptr.as_ref().clone().partially_apply_with_holes(staged);
+
+                return set_location(&mut self.stack, &self.context.txn, location, new_fp.into());
+            }
             FunctionReceiver::Efun => FunctionAddress::Efun(func_name),
             FunctionReceiver::SimulEfun => FunctionAddress::SimulEfun(func_name),
             FunctionReceiver::Dynamic => FunctionAddress::Dynamic(func_name),
@@ -149,16 +173,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        let mut partial_args = self
-            .partial_args
-            .iter()
-            .map(|arg| {
-                arg.map(|register| {
-                    Ok(get_location(&self.stack, &self.context.txn, register)?.into_owned())
-                })
-                .transpose()
-            })
-            .collect::<lpc_rs_errors::Result<ThinVec<Option<LpcRef>>>>()?;
+        let mut partial_args = staged;
         // A dynamic receiver is the pointer's first argument, bound at call time.
         if matches!(address, FunctionAddress::Dynamic(_)) {
             partial_args.insert(0, None);

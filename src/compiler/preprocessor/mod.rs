@@ -101,6 +101,11 @@ impl Preprocessor {
         self.context
     }
 
+    /// Record a diagnostic before the scan runs.
+    pub fn record(&mut self, diagnostic: LpcError) {
+        self.context.diagnostics.record(diagnostic);
+    }
+
     /// Scan a file's contents, transforming as necessary according to the
     /// preprocessing rules. This is the standard way to use the
     /// preprocessor
@@ -453,7 +458,13 @@ impl Preprocessor {
         let gate = self.context.gate.clone();
         let Some(opened) = self
             .includes
-            .open(source, span, &config, gate.as_deref())
+            .open(
+                source,
+                span,
+                &config,
+                gate.as_deref(),
+                &mut self.context.diagnostics,
+            )
             .await?
         else {
             return Ok(());
@@ -968,6 +979,26 @@ mod tests {
             };
 
             test_invalid(prog, "unexpected tokens after `#include`").await;
+        }
+
+        #[tokio::test]
+        async fn a_quoted_include_missing_locally_falls_back_to_the_system_dirs() {
+            let input = indoc! {r#"
+                #include "only_in_sys.h"
+                int i = ONLY_IN_SYS;
+            "#};
+
+            test_valid(input, &["int", "i", "=", "111", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn a_quoted_include_found_locally_does_not_fall_back() {
+            let input = indoc! {r#"
+                #include "local_and_sys.h"
+                int i = LOCAL_AND_SYS;
+            "#};
+
+            test_valid(input, &["int", "i", "=", "1", ";"]).await;
         }
     }
 
@@ -2959,6 +2990,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_parameter_named_like_a_keyword_is_substituted() {
+        // The parameter `int` lexes as the `int` keyword, not `Token::Id`.
+        let prog = "#define F(int, wis) ((((int) + (wis)) / 3) + 10)\nint x = F(3, 6);";
+        test_valid(
+            prog,
+            &[
+                "int", "x", "=", "(", "(", "(", "(", "3", ")", "+", "(", "6", ")", ")", "/", "3",
+                ")", "+", "10", ")", ";",
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_parameter_name_inside_a_string_literal_is_not_substituted() {
+        // The body's `"int"` lexes as a string literal, which `keyword_text` never matches.
+        let mut preprocessor = fixture();
+        let tokens = preprocessor
+            .scan("/test.c", "#define G(int) \"int\"\nG(1);\n")
+            .await
+            .expect("scans clean");
+        assert!(matches!(tokens[0], Token::StringLiteral(_)));
+        assert_eq!(tokens[0].to_string(), "int");
+    }
+
+    #[tokio::test]
     async fn a_spaced_paren_defines_an_object_macro() {
         // C99's rule: `(` not flush against the name = object macro
         // whose body starts with the paren.
@@ -3322,6 +3379,32 @@ mod tests {
                 !msg.contains(root.to_str().unwrap()),
                 "server path leaked: {msg}"
             );
+        }
+
+        async fn warnings_of(root: &std::path::Path, code: &str) -> Vec<String> {
+            let mut preprocessor = fixture_at(root);
+            preprocessor
+                .scan("/main.c", code)
+                .await
+                .expect("scans clean");
+            preprocessor
+                .context
+                .diagnostics
+                .errors()
+                .iter()
+                .filter(|e| e.is_warning())
+                .map(|e| e.message().to_string())
+                .collect()
+        }
+
+        #[tokio::test]
+        async fn a_non_utf8_header_compiles_with_one_warning() {
+            let root = TempLib::new("latin1-header");
+            std::fs::write(root.join("h.h"), b"int x = 1; // caf\xe9\n").unwrap();
+
+            let warnings = warnings_of(&root, "#include \"h.h\"\n").await;
+
+            assert_eq!(warnings, ["`/h.h` is not UTF-8; read as Latin-1"]);
         }
     }
 }

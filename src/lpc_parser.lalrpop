@@ -667,6 +667,16 @@ PostfixExpression: ExpressionNode = {
             Ok(ExpressionNode::from(c))
         }
     },
+    <e:PostfixExpression> "->" <name:"ID"> =>? {
+        let span = Span::combine(e.span(), Some(name.0));
+        let node = FunctionPtrNode {
+            receiver: Some(FunctionPtrReceiver::Static(Box::new(e))),
+            arguments: None,
+            name: ustr(&name.1),
+            span,
+        };
+        Ok(guard(ExpressionNode::from(node), span)?)
+    },
     <e:PostfixExpression> "++" =>? {
         let span = e.span();
         let n = UnaryOpNode {
@@ -1132,6 +1142,16 @@ FunctionPointer: ExpressionNode = {
 
 FunctionPointerReceiver: FunctionPtrReceiver = {
     "(" <expr:PostfixExpression> ")" "->" => FunctionPtrReceiver::Static(Box::new(expr)),
+    <name:"ID"> "->" => {
+        FunctionPtrReceiver::Static(Box::new(ExpressionNode::Var(
+            VarNode {
+                name: ustr(&name.1),
+                span: Some(name.0),
+                global: false,
+                function_name: false,
+            }
+        )))
+    },
     "->" => FunctionPtrReceiver::Dynamic,
 };
 

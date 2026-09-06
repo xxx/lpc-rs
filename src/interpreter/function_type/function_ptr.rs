@@ -93,6 +93,16 @@ impl FunctionPtr {
         self
     }
 
+    /// `args`, holes kept as `None`, appended to this pointer's own partial list.
+    pub fn partially_apply_with_holes(
+        mut self,
+        args: impl IntoIterator<Item = Option<LpcRef>>,
+    ) -> Self {
+        self.partial_args.extend(args);
+
+        self
+    }
+
     /// The argument list for a call with `passed`: the holes in the partial
     /// args fill left to right, the rest append, an unfilled hole is `0`.
     pub fn bound_args(&self, passed: &[LpcRef]) -> Vec<LpcRef> {

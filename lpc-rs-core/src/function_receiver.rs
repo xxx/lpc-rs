@@ -11,6 +11,10 @@ pub enum FunctionReceiver {
     /// The receiver is the Process stored in the [`RegisterVariant`].
     Var(RegisterVariant),
 
+    /// The receiver is a function value read from the [`RegisterVariant`];
+    /// the new pointer is built over it rather than by name.
+    Value(RegisterVariant),
+
     /// The receiver will be filled-in at call time, with the first argument
     /// passed to the call. i.e. the `&->foo()` syntax
     Dynamic,
@@ -27,6 +31,7 @@ impl Display for FunctionReceiver {
         match self {
             FunctionReceiver::Local => write!(f, "local"),
             FunctionReceiver::Var(reg) => write!(f, "var({reg})"),
+            FunctionReceiver::Value(reg) => write!(f, "value({reg})"),
             FunctionReceiver::Dynamic => write!(f, "dynamic"),
             FunctionReceiver::Efun => write!(f, "efun"),
             FunctionReceiver::SimulEfun => write!(f, "simul_efun"),

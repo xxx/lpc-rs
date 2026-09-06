@@ -34,7 +34,7 @@ Breaking it down by syntax, functions can take the following forms:
 * `&(object)->function_name()` - This is a reference to a function defined in
   another object. The object is put into place in the declaration, and you can call
   the function with additional arguments, or without, and the arguments will be filled in
-  from the declaration.
+  from the declaration. The parentheses may be dropped when the receiver is a plain variable: `&o->f()`.
 
 * `&(object)->function_name(arg1,,arg3)` - This is a reference to a function defined in
   another object. The object is put into place in the declaration, and you can call the function
@@ -44,6 +44,8 @@ Breaking it down by syntax, functions can take the following forms:
   In the example `f = &(object)->function_name(arg1,,arg3); f("foo");`, `foo` will be put into
     the second argument, where it was empty in the declaration. Again, this is referred to
   as "partial application".
+
+* `ob->name` without an argument list is the function value `&(ob)->name()`.
 
 * `&->function_name()` - This is a reference to a function defined in another object.
   The object is filled-in when the function is called, with the first argument.
@@ -62,6 +64,9 @@ Breaking it down by syntax, functions can take the following forms:
   `&operator(==)(name)` tests its argument against `name`, which is
   evaluated when the pointer is made. Binding more arguments than the
   operator takes is a compile error. `operator` is a reserved word.
+
+* `&f(a, , b)` where `f` holds a function value is a new value with `a`, a
+  hole and `b` appended to `f`'s bound arguments.
 
 * `(: function_name() :)` - A closure. Closures are functions that are defined
   inline, and capture any variables they reference from their environment.
@@ -99,6 +104,7 @@ that object can create a `function` variable pointing to it, and it will be call
 
 All `function` variables can be used in compositions with the `@` operator, or the `compose` efun.
 
-`function` variables cannot be partially applied via the `&` syntax (it only works when first declaring them),
-but the `papplyv` efun is able to do this. This is only because fiddling around with the parser to make it work 
-turned into a little box of hell.
+`&f(a, , b)` builds a new value over an existing `function` variable, appending `a`, a hole and `b` after
+`f`'s own bound arguments; `f`'s existing holes are left open. `papplyv(f, args)` instead fills `f`'s
+existing holes from `args` first, then appends any left over, so `papplyv(&add3(, 2), ({ 1 }))` binds
+`1` into the hole while `&f(1)` (over the same `f`) would leave the hole and append `1` after it.

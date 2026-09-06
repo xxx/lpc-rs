@@ -1,10 +1,15 @@
-use lpc_rs_errors::LpcError;
+use lpc_rs_errors::{LpcError, lpc_warning, span::Span};
 
 /// Everything one compilation has reported so far, and the one rule for
 /// turning it into a result.
 #[derive(Debug, Default, Clone)]
 pub struct Diagnostics {
     recorded: Vec<LpcError>,
+}
+
+/// The warning for a file read as Latin-1, shared by the include path and a root file.
+pub fn latin1_warning(in_game_path: &str, span: Option<Span>) -> LpcError {
+    lpc_warning!(span, "`{}` is not UTF-8; read as Latin-1", in_game_path)
 }
 
 impl Diagnostics {

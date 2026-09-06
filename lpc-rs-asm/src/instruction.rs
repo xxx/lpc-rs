@@ -381,6 +381,7 @@ impl Instruction {
                 // loses the receiver to register rewrites.
                 receiver: match receiver {
                     FunctionReceiver::Var(r) => FunctionReceiver::Var(f(r)),
+                    FunctionReceiver::Value(r) => FunctionReceiver::Value(f(r)),
                     other => other,
                 },
                 name,

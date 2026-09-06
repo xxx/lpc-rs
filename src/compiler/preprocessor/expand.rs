@@ -170,9 +170,13 @@ impl<'a> Expansion<'a> {
     fn substitute(&self, body: &[Token], args: &HashMap<&str, Vec<Token>>) -> Result<Vec<Token>> {
         let mut replacement = Vec::with_capacity(body.len());
         for token in body {
-            if let Token::Id(st) = token
-                && let Some(arg_tokens) = args.get(st.1.as_str())
-            {
+            // A parameter spelled like a keyword lexes as that keyword, not `Token::Id`, so it's matched by spelling instead.
+            let param_tokens = if let Token::Id(st) = token {
+                args.get(st.1.as_str())
+            } else {
+                token.keyword_text().and_then(|spelling| args.get(spelling))
+            };
+            if let Some(arg_tokens) = param_tokens {
                 if self.emitted + replacement.len() + arg_tokens.len() > MAX_EXPANDED_TOKENS {
                     return Err(self.too_many());
                 }

@@ -18,12 +18,13 @@ use crate::compiler::{
         expression_node::ExpressionNode,
         for_each_node::{FOREACH_INDEX, FOREACH_LENGTH, ForEachInit, ForEachNode},
         function_def_node::{ARGV, FunctionDefNode},
+        function_ptr_node::FunctionPtrNode,
         program_node::ProgramNode,
         ref_node::RefNode,
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
-    codegen::tree_walker::{ContextHolder, Pass, TreeWalker, walk_foreach},
+    codegen::tree_walker::{ContextHolder, Pass, TreeWalker, walk_foreach, walk_function_ptr},
     compilation_context::CompilationContext,
     diagnostics::Diagnostics,
     semantic::semantic_checks::check_var_redefinition,
@@ -449,6 +450,27 @@ impl TreeWalker for ScopeWalker {
         }
 
         self.context.scopes.pop();
+        Ok(())
+    }
+
+    async fn visit_function_ptr(&mut self, node: &mut FunctionPtrNode) -> Result<()> {
+        walk_function_ptr(self, node).await?;
+
+        // A function-typed variable answers a bare name only.
+        if node.receiver.is_none()
+            && let Some(symbol) = self.context.lookup_var(node.name)
+            && symbol.type_.matches_type(LpcType::Function(false))
+        {
+            Self::note_reference(&mut self.referenced, symbol, node.name);
+            let upvalue = self.should_upvalue_symbol(symbol);
+            self.check_ambiguity(node.name, node.span);
+            if upvalue {
+                trace!("upvaluing captured function var {}", node.name);
+                let symbol = self.context.lookup_var_mut(node.name).unwrap();
+                symbol.upvalue = true;
+            }
+        }
+
         Ok(())
     }
 

@@ -1980,6 +1980,13 @@ impl TreeWalker for CodegenWalker {
                 // `&` used as the receiver
                 FunctionPtrReceiver::Dynamic => FunctionReceiver::Dynamic,
             }
+        } else if self
+            .context
+            .lookup_var(node.name)
+            .is_some_and(|v| v.type_.matches_type(LpcType::Function(false)))
+        {
+            // A function-typed variable shadows a function of the same name, as a bare-name call does.
+            FunctionReceiver::Value(self.location_of(&node.name)?)
         } else {
             match self
                 .context
@@ -6209,6 +6216,38 @@ mod tests {
                 ]
             );
             assert_eq!(f.arg_lists, vec![vec![Arg::Value(local(1))]]);
+        }
+
+        #[tokio::test]
+        async fn a_bare_receiver_name_emits_the_same_pointer_as_the_ampersand_form() {
+            let a = function_f("void f(object o) { function g = o->twice; }").await;
+            let b = function_f("void f(object o) { function g = &(o)->twice(); }").await;
+            assert_eq!(a.instructions, b.instructions);
+        }
+
+        #[tokio::test]
+        async fn a_bare_variable_receiver_is_the_parenthesised_form() {
+            let a = function_f("void f(object o) { function g = &o->twice(1); }").await;
+            let b = function_f("void f(object o) { function g = &(o)->twice(1); }").await;
+            assert_eq!(a.instructions, b.instructions);
+        }
+
+        #[tokio::test]
+        async fn a_function_valued_variable_names_a_value_receiver() {
+            let f = function_f("void f(function h) { function g = &h(, 2); }").await;
+            let ptr_const = f
+                .instructions
+                .iter()
+                .find(|i| matches!(i, Instruction::FunctionPtrConst { .. }))
+                .expect("a FunctionPtrConst instruction");
+            assert_eq!(
+                ptr_const,
+                &Instruction::FunctionPtrConst {
+                    location: local(2),
+                    receiver: FunctionReceiver::Value(local(1)),
+                    name: ustr("h"),
+                }
+            );
         }
 
         #[tokio::test]
