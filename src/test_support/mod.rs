@@ -453,6 +453,29 @@ impl Drop for TempLib {
     }
 }
 
+/// A lib at a scratch root holding `files` (path under the lib, source),
+/// each parent directory created, plus an empty `secure/`.
+pub fn lib_holding(name: &str, files: &[(&str, &str)]) -> TempLib {
+    let root = TempLib::new(name);
+    std::fs::create_dir_all(root.join("secure")).unwrap();
+    for (path, source) in files {
+        let file = root.join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, source).unwrap();
+    }
+    root
+}
+
+/// The string global `name` of `process`; anything else panics.
+pub fn string_global(vm: &Vm, process: &Arc<Process>, name: &str) -> String {
+    // By name: an inherited global may hold register 0.
+    let Some(RegisterVariant::Global(register)) = process.program.global_variables[name].location
+    else {
+        panic!("`{name}` is a global");
+    };
+    committed_string(vm, process, register.index())
+}
+
 #[cfg(test)]
 mod compile_through_tests {
     use super::*;
