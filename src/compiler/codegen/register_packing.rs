@@ -112,6 +112,7 @@ pub fn pack(func: &mut ProgramFunction) {
             symbol.location = Some(remap(RegisterVariant::Local(old)));
         }
     }
+    // An argument list no instruction reads is left as is, so it may still name a register at or above num_locals.
     func.num_locals = (named.len() + slots.len()) as RegisterSize;
 }
 
@@ -554,7 +555,7 @@ mod tests {
     }
 
     #[test]
-    fn a_list_no_instruction_reads_is_still_mapped() {
+    fn a_list_no_instruction_reads_does_not_overrun_the_map() {
         let mut func = with_lists(
             temps_only(vec![Copy(constant(0), local(1)), Ret]),
             vec![vec![Arg::Value(local(5))]],
