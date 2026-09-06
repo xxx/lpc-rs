@@ -531,8 +531,19 @@ impl LpcRef {
         }
     }
 
-    pub fn bitand(&self, rhs: &Self) -> Result<Self> {
-        self.int_binop(rhs, BinaryOperation::And, |x, y| x & y)
+    pub(crate) fn bitand(&self, rhs: &Self, txn: &TxnHandle) -> Result<Self> {
+        match (self, rhs) {
+            (LpcRef::Array(cell), LpcRef::Array(rhs_cell)) => txn.with(|t| {
+                let (a, b) = (t.read_array(cell.id), t.read_array(rhs_cell.id));
+                let (a, b) = match (a, b) {
+                    (Some(a), Some(b)) => (a, b),
+                    _ => return Err(self.expected_array_error()),
+                };
+                let kept: Vec<LpcRef> = (*a).iter().filter(|x| (*b).contains(x)).cloned().collect();
+                Ok(LpcRef::Array(t.mint_array(LpcArray::from_iter(kept))))
+            }),
+            _ => self.int_binop(rhs, BinaryOperation::And, |x, y| x & y),
+        }
     }
 
     pub fn bitor(&self, rhs: &Self) -> Result<Self> {
@@ -1534,14 +1545,35 @@ mod tests {
 
         #[test]
         fn int_int() {
+            let txn = test_txn();
             let int = LpcRef::from(8);
             let int2 = LpcRef::from(15);
-            let result = int.bitand(&int2);
+            let result = int.bitand(&int2, &txn);
             if let Ok(LpcRef::Int(x)) = result {
                 assert_eq!(x, 8)
             } else {
                 panic!("no match")
             }
+        }
+
+        #[test]
+        fn array_array() {
+            let txn = test_txn();
+            let to_ref = |i| LpcRef::Int(LpcInt(i));
+            let v1 = vec![3, 1, 2, 1].into_iter().map(to_ref).collect::<Vec<_>>();
+            let v2 = vec![1, 3, 9].into_iter().map(to_ref).collect::<Vec<_>>();
+            let a1 = test_array_ref(&txn, LpcArray::new(v1));
+            let a2 = test_array_ref(&txn, LpcArray::new(v2));
+
+            let result = a1.bitand(&a2, &txn);
+            let expected = vec![3, 1, 1].into_iter().map(to_ref).collect::<Vec<_>>();
+
+            result
+                .unwrap()
+                .with_array(&txn, |a| {
+                    assert_eq!(*a, expected);
+                })
+                .unwrap();
         }
     }
 

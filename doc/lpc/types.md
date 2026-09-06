@@ -170,6 +170,7 @@
     - Arrays can be created with the `({ <values> })` syntax.
     - Arrays can be indexed with numeric or range indices.
     - Arrays can be concatenated with the `+` operator.
+    - `a & b` is the members of `a` also found in `b`, in `a`'s order, duplicates kept; `-` removes every occurrence.
     - `mixed *` indicates an array, where the values can be of any type, including other arrays.
     - `mixed *` is the only way to create a multidimensional array.
     - Arrays are mutable, and are reference types in LPC, meaning it is a pointer to the actual container, and

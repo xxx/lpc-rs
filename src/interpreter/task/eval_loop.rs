@@ -178,7 +178,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 consumed(&mut self.array_items, result)?;
             }
             Instruction::And(r1, r2, r3) => {
-                self.binary_operation(r1, r2, r3, |x, y| Some(x & y), |x, y, _| x.bitand(y))?;
+                self.binary_operation(
+                    r1,
+                    r2,
+                    r3,
+                    |x, y| Some(x & y),
+                    |x, y, txn| x.bitand(y, txn),
+                )?;
             }
             Instruction::BitwiseNot(r1, r2) => {
                 self.unary_operation(r1, r2, |x, _| x.bitnot())?;
