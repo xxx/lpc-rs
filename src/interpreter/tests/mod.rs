@@ -42,20 +42,9 @@ pub(crate) async fn run_with(
     objects: &[(&str, &str)],
     main: &str,
 ) -> Vec<LpcRef> {
-    let vm = Vm::new(config);
-    vm.initialize_process_from_code("/secure/master.c", master)
-        .await
-        .unwrap();
-    for (path, code) in objects {
-        vm.initialize_process_from_code(path, code).await.unwrap();
-    }
-    let proc = vm
-        .initialize_process_from_code("/main.c", main)
-        .await
-        .unwrap_or_else(|e| panic!("{}", e.diagnostic_string()));
-    let result = proc.result().expect("create() returns an array");
+    let (result, txn) = run_result(config, master, objects, main).await;
     result
-        .with_array(proc.context.txn(), |a| a.iter().cloned().collect())
+        .with_array(&txn, |a| a.iter().cloned().collect())
         .unwrap()
 }
 
@@ -67,7 +56,18 @@ pub(crate) async fn run_nested(
     objects: &[(&str, &str)],
     main: &str,
 ) -> (LpcRef, TxnHandle) {
-    let vm = Vm::new(test_config());
+    run_result(test_config(), master, objects, main).await
+}
+
+/// Loads `master`, `objects` and `/main.c` as in [`run`], and returns
+/// `create()`'s raw result with the transaction it was read through.
+async fn run_result(
+    config: Config,
+    master: &str,
+    objects: &[(&str, &str)],
+    main: &str,
+) -> (LpcRef, TxnHandle) {
+    let vm = Vm::new(config);
     vm.initialize_process_from_code("/secure/master.c", master)
         .await
         .unwrap();

@@ -205,16 +205,11 @@ pub fn check_binary_operation_types(
         }
         BinaryOperation::AndAnd => Ok(()),
         BinaryOperation::OrOr => Ok(()),
-        BinaryOperation::And => {
-            if tuple.0.is_array() && tuple.1.is_array() {
-                return Ok(());
-            }
-
-            match tuple {
-                (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
-                (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
-            }
-        }
+        BinaryOperation::And => match tuple {
+            (LpcType::Int(false), LpcType::Int(false)) => Ok(()),
+            (l, r) if l.is_array() && r.is_array() => Ok(()),
+            (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
+        },
         BinaryOperation::Or
         | BinaryOperation::Xor
         | BinaryOperation::Shl
