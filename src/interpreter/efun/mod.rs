@@ -14,6 +14,7 @@ pub(crate) mod calling;
 pub(crate) mod case;
 pub(crate) mod clone_object;
 pub(crate) mod command;
+pub(crate) mod commands;
 pub(crate) mod compose;
 pub(crate) mod conversions;
 pub(crate) mod crypt;
@@ -983,6 +984,11 @@ efuns! {
         arity: (1, 1),
         args: [LpcType::Int(false)],
     },
+    commands [async] => {
+        returns: LpcType::Mixed(true),
+        arity: (1, 1),
+        args: [LpcType::Object(false) | LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1291,6 +1297,7 @@ mod tests {
                 "break_string",
                 "calling_function",
                 "calling_program",
+                "commands",
             ]
         );
     }
