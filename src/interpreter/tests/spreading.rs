@@ -142,6 +142,19 @@ async fn call_other_spreads_in_both_forms() {
     assert_eq!(r, vec![n(6), n(9)]);
 }
 
+/// A collection receiver's argument list is read by `arg_values`, not
+/// `push_call_frame`'s door: its own spread expansion.
+#[tokio::test]
+async fn a_collection_call_other_spreads() {
+    let r = run(
+        "",
+        &[X],
+        r#"mixed *create() { int *xs = ({ 2, 3 }); mixed *r = ({ "/x", "/x" })->add(1, xs...); return ({ r[0], r[1] }); }"#,
+    )
+    .await;
+    assert_eq!(r, vec![n(6), n(6)]);
+}
+
 #[tokio::test]
 async fn a_function_pointer_spreads_after_its_bound_arguments() {
     let r = run(
