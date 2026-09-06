@@ -575,8 +575,7 @@ mod tests {
         }
     }
 
-    /// A spread's operand is a child like any other: the guard must descend
-    /// into `expr...` exactly as it would into a bare argument.
+    /// The nesting guard descends into a spread's operand.
     #[tokio::test]
     async fn a_spread_operand_past_the_cap_is_refused_like_any_other() {
         let compiler = Compiler::new(test_config());
