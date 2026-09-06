@@ -12,7 +12,7 @@ are counted, not bytes or display columns.
 
 A non-string `str` answers 0, so the call is safe on a value that may be
 0. A width below 1 is taken as 1. An indent that is neither an int in
-0..1000 nor a string is an error.
+0..=1000 nor a string is an error.
 
 ### Examples
 
