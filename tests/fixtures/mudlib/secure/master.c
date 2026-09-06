@@ -24,3 +24,11 @@ mapping get_mud_stats() {
         "FAMILY": "LPMud",
     ]);
 }
+
+string *epilog(int load_empty) {
+    return ({ "/std/room" });
+}
+
+void preload(string file) {
+    file->query_short();
+}

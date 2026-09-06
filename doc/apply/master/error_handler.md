@@ -34,6 +34,9 @@ the receiver itself cannot be resolved (its load refused by `valid_load`, its
 compile failed, the pointer's owner destructed) the object is the one that made
 the pointer.
 
+A boot apply — `epilog`, or a `preload` — has no caller either; its error
+arrives with the master as `error["object"]`.
+
 A compile that fails carries its warnings inside the error's diagnostic; a
 compile that succeeds hands its warnings to `warning_handler` instead.
 

@@ -19,3 +19,7 @@ typical applies, due to the potential need to persist data, and how bad things
 can go if that partially fails.
 
 Defining `shutdown` is optional, and it will simply not be called if not defined.
+
+### See also
+
+`epilog`, `valid_shutdown`

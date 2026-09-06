@@ -3,14 +3,11 @@
 //! call by bare name resolves own and inherited functions first, then simul
 //! efuns, then efuns.
 
-use std::sync::Arc;
-
-use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_utils::config::ConfigBuilder;
 
 use crate::{
-    interpreter::{process::Process, vm::Vm},
-    test_support::{TempLib, committed_string, permissive_master, test_config},
+    interpreter::vm::Vm,
+    test_support::{lib_holding, permissive_master, string_global, test_config},
 };
 
 /// A simul efun answering what `this_object()` names.
@@ -18,26 +15,6 @@ const ME: &str = "string me() { return file_name(this_object()); }\n";
 
 /// `/user.c`: `got` is what `me()` returns.
 const USER_ME: &str = "string got; void create() { got = me(); }";
-
-/// A lib holding `files` (path under the lib, source), with a `secure/` dir.
-fn lib_holding(lib: &str, files: &[(&str, &str)]) -> TempLib {
-    let root = TempLib::new(lib);
-    std::fs::create_dir_all(root.join("secure")).unwrap();
-    for (path, source) in files {
-        std::fs::write(root.join(path), source).unwrap();
-    }
-    root
-}
-
-/// The string global `name` of `process`.
-fn string_global(vm: &Vm, process: &Arc<Process>, name: &str) -> String {
-    // By name: an inherited global may hold register 0.
-    let Some(RegisterVariant::Global(register)) = process.program.global_variables[name].location
-    else {
-        panic!("`{name}` is a global");
-    };
-    committed_string(vm, process, register.index())
-}
 
 /// The `got` global of `/user.c` compiled from `user`, in a lib holding
 /// `files` (path under the lib, source) whose simul-efun file the config

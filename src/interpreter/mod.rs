@@ -53,6 +53,8 @@ pub const COMPILE_OBJECT: &str = "compile_object";
 pub const VALID_INHERIT: &str = "valid_inherit";
 /// Master apply: returns the object a new connection becomes (`doc/apply/master/connect.md`).
 pub const CONNECT: &str = "connect";
+/// Master apply: the files to preload at boot (`doc/apply/master/epilog.md`).
+pub const EPILOG: &str = "epilog";
 /// Master apply: receives each uncaught runtime error (`doc/apply/master/error_handler.md`).
 pub const ERROR_HANDLER: &str = "error_handler";
 /// Master apply: receives each warning a successful compile raised (`doc/apply/master/warning_handler.md`).
@@ -91,6 +93,8 @@ pub const PARSE_COMMAND_PREPOS_LIST: &str = "parse_command_prepos_list";
 pub const PARSE_COMMAND_USERS: &str = "parse_command_users";
 /// Master apply: the message for a parser-package failure (`doc/apply/master/parser_error_message.md`).
 pub const PARSER_ERROR_MESSAGE: &str = "parser_error_message";
+/// Master apply: loads one file `epilog` listed (`doc/apply/master/preload.md`).
+pub const PRELOAD: &str = "preload";
 /// Living apply: sees each command line before dispatch (`doc/apply/living/process_input.md`).
 pub const PROCESS_INPUT: &str = "process_input";
 /// Master apply: called as the driver shuts down (`doc/apply/master/shutdown.md`).

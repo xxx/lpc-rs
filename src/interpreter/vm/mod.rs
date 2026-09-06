@@ -23,6 +23,7 @@ const SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
 
 mod initiate_login;
 mod object_initializers;
+mod preload;
 mod prioritize_call_out;
 
 pub mod binding;
@@ -65,10 +66,12 @@ impl Vm {
     /// The main initialization method for the VM.
     ///
     /// This method will load the master object and simul_efun file, add
-    /// the master object to the object space, start networking,
-    /// and then start the main loop.
+    /// the master object to the object space, run the master's boot applies
+    /// (`epilog`, then `preload` per listed file), start networking, and
+    /// then start the main loop.
     pub async fn boot(&mut self) -> lpc_rs_errors::Result<i32> {
         self.bootstrap().await?;
+        self.preload().await;
 
         let config = &self.global_state.config;
         let address = format!("{}:{}", config.bind_address, config.port);
