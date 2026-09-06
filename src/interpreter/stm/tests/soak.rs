@@ -1,26 +1,40 @@
-//! Long-run soak tests: sustained commits must plateau in RSS, and
-//! retention must be bounded by the oldest live snapshot and released
-//! when it drops.
+//! Long-run soak tests: sustained commits must plateau in the bytes the
+//! committing thread holds, and retention must be bounded by the oldest
+//! live snapshot and released when it drops.
+
+use jemalloc_ctl::thread::{ThreadLocal, allocatedp, deallocatedp};
 
 use crate::interpreter::{
     lpc_ref::LpcRef,
     stm::{VarId, committer::Committer, tests::*},
 };
 
-/// Resident set size in bytes, from `/proc/self/statm` (Linux only).
-/// Returns `None` off-Linux so the tests skip instead of failing there.
-fn rss_bytes() -> Option<u64> {
-    let statm = std::fs::read_to_string("/proc/self/statm").ok()?;
-    let pages: u64 = statm.split_whitespace().nth(1)?.parse().ok()?;
-    // statm counts pages; the page size is 4 KiB on every Linux target we run on.
-    Some(pages * 4096)
+/// The calling thread's jemalloc counters: bytes ever allocated and ever
+/// freed by it, which no other thread's allocations move.
+struct ThreadBytes {
+    allocated: ThreadLocal<u64>,
+    deallocated: ThreadLocal<u64>,
+}
+
+impl ThreadBytes {
+    fn current() -> Self {
+        Self {
+            allocated: allocatedp::read().expect("jemalloc thread.allocatedp"),
+            deallocated: deallocatedp::read().expect("jemalloc thread.deallocatedp"),
+        }
+    }
+
+    /// Bytes this thread holds right now.
+    fn live(&self) -> u64 {
+        self.allocated.get() - self.deallocated.get()
+    }
 }
 
 /// Upward slope the failure mode.
 fn assert_plateau(samples: &[u64], baseline: u64, headroom: u64) {
     assert!(
         samples.iter().all(|&s| s <= baseline + headroom),
-        "RSS grew past headroom: baseline {baseline} B, max {} B",
+        "live bytes grew past headroom: baseline {baseline} B, max {} B",
         samples.iter().max().copied().unwrap_or(0)
     );
 
@@ -31,16 +45,16 @@ fn assert_plateau(samples: &[u64], baseline: u64, headroom: u64) {
     let last = samples[samples.len() - 1];
     assert!(
         last <= median + headroom / 4,
-        "RSS trending upward: tail {last} B, median {median} B\nsamples: {samples:?}"
+        "live bytes trending upward: tail {last} B, median {median} B\nsamples: {samples:?}"
     );
 }
 
 #[test]
-fn soak_rss_plateaus_under_sustained_commits() {
+fn soak_live_bytes_plateau_under_sustained_commits() {
     const COMMITS: usize = 100_000;
     const WARMUP: usize = 2_000;
     const SAMPLE_EVERY: usize = 5_000;
-    const HEADROOM: u64 = 32 * 1024 * 1024;
+    const HEADROOM: u64 = 1024 * 1024;
 
     let (tx, rx) = flume::unbounded();
     let mut committer = Committer::new();
@@ -54,10 +68,20 @@ fn soak_rss_plateaus_under_sustained_commits() {
         assert!(result.is_ok());
     }
 
-    let Some(baseline) = rss_bytes() else {
-        eprintln!("soak skipped: /proc/self/statm unavailable (non-Linux)");
-        return;
-    };
+    let bytes = ThreadBytes::current();
+    let baseline = bytes.live();
+
+    // A neighbour on another thread holds twice the headroom for the
+    // whole sampling window: the measurement must not see it.
+    let (release_tx, release_rx) = flume::bounded::<()>(1);
+    let (ready_tx, ready_rx) = flume::bounded::<()>(1);
+    let neighbour = std::thread::spawn(move || {
+        let held = vec![1u8; 2 * HEADROOM as usize];
+        ready_tx.send(()).unwrap();
+        release_rx.recv().unwrap();
+        drop(held);
+    });
+    ready_rx.recv().unwrap();
 
     let started = std::time::Instant::now();
     let mut samples = vec![baseline];
@@ -67,15 +91,16 @@ fn soak_rss_plateaus_under_sustained_commits() {
         });
         assert!(result.is_ok());
         if i % SAMPLE_EVERY == 0 {
-            let rss = rss_bytes().expect("statm disappeared mid-test");
-            samples.push(rss);
+            samples.push(bytes.live());
         }
     }
     let elapsed = started.elapsed();
+    release_tx.send(()).unwrap();
+    neighbour.join().unwrap();
     let ns_per_commit = elapsed.as_nanos() as u64 / COMMITS as u64;
-    let final_rss = samples[samples.len() - 1];
+    let final_live = samples[samples.len() - 1];
     eprintln!(
-        "soak: {COMMITS} commits in {elapsed:?} ({ns_per_commit} ns/commit); baseline {baseline} B, final {final_rss} B"
+        "soak: {COMMITS} commits in {elapsed:?} ({ns_per_commit} ns/commit); baseline {baseline} B, final {final_live} B"
     );
 
     assert_plateau(&samples, baseline, HEADROOM);
