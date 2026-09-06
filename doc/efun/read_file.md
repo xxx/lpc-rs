@@ -2,8 +2,9 @@
 
 `string read_file(string path, int start = 1, int lines = 0)`
 
-The whole of the file at `path` as a string. `path` is an in-game path; a
-relative one is resolved against the calling object's directory.
+The file at `path` as a string, or the lines `start` and `lines` select.
+`path` is an in-game path; a relative one is resolved against the calling
+object's directory.
 
 `start` is a 1-based line number (0 is the first line too) and `lines` a
 count; `0` or an absent `lines` reads to the end. A start past the last line
