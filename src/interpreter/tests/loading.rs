@@ -715,8 +715,7 @@ mod simul_efuns {
 
     use super::*;
 
-    /// A parent reached only through `inherit` sees the simul-efuns too, not
-    /// just the file that inherits it.
+    /// A parent reached only through `inherit` sees the simul-efuns too.
     #[tokio::test]
     async fn an_inherited_parent_resolves_simul_efuns() {
         let vm = Vm::new(test_config());

@@ -42,8 +42,8 @@ async fn run() {
 
     let vm = Vm::new(config.clone());
 
-    // The sefun file compiles as the target too; loading it first as well
-    // redefines its own nomask functions.
+    // Loading the sefun file first when it is also the target redefines its
+    // own nomask functions.
     let target_is_sefun_file = config.simul_efun_source().is_some_and(|sefuns| {
         sefuns.as_in_game(&*config.lib_dir) == lpc_path.as_in_game(&*config.lib_dir)
     });
