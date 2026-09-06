@@ -318,7 +318,7 @@ void preload(string file) { loaded += file + ";"; }
         assert!(!is_loaded(&vm, "/good"));
     }
 
-    /// The list ends with the master; nothing after it is applied.
+    /// Nothing after the destructed master is applied.
     #[tokio::test]
     async fn the_master_destructing_itself_ends_the_list() {
         let master_source = r#"
