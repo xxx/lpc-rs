@@ -645,8 +645,8 @@ efuns! {
     },
     read_file [async] => {
         returns: LpcType::String(false),
-        arity: 1,
-        args: [LpcType::String(false)],
+        arity: (3, 2),
+        args: [LpcType::String(false), LpcType::Int(false), LpcType::Int(false)],
     },
     rm [async] => {
         returns: LpcType::Int(false),
