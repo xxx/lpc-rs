@@ -206,25 +206,35 @@ impl IncludeWalk {
         match source {
             IncludeSource::Configured(path) => path.clone(),
             IncludeSource::Local { path } => {
-                LpcPath::new_in_game(path, self.cwd(config), &*config.lib_dir)
-            }
-            IncludeSource::System { path } => {
-                let mut found = None;
-                for dir in &config.system_include_dirs {
-                    let candidate = LpcPath::new_in_game(path, dir.as_str(), &*config.lib_dir);
-                    let exists = tokio::fs::metadata(candidate.as_server(&*config.lib_dir))
-                        .await
-                        .is_ok();
-                    if exists {
-                        found = Some(candidate);
-                        break;
-                    }
+                let local = LpcPath::new_in_game(path, self.cwd(config), &*config.lib_dir);
+                if Self::exists(&local, config).await {
+                    return local;
                 }
-                found.unwrap_or_else(|| {
-                    LpcPath::new_in_game(path, self.cwd(config), &*config.lib_dir)
-                })
+                self.in_system_dirs(path, config).await.unwrap_or(local)
+            }
+            IncludeSource::System { path } => self
+                .in_system_dirs(path, config)
+                .await
+                .unwrap_or_else(|| LpcPath::new_in_game(path, self.cwd(config), &*config.lib_dir)),
+        }
+    }
+
+    /// Whether `path` exists on disk, at its server path.
+    async fn exists(path: &LpcPath, config: &Config) -> bool {
+        tokio::fs::metadata(path.as_server(&*config.lib_dir))
+            .await
+            .is_ok()
+    }
+
+    /// The first configured system dir holding `path`, in order.
+    async fn in_system_dirs(&self, path: &str, config: &Config) -> Option<LpcPath> {
+        for dir in &config.system_include_dirs {
+            let candidate = LpcPath::new_in_game(path, dir.as_str(), &*config.lib_dir);
+            if Self::exists(&candidate, config).await {
+                return Some(candidate);
             }
         }
+        None
     }
 
     /// The including file's directory — the resolution cwd.

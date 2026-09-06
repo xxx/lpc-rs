@@ -969,6 +969,26 @@ mod tests {
 
             test_invalid(prog, "unexpected tokens after `#include`").await;
         }
+
+        #[tokio::test]
+        async fn a_quoted_include_missing_locally_falls_back_to_the_system_dirs() {
+            let input = indoc! {r#"
+                #include "only_in_sys.h"
+                int i = ONLY_IN_SYS;
+            "#};
+
+            test_valid(input, &["int", "i", "=", "111", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn a_quoted_include_found_locally_does_not_fall_back() {
+            let input = indoc! {r#"
+                #include "local_and_sys.h"
+                int i = LOCAL_AND_SYS;
+            "#};
+
+            test_valid(input, &["int", "i", "=", "1", ";"]).await;
+        }
     }
 
     mod test_local_includes {
