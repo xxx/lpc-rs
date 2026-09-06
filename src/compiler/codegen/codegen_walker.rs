@@ -1337,7 +1337,7 @@ impl TreeWalker for CodegenWalker {
         };
         let has_receiver = receiver.is_some();
 
-        if name.as_str() == CATCH {
+        if !has_receiver && name.as_str() == CATCH {
             return self.emit_catch(node).await;
         }
 
@@ -1411,7 +1411,7 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        if name.as_str() == SIZEOF {
+        if !has_receiver && name.as_str() == SIZEOF {
             let result = self.register_counter.next().unwrap().as_local();
             // `sizeof`'s arity is checked by the semantic walker, fatal before codegen runs.
             let arg = expect_value(*arg_results.first().unwrap(), node.span)?;
@@ -6222,6 +6222,17 @@ mod tests {
                 f.arg_lists,
                 vec![vec![Arg::Value(local(1)), Arg::Spread(local(2))]]
             );
+        }
+
+        #[tokio::test]
+        async fn a_receiver_sizeof_is_an_ordinary_call_other() {
+            let f = function_f("void f(object o, int *xs) { o->sizeof(xs...); }").await;
+            assert!(
+                matches!(f.instructions[0], Instruction::CallOther(..)),
+                "{:?}",
+                f.instructions[0]
+            );
+            assert_eq!(f.arg_lists[0], vec![Arg::Spread(local(2))]);
         }
 
         #[tokio::test]
