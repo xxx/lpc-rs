@@ -1317,3 +1317,16 @@ async fn a_literal_with_a_quote_reaches_the_generic_handlers() {
     let r = run("", &[QUOTED_VERB, GENERIC_TARGET, ROOM], &custom_main(body)).await;
     assert_eq!(r, vec![LpcRef::from(1), s("at bob's OBJ /generic_target")]);
 }
+
+#[tokio::test]
+async fn a_triple_quote_char_literal_is_the_apostrophe() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
+        mixed *create() { return ({ ''' == "'"[0] }); }
+    "# },
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(1)]);
+}

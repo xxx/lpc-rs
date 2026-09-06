@@ -303,18 +303,36 @@ pub enum Token {
     #[regex(r#""(\\.|[^"])*""#, string_token_without_startend)]
     StringLiteral(StringToken),
 
-    // Allow multiple bytes so any Unicode scalar can be matched.
-    #[regex(r#"'(\\.|[^']){1,4}'"#, |lex| {
+    // `'''` is CD-flavoured LPC's spelling of the apostrophe char literal,
+    // alongside the ordinary escape `'\''`.
+    #[regex(r#"'''|'(\\.|[^'])'"#, |lex| {
     let span = track_slice(lex);
+    let slice = lex.slice();
 
-    match lex.slice().chars().nth(1) {
+    let c = if slice == "'''" {
+        Some('\'')
+    } else if slice.as_bytes().get(1) == Some(&b'\\') {
+        // A small local table, not `convert_escapes`: that table has no
+        // `\0` -> NUL mapping (an unhandled escape there keeps the digit
+        // `0`), and adds `\v`/`\f`/`\a`/`\b`, which char literals don't.
+        Some(match slice.chars().nth(2) {
+            Some('n') => '\n',
+            Some('t') => '\t',
+            Some('r') => '\r',
+            Some('0') => '\0',
+            Some('\\') => '\\',
+            Some('\'') => '\'',
+            Some('"') => '"',
+            Some(other) => other,
+            None => '\\',
+        })
+    } else {
+        slice.chars().nth(1)
+    };
+
+    match c {
         Some(c) => Ok(IntToken(span, c as LpcIntInner)),
-        None => {
-            Err(())
-            // Err(LpcError::bug(
-            //     format!("Unable to find the character in token `{}`? This is a WTF.", lex.slice())
-            // ).with_span(Some(span)))
-        }
+        None => Err(()),
     }
     })]
     #[regex(r"[1-9][0-9_]*|0", |lex| {
@@ -789,6 +807,26 @@ mod tests {
             panic!("expected a string literal");
         };
         assert_eq!(st.0, Span::new(0, 0..5));
+    }
+
+    #[test]
+    fn an_apostrophe_char_literal_is_the_triple_quote() {
+        let vec = lex_vec("'''");
+        let Ok(Token::IntLiteral(IntToken(_, i))) = &vec[0] else {
+            panic!("expected an int literal");
+        };
+        assert_eq!(*i, 39);
+    }
+
+    #[test]
+    fn an_escaped_char_literal_is_the_escaped_character() {
+        for (src, expected) in [(r"'\n'", 10), (r"'\''", 39), (r"'\\'", 92)] {
+            let vec = lex_vec(src);
+            let Ok(Token::IntLiteral(IntToken(_, i))) = &vec[0] else {
+                panic!("expected an int literal for `{src}`");
+            };
+            assert_eq!(*i, expected, "for `{src}`");
+        }
     }
 
     #[test]
