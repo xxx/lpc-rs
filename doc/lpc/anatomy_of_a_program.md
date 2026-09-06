@@ -28,6 +28,7 @@ notes:
 - globals are initialized when the object is created, prior to calling `create`, (which happens automatically)
 - a parameter declared `ref` is the caller's variable; see [references](references.md)
 - `f(a, xs...)` passes each element of `xs` as its own argument; see [argument spreading](argument_spreading.md)
+- a function declared without a return type is `mixed`; `#pragma strict_types` makes that an error from its line to the end of the file that declares it, and an `#include`d file is outside it unless it declares the pragma itself
 - `::f()` calls the inherited `f`, `name::f()` the one of the parent inherited as `name` (`inherit "/x" name;`), and `efun::f()` the efun; each looks only there, so a name that program lacks is a compile error
 - `#include "x.h"` looks beside the including file, then in the system include dirs; `<x.h>` looks only in the system dirs
 - a source file that is not UTF-8 is read as Latin-1, with a warning

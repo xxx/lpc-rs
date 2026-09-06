@@ -681,7 +681,15 @@ impl Preprocessor {
                 NO_INHERIT => self.context.pragmas.set_no_inherit(true),
                 NO_SHADOW => self.context.pragmas.set_no_shadow(true),
                 RESIDENT => self.context.pragmas.set_resident(true),
-                STRICT_TYPES => self.context.pragmas.set_strict_types(true),
+                STRICT_TYPES => {
+                    self.context
+                        .strict_types_from
+                        .entry(span.file_id())
+                        .or_insert(span.l());
+                    if self.includes.at_root() {
+                        self.context.pragmas.set_strict_types(true);
+                    }
+                }
                 SAVE_BINARY | NO_INCLUDE => self.context.diagnostics.record(lpc_warning!(
                     Some(span),
                     "pragma `{}` has no effect in lpc-rs",

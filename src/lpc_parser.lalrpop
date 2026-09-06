@@ -251,10 +251,10 @@ FunctionDef: FunctionDefNode = {
 
         let return_type = if let Some(this_type) = r_type {
             LpcType::from(this_type.1).as_array(array)
-        } else if context.pragmas.strict_types() {
+        } else if context.strict_types_at(span) {
             let err = LpcError::new("Missing return type")
                                       .with_span(Some(span))
-                                      .with_note("`#pragma strict_types` is enabled, which requires all functions to have an explicit return type.");
+                                      .with_note("`#pragma strict_types` governs this file, so every function it declares needs an explicit return type.");
             return Err(ParseError::User { error: err });
         } else {
             LpcType::Mixed(array)

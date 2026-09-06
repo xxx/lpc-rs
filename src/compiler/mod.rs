@@ -440,6 +440,72 @@ mod tests {
         }
     }
 
+    mod strict_types_scope {
+        use super::*;
+        use crate::test_support::{lib_holding, temp_lib_config};
+
+        const UNTYPED: &str = "untyped(int x) { return x + 1; }\n";
+        const STRICT: &str = "#pragma strict_types\n";
+
+        async fn compile_root(name: &str, files: &[(&str, &str)]) -> Result<Compiled> {
+            let root = lib_holding(name, files);
+            let config: Arc<Config> = temp_lib_config(&root).into();
+            let compiler = CompilerBuilder::default().config(config).build().unwrap();
+            compiler.compile_file("/root.c").await
+        }
+
+        #[tokio::test]
+        async fn an_include_is_outside_the_includer_s_strict_types() {
+            let source =
+                format!("{STRICT}#include \"inc.h\"\nint typed() {{ untyped(1); return 1; }}\n");
+            let compiled =
+                compile_root("strict-include", &[("root.c", &source), ("inc.h", UNTYPED)]).await;
+
+            assert!(compiled.is_ok(), "{:?}", compiled.err());
+        }
+
+        #[tokio::test]
+        async fn the_root_s_own_untyped_function_is_refused() {
+            let source = format!("{STRICT}{UNTYPED}");
+            let compiled = compile_root("strict-root", &[("root.c", &source)]).await;
+
+            assert_eq!(compiled.unwrap_err().message(), "Missing return type");
+        }
+
+        #[tokio::test]
+        async fn an_include_s_strict_types_ends_with_the_include() {
+            let header = format!("{STRICT}int typed_in_include() {{ return 1; }}\n");
+            let source = format!("#include \"strict.h\"\n{UNTYPED}");
+            let compiled = compile_root(
+                "strict-header",
+                &[("root.c", &source), ("strict.h", &header)],
+            )
+            .await;
+
+            assert!(compiled.is_ok(), "{:?}", compiled.err());
+        }
+
+        #[tokio::test]
+        async fn an_include_s_strict_types_governs_its_own_functions() {
+            let header = format!("{STRICT}{UNTYPED}");
+            let compiled = compile_root(
+                "strict-header-own",
+                &[("root.c", "#include \"strict.h\"\n"), ("strict.h", &header)],
+            )
+            .await;
+
+            assert_eq!(compiled.unwrap_err().message(), "Missing return type");
+        }
+
+        #[tokio::test]
+        async fn a_function_above_the_pragma_line_is_unchecked() {
+            let source = format!("{UNTYPED}{STRICT}int typed() {{ untyped(1); return 1; }}\n");
+            let compiled = compile_root("strict-below", &[("root.c", &source)]).await;
+
+            assert!(compiled.is_ok(), "{:?}", compiled.err());
+        }
+    }
+
     mod test_rendered_diagnostics {
         use indoc::indoc;
 

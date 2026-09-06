@@ -32,8 +32,7 @@ pub struct PragmaFlags {
     /// that run in the background.
     pub resident: bool,
 
-    /// When true, enforce explicit return types on functions at compile time.
-    /// When false, functions can be declared without a return type,
-    /// which will be treated as `mixed`.
+    /// The root file declared `#pragma strict_types`; the per-file scope
+    /// lives in the compilation context.
     pub strict_types: bool,
 }

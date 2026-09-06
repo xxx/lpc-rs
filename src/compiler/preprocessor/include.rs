@@ -200,6 +200,11 @@ impl IncludeWalk {
         debug_assert!(popped.is_some(), "include close without an open");
     }
 
+    /// Whether the active file is the root rather than an `#include`.
+    pub fn at_root(&self) -> bool {
+        self.stack.len() == 1
+    }
+
     /// Mark the active file `#pragma once` (idempotent).
     pub fn mark_once(&mut self) {
         let frame = self
