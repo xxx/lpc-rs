@@ -42,7 +42,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         list: ArgList,
         external: bool,
     ) -> lpc_rs_errors::Result<()> {
-        let num_args = RegisterSize::try_from(self.expanded_arg_count(list)?)?;
+        let num_args = self.checked_register_count(self.expanded_arg_count(list)?, &func)?;
         // A simul_efun's prototype can change after a cached caller was compiled against it.
         if num_args < func.arity().num_args
             && let Some(i) = func.prototype.first_ref_param()
@@ -89,11 +89,30 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let mut count = 0;
         for arg in args {
             count += match *arg {
-                Arg::Spread(location) => frame.spread_elements(&self.context.txn, location)?.len(),
+                Arg::Spread(location) => frame.spread_len(&self.context.txn, location)?,
                 Arg::Value(_) | Arg::Ref(_) => 1,
             };
         }
         Ok(count)
+    }
+
+    /// `count` as a [`RegisterSize`] for `function`'s frame; a runtime error,
+    /// not a bare conversion failure, when it would not fit one alongside
+    /// the function's locals and its `r0`.
+    pub(crate) fn checked_register_count(
+        &self,
+        count: usize,
+        function: &ProgramFunction,
+    ) -> lpc_rs_errors::Result<RegisterSize> {
+        if count + function.num_locals as usize + 1 > RegisterSize::MAX as usize {
+            let limit =
+                (RegisterSize::MAX as usize).saturating_sub(function.num_locals as usize + 1);
+            return Err(self.runtime_error(format!(
+                "cannot pass {count} arguments to `{}`: the limit is {limit}",
+                function.name()
+            )));
+        }
+        Ok(count as RegisterSize)
     }
 
     /// Copy the arguments the caller's `list` names into the frame above it.

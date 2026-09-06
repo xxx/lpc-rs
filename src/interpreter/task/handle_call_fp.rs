@@ -266,7 +266,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             )));
         }
         let txn = &self.context.txn;
-        let num_args = RegisterSize::try_from(ptr.bound_len(passed.len()))?;
+        let num_args = self.checked_register_count(ptr.bound_len(passed.len()), function)?;
         let mut frame = CallFrame::with_minimum_arg_capacity(
             process,
             function.clone(),

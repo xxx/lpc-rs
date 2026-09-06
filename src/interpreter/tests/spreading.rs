@@ -143,7 +143,7 @@ async fn call_other_spreads_in_both_forms() {
 }
 
 /// A collection receiver's argument list is read by `arg_values`, not
-/// `push_call_frame`'s door: its own spread expansion.
+/// `push_call_frame`'s door.
 #[tokio::test]
 async fn a_collection_call_other_spreads() {
     let r = run(
@@ -201,4 +201,48 @@ async fn a_pointer_call_refuses_a_non_array_spread() {
     )
     .await;
     assert!(e.contains("cannot spread int: `...` takes an array"), "{e}");
+}
+
+const LOCALS: &str = "int f(int a) { int q; int w; int z; q = 1; w = 2; z = 3; return q + w + z; }";
+
+#[tokio::test]
+async fn a_spread_past_the_register_ceiling_is_a_clean_runtime_error() {
+    let e = fails(
+        "",
+        &[],
+        &format!(
+            "{LOCALS} mixed *create() {{ mixed *xs = allocate(65535); return ({{ f(xs...) }}); }}"
+        ),
+    )
+    .await;
+    assert!(e.contains("cannot pass"), "{e}");
+    assert!(e.contains("the limit is"), "{e}");
+}
+
+#[tokio::test]
+async fn a_spread_past_the_register_ceiling_through_a_pointer_is_a_clean_runtime_error() {
+    let e = fails(
+        "",
+        &[],
+        &format!(
+            "{LOCALS} mixed *create() {{ mixed *xs = allocate(65535); function fp = &f(); return ({{ fp(xs...) }}); }}"
+        ),
+    )
+    .await;
+    assert!(e.contains("cannot pass"), "{e}");
+    assert!(e.contains("the limit is"), "{e}");
+}
+
+#[tokio::test]
+async fn a_large_spread_well_under_the_ceiling_still_works() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
+            int count(int a, ...) { int q; int w; int z; q = 1; w = 2; z = 3; return sizeof(argv); }
+            mixed *create() { mixed *xs = allocate(1000); return ({ count(xs...) }); }
+        "# },
+    )
+    .await;
+    assert_eq!(r, vec![n(999)]);
 }
