@@ -1,9 +1,15 @@
 # read_file
 
-`string read_file(string path)`
+`string read_file(string path, int start = 1, int lines = 0)`
 
-The whole of the file at `path` as a string. `path` is an in-game path; a
-relative one is resolved against the calling object's directory.
+The file at `path` as a string, or the lines `start` and `lines` select.
+`path` is an in-game path; a relative one is resolved against the calling
+object's directory.
+
+`start` is a 1-based line number (0 is the first line too) and `lines` a
+count; `0` or an absent `lines` reads to the end. A start past the last line
+answers `""`. A negative `start` or `lines` is a runtime error. Lines keep the
+newline they had in the file.
 
 Every call is first put to the master's `valid_read(path, "read_file",
 caller, program)`. A refusal, or a master that does not define the apply, is
@@ -22,6 +28,7 @@ The read is live: a `write_file` earlier in the same task has not landed yet
 ```c
 string motd = read_file("/etc/motd");
 if (catch(motd = read_file("/secure/passwd"))) write("Not for you.\n");
+string tail = read_file("/log/runtime", 100, 20);
 ```
 
 ### See also

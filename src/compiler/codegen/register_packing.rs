@@ -37,10 +37,19 @@ pub fn pack(func: &mut ProgramFunction) {
     named.sort_unstable();
     named.dedup();
 
+    // The peephole prunes a call it finds unreachable but keeps its argument
+    // list, which `rename_registers` still visits.
+    let listed = func
+        .arg_lists
+        .iter()
+        .flatten()
+        .filter_map(|arg| local_index(arg.register()));
+
     let universe = flows
         .iter()
         .flat_map(|flow| flow.def.into_iter().chain(flow.uses.iter().copied()))
         .chain(named.iter().copied())
+        .chain(listed)
         .max()
         .map_or(0, |max| max + 1);
 
@@ -103,6 +112,7 @@ pub fn pack(func: &mut ProgramFunction) {
             symbol.location = Some(remap(RegisterVariant::Local(old)));
         }
     }
+    // An argument list no instruction reads is left as is, so it may still name a register at or above num_locals.
     func.num_locals = (named.len() + slots.len()) as RegisterSize;
 }
 
@@ -238,6 +248,7 @@ mod tests {
     use lpc_rs_function_support::{function_prototype::FunctionPrototypeBuilder, symbol::Symbol};
 
     use super::*;
+    use crate::{compiler::codegen::codegen_walker::CodegenWalker, test_support::CompileThrough};
 
     fn func_with(
         arity: FunctionArity,
@@ -541,6 +552,33 @@ mod tests {
         pack(&mut func);
         assert_eq!(func.instructions, before);
         assert_eq!(func.num_locals, 2);
+    }
+
+    #[test]
+    fn a_list_no_instruction_reads_does_not_overrun_the_map() {
+        let mut func = with_lists(
+            temps_only(vec![Copy(constant(0), local(1)), Ret]),
+            vec![vec![Arg::Value(local(5))]],
+        );
+        pack(&mut func);
+        assert_eq!(func.arg_lists, vec![vec![Arg::Value(local(5))]]);
+    }
+
+    /// The peephole drops the tail after an early `return`, and the
+    /// argument list the pruned call read outlives it.
+    #[tokio::test]
+    async fn a_function_whose_tail_is_unreachable_packs() {
+        let walker = CodegenWalker::compile_through(
+            r#"void f(string s) {} void g(string s) { return; f(s + "!"); }"#,
+        )
+        .await
+        .unwrap();
+        let g = walker
+            .functions
+            .values()
+            .find(|function| function.name() == "g")
+            .unwrap();
+        assert_eq!(g.instructions, vec![Ret]);
     }
 
     #[test]

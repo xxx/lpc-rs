@@ -7,7 +7,7 @@ use indoc::indoc;
 
 use crate::{
     interpreter::{CommittedReader, lpc_ref::LpcRef, process::Process, vm::Vm},
-    test_support::{TempLib, committed_string, temp_lib_config},
+    test_support::{TempLib, committed_string, temp_lib_config, test_config},
 };
 
 /// Records every loading question and allows it. Globals, by register:
@@ -707,5 +707,32 @@ mod boot {
 
         let err = message(&cloner_caught(&vm).await);
         assert!(err.contains("clone_object: permission denied"), "{err}");
+    }
+}
+
+mod simul_efuns {
+    use lpc_rs_core::lpc_path::LpcPath;
+
+    use super::*;
+
+    /// A parent reached only through `inherit` sees the simul-efuns too.
+    #[tokio::test]
+    async fn an_inherited_parent_resolves_simul_efuns() {
+        let vm = Vm::new(test_config());
+        vm.initialize_simul_efuns()
+            .await
+            .expect("configured")
+            .expect("compiles");
+        let lib_dir = vm.global_state.config.lib_dir.to_string();
+        let process = vm
+            .initialize_process_from_path(&LpcPath::new_in_game("/sefun_child", "/", &lib_dir))
+            .await
+            .expect("the parent's sefun call resolves")
+            .context
+            .process;
+        assert_eq!(
+            committed_string(&vm, &process, 0),
+            "this is a simul_efun: parent"
+        );
     }
 }

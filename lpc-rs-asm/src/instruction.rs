@@ -151,9 +151,9 @@ pub enum Instruction {
     CatchEnd,
 
     /// Start a block of instructions that can catch errors and continue
-    /// execution. Store the error in x.0, and jump to x.1 to continue
-    /// execution. Jumping to x.1 may include removing call frames to
-    /// get back to the correct location.
+    /// execution. Clear x.0, store the error there if one is raised, and
+    /// jump to x.1 to continue execution. Jumping to x.1 may include
+    /// removing call frames to get back to the correct location.
     CatchStart(RegisterVariant, Address),
 
     /// x.3 = x.1 `kind` x.2, as 1 or 0

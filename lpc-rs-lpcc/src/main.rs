@@ -17,6 +17,10 @@ struct Args {
     /// Use a specific configuration file
     #[clap(short, long, value_parser)]
     config: Option<String>,
+
+    /// Compile only: the file is not initialized, so its create() does not run
+    #[clap(long)]
+    check: bool,
 }
 
 fn main() {
@@ -36,9 +40,24 @@ async fn run() {
 
     let lpc_path = LpcPath::new_server(&args.filename);
 
-    let vm = Vm::new(config);
-    vm.initialize_process_from_path(&lpc_path)
-        .await
+    let vm = Vm::new(config.clone());
+
+    // Loading the sefun file first when it is also the target redefines its
+    // own nomask functions.
+    let target_is_sefun_file = config.simul_efun_source().is_some_and(|sefuns| {
+        sefuns.as_in_game(&*config.lib_dir) == lpc_path.as_in_game(&*config.lib_dir)
+    });
+    if !target_is_sefun_file && let Some(Err(e)) = vm.initialize_simul_efuns().await {
+        e.emit_diagnostics();
+        std::process::exit(1);
+    }
+
+    let compiled = if args.check {
+        vm.compile_from_path(&lpc_path).await
+    } else {
+        vm.initialize_process_from_path(&lpc_path).await.map(|_| ())
+    };
+    compiled
         .inspect_err(|e| {
             e.emit_diagnostics();
         })

@@ -2,6 +2,7 @@
 
 mod call_other;
 mod calling;
+mod catch_result;
 mod entry_args;
 mod loading;
 mod parse_command;

@@ -6,16 +6,53 @@ use crate::interpreter::{
     lpc_ref::LpcRef,
 };
 
-/// `read_file(path)`: the whole file as a string, once the master's
-/// `valid_read` allows it. Reads live: a `write_file` earlier in this task
-/// has not landed yet.
+/// `read_file(path [, start [, lines]])`: the file as a string, once the
+/// master's `valid_read` allows it; `start` a 1-based line (0 is 1), `lines`
+/// a count (0 means to the end). Reads live: a `write_file` earlier in this
+/// task has not landed yet.
 pub async fn read_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "read_file", VALID_READ, 0).await?;
+    let start = line_number(context, 1, "start")?;
+    let count = line_number(context, 2, "lines")?;
     let contents = tokio::fs::read_to_string(&access.server)
         .await
         .map_err(|e| context.runtime_error(format!("read_file: {}: {e}", access.in_game)))?;
+    let contents = if start > 1 || count > 0 {
+        lines_of(&contents, start, count)
+    } else {
+        contents
+    };
     context.return_efun_result(LpcRef::from(contents));
     Ok(())
+}
+
+/// The non-negative int in argument `index`; an absent argument is 0.
+fn line_number<const N: usize>(
+    context: &EfunContext<'_, N>,
+    index: usize,
+    name: &str,
+) -> Result<usize> {
+    match context.arg(index) {
+        LpcRef::Int(n) if n.0 < 0 => {
+            Err(context.runtime_error(format!("read_file: negative {name}")))
+        }
+        LpcRef::Int(n) => Ok(n.0 as usize),
+        other => Err(context.runtime_error(format!(
+            "read_file: {name} must be an int, not {}",
+            other.type_name()
+        ))),
+    }
+}
+
+/// Lines `start` (1-based; 0 is 1) onward, `count` of them (0: all), each
+/// with the newline it had.
+fn lines_of(text: &str, start: usize, count: usize) -> String {
+    let lines = text.split_inclusive('\n').skip(start.saturating_sub(1));
+    if count == 0 {
+        lines.collect()
+    } else {
+        lines.take(count).collect()
+    }
 }
 
 #[cfg(test)]
@@ -197,5 +234,88 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("read_file: path must be a string"), "{err}");
+    }
+
+    /// A lib at `root` holding `/lines.txt` with four lines.
+    fn lib_with_lines(name: &str) -> TempLib {
+        let root = TempLib::new(name);
+        std::fs::write(root.join("lines.txt"), "one\ntwo\nthree\nfour\n").unwrap();
+        root
+    }
+
+    async fn lines_read_as(name: &str, call: &str) -> String {
+        let root = lib_with_lines(name);
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            "int valid_read(string p, string e, object c, string g) { return 1; }",
+        )
+        .await
+        .unwrap();
+        let process = vm
+            .initialize_process_from_code(
+                "/reader.c",
+                &format!("string got; void create() {{ got = {call}; }}"),
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        committed_string(&vm, &process, 0)
+    }
+
+    #[tokio::test]
+    async fn a_start_line_reads_from_there_to_the_end() {
+        assert_eq!(
+            lines_read_as("read-start", r#"read_file("/lines.txt", 2)"#).await,
+            "two\nthree\nfour\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_line_count_bounds_the_read() {
+        assert_eq!(
+            lines_read_as("read-count", r#"read_file("/lines.txt", 2, 2)"#).await,
+            "two\nthree\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_zero_start_is_the_first_line() {
+        assert_eq!(
+            lines_read_as("read-zero", r#"read_file("/lines.txt", 0, 1)"#).await,
+            "one\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_start_past_the_end_is_empty() {
+        assert_eq!(
+            lines_read_as("read-past", r#"read_file("/lines.txt", 9)"#).await,
+            ""
+        );
+    }
+
+    #[tokio::test]
+    async fn a_negative_start_is_an_error() {
+        let root = lib_with_lines("read-negative");
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            "int valid_read(string p, string e, object c, string g) { return 1; }",
+        )
+        .await
+        .unwrap();
+        let process = vm
+            .initialize_process_from_code(
+                "/reader.c",
+                r#"string err; void create() { err = catch(read_file("/lines.txt", -1)); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let err = committed_string(&vm, &process, 0);
+        assert!(err.contains("read_file: negative start"), "{err}");
     }
 }
