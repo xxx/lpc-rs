@@ -318,6 +318,29 @@ void preload(string file) { loaded += file + ";"; }
         assert!(!is_loaded(&vm, "/good"));
     }
 
+    /// The list ends with the master; nothing after it is applied.
+    #[tokio::test]
+    async fn the_master_destructing_itself_ends_the_list() {
+        let master_source = r#"
+string *epilog(int load_empty) { return ({ "/good", "/also" }); }
+void preload(string file) {
+    if (file == "/good") destruct(this_object());
+    else file->ping();
+}
+"#;
+        let (vm, _master, _lib) = booted(
+            "preload-master-gone",
+            master_source,
+            &[("good.c", QUIET), ("also.c", QUIET)],
+        )
+        .await;
+
+        vm.preload().await;
+
+        assert!(vm.global_state.object_space.master_object().is_none());
+        assert!(!is_loaded(&vm, "/also"));
+    }
+
     /// The main loop has not started; the op the timer sends waits on the
     /// channel `run` drains.
     #[tokio::test]
