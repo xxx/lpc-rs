@@ -9,6 +9,7 @@ mod loading;
 mod parse_command;
 mod parse_string;
 mod parser;
+mod pointers;
 mod previous_object;
 mod references;
 mod security;

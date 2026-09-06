@@ -65,6 +65,9 @@ Breaking it down by syntax, functions can take the following forms:
   evaluated when the pointer is made. Binding more arguments than the
   operator takes is a compile error. `operator` is a reserved word.
 
+* `&f(a, , b)` where `f` holds a function value is a new value with `a`, a
+  hole and `b` appended to `f`'s bound arguments.
+
 * `(: function_name() :)` - A closure. Closures are functions that are defined
   inline, and capture any variables they reference from their environment.
   * When called, closures without an explicit `return` will return their last 
@@ -101,6 +104,5 @@ that object can create a `function` variable pointing to it, and it will be call
 
 All `function` variables can be used in compositions with the `@` operator, or the `compose` efun.
 
-`function` variables cannot be partially applied via the `&` syntax (it only works when first declaring them),
-but the `papplyv` efun is able to do this. This is only because fiddling around with the parser to make it work 
-turned into a little box of hell.
+`&f(a, , b)` partially applies an existing `function` variable, as above; the `papplyv` efun does the same
+from an array of arguments computed at runtime rather than written out in the call.
