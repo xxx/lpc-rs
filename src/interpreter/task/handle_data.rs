@@ -81,23 +81,20 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             })
             .collect::<lpc_rs_errors::Result<ThinVec<Option<LpcRef>>>>()?;
 
-        if let FunctionReceiver::Value(value_location) = receiver {
-            let value_ref =
-                get_location(&self.stack, &self.context.txn, value_location)?.into_owned();
-            let LpcRef::Function(ptr) = value_ref else {
-                return Err(self.runtime_error(format!(
-                    "cannot apply arguments to {}",
-                    value_ref.type_name()
-                )));
-            };
-            let new_fp = ptr.as_ref().clone().partially_apply_with_holes(staged);
-
-            return set_location(&mut self.stack, &self.context.txn, location, new_fp.into());
-        }
-
         let address = match receiver {
-            // Handled above; this arm is unreached.
-            FunctionReceiver::Value(_) => unreachable!("a Value receiver already returned"),
+            FunctionReceiver::Value(value_location) => {
+                let value_ref =
+                    get_location(&self.stack, &self.context.txn, value_location)?.into_owned();
+                let LpcRef::Function(ptr) = value_ref else {
+                    return Err(self.runtime_error(format!(
+                        "cannot apply arguments to {}",
+                        value_ref.type_name()
+                    )));
+                };
+                let new_fp = ptr.as_ref().clone().partially_apply_with_holes(staged);
+
+                return set_location(&mut self.stack, &self.context.txn, location, new_fp.into());
+            }
             FunctionReceiver::Efun => FunctionAddress::Efun(func_name),
             FunctionReceiver::SimulEfun => FunctionAddress::SimulEfun(func_name),
             FunctionReceiver::Dynamic => FunctionAddress::Dynamic(func_name),
