@@ -453,7 +453,13 @@ impl Preprocessor {
         let gate = self.context.gate.clone();
         let Some(opened) = self
             .includes
-            .open(source, span, &config, gate.as_deref())
+            .open(
+                source,
+                span,
+                &config,
+                gate.as_deref(),
+                &mut self.context.diagnostics,
+            )
             .await?
         else {
             return Ok(());
@@ -3368,6 +3374,32 @@ mod tests {
                 !msg.contains(root.to_str().unwrap()),
                 "server path leaked: {msg}"
             );
+        }
+
+        async fn warnings_of(root: &std::path::Path, code: &str) -> Vec<String> {
+            let mut preprocessor = fixture_at(root);
+            preprocessor
+                .scan("/main.c", code)
+                .await
+                .expect("scans clean");
+            preprocessor
+                .context
+                .diagnostics
+                .errors()
+                .iter()
+                .filter(|e| e.is_warning())
+                .map(|e| e.message().to_string())
+                .collect()
+        }
+
+        #[tokio::test]
+        async fn a_non_utf8_header_compiles_with_one_warning() {
+            let root = TempLib::new("latin1-header");
+            std::fs::write(root.join("h.h"), b"int x = 1; // caf\xe9\n").unwrap();
+
+            let warnings = warnings_of(&root, "#include \"h.h\"\n").await;
+
+            assert_eq!(warnings, ["`/h.h` is not UTF-8; read as Latin-1"]);
         }
     }
 }

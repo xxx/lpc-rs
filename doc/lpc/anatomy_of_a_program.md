@@ -30,3 +30,4 @@ notes:
 - `f(a, xs...)` passes each element of `xs` as its own argument; see [argument spreading](argument_spreading.md)
 - `::f()` calls the inherited `f`, `name::f()` the one of the parent inherited as `name` (`inherit "/x" name;`), and `efun::f()` the efun; each looks only there, so a name that program lacks is a compile error
 - `#include "x.h"` looks beside the including file, then in the system include dirs; `<x.h>` looks only in the system dirs
+- a source file that is not UTF-8 is read as Latin-1, with a warning

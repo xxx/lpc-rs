@@ -122,7 +122,7 @@ impl Compiler {
             let absolute = lpc_path.as_server(&*self.config.lib_dir);
 
             let file_content = match read_lpc_file(&*absolute).await {
-                Ok(s) => s,
+                Ok(source) => source.text,
                 Err(e) => {
                     return match e.kind() {
                         ErrorKind::NotFound => {

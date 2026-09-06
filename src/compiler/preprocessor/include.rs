@@ -8,14 +8,14 @@ use std::{
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{
-    LpcError, Result, lpc_error,
+    LpcError, Result, lpc_error, lpc_warning,
     source_map::{FileId, SOURCE_MAP},
     span::Span,
 };
 use lpc_rs_utils::{config::Config, read_lpc_file};
 use tracing::instrument;
 
-use crate::compiler::compile_gate::CompileGate;
+use crate::compiler::{compile_gate::CompileGate, diagnostics::Diagnostics};
 
 /// Deepest `#include` nesting allowed, the root file included.
 pub(super) const MAX_INCLUDE_DEPTH: usize = 64;
@@ -93,13 +93,14 @@ impl IncludeWalk {
     /// the `#pragma once` skip; the caller scans `Some` and then
     /// [`close`](Self::close)s. `gate` is asked for every directive but a
     /// configured one, before anything is read.
-    #[instrument(skip(self, config, gate))]
+    #[instrument(skip(self, config, gate, diagnostics))]
     pub async fn open(
         &mut self,
         source: IncludeSource<'_>,
         span: Option<Span>,
         config: &Config,
         gate: Option<&dyn CompileGate>,
+        diagnostics: &mut Diagnostics,
     ) -> Result<Option<Opened>> {
         let configured = matches!(source, IncludeSource::Configured(_));
         // An out-of-root path collapses to an empty in-game form, so the
@@ -161,8 +162,8 @@ impl IncludeWalk {
                         path
                     ));
                 }
-                let text = match read_lpc_file(&canon).await {
-                    Ok(text) => text,
+                let source = match read_lpc_file(&canon).await {
+                    Ok(source) => source,
                     Err(e) => {
                         return Err(lpc_error!(
                             span,
@@ -172,6 +173,15 @@ impl IncludeWalk {
                         ));
                     }
                 };
+                if source.latin1 {
+                    let in_game = path.as_in_game(lib_dir).display().to_string();
+                    diagnostics.record(lpc_warning!(
+                        span,
+                        "`{}` is not UTF-8; read as Latin-1",
+                        in_game
+                    ));
+                }
+                let text = source.text;
                 let file_id = SOURCE_MAP
                     .write()
                     .add(in_game_name(&canon, config), text.clone());
@@ -316,13 +326,25 @@ mod tests {
         let mut walk = rooted(&config);
 
         let first = walk
-            .open(IncludeSource::Local { path: "a.h" }, None, &config, None)
+            .open(
+                IncludeSource::Local { path: "a.h" },
+                None,
+                &config,
+                None,
+                &mut Diagnostics::default(),
+            )
             .await
             .unwrap()
             .expect("not once-marked");
         walk.close();
         let second = walk
-            .open(IncludeSource::Local { path: "a.h" }, None, &config, None)
+            .open(
+                IncludeSource::Local { path: "a.h" },
+                None,
+                &config,
+                None,
+                &mut Diagnostics::default(),
+            )
             .await
             .unwrap()
             .expect("not once-marked");
@@ -338,11 +360,23 @@ mod tests {
         let config = config_at(&root);
         let mut walk = rooted(&config);
 
-        walk.open(IncludeSource::Local { path: "a.h" }, None, &config, None)
-            .await
-            .unwrap();
+        walk.open(
+            IncludeSource::Local { path: "a.h" },
+            None,
+            &config,
+            None,
+            &mut Diagnostics::default(),
+        )
+        .await
+        .unwrap();
         let e = walk
-            .open(IncludeSource::Local { path: "a.h" }, None, &config, None)
+            .open(
+                IncludeSource::Local { path: "a.h" },
+                None,
+                &config,
+                None,
+                &mut Diagnostics::default(),
+            )
             .await
             .unwrap_err();
 
@@ -358,14 +392,26 @@ mod tests {
         let config = config_at(&root);
         let mut walk = rooted(&config);
 
-        walk.open(IncludeSource::Local { path: "o.h" }, None, &config, None)
-            .await
-            .unwrap();
+        walk.open(
+            IncludeSource::Local { path: "o.h" },
+            None,
+            &config,
+            None,
+            &mut Diagnostics::default(),
+        )
+        .await
+        .unwrap();
         walk.mark_once();
         walk.close();
 
         let reopened = walk
-            .open(IncludeSource::Local { path: "o.h" }, None, &config, None)
+            .open(
+                IncludeSource::Local { path: "o.h" },
+                None,
+                &config,
+                None,
+                &mut Diagnostics::default(),
+            )
             .await
             .unwrap();
         assert!(reopened.is_none());
@@ -381,7 +427,13 @@ mod tests {
         walk.mark_once();
 
         let reopened = walk
-            .open(IncludeSource::Local { path: "main.c" }, None, &config, None)
+            .open(
+                IncludeSource::Local { path: "main.c" },
+                None,
+                &config,
+                None,
+                &mut Diagnostics::default(),
+            )
             .await
             .unwrap();
         assert!(reopened.is_none());
@@ -400,7 +452,13 @@ mod tests {
         let err = loop {
             let path = format!("h{opened}.h");
             match walk
-                .open(IncludeSource::Local { path: &path }, None, &config, None)
+                .open(
+                    IncludeSource::Local { path: &path },
+                    None,
+                    &config,
+                    None,
+                    &mut Diagnostics::default(),
+                )
                 .await
             {
                 Ok(Some(_)) => opened += 1,
@@ -421,7 +479,13 @@ mod tests {
         let config = config_at(&root);
         let mut walk = rooted(&config);
         let opened = walk
-            .open(IncludeSource::Local { path: "a.h" }, None, &config, None)
+            .open(
+                IncludeSource::Local { path: "a.h" },
+                None,
+                &config,
+                None,
+                &mut Diagnostics::default(),
+            )
             .await
             .unwrap()
             .unwrap();
@@ -447,9 +511,15 @@ mod tests {
         let mut walk = rooted(&config);
         assert_eq!(walk.stack.len(), 1, "open_root leaves the root frame");
 
-        walk.open(IncludeSource::Local { path: "a.h" }, None, &config, None)
-            .await
-            .unwrap();
+        walk.open(
+            IncludeSource::Local { path: "a.h" },
+            None,
+            &config,
+            None,
+            &mut Diagnostics::default(),
+        )
+        .await
+        .unwrap();
         assert_eq!(walk.stack.len(), 2, "open pushes the included frame");
 
         walk.close();
