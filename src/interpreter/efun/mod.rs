@@ -100,6 +100,7 @@ pub(crate) mod type_predicates;
 pub(crate) mod unique_array;
 pub(crate) mod users;
 pub(crate) mod wildmatch;
+pub(crate) mod word_wrap;
 pub(crate) mod write;
 pub(crate) mod write_file;
 pub(crate) mod write_socket;
@@ -962,6 +963,15 @@ efuns! {
             LpcType::String(false) | LpcType::Int(false),
         ],
     },
+    break_string [in word_wrap] => {
+        returns: LpcType::String(false),
+        arity: (3, 1),
+        args: [
+            LpcType::String(false) | LpcType::Int(false),
+            LpcType::Int(false),
+            LpcType::Int(false) | LpcType::String(false),
+        ],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1267,6 +1277,7 @@ mod tests {
                 "file_time",
                 "object_time",
                 "wildmatch",
+                "break_string",
             ]
         );
     }
