@@ -101,6 +101,12 @@ impl Preprocessor {
         self.context
     }
 
+    /// Seed a diagnostic before scanning — the root-file counterpart to
+    /// the warning `#include` records for a file it reads.
+    pub fn record(&mut self, diagnostic: LpcError) {
+        self.context.diagnostics.record(diagnostic);
+    }
+
     /// Scan a file's contents, transforming as necessary according to the
     /// preprocessing rules. This is the standard way to use the
     /// preprocessor

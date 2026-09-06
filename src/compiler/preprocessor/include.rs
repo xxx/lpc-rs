@@ -8,14 +8,17 @@ use std::{
 
 use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{
-    LpcError, Result, lpc_error, lpc_warning,
+    LpcError, Result, lpc_error,
     source_map::{FileId, SOURCE_MAP},
     span::Span,
 };
 use lpc_rs_utils::{config::Config, read_lpc_file};
 use tracing::instrument;
 
-use crate::compiler::{compile_gate::CompileGate, diagnostics::Diagnostics};
+use crate::compiler::{
+    compile_gate::CompileGate,
+    diagnostics::{Diagnostics, latin1_warning},
+};
 
 /// Deepest `#include` nesting allowed, the root file included.
 pub(super) const MAX_INCLUDE_DEPTH: usize = 64;
@@ -175,11 +178,7 @@ impl IncludeWalk {
                 };
                 if source.latin1 {
                     let in_game = path.as_in_game(lib_dir).display().to_string();
-                    diagnostics.record(lpc_warning!(
-                        span,
-                        "`{}` is not UTF-8; read as Latin-1",
-                        in_game
-                    ));
+                    diagnostics.record(latin1_warning(&in_game, span));
                 }
                 let text = source.text;
                 let file_id = SOURCE_MAP
