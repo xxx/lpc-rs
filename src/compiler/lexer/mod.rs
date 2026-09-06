@@ -743,8 +743,44 @@ impl Display for Token {
             | Token::ClosureArgVar(s)
             | Token::DirectiveLine(s) => &s.1,
 
-            // Every keyword variant returned above via `keyword_text`.
-            _ => unreachable!("{self:?} is a keyword, handled by keyword_text above"),
+            // Runtime-dead: the early return above already handled every keyword.
+            Token::If(_)
+            | Token::Else(_)
+            | Token::While(_)
+            | Token::For(_)
+            | Token::Inherit(_)
+            | Token::Break(_)
+            | Token::Continue(_)
+            | Token::Case(_)
+            | Token::Do(_)
+            | Token::Int(_)
+            | Token::Float(_)
+            | Token::String(_)
+            | Token::Object(_)
+            | Token::Mapping(_)
+            | Token::Mixed(_)
+            | Token::Void(_)
+            | Token::Return(_)
+            | Token::Static(_)
+            | Token::Varargs(_)
+            | Token::Nomask(_)
+            | Token::Ref(_)
+            | Token::Efun(_)
+            | Token::Switch(_)
+            | Token::Default(_)
+            | Token::ForEach(_)
+            | Token::Operator(_)
+            | Token::Function(_)
+            | Token::Private(_)
+            | Token::Public(_)
+            | Token::Protected(_) => {
+                return write!(
+                    f,
+                    "{}",
+                    self.keyword_text()
+                        .expect("a keyword token names its spelling")
+                );
+            }
         };
 
         write!(f, "{out}")
