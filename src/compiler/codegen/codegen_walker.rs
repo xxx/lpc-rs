@@ -187,6 +187,10 @@ fn expect_value(arg: Arg, span: Option<Span>) -> Result<RegisterVariant> {
             span,
             "a `ref` argument reached a value-only position"
         )),
+        Arg::Spread(_) => Err(lpc_bug!(
+            span,
+            "a spread argument reached a value-only position"
+        )),
     }
 }
 
@@ -419,7 +423,7 @@ impl CodegenWalker {
                     ),
                     a,
                     b,
-                    &func.name()
+                    func.name()
                 )));
             }
         }
@@ -1333,7 +1337,7 @@ impl TreeWalker for CodegenWalker {
         };
         let has_receiver = receiver.is_some();
 
-        if name.as_str() == CATCH {
+        if !has_receiver && name.as_str() == CATCH {
             return self.emit_catch(node).await;
         }
 
@@ -1370,10 +1374,20 @@ impl TreeWalker for CodegenWalker {
         };
 
         let mut arg_results: Vec<Arg> = Vec::with_capacity(argument_len);
+        let mut spread_seen = false;
         for (index, argument) in node.arguments.iter_mut().enumerate() {
+            if let ExpressionNode::Spread(spread) = argument {
+                spread.expr.visit(self).await?;
+                arg_results.push(Arg::Spread(self.current_result));
+                spread_seen = true;
+                continue;
+            }
             let by_ref = match argument {
                 ExpressionNode::Ref(r) => Some((r.name, r.span)),
-                ExpressionNode::Var(v) if implicit_refs.get(index).copied().unwrap_or(false) => {
+                // Positions past a spread are unknown until runtime, so no later `Var` is implicitly a ref.
+                ExpressionNode::Var(v)
+                    if !spread_seen && implicit_refs.get(index).copied().unwrap_or(false) =>
+                {
                     Some((v.name, v.span))
                 }
                 _ => None,
@@ -1397,7 +1411,7 @@ impl TreeWalker for CodegenWalker {
             }
         }
 
-        if name.as_str() == SIZEOF {
+        if !has_receiver && name.as_str() == SIZEOF {
             let result = self.register_counter.next().unwrap().as_local();
             // `sizeof`'s arity is checked by the semantic walker, fatal before codegen runs.
             let arg = expect_value(*arg_results.first().unwrap(), node.span)?;
@@ -1528,8 +1542,13 @@ impl TreeWalker for CodegenWalker {
         let mut arg_results = Vec::with_capacity(argument_len);
 
         for argument in &mut node.arguments {
-            argument.visit(self).await?;
-            arg_results.push(Arg::Value(self.current_result));
+            if let ExpressionNode::Spread(spread) = argument {
+                spread.expr.visit(self).await?;
+                arg_results.push(Arg::Spread(self.current_result));
+            } else {
+                argument.visit(self).await?;
+                arg_results.push(Arg::Value(self.current_result));
+            }
         }
 
         let list = self.arg_list(arg_results, node.span)?;
@@ -6190,6 +6209,60 @@ mod tests {
                 ]
             );
             assert_eq!(f.arg_lists, vec![vec![Arg::Value(local(1))]]);
+        }
+
+        #[tokio::test]
+        async fn a_spread_argument_names_its_array() {
+            let f = function_f("void g() {} void f(int a, int *xs) { g(a, xs...); }").await;
+            assert!(matches!(
+                f.instructions[0],
+                Instruction::Call(_, ArgList(0))
+            ));
+            assert_eq!(
+                f.arg_lists,
+                vec![vec![Arg::Value(local(1)), Arg::Spread(local(2))]]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_receiver_sizeof_is_an_ordinary_call_other() {
+            let f = function_f("void f(object o, int *xs) { o->sizeof(xs...); }").await;
+            assert!(
+                matches!(f.instructions[0], Instruction::CallOther(..)),
+                "{:?}",
+                f.instructions[0]
+            );
+            assert_eq!(f.arg_lists[0], vec![Arg::Spread(local(2))]);
+        }
+
+        #[tokio::test]
+        async fn a_chained_call_spreads_too() {
+            let f = function_f("void f(function fp, int *xs) { fp()(xs...); }").await;
+            assert_eq!(f.arg_lists.len(), 2);
+            assert_eq!(f.arg_lists[1], vec![Arg::Spread(local(2))]);
+        }
+
+        #[tokio::test]
+        async fn an_implicit_efun_lvalue_after_a_spread_is_a_value() {
+            // `sscanf`'s by-reference tail starts at its third argument, so
+            // `b` sits on a ref position by index alone.
+            let f =
+                function_f(r#"void f(mixed *pre, int a, int b) { sscanf(pre..., a, b); }"#).await;
+            assert_eq!(f.arg_lists.len(), 1);
+            assert_eq!(f.arg_lists[0][0], Arg::Spread(local(1)));
+            assert_eq!(f.arg_lists[0][2], Arg::Value(local(3)));
+        }
+
+        #[tokio::test]
+        async fn an_implicit_efun_lvalue_before_a_spread_is_still_a_ref() {
+            let f = function_f(
+                r#"void f(string s, int a, mixed *rest) { sscanf(s, "%d", a, rest...); }"#,
+            )
+            .await;
+            let list = &f.arg_lists[0];
+            assert!(matches!(list[2], Arg::Ref(_)), "{list:?}");
+            // `a`'s promotion to a cell gives it no local slot, so `rest` is local 2, not 3.
+            assert_eq!(list[3], Arg::Spread(local(2)));
         }
 
         #[tokio::test]

@@ -27,6 +27,7 @@ pub mod program_node;
 pub mod range_node;
 pub mod ref_node;
 pub mod return_node;
+pub mod spread_node;
 pub mod string_node;
 pub mod switch_node;
 pub mod ternary_node;

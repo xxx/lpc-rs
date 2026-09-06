@@ -42,7 +42,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         list: ArgList,
         external: bool,
     ) -> lpc_rs_errors::Result<()> {
-        let num_args = RegisterSize::try_from(self.args_of(list)?.len())?;
+        let num_args = self.checked_register_count(self.expanded_arg_count(list)?, &func)?;
         // A simul_efun's prototype can change after a cached caller was compiled against it.
         if num_args < func.arity().num_args
             && let Some(i) = func.prototype.first_ref_param()
@@ -79,6 +79,42 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
+    /// How many arguments `list` passes once its spreads are expanded.
+    fn expanded_arg_count(&self, list: ArgList) -> lpc_rs_errors::Result<usize> {
+        let args = self.args_of(list)?;
+        if !args.iter().any(|arg| matches!(arg, Arg::Spread(_))) {
+            return Ok(args.len());
+        }
+        let frame = self.stack.current_frame()?;
+        let mut count = 0;
+        for arg in args {
+            count += match *arg {
+                Arg::Spread(location) => frame.spread_len(&self.context.txn, location)?,
+                Arg::Value(_) | Arg::Ref(_) => 1,
+            };
+        }
+        Ok(count)
+    }
+
+    /// `count` as a [`RegisterSize`] for `function`'s frame, or a runtime
+    /// error when it would not fit one alongside the function's locals and
+    /// its `r0`.
+    pub(crate) fn checked_register_count(
+        &self,
+        count: usize,
+        function: &ProgramFunction,
+    ) -> lpc_rs_errors::Result<RegisterSize> {
+        let num_locals = usize::from(function.num_locals);
+        if count + num_locals + 1 > usize::from(RegisterSize::MAX) {
+            let limit = usize::from(RegisterSize::MAX).saturating_sub(num_locals + 1);
+            return Err(self.runtime_error(format!(
+                "cannot pass {count} arguments to `{}`: the limit is {limit}",
+                function.name()
+            )));
+        }
+        Ok(count as RegisterSize)
+    }
+
     /// Copy the arguments the caller's `list` names into the frame above it.
     fn populate_arguments(&mut self, list: ArgList) -> lpc_rs_errors::Result<()> {
         let txn = &self.context.txn;
@@ -86,15 +122,24 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let Some(caller) = below.last() else {
             return Err(callee.runtime_bug("a call with no frame to read its arguments from"));
         };
-        for (i, arg) in caller.function.args(list).iter().enumerate() {
+        let mut i = 0;
+        for arg in caller.function.args(list) {
             match *arg {
                 Arg::Value(loc) => {
                     let value = caller.get_location(txn, loc)?.into_owned();
                     callee.push_arg(txn, i, value)?;
+                    i += 1;
                 }
                 Arg::Ref(loc) => {
                     let cell = caller.ref_cell(loc)?;
                     callee.push_ref(i, cell)?;
+                    i += 1;
+                }
+                Arg::Spread(loc) => {
+                    for value in caller.spread_elements(txn, loc)? {
+                        callee.push_arg(txn, i, value)?;
+                        i += 1;
+                    }
                 }
             }
         }

@@ -159,7 +159,7 @@ impl Preprocessor {
         // handle auto-include
         if let Some(auto_include) = &config.auto_include_file {
             let auto_include_path =
-                LpcPath::new_server(format!("{}/{}", &config.lib_dir, auto_include));
+                LpcPath::new_server(format!("{}/{}", config.lib_dir, auto_include));
 
             if auto_include_path != lpc_path {
                 // On error, this `?` skips the `close()` below, leaving the

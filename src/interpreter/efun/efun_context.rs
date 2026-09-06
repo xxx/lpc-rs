@@ -88,7 +88,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         let txn = task_context.txn();
         let prototype = efun.prototype();
         let mut args = SmallVec::new();
-        for (i, arg) in caller.function.args(list).iter().enumerate() {
+        for arg in caller.function.args(list) {
+            let i = args.len();
             let value = match *arg {
                 Arg::Value(location) => {
                     if prototype.is_ref_param(i) {
@@ -110,6 +111,23 @@ impl<'task, const N: usize> EfunContext<'task, N> {
                     }
                     let cell = caller.ref_cell(location)?;
                     txn.with(|t| t.read(cell).unwrap_or(NULL))
+                }
+                Arg::Spread(location) => {
+                    for (offset, value) in caller
+                        .spread_elements(txn, location)?
+                        .into_iter()
+                        .enumerate()
+                    {
+                        if prototype.is_ref_param(i + offset) {
+                            return Err(caller.runtime_error(format!(
+                                "argument {} of `{}` must be passed by reference",
+                                i + offset + 1,
+                                prototype.name
+                            )));
+                        }
+                        args.push(value);
+                    }
+                    continue;
                 }
             };
             args.push(value);
@@ -304,6 +322,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     }
 
     /// Write `value` back through by-reference argument `index` (0-based).
+    /// The list index equals the argument index because no `Arg::Ref` follows
+    /// a spread (the checker refuses one).
     pub(crate) fn write_ref(&self, index: RegisterSize, value: LpcRef) -> Result<()> {
         let cell = self.list.and_then(|list| {
             let caller = self.stack.last()?;

@@ -125,6 +125,7 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
             }
             ExpressionNode::UnaryOp(n) => out.push(Child::Expr(&n.expr)),
             ExpressionNode::Cast(n) => out.push(Child::Expr(&n.expr)),
+            ExpressionNode::Spread(n) => out.push(Child::Expr(&n.expr)),
             ExpressionNode::Array(n) => out.extend(n.value.iter().map(Child::Expr)),
             ExpressionNode::Mapping(n) => {
                 for (key, value) in &n.value {
@@ -571,6 +572,27 @@ mod tests {
                 .map(|_| ())
                 .expect_err(&format!("{kind} at {} parsed", ok + 1));
             assert_eq!(e.to_string(), TOO_DEEP, "{kind}");
+        }
+    }
+
+    /// The nesting guard descends into a spread's operand.
+    #[tokio::test]
+    async fn a_spread_operand_past_the_cap_is_refused_like_any_other() {
+        let compiler = Compiler::new(test_config());
+        let path = LpcPath::from("/spread_cap.c");
+        let chain = |m: usize| vec!["a"; m].join(" + ");
+        let deep = chain(254); // one past `binary_left`'s cap on its own.
+
+        let without = format!("mixed f(mixed a) {{ return g({deep}); }}");
+        let with = format!("mixed f(mixed a) {{ return g({deep}...); }}");
+
+        for code in [&without, &with] {
+            let e = compiler
+                .parse_string(&path, code)
+                .await
+                .map(|_| ())
+                .expect_err("too deep");
+            assert_eq!(e.to_string(), TOO_DEEP, "{code}");
         }
     }
 

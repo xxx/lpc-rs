@@ -85,7 +85,7 @@ impl Display for ForEachNode {
         write!(
             f,
             "foreach ({}: {}) {{ {} }}",
-            self.initializer, &self.collection, self.body
+            self.initializer, self.collection, self.body
         )
     }
 }

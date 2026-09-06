@@ -47,7 +47,7 @@ use crate::{
             element_type, impossible_cast, is_keyword, mismatch, node_type,
         },
     },
-    interpreter::efun::CALL_OTHER,
+    interpreter::efun::{CALL_OTHER, CATCH, SIZEOF},
 };
 
 struct BreakAllowed(bool);
@@ -138,6 +138,54 @@ impl SemanticCheckWalker {
                 _ => {}
             }
         }
+    }
+
+    /// Record the diagnostics for the spread arguments of a call to
+    /// `callee` (`None` for a receiver, pointer or chained call).
+    fn check_spreads(&mut self, callee: Option<&str>, arguments: &[ExpressionNode]) -> Result<()> {
+        let Some(first) = arguments
+            .iter()
+            .position(|a| matches!(a, ExpressionNode::Spread(_)))
+        else {
+            return Ok(());
+        };
+
+        for argument in arguments {
+            let ExpressionNode::Spread(spread) = argument else {
+                continue;
+            };
+            let ty = node_type(&spread.expr, &self.context)?;
+            if !ty.matches_type(LpcType::Mixed(true)) {
+                let e = lpc_error!(spread.span, "`...` spreads an array, not {}", ty);
+                self.context.diagnostics.record(e);
+            }
+        }
+
+        let spread_span = arguments[first].span();
+        match callee {
+            Some(name @ (CATCH | SIZEOF)) => {
+                let e = lpc_error!(spread_span, "`{}` takes one expression, not a spread", name);
+                self.context.diagnostics.record(e);
+            }
+            Some(CALL_OTHER) if first < 2 => {
+                let e = lpc_error!(
+                    spread_span,
+                    "`call_other`'s receiver and function name cannot be spread"
+                );
+                self.context.diagnostics.record(e);
+            }
+            _ => {}
+        }
+
+        if let Some(arg) = arguments[first..]
+            .iter()
+            .find(|a| matches!(a, ExpressionNode::Ref(_)))
+        {
+            let e = lpc_error!(arg.span(), "a `ref` argument cannot follow a spread");
+            self.context.diagnostics.record(e);
+        }
+
+        Ok(())
     }
 }
 
@@ -251,6 +299,9 @@ impl TreeWalker for SemanticCheckWalker {
             self.context.diagnostics.record(e);
         }
 
+        let callee = receiver.is_none().then(|| name.as_str());
+        self.check_spreads(callee, &node.arguments)?;
+
         if receiver.is_some() {
             if namespace != &CallNamespace::Local {
                 let e = lpc_error!(node.span, "namespaced `call_other` is not allowed");
@@ -332,8 +383,14 @@ impl TreeWalker for SemanticCheckWalker {
             }
 
             let arg_len = node.arguments.len();
+            let fixed = node
+                .arguments
+                .iter()
+                .position(|a| matches!(a, ExpressionNode::Spread(_)))
+                .unwrap_or(arg_len);
+            let has_spread = fixed < arg_len;
 
-            if !prototype.accepts_arg_count(arg_len) {
+            if !has_spread && !prototype.accepts_arg_count(arg_len) {
                 let e = LpcError::new(format!(
                     "incorrect argument count in call to `{}`: expected: {}, received: {}",
                     name, prototype.arity.num_args, arg_len
@@ -346,7 +403,7 @@ impl TreeWalker for SemanticCheckWalker {
             // `call_other`'s `ref` arguments were reported as the cross-object error above.
             if name.as_str() != CALL_OTHER {
                 let is_efun = matches!(callee, Callee::Efun(_));
-                for (index, arg) in node.arguments.iter().enumerate() {
+                for (index, arg) in node.arguments.iter().take(fixed).enumerate() {
                     let is_ref_arg = matches!(arg, ExpressionNode::Ref(_));
                     let wants_ref = prototype.is_ref_param(index);
                     if wants_ref && !is_ref_arg {
@@ -393,7 +450,7 @@ impl TreeWalker for SemanticCheckWalker {
 
             // Check argument types.
             for (index, ty) in prototype.arg_types.iter().enumerate() {
-                let Some(arg) = node.arguments.get(index) else {
+                let Some(arg) = node.arguments[..fixed].get(index) else {
                     continue;
                 };
 
@@ -436,6 +493,8 @@ impl TreeWalker for SemanticCheckWalker {
             );
             self.context.diagnostics.record(e);
         }
+
+        self.check_spreads(None, &node.arguments)?;
 
         chain_node.visit(self).await?;
 
@@ -3857,6 +3916,102 @@ mod tests {
             let errors =
                 errors_of("void f(object o) { int y; call_other(o, \"g\", ref y); }").await;
             assert_one_error(&errors, "`ref` cannot cross objects");
+        }
+
+        #[tokio::test]
+        async fn a_spread_of_an_array_is_clean() {
+            let errors =
+                errors_of("void g(int a, int b) { } void f(int *xs) { g(1, xs...); }").await;
+            assert!(errors.is_empty(), "{errors:?}");
+        }
+
+        #[tokio::test]
+        async fn a_mixed_operand_may_be_spread() {
+            let errors = errors_of("void g() { } void f(mixed x) { g(x...); }").await;
+            assert!(errors.is_empty(), "{errors:?}");
+        }
+
+        #[tokio::test]
+        async fn a_spread_needs_an_array() {
+            let errors = errors_of("void g() { } void f(int x) { g(x...); }").await;
+            assert_one_error(&errors, "`...` spreads an array, not int");
+        }
+
+        #[tokio::test]
+        async fn a_spread_skips_the_argument_count_check() {
+            let errors = errors_of("void g(int a) { } void f(int *xs) { g(xs...); }").await;
+            assert!(errors.is_empty(), "{errors:?}");
+            let errors = errors_of("void g(int a) { } void f(int *xs) { g(1, 2, xs...); }").await;
+            assert!(errors.is_empty(), "{errors:?}");
+        }
+
+        #[tokio::test]
+        async fn arguments_before_a_spread_are_type_checked() {
+            let errors = errors_of(r#"void g(int a) { } void f(int *xs) { g("s", xs...); }"#).await;
+            assert_one_error(&errors, "unexpected argument type to `g`");
+        }
+
+        #[tokio::test]
+        async fn arguments_after_a_spread_are_not_type_checked() {
+            let errors =
+                errors_of(r#"void g(int a, int b) { } void f(int *xs) { g(xs..., "s"); }"#).await;
+            assert!(errors.is_empty(), "{errors:?}");
+        }
+
+        #[tokio::test]
+        async fn a_ref_cannot_follow_a_spread() {
+            let errors =
+                errors_of("void g(int ref a) { } void f(int *xs) { int y; g(xs..., ref y); }")
+                    .await;
+            assert_one_error(&errors, "a `ref` argument cannot follow a spread");
+        }
+
+        #[tokio::test]
+        async fn a_ref_before_a_spread_is_checked_as_usual() {
+            let errors =
+                errors_of("void g(int ref a) { } void f(int *xs) { int y; g(ref y, xs...); }")
+                    .await;
+            assert!(errors.is_empty(), "{errors:?}");
+            let errors =
+                errors_of("void g(int a) { } void f(int *xs) { int y; g(ref y, xs...); }").await;
+            assert_one_error(&errors, "`g` does not take argument 1 by reference");
+        }
+
+        #[tokio::test]
+        async fn catch_and_sizeof_refuse_a_spread() {
+            let errors = errors_of("void f(int *xs) { sizeof(xs...); }").await;
+            assert_one_error(&errors, "`sizeof` takes one expression, not a spread");
+            let errors = errors_of("void f(int *xs) { catch(xs...); }").await;
+            assert_one_error(&errors, "`catch` takes one expression, not a spread");
+        }
+
+        #[tokio::test]
+        async fn call_others_receiver_and_name_cannot_be_spread() {
+            let errors = errors_of("void f(mixed *xs) { call_other(xs...); }").await;
+            assert_one_error(
+                &errors,
+                "`call_other`'s receiver and function name cannot be spread",
+            );
+            let errors =
+                errors_of(r#"void f(object o, mixed *xs) { call_other(o, "g", xs...); }"#).await;
+            assert!(errors.is_empty(), "{errors:?}");
+        }
+
+        #[tokio::test]
+        async fn a_receiver_call_checks_the_spread_operand() {
+            let errors = errors_of("void f(object o, int x) { o->g(x...); }").await;
+            assert_one_error(&errors, "`...` spreads an array, not int");
+            let errors = errors_of("void f(object o, int *xs) { o->g(1, xs...); }").await;
+            assert!(errors.is_empty(), "{errors:?}");
+        }
+
+        #[tokio::test]
+        async fn pointer_and_chained_calls_may_spread() {
+            let errors =
+                errors_of("void f(function fp, int *xs) { fp(xs...); fp()(xs...); }").await;
+            assert!(errors.is_empty(), "{errors:?}");
+            let errors = errors_of("void f(function fp, int x) { fp()(x...); }").await;
+            assert_one_error(&errors, "`...` spreads an array, not int");
         }
 
         #[tokio::test]

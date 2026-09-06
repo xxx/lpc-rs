@@ -12,6 +12,7 @@ mod previous_object;
 mod references;
 mod security;
 mod simul_efuns;
+mod spreading;
 mod virtual_objects;
 
 use lpc_rs_utils::config::Config;

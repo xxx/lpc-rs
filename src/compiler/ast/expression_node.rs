@@ -25,6 +25,7 @@ use crate::compiler::{
         operator_node::OperatorNode,
         range_node::RangeNode,
         ref_node::RefNode,
+        spread_node::SpreadNode,
         string_node::StringNode,
         ternary_node::TernaryNode,
         unary_op_node::UnaryOpNode,
@@ -52,6 +53,7 @@ pub enum ExpressionNode {
     UnaryOp(UnaryOpNode),
     Var(VarNode),
     Ref(RefNode),
+    Spread(SpreadNode),
     Array(ArrayNode),
     Mapping(MappingNode),
     Operator(OperatorNode),
@@ -108,6 +110,7 @@ delegated_traits!(
     ExpressionNode::UnaryOp,
     ExpressionNode::Var,
     ExpressionNode::Ref,
+    ExpressionNode::Spread,
     ExpressionNode::Array,
     ExpressionNode::Mapping,
     ExpressionNode::Operator
@@ -140,6 +143,12 @@ impl From<VarNode> for ExpressionNode {
 impl From<RefNode> for ExpressionNode {
     fn from(node: RefNode) -> Self {
         Self::Ref(node)
+    }
+}
+
+impl From<SpreadNode> for ExpressionNode {
+    fn from(node: SpreadNode) -> Self {
+        Self::Spread(node)
     }
 }
 

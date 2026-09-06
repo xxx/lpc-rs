@@ -381,6 +381,36 @@ impl CallFrame {
         self.runtime_bug(format!("write through constant {location}"))
     }
 
+    /// The array in `location` for a spread argument — any other type
+    /// shares one error message with every caller.
+    fn spread_array(&self, txn: &TxnHandle, location: RegisterVariant) -> Result<Cow<'_, LpcRef>> {
+        let value = self.get_location(txn, location)?;
+        if !matches!(*value, LpcRef::Array(_)) {
+            return Err(self.runtime_error(format!(
+                "cannot spread {}: `...` takes an array",
+                value.type_name()
+            )));
+        }
+        Ok(value)
+    }
+
+    /// The elements of the array in `location`, for a spread argument.
+    pub(crate) fn spread_elements(
+        &self,
+        txn: &TxnHandle,
+        location: RegisterVariant,
+    ) -> Result<Vec<LpcRef>> {
+        let value = self.spread_array(txn, location)?;
+        value.with_array(txn, |array| array.iter().cloned().collect())
+    }
+
+    /// The length of the array in `location`, for a spread argument, without
+    /// collecting its elements.
+    pub(crate) fn spread_len(&self, txn: &TxnHandle, location: RegisterVariant) -> Result<usize> {
+        let value = self.spread_array(txn, location)?;
+        value.with_array(txn, |array| array.len())
+    }
+
     /// Read the [`LpcRef`] at `location`; an unwritten cell reads `NULL`.
     #[inline(always)]
     pub(crate) fn get_location(
@@ -942,6 +972,38 @@ mod tests {
         frame.set_int(&txn, l0, 6).unwrap();
 
         assert_eq!(*frame.get_location(&txn, l0).unwrap(), LpcRef::from(6));
+    }
+
+    #[test]
+    fn spread_len_matches_spread_elements_without_collecting_them() {
+        use crate::interpreter::efun::callback::mint_array;
+
+        let txn = TxnHandle::empty();
+        let mut frame = CallFrame::new(Process::default(), value_function(), 1, None::<&[VarId]>);
+        let l0 = Register(0).as_local();
+        let array = mint_array(
+            &txn,
+            vec![LpcRef::from(1), LpcRef::from(2), LpcRef::from(3)],
+        );
+        frame.set_location(&txn, l0, array).unwrap();
+
+        assert_eq!(frame.spread_len(&txn, l0).unwrap(), 3);
+    }
+
+    #[test]
+    fn spread_len_refuses_a_non_array_like_spread_elements() {
+        let txn = TxnHandle::empty();
+        let mut frame = CallFrame::new(Process::default(), value_function(), 1, None::<&[VarId]>);
+        let l0 = Register(0).as_local();
+        frame.set_location(&txn, l0, LpcRef::from(5)).unwrap();
+
+        let len_err = frame.spread_len(&txn, l0).unwrap_err().to_string();
+        let elements_err = frame.spread_elements(&txn, l0).unwrap_err().to_string();
+        assert!(
+            len_err.contains("cannot spread int: `...` takes an array"),
+            "{len_err}"
+        );
+        assert_eq!(len_err, elements_err);
     }
 
     mod test_with_minimum_arg_capacity {

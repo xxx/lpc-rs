@@ -18,13 +18,14 @@ impl RefBank {
         function: &ProgramFunction,
         runtime_arg_count: RegisterSize,
     ) -> RefBank {
-        // add +1 for r0 (where return value is stored)
-        let static_length = function.arity().num_args + function.num_locals + 1;
-        let dynamic_length = runtime_arg_count + function.num_locals + 1;
+        // usize: runtime_arg_count + num_locals + 1 can exceed u16::MAX even though each fits one.
+        let num_locals = usize::from(function.num_locals);
+        let static_length = usize::from(function.arity().num_args) + num_locals + 1;
+        let dynamic_length = usize::from(runtime_arg_count) + num_locals + 1;
         let reservation = std::cmp::max(static_length, dynamic_length);
 
         RefBank {
-            registers: thin_vec::thin_vec![NULL; reservation as usize],
+            registers: thin_vec::thin_vec![NULL; reservation],
         }
     }
 }

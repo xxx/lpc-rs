@@ -11,21 +11,24 @@ use ustr::Ustr;
 
 use crate::address::Address;
 
-/// One argument of a call: a value copied into the callee, or a cell the
-/// callee aliases in place of minting its own.
+/// One argument of a call: a value copied into the callee, a cell the
+/// callee aliases in place of minting its own, or an array whose elements
+/// are passed one per argument.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Arg {
     /// A value, read from the register at call time.
     Value(RegisterVariant),
     /// A `ref` argument's cell.
     Ref(RegisterVariant),
+    /// A spread argument's array.
+    Spread(RegisterVariant),
 }
 
 impl Arg {
     /// The register this argument reads.
     pub fn register(self) -> RegisterVariant {
         match self {
-            Self::Value(r) | Self::Ref(r) => r,
+            Self::Value(r) | Self::Ref(r) | Self::Spread(r) => r,
         }
     }
 
@@ -37,6 +40,7 @@ impl Arg {
         match self {
             Self::Value(r) => Self::Value(f(r)),
             Self::Ref(r) => Self::Ref(f(r)),
+            Self::Spread(r) => Self::Spread(f(r)),
         }
     }
 }
@@ -46,6 +50,7 @@ impl Display for Arg {
         match self {
             Self::Value(r) => write!(f, "{r}"),
             Self::Ref(r) => write!(f, "ref {r}"),
+            Self::Spread(r) => write!(f, "{r}..."),
         }
     }
 }
@@ -835,8 +840,12 @@ mod tests {
     fn an_argument_displays_bare_and_a_ref_argument_with_ref() {
         let r1 = Register(1).as_local();
         assert_eq!(
-            (Arg::Value(r1).to_string(), Arg::Ref(r1).to_string()),
-            ("r1".to_string(), "ref r1".to_string())
+            (
+                Arg::Value(r1).to_string(),
+                Arg::Ref(r1).to_string(),
+                Arg::Spread(r1).to_string()
+            ),
+            ("r1".to_string(), "ref r1".to_string(), format!("{r1}..."))
         );
     }
 
