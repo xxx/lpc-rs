@@ -36,11 +36,14 @@ async fn run() {
 
     let lpc_path = LpcPath::new_server(&args.filename);
 
-    let vm = Vm::new(config);
+    let vm = Vm::new(config.clone());
 
-    // A call to a sefun is a compile error without the sefun object, as it
-    // would be in the driver.
-    if let Some(Err(e)) = vm.initialize_simul_efuns().await {
+    // The sefun file compiles as the target too; loading it first as well
+    // redefines its own nomask functions.
+    let target_is_sefun_file = config.simul_efun_source().is_some_and(|sefuns| {
+        sefuns.as_in_game(&*config.lib_dir) == lpc_path.as_in_game(&*config.lib_dir)
+    });
+    if !target_is_sefun_file && let Some(Err(e)) = vm.initialize_simul_efuns().await {
         e.emit_diagnostics();
         std::process::exit(1);
     }
