@@ -5,6 +5,7 @@ use delegate::delegate;
 use lpc_rs_asm::instruction::{Arg, ArgList};
 use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::{LpcError, Result, span::Span};
+use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use smallvec::SmallVec;
 
@@ -482,20 +483,29 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.task_context
     }
 
-    /// The objects that led here, nearest first: for a fired efun the frame
-    /// that called the pointer, then every door crossed below it, then the
-    /// task's callers.
-    pub fn previous_objects(&self) -> impl Iterator<Item = &Arc<Process>> {
-        let caller = self.caller_frame();
-        let firer = self.fired.as_ref().and(caller).map(|frame| &frame.process);
+    /// The callers that led here, nearest first — for a fired efun the
+    /// frame that called the pointer, then every door crossed below it,
+    /// then the task's chain — each with the function it called through
+    /// from, where a frame is known.
+    pub fn callers(&self) -> impl Iterator<Item = (&Arc<Process>, Option<&Arc<ProgramFunction>>)> {
+        let firer = self
+            .fired
+            .as_ref()
+            .and(self.caller_frame())
+            .map(frame_caller);
         let crossers = self
             .caller_index()
             .into_iter()
-            .flat_map(|index| self.stack.door_crossers(index));
-        firer
-            .into_iter()
-            .chain(crossers)
-            .chain(Caller::objects(&self.task_context.callers))
+            .flat_map(|index| self.stack.door_crossers(index))
+            .map(frame_caller);
+        let chain = Caller::links(&self.task_context.callers)
+            .map(|caller| (&caller.object, caller.function.as_ref()));
+        firer.into_iter().chain(crossers).chain(chain)
+    }
+
+    /// The objects of [`callers`](Self::callers).
+    pub fn previous_objects(&self) -> impl Iterator<Item = &Arc<Process>> {
+        self.callers().map(|(object, _)| object)
     }
 
     /// The chain a load or apply made by this efun is entered with.
@@ -524,7 +534,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// wrote the pointer when it was fired through one, else the calling
     /// frame's — as an in-game path with its extension
     /// (`/secure/master.c`); `NULL` when there is neither (an efun pointer
-    /// fired as a task's entry).
+    /// fired as a task's entry). The `calling_program` efun answers the
+    /// caller's file, not this one.
     pub(crate) fn calling_program(&self) -> LpcRef {
         let lib_dir = self.config().lib_dir.as_str();
         let origin = self
@@ -560,6 +571,11 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     pub fn clone_stack(&self) -> CallStack<N> {
         self.stack.clone()
     }
+}
+
+/// A frame as a caller: its object and its function.
+fn frame_caller(frame: &CallFrame) -> (&Arc<Process>, Option<&Arc<ProgramFunction>>) {
+    (&frame.process, frame.lpc_function())
 }
 
 #[cfg(test)]

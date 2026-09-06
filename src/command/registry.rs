@@ -84,6 +84,26 @@ impl VerbMatch {
             _ => None,
         }
     }
+
+    /// The `add_action` flag this matching came from; `Full` with
+    /// `RestOfWord`, which no flag makes, answers 1.
+    pub fn flag(self) -> i64 {
+        match self {
+            VerbMatch::Exact => 0,
+            VerbMatch::Prefix {
+                reports: Reported::Full,
+                ..
+            } => 1,
+            VerbMatch::Prefix {
+                reports: Reported::Registered,
+                args: ArgSpan::RestOfLine,
+            } => 2,
+            VerbMatch::Prefix {
+                reports: Reported::Registered,
+                args: ArgSpan::RestOfWord,
+            } => 3,
+        }
+    }
 }
 
 /// Which surface registered a rule: the one thing that owns both how a
@@ -367,6 +387,13 @@ pub(crate) mod tests {
         );
         assert_eq!(VerbMatch::from_flag(4), None);
         assert_eq!(VerbMatch::from_flag(-1), None);
+    }
+
+    #[test]
+    fn a_flag_round_trips_through_its_matching() {
+        for flag in 0..4 {
+            assert_eq!(VerbMatch::from_flag(flag).unwrap().flag(), flag);
+        }
     }
 
     #[test]

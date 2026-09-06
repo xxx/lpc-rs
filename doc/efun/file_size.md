@@ -19,4 +19,4 @@ if (file_size(path) == -2) {
 
 ### See also
 
-`get_dir`, `read_file`, `write_file`, `rm`, `mkdir`
+`file_time`, `get_dir`, `read_file`, `write_file`, `rm`, `mkdir`
