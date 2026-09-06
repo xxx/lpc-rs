@@ -74,6 +74,17 @@ pub struct Config {
     pub port: u16,
 }
 
+/// The in-game file a setting names; `Some(None)` for a blank value, which
+/// disables the file even when the shell exports the plain variable.
+fn optional_in_game_file(value: Option<&String>, lib_dir: &str) -> Option<Option<Ustr>> {
+    let value = value?;
+    if value.trim().is_empty() {
+        return Some(None);
+    }
+    let canon = canonicalize_in_game_path(value, "/", lib_dir);
+    Some(Some(ustr(canon.to_string_lossy().as_ref())))
+}
+
 impl ConfigBuilder {
     /// Set config values from a `dotenv` file. If `env_path` is `None`, the default `.env` is used.
     pub async fn load_env<P>(self, env_path: Option<P>) -> Self
@@ -111,22 +122,18 @@ impl ConfigBuilder {
             .or(self.lib_dir);
 
         Self {
-            auto_include_file: env
-                .get("LPC_AUTO_INCLUDE_FILE")
-                .or_else(|| env.get("AUTO_INCLUDE_FILE"))
-                .map(|x| {
-                    let canon = canonicalize_in_game_path(x, "/", lib_dir.unwrap().as_str());
-                    Some(ustr(canon.to_string_lossy().as_ref()))
-                })
-                .or(self.auto_include_file),
-            auto_inherit_file: env
-                .get("LPC_AUTO_INHERIT_FILE")
-                .or_else(|| env.get("AUTO_INHERIT_FILE"))
-                .map(|x| {
-                    let canon = canonicalize_in_game_path(x, "/", lib_dir.unwrap().as_str());
-                    Some(ustr(canon.to_string_lossy().as_ref()))
-                })
-                .or(self.auto_inherit_file),
+            auto_include_file: optional_in_game_file(
+                env.get("LPC_AUTO_INCLUDE_FILE")
+                    .or_else(|| env.get("AUTO_INCLUDE_FILE")),
+                lib_dir.unwrap().as_str(),
+            )
+            .or(self.auto_include_file),
+            auto_inherit_file: optional_in_game_file(
+                env.get("LPC_AUTO_INHERIT_FILE")
+                    .or_else(|| env.get("AUTO_INHERIT_FILE")),
+                lib_dir.unwrap().as_str(),
+            )
+            .or(self.auto_inherit_file),
             bind_address: env
                 .get("LPC_BIND_ADDRESS")
                 .or_else(|| env.get("BIND_ADDRESS"))
@@ -177,14 +184,12 @@ impl ConfigBuilder {
                 .or_else(|| env.get("PORT"))
                 .map(|x| x.parse::<u16>().unwrap())
                 .or(self.port),
-            simul_efun_file: env
-                .get("LPC_SIMUL_EFUN_FILE")
-                .or_else(|| env.get("SIMUL_EFUN_FILE"))
-                .map(|x| {
-                    let canon = canonicalize_in_game_path(x, "/", lib_dir.unwrap().as_str());
-                    Some(ustr(canon.to_string_lossy().as_ref()))
-                })
-                .or(self.simul_efun_file),
+            simul_efun_file: optional_in_game_file(
+                env.get("LPC_SIMUL_EFUN_FILE")
+                    .or_else(|| env.get("SIMUL_EFUN_FILE")),
+                lib_dir.unwrap().as_str(),
+            )
+            .or(self.simul_efun_file),
             system_include_dirs: env
                 .get("LPC_SYSTEM_INCLUDE_DIRS")
                 .or_else(|| env.get("SYSTEM_INCLUDE_DIRS"))
@@ -342,6 +347,28 @@ mod tests {
     #[test]
     fn simul_efun_source_is_none_when_no_file_is_configured() {
         assert!(Config::default().simul_efun_source().is_none());
+    }
+
+    #[test]
+    fn an_absent_optional_file_leaves_the_builder_alone() {
+        assert_eq!(optional_in_game_file(None, "/lib"), None);
+    }
+
+    #[test]
+    fn a_blank_optional_file_means_none() {
+        for blank in ["", "  ", "\t"] {
+            assert_eq!(
+                optional_in_game_file(Some(&blank.to_string()), "/lib"),
+                Some(None),
+                "{blank:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_named_optional_file_is_its_in_game_path() {
+        let got = optional_in_game_file(Some(&"/secure/x".to_string()), "/lib");
+        assert_eq!(got, Some(Some(ustr("/secure/x"))));
     }
 
     #[test]
