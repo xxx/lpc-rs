@@ -241,6 +241,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     address,
                 };
 
+                // The packer counts this as the register's definition, so
+                // dropping the write leaves a catch that raises nothing
+                // answering whatever temp shared the slot.
+                set_location(&mut self.stack, &self.context.txn, r, NULL)?;
+
                 self.catch_points.push(catch_point);
             }
             Instruction::Copy(r1, r2) => {
