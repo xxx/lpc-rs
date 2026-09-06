@@ -419,7 +419,7 @@ impl CodegenWalker {
                     ),
                     a,
                     b,
-                    &func.name()
+                    func.name()
                 )));
             }
         }

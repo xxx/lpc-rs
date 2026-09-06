@@ -242,7 +242,7 @@ mod tests {
             ..Program::default()
         };
 
-        assert_eq!(program.cwd().to_str().unwrap(), format!("/foo/bar"));
+        assert_eq!(program.cwd().to_str().unwrap(), "/foo/bar".to_string());
 
         program.filename = Arc::new("marf.c".into());
         assert_eq!(program.cwd().to_str().unwrap(), "/");
