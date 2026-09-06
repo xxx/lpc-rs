@@ -122,17 +122,20 @@ impl ConfigBuilder {
             .and_then(|x| canonicalized_path(x).ok())
             .or(self.lib_dir);
 
+        // No LIB_DIR means no lib dir, not a panic: the optional-file arms fall back to "".
+        let lib_dir_str = lib_dir.map(|d| d.to_string()).unwrap_or_default();
+
         Self {
             auto_include_file: optional_in_game_file(
                 env.get("LPC_AUTO_INCLUDE_FILE")
                     .or_else(|| env.get("AUTO_INCLUDE_FILE")),
-                lib_dir.unwrap().as_str(),
+                &lib_dir_str,
             )
             .or(self.auto_include_file),
             auto_inherit_file: optional_in_game_file(
                 env.get("LPC_AUTO_INHERIT_FILE")
                     .or_else(|| env.get("AUTO_INHERIT_FILE")),
-                lib_dir.unwrap().as_str(),
+                &lib_dir_str,
             )
             .or(self.auto_inherit_file),
             bind_address: env
@@ -188,7 +191,7 @@ impl ConfigBuilder {
             simul_efun_file: optional_in_game_file(
                 env.get("LPC_SIMUL_EFUN_FILE")
                     .or_else(|| env.get("SIMUL_EFUN_FILE")),
-                lib_dir.unwrap().as_str(),
+                &lib_dir_str,
             )
             .or(self.simul_efun_file),
             system_include_dirs: env
@@ -370,6 +373,17 @@ mod tests {
     fn a_named_optional_file_is_its_in_game_path() {
         let got = optional_in_game_file(Some(&"/secure/x".to_string()), "/lib");
         assert_eq!(got, Some(Some(ustr("/secure/x"))));
+    }
+
+    #[test]
+    fn an_optional_file_with_no_lib_dir_set_does_not_panic() {
+        // `load_env` falls back to "" for lib_dir when no LIB_DIR is configured;
+        // neither arm of the caller's value should panic on that empty string.
+        assert_eq!(optional_in_game_file(None, ""), None);
+        assert_eq!(
+            optional_in_game_file(Some(&"/secure/x".to_string()), ""),
+            Some(Some(ustr("/secure/x")))
+        );
     }
 
     #[test]
