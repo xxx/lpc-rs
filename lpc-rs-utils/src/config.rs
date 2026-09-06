@@ -75,7 +75,8 @@ pub struct Config {
 }
 
 /// The in-game file a setting names; `Some(None)` for a blank value, which
-/// disables the file even when the shell exports the plain variable.
+/// turns the file off (an `LPC_`-prefixed blank wins over a plain variable
+/// the shell exports).
 fn optional_in_game_file(value: Option<&String>, lib_dir: &str) -> Option<Option<Ustr>> {
     let value = value?;
     if value.trim().is_empty() {
