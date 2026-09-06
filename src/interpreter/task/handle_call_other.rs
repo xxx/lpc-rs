@@ -135,18 +135,24 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(())
     }
 
-    /// The call's arguments as values; refs were rejected before this.
+    /// The call's arguments as values, each spread expanded; refs were rejected before this.
     fn arg_values(&self, list: ArgList) -> Result<Vec<LpcRef>> {
-        self.args_of(list)?
-            .iter()
-            .map(|arg| match *arg {
+        let frame = self.stack.current_frame()?;
+        let mut values = Vec::new();
+        for arg in self.args_of(list)? {
+            match *arg {
                 Arg::Value(loc) => {
-                    get_location(&self.stack, &self.context.txn, loc).map(|r| r.into_owned())
+                    values.push(get_location(&self.stack, &self.context.txn, loc)?.into_owned());
                 }
-                Arg::Ref(_) => Err(self.runtime_bug("a by-reference argument reached call_other")),
-                Arg::Spread(_) => Err(self.runtime_bug("a spread argument reached call_other")),
-            })
-            .collect()
+                Arg::Spread(loc) => {
+                    values.extend(frame.spread_elements(&self.context.txn, loc)?);
+                }
+                Arg::Ref(_) => {
+                    return Err(self.runtime_bug("a by-reference argument reached call_other"));
+                }
+            }
+        }
+        Ok(values)
     }
 
     /// The pending collection call for `receiver_ref`'s elements, each

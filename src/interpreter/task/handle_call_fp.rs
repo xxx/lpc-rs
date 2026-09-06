@@ -230,12 +230,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         match passed {
             Passed::List { list, .. } => {
                 let args = self.args_of(list)?;
-                self.pointer_frame(
-                    process,
-                    function,
-                    ptr,
-                    args.iter().map(|arg| self.arg_value(*arg)),
-                )
+                if args.iter().any(|arg| matches!(arg, Arg::Spread(_))) {
+                    let values = self.passed_values(passed)?;
+                    self.pointer_frame(process, function, ptr, values.into_iter().map(Ok))
+                } else {
+                    self.pointer_frame(
+                        process,
+                        function,
+                        ptr,
+                        args.iter().map(|arg| self.arg_value(*arg)),
+                    )
+                }
             }
             Passed::Values { values, .. } => {
                 self.pointer_frame(process, function, ptr, values.iter().cloned().map(Ok))
@@ -285,7 +290,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(frame)
     }
 
-    /// The value the current frame's `arg` names.
+    /// The value the current frame's `arg` names; only reached by lists
+    /// already known to hold no spread.
     fn arg_value(&self, arg: Arg) -> Result<LpcRef> {
         match arg {
             Arg::Value(loc) => {
@@ -294,21 +300,36 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Arg::Ref(_) => {
                 Err(self.runtime_bug("a by-reference argument reached a function pointer call"))
             }
-            Arg::Spread(_) => {
-                Err(self.runtime_bug("a spread argument reached a function pointer call"))
-            }
+            Arg::Spread(_) => Err(self.runtime_bug("a spread reached a single-value read")),
         }
     }
 
-    /// `passed` as owned values.
+    /// `passed` as owned values, each spread expanded.
     fn passed_values(&self, passed: Passed<'_>) -> Result<Vec<LpcRef>> {
         match passed {
             Passed::Values { values, .. } => Ok(values.to_vec()),
-            Passed::List { list, .. } => self
-                .args_of(list)?
-                .iter()
-                .map(|arg| self.arg_value(*arg))
-                .collect(),
+            Passed::List { list, .. } => {
+                let frame = self.stack.current_frame()?;
+                let mut values = Vec::new();
+                for arg in self.args_of(list)? {
+                    match *arg {
+                        Arg::Value(loc) => {
+                            values.push(
+                                get_location(&self.stack, &self.context.txn, loc)?.into_owned(),
+                            );
+                        }
+                        Arg::Spread(loc) => {
+                            values.extend(frame.spread_elements(&self.context.txn, loc)?);
+                        }
+                        Arg::Ref(_) => {
+                            return Err(self.runtime_bug(
+                                "a by-reference argument reached a function pointer call",
+                            ));
+                        }
+                    }
+                }
+                Ok(values)
+            }
         }
     }
 

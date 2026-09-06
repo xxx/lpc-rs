@@ -89,3 +89,103 @@ async fn spreading_a_non_array_is_a_runtime_error() {
     .await;
     assert!(e.contains("cannot spread int: `...` takes an array"), "{e}");
 }
+
+const X: (&str, &str) = ("/x.c", ADD);
+
+#[tokio::test]
+async fn an_efun_call_spreads() {
+    let r = run(
+        "",
+        &[],
+        r#"mixed *create() { mixed *args = ({ ({ "a", "b" }), "-" }); return ({ implode(args...) }); }"#,
+    )
+    .await;
+    assert_eq!(r, vec![super::s("a-b")]);
+}
+
+#[tokio::test]
+async fn a_bare_variable_after_a_spread_is_not_an_efun_lvalue() {
+    let e = fails(
+        "",
+        &[],
+        r#"mixed *create() { int a; mixed *pre = ({ "12", "%d" }); sscanf(pre..., a); return ({ a }); }"#,
+    )
+    .await;
+    assert!(
+        e.contains("argument 3 of `sscanf` must be passed by reference"),
+        "{e}"
+    );
+}
+
+#[tokio::test]
+async fn a_spread_element_cannot_land_on_an_efun_ref_parameter() {
+    let e = fails(
+        "",
+        &[],
+        r#"mixed *create() { mixed *all = ({ "12", "%d", 0 }); sscanf(all...); return ({ 0 }); }"#,
+    )
+    .await;
+    assert!(
+        e.contains("argument 3 of `sscanf` must be passed by reference"),
+        "{e}"
+    );
+}
+
+#[tokio::test]
+async fn call_other_spreads_in_both_forms() {
+    let r = run(
+        "",
+        &[X],
+        r#"mixed *create() { int *xs = ({ 2, 3 }); return ({ "/x"->add(1, xs...), call_other("/x", "add", xs..., 4) }); }"#,
+    )
+    .await;
+    assert_eq!(r, vec![n(6), n(9)]);
+}
+
+#[tokio::test]
+async fn a_function_pointer_spreads_after_its_bound_arguments() {
+    let r = run(
+        "",
+        &[],
+        &format!(
+            "{ADD} mixed *create() {{ int *xs = ({{ 2, 3 }}); function bare = &add(); function bound = &add(10); return ({{ bare(1, xs...), bound(xs...) }}); }}"
+        ),
+    )
+    .await;
+    assert_eq!(r, vec![n(6), n(15)]);
+}
+
+#[tokio::test]
+async fn a_chained_call_spreads() {
+    let r = run(
+        "",
+        &[],
+        &format!(
+            "{ADD} function make() {{ return &add(); }} mixed *create() {{ int *xs = ({{ 2, 3 }}); return ({{ make()(1, xs...) }}); }}"
+        ),
+    )
+    .await;
+    assert_eq!(r, vec![n(6)]);
+}
+
+#[tokio::test]
+async fn an_efun_pointer_spreads() {
+    let r = run(
+        "",
+        &[],
+        r#"mixed *create() { function fp = &implode(); mixed *args = ({ ({ "a", "b" }), "+" }); return ({ fp(args...) }); }"#,
+    )
+    .await;
+    assert_eq!(r, vec![super::s("a+b")]);
+}
+
+#[tokio::test]
+async fn a_pointer_call_refuses_a_non_array_spread() {
+    let e = fails(
+        "",
+        &[],
+        &format!("{ADD} mixed *create() {{ function fp = &add(); mixed x = 5; return ({{ fp(x...) }}); }}"),
+    )
+    .await;
+    assert!(e.contains("cannot spread int: `...` takes an array"), "{e}");
+}
