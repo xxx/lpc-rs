@@ -187,6 +187,10 @@ fn expect_value(arg: Arg, span: Option<Span>) -> Result<RegisterVariant> {
             span,
             "a `ref` argument reached a value-only position"
         )),
+        Arg::Spread(_) => Err(lpc_bug!(
+            span,
+            "a spread argument reached a value-only position"
+        )),
     }
 }
 

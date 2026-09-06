@@ -144,6 +144,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     get_location(&self.stack, &self.context.txn, loc).map(|r| r.into_owned())
                 }
                 Arg::Ref(_) => Err(self.runtime_bug("a by-reference argument reached call_other")),
+                Arg::Spread(_) => Err(self.runtime_bug("a spread argument reached call_other")),
             })
             .collect()
     }

@@ -33,6 +33,7 @@ use crate::compiler::{
         range_node::RangeNode,
         ref_node::RefNode,
         return_node::ReturnNode,
+        spread_node::SpreadNode,
         string_node::StringNode,
         switch_node::SwitchNode,
         ternary_node::TernaryNode,
@@ -460,6 +461,14 @@ where
     Ok(())
 }
 
+/// Visit a spread's array expression.
+pub async fn walk_spread<W>(walker: &mut W, node: &mut SpreadNode) -> Result<()>
+where
+    W: TreeWalker + Send,
+{
+    node.expr.visit(walker).await
+}
+
 /// Visit a cast's operand.
 pub async fn walk_cast<W>(walker: &mut W, node: &mut CastNode) -> Result<()>
 where
@@ -771,6 +780,14 @@ pub trait TreeWalker {
         Self: Sized,
     {
         Ok(())
+    }
+
+    /// Visit a spread argument
+    async fn visit_spread(&mut self, node: &mut SpreadNode) -> Result<()>
+    where
+        Self: Sized,
+    {
+        walk_spread(self, node).await
     }
 
     /// Visit a variable initialization node

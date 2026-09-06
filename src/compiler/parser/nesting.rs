@@ -136,7 +136,8 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
             | ExpressionNode::Int(_)
             | ExpressionNode::String(_)
             | ExpressionNode::Var(_)
-            | ExpressionNode::Ref(_) => {}
+            | ExpressionNode::Ref(_)
+            | ExpressionNode::Spread(_) => {}
         },
         Child::Stmt(s) => match s {
             AstNode::Block(n) => push_children(Child::Block(n), out),

@@ -294,6 +294,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Arg::Ref(_) => {
                 Err(self.runtime_bug("a by-reference argument reached a function pointer call"))
             }
+            Arg::Spread(_) => {
+                Err(self.runtime_bug("a spread argument reached a function pointer call"))
+            }
         }
     }
 

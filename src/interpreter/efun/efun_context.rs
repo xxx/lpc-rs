@@ -111,6 +111,9 @@ impl<'task, const N: usize> EfunContext<'task, N> {
                     let cell = caller.ref_cell(location)?;
                     txn.with(|t| t.read(cell).unwrap_or(NULL))
                 }
+                Arg::Spread(_) => {
+                    return Err(caller.runtime_bug("a spread argument reached an efun call"));
+                }
             };
             args.push(value);
         }

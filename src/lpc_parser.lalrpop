@@ -31,6 +31,7 @@ use crate::compiler::ast::program_node::ProgramNode;
 use crate::compiler::ast::range_node::RangeNode;
 use crate::compiler::ast::ref_node::RefNode;
 use crate::compiler::ast::return_node::ReturnNode;
+use crate::compiler::ast::spread_node::SpreadNode;
 use crate::compiler::ast::string_node::StringNode;
 use crate::compiler::ast::switch_node::SwitchNode;
 use crate::compiler::ast::ternary_node::TernaryNode;
@@ -926,6 +927,10 @@ ArgumentExpression: ExpressionNode = {
             span: Some(Span::join(l, r)),
             global: false,
         }))
+    },
+    <e:AssignmentExpression> <r:"..."> => {
+        let span = Span::combine(e.span(), Some(r));
+        ExpressionNode::Spread(SpreadNode { expr: Box::new(e), span })
     },
     <e:AssignmentExpression> => e,
 };

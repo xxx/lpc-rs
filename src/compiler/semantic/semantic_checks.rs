@@ -16,6 +16,7 @@ use crate::compiler::{
         expression_node::ExpressionNode,
         int_node::IntNode,
         ref_node::RefNode,
+        spread_node::SpreadNode,
         ternary_node::TernaryNode,
         unary_op_node::{UnaryOpNode, UnaryOperation},
         var_init_node::VarInitNode,
@@ -445,6 +446,7 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
         ExpressionNode::String(_) => Ok(LpcType::String(false)),
         ExpressionNode::Var(VarNode { name, span, .. }) => var_type(name, *span, context),
         ExpressionNode::Ref(RefNode { name, span, .. }) => var_type(name, *span, context),
+        ExpressionNode::Spread(SpreadNode { expr, .. }) => node_type(expr, context),
         ExpressionNode::BinaryOp(BinaryOpNode { l, r, op, .. }) => {
             if op == &BinaryOperation::Index {
                 let left_type = node_type(l, context)?;

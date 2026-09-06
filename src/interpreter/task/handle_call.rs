@@ -96,6 +96,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let cell = caller.ref_cell(loc)?;
                     callee.push_ref(i, cell)?;
                 }
+                Arg::Spread(_) => {
+                    return Err(callee.runtime_bug("a spread argument reached a local call"));
+                }
             }
         }
         Ok(())
