@@ -3229,16 +3229,33 @@ mod test_instructions {
         }
 
         #[tokio::test]
-        async fn errors_on_a_mixed_holding_a_string() {
+        async fn errors_on_a_mixed_that_is_not_an_int() {
+            for value in [r#""x""#, "({ 1 })"] {
+                let code = format!("mixed m = {value}; void create() {{ m++; }}");
+
+                let error = try_run_prog(&code)
+                    .await
+                    .expect_err("++ on a non-int mixed must error");
+                assert_eq!(error.to_string(), "runtime error: invalid increment");
+            }
+        }
+
+        #[tokio::test]
+        async fn a_string_element_is_not_stepped() {
             let code = indoc! { r##"
-                    mixed m = "x";
-                    void create() { m++; }
+                    string s = "hey";
+                    void create() { s[0]++; }
                 "##};
 
             let error = try_run_prog(code)
                 .await
-                .expect_err("++ on a string must error");
-            assert_eq!(error.to_string(), "runtime error: invalid increment");
+                .expect_err("a string has no element to store");
+            assert!(
+                error
+                    .to_string()
+                    .starts_with("runtime error: Invalid attempt to take index"),
+                "{error}"
+            );
         }
 
         #[tokio::test]
@@ -4430,6 +4447,26 @@ mod test_instructions {
                 )],
             )
             .await;
+        }
+
+        #[tokio::test]
+        async fn a_non_int_index_is_not_stored() {
+            for value in [r#""x""#, "1.5"] {
+                let code = format!(
+                    "int *a = ({{ 1, 2, 3 }}); mixed m = {value}; void create() {{ a[m] = 99; }}"
+                );
+
+                let error = try_run_prog(&code)
+                    .await
+                    .expect_err("a non-int index into an array must error");
+
+                assert!(
+                    error
+                        .to_string()
+                        .starts_with("runtime error: Attempting to access index"),
+                    "{error}"
+                );
+            }
         }
     }
 

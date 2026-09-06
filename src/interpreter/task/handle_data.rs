@@ -348,7 +348,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ) -> lpc_rs_errors::Result<()> {
         let container = get_location(&self.stack, &self.context.txn, container_loc)?.into_owned();
         let index = &*get_location(&self.stack, &self.context.txn, index_loc)?;
-        let array_idx = if let LpcRef::Int(i) = index { i.0 } else { 0 };
 
         match &container {
             LpcRef::Array(_) => {
@@ -357,6 +356,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let value = (*get_location(&self.stack, &self.context.txn, value_loc)?).clone();
                 container.with_array_cow(&self.context.txn, |vec| {
                     let cell_len = vec.len();
+                    let LpcRef::Int(i) = index else {
+                        return Err(self.array_index_error(index, cell_len));
+                    };
+                    let array_idx = i.0;
                     let idx = if array_idx >= 0 {
                         array_idx
                     } else {
