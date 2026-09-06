@@ -93,10 +93,7 @@ impl FunctionPtr {
         self
     }
 
-    /// Build a new pointer over this one: `args` (holes kept as `None`) is
-    /// appended to this pointer's own partial list unchanged. Consumes the
-    /// pointer and returns it; callers clone first (the published original is
-    /// immutable).
+    /// `args`, holes kept as `None`, appended to this pointer's own partial list.
     pub fn partially_apply_with_holes(
         mut self,
         args: impl IntoIterator<Item = Option<LpcRef>>,

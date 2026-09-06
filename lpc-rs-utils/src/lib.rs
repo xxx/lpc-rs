@@ -18,9 +18,7 @@ pub struct LpcSource {
     pub latin1: bool,
 }
 
-/// Read a source file's bytes as UTF-8, falling back to Latin-1
-/// (`b as char`, a one-to-one mapping of a byte to its code point, not a
-/// lossy decode) so a stray non-UTF-8 byte doesn't fail the read.
+/// Read a source file as UTF-8, or as Latin-1 (each byte its own code point) when it is not; a trailing newline is appended.
 pub async fn read_lpc_file<P>(path: P) -> std::io::Result<LpcSource>
 where
     P: AsRef<Path>,

@@ -7,9 +7,7 @@ pub struct Diagnostics {
     recorded: Vec<LpcError>,
 }
 
-/// The one warning text for a file read as Latin-1, shared by the
-/// `#include` path and a directly compiled root file so it cannot drift
-/// between them.
+/// The warning for a file read as Latin-1, shared by the include path and a root file.
 pub fn latin1_warning(in_game_path: &str, span: Option<Span>) -> LpcError {
     lpc_warning!(span, "`{}` is not UTF-8; read as Latin-1", in_game_path)
 }

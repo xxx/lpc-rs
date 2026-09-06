@@ -34,7 +34,7 @@ Breaking it down by syntax, functions can take the following forms:
 * `&(object)->function_name()` - This is a reference to a function defined in
   another object. The object is put into place in the declaration, and you can call
   the function with additional arguments, or without, and the arguments will be filled in
-  from the declaration.
+  from the declaration. The parentheses may be dropped when the receiver is a plain variable: `&o->f()`.
 
 * `&(object)->function_name(arg1,,arg3)` - This is a reference to a function defined in
   another object. The object is put into place in the declaration, and you can call the function

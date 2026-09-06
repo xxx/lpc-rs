@@ -146,9 +146,7 @@ impl Compiler {
                 }
             };
 
-            // A file read directly (not through `#include`) has no
-            // preprocessor yet to record its warning through, so it is
-            // seeded here instead.
+            // A root file has no preprocessor yet to record its warning, so it is seeded here.
             let warning = source.latin1.then(|| {
                 let in_game = lpc_path
                     .as_in_game(&*self.config.lib_dir)
@@ -218,10 +216,7 @@ impl Compiler {
             .await
     }
 
-    /// [`preprocess_string`](Self::preprocess_string), with `warning`
-    /// seeded before the scan — `compile_file` uses this to flag a root
-    /// file it read as Latin-1, which has no preprocessor yet of its own
-    /// to record that warning through.
+    /// [`preprocess_string`](Self::preprocess_string), with `warning` recorded before the scan.
     #[instrument(skip(self, code, warning))]
     async fn preprocess_source(
         &self,
