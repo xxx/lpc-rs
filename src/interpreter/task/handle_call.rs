@@ -96,9 +96,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Ok(count)
     }
 
-    /// `count` as a [`RegisterSize`] for `function`'s frame; a runtime error,
-    /// not a bare conversion failure, when it would not fit one alongside
-    /// the function's locals and its `r0`.
+    /// `count` as a [`RegisterSize`] for `function`'s frame, or a runtime
+    /// error when it would not fit one alongside the function's locals and
+    /// its `r0`.
     pub(crate) fn checked_register_count(
         &self,
         count: usize,

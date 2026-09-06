@@ -159,6 +159,18 @@ async fn a_collection_call_other_spreads() {
 }
 
 #[tokio::test]
+async fn a_collection_receiver_spread_past_the_ceiling_is_a_clean_runtime_error() {
+    let e = fails(
+        "",
+        &[X],
+        r#"mixed *create() { mixed *xs = allocate(65535); mixed *r = ({ "/x", "/x" })->add(xs...); return r; }"#,
+    )
+    .await;
+    assert!(e.contains("cannot pass"), "{e}");
+    assert!(e.contains("the limit is"), "{e}");
+}
+
+#[tokio::test]
 async fn a_function_pointer_spreads_after_its_bound_arguments() {
     let r = run(
         "",

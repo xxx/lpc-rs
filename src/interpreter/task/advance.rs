@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
+use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 
@@ -308,12 +308,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 function.name()
             )));
         }
-        let mut frame = CallFrame::new(
-            process,
-            function,
-            RegisterSize::try_from(args.len())?,
-            None::<&[VarId]>,
-        );
+        let num_args = self.checked_register_count(args.len(), &function)?;
+        let mut frame = CallFrame::new(process, function, num_args, None::<&[VarId]>);
         for (i, arg) in args.enumerate() {
             frame.push_arg(&self.context.txn, i, arg)?;
         }
