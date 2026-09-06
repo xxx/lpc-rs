@@ -17,6 +17,10 @@ struct Args {
     /// Use a specific configuration file
     #[clap(short, long, value_parser)]
     config: Option<String>,
+
+    /// Compile only: the file is not initialized, so its create() does not run
+    #[clap(long)]
+    check: bool,
 }
 
 fn main() {
@@ -48,8 +52,12 @@ async fn run() {
         std::process::exit(1);
     }
 
-    vm.initialize_process_from_path(&lpc_path)
-        .await
+    let compiled = if args.check {
+        vm.compile_from_path(&lpc_path).await
+    } else {
+        vm.initialize_process_from_path(&lpc_path).await.map(|_| ())
+    };
+    compiled
         .inspect_err(|e| {
             e.emit_diagnostics();
         })

@@ -234,7 +234,7 @@ mod tests {
             stm::{GcRefused, start_txn},
             task::apply_function::apply_function_by_name,
         },
-        test_support::{permissive_master, test_config},
+        test_support::{TempLib, permissive_master, temp_lib_config, test_config},
     };
 
     /// Closures held only by another object's committed global keep their
@@ -729,5 +729,19 @@ mod tests {
                 }
             });
         }
+    }
+
+    #[tokio::test]
+    async fn compile_from_path_does_not_run_create() {
+        let root = TempLib::new("compile-only");
+        std::fs::write(root.join("boom.c"), r#"void create() { throw("boom"); }"#).unwrap();
+        let vm = Vm::new(temp_lib_config(&root));
+        let path = LpcPath::new_in_game("/boom", "/", &*vm.global_state.config.lib_dir);
+
+        assert!(vm.compile_from_path(&path).await.is_ok());
+        assert!(
+            vm.initialize_process_from_path(&path).await.is_err(),
+            "initializing runs create, which throws"
+        );
     }
 }

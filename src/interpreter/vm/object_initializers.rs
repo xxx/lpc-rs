@@ -77,6 +77,14 @@ impl GlobalState {
         process_insert_and_initialize_program(process, TaskTemplate::from(self.clone())).await
     }
 
+    /// Compile the in-game file at `path` without initializing it: the
+    /// warnings are logged, nothing enters the object space, no `create()` runs.
+    pub async fn compile_from_path(&self, path: &LpcPath) -> Result<()> {
+        let (_, warnings) = compile_process_from_path(&self.object_space, path, None).await?;
+        log_warnings(&self.config, warnings).await;
+        Ok(())
+    }
+
     /// Compile `code` (masquerading as `filename`) and initialize it (insert it
     /// into the [`ObjectSpace`](crate::interpreter::object_space::ObjectSpace), then run its initializer in a fresh task).
     pub async fn initialize_process_from_code<P, S>(
@@ -134,6 +142,11 @@ impl Vm {
         path: &LpcPath,
     ) -> Result<task::Task<MAX_CALL_STACK_SIZE>> {
         self.global_state.initialize_process_from_path(path).await
+    }
+
+    /// See [`GlobalState::compile_from_path`].
+    pub async fn compile_from_path(&self, path: &LpcPath) -> Result<()> {
+        self.global_state.compile_from_path(path).await
     }
 
     /// See [`GlobalState::initialize_process_from_code`].
