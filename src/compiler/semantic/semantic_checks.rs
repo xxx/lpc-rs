@@ -368,14 +368,6 @@ fn combine_types(type1: LpcType, type2: LpcType, op: BinaryOperation) -> LpcType
         return LpcType::Int(false);
     }
 
-    if op == BinaryOperation::Index {
-        if matches!(type1, LpcType::Mapping(_)) {
-            return LpcType::Mixed(false);
-        }
-
-        return type1.as_array(type2.is_array());
-    }
-
     if type1 == type2 {
         return type1;
     }
@@ -1953,26 +1945,6 @@ mod tests {
 
     mod combine_types_tests {
         use super::*;
-
-        #[test]
-        fn index_into_mapping_is_mixed() {
-            let combo = combine_types(
-                LpcType::Mapping(false),
-                LpcType::String(false),
-                BinaryOperation::Index,
-            );
-            assert_eq!(combo, LpcType::Mixed(false));
-        }
-
-        #[test]
-        fn index_into_array_is_first_type_with_second_type_array_status() {
-            let combo = combine_types(
-                LpcType::String(true),
-                LpcType::Int(false),
-                BinaryOperation::Index,
-            );
-            assert_eq!(combo, LpcType::String(false));
-        }
 
         #[test]
         fn equivalent_returns_that_type() {

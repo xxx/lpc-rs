@@ -3264,6 +3264,8 @@ mod test_instructions {
                     int *a = ({ 1, 2 });
                     mapping counts = ([ "k": 10 ]);
                     mixed m = ({ 7 });
+                    int *b = ({ 5 });
+                    mixed idx = 0;
                     int first; int second; int third;
                     void create() {
                         first = a[0]++;
@@ -3271,6 +3273,7 @@ mod test_instructions {
                         counts["k"]++;
                         third = counts["k"];
                         m[0]--;
+                        b[idx]++;
                     }
                 "##};
 
@@ -3282,6 +3285,7 @@ mod test_instructions {
                     ("second", BareVal::Int(3)),
                     ("third", BareVal::Int(11)),
                     ("m", BareVal::Array(vec![BareVal::Int(6)])),
+                    ("b", BareVal::Array(vec![BareVal::Int(6)])),
                 ],
             )
             .await;
