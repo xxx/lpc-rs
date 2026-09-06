@@ -30,6 +30,7 @@ pub async fn commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
             };
             let owner = rule
                 .owner()
+                .filter(|owner| owner.is_live(context.txn()))
                 .map_or(NULL, |owner| LpcRef::from(Arc::downgrade(&owner)));
             let function = rule
                 .pointer()
@@ -118,6 +119,38 @@ mod tests {
             .initialize_process_from_code(
                 "/asker.c",
                 r#"int create() { return sizeof(commands("/p")) * 10 + sizeof(commands(find_object("/p"))); }"#,
+            )
+            .await
+            .unwrap()
+            .result();
+        assert_eq!(result, Some(LpcRef::from(11)));
+    }
+
+    #[tokio::test]
+    async fn a_destructed_owner_is_zero_in_its_row() {
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code(
+            "/d.c",
+            indoc! { r#"
+                void register() { add_action("do_x", "x"); }
+                int do_x(string s) { return 1; }
+            "# },
+        )
+        .await
+        .unwrap();
+        let result = vm
+            .initialize_process_from_code(
+                "/p.c",
+                indoc! { r#"
+                    int create() {
+                        set_this_player(this_object());
+                        enable_commands();
+                        "/d"->register();
+                        destruct(find_object("/d"));
+                        mixed *rows = commands();
+                        return sizeof(rows) * 10 + (rows[0][2] == 0);
+                    }
+                "# },
             )
             .await
             .unwrap()

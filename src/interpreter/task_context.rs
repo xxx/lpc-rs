@@ -140,7 +140,7 @@ impl Caller {
     pub fn link_frame(frame: &CallFrame, rest: Callers) -> Arc<Self> {
         Arc::new(Self {
             object: frame.process.clone(),
-            function: Some(frame.function.clone()),
+            function: frame.lpc_function().cloned(),
             rest,
         })
     }

@@ -157,6 +157,27 @@ async fn a_closure_call_sees_the_firing_function() {
     assert_eq!(r, vec![s("create")]);
 }
 
+/// The driver fires an efun pointer through an entry frame: a callback it
+/// runs has no calling function, though `previous_object` names the owner.
+#[tokio::test]
+async fn a_callback_of_a_fired_efun_pointer_has_no_calling_function() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
+            mixed *create() {
+                function f = &map();
+                mixed *names = f(({ 1 }), (: calling_function() :));
+                mixed *files = f(({ 1 }), (: calling_program() :));
+                mixed *objects = f(({ 1 }), (: previous_object() :));
+                return ({ names[0], files[0], file_name(objects[0]) });
+            }
+        "# },
+    )
+    .await;
+    assert_eq!(r, vec![LpcRef::from(0), LpcRef::from(0), s("/main")]);
+}
+
 #[tokio::test]
 async fn a_simul_efun_sees_the_function_that_called_it() {
     let task = run_prog(r#"string seen; void create() { seen = simul_calling(); }"#).await;
@@ -187,4 +208,40 @@ async fn a_call_out_has_no_calling_function() {
     let id = gs.with_call_outs(|co| co.queue().iter().next().unwrap().1.id);
     gs.prioritize_call_out(id).await.await.unwrap();
     assert_eq!(gs.committed_global(&y, 0), LpcRef::from(0));
+}
+
+/// Inside the whole chain a driver-fired link is a 0 in its place.
+#[tokio::test]
+async fn a_driver_fired_link_is_zero_inside_the_whole_chain() {
+    let vm = Vm::new(test_config());
+    vm.initialize_process_from_code(
+        "/x.c",
+        indoc! { r#"
+            string all() {
+                mixed *a = calling_function(-1);
+                return sprintf("%d:%s:%d", sizeof(a), a[0], a[1] == 0);
+            }
+        "# },
+    )
+    .await
+    .unwrap();
+    let y = vm
+        .initialize_process_from_code(
+            "/y.c",
+            r#"mixed seen = "unset"; void note() { seen = "/x"->all(); }"#,
+        )
+        .await
+        .unwrap()
+        .context
+        .process;
+    vm.initialize_process_from_code(
+        "/w.c",
+        r#"void create() { call_out(papplyv(&->note(), ({ "/y" })), 100); }"#,
+    )
+    .await
+    .unwrap();
+    let gs = vm.global_state.clone();
+    let id = gs.with_call_outs(|co| co.queue().iter().next().unwrap().1.id);
+    gs.prioritize_call_out(id).await.await.unwrap();
+    assert_eq!(gs.committed_global(&y, 0), LpcRef::from("2:note:1"));
 }

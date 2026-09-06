@@ -177,6 +177,12 @@ impl CallFrame {
         Arc::ptr_eq(&self.function, &ENTRY)
     }
 
+    /// The LPC function this frame runs, for a caller chain: `None` for
+    /// the entry frame, which the driver pushed rather than any code.
+    pub fn lpc_function(&self) -> Option<&Arc<ProgramFunction>> {
+        (!self.is_entry()).then_some(&self.function)
+    }
+
     /// Create a new [`CallFrame`] instance with space for at least
     /// `arg_capacity` registers.
     ///

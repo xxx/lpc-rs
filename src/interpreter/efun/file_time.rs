@@ -18,7 +18,12 @@ pub async fn file_time<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         .await
         .and_then(|m| m.modified())
     {
-        Ok(modified) => chrono::DateTime::<chrono::Utc>::from(modified).timestamp(),
+        // Not chrono's `From<SystemTime>`: it unwraps on an mtime a
+        // filesystem can hold.
+        Ok(modified) => match modified.duration_since(std::time::UNIX_EPOCH) {
+            Ok(d) => i64::try_from(d.as_secs()).unwrap_or(i64::MAX),
+            Err(e) => -i64::try_from(e.duration().as_secs()).unwrap_or(i64::MAX),
+        },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => -1,
         Err(e) => {
             return Err(context.runtime_error(format!("file_time: {}: {e}", access.in_game)));

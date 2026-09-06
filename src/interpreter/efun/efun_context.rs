@@ -534,7 +534,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// wrote the pointer when it was fired through one, else the calling
     /// frame's — as an in-game path with its extension
     /// (`/secure/master.c`); `NULL` when there is neither (an efun pointer
-    /// fired as a task's entry).
+    /// fired as a task's entry). The `calling_program` efun answers the
+    /// caller's file, not this one.
     pub(crate) fn calling_program(&self) -> LpcRef {
         let lib_dir = self.config().lib_dir.as_str();
         let origin = self
@@ -574,7 +575,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
 
 /// A frame as a caller: its object and its function.
 fn frame_caller(frame: &CallFrame) -> (&Arc<Process>, Option<&Arc<ProgramFunction>>) {
-    (&frame.process, Some(&frame.function))
+    (&frame.process, frame.lpc_function())
 }
 
 #[cfg(test)]
