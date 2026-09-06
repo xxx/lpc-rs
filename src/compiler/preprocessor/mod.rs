@@ -2979,6 +2979,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_parameter_named_like_a_keyword_is_substituted() {
+        // The parameter `int` lexes as the `int` keyword, not `Token::Id`.
+        let prog = "#define F(int, wis) ((((int) + (wis)) / 3) + 10)\nint x = F(3, 6);";
+        test_valid(
+            prog,
+            &[
+                "int", "x", "=", "(", "(", "(", "(", "3", ")", "+", "(", "6", ")", ")", "/", "3",
+                ")", "+", "10", ")", ";",
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_parameter_name_inside_a_string_literal_is_not_substituted() {
+        // The body's `"int"` lexes as a string literal, which `keyword_text` never matches.
+        let mut preprocessor = fixture();
+        let tokens = preprocessor
+            .scan("/test.c", "#define G(int) \"int\"\nG(1);\n")
+            .await
+            .expect("scans clean");
+        assert!(matches!(tokens[0], Token::StringLiteral(_)));
+        assert_eq!(tokens[0].to_string(), "int");
+    }
+
+    #[tokio::test]
     async fn a_spaced_paren_defines_an_object_macro() {
         // C99's rule: `(` not flush against the name = object macro
         // whose body starts with the paren.

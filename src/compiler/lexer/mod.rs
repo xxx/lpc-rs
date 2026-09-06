@@ -625,6 +625,43 @@ impl Token {
 
         self
     }
+
+    /// The fixed spelling of a keyword token; `None` for anything whose text varies.
+    pub(in crate::compiler) fn keyword_text(&self) -> Option<&'static str> {
+        Some(match self {
+            Token::If(_) => "if",
+            Token::Else(_) => "else",
+            Token::While(_) => "while",
+            Token::For(_) => "for",
+            Token::Inherit(_) => "inherit",
+            Token::Break(_) => "break",
+            Token::Continue(_) => "continue",
+            Token::Case(_) => "case",
+            Token::Do(_) => "do",
+            Token::Int(_) => "int",
+            Token::Float(_) => "float",
+            Token::String(_) => "string",
+            Token::Object(_) => "object",
+            Token::Mapping(_) => "mapping",
+            Token::Mixed(_) => "mixed",
+            Token::Void(_) => "void",
+            Token::Return(_) => "return",
+            Token::Static(_) => "static",
+            Token::Varargs(_) => "varargs",
+            Token::Nomask(_) => "nomask",
+            Token::Ref(_) => "ref",
+            Token::Efun(_) => "efun",
+            Token::Switch(_) => "switch",
+            Token::Default(_) => "default",
+            Token::ForEach(_) => "foreach",
+            Token::Operator(_) => "operator",
+            Token::Function(_) => "function",
+            Token::Private(_) => "private",
+            Token::Public(_) => "public",
+            Token::Protected(_) => "protected",
+            _ => return None,
+        })
+    }
 }
 
 impl Display for Token {
