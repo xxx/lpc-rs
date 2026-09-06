@@ -569,6 +569,15 @@ impl LpcRef {
             _ => Err(self.to_unary_op_error(UnaryOperation::BitwiseNot)),
         }
     }
+
+    /// `-self`; the minimum int wraps to itself.
+    pub fn negate(&self) -> Result<Self> {
+        match self {
+            LpcRef::Int(x) => Ok(Self::Int(LpcInt(x.0.wrapping_neg()))),
+            LpcRef::Float(f) => Ok(Self::from(-f.0.into_inner())),
+            _ => Err(self.to_unary_op_error(UnaryOperation::Negate)),
+        }
+    }
 }
 
 impl From<BaseFloat> for LpcRef {

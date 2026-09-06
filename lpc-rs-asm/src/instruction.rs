@@ -216,6 +216,9 @@ pub enum Instruction {
     /// x.2 = x.0 * x.1
     Mul(RegisterVariant, RegisterVariant, RegisterVariant),
 
+    /// x.1 = -x.0
+    Negate(RegisterVariant, RegisterVariant),
+
     /// Check if x.0 is equal to 0
     Not(RegisterVariant, RegisterVariant),
 
@@ -302,6 +305,7 @@ impl Instruction {
             | Self::Load(_, _, d)
             | Self::LoadMappingKey(_, _, d)
             | Self::MapConst(d)
+            | Self::Negate(_, d)
             | Self::Not(_, d)
             | Self::Range(_, _, _, d)
             | Self::Sizeof(_, d) => Some(d),
@@ -387,6 +391,7 @@ impl Instruction {
             Self::MapConst(a0) => Self::MapConst(f(a0)),
             Self::Mod(a0, a1, a2) => Self::Mod(f(a0), f(a1), f(a2)),
             Self::Mul(a0, a1, a2) => Self::Mul(f(a0), f(a1), f(a2)),
+            Self::Negate(a0, a1) => Self::Negate(f(a0), f(a1)),
             Self::Not(a0, a1) => Self::Not(f(a0), f(a1)),
             Self::NewUpvalue(a0) => Self::NewUpvalue(f(a0)),
             Self::Or(a0, a1, a2) => Self::Or(f(a0), f(a1), f(a2)),
@@ -462,7 +467,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 43;
+    pub const COUNT: usize = 44;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -494,6 +499,7 @@ impl Instruction {
         "map_const",
         "mod",
         "mul",
+        "negate",
         "not",
         "new_upvalue",
         "or",
@@ -542,21 +548,22 @@ impl Instruction {
             Self::MapConst(..) => 25,
             Self::Mod(..) => 26,
             Self::Mul(..) => 27,
-            Self::Not(..) => 28,
-            Self::NewUpvalue(..) => 29,
-            Self::Or(..) => 30,
-            Self::PopulateArgv(..) => 31,
-            Self::PopulateDefaults => 32,
-            Self::PushArrayItem(..) => 33,
-            Self::PushPartialArg(..) => 34,
-            Self::Range(..) => 35,
-            Self::Ret => 36,
-            Self::Shl(..) => 37,
-            Self::Shr(..) => 38,
-            Self::Sizeof(..) => 39,
-            Self::Store(..) => 40,
-            Self::Sub(..) => 41,
-            Self::Xor(..) => 42,
+            Self::Negate(..) => 28,
+            Self::Not(..) => 29,
+            Self::NewUpvalue(..) => 30,
+            Self::Or(..) => 31,
+            Self::PopulateArgv(..) => 32,
+            Self::PopulateDefaults => 33,
+            Self::PushArrayItem(..) => 34,
+            Self::PushPartialArg(..) => 35,
+            Self::Range(..) => 36,
+            Self::Ret => 37,
+            Self::Shl(..) => 38,
+            Self::Shr(..) => 39,
+            Self::Sizeof(..) => 40,
+            Self::Store(..) => 41,
+            Self::Sub(..) => 42,
+            Self::Xor(..) => 43,
         }
     }
 
@@ -654,6 +661,9 @@ impl Display for Instruction {
             }
             Instruction::Mul(r1, r2, r3) => {
                 write!(f, "{} {r1}, {r2}, {r3}", self.mnemonic())
+            }
+            Instruction::Negate(r1, r2) => {
+                write!(f, "{} {r1}, {r2}", self.mnemonic())
             }
             Instruction::NewUpvalue(r) => {
                 write!(f, "{} {r}", self.mnemonic())
@@ -881,6 +891,7 @@ mod tests {
             MapConst(r()),
             Mod(r(), r(), r()),
             Mul(r(), r(), r()),
+            Negate(r(), r()),
             Not(r(), r()),
             NewUpvalue(r()),
             Or(r(), r(), r()),
@@ -932,6 +943,7 @@ mod tests {
         assert_eq!(Cast(r(), LpcType::Int(false), d).dest_register(), Some(d));
         assert_eq!(Copy(r(), d).dest_register(), Some(d));
         assert_eq!(Load(r(), r(), d).dest_register(), Some(d));
+        assert_eq!(Negate(r(), d).dest_register(), Some(d));
         assert_eq!(Range(r(), r(), r(), d).dest_register(), Some(d));
         assert_eq!(Sizeof(r(), d).dest_register(), Some(d));
         assert_eq!(

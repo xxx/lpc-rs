@@ -9,7 +9,7 @@ use crate::{
         ast::{
             assignment_node::AssignmentNode,
             ast_node::{AstNode, AstNodeTrait, SpannedNode},
-            binary_op_node::BinaryOpNode,
+            binary_op_node::{BinaryOpNode, BinaryOperation},
             block_node::BlockNode,
             break_node::BreakNode,
             call_node::{CallChain, CallNode},
@@ -759,10 +759,27 @@ impl TreeWalker for SemanticCheckWalker {
                 UnaryOperation::Inc | UnaryOperation::Dec => {
                     if matches!(*node.expr, ExpressionNode::Int(_)) {
                         let err: LpcError = lpc_error!("Invalid operation on `int` literal");
-                        Err(self.context.diagnostics.fail(err))
-                    } else {
-                        Ok(())
+                        return Err(self.context.diagnostics.fail(err));
                     }
+
+                    // A slice is a value, not a place.
+                    if let ExpressionNode::BinaryOp(BinaryOpNode {
+                        op: BinaryOperation::Index,
+                        r,
+                        ..
+                    }) = &*node.expr
+                        && matches!(**r, ExpressionNode::Range(_))
+                    {
+                        let err: LpcError = lpc_error!(
+                            node.span,
+                            "`{}` cannot step a slice: `{}`",
+                            node.op,
+                            node.expr
+                        );
+                        return Err(self.context.diagnostics.fail(err));
+                    }
+
+                    Ok(())
                 }
                 _ => Ok(()),
             },
@@ -902,6 +919,26 @@ mod tests {
         Ok(SemanticCheckWalker::compile_through(code)
             .await?
             .into_context())
+    }
+
+    /// The messages a snippet earns, warnings aside. A checker `fail` stops
+    /// the walk outright, so its diagnostics arrive via `Err` rather than the
+    /// context.
+    async fn messages(code: &str) -> Vec<String> {
+        match walk_code(code).await {
+            Ok(context) => context
+                .diagnostics
+                .errors()
+                .iter()
+                .filter(|e| !e.is_warning())
+                .map(ToString::to_string)
+                .collect(),
+            Err(e) => std::iter::once(e.clone())
+                .chain(e.additional_errors().iter().cloned())
+                .filter(|e| !e.is_warning())
+                .map(|e| e.to_string())
+                .collect(),
+        }
     }
 
     mod test_visit_assignment {
@@ -2522,22 +2559,12 @@ mod tests {
     mod test_visit_operator {
         use super::*;
 
-        fn messages(context: &CompilationContext) -> Vec<String> {
-            context
-                .diagnostics
-                .errors()
-                .iter()
-                .map(ToString::to_string)
-                .collect()
-        }
-
         #[tokio::test]
         async fn refuses_more_bound_arguments_than_the_operator_takes() {
             let code = "function f; void create() { f = &operator(+)(1, 2, 3); }";
-            let context = walk_code(code).await.unwrap();
 
             assert_eq!(
-                messages(&context),
+                messages(code).await,
                 ["`operator(+)` takes 2 arguments, found 3"]
             );
         }
@@ -2545,10 +2572,9 @@ mod tests {
         #[tokio::test]
         async fn a_hole_counts_as_a_bound_argument() {
             let code = "function f; void create() { f = &operator(!)(, 1); }";
-            let context = walk_code(code).await.unwrap();
 
             assert_eq!(
-                messages(&context),
+                messages(code).await,
                 ["`operator(!)` takes 1 argument, found 2"]
             );
         }
@@ -2556,38 +2582,35 @@ mod tests {
         #[tokio::test]
         async fn accepts_every_slot_bound_or_none() {
             let code = "function f, g, h, i; void create() { f = &operator(+)(1, 2); g = &operator(!)(0); h = operator([]); i = &operator(-)(); }";
-            let context = walk_code(code).await.unwrap();
+            let msgs = messages(code).await;
 
-            assert!(messages(&context).is_empty(), "{:?}", messages(&context));
+            assert!(msgs.is_empty(), "{:?}", msgs);
         }
 
         #[tokio::test]
         async fn bitwise_not_takes_a_mixed_operand() {
             let code = "mixed m; int r; void create() { r = ~m; }";
-            let context = walk_code(code).await.unwrap();
+            let msgs = messages(code).await;
 
-            assert!(messages(&context).is_empty(), "{:?}", messages(&context));
+            assert!(msgs.is_empty(), "{:?}", msgs);
         }
 
         #[tokio::test]
         async fn bitwise_not_still_refuses_a_string() {
             let code = "string s; int r; void create() { r = ~s; }";
-            let err = walk_code(code)
-                .await
-                .expect_err("a string operand is refused");
 
             assert_eq!(
-                err.to_string(),
-                "Invalid Type: `~` `s` (string). Expected `int`"
+                messages(code).await,
+                ["Invalid Type: `~` `s` (string). Expected `int`"]
             );
         }
 
         #[tokio::test]
         async fn bitwise_not_takes_a_closure_positional() {
             let code = "function f; void create() { f = (: ~$1 :); }";
-            let context = walk_code(code).await.unwrap();
+            let msgs = messages(code).await;
 
-            assert!(messages(&context).is_empty(), "{:?}", messages(&context));
+            assert!(msgs.is_empty(), "{:?}", msgs);
         }
     }
 
@@ -3323,18 +3346,6 @@ mod tests {
     mod test_expression_type {
         use super::*;
 
-        /// The messages a snippet earns, warnings aside.
-        async fn messages(code: &str) -> Vec<String> {
-            let context = walk_code(code).await.expect("failed to parse?");
-            context
-                .diagnostics
-                .errors()
-                .iter()
-                .filter(|e| !e.is_warning())
-                .map(ToString::to_string)
-                .collect()
-        }
-
         #[tokio::test]
         async fn a_mixed_right_operand_absorbs() {
             let code = r#"
@@ -3513,6 +3524,160 @@ mod tests {
             assert_eq!(
                 messages(code).await,
                 vec!["mismatched types: `i` (int) = `1 + x` (string)".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_union_typed_index_is_refused() {
+            let code = r#"
+                int *a = ({ 1, 2 });
+                int c = 1;
+                int i;
+                void create() { i = a[c ? 1 : "x"]; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec![
+                    r#"Mismatched types: `a` (int *) [] `c ? 1 : "x"` (int | string)"#.to_string()
+                ]
+            );
+        }
+    }
+
+    /// `mixed` is taken in every operand and index position; the runtime
+    /// checks the value.
+    mod mixed_operands {
+        use super::*;
+
+        #[tokio::test]
+        async fn a_unary_operator_takes_mixed() {
+            let code = r#"
+                mixed m = 1;
+                mixed a; mixed b; mixed c; mixed d; mixed e;
+                void create() {
+                    a = -m;
+                    b = m++;
+                    c = ++m;
+                    d = m--;
+                    e = --m;
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn an_element_and_a_positional_argument_take_a_step() {
+            let code = r#"
+                mapping counts = ([ "a": 1 ]);
+                mixed *list = ({ 1 });
+                function f;
+                void create() {
+                    counts["a"]++;
+                    list[0]--;
+                    f = (: $1++ :);
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_mixed_array_is_not_negated() {
+            let code = r#"
+                mixed *ma = ({ 1 });
+                mixed a;
+                void create() { a = -ma; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["Invalid Type: `-` `ma` (mixed *). Expected `int`, or `float`".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_mixed_array_is_not_stepped() {
+            let code = r#"
+                mixed *ma = ({ 1 });
+                void create() { ma++; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["Invalid Type: `++` `ma` (mixed *). Expected `int`".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn an_array_and_a_string_take_a_mixed_index() {
+            let code = r#"
+                mixed m = 1;
+                int *a = ({ 1, 2 });
+                string s = "ab";
+                int i; int c; mixed x;
+                void create() {
+                    i = a[m];
+                    c = s[m];
+                    a[m] = 3;
+                    a[m] += 1;
+                    a[m]++;
+                    x = m[i];
+                    x = m[s];
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_slice_of_mixed_is_mixed() {
+            let code = r#"
+                mixed m = "hello";
+                mixed *ma = ({ 1, 2 });
+                string s; int *a; int *b; mixed x;
+                void create() {
+                    s = m[1..2];
+                    a = m[1..];
+                    b = ma[0..1];
+                    x = m[..m];
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_mixed_array_is_not_an_index() {
+            let code = r#"
+                mixed *ma = ({ 1 });
+                int *a = ({ 1, 2 });
+                int i;
+                void create() { i = a[ma]; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["Mismatched types: `a` (int *) [] `ma` (mixed *)".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_string_is_still_not_an_array_index() {
+            let code = r#"
+                int *a = ({ 1, 2 });
+                int i;
+                void create() { i = a["x"]; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec![r#"Mismatched types: `a` (int *) [] `"x"` (string)"#.to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_slice_of_an_array_is_not_stepped() {
+            let code = r#"
+                mixed m = ({ 10, 20, 30 });
+                void create() { m[1..2]++; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["`++` cannot step a slice: `m [] 1..2`".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn a_slice_of_a_mapping_is_not_stepped() {
+            let code = r#"
+                mapping mm = ([ 2: 7 ]);
+                void create() { mm[1..2]--; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec!["`--` cannot step a slice: `mm [] 1..2`".to_string()]
             );
         }
     }

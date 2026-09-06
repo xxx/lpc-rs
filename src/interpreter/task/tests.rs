@@ -2406,6 +2406,27 @@ mod test_instructions {
 
             check_committed_globals(code, &[("j", BareVal::Int(4)), ("k", BareVal::Int(5))]).await;
         }
+
+        #[tokio::test]
+        async fn steps_a_mixed_holding_an_int() {
+            let code = indoc! { r##"
+                    mixed m = 4;
+                    mixed k = m--;
+                    mixed n = 4;
+                    mixed j = --n;
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("m", BareVal::Int(3)),
+                    ("k", BareVal::Int(4)),
+                    ("n", BareVal::Int(3)),
+                    ("j", BareVal::Int(3)),
+                ],
+            )
+            .await;
+        }
     }
 
     mod test_eq_eq {
@@ -3185,6 +3206,109 @@ mod test_instructions {
 
             check_committed_globals(code, &[("j", BareVal::Int(6)), ("k", BareVal::Int(5))]).await;
         }
+
+        #[tokio::test]
+        async fn steps_a_mixed_holding_an_int() {
+            let code = indoc! { r##"
+                    mixed m = 4;
+                    mixed k = m++;
+                    mixed n = 4;
+                    mixed j = ++n;
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("m", BareVal::Int(5)),
+                    ("k", BareVal::Int(4)),
+                    ("n", BareVal::Int(5)),
+                    ("j", BareVal::Int(5)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn errors_on_a_mixed_that_is_not_an_int() {
+            for value in [r#""x""#, "({ 1 })"] {
+                let code = format!("mixed m = {value}; void create() {{ m++; }}");
+
+                let error = try_run_prog(&code)
+                    .await
+                    .expect_err("++ on a non-int mixed must error");
+                assert_eq!(error.to_string(), "runtime error: invalid increment");
+            }
+        }
+
+        #[tokio::test]
+        async fn a_string_element_is_not_stepped() {
+            let code = indoc! { r##"
+                    string s = "hey";
+                    void create() { s[0]++; }
+                "##};
+
+            let error = try_run_prog(code)
+                .await
+                .expect_err("a string has no element to store");
+            assert!(
+                error
+                    .to_string()
+                    .starts_with("runtime error: Invalid attempt to take index"),
+                "{error}"
+            );
+        }
+
+        #[tokio::test]
+        async fn steps_an_element_in_place() {
+            let code = indoc! { r##"
+                    int *a = ({ 1, 2 });
+                    mapping counts = ([ "k": 10 ]);
+                    mixed m = ({ 7 });
+                    int *b = ({ 5 });
+                    mixed idx = 0;
+                    int first; int second; int third;
+                    void create() {
+                        first = a[0]++;
+                        second = ++a[1];
+                        counts["k"]++;
+                        third = counts["k"];
+                        m[0]--;
+                        b[idx]++;
+                    }
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::Array(vec![BareVal::Int(2), BareVal::Int(3)])),
+                    ("first", BareVal::Int(1)),
+                    ("second", BareVal::Int(3)),
+                    ("third", BareVal::Int(11)),
+                    ("m", BareVal::Array(vec![BareVal::Int(6)])),
+                    ("b", BareVal::Array(vec![BareVal::Int(6)])),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn steps_an_element_of_a_local_array() {
+            let code = indoc! { r##"
+                    void create() {
+                        int *a = ({ 1 });
+                        int old = a[0]++;
+                    }
+                "##};
+
+            check_popped_vars(
+                code,
+                &[
+                    ("a", BareVal::Array(vec![BareVal::Int(2)])),
+                    ("old", BareVal::Int(1)),
+                ],
+            )
+            .await;
+        }
     }
 
     mod test_isub {
@@ -3285,6 +3409,45 @@ mod test_instructions {
                 ],
             )
             .await;
+        }
+
+        #[tokio::test]
+        async fn a_mixed_index_reads_the_element() {
+            let code = indoc! { r##"
+                    mixed m = 1;
+                    int *a = ({ 5, 6 });
+                    string s = "hey";
+                    int i = a[m];
+                    int c = s[m];
+                    mixed t = "hello";
+                    string u = t[1..2];
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("i", BareVal::Int(6)),
+                    ("c", BareVal::Int('e' as LpcIntInner)),
+                    ("u", BareVal::String("el".into())),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_string_in_a_mixed_is_not_an_array_index() {
+            let code = r#"mixed m = "x"; int *a = ({ 1 }); int i = a[m];"#;
+
+            let error = try_run_prog(code)
+                .await
+                .expect_err("a string index needs a mapping");
+
+            assert!(
+                error
+                    .to_string()
+                    .starts_with("runtime error: Attempting to access index"),
+                "{error}"
+            );
         }
     }
 
@@ -3425,6 +3588,69 @@ mod test_instructions {
                 ],
             )
             .await;
+        }
+    }
+
+    mod test_negate {
+        use super::*;
+
+        #[tokio::test]
+        async fn negates_a_number() {
+            let code = indoc! { r##"
+                    int i = 5;
+                    int a = -i;
+                    int b = -a;
+                    float f = 1.5;
+                    int c = -f == -1.5;
+                    mixed m = 3;
+                    mixed d = -m;
+                    mixed g = 2.5;
+                    int e = -g == -2.5;
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("a", BareVal::Int(-5)),
+                    ("b", BareVal::Int(5)),
+                    ("c", BareVal::Int(1)),
+                    ("d", BareVal::Int(-3)),
+                    ("e", BareVal::Int(1)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn the_minimum_int_wraps() {
+            let code = indoc! { r##"
+                    int i = -9223372036854775807 - 1;
+                    int a = -i;
+                "##};
+
+            check_committed_globals(code, &[("a", BareVal::Int(LpcIntInner::MIN))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_value_that_is_not_a_number_is_an_error() {
+            for (value, name) in [
+                (r#""ab""#, "string"),
+                ("({ 1 })", "array"),
+                ("([ ])", "mapping"),
+            ] {
+                let code = format!("mixed m = {value}; mixed a = -m;");
+
+                let error = try_run_prog(&code)
+                    .await
+                    .expect_err("negating a non-number must error");
+
+                let rendered = error.to_string();
+                assert!(
+                    rendered.starts_with("runtime error: mismatched types: -"),
+                    "{rendered}"
+                );
+                assert!(rendered.ends_with(&format!("({name})")), "{rendered}");
+            }
         }
     }
 
@@ -4225,6 +4451,26 @@ mod test_instructions {
                 )],
             )
             .await;
+        }
+
+        #[tokio::test]
+        async fn a_non_int_index_is_not_stored() {
+            for value in [r#""x""#, "1.5"] {
+                let code = format!(
+                    "int *a = ({{ 1, 2, 3 }}); mixed m = {value}; void create() {{ a[m] = 99; }}"
+                );
+
+                let error = try_run_prog(&code)
+                    .await
+                    .expect_err("a non-int index into an array must error");
+
+                assert!(
+                    error
+                        .to_string()
+                        .starts_with("runtime error: Attempting to access index"),
+                    "{error}"
+                );
+            }
         }
     }
 
