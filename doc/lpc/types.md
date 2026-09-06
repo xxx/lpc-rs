@@ -135,6 +135,12 @@
     - A `mixed` is a type that can be any other LPC type. It doesn't _change_ the underlying
       type of the data - it simply disables compile-time type checks.
     - Run-time checks can still fail.
+    - A `mixed` is taken wherever a value is checked: as either operand of an operator, as
+      an index (`a[m]`), as the operand of `-`, `++`, `--` and `~`, and a slice of one
+      (`m[1..2]`) is `mixed`, since the value may be a string. The runtime checks the
+      value: `-m` on a string, `m++` on an array and `a[m]` with a string in `m` are
+      runtime errors. A `mixed *` is an array, so `-ma`, `ma++` and `a[ma]` are compile
+      errors.
     - Whether the value is a reference or value type depends on the underlying type.
     - Examples:
         ```c
