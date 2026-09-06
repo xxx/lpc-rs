@@ -8,6 +8,7 @@ use indexmap::IndexMap;
 use lpc_rs_core::{
     EFUN, RegisterSize, call_namespace::CallNamespace, lpc_path::LpcPath, pragma_flags::PragmaFlags,
 };
+use lpc_rs_errors::{source_map::FileId, span::Span};
 use lpc_rs_function_support::{
     function_prototype::FunctionPrototype, program_function::ProgramFunction, symbol::Symbol,
 };
@@ -53,6 +54,10 @@ pub struct CompilationContext {
     /// The pragmas that have been set
     pub pragmas: PragmaFlags,
 
+    /// Per file, the byte offset from which `#pragma strict_types` governs
+    /// it; an `#include` never inherits the includer's entry.
+    pub strict_types_from: HashMap<FileId, usize>,
+
     /// All of the inherited functions, keyed by their mangled name.
     pub inherited_functions: IndexMap<Ustr, Arc<ProgramFunction>>,
 
@@ -91,6 +96,13 @@ pub struct CompilationContext {
 
 impl CompilationContext {
     /// config's lib_dir (a.k.a. LIB_DIR)
+    /// Whether `#pragma strict_types` governs the source at `span`.
+    pub fn strict_types_at(&self, span: Span) -> bool {
+        self.strict_types_from
+            .get(&span.file_id())
+            .is_some_and(|&from| from <= span.l())
+    }
+
     pub fn lib_dir(&self) -> &str {
         &self.config.lib_dir
     }
@@ -251,6 +263,7 @@ impl Default for CompilationContext {
             scopes: ScopeTree::default(),
             function_prototypes: HashMap::new(),
             pragmas: PragmaFlags::new(),
+            strict_types_from: HashMap::new(),
             inherits: vec![],
             inherit_names: HashMap::new(),
             inherited_functions: IndexMap::new(),
