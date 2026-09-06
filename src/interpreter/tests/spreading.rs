@@ -3,7 +3,10 @@
 use indoc::indoc;
 
 use super::{fails, run};
-use crate::interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef};
+use crate::{
+    interpreter::{lpc_int::LpcInt, lpc_ref::LpcRef},
+    test_support::PERMISSIVE_MASTER,
+};
 
 fn n(i: i64) -> LpcRef {
     LpcRef::Int(LpcInt(i))
@@ -245,4 +248,18 @@ async fn a_large_spread_well_under_the_ceiling_still_works() {
     )
     .await;
     assert_eq!(r, vec![n(999)]);
+}
+
+/// `&->add()`'s receiver is unbound until the call, which is what routes
+/// this through the slow door that loads `/spread_base`.
+#[tokio::test]
+async fn a_spread_past_the_ceiling_through_an_unloaded_dynamic_pointer_is_a_clean_runtime_error() {
+    let e = fails(
+        PERMISSIVE_MASTER,
+        &[],
+        r#"mixed *create() { function fp = &->add(); mixed *xs = allocate(65535); return ({ fp("/spread_base", xs...) }); }"#,
+    )
+    .await;
+    assert!(e.contains("cannot pass"), "{e}");
+    assert!(e.contains("the limit is"), "{e}");
 }

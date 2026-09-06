@@ -19,8 +19,9 @@ impl RefBank {
         runtime_arg_count: RegisterSize,
     ) -> RefBank {
         // usize: runtime_arg_count + num_locals + 1 can exceed u16::MAX even though each fits one.
-        let static_length = function.arity().num_args as usize + function.num_locals as usize + 1;
-        let dynamic_length = runtime_arg_count as usize + function.num_locals as usize + 1;
+        let num_locals = usize::from(function.num_locals);
+        let static_length = usize::from(function.arity().num_args) + num_locals + 1;
+        let dynamic_length = usize::from(runtime_arg_count) + num_locals + 1;
         let reservation = std::cmp::max(static_length, dynamic_length);
 
         RefBank {

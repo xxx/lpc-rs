@@ -5,7 +5,7 @@
 use std::{borrow::Cow, sync::Arc};
 
 use lpc_rs_asm::instruction::{Arg, ArgList};
-use lpc_rs_core::{RegisterSize, register::RegisterVariant};
+use lpc_rs_core::register::RegisterVariant;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use tracing::instrument;
@@ -440,10 +440,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Ok(Called::Framed);
         }
 
+        let num_args = self.checked_register_count(args.len(), &function)?;
         let mut new_frame = CallFrame::new(
             process,
             function.clone(),
-            RegisterSize::try_from(args.len())?,
+            num_args,
             Some(ptr.upvalue_ptrs.clone()),
         );
         for (i, arg) in args.into_iter().enumerate() {

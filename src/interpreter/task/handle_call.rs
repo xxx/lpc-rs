@@ -104,9 +104,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         count: usize,
         function: &ProgramFunction,
     ) -> lpc_rs_errors::Result<RegisterSize> {
-        if count + function.num_locals as usize + 1 > RegisterSize::MAX as usize {
-            let limit =
-                (RegisterSize::MAX as usize).saturating_sub(function.num_locals as usize + 1);
+        let num_locals = usize::from(function.num_locals);
+        if count + num_locals + 1 > usize::from(RegisterSize::MAX) {
+            let limit = usize::from(RegisterSize::MAX).saturating_sub(num_locals + 1);
             return Err(self.runtime_error(format!(
                 "cannot pass {count} arguments to `{}`: the limit is {limit}",
                 function.name()
