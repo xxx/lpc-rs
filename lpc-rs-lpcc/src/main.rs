@@ -37,6 +37,14 @@ async fn run() {
     let lpc_path = LpcPath::new_server(&args.filename);
 
     let vm = Vm::new(config);
+
+    // A call to a sefun is a compile error without the sefun object, as it
+    // would be in the driver.
+    if let Some(Err(e)) = vm.initialize_simul_efuns().await {
+        e.emit_diagnostics();
+        std::process::exit(1);
+    }
+
     vm.initialize_process_from_path(&lpc_path)
         .await
         .inspect_err(|e| {
