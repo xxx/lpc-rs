@@ -16,7 +16,8 @@ belongs to and `previous_object()` is the real caller.
 With `flag` 0, the object directly outside `ob` in its chain: for a
 shadowed object its innermost shadow, for a shadow the next one out, 0 when
 there is none — so `while (ob = shadow(ob, 0))` walks a chain inner to
-outer.
+outer. Either form errors when `ob` is not an object or has been
+destructed.
 
 A shadow is one object attached to one target. Every refusal is a runtime
 error, `shadow '<caller>' on '<ob>': <reason>`:
