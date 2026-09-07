@@ -319,6 +319,7 @@ impl CodegenWalker {
                 },
                 arguments: vec![],
                 span: None,
+                lvalue_temps: Vec::new(),
             };
             call.visit(self).await?;
         }
@@ -1380,11 +1381,44 @@ impl TreeWalker for CodegenWalker {
 
         let mut arg_results: Vec<Arg> = Vec::with_capacity(argument_len);
         let mut spread_seen = false;
+        // (cell, container, key) for each indexed lvalue: stored back after the call.
+        let mut write_backs: Vec<(RegisterVariant, RegisterVariant, RegisterVariant)> = Vec::new();
+        let lvalue_temps = node.lvalue_temps.clone();
         for (index, argument) in node.arguments.iter_mut().enumerate() {
             if let ExpressionNode::Spread(spread) = argument {
                 spread.expr.visit(self).await?;
                 arg_results.push(Arg::Spread(self.current_result));
                 spread_seen = true;
+                continue;
+            }
+            if let Some((_, temp)) = lvalue_temps.iter().find(|(i, _)| *i == index) {
+                let ExpressionNode::BinaryOp(BinaryOpNode {
+                    op: BinaryOperation::Index,
+                    l,
+                    r,
+                    ..
+                }) = argument
+                else {
+                    return Err(lpc_bug!(
+                        node.span,
+                        "hidden cell `{temp}` stands in for a non-indexed argument"
+                    ));
+                };
+                l.visit(self).await?;
+                let container = self.current_result;
+                r.visit(self).await?;
+                let key = self.current_result;
+                let cell = self.location_of(temp)?;
+                if !matches!(cell, RegisterVariant::Upvalue(_)) {
+                    return Err(lpc_bug!(
+                        node.span,
+                        "hidden cell `{temp}` resolved to a register, not a cell"
+                    ));
+                }
+                push_instruction!(self, Instruction::NewUpvalue(cell), node.span);
+                push_instruction!(self, Instruction::Load(container, key, cell), node.span);
+                arg_results.push(Arg::Ref(cell));
+                write_backs.push((cell, container, key));
                 continue;
             }
             let by_ref = match argument {
@@ -1529,6 +1563,10 @@ impl TreeWalker for CodegenWalker {
                 something very broken in the semantic checks, or that I'm not looking hard enough.",
                 name
             ));
+        }
+
+        for (cell, container, key) in write_backs {
+            push_instruction!(self, Instruction::Store(cell, container, key), node.span);
         }
 
         Ok(())
@@ -4476,6 +4514,7 @@ mod tests {
                         chain: create!(CallChain, name: ustr("dump")),
                         arguments: vec![ExpressionNode::Var(var)],
                         span: None,
+                        lvalue_temps: Vec::new(),
                     })],
                     scope_id: None,
                 })),
@@ -4779,6 +4818,7 @@ mod tests {
                     chain: create!(CallChain, name: ustr("dump")),
                     arguments: vec![ExpressionNode::from("false")],
                     span: None,
+                    lvalue_temps: Vec::new(),
                 }))),
                 scope_id: None,
                 span: None,
@@ -7031,6 +7071,7 @@ mod tests {
                     chain: create!(CallChain, name: ustr("clone_object")),
                     arguments: vec![ExpressionNode::from("/foo/bar.c")],
                     span: None,
+                    lvalue_temps: Vec::new(),
                 })),
                 array: false,
                 global: false,
@@ -7212,6 +7253,7 @@ mod tests {
                     chain: create!(CallChain, name: ustr("dump")),
                     arguments: vec![ExpressionNode::from("body")],
                     span: None,
+                    lvalue_temps: Vec::new(),
                 })),
                 scope_id: None,
                 span: None,

@@ -986,7 +986,7 @@ Call: CallNode = {
             },
             arguments,
             span,
-        }, span)?)
+         lvalue_temps: Vec::new(), }, span)?)
     },
     <expr:Call> <lparen:"("> <list:ArgumentExpressionList?> <right:")"> =>? {
         let arguments = list.unwrap_or_else(|| vec![]);
@@ -996,7 +996,7 @@ Call: CallNode = {
             chain: CallChain::Node(Box::new(expr)),
             arguments,
             span,
-        }, span)?)
+         lvalue_temps: Vec::new(), }, span)?)
     }
 };
 

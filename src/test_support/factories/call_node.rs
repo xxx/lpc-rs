@@ -14,5 +14,6 @@ factori!(CallNode, {
         },
         arguments = vec![],
         span = None,
+        lvalue_temps = vec![],
     }
 });

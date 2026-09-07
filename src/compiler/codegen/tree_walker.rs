@@ -938,6 +938,7 @@ mod tests {
                 },
                 arguments: vec![var("a"), var("b")],
                 span: None,
+                lvalue_temps: Vec::new(),
             };
             let mut walker = spy();
             walker.visit_call(&mut node).await.unwrap();
@@ -954,11 +955,13 @@ mod tests {
                 },
                 arguments: vec![var("c")],
                 span: None,
+                lvalue_temps: Vec::new(),
             };
             let mut node = CallNode {
                 chain: CallChain::Node(Box::new(inner)),
                 arguments: vec![var("a")],
                 span: None,
+                lvalue_temps: Vec::new(),
             };
             let mut walker = spy();
             walker.visit_call(&mut node).await.unwrap();
