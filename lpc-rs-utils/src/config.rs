@@ -154,7 +154,7 @@ impl ConfigBuilder {
                 .get("LPC_MASTER_OBJECT")
                 .or_else(|| env.get("MASTER_OBJECT"))
                 .map(|x| {
-                    let canon = canonicalize_in_game_path(x, "/", lib_dir.unwrap().as_str());
+                    let canon = canonicalize_in_game_path(x, "/", &lib_dir_str);
                     ustr(canon.to_string_lossy().as_ref())
                 })
                 .or(self.master_object),
@@ -200,8 +200,7 @@ impl ConfigBuilder {
                 .map(|x| {
                     x.split(':')
                         .map(|x| {
-                            let canon =
-                                canonicalize_in_game_path(x, "/", lib_dir.unwrap().as_str());
+                            let canon = canonicalize_in_game_path(x, "/", &lib_dir_str);
                             canon.to_string_lossy().as_ref().into()
                         })
                         .collect::<Vec<_>>()
