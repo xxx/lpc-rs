@@ -373,16 +373,22 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
         let caller = self.stack.current_frame()?.process.clone();
-        let (process, function) =
-            match Process::shadow_entry(&self.context.txn, &process, name.as_str(), &caller) {
-                ShadowEntry::Found(process, function) => (process, function),
-                ShadowEntry::Fallback(real) => {
-                    let Some(function) = real.program.lookup_function(name).cloned() else {
-                        return Ok(Called::Unresolved);
-                    };
-                    (real, function)
-                }
-            };
+        let entry = Process::shadow_entry(&self.context.txn, &process, name.as_str(), &caller);
+        let (process, function) = match entry {
+            ShadowEntry::Unshadowed => {
+                let Some(function) = process.program.lookup_function(name).cloned() else {
+                    return Ok(Called::Unresolved);
+                };
+                (process, function)
+            }
+            ShadowEntry::Found(process, function) => (process, function),
+            ShadowEntry::Fallback(real) => {
+                let Some(function) = real.program.lookup_function(name).cloned() else {
+                    return Ok(Called::Unresolved);
+                };
+                (real, function)
+            }
+        };
         if let Some(i) = function.prototype.first_ref_param() {
             return Err(LpcError::runtime(format!(
                 "`{}` takes argument {} by reference; call it directly",

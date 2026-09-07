@@ -126,6 +126,9 @@ impl Process {
 
 /// Where an external call to an object enters its shadow chain.
 pub(crate) enum ShadowEntry {
+    /// The called object is neither a shadow nor shadowed: the door uses
+    /// the receiver it already holds.
+    Unshadowed,
     /// A shadow defines the function publicly: run it there.
     Found(Arc<Process>, Arc<ProgramFunction>),
     /// No shadow answers: the door looks the function up on this object,
@@ -139,7 +142,25 @@ impl Process {
     /// inside `caller` when it is further out, then walking inward past
     /// shadows that do not define `name` publicly. Costs two atomic loads when
     /// `target` was never in a chain.
+    #[inline]
     pub(crate) fn shadow_entry(
+        txn: &TxnHandle,
+        target: &Arc<Process>,
+        name: &str,
+        caller: &Arc<Process>,
+    ) -> ShadowEntry {
+        if !target.shadow.ever_shadowing.load(Ordering::Acquire)
+            && !target.shadow.ever_shadowed.load(Ordering::Acquire)
+        {
+            return ShadowEntry::Unshadowed;
+        }
+        Self::shadow_entry_in_chain(txn, target, name, caller)
+    }
+
+    /// [`Self::shadow_entry`] past the hint-bit gate: `target` is, or once
+    /// was, a shadow or shadowed.
+    #[inline(never)]
+    fn shadow_entry_in_chain(
         txn: &TxnHandle,
         target: &Arc<Process>,
         name: &str,

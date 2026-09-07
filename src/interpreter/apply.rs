@@ -67,6 +67,12 @@ pub(crate) async fn apply_hook(
     args: &[LpcRef],
 ) -> Result<Option<LpcRef>> {
     let (target, function) = match Process::shadow_entry(ctx.txn(), target, name, target) {
+        ShadowEntry::Unshadowed => {
+            let Some(function) = target.program.unmangled_functions.get(name).cloned() else {
+                return Ok(None);
+            };
+            (target.clone(), function)
+        }
         ShadowEntry::Found(process, function) => (process, function),
         ShadowEntry::Fallback(real) => {
             let Some(function) = real.program.unmangled_functions.get(name).cloned() else {
@@ -169,6 +175,12 @@ pub(crate) async fn deliver(
         return Ok(false);
     }
     let heard = match Process::shadow_entry(ctx.txn(), target, CATCH_TELL, target) {
+        ShadowEntry::Unshadowed => target
+            .program
+            .unmangled_functions
+            .get(CATCH_TELL)
+            .cloned()
+            .map(|function| (target.clone(), function)),
         ShadowEntry::Found(process, function) => Some((process, function)),
         ShadowEntry::Fallback(real) => real
             .program

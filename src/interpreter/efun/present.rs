@@ -125,6 +125,13 @@ impl Continuation for Present {
         for candidate in self.candidates.by_ref() {
             let (process, function) = match Process::shadow_entry(txn, &candidate, "id", &candidate)
             {
+                ShadowEntry::Unshadowed => {
+                    let Some(function) = candidate.program.unmangled_functions.get("id").cloned()
+                    else {
+                        continue;
+                    };
+                    (candidate.clone(), function)
+                }
                 ShadowEntry::Found(process, function) => (process, function),
                 ShadowEntry::Fallback(real) => {
                     let Some(function) = real.program.unmangled_functions.get("id").cloned() else {

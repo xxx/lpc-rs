@@ -57,7 +57,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 return Ok(false);
             };
             match Self::standing(&receiver_ref, &self.context)? {
-                Standing::Ready(process) => self.door_callee(&process, name)?,
+                Standing::Ready(process) => self.door_callee(process, name)?,
                 Standing::Dead | Standing::Removed(_) => None,
                 Standing::Uncreated(_) | Standing::Uninitialized(_) => return Ok(false),
             }
@@ -102,7 +102,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     self.stack.current_frame_mut()?.registers[0] = NULL;
                     return Ok(());
                 };
-                match self.door_callee(&receiver, function_name)? {
+                match self.door_callee(receiver, function_name)? {
                     Some((receiver, function)) => {
                         debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
                         // The callee returns through `pop_frame`'s result copy.
@@ -187,24 +187,30 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
     /// The object and function an external call of `name` on `receiver`
     /// runs: a shadow that defines it, else `receiver`'s chain target's own
-    /// public definition.
+    /// public definition. Takes `receiver` by value: the common,
+    /// never-shadowed case returns it straight back with no clone.
     pub(super) fn door_callee(
         &self,
-        receiver: &Arc<Process>,
+        receiver: Arc<Process>,
         name: &str,
     ) -> Result<Option<(Arc<Process>, Arc<ProgramFunction>)>> {
         let caller = &self.stack.current_frame()?.process;
-        Ok(
-            match Process::shadow_entry(&self.context.txn, receiver, name, caller) {
-                ShadowEntry::Found(process, function) => Some((process, function)),
-                ShadowEntry::Fallback(real) => real
-                    .program
-                    .lookup_function(name)
-                    .filter(|function| function.public())
-                    .cloned()
-                    .map(|function| (real.clone(), function)),
-            },
-        )
+        let entry = Process::shadow_entry(&self.context.txn, &receiver, name, caller);
+        Ok(match entry {
+            ShadowEntry::Unshadowed => receiver
+                .program
+                .lookup_function(name)
+                .filter(|function| function.public())
+                .cloned()
+                .map(|function| (receiver, function)),
+            ShadowEntry::Found(process, function) => Some((process, function)),
+            ShadowEntry::Fallback(real) => real
+                .program
+                .lookup_function(name)
+                .filter(|function| function.public())
+                .cloned()
+                .map(|function| (real.clone(), function)),
+        })
     }
 
     /// The identity a `->` from the current frame loads under.

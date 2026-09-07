@@ -156,7 +156,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             };
             match Self::standing(&receiver, &self.context)? {
                 Standing::Ready(process) => {
-                    let callee = self.door_callee(&process, &call.name)?;
+                    let callee = self.door_callee(process, &call.name)?;
                     match callee {
                         Some((process, function)) => {
                             debug_assert!(
@@ -224,7 +224,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         })
                         .await?;
                     let callee = match resolved {
-                        Some(process) => self.door_callee(&process, &name)?,
+                        Some(process) => self.door_callee(process, &name)?,
                         None => None,
                     };
                     match callee {
