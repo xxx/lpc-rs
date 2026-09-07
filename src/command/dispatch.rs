@@ -413,6 +413,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_low_priority_notify_fail_keeps_the_pending_message() {
+        let code = indoc! { r#"
+            string heard;
+            void create() { set_this_player(this_object()); enable_commands(); add_action("do_a", "go"); add_action("do_b", "go"); command("go"); }
+            int do_b(string a) { notify_fail("specific\n"); return 0; }
+            int do_a(string a) { notify_fail("Go where?\n", 0); return 0; }
+            void catch_tell(string m) { heard = m; }
+        "# };
+        assert_eq!(globals(code, 1).await, vec![s("specific\n")]);
+    }
+
+    #[tokio::test]
+    async fn a_default_priority_notify_fail_replaces_a_low_priority_one() {
+        let code = indoc! { r#"
+            string heard;
+            void create() { set_this_player(this_object()); enable_commands(); add_action("do_a", "go"); add_action("do_b", "go"); command("go"); }
+            int do_b(string a) { notify_fail("Go where?\n", 0); return 0; }
+            int do_a(string a) { notify_fail("specific\n"); return 0; }
+            void catch_tell(string m) { heard = m; }
+        "# };
+        assert_eq!(globals(code, 1).await, vec![s("specific\n")]);
+    }
+
+    #[tokio::test]
+    async fn the_first_notify_fail_is_kept_at_any_priority() {
+        let code = indoc! { r#"
+            string heard;
+            void create() { set_this_player(this_object()); enable_commands(); add_action("do_open", "open"); command("open door"); }
+            int do_open(string a) { notify_fail("Open what?\n", 0); return 0; }
+            void catch_tell(string m) { heard = m; }
+        "# };
+        assert_eq!(globals(code, 1).await, vec![s("Open what?\n")]);
+    }
+
+    #[tokio::test]
     async fn a_notify_fail_closure_supplies_the_message() {
         let code = indoc! { r#"
             string heard;

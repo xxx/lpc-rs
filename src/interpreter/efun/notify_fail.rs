@@ -1,10 +1,12 @@
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
+use crate::interpreter::{efun::efun_context::EfunContext, lpc_int::LpcInt, lpc_ref::LpcRef};
 
 /// `notify_fail`, an efun that sets the message (or a closure producing it)
-/// for the command in progress if nothing handles it. Returns 0, so
-/// `return notify_fail("...")` reads as "not handled".
+/// for the command in progress if nothing handles it. A priority of `0`
+/// leaves a message already pending in place; any other (the default `1`)
+/// replaces it. Returns 0, so `return notify_fail("...")` reads as "not
+/// handled".
 pub fn notify_fail<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let message = context.arg(0).clone();
     if !matches!(message, LpcRef::String(_) | LpcRef::Function(_)) {
@@ -12,8 +14,11 @@ pub fn notify_fail<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
             context.runtime_error("notify_fail: the message must be a string or a function")
         );
     }
+    let low_priority = context.arg_count() > 1 && matches!(context.arg(1), LpcRef::Int(LpcInt(0)));
     context.task_context().with_command(|state| {
-        if let Some(state) = state {
+        if let Some(state) = state
+            && !(low_priority && state.notify_fail.is_some())
+        {
             state.notify_fail = Some(message);
         }
     });

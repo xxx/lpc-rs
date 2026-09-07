@@ -459,8 +459,8 @@ efuns! {
     },
     notify_fail => {
         returns: LpcType::Int(false),
-        arity: 1,
-        args: [LpcType::String(false) | LpcType::Function(false)],
+        arity: (2, 1),
+        args: [LpcType::String(false) | LpcType::Function(false), LpcType::Int(false)],
     },
     objectp [in type_predicates] => {
         returns: LpcType::Int(false),
