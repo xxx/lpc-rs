@@ -56,14 +56,26 @@ pub(crate) async fn authorize_or_deny<const N: usize>(
         .as_in_game(context.config().lib_dir.as_str())
         .display()
         .to_string();
+    let allowed = master_allows(context, efun, apply, &in_game).await?;
+    Ok(allowed.then_some(FileAccess { in_game, server }))
+}
+
+/// Puts `in_game` to the master's `apply` (`valid_read`/`valid_write`) with
+/// `efun`'s name, the calling process, and its program; answers whether it
+/// allowed the access.
+async fn master_allows<const N: usize>(
+    context: &EfunContext<'_, N>,
+    efun: &str,
+    apply: &str,
+    in_game: &str,
+) -> Result<bool> {
     let args = [
-        LpcRef::from(in_game.clone()),
+        LpcRef::from(in_game),
         LpcRef::from(efun),
         LpcRef::from(Arc::downgrade(context.process())),
         context.calling_program(),
     ];
-    let allowed = valid_apply(context.task_context(), Some(context.chain()), apply, &args).await?;
-    Ok(allowed.then_some(FileAccess { in_game, server }))
+    valid_apply(context.task_context(), Some(context.chain()), apply, &args).await
 }
 
 /// [`authorize`] for a save efun: argument `i` is resolved against the lib
@@ -87,13 +99,7 @@ pub(crate) async fn authorize_save<const N: usize>(
         .config()
         .validate_in_game_path(&path, None)
         .map_err(|_| context.runtime_error(format!("{efun}: `{arg}` is not a valid path")))?;
-    let args = [
-        LpcRef::from(in_game.clone()),
-        LpcRef::from(efun),
-        LpcRef::from(Arc::downgrade(context.process())),
-        context.calling_program(),
-    ];
-    let allowed = valid_apply(context.task_context(), Some(context.chain()), apply, &args).await?;
+    let allowed = master_allows(context, efun, apply, &in_game).await?;
     if !allowed {
         return Err(context.runtime_error(format!("{efun}: permission denied")));
     }
