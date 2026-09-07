@@ -11,6 +11,7 @@ use lpc_rs_core::{LpcFloatInner, LpcIntInner, register::RegisterVariant};
 use tokio::sync::mpsc;
 use ustr::ustr;
 
+use super::handle_call::CallEntry;
 use super::*;
 use crate::{
     interpreter::{
@@ -1807,7 +1808,7 @@ mod test_instructions {
             let f = process.program.lookup_function("f").unwrap().clone();
 
             let e = task
-                .push_call_frame(process.clone(), f, ArgList(0), false)
+                .push_call_frame(process.clone(), f, ArgList(0), CallEntry::Direct)
                 .unwrap_err();
             assert!(
                 e.to_string()
@@ -4186,8 +4187,8 @@ mod test_instructions {
 
         use lpc_rs_asm::instruction::Instruction::{self, *};
         use lpc_rs_core::{
-            INIT_GLOBALS, function_arity::FunctionArity, function_receiver::FunctionReceiver,
-            lpc_path::LpcPath, lpc_type::LpcType,
+            INIT_GLOBALS, function_arity::FunctionArity, function_flags::FunctionFlags,
+            function_receiver::FunctionReceiver, lpc_path::LpcPath, lpc_type::LpcType,
         };
         use lpc_rs_function_support::{
             constant::LpcConstant, function_prototype::FunctionPrototypeBuilder,
@@ -4220,6 +4221,7 @@ mod test_instructions {
                 .return_type(LpcType::Mixed(false))
                 .arity(FunctionArity::new(2))
                 .arg_types(vec![LpcType::Mixed(false), LpcType::Mixed(false)])
+                .flags(FunctionFlags::default().with_varargs(true))
                 .build()
                 .unwrap();
             let mut func = ProgramFunction::new(prototype, 0);

@@ -12,7 +12,7 @@ use crate::interpreter::{
     continuation::Pending,
     lpc_ref::{LpcRef, NULL},
     process::{Liveness, Process},
-    task::{Task, advance::Advance, get_location},
+    task::{Task, advance::Advance, get_location, handle_call::CallEntry},
     task_context::{Loader, ObjectLookup, TaskContext},
 };
 
@@ -70,7 +70,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         match called {
             Some((process, function)) => {
                 debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
-                self.push_call_frame(process, function, list, true)?;
+                self.push_call_frame(process, function, list, CallEntry::Door)?;
             }
             None => self.stack.current_frame_mut()?.registers[0] = NULL,
         }
@@ -114,7 +114,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 } else {
                     debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
                     // The callee returns through `pop_frame`'s result copy.
-                    self.push_call_frame(receiver, function, list, true)?;
+                    self.push_call_frame(receiver, function, list, CallEntry::Door)?;
                     return Ok(());
                 }
             }
