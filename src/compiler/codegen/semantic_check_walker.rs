@@ -1206,6 +1206,33 @@ mod tests {
 
             assert!(walker.context.diagnostics.errors().is_empty());
         }
+
+        #[tokio::test]
+        async fn a_chained_literal_zero_is_taken_by_every_left_side() {
+            let code = r#"
+                static string s;
+                static object o;
+                int *a;
+                void create() {
+                    o = s = 0;
+                    a = o = s = 0;
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_chained_non_zero_value_is_still_checked() {
+            let code = r#"
+                static string s;
+                static object o;
+                void create() {
+                    o = s = "x";
+                }"#;
+            assert_eq!(
+                messages(code).await,
+                vec![r#"Mismatched types: `o` (object) = `s = "x"` (string)"#.to_string()]
+            );
+        }
     }
 
     mod test_visit_binary_op {
