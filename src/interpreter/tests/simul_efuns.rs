@@ -404,3 +404,20 @@ async fn the_simul_efun_object_is_the_resident_for_its_own_initializer() {
         .unwrap();
     assert!(task.context.simul_efuns().is_some());
 }
+
+/// A simul-efun spelled like an efun is what a bare call reaches, so a lib
+/// that stubs `save_object` hides the real one until the stub is deleted.
+#[tokio::test]
+async fn a_simul_efun_named_like_an_efun_shadows_it() {
+    let got = got_from_user(
+        "sefun-shadows-efun",
+        "/secure/simul_efun.c",
+        &[(
+            "secure/simul_efun.c",
+            "string save_object(string f) { return \"stub\"; }\n",
+        )],
+        r#"string got; void create() { got = save_object("/x"); }"#,
+    )
+    .await;
+    assert_eq!(got, "stub");
+}
