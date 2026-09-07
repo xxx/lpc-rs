@@ -1,5 +1,5 @@
-//! `shadow(ob, flag)`: the chain query, the attach, its refusals, and —
-//! from the dispatch tasks on — where an external call enters a chain.
+//! `shadow(ob, flag)`: the chain query, the attach, its refusals, and,
+//! through the doors, where an external call enters a chain.
 //! Cases follow `local/bench-drivers/shprobe/results.md` (c01–c23).
 
 use indoc::indoc;
@@ -56,8 +56,7 @@ const SB: &str = indoc! { r#"
     string f() { return "sb.f"; }
 "# };
 
-/// `S` with its attach entry point renamed, for a shadow that must not
-/// intercept a call meant for the target's own `go`.
+/// A shadow that attaches through `attach` and defines nothing else.
 const SG: &str = "object attach(object o) { return shadow(o, 1); }";
 
 fn ints(values: &[LpcRef]) -> Vec<i64> {
@@ -273,7 +272,7 @@ async fn a_shadowing_object_cannot_be_moved() {
 }
 
 /// A target with an internal call, a self call through `this_object()`, a
-/// public `p`, and a way to die.
+/// public `p`, a way to die, a way to move, and a way to enable commands.
 const T: &str = indoc! { r#"
     string f() { return "t.f prev=" + file_name(previous_object()); }
     string g() { return "t.g"; }
@@ -281,6 +280,8 @@ const T: &str = indoc! { r#"
     string self() { return "t.self->" + this_object()->f(); }
     string p() { return "t.p"; }
     void die_t() { destruct(this_object()); }
+    void enter(object e) { move_object(e); }
+    void wake() { enable_commands(); }
 "# };
 
 /// A shadow with a tag, a forward to its target, a self call, a static `p`.
@@ -352,4 +353,69 @@ async fn a_collection_call_enters_each_receivers_chain() {
     "# };
     let got = strings(&run(ALLOWING, &[("/t.c", T), ("/sh.c", SH)], main).await);
     assert_eq!(got[2], format!("s1.f prev={} this={}", got[0], got[1]));
+}
+
+/// A shadow that answers `id`, answers `process_input` as the driver's
+/// hook, and records what it is told.
+const LISTENING: &str = indoc! { r#"
+    string heard;
+    object go(object o) { return shadow(o, 1); }
+    int id(string s) { return s == "shade"; }
+    int process_input(string s) { heard = s; return 1; }
+    string heard() { return heard; }
+    string f() { return "shade.f"; }
+"# };
+
+#[tokio::test]
+async fn a_dynamic_pointer_enters_the_chain() {
+    let main = indoc! { r#"
+        mixed *create() {
+            object t = clone_object("/t");
+            object s = clone_object("/ls");
+            s->go(t);
+            function fp = &->f();
+            return ({ fp(t) });
+        }
+    "# };
+    let got = strings(&run(ALLOWING, &[("/t.c", T), ("/ls.c", LISTENING)], main).await);
+    assert_eq!(got, vec!["shade.f".to_string()]);
+}
+
+#[tokio::test]
+async fn present_asks_the_shadow_for_id() {
+    let main = indoc! { r#"
+        mixed *create() {
+            object room = clone_object("/s");
+            object t = clone_object("/t");
+            object s = clone_object("/ls");
+            t->enter(room);
+            s->go(t);
+            return ({ present("shade", room) == t });
+        }
+    "# };
+    let got = run(
+        ALLOWING,
+        &[("/s.c", S), ("/t.c", T), ("/ls.c", LISTENING)],
+        main,
+    )
+    .await;
+    assert_eq!(ints(&got), vec![1]);
+}
+
+/// `deliver`'s `catch_tell` lookup never consults the chain, so this uses
+/// `process_input`, which reaches the chain through `apply_hook`.
+#[tokio::test]
+async fn a_driver_hook_enters_the_chain() {
+    let main = indoc! { r#"
+        mixed *create() {
+            object t = clone_object("/t");
+            object s = clone_object("/ls");
+            s->go(t);
+            t->wake();
+            command("psst", t);
+            return ({ s->heard() });
+        }
+    "# };
+    let got = strings(&run(ALLOWING, &[("/t.c", T), ("/ls.c", LISTENING)], main).await);
+    assert_eq!(got, vec!["psst".to_string()]);
 }

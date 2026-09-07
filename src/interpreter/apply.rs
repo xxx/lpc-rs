@@ -15,7 +15,7 @@ use crate::{
         function_type::function_ptr::FunctionPtr,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
-        process::Process,
+        process::{Process, shadow::ShadowEntry},
         stm::Effect,
         task::apply_function::apply_function,
         task_context::{Caller, Callers, TaskContext},
@@ -56,8 +56,8 @@ pub(crate) async fn apply_on(
     timed(ctx, nested, function, args).await
 }
 
-/// `target->name(args)` as `apply_on`, entered through `callers`; `None`
-/// when `target` does not define `name`.
+/// `target->name(args)` as `apply_on`, entered through `callers`, through
+/// `target`'s shadow chain; `None` when nothing in it defines `name`.
 pub(crate) async fn apply_hook(
     ctx: &TaskContext,
     callers: Callers,
@@ -66,10 +66,16 @@ pub(crate) async fn apply_hook(
     name: &str,
     args: &[LpcRef],
 ) -> Result<Option<LpcRef>> {
-    let Some(function) = target.program.unmangled_functions.get(name).cloned() else {
-        return Ok(None);
+    let (target, function) = match Process::shadow_entry(ctx.txn(), target, name, target) {
+        ShadowEntry::Found(process, function) => (process, function),
+        ShadowEntry::Fallback(real) => {
+            let Some(function) = real.program.unmangled_functions.get(name).cloned() else {
+                return Ok(None);
+            };
+            (real, function)
+        }
     };
-    apply_on(ctx, callers, target, this_player, function, args)
+    apply_on(ctx, callers, &target, this_player, function, args)
         .await
         .map(Some)
 }

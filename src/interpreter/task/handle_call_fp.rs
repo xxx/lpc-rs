@@ -19,7 +19,7 @@ use crate::interpreter::{
         function_ptr::{FunctionPtr, ResolvedCall},
     },
     lpc_ref::{LpcRef, NULL},
-    process::{Liveness, Process},
+    process::{Liveness, Process, shadow::ShadowEntry},
     task::{
         Task, advance::Advance, eval_loop::AsyncCall, get_location, handle_call::check_arg_type,
         handle_call_other::Standing,
@@ -372,9 +372,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 )));
             }
         };
-        let Some(function) = process.program.lookup_function(name).cloned() else {
-            return Ok(Called::Unresolved);
-        };
+        let caller = self.stack.current_frame()?.process.clone();
+        let (process, function) =
+            match Process::shadow_entry(&self.context.txn, &process, name.as_str(), &caller) {
+                ShadowEntry::Found(process, function) => (process, function),
+                ShadowEntry::Fallback(real) => {
+                    let Some(function) = real.program.lookup_function(name).cloned() else {
+                        return Ok(Called::Unresolved);
+                    };
+                    (real, function)
+                }
+            };
         if let Some(i) = function.prototype.first_ref_param() {
             return Err(LpcError::runtime(format!(
                 "`{}` takes argument {} by reference; call it directly",
