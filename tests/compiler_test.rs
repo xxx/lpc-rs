@@ -214,9 +214,9 @@ async fn test_multi_dimensional_arrays() {
 #[tokio::test]
 async fn test_positional_vars_into_argv() {
     let code = indoc! { r##"
-        void create() {
+        mixed create() {
             function f = (: [...] $2 :);
-            f(666, 777);
+            return f(666, 777);
         }
     "## };
 
@@ -269,8 +269,8 @@ async fn test_calls_simul_efuns() {
         .expect("init error");
 
     let code = indoc! { r##"
-        void create() {
-            simul_efun("cool!");
+        mixed create() {
+            return simul_efun("cool!");
         }
     "## };
     let ctx = vm.initialize_string(code, "foo.c").await.unwrap();
@@ -282,8 +282,8 @@ async fn test_calls_simul_efuns() {
             return "local simul_efun: " + s;
         }
 
-        void create() {
-            simul_efun("cool!");
+        mixed create() {
+            return simul_efun("cool!");
         }
     "## };
     let ctx = vm.initialize_string(code, "foo.c").await.unwrap();
@@ -291,9 +291,9 @@ async fn test_calls_simul_efuns() {
     assert_eq!("local simul_efun: cool!", val.to_string());
 
     let code = indoc! { r##"
-        void create() {
+        mixed create() {
             function f = &simul_efun("pointed!");
-            f();
+            return f();
         }
     "## };
     let ctx = vm.initialize_string(code, "foo.c").await.unwrap();
@@ -305,9 +305,9 @@ async fn test_calls_simul_efuns() {
             return "local simul_efun: " + s;
         }
 
-        void create() {
+        mixed create() {
             function f = &simul_efun("pointed!");
-            f();
+            return f();
         }
     "## };
     let ctx = vm.initialize_string(code, "foo.c").await.unwrap();

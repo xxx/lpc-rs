@@ -29,12 +29,13 @@ mod tests {
     use std::{path::Path, sync::Arc};
 
     use indoc::indoc;
-    use lpc_rs_core::lpc_path::LpcPath;
+    use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
     use lpc_rs_utils::config::Config;
 
     use super::*;
     use crate::{
         interpreter::{
+            CommittedReader,
             object_space::ObjectSpace,
             process::Process,
             program::{Program, ProgramBuilder},
@@ -80,7 +81,16 @@ mod tests {
             .await
             .expect("task failed");
 
-        let LpcRef::Object(obj) = task.result().unwrap() else {
+        let process = task.context.process();
+        let sym = &process.program.global_variables["foo"];
+        let Some(RegisterVariant::Global(reg)) = sym.location else {
+            panic!("`foo` is not a global register");
+        };
+        let LpcRef::Object(obj) = task
+            .context
+            .global_state
+            .committed_global(process, reg.index())
+        else {
             panic!("expected object");
         };
 
