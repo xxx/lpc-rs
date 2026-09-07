@@ -22,11 +22,13 @@ pub async fn shadow<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
     let LpcRef::Object(weak) = context.arg(0) else {
         return Err(context.runtime_error("shadow: the target must be an object"));
     };
-    let Some(target) = weak.upgrade() else {
-        return Err(context.runtime_error("shadow: the target has been destructed"));
+    let txn = context.txn().clone();
+    // A destructed object's pointer still upgrades; liveness is the cell's.
+    let target = match weak.upgrade() {
+        Some(target) if target.is_live(&txn) => target,
+        _ => return Err(context.runtime_error("shadow: the target has been destructed")),
     };
     let query = context.arg_count() > 1 && matches!(context.arg(1), LpcRef::Int(LpcInt(0)));
-    let txn = context.txn().clone();
     if query {
         let answer = Process::shadow_after(&txn, &target)
             .map_or(NULL, |ob| LpcRef::from(Arc::downgrade(&ob)));

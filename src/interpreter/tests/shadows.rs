@@ -9,6 +9,7 @@ use crate::{
     interpreter::{
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
+        process::Process,
         task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
         tests::{fails, run},
         vm::Vm,
@@ -251,6 +252,76 @@ async fn a_refusing_master_refuses() {
     let main = r#"void create() { object t = clone_object("/s"); object s = clone_object("/s"); s->go(t); }"#;
     let err = fails(REFUSING, &[("/s.c", S)], main).await;
     assert!(err.contains("The master refused the shadow."), "{err}");
+}
+
+#[tokio::test]
+async fn the_query_needs_a_live_object() {
+    let main = indoc! { r#"
+        mixed *create() {
+            object s = clone_object("/s");
+            s->die();
+            return ({ catch(shadow(0, 0)), catch(shadow(s, 0)), catch(shadow(s, 1)) });
+        }
+    "# };
+    let got = strings(&run(ALLOWING, &[("/s.c", S)], main).await);
+    assert!(
+        got[0].contains("the target must be an object"),
+        "{}",
+        got[0]
+    );
+    assert!(
+        got[1].contains("the target has been destructed"),
+        "{}",
+        got[1]
+    );
+    assert!(
+        got[2].contains("the target has been destructed"),
+        "{}",
+        got[2]
+    );
+}
+
+/// The walk skips a chain entry whose object died: an invariant guard, so
+/// the state is forced here rather than reached.
+#[tokio::test]
+async fn a_dead_entry_is_skipped() {
+    use std::sync::Arc;
+
+    use crate::{
+        interpreter::{
+            process::shadow::ShadowEntry,
+            stm::{Transaction, TxnHandle, start_txn},
+        },
+        test_support::committed_global,
+    };
+
+    let vm = Vm::new(crate::test_support::test_config());
+    for (path, code) in [("/secure/master.c", ALLOWING), ("/t.c", T), ("/s.c", S)] {
+        vm.initialize_process_from_code(path, code).await.unwrap();
+    }
+    let main = r#"object t, s; void create() { t = clone_object("/t"); s = clone_object("/s"); s->go(t); }"#;
+    let task = vm
+        .initialize_process_from_code("/main.c", main)
+        .await
+        .unwrap();
+    let object = |name: &str| match committed_global(&task, name) {
+        LpcRef::Object(weak) => weak.upgrade().unwrap(),
+        other => panic!("{name}: {other:?}"),
+    };
+    let (t, s) = (object("t"), object("s"));
+
+    let live = start_txn(&vm.global_state.committer_tx).await.unwrap();
+    let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+    assert!(
+        matches!(Process::shadow_entry(&txn, &t, "f", &t), ShadowEntry::Found(ref found, _) if Arc::ptr_eq(found, &s)),
+        "the live shadow answers f"
+    );
+    txn.with(|inner| inner.drop_var(*s.cell.get().unwrap()));
+    assert!(
+        matches!(Process::shadow_entry(&txn, &t, "f", &t), ShadowEntry::Fallback(ref real) if Arc::ptr_eq(real, &t)),
+        "the dead shadow is passed over"
+    );
+    drop(live);
 }
 
 #[tokio::test]
