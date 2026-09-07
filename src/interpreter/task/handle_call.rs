@@ -16,6 +16,27 @@ use crate::interpreter::{
     task::{Task, advance::Advance},
 };
 
+/// How a frame is entered: a direct or simul-efun call was compiled against
+/// its callee's parameter list, a door was not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CallEntry {
+    Direct,
+    SimulEfun,
+    Door,
+}
+
+impl CallEntry {
+    /// Whether the frame counts as entered from outside its program.
+    fn external(self) -> bool {
+        self != Self::Direct
+    }
+
+    /// Whether the argument count is held to the callee's parameter list.
+    fn counted(self) -> bool {
+        self != Self::Door
+    }
+}
+
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[instrument(level = "debug", skip_all)]
     pub(crate) fn handle_call(&mut self, name: Ustr, list: ArgList) -> lpc_rs_errors::Result<()> {
@@ -28,19 +49,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         };
         let process = current_frame.process.clone();
 
-        self.push_call_frame(process, func, list, false)
+        self.push_call_frame(process, func, list, CallEntry::Direct)
     }
 
     /// Push a frame for a call to `func` on `process`, its arguments read
-    /// from the current frame's `list`; `external` marks a frame entered
-    /// through a door.
+    /// from the current frame's `list`.
     #[instrument(level = "debug", skip_all)]
     pub(crate) fn push_call_frame(
         &mut self,
         process: Arc<Process>,
         func: Arc<ProgramFunction>,
         list: ArgList,
-        external: bool,
+        entry: CallEntry,
     ) -> lpc_rs_errors::Result<()> {
         let num_args = self.checked_register_count(self.expanded_arg_count(list)?, &func)?;
         // A simul_efun's prototype can change after a cached caller was compiled against it.
@@ -48,35 +68,44 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             && let Some(i) = func.prototype.first_ref_param()
             && i >= usize::from(num_args)
         {
-            let caller_span = self
-                .stack
-                .current_frame()
-                .ok()
-                .and_then(CallFrame::current_debug_span);
             return Err(LpcError::runtime(format!(
                 "argument {} of `{}` must be passed by reference",
                 i + 1,
                 func.name()
             ))
-            .or_span(caller_span));
+            .or_span(self.caller_span()));
+        }
+        // A spread's count is known only here.
+        if entry.counted() && !func.prototype.accepts_arg_count(usize::from(num_args)) {
+            return Err(LpcError::runtime(format!(
+                "incorrect argument count in call to `{}`: expected: {}, received: {}",
+                func.name(),
+                func.arity().num_args,
+                num_args
+            ))
+            .or_span(self.caller_span()));
         }
 
         trace!("pushing new frame; copying arguments: {num_args}");
         self.stack
             .push_new(process, func, num_args, num_args, None::<&[VarId]>)?;
-        self.stack.current_frame_mut()?.external = external;
+        self.stack.current_frame_mut()?.external = entry.external();
         if let Err(e) = self.populate_arguments(list) {
             // The half-built frame comes off; the error names the caller.
             let depth = self.stack.len() - 1;
             self.stack.truncate(depth);
-            let caller_span = self
-                .stack
-                .current_frame()
-                .ok()
-                .and_then(CallFrame::current_debug_span);
-            return Err(e.or_span(caller_span));
+            return Err(e.or_span(self.caller_span()));
         }
         Ok(())
+    }
+
+    /// The current frame's instruction span, for an error raised before a
+    /// callee's frame exists.
+    fn caller_span(&self) -> Option<Span> {
+        self.stack
+            .current_frame()
+            .ok()
+            .and_then(CallFrame::current_debug_span)
     }
 
     /// How many arguments `list` passes once its spreads are expanded.
@@ -330,7 +359,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Err(self.runtime_error(format!("call to unknown simul efun `{func_name}`")));
         };
 
-        self.push_call_frame(simul_efuns.clone(), func, list, true)
+        self.push_call_frame(simul_efuns.clone(), func, list, CallEntry::SimulEfun)
     }
 }
 

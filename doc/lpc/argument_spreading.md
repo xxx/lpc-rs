@@ -35,6 +35,10 @@ arguments past the callee's parameters land in `argv` as usual.
 
 - A non-array value in a spread is the runtime error
   "cannot spread int: `...` takes an array".
+- A spread that lands the wrong number of arguments on a direct or
+  simul-efun call is the compiler's own "incorrect argument count in call
+  to `add`: expected: 3, received: 2", raised at the call. `call_other`
+  and pointer calls drop the extras and read a missing parameter as 0.
 - A spread element, or any value after a spread, that lands on an efun's
   by-reference parameter is "argument N of `sscanf` must be passed by
   reference".

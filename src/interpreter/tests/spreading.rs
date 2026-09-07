@@ -45,10 +45,10 @@ async fn an_empty_array_spreads_to_nothing() {
     let r = run(
         "",
         &[],
-        &format!("{ADD} mixed *create() {{ return ({{ add(1, ({{ }})..., 2) }}); }}"),
+        &format!("{ADD} mixed *create() {{ return ({{ add(1, ({{ }})..., 2, 3) }}); }}"),
     )
     .await;
-    assert_eq!(r, vec![n(3)]);
+    assert_eq!(r, vec![n(6)]);
 }
 
 #[tokio::test]
@@ -93,7 +93,56 @@ async fn spreading_a_non_array_is_a_runtime_error() {
     assert!(e.contains("cannot spread int: `...` takes an array"), "{e}");
 }
 
+#[tokio::test]
+async fn a_spread_is_held_to_the_callee_s_parameter_count() {
+    for (xs, received) in [("({ 1, 2 })", 2), ("({ 1, 2, 3, 4 })", 4)] {
+        let e = fails(
+            "",
+            &[],
+            &format!("{ADD} mixed *create() {{ int *xs = {xs}; return ({{ add(xs...) }}); }}"),
+        )
+        .await;
+        assert!(
+            e.contains(&format!(
+                "incorrect argument count in call to `add`: expected: 3, received: {received}"
+            )),
+            "{e}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_spread_to_a_varargs_function_may_fall_short_but_not_run_over() {
+    const VAR: &str = "varargs int add(int a, int b, int c) { return a + b + c; }";
+    let r = run(
+        "",
+        &[],
+        &format!("{VAR} mixed *create() {{ return ({{ add(({{ 1 }})...), add(({{ }})...) }}); }}"),
+    )
+    .await;
+    assert_eq!(r, vec![n(1), n(0)]);
+
+    let e = fails(
+        "",
+        &[],
+        &format!("{VAR} mixed *create() {{ return ({{ add(({{ 1, 2, 3, 4 }})...) }}); }}"),
+    )
+    .await;
+    assert!(e.contains("expected: 3, received: 4"), "{e}");
+}
+
 const X: (&str, &str) = ("/x.c", ADD);
+
+#[tokio::test]
+async fn call_other_drops_a_spread_s_extras() {
+    let r = run(
+        "",
+        &[X],
+        r#"mixed *create() { return ({ "/x"->add(({ 1, 2, 3, 4 })...), "/x"->add(({ 1 })...) }); }"#,
+    )
+    .await;
+    assert_eq!(r, vec![n(6), n(1)]);
+}
 
 #[tokio::test]
 async fn an_efun_call_spreads() {

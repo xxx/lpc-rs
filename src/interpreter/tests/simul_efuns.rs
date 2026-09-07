@@ -371,6 +371,21 @@ async fn a_spread_argument_reaches_a_simul_efun() {
 }
 
 #[tokio::test]
+async fn a_spread_to_a_simul_efun_is_held_to_its_parameter_count() {
+    let got = got_from_user(
+        "simul-spread-count",
+        "/secure/simul_efuns",
+        &[("secure/simul_efuns.c", ADD3)],
+        r#"string got; void create() { mixed e = catch(add3(({ 1, 2 })...)); got = stringp(e) ? e : "ran"; }"#,
+    )
+    .await;
+    assert!(
+        got.contains("incorrect argument count in call to `add3`: expected: 3, received: 2"),
+        "{got}"
+    );
+}
+
+#[tokio::test]
 async fn the_simul_efun_object_is_the_resident_for_its_own_initializer() {
     let vm = Vm::new(test_config());
     let task = vm
