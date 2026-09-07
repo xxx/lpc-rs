@@ -5,12 +5,11 @@ use crate::interpreter::{
     VALID_WRITE,
     efun::{
         efun_context::EfunContext,
-        file_access::{authorize_save, parent_is_dir},
+        file_access::{authorize_save, record_save},
     },
     lpc_ref::LpcRef,
     process::Process,
     save_format::write_line,
-    stm::Effect,
 };
 
 /// The globals `save_object` writes: every non-static one by name, in slot
@@ -36,14 +35,7 @@ pub(crate) fn saved_globals(process: &Process) -> Vec<(&str, RegisterSize)> {
 /// Returns the in-game path written.
 pub async fn save_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize_save(context, "save_object", VALID_WRITE, 0).await?;
-    let io_error =
-        |e: std::io::Error| context.runtime_error(format!("save_object: {}: {e}", access.in_game));
-    if !parent_is_dir(&access.server).await.map_err(io_error)? {
-        return Err(context.runtime_error(format!(
-            "save_object: {}: parent directory does not exist",
-            access.in_game
-        )));
-    }
+    let in_game = access.in_game.clone();
     let process = context.process().clone();
     let mut contents = String::new();
     for (name, reg) in saved_globals(&process) {
@@ -54,12 +46,7 @@ pub async fn save_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         write_line(&mut contents, name, &value, context.txn())
             .map_err(|e| e.with_span(context.call_site_span()))?;
     }
-    let in_game = access.in_game.clone();
-    context.record_effect(Effect::WriteFile {
-        in_game: access.in_game,
-        server: access.server,
-        contents,
-    });
+    record_save(context, "save_object", access, contents).await?;
     context.return_efun_result(LpcRef::from(in_game));
     Ok(())
 }

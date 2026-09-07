@@ -14,7 +14,13 @@
 //! carries its own send channel. Flushing never re-resolves a transactional
 //! cell, so an effect can never observe end-of-transaction state.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 use tokio::{
     io::{AsyncSeekExt, AsyncWriteExt},
@@ -62,6 +68,10 @@ impl std::fmt::Debug for CallOutSchedule {
             .finish()
     }
 }
+
+/// Ordinal for `WriteFile`'s temp file name, so two concurrent flushes of
+/// the same path never collide.
+static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
 
 /// One physical side effect pending delivery.
 #[derive(Clone)]
@@ -129,7 +139,9 @@ pub(crate) enum Effect {
 
     /// A save efun's whole-file write of `contents` to `server`, once the
     /// attempt commits: a temp file beside the target, renamed over it.
-    /// `in_game` names it in the log when the write fails.
+    /// The temp name is unique per flush, so two concurrent flushes of the
+    /// same path never share one. `in_game` names it in the log when the
+    /// write fails.
     WriteFile {
         in_game: String,
         server: PathBuf,
@@ -247,8 +259,9 @@ impl Effect {
                 server,
                 contents,
             } => {
+                let n = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
                 let mut temp = server.clone().into_os_string();
-                temp.push(".tmp");
+                temp.push(format!(".{n}.tmp"));
                 let temp = PathBuf::from(temp);
                 let written = async {
                     tokio::fs::write(&temp, contents.as_bytes()).await?;
@@ -479,7 +492,11 @@ mod tests {
         .flush(&gs)
         .await;
         assert_eq!(std::fs::read_to_string(&server).unwrap(), "a 1\n");
-        assert!(!root.join("save.o.tmp").exists());
+        let entries: Vec<_> = std::fs::read_dir(&*root)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(!entries.iter().any(|f| f.ends_with(".tmp")), "{entries:?}");
     }
 
     #[tokio::test]

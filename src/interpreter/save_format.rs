@@ -37,6 +37,17 @@ pub(crate) fn hex_float(f: f64) -> String {
     format!("{sign}0x{lead}{fraction}p{exp:+}")
 }
 
+/// Whether `s` is a valid save-file name: an ASCII identifier,
+/// `[A-Za-z_][A-Za-z0-9_]*`.
+pub(crate) fn is_name(s: &str) -> bool {
+    let mut bytes = s.bytes();
+    match bytes.next() {
+        Some(b) if b.is_ascii_alphabetic() || b == b'_' => {}
+        _ => return false,
+    }
+    bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
+}
+
 /// An error when `depth` has gone past [`MAX_DEPTH`].
 fn too_deep(depth: usize) -> Result<()> {
     if depth > MAX_DEPTH {
@@ -60,7 +71,13 @@ pub(crate) fn write_value(
     match value {
         LpcRef::Int(x) => write!(out, "{}", x.0).expect("String never fails"),
         LpcRef::Float(x) => {
-            write!(out, "#{}#", hex_float(x.0.into_inner())).expect("String never fails")
+            let f = x.0.into_inner();
+            if !f.is_finite() {
+                return Err(LpcError::runtime(format!(
+                    "save file: a float must be finite, not {x}"
+                )));
+            }
+            write!(out, "#{}#", hex_float(f)).expect("String never fails")
         }
         LpcRef::String(s) => {
             out.push('"');
@@ -138,8 +155,7 @@ pub(crate) fn split_line(line: &str) -> Result<(&str, &str)> {
         .bytes()
         .take_while(|b| b.is_ascii_alphanumeric() || *b == b'_')
         .count();
-    let valid_name = name_len > 0 && !line.as_bytes()[0].is_ascii_digit();
-    if !valid_name {
+    if !is_name(&line[..name_len]) {
         return Err(LpcError::runtime(
             "save file: a line must start with a variable name at byte 0",
         ));
@@ -513,6 +529,28 @@ mod tests {
     }
 
     #[test]
+    fn a_non_finite_float_is_a_writer_error() {
+        let txn = TxnHandle::empty();
+        for f in [f64::INFINITY, f64::NAN] {
+            let err = write_value(&mut String::new(), &LpcRef::from(f), &txn, 0)
+                .unwrap_err()
+                .to_string();
+            assert!(
+                err.contains("save file: a float must be finite, not"),
+                "{err}"
+            );
+        }
+        let mut out = String::new();
+        let err = write_line(&mut out, "f", &LpcRef::from(f64::NAN), &txn)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("save file: a float must be finite, not"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn nesting_past_the_cap_is_an_error() {
         let txn = TxnHandle::empty();
         let mut value = array(&txn, vec![]);
@@ -690,7 +728,7 @@ mod tests {
             ("hit_points", "7220")
         );
         assert_eq!(split_line(r#"s "a b""#).unwrap(), ("s", r#""a b""#));
-        for bad in ["", "a  1", "a\t1", "a", " a 1", "1a 1"] {
+        for bad in ["", "a  1", "a\t1", "a", "a ", " a 1", "1a 1"] {
             assert!(split_line(bad).is_err(), "{bad:?}");
         }
     }

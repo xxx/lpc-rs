@@ -5,8 +5,8 @@ use crate::interpreter::{
     VALID_READ,
     efun::{
         efun_context::EfunContext,
-        file_access::authorize_save,
-        restore_object::{line_error, read_save_file, resolve_object},
+        file_access::{authorize_save, line_error},
+        restore_object::{read_save_file, resolve_object},
     },
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,

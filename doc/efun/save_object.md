@@ -20,7 +20,12 @@ one is a runtime error naming the suffixed path. Both are caught by
 The file's text is built when the efun runs, so it is one consistent view of
 the object, and written when the task commits, through a temporary file
 renamed over the target: a task that errors out writes nothing, a task the
-driver re-runs writes once, and a reader never sees a half-written file.
+driver re-runs writes once, and a reader never sees a half-written file. A
+failure at that point (the disk is full, the directory was removed
+meanwhile) goes to the debug log; the efun has already returned.
+
+A global holding a float that is not finite (infinity or NaN) makes the
+efun raise a runtime error instead of writing the file.
 
 The format is described in [`doc/save-format.md`](../save-format.md).
 

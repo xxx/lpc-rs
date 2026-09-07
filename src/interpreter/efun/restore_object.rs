@@ -1,11 +1,14 @@
 use std::{path::Path, sync::Arc};
 
 use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
-use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_READ,
-    efun::{efun_context::EfunContext, file_access::authorize_save},
+    efun::{
+        efun_context::EfunContext,
+        file_access::{authorize_save, line_error},
+    },
     lpc_ref::LpcRef,
     process::Process,
     save_format::{read_value, split_line},
@@ -21,21 +24,6 @@ pub(crate) async fn read_save_file(server: &Path) -> Option<String> {
         Ok(text) => text,
         Err(e) => e.into_bytes().iter().map(|&b| b as char).collect(),
     })
-}
-
-/// A corrupt save-file line as a runtime error: `<efun>: <in_game> line
-/// <line>: <e>`, `e`'s own `runtime error: ` prefix stripped.
-pub(crate) fn line_error<const N: usize>(
-    context: &EfunContext<'_, N>,
-    efun: &str,
-    in_game: &str,
-    line: usize,
-    e: LpcError,
-) -> LpcError {
-    context.runtime_error(format!(
-        "{efun}: {in_game} line {line}: {}",
-        e.to_string().trim_start_matches("runtime error: ")
-    ))
 }
 
 /// The object resolver for `$created@name$` references: the live object
@@ -152,6 +140,122 @@ mod tests {
             "absent untouched"
         );
         assert_eq!(vm.global_state.committed_global(&r, 5u16), LpcRef::from(1));
+    }
+
+    #[tokio::test]
+    async fn a_file_missing_its_final_newline_still_restores_the_last_line() {
+        let root = TempLib::new("restore-no-final-newline");
+        std::fs::write(root.join("r.o"), "a 5\nleft 1").unwrap();
+        let vm = allowing_vm(&root).await;
+        let r = vm
+            .initialize_process_from_code("/r.c", R)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(vm.global_state.committed_global(&r, 0u16), LpcRef::from(5));
+        assert_eq!(vm.global_state.committed_global(&r, 4u16), LpcRef::from(1));
+    }
+
+    #[tokio::test]
+    async fn an_empty_file_succeeds_and_changes_nothing() {
+        let root = TempLib::new("restore-empty-file");
+        std::fs::write(root.join("r.o"), "").unwrap();
+        let vm = allowing_vm(&root).await;
+        let r = vm
+            .initialize_process_from_code("/r.c", R)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(vm.global_state.committed_global(&r, 5u16), LpcRef::from(1));
+        assert_eq!(vm.global_state.committed_global(&r, 0u16), LpcRef::from(0));
+        assert_eq!(vm.global_state.committed_global(&r, 4u16), LpcRef::from(77));
+    }
+
+    #[tokio::test]
+    async fn a_crlf_file_restores_both_values() {
+        let root = TempLib::new("restore-crlf");
+        std::fs::write(root.join("r.o"), "a 5\r\nleft 1\r\n").unwrap();
+        let vm = allowing_vm(&root).await;
+        let r = vm
+            .initialize_process_from_code("/r.c", R)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(vm.global_state.committed_global(&r, 0u16), LpcRef::from(5));
+        assert_eq!(vm.global_state.committed_global(&r, 4u16), LpcRef::from(1));
+    }
+
+    #[tokio::test]
+    async fn a_string_restored_into_an_int_variable_lands_as_the_string() {
+        let root = TempLib::new("restore-string-into-int");
+        std::fs::write(root.join("r.o"), "a \"str\"\n").unwrap();
+        let vm = allowing_vm(&root).await;
+        let r = vm
+            .initialize_process_from_code(
+                "/r.c",
+                r#"int a; void create() { restore_object("/r"); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(string_global(&vm, &r, "a"), "str");
+    }
+
+    #[tokio::test]
+    async fn an_object_reference_to_a_clone_resolves_by_its_numbered_name() {
+        let root = lib_holding(
+            "restore-clone-ref",
+            &[
+                ("secure/master.c", ALLOWING),
+                (
+                    "w.c",
+                    indoc! { r#"
+                        object me;
+                        void become() { me = this_object(); save_object("/data"); }
+                    "# },
+                ),
+            ],
+        );
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            indoc! { r#"
+                int valid_read(string p, string e, object c, string g) { return 1; }
+                int valid_write(string p, string e, object c, string g) { return 1; }
+                int valid_load(string p, string f, object c, string g) { return 1; }
+            "# },
+        )
+        .await
+        .unwrap();
+        let clone_name = vm
+            .initialize_process_from_code(
+                "/main.c",
+                r#"string got; void create() { object c = clone_object("/w"); c->become(); got = file_name(c); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let expected = string_global(&vm, &clone_name, "got");
+        let r = vm
+            .initialize_process_from_code(
+                "/r.c",
+                indoc! { r#"
+                    object me;
+                    string got;
+                    void create() { restore_object("/data"); got = me ? file_name(me) : "none"; }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(string_global(&vm, &r, "got"), expected);
+        assert!(expected.contains('#'), "{expected}");
     }
 
     #[tokio::test]

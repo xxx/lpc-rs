@@ -4,17 +4,17 @@ use crate::interpreter::{
     VALID_WRITE,
     efun::{
         efun_context::EfunContext,
-        file_access::{authorize_save, parent_is_dir},
+        file_access::{authorize_save, record_save},
     },
     lpc_ref::LpcRef,
-    save_format::write_line,
-    stm::Effect,
+    save_format::{is_name, write_line},
 };
 
 /// `save_map(m, file)`: the string-keyed mapping `m` as `key value` lines
 /// in `<file>.o`, root-relative, once the master's `valid_write` allows the
-/// unsuffixed path. A non-string key is an error before anything is
-/// checked or written. Built now, written at commit.
+/// unsuffixed path. A non-string key, or a string key that is not a valid
+/// variable name, is an error before anything is checked or written. Built
+/// now, written at commit.
 pub async fn save_map<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     if !matches!(context.arg(0), LpcRef::Mapping(_)) {
         return Err(context.runtime_error("save_map: the first argument must be a mapping"));
@@ -23,7 +23,15 @@ pub async fn save_map<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         mapping
             .iter()
             .map(|(key, value)| match key {
-                LpcRef::String(s) => Ok((s.to_str().to_owned(), value.clone())),
+                LpcRef::String(s) => {
+                    let key = s.to_str().to_owned();
+                    if !is_name(&key) {
+                        return Err(context.runtime_error(format!(
+                            "save_map: a key must be a variable name, not \"{key}\""
+                        )));
+                    }
+                    Ok((key, value.clone()))
+                }
                 other => Err(context.runtime_error(format!(
                     "save_map: a key must be a string, not {}",
                     other.type_name()
@@ -32,24 +40,12 @@ pub async fn save_map<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
             .collect::<Result<Vec<_>>>()
     })??;
     let access = authorize_save(context, "save_map", VALID_WRITE, 1).await?;
-    let io_error =
-        |e: std::io::Error| context.runtime_error(format!("save_map: {}: {e}", access.in_game));
-    if !parent_is_dir(&access.server).await.map_err(io_error)? {
-        return Err(context.runtime_error(format!(
-            "save_map: {}: parent directory does not exist",
-            access.in_game
-        )));
-    }
     let mut contents = String::new();
     for (key, value) in &entries {
         write_line(&mut contents, key, value, context.txn())
             .map_err(|e| e.with_span(context.call_site_span()))?;
     }
-    context.record_effect(Effect::WriteFile {
-        in_game: access.in_game,
-        server: access.server,
-        contents,
-    });
+    record_save(context, "save_map", access, contents).await?;
     context.return_efun_result(LpcRef::from(0));
     Ok(())
 }
@@ -110,6 +106,74 @@ mod tests {
             .context
             .process;
         assert!(string_global(&vm, &w, "err").contains("save_map: a key must be a string"));
+        assert!(!root.join("m.o").exists());
+    }
+
+    #[tokio::test]
+    async fn a_key_that_is_not_a_variable_name_is_an_error_before_anything_is_written() {
+        let root = TempLib::new("save-map-bad-name");
+        let vm = allowing_vm(&root).await;
+        let w = vm
+            .initialize_process_from_code(
+                "/w.c",
+                r#"string err; void create() { err = catch(save_map(([ "a-b": 1 ]), "/m")); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert!(
+            string_global(&vm, &w, "err")
+                .contains(r#"save_map: a key must be a variable name, not "a-b""#),
+            "{}",
+            string_global(&vm, &w, "err")
+        );
+        assert!(!root.join("m.o").exists());
+    }
+
+    #[tokio::test]
+    async fn a_key_containing_a_newline_is_an_error_before_anything_is_written() {
+        let root = TempLib::new("save-map-newline-key");
+        let vm = allowing_vm(&root).await;
+        let w = vm
+            .initialize_process_from_code(
+                "/w.c",
+                indoc! { r#"
+                    string err;
+                    void create() { err = catch(save_map(([ "a 1\nb": 1 ]), "/m")); }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert!(
+            string_global(&vm, &w, "err").contains("save_map: a key must be a variable name"),
+            "{}",
+            string_global(&vm, &w, "err")
+        );
+        assert!(!root.join("m.o").exists());
+    }
+
+    #[tokio::test]
+    async fn an_empty_key_is_an_error_before_anything_is_written() {
+        let root = TempLib::new("save-map-empty-key");
+        let vm = allowing_vm(&root).await;
+        let w = vm
+            .initialize_process_from_code(
+                "/w.c",
+                r#"string err; void create() { err = catch(save_map(([ "": 1 ]), "/m")); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert!(
+            string_global(&vm, &w, "err")
+                .contains(r#"save_map: a key must be a variable name, not """#),
+            "{}",
+            string_global(&vm, &w, "err")
+        );
         assert!(!root.join("m.o").exists());
     }
 

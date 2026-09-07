@@ -16,6 +16,9 @@ caller, program)` with `path` as resolved but before the suffix. A refusal,
 or a master that does not define the apply, is the runtime error
 `restore_map: permission denied`.
 
+A file that is not UTF-8 is read as Latin-1. The format is described in
+[`doc/save-format.md`](../save-format.md).
+
 ### Examples
 
 ```c

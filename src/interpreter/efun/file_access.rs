@@ -7,9 +7,11 @@ use std::{
 };
 
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{LpcError, Result};
 
-use crate::interpreter::{apply::valid_apply, efun::efun_context::EfunContext, lpc_ref::LpcRef};
+use crate::interpreter::{
+    apply::valid_apply, efun::efun_context::EfunContext, lpc_ref::LpcRef, stm::Effect,
+};
 
 /// A file path the master has allowed an efun to touch.
 pub(crate) struct FileAccess {
@@ -80,7 +82,9 @@ async fn master_allows<const N: usize>(
 
 /// [`authorize`] for a save efun: argument `i` is resolved against the lib
 /// root, the master sees it without a suffix, then `.o` is appended to both
-/// paths and confinement is checked again.
+/// paths and confinement is checked again, though appending a fixed suffix
+/// to an already-confined path cannot leave the lib, so the second check is
+/// kept only as a guard against a future change to that logic.
 pub(crate) async fn authorize_save<const N: usize>(
     context: &EfunContext<'_, N>,
     efun: &str,
@@ -126,4 +130,44 @@ pub(crate) async fn parent_is_dir(server: &Path) -> std::io::Result<bool> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(e) => Err(e),
     }
+}
+
+/// The write tail shared by `save_object` and `save_map`: checks `access`'s
+/// parent directory exists, then records `contents` as a whole-file write to
+/// it, delivered once the attempt commits.
+pub(crate) async fn record_save<const N: usize>(
+    context: &EfunContext<'_, N>,
+    efun: &str,
+    access: FileAccess,
+    contents: String,
+) -> Result<()> {
+    let io_error =
+        |e: std::io::Error| context.runtime_error(format!("{efun}: {}: {e}", access.in_game));
+    if !parent_is_dir(&access.server).await.map_err(io_error)? {
+        return Err(context.runtime_error(format!(
+            "{efun}: {}: parent directory does not exist",
+            access.in_game
+        )));
+    }
+    context.record_effect(Effect::WriteFile {
+        in_game: access.in_game,
+        server: access.server,
+        contents,
+    });
+    Ok(())
+}
+
+/// A corrupt save-file line as a runtime error: `<efun>: <in_game> line
+/// <line>: <e>`, `e`'s own `runtime error: ` prefix stripped.
+pub(crate) fn line_error<const N: usize>(
+    context: &EfunContext<'_, N>,
+    efun: &str,
+    in_game: &str,
+    line: usize,
+    e: LpcError,
+) -> LpcError {
+    context.runtime_error(format!(
+        "{efun}: {in_game} line {line}: {}",
+        e.to_string().trim_start_matches("runtime error: ")
+    ))
 }
