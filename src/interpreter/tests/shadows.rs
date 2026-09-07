@@ -64,7 +64,7 @@ async fn the_query_walks_the_chain_inner_to_outer() {
             object t = clone_object("/s");
             object s1 = clone_object("/s");
             object s2 = clone_object("/s");
-            int before = shadow(t, 0);
+            mixed before = shadow(t, 0);
             int first = s1->go(t) == t;
             int after_one = shadow(t, 0) == s1;
             int second = s2->go(t) == t;

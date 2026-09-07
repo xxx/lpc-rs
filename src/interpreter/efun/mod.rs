@@ -578,7 +578,7 @@ efuns! {
         args: [LpcType::Object(false)],
     },
     shadow [async] => {
-        returns: LpcType::Mixed(false),
+        returns: LpcType::Object(false),
         arity: (2, 1),
         args: [LpcType::Object(false), LpcType::Int(false)],
     },
