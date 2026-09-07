@@ -6,7 +6,7 @@ use crate::interpreter::{
     efun::{
         efun_context::EfunContext,
         file_access::authorize_save,
-        restore_object::{read_save_file, resolve_object},
+        restore_object::{line_error, read_save_file, resolve_object},
     },
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
@@ -23,16 +23,9 @@ pub async fn restore_map<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     if let Some(text) = read_save_file(&access.server).await {
         let resolve = resolve_object(context);
         for (index, line) in text.lines().enumerate() {
-            let line_error = |e: lpc_rs_errors::LpcError| {
-                context.runtime_error(format!(
-                    "restore_map: {} line {}: {}",
-                    access.in_game,
-                    index + 1,
-                    e.to_string().trim_start_matches("runtime error: ")
-                ))
-            };
-            let (name, value_text) = split_line(line).map_err(line_error)?;
-            let value = read_value(value_text, context.txn(), &resolve).map_err(line_error)?;
+            let err = |e| line_error(context, "restore_map", &access.in_game, index + 1, e);
+            let (name, value_text) = split_line(line).map_err(err)?;
+            let value = read_value(value_text, context.txn(), &resolve).map_err(err)?;
             entries.insert(LpcRef::from(name), value);
         }
     }

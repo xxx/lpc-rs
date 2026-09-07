@@ -1,7 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{LpcError, Result};
 
 use crate::interpreter::{
     VALID_READ,
@@ -21,6 +21,21 @@ pub(crate) async fn read_save_file(server: &Path) -> Option<String> {
         Ok(text) => text,
         Err(e) => e.into_bytes().iter().map(|&b| b as char).collect(),
     })
+}
+
+/// A corrupt save-file line as a runtime error: `<efun>: <in_game> line
+/// <line>: <e>`, `e`'s own `runtime error: ` prefix stripped.
+pub(crate) fn line_error<const N: usize>(
+    context: &EfunContext<'_, N>,
+    efun: &str,
+    in_game: &str,
+    line: usize,
+    e: LpcError,
+) -> LpcError {
+    context.runtime_error(format!(
+        "{efun}: {in_game} line {line}: {}",
+        e.to_string().trim_start_matches("runtime error: ")
+    ))
 }
 
 /// The object resolver for `$created@name$` references: the live object
@@ -52,15 +67,8 @@ pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) ->
     {
         let resolve = resolve_object(context);
         for (index, line) in text.lines().enumerate() {
-            let line_error = |e: lpc_rs_errors::LpcError| {
-                context.runtime_error(format!(
-                    "restore_object: {} line {}: {}",
-                    access.in_game,
-                    index + 1,
-                    e.to_string().trim_start_matches("runtime error: ")
-                ))
-            };
-            let (name, value_text) = split_line(line).map_err(line_error)?;
+            let err = |e| line_error(context, "restore_object", &access.in_game, index + 1, e);
+            let (name, value_text) = split_line(line).map_err(err)?;
             let Some(symbol) = process.program.global_variables.get(name) else {
                 continue;
             };
@@ -70,7 +78,7 @@ pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) ->
             let Some(RegisterVariant::Global(reg)) = symbol.location else {
                 continue;
             };
-            let value = read_value(value_text, context.txn(), &resolve).map_err(line_error)?;
+            let value = read_value(value_text, context.txn(), &resolve).map_err(err)?;
             context
                 .txn()
                 .with(|t| t.write(process.var_id(reg.index()), value));
