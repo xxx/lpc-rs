@@ -9,6 +9,7 @@ use crate::{
     interpreter::{
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
+        task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
         tests::{fails, run},
         vm::Vm,
     },
@@ -457,4 +458,74 @@ async fn a_command_hook_enters_the_chain() {
     "# };
     let got = strings(&run(ALLOWING, &[("/t.c", T), ("/ls.c", LISTENING)], main).await);
     assert_eq!(got, vec!["psst".to_string()]);
+}
+
+/// A shadow with a prompt, for the applies the connection makes by name.
+const PROMPTING: &str = indoc! { r#"
+    object go(object o) { return shadow(o, 1); }
+    string write_prompt() { return "shade> " + file_name(this_object()); }
+"# };
+
+/// The body of `/main.c`'s chain and the template to apply on it.
+async fn shadowed_body() -> (
+    std::sync::Arc<crate::interpreter::process::Process>,
+    TaskTemplate,
+) {
+    let vm = Vm::new(crate::test_support::test_config());
+    for (path, code) in [
+        ("/secure/master.c", ALLOWING),
+        ("/t.c", T),
+        ("/ps.c", PROMPTING),
+    ] {
+        vm.initialize_process_from_code(path, code).await.unwrap();
+    }
+    let main = vm
+        .initialize_process_from_code(
+            "/main.c",
+            indoc! { r#"
+                object t;
+                void create() { object s = clone_object("/ps"); t = clone_object("/t"); s->go(t); }
+                object t() { return t; }
+            "# },
+        )
+        .await
+        .unwrap()
+        .context
+        .process;
+    let template = TaskTemplate::from(vm.global_state.clone());
+    let body = match apply_function_by_name("t", &[], main, template.clone(), None).await {
+        Some(Ok(LpcRef::Object(weak))) => weak.upgrade().unwrap(),
+        other => panic!("the body: {other:?}"),
+    };
+    (body, template)
+}
+
+#[tokio::test]
+async fn a_body_apply_enters_the_chain() {
+    let (body, template) = shadowed_body().await;
+    let got = apply_function_by_name("write_prompt", &[], body, template, None)
+        .await
+        .unwrap()
+        .unwrap();
+    let LpcRef::String(s) = got else {
+        panic!("a string: {got:?}");
+    };
+    assert!(s.to_str().starts_with("shade> /ps#"), "{s}");
+}
+
+#[tokio::test]
+async fn a_body_apply_falls_back_to_the_body() {
+    let (body, template) = shadowed_body().await;
+    let got = apply_function_by_name("g", &[], body, template, None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(got, LpcRef::from("t.g"));
+}
+
+#[tokio::test]
+async fn a_body_apply_nothing_defines_is_absent() {
+    let (body, template) = shadowed_body().await;
+    let got = apply_function_by_name("nothing_here", &[], body, template, None).await;
+    assert!(got.is_none(), "{got:?}");
 }

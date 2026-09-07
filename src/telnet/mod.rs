@@ -26,7 +26,7 @@ use crate::{
     command::command_task::run_command_line,
     interpreter::{
         GET_MUD_STATS, GMCP, NET_DEAD, WINDOW_SIZE, WRITE_PROMPT,
-        lpc_ref::LpcRef,
+        lpc_ref::{LpcRef, NULL},
         process::Process,
         task::{
             apply_function::{
@@ -398,9 +398,9 @@ impl Telnet {
         Self::apply_on(body, NET_DEAD, &[], template).await;
     }
 
-    /// Apply `name` on `body` as `this_player`; the value it returned, or
-    /// `None` when `body` does not define it or it errored (the error is
-    /// reported).
+    /// Apply `name` on `body` as `this_player`; the value it returned, 0
+    /// when it errored (the error is reported), or `None` when nothing in
+    /// `body`'s shadow chain defines it.
     async fn apply_on(
         body: Arc<Process>,
         name: &str,
@@ -416,7 +416,7 @@ impl Telnet {
             Some(Ok(value)) => Some(value),
             Some(Err(e)) => {
                 report_runtime_error(&e, Some(body), template).await;
-                None
+                Some(NULL)
             }
             None => None,
         }
@@ -642,11 +642,11 @@ impl Telnet {
         let Some(body) = connection.body() else {
             return;
         };
-        if !body.program.unmangled_functions.contains_key(WRITE_PROMPT) {
+        let Some(answer) = Self::apply_on(body, WRITE_PROMPT, &[], template).await else {
             return;
-        }
-        let text = match Self::apply_on(body, WRITE_PROMPT, &[], template).await {
-            Some(LpcRef::String(s)) => s.to_str().to_owned(),
+        };
+        let text = match answer {
+            LpcRef::String(s) => s.to_str().to_owned(),
             _ => String::new(),
         };
         let _ = connection.send(ConnectionOp::Prompt(text));
