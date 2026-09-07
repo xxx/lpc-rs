@@ -110,7 +110,18 @@ pub fn check_binary_operation_types(
     let right_type = node_type(&node.r, context)?;
     let tuple = (left_type, right_type);
 
-    if node.op != BinaryOperation::Index {
+    // Operators that accept any pair skip the mixed match: it refused
+    // `int && mixed *`.
+    let any_pair = matches!(
+        node.op,
+        BinaryOperation::Index
+            | BinaryOperation::AndAnd
+            | BinaryOperation::OrOr
+            | BinaryOperation::EqEq
+            | BinaryOperation::NotEq
+    );
+
+    if !any_pair {
         let handle = |tuple: (LpcType, LpcType), node| {
             if tuple.0.matches_type(tuple.1) {
                 Ok(())
