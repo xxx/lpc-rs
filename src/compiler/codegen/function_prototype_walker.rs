@@ -11,6 +11,7 @@ use crate::compiler::{
         closure_node::ClosureNode, function_def_node::FunctionDefNode, var_init_node::VarInitNode,
         var_node::VarNode,
     },
+    callee::Callee,
     codegen::tree_walker::{ContextHolder, Pass, TreeWalker, walk_closure, walk_function_def},
     compilation_context::CompilationContext,
     diagnostics::Diagnostics,
@@ -121,19 +122,18 @@ impl TreeWalker for FunctionPrototypeWalker {
             .context
             .lookup_function_complete(node.name, &CallNamespace::default());
 
-        if let Some(callee) = proto_opt {
-            let prototype = callee.as_ref();
-            // If we find another prototype with this name, it's not ours.
-            if prototype.flags.nomask() {
-                let e = LpcError::new(format!(
-                    "attempt to redefine nomask function `{}`",
-                    node.name
-                ))
-                .with_span(node.span)
-                .with_label("defined here", prototype.span);
+        // An object's own definition outranks a nomask simul efun (CD, FluffOS).
+        if let Some(Callee::Local(prototype)) = proto_opt
+            && prototype.flags.nomask()
+        {
+            let e = LpcError::new(format!(
+                "attempt to redefine nomask function `{}`",
+                node.name
+            ))
+            .with_span(node.span)
+            .with_label("defined here", prototype.span);
 
-                return Err(e);
-            }
+            return Err(e);
         }
 
         // Store the prototype now, to allow for forward references.

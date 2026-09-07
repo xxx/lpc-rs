@@ -90,6 +90,16 @@ async fn the_config_may_omit_the_leading_slash() {
 /// A simul efun calling one of its own file's functions is a local call: no
 /// door, so the inner one's `previous_object()` is still the user.
 #[tokio::test]
+async fn an_object_may_define_a_function_a_nomask_simul_efun_also_names() {
+    let files = [("secure/simul_efuns.c", "nomask int npf() { return 1; }")];
+    let user = r#"int npf() { return 2; } string got; void create() { got = "" + npf(); }"#;
+    assert_eq!(
+        got_from_user("simul-nomask", "/secure/simul_efuns", &files, user).await,
+        "2"
+    );
+}
+
+#[tokio::test]
 async fn a_call_between_simul_efuns_is_local() {
     let simul = "string inner() { return file_name(previous_object()); }\n\
                  string outer() { return inner(); }\n";
