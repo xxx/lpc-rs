@@ -92,6 +92,8 @@ pub struct CompilationContext {
     /// The count of closures that have been defined, so we can give them unique
     /// names.
     pub closure_count: u16,
+    /// How many hidden lvalue cells have been named so far.
+    pub lvalue_temp_count: u16,
 }
 
 impl CompilationContext {
@@ -116,6 +118,14 @@ impl CompilationContext {
     pub fn next_closure_name(&mut self) -> Ustr {
         let name = ustr(&format!("closure-{}", self.closure_count));
         self.closure_count += 1;
+        name
+    }
+
+    /// The name of the next hidden cell standing in for an indexed lvalue
+    /// argument; `#` keeps it unspellable in LPC.
+    pub fn next_lvalue_temp_name(&mut self) -> Ustr {
+        let name = ustr(&format!("#lvalue-{}", self.lvalue_temp_count));
+        self.lvalue_temp_count += 1;
         name
     }
 
@@ -274,6 +284,7 @@ impl Default for CompilationContext {
             simul_efuns: None,
             gate: None,
             closure_count: 0,
+            lvalue_temp_count: 0,
         }
     }
 }

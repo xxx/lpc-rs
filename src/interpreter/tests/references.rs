@@ -233,3 +233,88 @@ async fn a_child_override_does_not_intercept_the_bases_ref_call() {
     let task = result.unwrap();
     assert_eq!(task.result(), Some(LpcRef::from(2)));
 }
+
+#[tokio::test]
+async fn sscanf_writes_an_array_element() {
+    let n = create_returns(indoc! { r#"
+        int create() { int *a = ({ 7, 8 }); sscanf("1 2", "%d %d", a[0], a[1]); return a[0] * 10 + a[1]; }
+    "# })
+    .await;
+    assert_eq!(n, 12);
+}
+
+#[tokio::test]
+async fn sscanf_treats_an_element_exactly_like_a_variable_on_a_partial_match() {
+    let n = create_returns(indoc! { r#"
+        int create() {
+            int x = 7, y = 8;
+            int *a = ({ 7, 8 });
+            int nx = sscanf("1", "%d %d", x, y);
+            int na = sscanf("1", "%d %d", a[0], a[1]);
+            return nx == na && x == a[0] && y == a[1];
+        }
+    "# })
+    .await;
+    assert_eq!(n, 1);
+}
+
+#[tokio::test]
+async fn sscanf_writes_a_mapping_element_and_a_global_element() {
+    let n = create_returns(indoc! { r#"
+        int *g = ({ 7 });
+        int create() {
+            mapping m = ([ "k": 5 ]);
+            sscanf("3", "%d", m["k"]);
+            sscanf("2", "%d", g[0]);
+            return m["k"] * 10 + g[0];
+        }
+    "# })
+    .await;
+    assert_eq!(n, 32);
+}
+
+#[tokio::test]
+async fn an_indexed_target_is_evaluated_once_before_the_call() {
+    let n = create_returns(indoc! { r#"
+        int create() { int i = 0; int *a = ({ 7, 8 }); sscanf("5", "%d", a[i++]); return a[0] * 10 + i; }
+    "# })
+    .await;
+    assert_eq!(n, 51);
+}
+
+#[tokio::test]
+async fn a_nested_element_is_written_in_place() {
+    let n = create_returns(indoc! { r#"
+        int create() { mixed *a = ({ ({ 1, 2 }) }); sscanf("9", "%d", a[0][1]); return a[0][1]; }
+    "# })
+    .await;
+    assert_eq!(n, 9);
+}
+
+#[tokio::test]
+async fn a_hidden_cell_does_not_disturb_a_closures_capture() {
+    let n = create_returns(indoc! { r#"
+        int create() {
+            int *a = ({ 7 });
+            int c = 1;
+            function f = (: c :);
+            sscanf("3", "%d", a[0]);
+            return a[0] * 10 + f();
+        }
+    "# })
+    .await;
+    assert_eq!(n, 31);
+}
+
+#[tokio::test]
+async fn parse_command_writes_an_array_element() {
+    let n = create_returns(indoc! { r#"
+        int create() {
+            mixed *t = ({ 0 });
+            int n = parse_command("foo", ({ }), "%w", t[0]);
+            return n * 10 + (t[0] == "foo");
+        }
+    "# })
+    .await;
+    assert_eq!(n, 11);
+}

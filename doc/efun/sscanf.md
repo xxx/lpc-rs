@@ -4,7 +4,8 @@
 
 Scans `str` against `fmt`, assigning each conversion to the next `var` in
 turn. The variables are passed by reference implicitly — write `n`, not
-`ref n` — and must be variables. Returns the number of conversions matched.
+`ref n` — and must be variables or indexed elements (`a[i]`, `m[key]`).
+Returns the number of conversions matched.
 
 | in `fmt` | matches | assigns |
 |---|---|---|

@@ -13,6 +13,7 @@ use ustr::Ustr;
 use crate::compiler::{
     ast::{
         ast_node::AstNodeTrait,
+        binary_op_node::{BinaryOpNode, BinaryOperation},
         call_node::{CallChain, CallNode},
         closure_node::ClosureNode,
         expression_node::ExpressionNode,
@@ -24,6 +25,7 @@ use crate::compiler::{
         var_init_node::VarInitNode,
         var_node::VarNode,
     },
+    callee::Callee,
     codegen::tree_walker::{ContextHolder, Pass, TreeWalker, walk_foreach, walk_function_ptr},
     compilation_context::CompilationContext,
     diagnostics::Diagnostics,
@@ -309,11 +311,14 @@ impl TreeWalker for ScopeWalker {
         }
 
         // An implicit efun lvalue (e.g. `sscanf`'s trailing variables) promotes
-        // its bare-variable argument the same way an explicit `ref` does.
+        // its bare-variable argument the same way an explicit `ref` does; an
+        // indexed argument gets a hidden cell instead.
         if receiver.is_none() {
             let mut to_mark: Vec<Ustr> = Vec::new();
+            let mut indexed: Vec<usize> = Vec::new();
             if let Some(callee) = self.context.lookup_function_complete(*name, namespace) {
                 let prototype = callee.as_ref();
+                let is_efun = matches!(callee, Callee::Efun(_));
                 // Positions past a spread are unknown until runtime, so none of them are promoted.
                 let fixed = node
                     .arguments
@@ -321,15 +326,30 @@ impl TreeWalker for ScopeWalker {
                     .position(|a| matches!(a, ExpressionNode::Spread(_)))
                     .unwrap_or(node.arguments.len());
                 for (index, argument) in node.arguments.iter().take(fixed).enumerate() {
-                    if prototype.is_ref_param(index)
-                        && let ExpressionNode::Var(var) = argument
-                    {
-                        to_mark.push(var.name);
+                    if !prototype.is_ref_param(index) {
+                        continue;
+                    }
+                    match argument {
+                        ExpressionNode::Var(var) => to_mark.push(var.name),
+                        ExpressionNode::BinaryOp(BinaryOpNode {
+                            op: BinaryOperation::Index,
+                            ..
+                        }) if is_efun => indexed.push(index),
+                        _ => {}
                     }
                 }
             }
             for var_name in to_mark {
                 self.mark_cell(var_name);
+            }
+            for index in indexed {
+                let temp = self.context.next_lvalue_temp_name();
+                let mut symbol = Symbol::new(&temp, LpcType::Mixed(false));
+                symbol.scope_id = self.context.scopes.current().and_then(|scope| scope.id);
+                symbol.span = node.span;
+                symbol.upvalue = true;
+                self.insert_symbol(symbol);
+                node.lvalue_temps.push((index, temp));
             }
         }
 

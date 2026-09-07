@@ -407,8 +407,17 @@ impl TreeWalker for SemanticCheckWalker {
                     let is_ref_arg = matches!(arg, ExpressionNode::Ref(_));
                     let wants_ref = prototype.is_ref_param(index);
                     if wants_ref && !is_ref_arg {
-                        // An implicit efun lvalue accepts a bare variable.
-                        if is_efun && matches!(arg, ExpressionNode::Var(_)) {
+                        // An implicit efun lvalue accepts a bare variable or an indexed element.
+                        if is_efun
+                            && matches!(
+                                arg,
+                                ExpressionNode::Var(_)
+                                    | ExpressionNode::BinaryOp(BinaryOpNode {
+                                        op: BinaryOperation::Index,
+                                        ..
+                                    })
+                            )
+                        {
                             continue;
                         }
                         let e = if is_efun {
@@ -4113,6 +4122,22 @@ mod tests {
             assert!(errors.is_empty(), "{errors:?}");
             let errors = errors_of("void f(function fp, int x) { fp()(x...); }").await;
             assert_one_error(&errors, "`...` spreads an array, not int");
+        }
+
+        #[tokio::test]
+        async fn an_indexed_element_is_an_implicit_efun_lvalue() {
+            let code = r#"void f(string s) { int *a = ({ 0 }); mapping m = ([ ]); sscanf(s, "%d %d", a[0], m["k"]); }"#;
+            assert!(
+                errors_of(code).await.is_empty(),
+                "{:?}",
+                errors_of(code).await
+            );
+        }
+
+        #[tokio::test]
+        async fn an_implicit_efun_lvalue_is_still_not_any_expression() {
+            let errors = errors_of(r#"void f(string s) { sscanf(s, "%d", 1 + 2); }"#).await;
+            assert_one_error(&errors, "argument 3 of `sscanf` must be a variable");
         }
 
         #[tokio::test]

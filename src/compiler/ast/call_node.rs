@@ -45,6 +45,9 @@ pub struct CallNode {
     /// The text span in the original file that this node represents. Used for
     /// error messages.
     pub span: Option<Span>,
+    /// Indexed arguments in an efun's implicit-lvalue positions, each with
+    /// the hidden cell standing in for it.
+    pub lvalue_temps: Vec<(usize, Ustr)>,
 }
 
 impl CallNode {

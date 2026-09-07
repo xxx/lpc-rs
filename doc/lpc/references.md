@@ -60,8 +60,12 @@ at the call, so a `ref` parameter never silently receives a copy.
 
 `sscanf(str, fmt, a, b)` writes into `a` and `b` without `ref`, as in every
 driver: the efun's prototype marks those positions, and the compiler
-requires a variable there (`argument N of `sscanf` must be a variable`).
-Writing `ref` explicitly is accepted and identical.
+requires a variable or an indexed element there (`argument N of `sscanf`
+must be a variable`). An element such as `a[i]` or `m[key]` is read into a
+hidden cell before the call and written back after it, so it ends up
+exactly as a variable in that position would; the container and index are
+evaluated once, before the call. Writing `ref` explicitly is accepted and
+identical for a variable.
 
 ## Differences from other drivers
 
