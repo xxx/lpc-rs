@@ -47,6 +47,15 @@ const NOMASK: &str =
 const DEFINES_N: &str =
     "object go(object o) { return shadow(o, 1); }\nstring n() { return \"sn.n\"; }";
 
+/// `S` with its death function renamed, for an outer shadow that must not
+/// answer `die`.
+const SB: &str = indoc! { r#"
+    object go(object o) { return shadow(o, 1); }
+    void enter(object e) { move_object(e); }
+    void die_b() { destruct(this_object()); }
+    string f() { return "sb.f"; }
+"# };
+
 fn ints(values: &[LpcRef]) -> Vec<i64> {
     values
         .iter()
@@ -206,4 +215,51 @@ async fn a_refusing_master_refuses() {
     let main = r#"void create() { object t = clone_object("/s"); object s = clone_object("/s"); s->go(t); }"#;
     let err = fails(REFUSING, &[("/s.c", S)], main).await;
     assert!(err.contains("The master refused the shadow."), "{err}");
+}
+
+#[tokio::test]
+async fn destructing_an_inner_shadow_closes_the_chain() {
+    let main = indoc! { r#"
+        mixed *create() {
+            object t = clone_object("/s");
+            object s1 = clone_object("/s");
+            object s2 = clone_object("/sb");
+            s1->go(t);
+            s2->go(t);
+            s1->die();
+            return ({ shadow(t, 0) == s2, shadow(s2, 0) });
+        }
+    "# };
+    assert_eq!(
+        ints(&run(ALLOWING, &[("/s.c", S), ("/sb.c", SB)], main).await),
+        vec![1, 0]
+    );
+}
+
+#[tokio::test]
+async fn destructing_the_target_frees_its_shadows() {
+    let main = indoc! { r#"
+        mixed *create() {
+            object t = clone_object("/s");
+            object u = clone_object("/s");
+            object s1 = clone_object("/s");
+            s1->go(t);
+            t->die();
+            return ({ objectp(s1), s1->go(u) == u, shadow(u, 0) == s1 });
+        }
+    "# };
+    assert_eq!(
+        ints(&run(ALLOWING, &[("/s.c", S)], main).await),
+        vec![1, 1, 1]
+    );
+}
+
+#[tokio::test]
+async fn a_shadowing_object_cannot_be_moved() {
+    let main = r#"void create() { object t = clone_object("/s"); object r = clone_object("/s"); object s = clone_object("/s"); s->go(t); s->enter(r); }"#;
+    assert!(
+        refused(&[], main)
+            .await
+            .contains("Can't move an object that is shadowing.")
+    );
 }

@@ -100,7 +100,6 @@ impl Process {
     }
 
     /// Unlink `shadow` from `target`'s chain; the chain closes around it.
-    #[expect(dead_code)]
     pub(crate) fn detach_shadow(t: &mut Transaction, shadow: &Arc<Process>, target: &Arc<Process>) {
         t.merge(
             target.shadow.shadows.id,
