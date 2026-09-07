@@ -3936,6 +3936,25 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn an_array_of_literal_zeros_is_taken_by_any_array_type() {
+            let code = r#"
+                void g(object *o) {}
+                void f() {
+                    object *x = ({ 0 });
+                    string *z = ({ 0, 0 });
+                    x = ({ 0 });
+                    g(({ 0 }));
+                    parse_command("a", ({ 0 }), "'a'");
+                }
+            "#;
+            assert!(
+                errors_of(code).await.is_empty(),
+                "{:?}",
+                errors_of(code).await
+            );
+        }
+
+        #[tokio::test]
         async fn a_matching_ref_call_is_clean() {
             let errors =
                 errors_of("void inc(int ref x) { x++; } void f() { int y; inc(ref y); }").await;
