@@ -243,21 +243,23 @@ async fn destructing_an_inner_shadow_closes_the_chain() {
 
 #[tokio::test]
 async fn destructing_the_target_frees_its_shadows() {
-    // `s1` is `/sb`, whose `die` is renamed, so the call below reaches `t`'s
+    // `s1` is `/sh`, which defines no `die`, so the call below reaches `t`'s
     // own `die` instead of the shadow's.
     let main = indoc! { r#"
         mixed *create() {
             object t = clone_object("/s");
             object u = clone_object("/s");
-            object s1 = clone_object("/sb");
+            object s1 = clone_object("/sh"); s1->set_tag("s1");
             s1->go(t);
             t->die();
-            return ({ objectp(s1), s1->go(u) == u, shadow(u, 0) == s1 });
+            string dead_forward = s1->fwd();
+            return ({ objectp(s1), s1->go(u) == u, shadow(u, 0) == s1,
+                      dead_forward == "s1.fwd->0" });
         }
     "# };
     assert_eq!(
-        ints(&run(ALLOWING, &[("/s.c", S), ("/sb.c", SB)], main).await),
-        vec![1, 1, 1]
+        ints(&run(ALLOWING, &[("/s.c", S), ("/sh.c", SH)], main).await),
+        vec![1, 1, 1, 1]
     );
 }
 

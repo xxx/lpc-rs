@@ -509,6 +509,8 @@ impl<'task, const N: usize> EfunContext<'task, N> {
                     t.write(shadow.shadow.shadowing.id, NULL);
                 }
             }
+            t.drop_var(process.shadow.shadows.id);
+            t.drop_var(process.shadow.shadowing.id);
         });
         self.record_effect(Effect::RemoveObject { key, process });
     }

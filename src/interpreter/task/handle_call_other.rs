@@ -209,7 +209,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 .lookup_function(name)
                 .filter(|function| function.public())
                 .cloned()
-                .map(|function| (real.clone(), function)),
+                .map(|function| (real, function)),
         })
     }
 

@@ -84,8 +84,7 @@ impl<'a> LpcVocabulary<'a> {
         name: &str,
         args: &[LpcRef],
     ) -> Result<Option<LpcRef>> {
-        let (target, function) = match Process::shadow_entry(self.ctx.txn(), target, name, target)
-        {
+        let (target, function) = match Process::shadow_entry(self.ctx.txn(), target, name, target) {
             ShadowEntry::Unshadowed => {
                 let Some(function) = target.program.unmangled_functions.get(name).cloned() else {
                     return Ok(None);
