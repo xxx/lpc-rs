@@ -130,7 +130,6 @@ pub(crate) enum Effect {
     /// A save efun's whole-file write of `contents` to `server`, once the
     /// attempt commits: a temp file beside the target, renamed over it.
     /// `in_game` names it in the log when the write fails.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no save efun records this yet"))]
     WriteFile {
         in_game: String,
         server: PathBuf,

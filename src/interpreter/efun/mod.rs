@@ -85,6 +85,7 @@ pub(crate) mod remove_rule;
 pub(crate) mod rename;
 pub(crate) mod rm;
 pub(crate) mod rmdir;
+pub(crate) mod save_object;
 pub(crate) mod send_gmcp;
 pub(crate) mod send_mxp;
 pub(crate) mod set_this_player;
@@ -1006,6 +1007,11 @@ efuns! {
         arity: (1, 1),
         args: [LpcType::Object(false) | LpcType::String(false)],
     },
+    save_object [async] => {
+        returns: LpcType::String(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1318,6 +1324,7 @@ mod tests {
                 "calling_function",
                 "calling_program",
                 "commands",
+                "save_object",
             ]
         );
     }

@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{apply::valid_apply, efun::efun_context::EfunContext, lpc_ref::LpcRef};
@@ -63,6 +64,49 @@ pub(crate) async fn authorize_or_deny<const N: usize>(
     ];
     let allowed = valid_apply(context.task_context(), Some(context.chain()), apply, &args).await?;
     Ok(allowed.then_some(FileAccess { in_game, server }))
+}
+
+/// [`authorize`] for a save efun: argument `i` is resolved against the lib
+/// root, the master sees it without a suffix, then `.o` is appended to both
+/// paths and confinement is checked again.
+pub(crate) async fn authorize_save<const N: usize>(
+    context: &EfunContext<'_, N>,
+    efun: &str,
+    apply: &str,
+    i: usize,
+) -> Result<FileAccess> {
+    let Some(arg) = context.arg(i).as_str() else {
+        return Err(context.runtime_error(format!("{efun}: path must be a string")));
+    };
+    let path = LpcPath::new_in_game(arg, "/", &*context.config().lib_dir);
+    let in_game = path
+        .as_in_game(context.config().lib_dir.as_str())
+        .display()
+        .to_string();
+    context
+        .config()
+        .validate_in_game_path(&path, None)
+        .map_err(|_| context.runtime_error(format!("{efun}: `{arg}` is not a valid path")))?;
+    let args = [
+        LpcRef::from(in_game.clone()),
+        LpcRef::from(efun),
+        LpcRef::from(Arc::downgrade(context.process())),
+        context.calling_program(),
+    ];
+    let allowed = valid_apply(context.task_context(), Some(context.chain()), apply, &args).await?;
+    if !allowed {
+        return Err(context.runtime_error(format!("{efun}: permission denied")));
+    }
+    let suffixed = LpcPath::new_in_game(format!("{in_game}.o"), "/", &*context.config().lib_dir);
+    let server = context
+        .config()
+        .validate_in_game_path(&suffixed, None)
+        .map_err(|_| context.runtime_error(format!("{efun}: `{arg}` is not a valid path")))?
+        .into_owned();
+    Ok(FileAccess {
+        in_game: format!("{in_game}.o"),
+        server,
+    })
 }
 
 /// Whether `server`'s parent exists and is a directory; a missing parent
