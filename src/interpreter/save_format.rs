@@ -1,14 +1,6 @@
 //! CD's save-file grammar: `name value` lines, values in the compact literal
 //! form `save_object` writes and `restore_object` reads.
 
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the reader and the save/restore efuns call these outside tests"
-    )
-)]
-
 use std::{fmt::Write, sync::Arc};
 
 use indexmap::IndexMap;
