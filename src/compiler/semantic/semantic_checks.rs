@@ -288,8 +288,14 @@ pub fn check_unary_operation_types(node: &UnaryOpNode, context: &CompilationCont
     }
 }
 
+/// An assignment's value is its right side, though `node_type` gives it the
+/// left side's type.
 fn is_literal_zero(expression: &ExpressionNode) -> bool {
-    matches!(expression, ExpressionNode::Int(IntNode { value: 0, .. }))
+    match expression {
+        ExpressionNode::Int(IntNode { value: 0, .. }) => true,
+        ExpressionNode::Assignment(AssignmentNode { rhs, .. }) => is_literal_zero(rhs),
+        _ => false,
+    }
 }
 
 /// The expression's type when `expected` does not take it: a literal `0` is
