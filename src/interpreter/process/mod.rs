@@ -1,4 +1,7 @@
+mod shadow;
 pub mod util;
+
+pub use shadow::ShadowLinks;
 
 use std::{
     borrow::Cow,
@@ -113,6 +116,9 @@ pub struct Process {
 
     /// Where are we in the game world?
     pub position: ProcessPosition,
+
+    /// Who shadows this object, and what it shadows.
+    pub shadow: ShadowLinks,
 }
 
 /// A `Process` with an empty `Program`: no globals, an `ObjectName::File`
@@ -131,6 +137,7 @@ impl Default for Process {
             parser_ready: OnceLock::new(),
             cell: OnceLock::new(),
             position: Default::default(),
+            shadow: Default::default(),
         }
     }
 }
@@ -165,6 +172,7 @@ impl Process {
             parser_ready: OnceLock::new(),
             cell: OnceLock::new(),
             position: Default::default(),
+            shadow: Default::default(),
         }
     }
 
