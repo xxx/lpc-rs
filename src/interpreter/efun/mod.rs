@@ -83,9 +83,11 @@ pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
 pub(crate) mod remove_rule;
 pub(crate) mod rename;
+pub(crate) mod restore_map;
 pub(crate) mod restore_object;
 pub(crate) mod rm;
 pub(crate) mod rmdir;
+pub(crate) mod save_map;
 pub(crate) mod save_object;
 pub(crate) mod send_gmcp;
 pub(crate) mod send_mxp;
@@ -1018,6 +1020,16 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false)],
     },
+    save_map [async] => {
+        returns: LpcType::Void,
+        arity: 2,
+        args: [LpcType::Mapping(false), LpcType::String(false)],
+    },
+    restore_map [async] => {
+        returns: LpcType::Mapping(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1332,6 +1344,8 @@ mod tests {
                 "commands",
                 "save_object",
                 "restore_object",
+                "save_map",
+                "restore_map",
             ]
         );
     }
