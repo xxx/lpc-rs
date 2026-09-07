@@ -509,13 +509,15 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
             _ => node_type(expr, context),
         },
         ExpressionNode::Array(node) => {
-            if node.value.is_empty() {
-                return Ok(LpcType::Mixed(true));
-            }
-
-            let res: Result<Vec<_>> = node.value.iter().map(|i| node_type(i, context)).collect();
+            // A literal 0 is taken by any type.
+            let typed = node.value.iter().filter(|i| !is_literal_zero(i));
+            let res: Result<Vec<_>> = typed.map(|i| node_type(i, context)).collect();
 
             let value_types = res?;
+
+            if value_types.is_empty() {
+                return Ok(LpcType::Mixed(true));
+            }
 
             if value_types.iter().any(|ty| ty.is_array()) {
                 Ok(LpcType::Mixed(true))
@@ -2190,6 +2192,24 @@ mod tests {
                 ]);
 
                 assert_eq!(node_type(&node, &context).unwrap(), LpcType::Int(true));
+            }
+
+            #[test]
+            fn array_of_literal_zeros_is_mixed() {
+                let context = CompilationContext::default();
+                let node =
+                    ExpressionNode::from(vec![ExpressionNode::from(0), ExpressionNode::from(0)]);
+
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::Mixed(true));
+            }
+
+            #[test]
+            fn a_literal_zero_does_not_narrow_an_array() {
+                let context = CompilationContext::default();
+                let node =
+                    ExpressionNode::from(vec![ExpressionNode::from(0), ExpressionNode::from("a")]);
+
+                assert_eq!(node_type(&node, &context).unwrap(), LpcType::String(true));
             }
 
             #[test]
