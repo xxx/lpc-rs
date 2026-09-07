@@ -40,7 +40,7 @@ pub mod preprocessor_node;
 /// before `MAX_EXPANSION_DEPTH` does. 512 levels × ≈2.6 KB (debug) ≈ 1.3 MB.
 const MAX_IF_EVAL_DEPTH: usize = 2 * MAX_NESTING_DEPTH;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Preprocessor {
     /// The compilation context
     context: CompilationContext,
@@ -84,7 +84,6 @@ impl Preprocessor {
     ///     .unwrap();
     /// let preprocessor = Preprocessor::new(context);
     /// ```
-    #[instrument]
     pub fn new(context: CompilationContext) -> Self {
         Self {
             context,
@@ -96,7 +95,6 @@ impl Preprocessor {
     ///
     /// This is intended for use after preprocessing has completed, and
     /// you're ready to re-take ownership of the context for the next step.
-    #[instrument]
     pub fn into_context(self) -> CompilationContext {
         self.context
     }
@@ -710,18 +708,6 @@ impl Preprocessor {
     fn append(&self, output: &mut Vec<Token>, token: Token) {
         if self.conditionals.live() {
             output.push(token);
-        }
-    }
-}
-
-impl Default for Preprocessor {
-    #[instrument]
-    fn default() -> Self {
-        Self {
-            context: CompilationContext::default(),
-            defines: HashMap::new(),
-            conditionals: Conditionals::default(),
-            includes: IncludeWalk::default(),
         }
     }
 }
