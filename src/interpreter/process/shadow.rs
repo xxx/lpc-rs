@@ -39,7 +39,6 @@ impl Default for ShadowLinks {
     }
 }
 
-#[expect(dead_code)]
 impl Process {
     /// The live objects shadowing `target`, inner to outer, through `txn`;
     /// empty without a read when nothing ever attached.
@@ -101,6 +100,7 @@ impl Process {
     }
 
     /// Unlink `shadow` from `target`'s chain; the chain closes around it.
+    #[expect(dead_code)]
     pub(crate) fn detach_shadow(t: &mut Transaction, shadow: &Arc<Process>, target: &Arc<Process>) {
         t.merge(
             target.shadow.shadows.id,

@@ -39,6 +39,8 @@ pub const CATCH_TELL: &str = "catch_tell";
 pub const COMMAND_NOT_FOUND: &str = "command_not_found";
 /// Master apply: whether the calling object may `exec` (`doc/apply/master/valid_exec.md`).
 pub const VALID_EXEC: &str = "valid_exec";
+/// The master apply that allows or refuses a shadow.
+pub const QUERY_ALLOW_SHADOW: &str = "query_allow_shadow";
 /// Master apply: whether the calling code may `shutdown` (`doc/apply/master/valid_shutdown.md`).
 pub const VALID_SHUTDOWN: &str = "valid_shutdown";
 /// Master apply: whether the calling code may read a lib file (`doc/apply/master/valid_read.md`).

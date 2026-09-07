@@ -87,6 +87,7 @@ pub(crate) mod rmdir;
 pub(crate) mod send_gmcp;
 pub(crate) mod send_mxp;
 pub(crate) mod set_this_player;
+pub(crate) mod shadow;
 pub(crate) mod shutdown;
 pub(crate) mod sort_array;
 pub(crate) mod sprintf;
@@ -575,6 +576,11 @@ efuns! {
         returns: LpcType::Object(false),
         arity: 1,
         args: [LpcType::Object(false)],
+    },
+    shadow [async] => {
+        returns: LpcType::Mixed(false),
+        arity: (2, 1),
+        args: [LpcType::Object(false), LpcType::Int(false)],
     },
     sizeof [prototype only] => {
         returns: LpcType::Int(false),
@@ -1215,6 +1221,7 @@ mod tests {
                 "remove_call_out",
                 "remove_rule",
                 "set_this_player",
+                "shadow",
                 "sizeof",
                 "sscanf",
                 "stringp",
