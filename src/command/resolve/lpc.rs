@@ -14,7 +14,7 @@ use crate::interpreter::{
     lpc_array::LpcArray,
     lpc_int::LpcInt,
     lpc_ref::LpcRef,
-    process::Process,
+    process::{Process, shadow::ShadowEntry},
     task_context::{Callers, TaskContext},
 };
 
@@ -75,18 +75,32 @@ impl<'a> LpcVocabulary<'a> {
         self.ctx
     }
 
-    /// Apply `name` on `target` nested in the caller's transaction, with
-    /// `this_player` unchanged; `None` when `target` does not define it.
+    /// Apply `name` on `target` nested in the caller's transaction, through
+    /// `target`'s shadow chain, with `this_player` unchanged; `None` when
+    /// nothing in the chain defines it.
     async fn apply(
         &self,
         target: &Arc<Process>,
         name: &str,
         args: &[LpcRef],
     ) -> Result<Option<LpcRef>> {
-        let Some(function) = target.program.unmangled_functions.get(name).cloned() else {
-            return Ok(None);
+        let (target, function) = match Process::shadow_entry(self.ctx.txn(), target, name, target)
+        {
+            ShadowEntry::Unshadowed => {
+                let Some(function) = target.program.unmangled_functions.get(name).cloned() else {
+                    return Ok(None);
+                };
+                (target.clone(), function)
+            }
+            ShadowEntry::Found(process, function) => (process, function),
+            ShadowEntry::Fallback(real) => {
+                let Some(function) = real.program.unmangled_functions.get(name).cloned() else {
+                    return Ok(None);
+                };
+                (real, function)
+            }
         };
-        apply_nested(self.ctx, self.callers.clone(), target, function, args)
+        apply_nested(self.ctx, self.callers.clone(), &target, function, args)
             .await
             .map(Some)
     }

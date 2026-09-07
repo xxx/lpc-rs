@@ -404,6 +404,29 @@ async fn present_asks_the_shadow_for_id() {
 }
 
 #[tokio::test]
+async fn a_parser_id_apply_enters_the_chain() {
+    let main = indoc! { r#"
+        mixed *create() {
+            object room = clone_object("/s");
+            object t = clone_object("/t");
+            object s = clone_object("/ls");
+            t->enter(room);
+            s->go(t);
+            mixed *items;
+            int r = parse_command("shade", room, "%i", items);
+            return ({ r, items[1] == t });
+        }
+    "# };
+    let got = run(
+        ALLOWING,
+        &[("/s.c", S), ("/t.c", T), ("/ls.c", LISTENING)],
+        main,
+    )
+    .await;
+    assert_eq!(ints(&got), vec![1, 1]);
+}
+
+#[tokio::test]
 async fn a_driver_hook_enters_the_chain() {
     let main = indoc! { r#"
         mixed *create() {
