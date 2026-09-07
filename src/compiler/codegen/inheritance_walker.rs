@@ -195,6 +195,12 @@ impl TreeWalker for InheritanceWalker {
                     ));
                 }
 
+                // CD's rule, which cdlib's command souls rely on; LDMud scopes the
+                // pragma to its unit.
+                if program.pragmas.no_shadow() {
+                    self.context.pragmas.set_no_shadow(true);
+                }
+
                 if self
                     .context
                     .inherits

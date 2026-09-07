@@ -197,6 +197,36 @@ async fn a_no_shadow_program_cannot_be_shadowed() {
 }
 
 #[tokio::test]
+async fn a_no_shadow_program_protects_what_inherits_it() {
+    let root = lib_holding(
+        "shadow-inherits",
+        &[
+            ("tn.c", NO_SHADOW),
+            ("tni.c", "inherit \"/tn\";\nstring g() { return \"g\"; }"),
+        ],
+    );
+    let config = ConfigBuilder::default()
+        .lib_dir(root.to_str().unwrap())
+        .build()
+        .unwrap();
+    let vm = Vm::new(config);
+    vm.initialize_process_from_code("/secure/master.c", ALLOWING)
+        .await
+        .unwrap();
+    vm.initialize_process_from_code("/s.c", S).await.unwrap();
+    vm.initialize_process_from_code("/tnii.c", "inherit \"/tni\";\nstring k() { return \"k\"; }")
+        .await
+        .unwrap();
+    let main = r#"void create() { object s = clone_object("/s"); s->go(find_object("/tnii")); }"#;
+    let err = vm
+        .initialize_process_from_code("/main.c", main)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Can't shadow a 'no_shadow' program."), "{err}");
+}
+
+#[tokio::test]
 async fn a_nomask_function_cannot_be_shadowed() {
     let main = r#"void create() { object t = clone_object("/tm"); object sn = clone_object("/sn"); sn->go(t); }"#;
     let err = refused(&[("/tm.c", NOMASK), ("/sn.c", DEFINES_N)], main).await;
