@@ -149,19 +149,20 @@ pub(crate) fn split_line(line: &str) -> Result<(&str, &str)> {
     let valid_name = name_len > 0 && !line.as_bytes()[0].is_ascii_digit();
     if !valid_name {
         return Err(LpcError::runtime(
-            "save file: a line must start with a variable name",
+            "save file: a line must start with a variable name at byte 0",
         ));
     }
     let rest = &line[name_len..];
     let Some(value) = rest.strip_prefix(' ') else {
-        return Err(LpcError::runtime(
-            "save file: one space must follow the variable name",
-        ));
+        return Err(LpcError::runtime(format!(
+            "save file: one space must follow the variable name at byte {name_len}"
+        )));
     };
     if value.starts_with(' ') || value.starts_with('\t') || value.is_empty() {
         return Err(LpcError::runtime(format!(
-            "save file: no value after `{}`",
-            &line[..name_len]
+            "save file: no value after `{}` at byte {}",
+            &line[..name_len],
+            name_len + 1
         )));
     }
     Ok((&line[..name_len], value))
@@ -292,7 +293,10 @@ impl Reader<'_> {
                 Some(c) if c.is_ascii_hexdigit() => {
                     seen_digit = true;
                     let d = (c as char).to_digit(16).expect("hex digit") as u64;
-                    if mantissa >> 60 == 0 {
+                    // 52 keeps every folded digit exact in an f64 (13 fraction
+                    // hex digits plus the leading one never exceed 2^53 - 1);
+                    // an excess digit is skipped along with its frac_digits count.
+                    if mantissa >> 52 == 0 {
                         mantissa = mantissa * 16 + d;
                         if seen_dot {
                             frac_digits += 1;
@@ -569,6 +573,15 @@ mod tests {
         let txn = TxnHandle::empty();
         assert_eq!(read("99999999999999999999", &txn), LpcRef::from(i64::MAX));
         assert_eq!(read("-99999999999999999999", &txn), LpcRef::from(i64::MIN));
+    }
+
+    #[test]
+    fn a_hex_float_fraction_past_the_mantissa_cap_reads_as_the_truncated_value() {
+        let txn = TxnHandle::empty();
+        assert_eq!(
+            read("#0x1.fffffffffffffffffffffp+0#", &txn),
+            read("#0x1.fffffffffffffp+0#", &txn)
+        );
     }
 
     #[test]
