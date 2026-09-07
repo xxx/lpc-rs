@@ -782,7 +782,12 @@ impl TreeWalker for SemanticCheckWalker {
 
                     self.context.diagnostics.record(error);
                 }
-            } else if function_def.return_type != LpcType::Void {
+            } else if !matches!(
+                function_def.return_type,
+                LpcType::Void | LpcType::Mixed(false)
+            ) {
+                // CD and LDMud take a bare `return` in a `mixed` function
+                // only; `mixed *` counts as typed.
                 let error = LpcError::new(format!(
                     "invalid return type {} - expected {}.",
                     LpcType::Void,
@@ -3024,6 +3029,30 @@ mod tests {
 
             let _ = node.visit(&mut walker).await;
             assert!(walker.context.diagnostics.errors().is_empty());
+        }
+
+        #[tokio::test]
+        async fn a_bare_return_is_allowed_in_a_mixed_function() {
+            let code = r#"
+                mixed f(object ob) {
+                    if (!ob) return;
+                    return 1;
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn a_bare_return_is_refused_in_a_typed_function() {
+            let code = r#"
+                int f() { return; }
+                mixed *g() { return; }"#;
+            assert_eq!(
+                messages(code).await,
+                vec![
+                    "invalid return type void - expected int.".to_string(),
+                    "invalid return type void - expected mixed *.".to_string(),
+                ]
+            );
         }
     }
 

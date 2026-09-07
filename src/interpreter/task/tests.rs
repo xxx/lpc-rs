@@ -1245,6 +1245,20 @@ mod test_instructions {
         }
 
         #[tokio::test]
+        async fn a_bare_return_from_a_mixed_function_yields_zero() {
+            let code = indoc! { r##"
+                    int five = 0;
+                    mixed r = 7;
+                    int g() { return 5; }
+                    mixed f() { five = g(); return; }
+                    void create() { r = f(); }
+                "##};
+
+            check_committed_globals(code, &[("five", BareVal::Int(5)), ("r", BareVal::Int(0))])
+                .await;
+        }
+
+        #[tokio::test]
         async fn calls_correct_function() {
             let code = indoc! { r##"
                     inherit "/std/object";
