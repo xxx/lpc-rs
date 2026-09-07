@@ -3707,6 +3707,32 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn a_truth_test_accepts_an_int_beside_a_mixed_array() {
+            let code = r#"
+                mixed *get_alarm(int id) { return ({ id }); }
+                int aid;
+                void create() {
+                    if (aid && get_alarm(aid)) aid = 1;
+                    if (aid || get_alarm(aid)) aid = 2;
+                    if (get_alarm(aid) && aid) aid = 3;
+                    if (get_alarm(aid) || aid) aid = 4;
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn an_equality_test_accepts_an_int_beside_a_mixed_array() {
+            let code = r#"
+                mixed *arr;
+                int i;
+                void create() {
+                    if (arr == 0) i = 1;
+                    if (0 != arr) i = 2;
+                }"#;
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
         async fn a_string_is_still_not_an_array_index() {
             let code = r#"
                 int *a = ({ 1, 2 });
