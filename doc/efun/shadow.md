@@ -25,7 +25,7 @@ error, `shadow '<caller>' on '<ob>': <reason>`:
 - the caller has an environment (and a shadowing object cannot be moved);
 - `ob` is a shadow, or the caller itself;
 - `ob` is the master or the simul-efun object;
-- `ob`'s program declares `#pragma no_shadow`;
+- `ob`'s program declares `#pragma no_shadow`, or inherits one that does;
 - the caller defines a function `ob` marks `nomask`;
 - the master defines no `query_allow_shadow` — shadowing is off until it
   does;
