@@ -127,6 +127,16 @@ pub(crate) enum Effect {
         contents: String,
     },
 
+    /// A save efun's whole-file write of `contents` to `server`, once the
+    /// attempt commits: a temp file beside the target, renamed over it.
+    /// `in_game` names it in the log when the write fails.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no save efun records this yet"))]
+    WriteFile {
+        in_game: String,
+        server: PathBuf,
+        contents: String,
+    },
+
     /// `write_bytes`'s overwrite of the file at `server` from byte `start`
     /// with `contents`, once the attempt commits; `in_game` names it in the
     /// log when the write fails.
@@ -230,6 +240,27 @@ impl Effect {
                     global_state
                         .config
                         .debug_log(format!("write_file: {in_game}: {e}"))
+                        .await;
+                }
+            }
+            Self::WriteFile {
+                in_game,
+                server,
+                contents,
+            } => {
+                let mut temp = server.clone().into_os_string();
+                temp.push(".tmp");
+                let temp = PathBuf::from(temp);
+                let written = async {
+                    tokio::fs::write(&temp, contents.as_bytes()).await?;
+                    tokio::fs::rename(&temp, &server).await
+                }
+                .await;
+                if let Err(e) = written {
+                    let _ = tokio::fs::remove_file(&temp).await;
+                    global_state
+                        .config
+                        .debug_log(format!("save file: {in_game}: {e}"))
                         .await;
                 }
             }
@@ -344,6 +375,7 @@ impl std::fmt::Debug for Effect {
             Self::Exec { .. } => f.debug_tuple("Exec").finish(),
             Self::Disconnect { message, .. } => f.debug_tuple("Disconnect").field(message).finish(),
             Self::AppendFile { in_game, .. } => f.debug_tuple("AppendFile").field(in_game).finish(),
+            Self::WriteFile { in_game, .. } => f.debug_tuple("WriteFile").field(in_game).finish(),
             Self::WriteBytes { in_game, .. } => f.debug_tuple("WriteBytes").field(in_game).finish(),
             Self::ReplaceChars { in_game, .. } => {
                 f.debug_tuple("ReplaceChars").field(in_game).finish()
@@ -432,6 +464,37 @@ mod tests {
             .await;
         }
         assert_eq!(std::fs::read_to_string(&server).unwrap(), "one\ntwo\n");
+    }
+
+    #[tokio::test]
+    async fn write_file_replaces_the_whole_file_and_leaves_no_temp() {
+        let root = crate::test_support::TempLib::new("write-file-effect");
+        let server = root.join("save.o");
+        std::fs::write(&server, "old contents that are longer\n").unwrap();
+        let gs = global_state();
+        Effect::WriteFile {
+            in_game: "/save.o".to_owned(),
+            server: server.clone(),
+            contents: "a 1\n".to_owned(),
+        }
+        .flush(&gs)
+        .await;
+        assert_eq!(std::fs::read_to_string(&server).unwrap(), "a 1\n");
+        assert!(!root.join("save.o.tmp").exists());
+    }
+
+    #[tokio::test]
+    async fn write_file_creates_a_missing_file() {
+        let root = crate::test_support::TempLib::new("write-file-effect-new");
+        let server = root.join("new.o");
+        Effect::WriteFile {
+            in_game: "/new.o".to_owned(),
+            server: server.clone(),
+            contents: "b 2\n".to_owned(),
+        }
+        .flush(&global_state())
+        .await;
+        assert_eq!(std::fs::read_to_string(&server).unwrap(), "b 2\n");
     }
 
     #[tokio::test]
