@@ -30,6 +30,7 @@ use crate::{
     interpreter::{
         CommittedReader,
         call_frame::CallFrame,
+        function_type::{function_address::FunctionAddress, function_ptr::FunctionPtrBuilder},
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
@@ -150,6 +151,16 @@ pub fn committed_string(vm: &Vm, process: &Arc<Process>, reg: u16) -> String {
         LpcRef::String(s) => s.to_str().to_owned(),
         other => panic!("a string in register {reg}: {other:?}"),
     }
+}
+
+/// A function pointer value with no owner, for codecs that must skip or
+/// zero one.
+pub fn function_pointer_ref() -> LpcRef {
+    let ptr = FunctionPtrBuilder::default()
+        .address(FunctionAddress::Efun(ustr::ustr("sizeof")))
+        .build()
+        .expect("only the address is required");
+    LpcRef::from(ptr)
 }
 
 /// `task`'s committed global `name`; panics if there is no such global.
