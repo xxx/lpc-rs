@@ -8,7 +8,7 @@ and `ob` is returned. From then on every external call by name to `ob` —
 driver hook such as `catch_tell` — starts at the outermost shadow and falls
 inward to the first object defining a public `f`, ending at `ob` itself.
 The applies the connection makes on its body — `net_dead`, `gmcp`,
-`window_size`, `write_prompt` — do not enter the chain yet.
+`window_size`, `write_prompt` — enter it the same way.
 Calls made inside `ob`'s own code stay inside `ob`; `this_object()->f()`
 does not. `this_object()` in the function that runs is the object it
 belongs to and `previous_object()` is the real caller.

@@ -15,7 +15,7 @@ use crate::{
         function_type::function_ptr::FunctionPtr,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
-        process::{Process, shadow::ShadowEntry},
+        process::Process,
         stm::Effect,
         task::apply_function::apply_function,
         task_context::{Caller, Callers, TaskContext},
@@ -66,20 +66,8 @@ pub(crate) async fn apply_hook(
     name: &str,
     args: &[LpcRef],
 ) -> Result<Option<LpcRef>> {
-    let (target, function) = match Process::shadow_entry(ctx.txn(), target, name, target) {
-        ShadowEntry::Unshadowed => {
-            let Some(function) = target.program.unmangled_functions.get(name).cloned() else {
-                return Ok(None);
-            };
-            (target.clone(), function)
-        }
-        ShadowEntry::Found(process, function) => (process, function),
-        ShadowEntry::Fallback(real) => {
-            let Some(function) = real.program.unmangled_functions.get(name).cloned() else {
-                return Ok(None);
-            };
-            (real, function)
-        }
+    let Some((target, function)) = Process::apply_entry(ctx.txn(), target, name) else {
+        return Ok(None);
     };
     apply_on(ctx, callers, &target, this_player, function, args)
         .await
@@ -174,22 +162,7 @@ pub(crate) async fn deliver(
             .with(|t| t.record_effect(Effect::DebugLog(message.to_owned())));
         return Ok(false);
     }
-    let heard = match Process::shadow_entry(ctx.txn(), target, CATCH_TELL, target) {
-        ShadowEntry::Unshadowed => target
-            .program
-            .unmangled_functions
-            .get(CATCH_TELL)
-            .cloned()
-            .map(|function| (target.clone(), function)),
-        ShadowEntry::Found(process, function) => Some((process, function)),
-        ShadowEntry::Fallback(real) => real
-            .program
-            .unmangled_functions
-            .get(CATCH_TELL)
-            .cloned()
-            .map(|function| (real, function)),
-    };
-    if let Some((process, function)) = heard {
+    if let Some((process, function)) = Process::apply_entry(ctx.txn(), target, CATCH_TELL) {
         let args = [LpcString::from(message).into()];
         let callers = callers();
         match this_player {

@@ -74,12 +74,22 @@ pub enum SeedArg {
     FreshMapping(LpcMapping),
 }
 
+/// The function a [`TaskSeed`] enters.
+#[derive(Debug, Clone)]
+pub enum SeedEntry {
+    /// A function resolved before the task began.
+    Function(Arc<ProgramFunction>),
+    /// A name resolved in each attempt through the object's shadow chain,
+    /// so a shadow attached under a concurrent commit is seen on retry.
+    Named(String),
+}
+
 /// The inputs needed to (re)start a task's entry call, hoisted out of the
 /// `CallStack` so a rejected commit can rebuild the task from scratch.
 #[derive(Debug, Clone)]
 pub struct TaskSeed {
     pub process: Arc<Process>,
-    pub function: Arc<ProgramFunction>,
+    pub entry: SeedEntry,
     pub args: Vec<SeedArg>,
     /// An initializer run: each attempt claims the marker first and is a
     /// no-op when it is already held.
@@ -87,27 +97,29 @@ pub struct TaskSeed {
 }
 
 impl TaskSeed {
-    /// Build the entry [`CallFrame`] for one attempt. Args go through
-    /// `push_arg`, never straight into registers `1..=len` — a captured
-    /// parameter lives in a cell, and an extra lands past the locals for `argv`.
-    /// A [`SeedArg::FreshMapping`] is minted into `txn` here, once per
-    /// attempt.
+    /// Build the entry [`CallFrame`] for one attempt, running `function` in
+    /// `process`. Args go through `push_arg`, never straight into registers
+    /// `1..=len` — a captured parameter lives in a cell, and an extra lands
+    /// past the locals for `argv`. A [`SeedArg::FreshMapping`] is minted
+    /// into `txn` here, once per attempt.
     pub(crate) fn build_call_frame(
         &self,
+        process: Arc<Process>,
+        function: Arc<ProgramFunction>,
         txn: &TxnHandle,
         upvalue_ptrs: Option<&[VarId]>,
     ) -> Result<CallFrame> {
-        if let Some(i) = self.function.prototype.first_ref_param() {
+        if let Some(i) = function.prototype.first_ref_param() {
             return Err(LpcError::runtime(format!(
                 "argument {} of `{}` must be passed by reference",
                 i + 1,
-                self.function.name()
+                function.name()
             )));
         }
 
         let mut frame = CallFrame::new(
-            self.process.clone(),
-            self.function.clone(),
+            process,
+            function,
             RegisterSize::try_from(self.args.len())?,
             upvalue_ptrs,
         );
@@ -247,7 +259,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let mut task = Task::new(context);
         let seed = TaskSeed {
             process: task.context.process().clone(),
-            function: initializer,
+            entry: SeedEntry::Function(initializer),
             args: Vec::new(),
             initializes: true,
         };
@@ -315,18 +327,33 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Run one attempt from `seed`: its frame pushed — an efun's is the entry
-    /// frame it is fired in — and stepped to completion.
+    /// frame it is fired in — and stepped to completion. A named entry that
+    /// nothing in the chain defines runs nothing, leaving no result.
     async fn run_entry(&mut self, seed: &TaskSeed) -> Result<()> {
-        if seed.function.prototype.is_efun() {
-            let efun = self.efun_of(&seed.function)?;
+        let (process, function) = match &seed.entry {
+            SeedEntry::Function(function) => (seed.process.clone(), function.clone()),
+            SeedEntry::Named(name) => {
+                let Some(found) = Process::apply_entry(&self.context.txn, &seed.process, name)
+                else {
+                    return Ok(());
+                };
+                self.context.process = found.0.clone();
+                found
+            }
+        };
+        if function.prototype.is_efun() {
+            let efun = self.efun_of(&function)?;
             self.refuse_ref_params(efun)?;
             let args = seed.arg_values(&self.context.txn);
-            self.push_entry_frame(seed.process.clone(), None)?;
-            self.call_fired_efun(efun, args, seed.process.clone(), None)
-                .await?;
+            self.push_entry_frame(process.clone(), None)?;
+            self.call_fired_efun(efun, args, process, None).await?;
         } else {
-            let frame =
-                seed.build_call_frame(&self.context.txn, self.context.upvalue_ptrs.as_deref())?;
+            let frame = seed.build_call_frame(
+                process,
+                function,
+                &self.context.txn,
+                self.context.upvalue_ptrs.as_deref(),
+            )?;
             self.stack.push(frame)?;
         }
         self.resume().await
@@ -344,7 +371,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         Box::pin(async move {
             let seed = TaskSeed {
                 process: self.context.process().clone(),
-                function: f,
+                entry: SeedEntry::Function(f),
                 args: args.iter().cloned().map(SeedArg::Value).collect(),
                 initializes: false,
             };
@@ -689,7 +716,7 @@ mod stm_retry_tests {
             .expect("program should define foo()");
         let seed = TaskSeed {
             process,
-            function: f,
+            entry: SeedEntry::Function(f),
             args: Vec::new(),
             initializes: false,
         };
@@ -714,7 +741,7 @@ mod stm_retry_tests {
         let (tx, handle) = committer();
         let seed = TaskSeed {
             process: task.context.process().clone(),
-            function: crate::interpreter::efun::EFUN_FUNCTIONS[name].clone(),
+            entry: SeedEntry::Function(crate::interpreter::efun::EFUN_FUNCTIONS[name].clone()),
             args: args.into_iter().map(SeedArg::Value).collect(),
             initializes: false,
         };
@@ -780,7 +807,7 @@ mod stm_retry_tests {
         let tx = task.context.global_state.committer_tx.clone();
         let seed = TaskSeed {
             process: task.context.process().clone(),
-            function: crate::interpreter::efun::EFUN_FUNCTIONS["map"].clone(),
+            entry: SeedEntry::Function(crate::interpreter::efun::EFUN_FUNCTIONS["map"].clone()),
             args: vec![SeedArg::Value(array), SeedArg::Value(pointer)],
             initializes: false,
         };

@@ -149,12 +149,38 @@ impl Process {
         name: &str,
         caller: &Arc<Process>,
     ) -> ShadowEntry {
-        if !target.shadow.ever_shadowing.load(Ordering::Acquire)
-            && !target.shadow.ever_shadowed.load(Ordering::Acquire)
-        {
+        if !target.ever_in_a_chain() {
             return ShadowEntry::Unshadowed;
         }
         Self::shadow_entry_in_chain(txn, target, name, caller)
+    }
+
+    /// Whether this object was ever a shadow or shadowed; never cleared, so
+    /// a rolled-back attach leaves it set.
+    #[inline]
+    pub(crate) fn ever_in_a_chain(&self) -> bool {
+        self.shadow.ever_shadowing.load(Ordering::Acquire)
+            || self.shadow.ever_shadowed.load(Ordering::Acquire)
+    }
+
+    /// The object and function a driver apply of `name` on `ob` runs:
+    /// [`Self::shadow_entry`] with `ob` as its own caller, then the plain
+    /// lookup on whichever object the walk ends at; `None` when nothing in
+    /// the chain defines `name`.
+    pub(crate) fn apply_entry(
+        txn: &TxnHandle,
+        ob: &Arc<Process>,
+        name: &str,
+    ) -> Option<(Arc<Process>, Arc<ProgramFunction>)> {
+        let defined_on = |object: Arc<Process>| {
+            let function = object.program.unmangled_functions.get(name).cloned()?;
+            Some((object, function))
+        };
+        match Self::shadow_entry(txn, ob, name, ob) {
+            ShadowEntry::Unshadowed => defined_on(ob.clone()),
+            ShadowEntry::Found(process, function) => Some((process, function)),
+            ShadowEntry::Fallback(real) => defined_on(real),
+        }
     }
 
     /// [`Self::shadow_entry`] past the hint-bit gate: `target` is, or once

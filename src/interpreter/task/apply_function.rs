@@ -5,7 +5,7 @@ use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::lpc_string::LpcString;
 
-use super::{SeedArg, TaskSeed};
+use super::{SeedArg, SeedEntry, TaskSeed};
 use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
@@ -120,7 +120,7 @@ pub async fn apply_function_seeded(
     let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(ctx);
     let seed = TaskSeed {
         process: task.context.process().clone(),
-        function: f,
+        entry: SeedEntry::Function(f),
         args,
         initializes: false,
     };
@@ -129,8 +129,10 @@ pub async fn apply_function_seeded(
         .map(|_| task.result().unwrap())
 }
 
-/// Apply function named `name`, in process `proc`, to arguments `args`, using context
-/// information from `template`.
+/// Apply function named `name` on process `proc`, to arguments `args`, using
+/// context information from `template`. The name is resolved through `proc`'s
+/// shadow chain inside each attempt, so a shadow defining it publicly runs
+/// instead of `proc`.
 /// Returns the result of the function.
 ///
 /// This function uses timed evaluation, and will timeout if execution takes too long.
@@ -139,7 +141,7 @@ pub async fn apply_function_seeded(
 ///
 /// * `name` - The name of the function to apply. This is assumed to be an unmangled name.
 /// * `args` - A slice of [`LpcRef`]s to apply the function to.
-/// * `proc` - The [`Process`] to apply the function in.
+/// * `proc` - The [`Process`] to apply the function on.
 /// * `template` - The template that holds the rest of the context information.
 /// * `timeout` - The maximum amount of time to allow the function to execute, in milliseconds.
 ///
@@ -147,7 +149,7 @@ pub async fn apply_function_seeded(
 ///
 /// * `Some(Ok(LpcRef))` - The result of the function.
 /// * `Some(Err(LpcError))` - The error that occurred.
-/// * `None` - The function is not defined in `proc`.
+/// * `None` - Nothing in `proc`'s chain defines the function.
 pub async fn apply_function_by_name<S>(
     name: S,
     args: &[LpcRef],
@@ -175,9 +177,27 @@ pub(crate) async fn applied_by_name<S>(
 where
     S: AsRef<str>,
 {
-    let f = proc.program.unmangled_functions.get(name.as_ref())?.clone();
+    let name = name.as_ref();
+    if !proc.ever_in_a_chain() && !proc.program.unmangled_functions.contains_key(name) {
+        return None;
+    }
 
-    Some(applied(f, args, template.into_task_context(proc), timeout).await)
+    let mut task: Task<MAX_CALL_STACK_SIZE> = Task::new(template.into_task_context(proc.clone()));
+    let seed = TaskSeed {
+        process: proc,
+        entry: SeedEntry::Named(name.to_owned()),
+        args: args.iter().cloned().map(SeedArg::Value).collect(),
+        initializes: false,
+    };
+    match task.timed_eval_seed(seed, timeout.unwrap_or(0)).await {
+        Err(e) => Some(Err(e)),
+        Ok(()) => task.result().map(|value| {
+            Ok(Applied {
+                value,
+                txn: task.context.txn().clone(),
+            })
+        }),
+    }
 }
 
 /// Apply function named `name`, in the master object, to arguments `args`, using context
