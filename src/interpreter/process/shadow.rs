@@ -39,7 +39,7 @@ impl Default for ShadowLinks {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 impl Process {
     /// The live objects shadowing `target`, inner to outer, through `txn`;
     /// empty without a read when nothing ever attached.
