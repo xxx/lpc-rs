@@ -355,12 +355,13 @@ async fn a_collection_call_enters_each_receivers_chain() {
     assert_eq!(got[2], format!("s1.f prev={} this={}", got[0], got[1]));
 }
 
-/// A shadow that answers `id`, answers `process_input` as the driver's
-/// hook, and records what it is told.
+/// A shadow that answers `id` and records what it is told, through either
+/// `catch_tell` or `process_input`.
 const LISTENING: &str = indoc! { r#"
     string heard;
     object go(object o) { return shadow(o, 1); }
     int id(string s) { return s == "shade"; }
+    void catch_tell(string msg) { heard = msg; }
     int process_input(string s) { heard = s; return 1; }
     string heard() { return heard; }
     string f() { return "shade.f"; }
@@ -402,10 +403,23 @@ async fn present_asks_the_shadow_for_id() {
     assert_eq!(ints(&got), vec![1]);
 }
 
-/// `deliver`'s `catch_tell` lookup never consults the chain, so this uses
-/// `process_input`, which reaches the chain through `apply_hook`.
 #[tokio::test]
 async fn a_driver_hook_enters_the_chain() {
+    let main = indoc! { r#"
+        mixed *create() {
+            object t = clone_object("/t");
+            object s = clone_object("/ls");
+            s->go(t);
+            tell_object(t, "psst");
+            return ({ s->heard() });
+        }
+    "# };
+    let got = strings(&run(ALLOWING, &[("/t.c", T), ("/ls.c", LISTENING)], main).await);
+    assert_eq!(got, vec!["psst".to_string()]);
+}
+
+#[tokio::test]
+async fn a_command_hook_enters_the_chain() {
     let main = indoc! { r#"
         mixed *create() {
             object t = clone_object("/t");

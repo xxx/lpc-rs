@@ -151,10 +151,11 @@ pub(crate) async fn valid_apply(
     Ok(verdict.is_some_and(|v| v.is_truthy(ctx.txn())))
 }
 
-/// `message` to `target`: through `catch_tell` — entered through the chain
-/// `callers` yields, applied with `this_player` set when one is given — else
-/// its connection, else the debug log, as effects; a destructed target is
-/// the log. Whether it was received; the log is not.
+/// `message` to `target`: through `catch_tell`, walking `target`'s shadow
+/// chain — entered through the chain `callers` yields, applied with
+/// `this_player` set when one is given — else its connection, else the
+/// debug log, as effects; a destructed target is the log. Whether it was
+/// received; the log is not.
 pub(crate) async fn deliver(
     ctx: &TaskContext,
     callers: impl FnOnce() -> Callers,
@@ -167,12 +168,21 @@ pub(crate) async fn deliver(
             .with(|t| t.record_effect(Effect::DebugLog(message.to_owned())));
         return Ok(false);
     }
-    if let Some(function) = target.program.unmangled_functions.get(CATCH_TELL).cloned() {
+    let heard = match Process::shadow_entry(ctx.txn(), target, CATCH_TELL, target) {
+        ShadowEntry::Found(process, function) => Some((process, function)),
+        ShadowEntry::Fallback(real) => real
+            .program
+            .unmangled_functions
+            .get(CATCH_TELL)
+            .cloned()
+            .map(|function| (real, function)),
+    };
+    if let Some((process, function)) = heard {
         let args = [LpcString::from(message).into()];
         let callers = callers();
         match this_player {
-            Some(player) => apply_on(ctx, callers, target, player, function, &args).await?,
-            None => apply_nested(ctx, callers, target, function, &args).await?,
+            Some(player) => apply_on(ctx, callers, &process, player, function, &args).await?,
+            None => apply_nested(ctx, callers, &process, function, &args).await?,
         };
         return Ok(true);
     }
