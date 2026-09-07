@@ -1,9 +1,5 @@
 //! The shadow chain: which objects shadow an object, and what an object
 //! shadows. Two transactional cells and two hint bits per object.
-//!
-//! A dispatch door may skip a read on a clear hint bit; a caller that judges
-//! a structural invariant (the efun's guards) must not, since only a read
-//! conflicts with a concurrent attach.
 
 use std::sync::{
     Arc,
@@ -26,8 +22,8 @@ pub struct ShadowLinks {
     pub shadows: SVar<LpcArray>,
     /// The object this one shadows; NULL when it is not a shadow.
     pub shadowing: SVar<LpcRef>,
-    /// Set by the first attach to this object, never cleared: clear means
-    /// `shadows` was never written, so a door skips the read.
+    /// Set by the first attach to this object, never cleared; clear means
+    /// `shadows` was never written.
     pub ever_shadowed: AtomicBool,
     /// Set when this object first attaches to another, never cleared:
     /// clear means `shadowing` was never written.
@@ -200,9 +196,7 @@ impl Process {
 /// Where a walk over `chain` (inner to outer) starts for a call on the
 /// object at `called` (`None` for the chain's target) from `caller`: just
 /// inside `caller` when it sits further out than the called object, else
-/// the outermost; `None` when the walk has nowhere to start. CD's rule:
-/// from the called object walk outward until the next shadow out is the
-/// caller.
+/// the outermost (CD's rule); `None` when the walk has nowhere to start.
 pub(crate) fn entry_index(
     chain: &[Arc<Process>],
     called: Option<usize>,
