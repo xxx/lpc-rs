@@ -14,7 +14,7 @@ use crate::{
         lpc_array::LpcArray,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
-        process::{Process, shadow::ShadowEntry},
+        process::Process,
         stm::TxnHandle,
         task::{Task, task_template::TaskTemplate},
         task_context::{Caller, TaskContext},
@@ -164,11 +164,7 @@ where
 }
 
 /// As [`apply_function_by_name`], with the result readable through the
-/// returned [`Applied`]. `proc` is both the target and the caller, so this
-/// runs through `proc`'s shadow chain (R3): a shadow that defines `name`
-/// publicly runs instead, and `proc` itself is the fallback. An object that
-/// is never shadowed (the master included, since it cannot be shadowed)
-/// takes the unshadowed path unchanged.
+/// returned [`Applied`].
 pub(crate) async fn applied_by_name<S>(
     name: S,
     args: &[LpcRef],
@@ -179,20 +175,9 @@ pub(crate) async fn applied_by_name<S>(
 where
     S: AsRef<str>,
 {
-    let name = name.as_ref();
-    let (target, f) = match Process::shadow_entry(&template.txn, &proc, name, &proc) {
-        ShadowEntry::Unshadowed => {
-            let f = proc.program.unmangled_functions.get(name)?.clone();
-            (proc, f)
-        }
-        ShadowEntry::Found(process, function) => (process, function),
-        ShadowEntry::Fallback(real) => {
-            let f = real.program.unmangled_functions.get(name)?.clone();
-            (real, f)
-        }
-    };
+    let f = proc.program.unmangled_functions.get(name.as_ref())?.clone();
 
-    Some(applied(f, args, template.into_task_context(target), timeout).await)
+    Some(applied(f, args, template.into_task_context(proc), timeout).await)
 }
 
 /// Apply function named `name`, in the master object, to arguments `args`, using context
