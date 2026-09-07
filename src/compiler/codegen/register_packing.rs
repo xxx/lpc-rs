@@ -578,7 +578,7 @@ mod tests {
             .values()
             .find(|function| function.name() == "g")
             .unwrap();
-        assert_eq!(g.instructions, vec![Ret]);
+        assert_eq!(g.instructions, vec![Copy(constant(0), local(0)), Ret]);
     }
 
     #[test]

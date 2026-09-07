@@ -323,11 +323,8 @@ impl CodegenWalker {
             call.visit(self).await?;
         }
 
-        let mut ret = ReturnNode {
-            value: None,
-            span: None,
-        };
-        ret.visit(self).await?;
+        // The initializer's value is `create()`'s, still in register 0.
+        push_instruction!(self, Instruction::Ret, None);
 
         let func = self.finalize_function(None, None)?;
         self.register_counter.pop();
@@ -712,6 +709,14 @@ impl CodegenWalker {
         pool.push(constant);
         keys.insert(key, index);
         Ok(Register(index).as_constant())
+    }
+
+    /// Store 0 in register 0, which otherwise still holds the last callee's
+    /// result.
+    fn zero_result(&mut self, span: Option<Span>) -> Result<()> {
+        let zero = self.constant(LpcConstant::Int(0), span)?;
+        push_instruction!(self, Instruction::Copy(zero, Register(0).as_local()), span);
+        Ok(())
     }
 
     /// The operand naming `args` in the current function's argument lists,
@@ -1917,7 +1922,7 @@ impl TreeWalker for CodegenWalker {
 
         // insert a final return if one isn't already there.
         {
-            let sym = self.function_stack.last_mut().unwrap();
+            let sym = self.function_stack.last().unwrap();
             if sym.instructions.len() == len.0
                 || (!sym.instructions.is_empty()
                     && *sym.instructions.last().unwrap() != Instruction::Ret)
@@ -1928,7 +1933,8 @@ impl TreeWalker for CodegenWalker {
                         "non-void function does not return a value. defaulting to 0."
                     ));
                 }
-                sym.push_instruction(Instruction::Ret, node.span);
+                self.zero_result(node.span)?;
+                push_instruction!(self, Instruction::Ret, node.span);
             }
         }
 
@@ -2179,6 +2185,8 @@ impl TreeWalker for CodegenWalker {
             expression.visit(self).await?;
             let copy = Instruction::Copy(self.current_result, Register(0).as_local());
             push_instruction!(self, copy, expression.span());
+        } else {
+            self.zero_result(node.span)?;
         }
 
         push_instruction!(self, Instruction::Ret, node.span);
@@ -3219,6 +3227,10 @@ mod tests {
                     RegisterVariant::Constant(Register(3)),
                     Address(1),
                 ),
+                Copy(
+                    RegisterVariant::Constant(Register(4)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
 
@@ -3275,6 +3287,10 @@ mod tests {
                     RegisterVariant::Constant(Register(4)),
                     Address(2),
                 ),
+                Copy(
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
 
@@ -3321,6 +3337,10 @@ mod tests {
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
                     Address(0),
+                ),
+                Copy(
+                    RegisterVariant::Constant(Register(4)),
+                    RegisterVariant::Local(Register(0)),
                 ),
                 Ret,
             ];
@@ -3378,6 +3398,10 @@ mod tests {
                 Jmp(Address(9)),
                 CallEfun(15, ArgList(1)),
                 CallEfun(15, ArgList(2)),
+                Copy(
+                    RegisterVariant::Constant(Register(6)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
 
@@ -3471,6 +3495,10 @@ mod tests {
                     RegisterVariant::Constant(Register(2)),
                     ArgList(0),
                 ),
+                Copy(
+                    RegisterVariant::Constant(Register(3)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
             check(r#""foo"->print(4 - 5)"#, expected).await;
@@ -3480,6 +3508,10 @@ mod tests {
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Constant(Register(1)),
                     ArgList(0),
+                ),
+                Copy(
+                    RegisterVariant::Constant(Register(3)),
+                    RegisterVariant::Local(Register(0)),
                 ),
                 Ret,
             ];
@@ -3508,6 +3540,10 @@ mod tests {
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2)),
                 ),
+                Copy(
+                    RegisterVariant::Constant(Register(3)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
             check(r#"sizeof(({ 1, 2, "c" }))"#, expected).await;
@@ -3529,6 +3565,10 @@ mod tests {
                     RegisterVariant::Local(Register(1)),
                 ),
                 CatchEnd,
+                Copy(
+                    RegisterVariant::Constant(Register(1)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
 
@@ -3569,6 +3609,10 @@ mod tests {
                     name: ustr("closure-0__x__/my_file.c__pv__x"),
                 },
                 CallFp(RegisterVariant::Local(Register(1)), ArgList(0)),
+                Copy(
+                    RegisterVariant::Constant(Register(1)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
 
@@ -3603,6 +3647,10 @@ mod tests {
 
             let expected = vec![
                 CallFp(RegisterVariant::Global(Register(0)), ArgList(0)),
+                Copy(
+                    RegisterVariant::Constant(Register(1)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
 
@@ -4166,6 +4214,10 @@ mod tests {
                     RegisterVariant::Constant(Register(3)),
                     Address(1),
                 ),
+                Copy(
+                    RegisterVariant::Constant(Register(4)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
 
@@ -4222,6 +4274,10 @@ mod tests {
                     RegisterVariant::Constant(Register(4)),
                     Address(2),
                 ),
+                Copy(
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
 
@@ -4268,6 +4324,10 @@ mod tests {
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(3)),
                     Address(0),
+                ),
+                Copy(
+                    RegisterVariant::Constant(Register(4)),
+                    RegisterVariant::Local(Register(0)),
                 ),
                 Ret,
             ];
@@ -4773,8 +4833,11 @@ mod tests {
         #[tokio::test]
         async fn a_literal_costs_no_instruction() {
             let f = function("void create() { int x = 5; }", "create").await;
-            assert_eq!(f.instructions, vec![Copy(k(0), l(1)), Ret]);
-            assert_eq!(f.constants, vec![LpcConstant::Int(5)]);
+            assert_eq!(
+                f.instructions,
+                vec![Copy(k(0), l(1)), Copy(k(1), l(0)), Ret]
+            );
+            assert_eq!(f.constants, vec![LpcConstant::Int(5), LpcConstant::Int(0)]);
         }
 
         #[tokio::test]
@@ -4836,7 +4899,11 @@ mod tests {
             assert_eq!(closure.constants, vec![LpcConstant::Int(7)]);
             assert_eq!(
                 create.constants,
-                vec![LpcConstant::Int(7), LpcConstant::Int(8)]
+                vec![
+                    LpcConstant::Int(7),
+                    LpcConstant::Int(8),
+                    LpcConstant::Int(0)
+                ]
             );
         }
 
@@ -4849,8 +4916,14 @@ mod tests {
                 .values()
                 .find(|f| f.name() == "parent_method")
                 .unwrap();
-            assert_eq!(f.constants, vec![string("parent method!")]);
-            assert_eq!(f.instructions, vec![CallEfun(15, ArgList(0)), Ret]);
+            assert_eq!(
+                f.constants,
+                vec![string("parent method!"), LpcConstant::Int(0)]
+            );
+            assert_eq!(
+                f.instructions,
+                vec![CallEfun(15, ArgList(0)), Copy(k(1), l(0)), Ret]
+            );
         }
 
         #[tokio::test]
@@ -4911,13 +4984,16 @@ mod tests {
                 "{:?}",
                 f.instructions
             );
-            assert_eq!(f.constants, vec![string("foo")]);
+            assert_eq!(f.constants, vec![string("foo"), LpcConstant::Int(0)]);
         }
 
         #[tokio::test]
         async fn an_argument_literal_is_pushed_from_the_pool() {
             let f = function("void create() { dump(5); }", "create").await;
-            assert_eq!(f.instructions, vec![CallEfun(15, ArgList(0)), Ret]);
+            assert_eq!(
+                f.instructions,
+                vec![CallEfun(15, ArgList(0)), Copy(k(1), l(0)), Ret]
+            );
         }
 
         #[tokio::test]
@@ -4969,6 +5045,7 @@ mod tests {
             let expected = vec![
                 Jnz(Register(1).as_local(), Address(2)),
                 Copy(Register(0).as_constant(), Register(1).as_local()),
+                Copy(Register(1).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -4981,6 +5058,7 @@ mod tests {
                 Jmp(Address(2)),
                 Copy(Register(0).as_constant(), Register(1).as_local()),
                 Jz(Register(1).as_local(), Address(1)),
+                Copy(Register(1).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -4993,6 +5071,7 @@ mod tests {
                 Jz(Register(1).as_local(), Address(3)),
                 Jz(Register(2).as_local(), Address(3)),
                 Copy(Register(0).as_constant(), Register(3).as_local()),
+                Copy(Register(1).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5005,6 +5084,7 @@ mod tests {
                 Jnz(Register(1).as_local(), Address(2)),
                 Jz(Register(2).as_local(), Address(3)),
                 Copy(Register(0).as_constant(), Register(3).as_local()),
+                Copy(Register(1).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5017,6 +5097,7 @@ mod tests {
                 Inc(Register(3).as_local()),
                 Jz(Register(1).as_local(), Address(3)),
                 Jnz(Register(2).as_local(), Address(0)),
+                Copy(Register(0).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5029,6 +5110,7 @@ mod tests {
                 Jz(Register(1).as_local(), Address(2)),
                 Jnz(Register(2).as_local(), Address(3)),
                 Copy(Register(0).as_constant(), Register(3).as_local()),
+                Copy(Register(1).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5041,6 +5123,7 @@ mod tests {
                 Jnz(Register(1).as_local(), Address(3)),
                 Jz(Register(2).as_local(), Address(3)),
                 Copy(Register(0).as_constant(), Register(3).as_local()),
+                Copy(Register(1).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5056,6 +5139,7 @@ mod tests {
                 Jmp(Address(5)),
                 Copy(Register(1).as_constant(), Register(4).as_local()),
                 Copy(Register(4).as_local(), Register(3).as_local()),
+                Copy(Register(2).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5074,6 +5158,7 @@ mod tests {
                 ),
                 Jmp(Address(4)),
                 Jmp(Address(0)),
+                Copy(Register(1).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5082,14 +5167,18 @@ mod tests {
         #[tokio::test]
         async fn a_literal_false_do_while_runs_once() {
             let code = "void create() { int c; do { c++; } while (0); }";
-            let expected = vec![Inc(Register(1).as_local()), Ret];
+            let expected = vec![
+                Inc(Register(1).as_local()),
+                Copy(Register(0).as_constant(), Register(0).as_local()),
+                Ret,
+            ];
             assert_eq!(create_instructions(code).await, expected);
         }
 
         #[tokio::test]
         async fn a_literal_false_if_emits_nothing() {
             let code = "void create() { int c; if (0) { c = 1; } }";
-            let expected = vec![Ret];
+            let expected = vec![Copy(Register(1).as_constant(), Register(0).as_local()), Ret];
             assert_eq!(create_instructions(code).await, expected);
         }
 
@@ -5102,6 +5191,7 @@ mod tests {
                 Jz(Register(2).as_local(), Address(4)),
                 Copy(Register(1).as_constant(), Register(4).as_local()),
                 Copy(Register(4).as_local(), Register(3).as_local()),
+                Copy(Register(0).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5139,7 +5229,11 @@ mod tests {
         async fn a_statement_increment_on_a_global_emits_a_bare_inc() {
             let mut walker = walk_prog("int g;\nvoid create() { g++; }").await;
 
-            let expected = vec![Inc(Register(0).as_global()), Ret];
+            let expected = vec![
+                Inc(Register(0).as_global()),
+                Copy(Register(0).as_constant(), Register(0).as_local()),
+                Ret,
+            ];
             assert_eq!(
                 walker_function_instructions(&mut walker, "create"),
                 expected
@@ -5188,6 +5282,10 @@ mod tests {
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Global(Register(0)),
                 ),
+                Copy(
+                    RegisterVariant::Constant(Register(1)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
             assert_eq!(
@@ -5222,7 +5320,14 @@ mod tests {
             assert_eq!(walker_function_instructions(&mut walker, "f"), expected);
 
             // The statement-position call result is dead, so its copy is too.
-            let expected = vec![Call(ustr("f__i____pb__"), ArgList(0)), Ret];
+            let expected = vec![
+                Call(ustr("f__i____pb__"), ArgList(0)),
+                Copy(
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(0)),
+                ),
+                Ret,
+            ];
             assert_eq!(
                 walker_function_instructions(&mut walker, "create"),
                 expected
@@ -5233,7 +5338,11 @@ mod tests {
         async fn a_statement_increment_keeps_no_pre_value() {
             let mut walker = walk_prog("void create() { int i; i++; }").await;
 
-            let expected = vec![Inc(Register(1).as_local()), Ret];
+            let expected = vec![
+                Inc(Register(1).as_local()),
+                Copy(Register(0).as_constant(), Register(0).as_local()),
+                Ret,
+            ];
             assert_eq!(
                 walker_function_instructions(&mut walker, "create"),
                 expected
@@ -5255,6 +5364,7 @@ mod tests {
                     Register(0).as_local(),
                     Register(0).as_global(),
                 ),
+                Copy(Register(0).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(
@@ -5270,6 +5380,10 @@ mod tests {
             let expected = vec![
                 Call(ustr("f__i____pb__"), ArgList(0)),
                 CallEfun(15, ArgList(1)),
+                Copy(
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
             assert_eq!(
@@ -5312,7 +5426,14 @@ mod tests {
 
             assert_eq!(walker.initializer.unwrap().instructions, expected);
 
-            let expected = vec![CallEfun(15, ArgList(0)), Ret];
+            let expected = vec![
+                CallEfun(15, ArgList(0)),
+                Copy(
+                    RegisterVariant::Constant(Register(2)),
+                    RegisterVariant::Local(Register(0)),
+                ),
+                Ret,
+            ];
 
             assert_eq!(
                 walker
@@ -5345,6 +5466,10 @@ mod tests {
                 Copy(
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Global(Register(1)),
+                ),
+                Copy(
+                    RegisterVariant::Constant(Register(2)),
+                    RegisterVariant::Local(Register(0)),
                 ),
                 Ret,
             ];
@@ -5396,6 +5521,10 @@ mod tests {
                     RegisterVariant::Constant(Register(1)),
                     RegisterVariant::Global(Register(1)),
                 ),
+                Copy(
+                    RegisterVariant::Constant(Register(2)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
 
@@ -5426,7 +5555,13 @@ mod tests {
         let mut node = ReturnNode::new(None);
         let _ = walker.visit_return(&mut node).await;
 
-        let expected = vec![Ret];
+        let expected = vec![
+            Copy(
+                RegisterVariant::Constant(Register(0)),
+                RegisterVariant::Local(Register(0)),
+            ),
+            Ret,
+        ];
 
         assert_eq!(walker_init_instructions(&mut walker), expected);
     }
@@ -5471,6 +5606,7 @@ mod tests {
                     Register(0).as_constant(),
                     Address(1),
                 ),
+                Copy(Register(1).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5497,6 +5633,7 @@ mod tests {
                     Register(2).as_constant(),
                     Address(2),
                 ),
+                Copy(Register(0).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5509,6 +5646,7 @@ mod tests {
                 Jz(Register(1).as_local(), Address(2)),
                 Jmp(Address(3)),
                 Jmp(Address(0)),
+                Copy(Register(0).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5521,6 +5659,7 @@ mod tests {
                 Jz(Register(1).as_local(), Address(2)),
                 Jmp(Address(3)),
                 Jmp(Address(0)),
+                Copy(Register(0).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5529,7 +5668,7 @@ mod tests {
         #[tokio::test]
         async fn a_literal_false_while_emits_nothing() {
             let code = "void create() { int c; while (0) { c++; } }";
-            let expected = vec![Ret];
+            let expected = vec![Copy(Register(0).as_constant(), Register(0).as_local()), Ret];
             assert_eq!(create_instructions(code).await, expected);
         }
 
@@ -5553,6 +5692,7 @@ mod tests {
                     Register(4).as_local(),
                     Address(4),
                 ),
+                Copy(Register(1).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5581,6 +5721,7 @@ mod tests {
                     Register(5).as_local(),
                     Address(2),
                 ),
+                Copy(Register(0).as_constant(), Register(0).as_local()),
                 Ret,
             ];
             assert_eq!(create_instructions(code).await, expected);
@@ -5626,6 +5767,10 @@ mod tests {
                 CallEfun(15, ArgList(1)),
                 Jmp(Address(8)),
                 CallEfun(15, ArgList(2)),
+                Copy(
+                    RegisterVariant::Constant(Register(6)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
 
@@ -5648,6 +5793,10 @@ mod tests {
                 ),
                 Jmp(Address(3)),
                 CallEfun(15, ArgList(0)),
+                Copy(
+                    RegisterVariant::Constant(Register(2)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
 
@@ -5671,6 +5820,10 @@ mod tests {
                 ),
                 CallEfun(15, ArgList(0)),
                 CallEfun(15, ArgList(1)),
+                Copy(
+                    RegisterVariant::Constant(Register(3)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Ret,
             ];
 
@@ -6212,6 +6365,7 @@ mod tests {
                 f.instructions,
                 vec![
                     Instruction::Call(ustr("g__v____pb__i"), ArgList(0)),
+                    Instruction::Copy(constant(0), local(0)),
                     Instruction::Ret,
                 ]
             );
@@ -6335,6 +6489,7 @@ mod tests {
                 vec![
                     Instruction::Call(ustr("g__v____pb__"), ArgList(0)),
                     Instruction::Call(ustr("g__v____pb__"), ArgList(1)),
+                    Instruction::Copy(constant(0), local(0)),
                     Instruction::Ret,
                 ]
             );
@@ -6346,7 +6501,11 @@ mod tests {
             let f = function_f("void f(int a) { dump(a); }").await;
             assert_eq!(
                 f.instructions,
-                vec![Instruction::CallEfun(15, ArgList(0)), Instruction::Ret]
+                vec![
+                    Instruction::CallEfun(15, ArgList(0)),
+                    Instruction::Copy(constant(0), local(0)),
+                    Instruction::Ret,
+                ]
             );
             assert_eq!(f.arg_lists, vec![vec![Arg::Value(local(1))]]);
         }
@@ -6376,6 +6535,7 @@ mod tests {
                 vec![
                     Instruction::Jncmp(Comparison::Lt, local(1), local(2), Address(2)),
                     Instruction::Copy(constant(0), local(1)),
+                    Instruction::Copy(constant(1), local(0)),
                     Instruction::Ret,
                 ]
             );
@@ -6389,6 +6549,7 @@ mod tests {
                 vec![
                     Instruction::Jcmp(Comparison::Eq, local(1), local(2), Address(2)),
                     Instruction::Copy(constant(0), local(1)),
+                    Instruction::Copy(constant(1), local(0)),
                     Instruction::Ret,
                 ]
             );
@@ -6502,6 +6663,10 @@ mod tests {
                     RegisterVariant::Local(Register(3)),
                 ),
                 Instruction::CallEfun(15, ArgList(1)),
+                Instruction::Copy(
+                    RegisterVariant::Constant(Register(2)),
+                    RegisterVariant::Local(Register(0)),
+                ),
                 Instruction::Ret,
             ];
 
@@ -6598,6 +6763,10 @@ mod tests {
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(1)),
                     Address(2),
+                ),
+                Instruction::Copy(
+                    RegisterVariant::Constant(Register(0)),
+                    RegisterVariant::Local(Register(0)),
                 ),
                 Instruction::Ret,
             ];

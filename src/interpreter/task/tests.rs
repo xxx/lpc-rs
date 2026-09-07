@@ -1231,6 +1231,34 @@ mod test_instructions {
         }
 
         #[tokio::test]
+        async fn a_function_that_falls_off_its_end_yields_zero() {
+            let code = indoc! { r##"
+                    int five = 0;
+                    mixed r = 7;
+                    int g() { return 5; }
+                    mixed f() { five = g(); }
+                    void create() { r = f(); }
+                "##};
+
+            check_committed_globals(code, &[("five", BareVal::Int(5)), ("r", BareVal::Int(0))])
+                .await;
+        }
+
+        #[tokio::test]
+        async fn a_bare_return_from_a_mixed_function_yields_zero() {
+            let code = indoc! { r##"
+                    int five = 0;
+                    mixed r = 7;
+                    int g() { return 5; }
+                    mixed f() { five = g(); return; }
+                    void create() { r = f(); }
+                "##};
+
+            check_committed_globals(code, &[("five", BareVal::Int(5)), ("r", BareVal::Int(0))])
+                .await;
+        }
+
+        #[tokio::test]
         async fn calls_correct_function() {
             let code = indoc! { r##"
                     inherit "/std/object";
@@ -3765,15 +3793,14 @@ mod test_instructions {
         #[tokio::test]
         async fn test_creates_empty_array() {
             let code = indoc! { r##"
+                    mixed r;
                     void create() {
                         function f = (: [int i = 69, ...] dump(i, argv); argv :);
-                        f();
+                        r = f();
                     }
                 "##};
 
-            let task = run_prog(code).await;
-            let ctx = task.context;
-            BareVal::Array(vec![]).assert_equal(&ctx.global_state, &ctx.result().unwrap());
+            check_committed_globals(code, &[("r", BareVal::Array(vec![]))]).await;
         }
 
         #[tokio::test]
