@@ -156,13 +156,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             };
             match Self::standing(&receiver, &self.context)? {
                 Standing::Ready(process) => {
-                    let function = process
-                        .program
-                        .lookup_function(&call.name)
-                        .filter(|function| function.public())
-                        .cloned();
-                    match function {
-                        Some(function) => {
+                    let callee = self.door_callee(process, &call.name)?;
+                    match callee {
+                        Some((process, function)) => {
                             debug_assert!(
                                 !function.prototype.is_efun(),
                                 "a `->` callee has a body"
@@ -222,12 +218,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         );
                     };
                     let name = call.name.clone();
-                    let callee =
-                        Self::resolve_call_other_receiver(&receiver, &name, &self.context, || {
+                    let resolved =
+                        Self::resolve_call_other_receiver(&receiver, &self.context, || {
                             self.loader()
                         })
-                        .await?
-                        .filter(|(_, function)| function.public());
+                        .await?;
+                    let callee = match resolved {
+                        Some(process) => self.door_callee(process, &name)?,
+                        None => None,
+                    };
                     match callee {
                         Some((process, function)) => {
                             debug_assert!(

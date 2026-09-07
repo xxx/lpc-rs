@@ -1,4 +1,8 @@
-use std::{fmt::Debug, path::PathBuf, sync::Arc};
+use std::{
+    fmt::Debug,
+    path::PathBuf,
+    sync::{Arc, atomic::Ordering},
+};
 
 use arc_swap::ArcSwapAny;
 use delegate::delegate;
@@ -493,6 +497,20 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             if is_living && let Some(env) = &environment {
                 Process::unmark_living(t, &process, env);
             }
+            // A dying shadow leaves its chain.
+            if process.shadow.ever_shadowing.load(Ordering::Acquire)
+                && let Some(target) = Process::shadow_target_in(t, &process)
+            {
+                Process::detach_shadow(t, &process, &target);
+            }
+            // A dying target orphans its shadows.
+            if process.shadow.ever_shadowed.load(Ordering::Acquire) {
+                for shadow in Process::shadows_in(t, &process) {
+                    t.write(shadow.shadow.shadowing.id, NULL);
+                }
+            }
+            t.drop_var(process.shadow.shadows.id);
+            t.drop_var(process.shadow.shadowing.id);
         });
         self.record_effect(Effect::RemoveObject { key, process });
     }

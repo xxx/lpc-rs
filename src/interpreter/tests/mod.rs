@@ -13,6 +13,7 @@ mod pointers;
 mod previous_object;
 mod references;
 mod security;
+mod shadows;
 mod simul_efuns;
 mod spreading;
 mod virtual_objects;

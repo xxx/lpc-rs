@@ -12,7 +12,7 @@ use crate::interpreter::{
     efun::efun_context::EfunContext,
     lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL},
-    process::Process,
+    process::{Process, shadow::ShadowEntry},
     stm::TxnHandle,
 };
 
@@ -123,12 +123,26 @@ impl Continuation for Present {
             }
         }
         for candidate in self.candidates.by_ref() {
-            let Some(function) = candidate.program.unmangled_functions.get("id").cloned() else {
-                continue;
+            let (process, function) = match Process::shadow_entry(txn, &candidate, "id", &candidate)
+            {
+                ShadowEntry::Unshadowed => {
+                    let Some(function) = candidate.program.unmangled_functions.get("id").cloned()
+                    else {
+                        continue;
+                    };
+                    (candidate.clone(), function)
+                }
+                ShadowEntry::Found(process, function) => (process, function),
+                ShadowEntry::Fallback(real) => {
+                    let Some(function) = real.program.unmangled_functions.get("id").cloned() else {
+                        continue;
+                    };
+                    (real, function)
+                }
             };
             self.asked = Some(candidate.clone());
             return Ok(Next::Call(Callee::Function {
-                process: candidate,
+                process,
                 function,
                 args: SmallVec::from_vec(vec![self.id.clone()]),
             }));

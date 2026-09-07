@@ -11,7 +11,7 @@ use crate::interpreter::{
     call_frame::CollectionCall,
     continuation::Pending,
     lpc_ref::{LpcRef, NULL},
-    process::{Liveness, Process},
+    process::{Liveness, Process, shadow::ShadowEntry},
     task::{Task, advance::Advance, get_location, handle_call::CallEntry},
     task_context::{Loader, ObjectLookup, TaskContext},
 };
@@ -57,12 +57,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 return Ok(false);
             };
             match Self::standing(&receiver_ref, &self.context)? {
-                Standing::Ready(process) => process
-                    .program
-                    .lookup_function(name)
-                    .filter(|function| function.public())
-                    .cloned()
-                    .map(|function| (process, function)),
+                Standing::Ready(process) => self.door_callee(process, name)?,
                 Standing::Dead | Standing::Removed(_) => None,
                 Standing::Uncreated(_) | Standing::Uninitialized(_) => return Ok(false),
             }
@@ -98,24 +93,23 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
         let result = match &receiver_ref {
             LpcRef::String(_) | LpcRef::Object(_) => {
-                let resolved = Self::resolve_call_other_receiver(
-                    &receiver_ref,
-                    function_name,
-                    &self.context,
-                    || self.loader(),
-                )
-                .await?;
-                let Some((receiver, function)) = resolved else {
+                let resolved =
+                    Self::resolve_call_other_receiver(&receiver_ref, &self.context, || {
+                        self.loader()
+                    })
+                    .await?;
+                let Some(receiver) = resolved else {
                     self.stack.current_frame_mut()?.registers[0] = NULL;
                     return Ok(());
                 };
-                if !function.public() {
-                    NULL
-                } else {
-                    debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
-                    // The callee returns through `pop_frame`'s result copy.
-                    self.push_call_frame(receiver, function, list, CallEntry::Door)?;
-                    return Ok(());
+                match self.door_callee(receiver, function_name)? {
+                    Some((receiver, function)) => {
+                        debug_assert!(!function.prototype.is_efun(), "a `->` callee has a body");
+                        // The callee returns through `pop_frame`'s result copy.
+                        self.push_call_frame(receiver, function, list, CallEntry::Door)?;
+                        return Ok(());
+                    }
+                    None => NULL,
                 }
             }
             // A collection never reaches this door: `call_other_resident`
@@ -191,6 +185,34 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         })))
     }
 
+    /// The object and function an external call of `name` on `receiver`
+    /// runs: a shadow that defines it, else `receiver`'s chain target's own
+    /// public definition. Takes `receiver` by value: the common,
+    /// never-shadowed case returns it straight back with no clone.
+    pub(super) fn door_callee(
+        &self,
+        receiver: Arc<Process>,
+        name: &str,
+    ) -> Result<Option<(Arc<Process>, Arc<ProgramFunction>)>> {
+        let caller = &self.stack.current_frame()?.process;
+        let entry = Process::shadow_entry(&self.context.txn, &receiver, name, caller);
+        Ok(match entry {
+            ShadowEntry::Unshadowed => receiver
+                .program
+                .lookup_function(name)
+                .filter(|function| function.public())
+                .cloned()
+                .map(|function| (receiver, function)),
+            ShadowEntry::Found(process, function) => Some((process, function)),
+            ShadowEntry::Fallback(real) => real
+                .program
+                .lookup_function(name)
+                .filter(|function| function.public())
+                .cloned()
+                .map(|function| (real, function)),
+        })
+    }
+
     /// The identity a `->` from the current frame loads under.
     pub(super) fn loader(&self) -> Result<Loader> {
         Ok(Loader {
@@ -228,19 +250,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         })
     }
 
-    /// The receiver's process and its function `name`, `None` for a dead
-    /// receiver or a missing function. `loader` runs only for a receiver to
-    /// create or initialize — a `->` to a resident, initialized object
-    /// must allocate nothing.
+    /// The receiver's process, loaded and initialized; `None` for a dead
+    /// receiver. `loader` runs only for a receiver to create or
+    /// initialize — a `->` to a resident, initialized object must
+    /// allocate nothing.
     #[instrument(level = "debug", skip_all)]
-    pub(super) async fn resolve_call_other_receiver<T, L>(
+    pub(super) async fn resolve_call_other_receiver<L>(
         receiver_ref: &LpcRef,
-        name: T,
         context: &TaskContext,
         loader: L,
-    ) -> Result<Option<(Arc<Process>, Arc<ProgramFunction>)>>
+    ) -> Result<Option<Arc<Process>>>
     where
-        T: AsRef<str>,
         L: Fn() -> Result<Loader>,
     {
         // A receiver is created and initialized whether or not it has the
@@ -266,8 +286,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
         };
 
-        let function = process.program.lookup_function(name).cloned();
-        Ok(function.map(|function| (process, function)))
+        Ok(Some(process))
     }
 }
 

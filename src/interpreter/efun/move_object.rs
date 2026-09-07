@@ -52,6 +52,12 @@ pub async fn move_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         return Ok(());
     }
 
+    if Process::shadow_target(ctx.txn(), &this_object).is_some() {
+        return Err(context.runtime_error(format!(
+            "move_object: {this_object}: Can't move an object that is shadowing."
+        )));
+    }
+
     if let Err(e) = Process::check_move(ctx.txn(), &this_object, &destination) {
         return Err(context.runtime_error(format!("move_object: {this_object} {e}")));
     }
