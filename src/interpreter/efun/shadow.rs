@@ -76,16 +76,25 @@ fn structural_refusal(
     caller: &Arc<Process>,
     target: &Arc<Process>,
 ) -> Option<String> {
-    if Process::shadow_target(txn, caller).is_some() {
+    // The dispatch gate may skip a read on a clear hint bit; these guards
+    // must not, since only a read conflicts with a concurrent attach.
+    let (already, shadowed, target_is_shadow) = txn.with(|t| {
+        (
+            Process::shadow_target_in(t, caller).is_some(),
+            !Process::shadows_in(t, caller).is_empty(),
+            Process::shadow_target_in(t, target).is_some(),
+        )
+    });
+    if already {
         return Some("Already shadowing.".into());
     }
-    if !Process::shadows_of(txn, caller).is_empty() {
+    if shadowed {
         return Some("Can't shadow when shadowed.".into());
     }
     if Process::environment_of(txn, caller).is_some() {
         return Some("The shadow must not reside inside another object.".into());
     }
-    if Arc::ptr_eq(caller, target) || Process::shadow_target(txn, target).is_some() {
+    if Arc::ptr_eq(caller, target) || target_is_shadow {
         return Some("Can't shadow a shadow.".into());
     }
     if ctx

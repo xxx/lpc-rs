@@ -1,5 +1,9 @@
 //! The shadow chain: which objects shadow an object, and what an object
 //! shadows. Two transactional cells and two hint bits per object.
+//!
+//! A dispatch door may skip a read on a clear hint bit; a caller that judges
+//! a structural invariant (the efun's guards) must not, since only a read
+//! conflicts with a concurrent attach.
 
 use std::sync::{
     Arc,
