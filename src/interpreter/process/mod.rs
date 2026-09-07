@@ -1,4 +1,4 @@
-mod shadow;
+pub(crate) mod shadow;
 pub mod util;
 
 pub use shadow::ShadowLinks;

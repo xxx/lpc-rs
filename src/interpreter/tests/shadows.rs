@@ -56,6 +56,10 @@ const SB: &str = indoc! { r#"
     string f() { return "sb.f"; }
 "# };
 
+/// `S` with its attach entry point renamed, for a shadow that must not
+/// intercept a call meant for the target's own `go`.
+const SG: &str = "object attach(object o) { return shadow(o, 1); }";
+
 fn ints(values: &[LpcRef]) -> Vec<i64> {
     values
         .iter()
@@ -113,9 +117,11 @@ async fn a_shadow_cannot_shadow_twice() {
 
 #[tokio::test]
 async fn a_shadowed_object_cannot_shadow() {
-    let main = r#"void create() { object t = clone_object("/s"); object u = clone_object("/s"); object s = clone_object("/s"); s->go(t); t->go(u); }"#;
+    // `s` attaches through `attach`, not `go`, so the outer call below still
+    // reaches `t`'s own `go` instead of being caught by the shadow.
+    let main = r#"void create() { object t = clone_object("/s"); object u = clone_object("/s"); object s = clone_object("/sg"); s->attach(t); t->go(u); }"#;
     assert!(
-        refused(&[], main)
+        refused(&[("/sg.c", SG)], main)
             .await
             .contains("Can't shadow when shadowed.")
     );
@@ -238,18 +244,20 @@ async fn destructing_an_inner_shadow_closes_the_chain() {
 
 #[tokio::test]
 async fn destructing_the_target_frees_its_shadows() {
+    // `s1` is `/sb`, whose `die` is renamed, so the call below reaches `t`'s
+    // own `die` instead of the shadow's.
     let main = indoc! { r#"
         mixed *create() {
             object t = clone_object("/s");
             object u = clone_object("/s");
-            object s1 = clone_object("/s");
+            object s1 = clone_object("/sb");
             s1->go(t);
             t->die();
             return ({ objectp(s1), s1->go(u) == u, shadow(u, 0) == s1 });
         }
     "# };
     assert_eq!(
-        ints(&run(ALLOWING, &[("/s.c", S)], main).await),
+        ints(&run(ALLOWING, &[("/s.c", S), ("/sb.c", SB)], main).await),
         vec![1, 1, 1]
     );
 }
@@ -262,4 +270,86 @@ async fn a_shadowing_object_cannot_be_moved() {
             .await
             .contains("Can't move an object that is shadowing.")
     );
+}
+
+/// A target with an internal call, a self call through `this_object()`, a
+/// public `p`, and a way to die.
+const T: &str = indoc! { r#"
+    string f() { return "t.f prev=" + file_name(previous_object()); }
+    string g() { return "t.g"; }
+    string h() { return "t.h->" + f(); }
+    string self() { return "t.self->" + this_object()->f(); }
+    string p() { return "t.p"; }
+    void die_t() { destruct(this_object()); }
+"# };
+
+/// A shadow with a tag, a forward to its target, a self call, a static `p`.
+const SH: &str = indoc! { r#"
+    string tag; object who;
+    void set_tag(string s) { tag = s; }
+    object go(object o) { who = o; return shadow(o, 1); }
+    string f() { return tag + ".f prev=" + file_name(previous_object()) + " this=" + file_name(this_object()); }
+    string fwd() { return tag + ".fwd->" + who->f(); }
+    string selfcall() { return tag + ".self->" + this_object()->f(); }
+    static string p() { return tag + ".p"; }
+"# };
+
+/// The dispatch table, one shadow (c04–c09) and two (c12–c16): the names of
+/// main, t, s1, s2, then each probe's answer.
+const DISPATCH_MAIN: &str = indoc! { r#"
+    mixed *create() {
+        object t = clone_object("/t");
+        object s1 = clone_object("/sh"); s1->set_tag("s1");
+        object s2 = clone_object("/sh"); s2->set_tag("s2");
+        string me = file_name(this_object());
+        s1->go(t);
+        string c04 = t->f();
+        string c05 = t->g();
+        string c06 = t->h();
+        string c07 = t->self();
+        string c08 = s1->fwd();
+        string c09 = t->p();
+        s2->go(t);
+        return ({ me, file_name(t), file_name(s1), file_name(s2),
+                  c04, c05, c06, c07, c08, c09,
+                  t->f(), s1->f(), s2->fwd(), s1->fwd(), s1->selfcall() });
+    }
+"# };
+
+fn strings(values: &[LpcRef]) -> Vec<String> {
+    values.iter().map(|v| v.to_string()).collect()
+}
+
+#[tokio::test]
+async fn external_calls_enter_at_the_outermost_shadow_and_fall_inward() {
+    let got = strings(&run(ALLOWING, &[("/t.c", T), ("/sh.c", SH)], DISPATCH_MAIN).await);
+    let (me, t, s1, s2) = (&got[0], &got[1], &got[2], &got[3]);
+    let expected = vec![
+        format!("s1.f prev={me} this={s1}"),          // c04 t->f
+        "t.g".to_string(),                            // c05 not in s1
+        format!("t.h->t.f prev={me}"),                // c06 internal stays internal
+        format!("t.self->s1.f prev={t} this={s1}"),   // c07 this_object()->f() sees the shadow
+        format!("s1.fwd->t.f prev={s1}"),             // c08 the shadow reaches its target
+        "t.p".to_string(),                            // c09 static in the shadow is skipped
+        format!("s2.f prev={me} this={s2}"),          // c12 two shadows: outermost first
+        format!("s2.f prev={me} this={s2}"),          // c13 a call on s1 from outside starts at s2
+        format!("s2.fwd->s1.f prev={s2} this={s1}"),  // c14 from s2, t->f enters just inside s2
+        format!("s2.fwd->s1.f prev={s2} this={s1}"),  // c15 s1->fwd from outside starts at s2
+        format!("s2.self->s2.f prev={s2} this={s2}"), // c16 this_object()->f in s1 starts at s2
+    ];
+    assert_eq!(got[4..].to_vec(), expected);
+}
+
+#[tokio::test]
+async fn a_collection_call_enters_each_receivers_chain() {
+    let main = indoc! { r#"
+        mixed *create() {
+            object t = clone_object("/t");
+            object s1 = clone_object("/sh"); s1->set_tag("s1");
+            s1->go(t);
+            return ({ file_name(this_object()), file_name(s1) }) + ({ t })->f();
+        }
+    "# };
+    let got = strings(&run(ALLOWING, &[("/t.c", T), ("/sh.c", SH)], main).await);
+    assert_eq!(got[2], format!("s1.f prev={} this={}", got[0], got[1]));
 }

@@ -6,6 +6,8 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use lpc_rs_function_support::program_function::ProgramFunction;
+
 use crate::interpreter::{
     lpc_array::LpcArray,
     lpc_ref::{LpcRef, NULL},
@@ -122,13 +124,60 @@ impl Process {
     }
 }
 
+/// Where an external call to an object enters its shadow chain.
+pub(crate) enum ShadowEntry {
+    /// A shadow defines the function publicly: run it there.
+    Found(Arc<Process>, Arc<ProgramFunction>),
+    /// No shadow answers: the door looks the function up on this object,
+    /// the real target of the chain the called object belongs to.
+    Fallback(Arc<Process>),
+}
+
+impl Process {
+    /// The object an external call of `name` on `target` from `caller`
+    /// enters: from `target` outward to the outermost shadow, stopping just
+    /// inside `caller` when it is further out, then walking inward past
+    /// shadows that do not define `name` publicly. Costs two atomic loads when
+    /// `target` was never in a chain.
+    pub(crate) fn shadow_entry(
+        txn: &TxnHandle,
+        target: &Arc<Process>,
+        name: &str,
+        caller: &Arc<Process>,
+    ) -> ShadowEntry {
+        let real = match Self::shadow_target(txn, target) {
+            Some(real) => real,
+            None => target.clone(),
+        };
+        if !real.shadow.ever_shadowed.load(Ordering::Acquire) {
+            return ShadowEntry::Fallback(real);
+        }
+        let chain = Self::shadows_of(txn, &real);
+        let called = chain.iter().position(|s| Arc::ptr_eq(s, target));
+        if let Some(start) = entry_index(&chain, called, caller) {
+            for shadow in chain[..=start].iter().rev() {
+                if !shadow.is_live(txn) {
+                    continue;
+                }
+                if let Some(function) = shadow
+                    .program
+                    .lookup_function(name)
+                    .filter(|function| function.public())
+                {
+                    return ShadowEntry::Found(shadow.clone(), function.clone());
+                }
+            }
+        }
+        ShadowEntry::Fallback(real)
+    }
+}
+
 /// Where a walk over `chain` (inner to outer) starts for a call on the
 /// object at `called` (`None` for the chain's target) from `caller`: just
 /// inside `caller` when it sits further out than the called object, else
 /// the outermost; `None` when the walk has nowhere to start. CD's rule:
 /// from the called object walk outward until the next shadow out is the
 /// caller.
-#[cfg_attr(not(test), expect(dead_code))]
 pub(crate) fn entry_index(
     chain: &[Arc<Process>],
     called: Option<usize>,
