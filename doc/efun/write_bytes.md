@@ -19,4 +19,4 @@ write_bytes("/d/map.m", y * width + x, "#");
 
 ### See also
 
-`read_bytes`, `write_file`
+`read_bytes`, `write_chars`, `write_file`

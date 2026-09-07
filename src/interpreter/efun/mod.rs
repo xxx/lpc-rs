@@ -12,6 +12,7 @@ pub(crate) mod call_out;
 pub(crate) mod callback;
 pub(crate) mod calling;
 pub(crate) mod case;
+pub(crate) mod chars;
 pub(crate) mod clone_object;
 pub(crate) mod command;
 pub(crate) mod commands;
@@ -943,6 +944,16 @@ efuns! {
         arity: 3,
         args: [LpcType::String(false), LpcType::Int(false), LpcType::String(false)],
     },
+    read_chars [async in chars] => {
+        returns: LpcType::Mixed(false),
+        arity: (3, 2),
+        args: [LpcType::String(false), LpcType::Int(false), LpcType::Int(false)],
+    },
+    write_chars [async in chars] => {
+        returns: LpcType::Int(false),
+        arity: 3,
+        args: [LpcType::String(false), LpcType::Int(false), LpcType::String(false)],
+    },
     query_ip_name [in query_ip_number] => {
         returns: LpcType::String(false),
         arity: (1, 1),
@@ -1296,6 +1307,8 @@ mod tests {
                 "unique_array",
                 "read_bytes",
                 "write_bytes",
+                "read_chars",
+                "write_chars",
                 "query_ip_name",
                 "shutdown",
                 "file_time",

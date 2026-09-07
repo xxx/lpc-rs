@@ -137,6 +137,17 @@ pub(crate) enum Effect {
         contents: String,
     },
 
+    /// `write_chars`'s replacement of `contents`'s worth of characters at
+    /// character `start` of the file at `server`, decoded again at commit
+    /// so an earlier write in the same task has already landed; `in_game`
+    /// names the file in the log when the write fails.
+    ReplaceChars {
+        in_game: String,
+        server: PathBuf,
+        start: usize,
+        contents: String,
+    },
+
     /// `shutdown(code)` committed: the main loop is told to leave with
     /// `code`.
     Shutdown { code: i32 },
@@ -250,6 +261,30 @@ impl Effect {
                         .await;
                 }
             }
+            Self::ReplaceChars {
+                in_game,
+                server,
+                start,
+                contents,
+            } => {
+                let written = async {
+                    let text = String::from_utf8(tokio::fs::read(&server).await?)
+                        .map_err(|_| std::io::Error::other("not UTF-8"))?;
+                    let mut out = String::with_capacity(text.len() + contents.len());
+                    let mut chars = text.chars();
+                    out.extend(chars.by_ref().take(start));
+                    out.push_str(&contents);
+                    out.extend(chars.skip(contents.chars().count()));
+                    tokio::fs::write(&server, out).await
+                }
+                .await;
+                if let Err(e) = written {
+                    global_state
+                        .config
+                        .debug_log(format!("write_chars: {in_game}: {e}"))
+                        .await;
+                }
+            }
             Self::RemoveFile { in_game, server } => {
                 if let Err(e) = tokio::fs::remove_file(&server).await {
                     global_state
@@ -310,6 +345,9 @@ impl std::fmt::Debug for Effect {
             Self::Disconnect { message, .. } => f.debug_tuple("Disconnect").field(message).finish(),
             Self::AppendFile { in_game, .. } => f.debug_tuple("AppendFile").field(in_game).finish(),
             Self::WriteBytes { in_game, .. } => f.debug_tuple("WriteBytes").field(in_game).finish(),
+            Self::ReplaceChars { in_game, .. } => {
+                f.debug_tuple("ReplaceChars").field(in_game).finish()
+            }
             Self::Shutdown { code } => f.debug_tuple("Shutdown").field(code).finish(),
             Self::RemoveFile { in_game, .. } => f.debug_tuple("RemoveFile").field(in_game).finish(),
             Self::CreateDir { in_game, .. } => f.debug_tuple("CreateDir").field(in_game).finish(),

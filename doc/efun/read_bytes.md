@@ -24,4 +24,4 @@ string cell = read_bytes("/d/map.m", y * width + x, 1);
 
 ### See also
 
-`write_bytes`, `read_file`, `file_size`
+`write_bytes`, `read_chars`, `read_file`, `file_size`
