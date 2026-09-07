@@ -12,7 +12,11 @@ use crate::interpreter::{
 };
 
 /// Argument `i` as an int.
-fn int_arg<const N: usize>(context: &EfunContext<'_, N>, name: &str, i: usize) -> Result<i64> {
+pub(super) fn int_arg<const N: usize>(
+    context: &EfunContext<'_, N>,
+    name: &str,
+    i: usize,
+) -> Result<i64> {
     match context.arg(i) {
         LpcRef::Int(n) => Ok(n.0),
         other => Err(context.runtime_error(format!("{name}: {} is not an int", other.type_name()))),
@@ -21,7 +25,7 @@ fn int_arg<const N: usize>(context: &EfunContext<'_, N>, name: &str, i: usize) -
 
 /// `start` against a file of `size` bytes: a negative start counts back
 /// from the end and stops at the beginning.
-fn offset(start: i64, size: u64) -> u64 {
+pub(super) fn offset(start: i64, size: u64) -> u64 {
     if start < 0 {
         size.saturating_sub(start.unsigned_abs())
     } else {
