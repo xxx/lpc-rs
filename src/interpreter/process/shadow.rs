@@ -129,7 +129,7 @@ impl Process {
 /// the outermost; `None` when the walk has nowhere to start. CD's rule:
 /// from the called object walk outward until the next shadow out is the
 /// caller.
-#[allow(dead_code)]
+#[cfg_attr(not(test), expect(dead_code))]
 pub(crate) fn entry_index(
     chain: &[Arc<Process>],
     called: Option<usize>,
