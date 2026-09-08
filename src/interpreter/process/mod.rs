@@ -11,7 +11,10 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use lpc_rs_core::RegisterSize;
+use lpc_rs_core::{
+    RegisterSize,
+    lpc_path::{LibRoot, LpcPath},
+};
 
 use crate::{
     command::registry::RuleList,
@@ -468,6 +471,23 @@ impl Process {
         }
     }
 
+    /// The object name for LPC output, with host-origin names localized safely.
+    pub fn in_game_name(&self, root: LibRoot<'_>) -> String {
+        match &self.name {
+            ObjectName::Virtual(path) => {
+                root.object_name(&LpcPath::in_game(path.into())).to_string()
+            }
+            ObjectName::File | ObjectName::Clone(_) => {
+                let clone_id = match self.name {
+                    ObjectName::Clone(id) => Some(id),
+                    _ => None,
+                };
+                root.object_name(&self.program.filename.object_file(clone_id))
+                    .to_string()
+            }
+        }
+    }
+
     /// The in-game directory of this object's name: what its relative object
     /// paths resolve against. A clone's is its program's; a virtual object's
     /// is the directory it was requested under.
@@ -506,7 +526,13 @@ impl Hash for Process {
 impl Display for Process {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.filename())
+        let source = self.program.filename.to_string();
+        let name = source.strip_suffix(".c").unwrap_or(&source);
+        match &self.name {
+            ObjectName::File => f.write_str(name),
+            ObjectName::Clone(id) => write!(f, "{name}#{id}"),
+            ObjectName::Virtual(path) => f.write_str(path),
+        }
     }
 }
 
@@ -557,6 +583,25 @@ mod tests {
             filename: Arc::new(filename.into()),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn object_names_keep_suffix_order_and_host_prefix_collisions() {
+        let root = LibRoot::new("/d/root");
+        let program: Arc<Program> = program_at("/d/root.c").into();
+        assert_eq!(Process::new(program.clone()).in_game_name(root), "/");
+        assert_eq!(
+            Process::new_clone(program, 7).in_game_name(root),
+            "/d/root#7"
+        );
+
+        let outside = Process::new(Program {
+            filename: Arc::new(LpcPath::new_server("/private/elsewhere.c")),
+            ..Default::default()
+        });
+        assert_eq!(outside.in_game_name(root), "<outside mudlib>");
+        assert_eq!(outside.filename(), "/private/elsewhere");
+        assert!(!outside.to_string().contains("private"));
     }
 
     #[test]

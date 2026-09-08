@@ -70,7 +70,7 @@ mod tests {
         let func = program.initializer.clone().expect("no init found?");
         let context = task_context_fixture(program, config, tx);
         let to_find = ProgramBuilder::default()
-            .filename(LpcPath::InGame(Path::new("/example").to_path_buf()))
+            .filename(LpcPath::in_game(Path::new("/example").to_path_buf()))
             .build()
             .unwrap();
         let proc = Process::new(to_find);

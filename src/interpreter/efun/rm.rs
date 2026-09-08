@@ -12,16 +12,13 @@ use crate::interpreter::{
 /// commit. A symlink is unlinked as a link, never followed.
 pub async fn rm<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "rm", VALID_WRITE, 0).await?;
-    let metadata = tokio::fs::symlink_metadata(&access.server)
+    let metadata = tokio::fs::symlink_metadata(access.server())
         .await
-        .map_err(|e| context.runtime_error(format!("rm: {}: {e}", access.in_game)))?;
+        .map_err(|e| context.runtime_error(format!("rm: {}: {e}", access.name())))?;
     if !(metadata.is_file() || metadata.is_symlink()) {
-        return Err(context.runtime_error(format!("rm: {} is not a file", access.in_game)));
+        return Err(context.runtime_error(format!("rm: {} is not a file", access.name())));
     }
-    context.record_effect(Effect::RemoveFile {
-        in_game: access.in_game,
-        server: access.server,
-    });
+    context.record_effect(Effect::RemoveFile { path: access });
     context.return_efun_result(LpcRef::from(1));
     Ok(())
 }

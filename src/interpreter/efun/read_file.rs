@@ -14,7 +14,7 @@ pub async fn read_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
     let start = line_number(context, 1, "start")?;
     let count = line_number(context, 2, "lines")?;
     let contents = async {
-        let bytes = read_through(context, &access.server).await?.into_bytes()?;
+        let bytes = read_through(context, access.server()).await?.into_bytes()?;
         String::from_utf8(bytes).map_err(|_| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -23,7 +23,7 @@ pub async fn read_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         })
     }
     .await
-    .map_err(|e| context.runtime_error(format!("read_file: {}: {e}", access.in_game)))?;
+    .map_err(|e| context.runtime_error(format!("read_file: {}: {e}", access.name())))?;
     let contents = if start > 1 || count > 0 {
         lines_of(&contents, start, count)
     } else {
@@ -101,6 +101,23 @@ mod tests {
         vm.initialize_process_from_code(
             "/secure/master.c",
             "int valid_read(string p, string e, object c, string g) { return 1; }",
+        )
+        .await
+        .unwrap();
+        let reader = read_under(&vm).await;
+        assert_eq!(committed_string(&vm, &reader, 0), "hello\n");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn an_administrator_symlink_can_still_read_outside_the_lib() {
+        let root = TempLib::new("read-symlink-lib");
+        let outside = lib_with_data("read-symlink-outside");
+        std::os::unix::fs::symlink(outside.join("data.txt"), root.join("data.txt")).unwrap();
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            "int valid_read(string p, string e, object c, string g) { return p == \"/data.txt\"; }",
         )
         .await
         .unwrap();

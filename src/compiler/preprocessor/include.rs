@@ -2,11 +2,11 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
 };
 
-use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_core::lpc_path::{LpcPath, ResolvedPath};
 use lpc_rs_errors::{
     LpcError, Result, lpc_error,
     source_map::{FileId, SOURCE_MAP},
@@ -55,10 +55,7 @@ pub(super) struct Opened {
 /// One file on the active include chain.
 #[derive(Debug)]
 struct Frame {
-    /// Canonical server path — the memo/once/cycle key.
-    canon: PathBuf,
-    /// The file as resolved; nested resolution derives its cwd from this.
-    path: LpcPath,
+    path: ResolvedPath,
 }
 
 /// The one owner of `#include` traversal for a compile: resolution,
@@ -80,15 +77,13 @@ impl IncludeWalk {
     /// Register the root file's text and push its frame. Called once,
     /// first, by `scan`.
     pub fn open_root(&mut self, path: &LpcPath, code: &str, config: &Config) -> FileId {
-        let canon = path.as_server(config.lib_dir.as_str()).into_owned();
+        let path = config.paths().source(path);
+        let canon = path.server().to_owned();
         let file_id = SOURCE_MAP
             .write()
-            .add(in_game_name(&canon, config), code.to_owned());
-        self.memo.insert(canon.clone(), (file_id, Arc::from(code)));
-        self.stack.push(Frame {
-            canon,
-            path: path.clone(),
-        });
+            .add(path.name().to_string(), code.to_owned());
+        self.memo.insert(canon, (file_id, Arc::from(code)));
+        self.stack.push(Frame { path });
         file_id
     }
 
@@ -110,25 +105,23 @@ impl IncludeWalk {
         // error names the directive's own text.
         let directive_text = match &source {
             IncludeSource::System { path } | IncludeSource::Local { path } => (*path).to_string(),
-            IncludeSource::Configured(path) => path.to_string(),
+            IncludeSource::Configured(path) => config.paths().source_name(path).to_string(),
         };
 
-        let lib_dir = config.lib_dir.as_str();
-        let path = self.resolve(source, config).await;
-        let canon = path.as_server(lib_dir).into_owned();
-
-        if !path.is_within_root(lib_dir) {
-            return Err(lpc_error!(
+        let input = self.resolve(source, config).await;
+        let path = config.paths().confine(&input).map_err(|_| {
+            lpc_error!(
                 span,
                 "attempt to include a file outside the root: `{}`",
                 directive_text
-            ));
-        }
+            )
+        })?;
+        let canon = path.server().to_owned();
 
         if let (Some(gate), false) = (gate, configured) {
-            let in_game = path.as_in_game(lib_dir).display().to_string();
-            let from = self.current_in_game(config);
-            if !gate.include(&in_game, &from).await? {
+            let in_game = path.name().as_str();
+            let from = self.current_in_game();
+            if !gate.include(in_game, &from).await? {
                 return Err(lpc_error!(
                     span,
                     "#include \"{}\": permission denied",
@@ -143,7 +136,7 @@ impl IncludeWalk {
             return Ok(None);
         }
 
-        if self.stack.iter().any(|frame| frame.canon == canon) {
+        if self.stack.iter().any(|frame| frame.path.server() == canon) {
             return Err(self.cycle_error(&path, span));
         }
 
@@ -177,20 +170,20 @@ impl IncludeWalk {
                     }
                 };
                 if source.latin1 {
-                    let in_game = path.as_in_game(lib_dir).display().to_string();
-                    diagnostics.record(latin1_warning(&in_game, span));
+                    let in_game = path.name().as_str();
+                    diagnostics.record(latin1_warning(in_game, span));
                 }
                 let text = source.text;
                 let file_id = SOURCE_MAP
                     .write()
-                    .add(in_game_name(&canon, config), text.clone());
+                    .add(path.name().to_string(), text.clone());
                 let content: Arc<str> = Arc::from(text);
                 self.memo.insert(canon.clone(), (file_id, content.clone()));
                 (file_id, content)
             }
         };
 
-        self.stack.push(Frame { canon, path });
+        self.stack.push(Frame { path });
         Ok(Some(Opened { file_id, content }))
     }
 
@@ -211,7 +204,7 @@ impl IncludeWalk {
             .stack
             .last()
             .expect("a pragma executes inside an open file");
-        self.once.insert(frame.canon.clone());
+        self.once.insert(frame.path.server().to_owned());
     }
 
     /// Turn a directive's path into an [`LpcPath`], relative to the
@@ -235,17 +228,20 @@ impl IncludeWalk {
 
     /// Whether `path` exists on disk, at its server path.
     async fn exists(path: &LpcPath, config: &Config) -> bool {
-        tokio::fs::metadata(path.as_server(&*config.lib_dir))
+        tokio::fs::metadata(config.paths().source(path).server())
             .await
             .is_ok()
     }
 
     /// The first configured system dir holding `path`, in order.
     async fn in_system_dirs(&self, path: &str, config: &Config) -> Option<LpcPath> {
+        let root = config.paths();
         for dir in &config.system_include_dirs {
-            let candidate = LpcPath::new_in_game(path, dir.as_str(), &*config.lib_dir);
-            if Self::exists(&candidate, config).await {
-                return Some(candidate);
+            let Ok(candidate) = root.resolve(path, dir.as_str()) else {
+                continue;
+            };
+            if tokio::fs::metadata(candidate.server()).await.is_ok() {
+                return Some(candidate.input().clone());
             }
         }
         None
@@ -255,33 +251,20 @@ impl IncludeWalk {
     fn cwd(&self, config: &Config) -> PathBuf {
         self.stack
             .last()
-            .map(|frame| {
-                frame
-                    .path
-                    .as_in_game(config.lib_dir.as_str())
-                    .parent()
-                    .unwrap_or_else(|| Path::new("/"))
-                    .to_path_buf()
-            })
+            .map(|frame| config.paths().source_cwd(frame.path.input()))
             .unwrap_or_else(|| PathBuf::from("/"))
     }
 
     /// The including file — the active frame — as an in-game path.
-    fn current_in_game(&self, config: &Config) -> String {
+    fn current_in_game(&self) -> String {
         self.stack
             .last()
-            .map(|frame| {
-                frame
-                    .path
-                    .as_in_game(config.lib_dir.as_str())
-                    .display()
-                    .to_string()
-            })
+            .map(|frame| frame.path.name().to_string())
             .unwrap_or_else(|| "/".to_string())
     }
 
     /// The cycle diagnostic; `scan_include` adds the chain labels.
-    fn cycle_error(&self, path: &LpcPath, span: Option<Span>) -> LpcError {
+    fn cycle_error(&self, path: &ResolvedPath, span: Option<Span>) -> LpcError {
         lpc_error!(
             span,
             "cyclic `#include`: `{}` is already being included",
@@ -290,17 +273,10 @@ impl IncludeWalk {
     }
 }
 
-/// The name a file is registered under for rendering: its in-game path.
-fn in_game_name(canon: &Path, config: &Config) -> String {
-    LpcPath::new_server(canon)
-        .as_in_game(config.lib_dir.as_str())
-        .display()
-        .to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use lpc_rs_utils::config::ConfigBuilder;
+    use std::path::Path;
 
     use super::*;
     use crate::test_support::TempLib;
@@ -320,6 +296,64 @@ mod tests {
             config,
         );
         walk
+    }
+
+    #[tokio::test]
+    async fn system_directories_are_searched_before_the_local_fallback() {
+        let parent = TempLib::new("include-search");
+        let root = parent.join("lib");
+        std::fs::create_dir_all(root.join("include")).unwrap();
+        std::fs::write(root.join("pick.h"), "root decoy\n").unwrap();
+        std::fs::write(root.join("include/pick.h"), "inside\n").unwrap();
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .system_include_dirs(vec!["/missing", "/include"])
+            .build()
+            .unwrap();
+        let mut walk = rooted(&config);
+        let opened = walk
+            .open(
+                IncludeSource::System { path: "pick.h" },
+                None,
+                &config,
+                None,
+                &mut Diagnostics::default(),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(&*opened.content, "inside\n");
+        assert_eq!(
+            Span::new(opened.file_id, 0..1).to_string(),
+            "/include/pick.h:1:1"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_configured_include_in_a_sibling_directory_is_rejected_without_disclosing_it() {
+        let parent = TempLib::new("private-include-host");
+        let root = parent.join("lib");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::create_dir(parent.join("lib-other")).unwrap();
+        let outside = parent.join("lib-other/auto.h");
+        std::fs::write(&outside, "outside\n").unwrap();
+        let config = config_at(&root);
+        let mut walk = rooted(&config);
+        let error = walk
+            .open(
+                IncludeSource::Configured(&LpcPath::new_server(outside)),
+                None,
+                &config,
+                None,
+                &mut Diagnostics::default(),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "attempt to include a file outside the root: `<outside mudlib>`"
+        );
+        assert_eq!(walk.memo.len(), 1);
     }
 
     #[tokio::test]
@@ -493,7 +527,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let root_id = walk.memo[&walk.stack[0].canon].0;
+        let root_id = walk.memo[walk.stack[0].path.server()].0;
         assert_eq!(Span::new(root_id, 0..3).to_string(), "/main.c:1:1");
         assert_eq!(Span::new(opened.file_id, 0..1).to_string(), "/a.h:1:1");
 

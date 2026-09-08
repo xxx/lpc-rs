@@ -324,7 +324,7 @@ impl Transaction {
     pub(crate) fn has_pending_dir(&self, server: &std::path::Path) -> bool {
         self.effects
             .iter()
-            .any(|e| matches!(e, Effect::CreateDir { server: s, .. } if s == server))
+            .any(|e| matches!(e, Effect::CreateDir { path, .. } if path.server() == server))
     }
 
     /// Record a call out for materialization after this attempt commits. The

@@ -18,30 +18,29 @@ pub async fn rename<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
     let to = authorize(context, "rename", VALID_WRITE, 1).await?;
     let io_error =
         |path: &str, e: std::io::Error| context.runtime_error(format!("rename: {path}: {e}"));
-    tokio::fs::symlink_metadata(&from.server)
+    tokio::fs::symlink_metadata(from.server())
         .await
-        .map_err(|e| io_error(&from.in_game, e))?;
-    let Some(name) = from.server.file_name() else {
-        return Err(context.runtime_error(format!("rename: {} cannot be moved", from.in_game)));
+        .map_err(|e| io_error(from.name().as_str(), e))?;
+    let Some(name) = from.server().file_name() else {
+        return Err(context.runtime_error(format!("rename: {} cannot be moved", from.name())));
     };
-    let target = match tokio::fs::metadata(&to.server).await {
-        Ok(m) if m.is_dir() => to.server.join(name),
-        Ok(_) => to.server,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => to.server,
-        Err(e) => return Err(io_error(&to.in_game, e)),
+    let target = match tokio::fs::metadata(to.server()).await {
+        Ok(m) if m.is_dir() => to.server().join(name),
+        Ok(_) => to.server().to_owned(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => to.server().to_owned(),
+        Err(e) => return Err(io_error(to.name().as_str(), e)),
     };
     if !parent_is_dir(context, &target)
         .await
-        .map_err(|e| io_error(&to.in_game, e))?
+        .map_err(|e| io_error(to.name().as_str(), e))?
     {
         return Err(context.runtime_error(format!(
             "rename: {}: parent directory does not exist",
-            to.in_game
+            to.name()
         )));
     }
     context.record_effect(Effect::Rename {
-        in_game: from.in_game,
-        from: from.server,
+        path: from,
         to: target,
     });
     context.return_efun_result(LpcRef::from(0));

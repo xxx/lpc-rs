@@ -346,7 +346,7 @@ mod tests {
         assert!(space.master_object().is_none());
 
         let prog = ProgramBuilder::default()
-            .filename(Arc::new(LpcPath::InGame("/master.c".into())))
+            .filename(Arc::new(LpcPath::in_game("/master.c".into())))
             .build()
             .unwrap();
         let proc = Arc::new(Process::new(prog));

@@ -54,7 +54,7 @@ pub(crate) fn resolve_object<'a, const N: usize>(
 /// an error on a corrupt line (earlier lines stay applied).
 pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize_save(context, "restore_object", VALID_READ, 0).await?;
-    let Some(text) = read_save_file(context, &access.server).await else {
+    let Some(text) = read_save_file(context, access.server()).await else {
         context.return_efun_result(LpcRef::from(0));
         return Ok(());
     };
@@ -62,7 +62,15 @@ pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) ->
     {
         let resolve = resolve_object(context);
         for (index, line) in text.lines().enumerate() {
-            let err = |e| line_error(context, "restore_object", &access.in_game, index + 1, e);
+            let err = |e| {
+                line_error(
+                    context,
+                    "restore_object",
+                    access.name().as_str(),
+                    index + 1,
+                    e,
+                )
+            };
             let (name, value_text) = split_line(line).map_err(err)?;
             let Some(symbol) = process.program.global_variables.get(name) else {
                 continue;

@@ -99,7 +99,7 @@ pub(crate) fn handler_from<const N: usize>(
                 return Err(context.runtime_error(format!(
                     "{efun}: no function `{}` in {}",
                     name.to_str(),
-                    this_object.filename()
+                    this_object
                 )));
             };
             let owner = Arc::downgrade(this_object);

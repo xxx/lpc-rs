@@ -229,7 +229,7 @@ macro_rules! efuns {
     }) => {
         FunctionPrototypeBuilder::default()
             .name(efun_name(stringify!($name)))
-            .filename(LpcPath::InGame("".into()))
+            .filename(LpcPath::in_game("".into()))
             .return_type($returns)
             .kind(FunctionKind::Efun)
             .arity(efuns!(@arity $($arity)?))
@@ -1137,10 +1137,7 @@ pub(crate) fn in_game_name<const N: usize>(
     context: &EfunContext<'_, N>,
     process: &Process,
 ) -> String {
-    LpcPath::new_server(&*process.filename())
-        .as_in_game(&*context.config().lib_dir)
-        .to_string_lossy()
-        .into_owned()
+    process.in_game_name(context.config().paths())
 }
 
 /// The connection of the object register 1 names — `this_player()` when the

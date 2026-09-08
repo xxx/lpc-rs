@@ -218,11 +218,10 @@ pub(crate) async fn report_warnings(
 /// The `warning_handler` argument — `message`, `location`, `file`,
 /// `diagnostic` — minted in `ctx`'s transaction.
 fn warning_mapping(ctx: &TaskContext, file: &LpcPath, warning: &LpcError) -> LpcRef {
-    let lib_dir = ctx.config().lib_dir.as_str();
     let entries = [
         ("message", warning.message().to_owned()),
         ("location", in_game_location(warning.span())),
-        ("file", file.as_in_game(lib_dir).display().to_string()),
+        ("file", ctx.config().paths().source_name(file).to_string()),
         ("diagnostic", warning.diagnostic_string()),
     ];
     let mapping: IndexMap<LpcRef, LpcRef> = entries

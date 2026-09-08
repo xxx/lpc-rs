@@ -89,8 +89,7 @@ pub fn dispatch_table(
 #[derive(Debug, Default, PartialEq, Eq, Clone, Builder)]
 #[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct Program {
-    /// The path to the file that this program was compiled from.
-    /// This is intended to be the fully-expanded, in-game path.
+    /// The in-game source identity, retaining host origin for unrestricted outside sources.
     #[builder(setter(into))]
     pub filename: Arc<LpcPath>,
 
@@ -298,7 +297,7 @@ mod tests {
         program.filename = Arc::new("marf.c".into());
         assert_eq!(program.cwd().to_str().unwrap(), "/");
 
-        program.filename = Arc::new(LpcPath::Server(Path::new("").to_path_buf()));
+        program.filename = Arc::new(LpcPath::in_game(Path::new("").to_path_buf()));
         assert_eq!(program.cwd().to_str().unwrap(), "/");
 
         program.filename = Arc::new("foo/bar/baz/quux/../../snerd/marf.c".into());
@@ -316,14 +315,14 @@ mod tests {
         use ustr::ustr;
 
         let region = |filename: &str, base, count| Region {
-            filename: Arc::new(LpcPath::InGame(filename.into())),
+            filename: Arc::new(LpcPath::in_game(filename.into())),
             base,
             count,
             init: ustr(""),
         };
         let prototype = FunctionPrototypeBuilder::default()
             .name("f")
-            .filename(Arc::new(LpcPath::InGame("/own.c".into())))
+            .filename(Arc::new(LpcPath::in_game("/own.c".into())))
             .return_type(LpcType::Void)
             .build()
             .unwrap();

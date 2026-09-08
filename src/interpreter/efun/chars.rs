@@ -22,11 +22,11 @@ async fn text_of<const N: usize>(
     name: &str,
     access: &FileAccess,
 ) -> Result<String> {
-    let read = async { read_through(context, &access.server).await?.into_bytes() };
+    let read = async { read_through(context, access.server()).await?.into_bytes() };
     match read.await {
-        Err(e) => Err(context.runtime_error(format!("{name}: {}: {e}", access.in_game))),
+        Err(e) => Err(context.runtime_error(format!("{name}: {}: {e}", access.name()))),
         Ok(bytes) => String::from_utf8(bytes)
-            .map_err(|_| context.runtime_error(format!("{name}: {} is not UTF-8", access.in_game))),
+            .map_err(|_| context.runtime_error(format!("{name}: {} is not UTF-8", access.name()))),
     }
 }
 
@@ -82,11 +82,11 @@ pub async fn write_chars<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     };
     let contents = contents.to_owned();
     let access = authorize(context, "write_chars", VALID_WRITE, 0).await?;
-    match tokio::fs::metadata(&access.server).await {
+    match tokio::fs::metadata(access.server()).await {
         Ok(m) if m.is_file() => {}
         Ok(_) => {
             return Err(
-                context.runtime_error(format!("write_chars: {} is not a file", access.in_game))
+                context.runtime_error(format!("write_chars: {} is not a file", access.name()))
             );
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -94,7 +94,7 @@ pub async fn write_chars<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
             return Ok(());
         }
         Err(e) => {
-            return Err(context.runtime_error(format!("write_chars: {}: {e}", access.in_game)));
+            return Err(context.runtime_error(format!("write_chars: {}: {e}", access.name())));
         }
     }
     let count = text_of(context, "write_chars", &access)
@@ -107,8 +107,7 @@ pub async fn write_chars<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         return Ok(());
     }
     context.record_effect(Effect::ReplaceChars {
-        in_game: access.in_game,
-        server: access.server,
+        path: access,
         start: from as usize,
         contents,
     });

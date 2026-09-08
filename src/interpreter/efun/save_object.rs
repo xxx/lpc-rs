@@ -35,7 +35,7 @@ pub(crate) fn saved_globals(process: &Process) -> Vec<(&str, RegisterSize)> {
 /// Returns the in-game path written.
 pub async fn save_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize_save(context, "save_object", VALID_WRITE, 0).await?;
-    let in_game = access.in_game.clone();
+    let in_game = access.name().to_string();
     let process = context.process().clone();
     let mut contents = String::new();
     for (name, reg) in saved_globals(&process) {

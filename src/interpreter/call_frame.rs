@@ -126,7 +126,7 @@ pub struct CallFrame {
 pub static ENTRY: LazyLock<Arc<ProgramFunction>> = LazyLock::new(|| {
     let prototype = FunctionPrototypeBuilder::default()
         .name("<entry>")
-        .filename(Arc::new(LpcPath::InGame("/<entry>".into())))
+        .filename(Arc::new(LpcPath::in_game("/<entry>".into())))
         .return_type(LpcType::Mixed(false))
         .build()
         .expect("the entry prototype has every field");

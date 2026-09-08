@@ -1,7 +1,7 @@
 use std::{borrow::Cow, collections::HashMap, fmt::Debug, fs, path::Path};
 
 use derive_builder::Builder;
-use lpc_rs_core::lpc_path::{LpcPath, canonicalize_in_game_path};
+use lpc_rs_core::lpc_path::{LibRoot, LpcPath, ResolvedPath};
 use lpc_rs_errors::{Result, lpc_error, span::Span};
 use tracing::{info, warn};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -17,7 +17,10 @@ const DEFAULT_MAX_IDLE_TIME: u64 = 0;
 
 /// The main struct that handles runtime use configurations.
 #[derive(Debug, Builder)]
-#[builder(build_fn(error = "lpc_rs_errors::LpcError"), pattern = "owned")]
+#[builder(
+    build_fn(private, name = "build_config", error = "lpc_rs_errors::LpcError"),
+    pattern = "owned"
+)]
 #[readonly::make]
 pub struct Config {
     #[builder(setter(into, strip_option), default = "None")]
@@ -67,6 +70,7 @@ pub struct Config {
     #[builder(setter(into, strip_option), default = "None")]
     pub simul_efun_file: Option<Ustr>,
 
+    /// In-game include search directories; entries escaping the lib root are invalid.
     #[builder(setter(custom), default = "vec![]")]
     pub system_include_dirs: Vec<Ustr>,
 
@@ -82,11 +86,32 @@ fn optional_in_game_file(value: Option<&String>, lib_dir: &str) -> Option<Option
     if value.trim().is_empty() {
         return Some(None);
     }
-    let canon = canonicalize_in_game_path(value, "/", lib_dir);
+    let canon = LibRoot::new(lib_dir).in_game(value, "/");
     Some(Some(ustr(canon.to_string_lossy().as_ref())))
 }
 
+fn in_game_include_dirs(dirs: &[Ustr], lib_dir: &str) -> Result<Vec<Ustr>> {
+    let root = LibRoot::new(lib_dir);
+    dirs.iter()
+        .map(|dir| {
+            root.include_dir(dir.as_str())
+                .map(|path| ustr(&path.to_string_lossy()))
+                .ok_or_else(|| {
+                    lpc_error!("invalid system include directory `{dir}`: path escapes lib_dir")
+                })
+        })
+        .collect()
+}
+
 impl ConfigBuilder {
+    /// Build the configuration, rejecting system include directories outside the lib root.
+    pub fn build(self) -> Result<Config> {
+        let mut config = self.build_config()?;
+        config.system_include_dirs =
+            in_game_include_dirs(&config.system_include_dirs, config.lib_dir.as_str())?;
+        Ok(config)
+    }
+
     /// Set config values from a `dotenv` file. If `env_path` is `None`, the default `.env` is used.
     pub async fn load_env<P>(self, env_path: Option<P>) -> Self
     where
@@ -154,7 +179,7 @@ impl ConfigBuilder {
                 .get("LPC_MASTER_OBJECT")
                 .or_else(|| env.get("MASTER_OBJECT"))
                 .map(|x| {
-                    let canon = canonicalize_in_game_path(x, "/", &lib_dir_str);
+                    let canon = LibRoot::new(&lib_dir_str).in_game(x, "/");
                     ustr(canon.to_string_lossy().as_ref())
                 })
                 .or(self.master_object),
@@ -197,14 +222,7 @@ impl ConfigBuilder {
             system_include_dirs: env
                 .get("LPC_SYSTEM_INCLUDE_DIRS")
                 .or_else(|| env.get("SYSTEM_INCLUDE_DIRS"))
-                .map(|x| {
-                    x.split(':')
-                        .map(|x| {
-                            let canon = canonicalize_in_game_path(x, "/", &lib_dir_str);
-                            canon.to_string_lossy().as_ref().into()
-                        })
-                        .collect::<Vec<_>>()
-                })
+                .map(|x| x.split(':').map(ustr).collect())
                 .or_else(|| self.system_include_dirs.clone()),
         }
     }
@@ -227,7 +245,7 @@ impl ConfigBuilder {
         self
     }
 
-    /// Set the system include directories. These are in-game directories.
+    /// Set in-game include directories; building rejects entries escaping the lib root.
     pub fn system_include_dirs<T>(mut self, dirs: Vec<T>) -> Self
     where
         T: Into<Ustr>,
@@ -247,23 +265,20 @@ impl Config {
         Some(LpcPath::new_in_game(file.as_str(), "/", &*self.lib_dir).source_file())
     }
 
-    /// Validate the passed-in path, and return a canonical, absolute on-server version of it
-    pub fn validate_in_game_path<'a>(
+    /// Resolve and name paths under this configuration's mudlib root.
+    pub fn paths(&self) -> LibRoot<'_> {
+        LibRoot::new(self.lib_dir.as_str())
+    }
+
+    /// Confine a path and attach the caller's source span to a path error.
+    pub fn validate_in_game_path(
         &self,
-        path: &'a LpcPath,
+        path: &LpcPath,
         span: Option<Span>,
-    ) -> Result<Cow<'a, Path>> {
-        let true_path = path.as_server(self.lib_dir.as_str());
-
-        if path.as_os_str().is_empty() || !true_path.starts_with(self.lib_dir.as_str()) {
-            return Err(lpc_error!(
-                span,
-                "attempt to access a file outside of lib_dir: `{}`",
-                path
-            ));
-        }
-
-        Ok(true_path)
+    ) -> Result<ResolvedPath> {
+        self.paths()
+            .confine(path)
+            .map_err(|e| lpc_error!(span, "{e}"))
     }
 
     /// Set up the global tracing subscriber for the server logs.
@@ -327,6 +342,39 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn config_build_rejects_escaping_include_directories_in_any_search_position() {
+        for dirs in [
+            vec!["../private", "/include"],
+            vec!["/include", "../private"],
+        ] {
+            let error = ConfigBuilder::default()
+                .system_include_dirs(dirs)
+                .lib_dir(".")
+                .build()
+                .unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                "invalid system include directory `../private`: path escapes lib_dir"
+            );
+            assert!(
+                !error
+                    .diagnostic_string()
+                    .contains(env!("CARGO_MANIFEST_DIR"))
+            );
+        }
+    }
+
+    #[test]
+    fn include_directory_settings_preserve_search_order_and_explicit_root() {
+        let given = "/include:/sys/../shared:/"
+            .split(':')
+            .map(ustr)
+            .collect::<Vec<_>>();
+        let dirs = in_game_include_dirs(&given, "/home/mud/lib").unwrap();
+        assert_eq!(dirs, [ustr("/include"), ustr("/shared"), ustr("/")]);
+    }
 
     #[test]
     fn simul_efun_source_is_the_source_file_however_the_config_spells_it() {

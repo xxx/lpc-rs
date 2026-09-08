@@ -103,6 +103,84 @@ fn lib_with_x(name: &str) -> TempLib {
     root
 }
 
+#[tokio::test]
+async fn configured_include_failures_never_disclose_host_paths_to_lpc() {
+    use crate::interpreter::task::{
+        apply_function::{apply_function_by_name, apply_runtime_error},
+        task_template::TaskTemplate,
+    };
+    use lpc_rs_utils::config::ConfigBuilder;
+
+    for failure in ["missing", "directory", "cycle"] {
+        let private_parent = TempLib::new("private-host-name");
+        let root = private_parent.join("lib");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join("auto.h"), "\n").unwrap();
+        std::fs::write(root.join("target.c"), "int value = 1;\n").unwrap();
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .auto_include_file("/auto.h")
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        let master = run(
+            &vm,
+            "/secure/master.c",
+            r#"
+            string last; string diagnostic; string location;
+            int valid_load(string p, string f, object c, mixed g) { return 1; }
+            int valid_read(string p, string f, object c, mixed g) { return 1; }
+            void error_handler(mapping m) {
+                last = m["error"]; diagnostic = m["diagnostic"]; location = m["location"];
+            }
+        "#,
+        )
+        .await;
+        let caller = run(
+            &vm,
+            "/caller.c",
+            r#"
+            mixed caught() { return catch(clone_object("/target")); }
+            void fail() { clone_object("/target"); }
+        "#,
+        )
+        .await;
+        match failure {
+            "missing" => std::fs::remove_file(root.join("auto.h")).unwrap(),
+            "directory" => {
+                std::fs::remove_file(root.join("auto.h")).unwrap();
+                std::fs::create_dir(root.join("auto.h")).unwrap();
+            }
+            _ => std::fs::write(root.join("auto.h"), "#include \"/auto.h\"\n").unwrap(),
+        }
+        let template = TaskTemplate::from(vm.global_state.clone());
+        let caught = apply_function_by_name("caught", &[], caller.clone(), template.clone(), None)
+            .await
+            .unwrap()
+            .unwrap();
+        let error = apply_function_by_name("fail", &[], caller.clone(), template.clone(), None)
+            .await
+            .unwrap()
+            .unwrap_err();
+        apply_runtime_error(&error, Some(caller), template)
+            .await
+            .unwrap()
+            .unwrap();
+        let forbidden = private_parent.file_name().unwrap().to_str().unwrap();
+        for text in [
+            message(&caught),
+            error.diagnostic_string(),
+            committed_string(&vm, &master, 0),
+            committed_string(&vm, &master, 1),
+        ] {
+            assert!(text.contains("/auto.h"), "{failure}: {text}");
+            assert!(!text.contains(forbidden), "{failure}: {text}");
+            assert!(!text.contains("/tmp/"), "{failure}: {text}");
+        }
+        assert!(!committed_string(&vm, &master, 2).contains(forbidden));
+    }
+}
+
 mod gate_states {
     use super::*;
 

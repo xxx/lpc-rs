@@ -16,4 +16,5 @@ derive_builder = "0.20.2"
 indextree = { version = "4.3.1", features = ["deser"] }
 modular-bitfield = "0.13.1"
 path-absolutize = { version = "4.0.1", features = ["fixed_workdir"] }
+relative-path = "2.0.1"
 ustr = "1.1.0"

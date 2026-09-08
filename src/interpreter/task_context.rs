@@ -190,11 +190,11 @@ pub(crate) fn confine_object_path(
     cwd: impl AsRef<Path>,
     func: &str,
 ) -> Result<LpcPath> {
-    let path = LpcPath::new_in_game(arg, cwd, &*config.lib_dir);
     config
-        .validate_in_game_path(&path, None)
-        .map_err(|_| LpcError::runtime(format!("{func}: `{arg}` is not a valid path")))?;
-    Ok(path)
+        .paths()
+        .resolve(arg, cwd)
+        .map(|path| path.input().clone())
+        .map_err(|_| LpcError::runtime(format!("{func}: `{arg}` is not a valid path")))
 }
 
 /// A struct to carry context during the evaluation of a single [`Task`].
@@ -332,7 +332,7 @@ impl TaskContext {
     /// Whether `path`'s source is a regular file in the lib.
     async fn source_exists(&self, path: &LpcPath) -> bool {
         let source = path.source_file();
-        tokio::fs::metadata(source.as_server(self.config().lib_dir.as_str()))
+        tokio::fs::metadata(self.config().paths().source(&source).server())
             .await
             .is_ok_and(|m| m.is_file())
     }
@@ -342,10 +342,10 @@ impl TaskContext {
     /// warnings go to `warning_handler`. A missing source is the compiler's
     /// `Cannot read file` error.
     async fn compile_file_process(&self, path: &LpcPath, loader: &Loader) -> Result<Arc<Process>> {
-        let source = path
-            .source_file()
-            .as_in_game(self.config().lib_dir.as_str())
-            .display()
+        let source = self
+            .config()
+            .paths()
+            .source_name(&path.source_file())
             .to_string();
         let args = [
             LpcRef::from(source),
@@ -606,20 +606,11 @@ impl TaskContext {
     /// The in-game directory of `process`'s name (lib root stripped): what
     /// its relative object paths resolve against.
     pub fn in_game_cwd_of(&self, process: &Process) -> PathBuf {
-        let current_cwd = process.cwd();
-
-        match current_cwd.strip_prefix(&*self.config().lib_dir) {
-            Ok(x) => {
-                if x.as_os_str().is_empty() {
-                    PathBuf::from("/")
-                } else if x.starts_with("/") {
-                    x.to_path_buf()
-                } else {
-                    PathBuf::from(format!("/{}", x.display()))
-                }
-            }
-            Err(_e) => current_cwd,
-        }
+        self.config()
+            .paths()
+            .object_name(&LpcPath::in_game(process.cwd()))
+            .as_str()
+            .into()
     }
 
     /// Update the context's `result` with the passed [`LpcRef`]

@@ -294,7 +294,7 @@ mod tests {
         let global_state = Arc::new(GlobalState::new(test_config(), vm_tx));
         let process = Arc::new(Process::new(
             ProgramBuilder::default()
-                .filename(LpcPath::InGame(std::path::PathBuf::from("/body")))
+                .filename(LpcPath::in_game(std::path::PathBuf::from("/body")))
                 .build()
                 .unwrap(),
         ));

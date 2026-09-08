@@ -22,6 +22,8 @@ use std::{
     },
 };
 
+use lpc_rs_core::lpc_path::ResolvedPath;
+
 use tokio::{
     io::{AsyncSeekExt, AsyncWriteExt},
     sync::mpsc::UnboundedSender,
@@ -129,42 +131,29 @@ pub(crate) enum Effect {
         message: Option<String>,
     },
 
-    /// `write_file`'s append of `contents` to the file at `server`, once the
-    /// attempt commits; `in_game` names it in the log when the append fails.
+    /// `write_file`'s append, applied once the attempt commits.
     AppendFile {
-        in_game: String,
-        server: PathBuf,
+        path: ResolvedPath,
         contents: String,
     },
 
-    /// A save efun's whole-file write of `contents` to `server`, once the
-    /// attempt commits: a temp file beside the target, renamed over it.
-    /// The temp name is unique per flush, so two concurrent flushes of the
-    /// same path never share one. `in_game` names it in the log when the
-    /// write fails.
+    /// A save efun's committed write through a temporary sibling renamed over the target.
+    /// The temporary name is unique per flush, including concurrent writes to one target.
     WriteFile {
-        in_game: String,
-        server: PathBuf,
+        path: ResolvedPath,
         contents: String,
     },
 
-    /// `write_bytes`'s overwrite of the file at `server` from byte `start`
-    /// with `contents`, once the attempt commits; `in_game` names it in the
-    /// log when the write fails.
+    /// `write_bytes`'s overwrite from byte `start`, applied once the attempt commits.
     WriteBytes {
-        in_game: String,
-        server: PathBuf,
+        path: ResolvedPath,
         start: u64,
         contents: Vec<u8>,
     },
 
-    /// `write_chars`'s replacement of `contents`'s worth of characters at
-    /// character `start` of the file at `server`, decoded again at commit
-    /// so an earlier write in the same task has already landed; `in_game`
-    /// names the file in the log when the write fails.
+    /// `write_chars`'s replacement at character `start`, decoded at commit after earlier writes.
     ReplaceChars {
-        in_game: String,
-        server: PathBuf,
+        path: ResolvedPath,
         start: usize,
         contents: String,
     },
@@ -173,24 +162,17 @@ pub(crate) enum Effect {
     /// `code`.
     Shutdown { code: i32 },
 
-    /// `rm`'s unlink of the file at `server`, once the attempt commits;
-    /// `in_game` names it in the log when the unlink fails.
-    RemoveFile { in_game: String, server: PathBuf },
+    /// `rm`'s unlink, applied once the attempt commits.
+    RemoveFile { path: ResolvedPath },
 
-    /// `mkdir`'s directory at `server`, once the attempt commits.
-    CreateDir { in_game: String, server: PathBuf },
+    /// `mkdir`'s directory creation, applied once the attempt commits.
+    CreateDir { path: ResolvedPath },
 
-    /// `rmdir`'s removal of the empty directory at `server`, once the
-    /// attempt commits.
-    RemoveDir { in_game: String, server: PathBuf },
+    /// `rmdir`'s empty-directory removal, applied once the attempt commits.
+    RemoveDir { path: ResolvedPath },
 
-    /// `rename`'s move of `from` to `to`, once the attempt commits;
-    /// `in_game` names the source in the log when the move fails.
-    Rename {
-        in_game: String,
-        from: PathBuf,
-        to: PathBuf,
-    },
+    /// `rename`'s move to `to`, applied once the attempt commits.
+    Rename { path: ResolvedPath, to: PathBuf },
 }
 
 /// One of a task's own pending changes to a file, in the form its reads
@@ -219,40 +201,42 @@ impl Effect {
     /// This effect's change to the file at `server`, if it touches it.
     pub(crate) fn pending_file_op(&self, server: &std::path::Path) -> Option<PendingFileOp> {
         match self {
-            Effect::WriteFile {
-                server: s,
-                contents,
-                ..
-            } if s == server => Some(PendingFileOp::Replace(contents.clone())),
-            Effect::AppendFile {
-                server: s,
-                contents,
-                ..
-            } if s == server => Some(PendingFileOp::Append(contents.clone())),
-            Effect::RemoveFile { server: s, .. } if s == server => Some(PendingFileOp::Remove),
+            Effect::WriteFile { path, contents, .. } if path.server() == server => {
+                Some(PendingFileOp::Replace(contents.clone()))
+            }
+            Effect::AppendFile { path, contents, .. } if path.server() == server => {
+                Some(PendingFileOp::Append(contents.clone()))
+            }
+            Effect::RemoveFile { path, .. } if path.server() == server => {
+                Some(PendingFileOp::Remove)
+            }
             Effect::WriteBytes {
-                server: s,
+                path,
                 start,
                 contents,
                 ..
-            } if s == server => Some(PendingFileOp::WriteBytes {
+            } if path.server() == server => Some(PendingFileOp::WriteBytes {
                 start: *start,
                 contents: contents.clone(),
             }),
             Effect::ReplaceChars {
-                server: s,
+                path,
                 start,
                 contents,
                 ..
-            } if s == server => Some(PendingFileOp::ReplaceChars {
+            } if path.server() == server => Some(PendingFileOp::ReplaceChars {
                 start: *start,
                 contents: contents.clone(),
             }),
-            Effect::CreateDir { server: s, .. } if s == server => Some(PendingFileOp::MakeDir),
-            Effect::RemoveDir { server: s, .. } if s == server => Some(PendingFileOp::RemoveDir),
-            Effect::Rename { from, .. } if from == server => Some(PendingFileOp::Remove),
-            Effect::Rename { from, to, .. } if to == server => {
-                Some(PendingFileOp::CopyOf(from.clone()))
+            Effect::CreateDir { path, .. } if path.server() == server => {
+                Some(PendingFileOp::MakeDir)
+            }
+            Effect::RemoveDir { path, .. } if path.server() == server => {
+                Some(PendingFileOp::RemoveDir)
+            }
+            Effect::Rename { path, .. } if path.server() == server => Some(PendingFileOp::Remove),
+            Effect::Rename { path, to, .. } if to == server => {
+                Some(PendingFileOp::CopyOf(path.server().to_owned()))
             }
             _ => None,
         }
@@ -296,16 +280,12 @@ impl Effect {
                 connection,
                 message,
             } => global_state.release(&connection, message),
-            Self::AppendFile {
-                in_game,
-                server,
-                contents,
-            } => {
+            Self::AppendFile { path, contents } => {
                 let appended = async {
                     let mut file = tokio::fs::OpenOptions::new()
                         .append(true)
                         .create(true)
-                        .open(&server)
+                        .open(path.server())
                         .await?;
                     file.write_all(contents.as_bytes()).await?;
                     file.flush().await
@@ -314,29 +294,25 @@ impl Effect {
                 if let Err(e) = appended {
                     global_state
                         .config
-                        .debug_log(format!("write_file: {in_game}: {e}"))
+                        .debug_log(format!("write_file: {path}: {e}"))
                         .await;
                 }
             }
-            Self::WriteFile {
-                in_game,
-                server,
-                contents,
-            } => {
+            Self::WriteFile { path, contents } => {
                 let n = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
-                let mut temp = server.clone().into_os_string();
+                let mut temp = path.server().as_os_str().to_owned();
                 temp.push(format!(".{n}.tmp"));
                 let temp = PathBuf::from(temp);
                 let written = async {
                     tokio::fs::write(&temp, contents.as_bytes()).await?;
-                    tokio::fs::rename(&temp, &server).await
+                    tokio::fs::rename(&temp, path.server()).await
                 }
                 .await;
                 if let Err(e) = written {
                     let _ = tokio::fs::remove_file(&temp).await;
                     global_state
                         .config
-                        .debug_log(format!("save file: {in_game}: {e}"))
+                        .debug_log(format!("save file: {path}: {e}"))
                         .await;
                 }
             }
@@ -346,15 +322,14 @@ impl Effect {
                 }
             }
             Self::WriteBytes {
-                in_game,
-                server,
+                path,
                 start,
                 contents,
             } => {
                 let written = async {
                     let mut file = tokio::fs::OpenOptions::new()
                         .write(true)
-                        .open(&server)
+                        .open(path.server())
                         .await?;
                     file.seek(std::io::SeekFrom::Start(start)).await?;
                     file.write_all(&contents).await?;
@@ -364,63 +339,62 @@ impl Effect {
                 if let Err(e) = written {
                     global_state
                         .config
-                        .debug_log(format!("write_bytes: {in_game}: {e}"))
+                        .debug_log(format!("write_bytes: {path}: {e}"))
                         .await;
                 }
             }
             Self::ReplaceChars {
-                in_game,
-                server,
+                path,
                 start,
                 contents,
             } => {
                 let written = async {
-                    let text = String::from_utf8(tokio::fs::read(&server).await?)
+                    let text = String::from_utf8(tokio::fs::read(path.server()).await?)
                         .map_err(|_| std::io::Error::other("not UTF-8"))?;
                     let mut out = String::with_capacity(text.len() + contents.len());
                     let mut chars = text.chars();
                     out.extend(chars.by_ref().take(start));
                     out.push_str(&contents);
                     out.extend(chars.skip(contents.chars().count()));
-                    tokio::fs::write(&server, out).await
+                    tokio::fs::write(path.server(), out).await
                 }
                 .await;
                 if let Err(e) = written {
                     global_state
                         .config
-                        .debug_log(format!("write_chars: {in_game}: {e}"))
+                        .debug_log(format!("write_chars: {path}: {e}"))
                         .await;
                 }
             }
-            Self::RemoveFile { in_game, server } => {
-                if let Err(e) = tokio::fs::remove_file(&server).await {
+            Self::RemoveFile { path } => {
+                if let Err(e) = tokio::fs::remove_file(path.server()).await {
                     global_state
                         .config
-                        .debug_log(format!("rm: {in_game}: {e}"))
+                        .debug_log(format!("rm: {path}: {e}"))
                         .await;
                 }
             }
-            Self::CreateDir { in_game, server } => {
-                if let Err(e) = tokio::fs::create_dir(&server).await {
+            Self::CreateDir { path } => {
+                if let Err(e) = tokio::fs::create_dir(path.server()).await {
                     global_state
                         .config
-                        .debug_log(format!("mkdir: {in_game}: {e}"))
+                        .debug_log(format!("mkdir: {path}: {e}"))
                         .await;
                 }
             }
-            Self::RemoveDir { in_game, server } => {
-                if let Err(e) = tokio::fs::remove_dir(&server).await {
+            Self::RemoveDir { path } => {
+                if let Err(e) = tokio::fs::remove_dir(path.server()).await {
                     global_state
                         .config
-                        .debug_log(format!("rmdir: {in_game}: {e}"))
+                        .debug_log(format!("rmdir: {path}: {e}"))
                         .await;
                 }
             }
-            Self::Rename { in_game, from, to } => {
-                if let Err(e) = tokio::fs::rename(&from, &to).await {
+            Self::Rename { path, to } => {
+                if let Err(e) = tokio::fs::rename(path.server(), &to).await {
                     global_state
                         .config
-                        .debug_log(format!("rename: {in_game}: {e}"))
+                        .debug_log(format!("rename: {path}: {e}"))
                         .await;
                 }
             }
@@ -450,19 +424,15 @@ impl std::fmt::Debug for Effect {
             Self::CancelCallOut { id } => f.debug_tuple("CancelCallOut").field(id).finish(),
             Self::Exec { .. } => f.debug_tuple("Exec").finish(),
             Self::Disconnect { message, .. } => f.debug_tuple("Disconnect").field(message).finish(),
-            Self::AppendFile { in_game, .. } => f.debug_tuple("AppendFile").field(in_game).finish(),
-            Self::WriteFile { in_game, .. } => f.debug_tuple("WriteFile").field(in_game).finish(),
-            Self::WriteBytes { in_game, .. } => f.debug_tuple("WriteBytes").field(in_game).finish(),
-            Self::ReplaceChars { in_game, .. } => {
-                f.debug_tuple("ReplaceChars").field(in_game).finish()
-            }
+            Self::AppendFile { path, .. } => f.debug_tuple("AppendFile").field(path).finish(),
+            Self::WriteFile { path, .. } => f.debug_tuple("WriteFile").field(path).finish(),
+            Self::WriteBytes { path, .. } => f.debug_tuple("WriteBytes").field(path).finish(),
+            Self::ReplaceChars { path, .. } => f.debug_tuple("ReplaceChars").field(path).finish(),
             Self::Shutdown { code } => f.debug_tuple("Shutdown").field(code).finish(),
-            Self::RemoveFile { in_game, .. } => f.debug_tuple("RemoveFile").field(in_game).finish(),
-            Self::CreateDir { in_game, .. } => f.debug_tuple("CreateDir").field(in_game).finish(),
-            Self::RemoveDir { in_game, .. } => f.debug_tuple("RemoveDir").field(in_game).finish(),
-            Self::Rename { in_game, to, .. } => {
-                f.debug_tuple("Rename").field(in_game).field(to).finish()
-            }
+            Self::RemoveFile { path, .. } => f.debug_tuple("RemoveFile").field(path).finish(),
+            Self::CreateDir { path, .. } => f.debug_tuple("CreateDir").field(path).finish(),
+            Self::RemoveDir { path, .. } => f.debug_tuple("RemoveDir").field(path).finish(),
+            Self::Rename { path, .. } => f.debug_tuple("Rename").field(path).finish(),
         }
     }
 }
@@ -532,8 +502,9 @@ mod tests {
         let gs = global_state();
         for contents in ["one\n", "two\n"] {
             Effect::AppendFile {
-                in_game: "/out.txt".to_owned(),
-                server: server.clone(),
+                path: lpc_rs_core::lpc_path::LibRoot::new(&*root)
+                    .resolve("/out.txt", "/")
+                    .unwrap(),
                 contents: contents.to_owned(),
             }
             .flush(&gs)
@@ -549,8 +520,9 @@ mod tests {
         std::fs::write(&server, "old contents that are longer\n").unwrap();
         let gs = global_state();
         Effect::WriteFile {
-            in_game: "/save.o".to_owned(),
-            server: server.clone(),
+            path: lpc_rs_core::lpc_path::LibRoot::new(&*root)
+                .resolve("/save.o", "/")
+                .unwrap(),
             contents: "a 1\n".to_owned(),
         }
         .flush(&gs)
@@ -568,8 +540,9 @@ mod tests {
         let root = crate::test_support::TempLib::new("write-file-effect-new");
         let server = root.join("new.o");
         Effect::WriteFile {
-            in_game: "/new.o".to_owned(),
-            server: server.clone(),
+            path: lpc_rs_core::lpc_path::LibRoot::new(&*root)
+                .resolve("/new.o", "/")
+                .unwrap(),
             contents: "b 2\n".to_owned(),
         }
         .flush(&global_state())
@@ -583,8 +556,9 @@ mod tests {
         let server = root.join("gone.txt");
         std::fs::write(&server, "x").unwrap();
         Effect::RemoveFile {
-            in_game: "/gone.txt".to_owned(),
-            server: server.clone(),
+            path: lpc_rs_core::lpc_path::LibRoot::new(&*root)
+                .resolve("/gone.txt", "/")
+                .unwrap(),
         }
         .flush(&global_state())
         .await;
@@ -608,8 +582,9 @@ mod tests {
         let (vm_tx, _vm_rx) = tokio::sync::mpsc::channel(16);
         let gs = GlobalState::new(config, vm_tx);
         Effect::RemoveFile {
-            in_game: "/missing.txt".to_owned(),
-            server: root.join("missing.txt"),
+            path: lpc_rs_core::lpc_path::LibRoot::new(&*root)
+                .resolve("/missing.txt", "/")
+                .unwrap(),
         }
         .flush(&gs)
         .await;

@@ -585,17 +585,17 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// fired as a task's entry). The `calling_program` efun answers the
     /// caller's file, not this one.
     pub(crate) fn calling_program(&self) -> LpcRef {
-        let lib_dir = self.config().lib_dir.as_str();
+        let root = self.config().paths();
         let origin = self
             .fired
             .as_ref()
             .and_then(|fired| fired.origin.as_deref());
         match origin {
-            Some(origin) => LpcRef::from(origin.as_in_game(lib_dir).display().to_string()),
+            Some(origin) => LpcRef::from(root.source_name(origin).to_string()),
             None => match self.caller_frame() {
                 Some(frame) => {
                     let path = &frame.function.prototype.filename;
-                    LpcRef::from(path.as_in_game(lib_dir).display().to_string())
+                    LpcRef::from(root.source_name(path).to_string())
                 }
                 None => NULL,
             },
@@ -653,7 +653,7 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::channel::<VmOp>(128);
         let global_state = GlobalState::new(test_config(), tx);
         let program = ProgramBuilder::default()
-            .filename(LpcPath::InGame("/caller".into()))
+            .filename(LpcPath::in_game("/caller".into()))
             .build()
             .expect("program builder");
         let process = Arc::new(Process::new(program));
@@ -676,7 +676,7 @@ mod tests {
             .prototype(
                 FunctionPrototypeBuilder::default()
                     .name("efun_test")
-                    .filename(Arc::new(LpcPath::InGame("/caller".into())))
+                    .filename(Arc::new(LpcPath::in_game("/caller".into())))
                     .return_type(LpcType::Void)
                     .build()
                     .expect("prototype builder"),
@@ -696,7 +696,7 @@ mod tests {
 
         let prototype = FunctionPrototypeBuilder::default()
             .name("caller")
-            .filename(Arc::new(LpcPath::InGame("/caller".into())))
+            .filename(Arc::new(LpcPath::in_game("/caller".into())))
             .return_type(LpcType::Void)
             .build()
             .unwrap();
@@ -870,11 +870,11 @@ mod tests {
         let (task_context, mut stack) = efun_context();
         let owner = Arc::new(Process::new(
             ProgramBuilder::default()
-                .filename(LpcPath::InGame("/owner".into()))
+                .filename(LpcPath::in_game("/owner".into()))
                 .build()
                 .unwrap(),
         ));
-        let origin = Arc::new(LpcPath::InGame("/writer.c".into()));
+        let origin = Arc::new(LpcPath::in_game("/writer.c".into()));
         let ctx = EfunContext::fired(
             &mut stack,
             &task_context,

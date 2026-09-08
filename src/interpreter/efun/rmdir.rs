@@ -13,23 +13,20 @@ use crate::interpreter::{
 pub async fn rmdir<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "rmdir", VALID_WRITE, 0).await?;
     let io_error =
-        |e: std::io::Error| context.runtime_error(format!("rmdir: {}: {e}", access.in_game));
-    let metadata = tokio::fs::symlink_metadata(&access.server)
+        |e: std::io::Error| context.runtime_error(format!("rmdir: {}: {e}", access.name()));
+    let metadata = tokio::fs::symlink_metadata(access.server())
         .await
         .map_err(io_error)?;
     if !metadata.is_dir() {
-        return Err(context.runtime_error(format!("rmdir: {} is not a directory", access.in_game)));
+        return Err(context.runtime_error(format!("rmdir: {} is not a directory", access.name())));
     }
-    let mut entries = tokio::fs::read_dir(&access.server)
+    let mut entries = tokio::fs::read_dir(access.server())
         .await
         .map_err(io_error)?;
     if entries.next_entry().await.map_err(io_error)?.is_some() {
-        return Err(context.runtime_error(format!("rmdir: {} is not empty", access.in_game)));
+        return Err(context.runtime_error(format!("rmdir: {} is not empty", access.name())));
     }
-    context.record_effect(Effect::RemoveDir {
-        in_game: access.in_game,
-        server: access.server,
-    });
+    context.record_effect(Effect::RemoveDir { path: access });
     context.return_efun_result(LpcRef::from(1));
     Ok(())
 }

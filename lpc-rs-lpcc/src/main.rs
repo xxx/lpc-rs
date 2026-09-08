@@ -34,7 +34,10 @@ async fn run() {
         .load_env(args.config)
         .await
         .build()
-        .unwrap();
+        .unwrap_or_else(|error| {
+            error.emit_diagnostics();
+            std::process::exit(1);
+        });
 
     let config = Arc::new(config);
 
@@ -45,7 +48,7 @@ async fn run() {
     // Loading the sefun file first when it is also the target redefines its
     // own nomask functions.
     let target_is_sefun_file = config.simul_efun_source().is_some_and(|sefuns| {
-        sefuns.as_in_game(&*config.lib_dir) == lpc_path.as_in_game(&*config.lib_dir)
+        config.paths().program_path(&sefuns) == config.paths().program_path(&lpc_path)
     });
     if !target_is_sefun_file && let Some(Err(e)) = vm.initialize_simul_efuns().await {
         e.emit_diagnostics();

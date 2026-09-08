@@ -4,7 +4,7 @@ use std::{
 };
 
 use delegate::delegate;
-use lpc_rs_core::RegisterSize;
+use lpc_rs_core::{RegisterSize, lpc_path::LibRoot};
 use lpc_rs_errors::{LpcError, Result, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::ThinVec;
@@ -170,7 +170,7 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
         match self.last() {
             Some(frame) => {
                 let path = &frame.function.prototype.filename;
-                LpcRef::from(path.as_in_game(lib_dir).display().to_string())
+                LpcRef::from(LibRoot::new(lib_dir).source_name(path).to_string())
             }
             None => NULL,
         }
@@ -255,14 +255,14 @@ mod tests {
 
     fn stack_with_one_frame() -> CallStack<4> {
         let program = ProgramBuilder::default()
-            .filename(LpcPath::InGame("/caller".into()))
+            .filename(LpcPath::in_game("/caller".into()))
             .build()
             .unwrap();
         let function = ProgramFunctionBuilder::default()
             .prototype(
                 FunctionPrototypeBuilder::default()
                     .name("f")
-                    .filename(Arc::new(LpcPath::InGame("/caller".into())))
+                    .filename(Arc::new(LpcPath::in_game("/caller".into())))
                     .return_type(LpcType::Void)
                     .build()
                     .unwrap(),

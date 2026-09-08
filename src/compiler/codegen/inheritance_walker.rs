@@ -107,14 +107,11 @@ impl TreeWalker for InheritanceWalker {
     async fn visit_inherit(&mut self, node: &mut InheritNode) -> Result<()> {
         self.validate(node)?;
 
-        let cwd = match self.context.filename.cwd() {
-            LpcPath::Server(_) => self
-                .context
-                .filename
-                .as_in_game(self.context.config.lib_dir.as_str())
-                .into_owned(),
-            LpcPath::InGame(x) => x,
-        };
+        let cwd = self
+            .context
+            .config
+            .paths()
+            .inheritance_cwd(&self.context.filename);
 
         let full_path =
             LpcPath::new_in_game(&*node.path, cwd, self.context.config.lib_dir.as_str());
@@ -148,16 +145,17 @@ impl TreeWalker for InheritanceWalker {
         if let Some(gate) = &self.context.gate
             && !configured
         {
-            let parent = full_path
-                .source_file()
-                .as_in_game(lib_dir)
-                .display()
+            let parent = self
+                .context
+                .config
+                .paths()
+                .source_name(&full_path.source_file())
                 .to_string();
             let child = self
                 .context
-                .filename
-                .as_in_game(lib_dir)
-                .display()
+                .config
+                .paths()
+                .source_name(&self.context.filename)
                 .to_string();
             if !gate.inherit(&parent, &child).await? {
                 return Err(lpc_error!(
@@ -260,7 +258,7 @@ mod tests {
             .unwrap();
 
         let context = CompilationContextBuilder::default()
-            .filename(LpcPath::InGame("test.c".into()))
+            .filename(LpcPath::in_game("test.c".into()))
             .config(config)
             .build()
             .unwrap();
@@ -277,7 +275,7 @@ mod tests {
 
         fn region(filename: &str, base: RegisterSize, count: RegisterSize) -> Region {
             Region {
-                filename: Arc::new(LpcPath::InGame(filename.into())),
+                filename: Arc::new(LpcPath::in_game(filename.into())),
                 base,
                 count,
                 init: ustr(""),

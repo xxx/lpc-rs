@@ -20,29 +20,28 @@ pub async fn write_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
     let contents = contents.to_owned();
     let access = authorize(context, "write_file", VALID_WRITE, 0).await?;
     let io_error =
-        |e: std::io::Error| context.runtime_error(format!("write_file: {}: {e}", access.in_game));
-    match tokio::fs::metadata(&access.server).await {
+        |e: std::io::Error| context.runtime_error(format!("write_file: {}: {e}", access.name()));
+    match tokio::fs::metadata(access.server()).await {
         Ok(m) if m.is_dir() => {
             return Err(
-                context.runtime_error(format!("write_file: {} is a directory", access.in_game))
+                context.runtime_error(format!("write_file: {} is a directory", access.name()))
             );
         }
         // Missing is fine: the target may be created.
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(io_error(e)),
         _ => {}
     }
-    if !parent_is_dir(context, &access.server)
+    if !parent_is_dir(context, access.server())
         .await
         .map_err(io_error)?
     {
         return Err(context.runtime_error(format!(
             "write_file: {}: parent directory does not exist",
-            access.in_game
+            access.name()
         )));
     }
     context.record_effect(Effect::AppendFile {
-        in_game: access.in_game,
-        server: access.server,
+        path: access,
         contents,
     });
     context.return_efun_result(LpcRef::from(1));

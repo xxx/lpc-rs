@@ -22,14 +22,13 @@ pub async fn function_exists<const N: usize>(context: &mut EfunContext<'_, N>) -
         return Ok(());
     };
     let own = Arc::ptr_eq(&target, context.process());
-    let lib_dir = context.config().lib_dir.as_str();
     let result = target
         .program
         .lookup_function(name)
         .filter(|function| own || function.prototype.flags.public())
         .map_or(NULL, |function| {
-            let file = function.prototype.filename.as_in_game(lib_dir);
-            LpcRef::from(file.with_extension("").display().to_string())
+            let file = function.prototype.filename.with_extension("");
+            LpcRef::from(context.config().paths().source_name(&file).to_string())
         });
     context.return_efun_result(result);
     Ok(())

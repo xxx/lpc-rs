@@ -6,7 +6,7 @@ use std::{
 
 use derive_builder::Builder;
 use itertools::Itertools;
-use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_core::lpc_path::{LibRoot, LpcPath};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::ThinVec;
@@ -195,7 +195,7 @@ impl FunctionPtr {
             )));
         };
         let program = self.origin.as_ref().map_or(NULL, |origin| {
-            LpcRef::from(origin.as_in_game(lib_dir).display().to_string())
+            LpcRef::from(LibRoot::new(lib_dir).source_name(origin).to_string())
         });
         Ok(Loader {
             func: "call_other".to_string(),

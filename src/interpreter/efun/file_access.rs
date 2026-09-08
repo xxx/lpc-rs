@@ -1,26 +1,14 @@
 //! The shared front of the file efuns: the path argument canonicalized,
 //! confined to the lib, and put to the master.
 
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
-use lpc_rs_core::lpc_path::LpcPath;
+pub(crate) use lpc_rs_core::lpc_path::ResolvedPath as FileAccess;
 use lpc_rs_errors::{LpcError, Result};
 
 use crate::interpreter::{
     apply::valid_apply, efun::efun_context::EfunContext, lpc_ref::LpcRef, stm::Effect,
 };
-
-/// A file path the master has allowed an efun to touch.
-pub(crate) struct FileAccess {
-    /// The canonical absolute in-game path: what the master saw, what
-    /// messages name.
-    pub in_game: String,
-    /// The file on the server.
-    pub server: PathBuf,
-}
 
 /// The path in argument `i`, canonicalized against the caller's directory
 /// and allowed by the master's `apply` (`valid_read`/`valid_write`) for
@@ -48,18 +36,13 @@ pub(crate) async fn authorize_or_deny<const N: usize>(
     let Some(arg) = context.arg(i).as_str() else {
         return Err(context.runtime_error(format!("{efun}: path must be a string")));
     };
-    let path = context.in_game_path(arg);
-    let server = context
+    let path = context
         .config()
-        .validate_in_game_path(&path, None)
-        .map_err(|_| context.runtime_error(format!("{efun}: `{arg}` is not a valid path")))?
-        .into_owned();
-    let in_game = path
-        .as_in_game(context.config().lib_dir.as_str())
-        .display()
-        .to_string();
-    let allowed = master_allows(context, efun, apply, &in_game).await?;
-    Ok(allowed.then_some(FileAccess { in_game, server }))
+        .paths()
+        .resolve(arg, context.in_game_cwd())
+        .map_err(|_| context.runtime_error(format!("{efun}: `{arg}` is not a valid path")))?;
+    let allowed = master_allows(context, efun, apply, path.name().as_str()).await?;
+    Ok(allowed.then_some(path))
 }
 
 /// Puts `in_game` to the master's `apply` (`valid_read`/`valid_write`) with
@@ -80,11 +63,7 @@ async fn master_allows<const N: usize>(
     valid_apply(context.task_context(), Some(context.chain()), apply, &args).await
 }
 
-/// [`authorize`] for a save efun: argument `i` is resolved against the lib
-/// root, the master sees it without a suffix, then `.o` is appended to both
-/// paths and confinement is checked again, though appending a fixed suffix
-/// to an already-confined path cannot leave the lib, so the second check is
-/// kept only as a guard against a future change to that logic.
+/// Authorize the root-relative, unsuffixed save name, then append `.o`.
 pub(crate) async fn authorize_save<const N: usize>(
     context: &EfunContext<'_, N>,
     efun: &str,
@@ -94,29 +73,15 @@ pub(crate) async fn authorize_save<const N: usize>(
     let Some(arg) = context.arg(i).as_str() else {
         return Err(context.runtime_error(format!("{efun}: path must be a string")));
     };
-    let path = LpcPath::new_in_game(arg, "/", &*context.config().lib_dir);
-    let in_game = path
-        .as_in_game(context.config().lib_dir.as_str())
-        .display()
-        .to_string();
-    context
+    let path = context
         .config()
-        .validate_in_game_path(&path, None)
+        .paths()
+        .resolve(arg, "/")
         .map_err(|_| context.runtime_error(format!("{efun}: `{arg}` is not a valid path")))?;
-    let allowed = master_allows(context, efun, apply, &in_game).await?;
-    if !allowed {
+    if !master_allows(context, efun, apply, path.name().as_str()).await? {
         return Err(context.runtime_error(format!("{efun}: permission denied")));
     }
-    let suffixed = LpcPath::new_in_game(format!("{in_game}.o"), "/", &*context.config().lib_dir);
-    let server = context
-        .config()
-        .validate_in_game_path(&suffixed, None)
-        .map_err(|_| context.runtime_error(format!("{efun}: `{arg}` is not a valid path")))?
-        .into_owned();
-    Ok(FileAccess {
-        in_game: format!("{in_game}.o"),
-        server,
-    })
+    Ok(path.save_file())
 }
 
 /// Whether `server`'s parent is a directory on disk or one this task's
@@ -149,19 +114,18 @@ pub(crate) async fn record_save<const N: usize>(
     contents: String,
 ) -> Result<()> {
     let io_error =
-        |e: std::io::Error| context.runtime_error(format!("{efun}: {}: {e}", access.in_game));
-    if !parent_is_dir(context, &access.server)
+        |e: std::io::Error| context.runtime_error(format!("{efun}: {}: {e}", access.name()));
+    if !parent_is_dir(context, access.server())
         .await
         .map_err(io_error)?
     {
         return Err(context.runtime_error(format!(
             "{efun}: {}: parent directory does not exist",
-            access.in_game
+            access.name()
         )));
     }
     context.record_effect(Effect::WriteFile {
-        in_game: access.in_game,
-        server: access.server,
+        path: access,
         contents,
     });
     Ok(())

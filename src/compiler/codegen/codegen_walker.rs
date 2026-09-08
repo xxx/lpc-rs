@@ -15,7 +15,6 @@ use lpc_rs_core::{
     call_namespace::CallNamespace,
     function_flags::FunctionFlags,
     function_receiver::FunctionReceiver,
-    lpc_path::LpcPath,
     lpc_type::LpcType,
     mangle::Mangle,
     register::{Register, RegisterVariant},
@@ -375,12 +374,12 @@ impl CodegenWalker {
 
         let num_globals = self.global_counter.number_emitted();
 
-        let filename = Arc::new(LpcPath::InGame(
+        let filename = Arc::new(
             self.context
-                .filename
-                .as_in_game(self.context.config.lib_dir.as_str())
-                .into_owned(),
-        ));
+                .config
+                .paths()
+                .program_path(&self.context.filename),
+        );
 
         let own = Region {
             filename: Arc::clone(&filename),

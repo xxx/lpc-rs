@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use lpc_rs_core::lpc_path::LibRoot;
 use lpc_rs_errors::Result;
 use lpc_rs_function_support::program_function::ProgramFunction;
 
@@ -26,8 +27,8 @@ pub fn calling_function<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
 pub fn calling_program<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let lib_dir = context.config().lib_dir;
     answer(context, "calling_program", |function| {
-        let path = function.prototype.filename.as_in_game(lib_dir.as_str());
-        LpcRef::from(path.display().to_string())
+        let path = LibRoot::new(lib_dir.as_str()).source_name(&function.prototype.filename);
+        LpcRef::from(path.to_string())
     })
 }
 

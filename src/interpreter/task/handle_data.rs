@@ -106,8 +106,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     let Some(func) = process.program.lookup_function(func_name) else {
                         return Err(self.runtime_error(format!(
                             "Unable to find function `{}` in local process `{}`.",
-                            func_name,
-                            process.filename()
+                            func_name, process
                         )));
                     };
 
@@ -130,7 +129,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         let path_str = receiver_ref
                             .with_string(|s| s.to_string())
                             .unwrap_or_default();
-                        let path = LpcPath::InGame(PathBuf::from(path_str.as_str()));
+                        let path = LpcPath::in_game(PathBuf::from(path_str.as_str()));
 
                         match self.context.find_object(&path) {
                             ObjectLookup::Found(process) => process,
@@ -155,8 +154,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 let Some(func) = process.program.lookup_function(func_name) else {
                     return Err(self.runtime_error(format!(
                         "Unable to find function `{}` in remote process `{}`.",
-                        func_name,
-                        process.filename()
+                        func_name, process
                     )));
                 };
                 // Visibility is decided when the pointer is taken; a pointer fires anywhere.
@@ -165,7 +163,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         "cannot take a pointer to {} function `{}` of `{}`",
                         func.prototype.flags.visibility(),
                         func_name,
-                        process.filename()
+                        process
                     )));
                 }
 

@@ -17,30 +17,27 @@ use crate::interpreter::{
 pub async fn mkdir<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "mkdir", VALID_WRITE, 0).await?;
     let io_error =
-        |e: std::io::Error| context.runtime_error(format!("mkdir: {}: {e}", access.in_game));
-    if context.has_pending_dir(&access.server) {
-        return Err(context.runtime_error(format!("mkdir: {} exists", access.in_game)));
+        |e: std::io::Error| context.runtime_error(format!("mkdir: {}: {e}", access.name()));
+    if context.has_pending_dir(access.server()) {
+        return Err(context.runtime_error(format!("mkdir: {} exists", access.name())));
     }
-    match tokio::fs::symlink_metadata(&access.server).await {
+    match tokio::fs::symlink_metadata(access.server()).await {
         Ok(_) => {
-            return Err(context.runtime_error(format!("mkdir: {} exists", access.in_game)));
+            return Err(context.runtime_error(format!("mkdir: {} exists", access.name())));
         }
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(io_error(e)),
         Err(_) => {}
     }
-    if !parent_is_dir(context, &access.server)
+    if !parent_is_dir(context, access.server())
         .await
         .map_err(io_error)?
     {
         return Err(context.runtime_error(format!(
             "mkdir: {}: parent directory does not exist",
-            access.in_game
+            access.name()
         )));
     }
-    context.record_effect(Effect::CreateDir {
-        in_game: access.in_game,
-        server: access.server,
-    });
+    context.record_effect(Effect::CreateDir { path: access });
     context.return_efun_result(LpcRef::from(1));
     Ok(())
 }

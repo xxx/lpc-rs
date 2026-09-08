@@ -52,7 +52,7 @@ pub async fn read_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
     };
     let access = authorize(context, "read_bytes", VALID_READ, 0).await?;
     let read = async {
-        let all = read_through(context, &access.server).await?.into_bytes()?;
+        let all = read_through(context, access.server()).await?.into_bytes()?;
         let size = all.len() as u64;
         let from = offset(start, size);
         if from >= size {
@@ -64,7 +64,7 @@ pub async fn read_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
     };
     let result = match read.await {
         Err(e) => {
-            return Err(context.runtime_error(format!("read_bytes: {}: {e}", access.in_game)));
+            return Err(context.runtime_error(format!("read_bytes: {}: {e}", access.name())));
         }
         Ok(None) => LpcRef::from(0),
         Ok(Some(bytes)) => LpcRef::from(bytes),
@@ -89,11 +89,11 @@ pub async fn write_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     };
     let contents = contents.to_vec();
     let access = authorize(context, "write_bytes", VALID_WRITE, 0).await?;
-    let size = match tokio::fs::metadata(&access.server).await {
+    let size = match tokio::fs::metadata(access.server()).await {
         Ok(m) if m.is_file() => m.len(),
         Ok(_) => {
             return Err(
-                context.runtime_error(format!("write_bytes: {} is not a file", access.in_game))
+                context.runtime_error(format!("write_bytes: {} is not a file", access.name()))
             );
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -101,7 +101,7 @@ pub async fn write_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
             return Ok(());
         }
         Err(e) => {
-            return Err(context.runtime_error(format!("write_bytes: {}: {e}", access.in_game)));
+            return Err(context.runtime_error(format!("write_bytes: {}: {e}", access.name())));
         }
     };
     let from = offset(start, size);
@@ -110,8 +110,7 @@ pub async fn write_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         return Ok(());
     }
     context.record_effect(Effect::WriteBytes {
-        in_game: access.in_game,
-        server: access.server,
+        path: access,
         start: from,
         contents,
     });

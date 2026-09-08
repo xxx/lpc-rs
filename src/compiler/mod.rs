@@ -119,40 +119,31 @@ impl Compiler {
     {
         Box::pin(async move {
             let lpc_path = path.into();
-            let absolute = lpc_path.as_server(&*self.config.lib_dir);
+            let source_path = self.config.paths().source(&lpc_path);
+            let name = self.config.paths().source_name(&lpc_path);
+            let absolute = source_path.server();
 
-            let source = match read_lpc_file(&*absolute).await {
+            let source = match read_lpc_file(absolute).await {
                 Ok(source) => source,
                 Err(e) => {
                     return match e.kind() {
                         ErrorKind::NotFound => {
                             if matches!(absolute.extension().and_then(OsStr::to_str), Some("c")) {
-                                return Err(lpc_error!(
-                                    "Cannot read file `{}`: {}",
-                                    lpc_path.as_in_game(&*self.config.lib_dir).display(),
-                                    e
-                                ));
+                                return Err(lpc_error!("Cannot read file `{}`: {}", name, e));
                             }
 
                             let dot_c = lpc_path.with_extension("c");
                             self.compile_file(dot_c).await
                         }
-                        _ => Err(lpc_error!(
-                            "Cannot read file `{}`: {}",
-                            lpc_path.as_in_game(&*self.config.lib_dir).display(),
-                            e
-                        )),
+                        _ => Err(lpc_error!("Cannot read file `{}`: {}", name, e)),
                     };
                 }
             };
 
             // A root file has no preprocessor yet to record its warning, so it is seeded here.
             let warning = source.latin1.then(|| {
-                let in_game = lpc_path
-                    .as_in_game(&*self.config.lib_dir)
-                    .display()
-                    .to_string();
-                diagnostics::latin1_warning(&in_game, None)
+                let in_game = name.as_str();
+                diagnostics::latin1_warning(in_game, None)
             });
 
             self.compile_source(lpc_path, &source.text, warning).await
@@ -558,6 +549,40 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn outside_host_sources_keep_identity_and_render_an_opaque_name() {
+            let config = test_config();
+            let compiler = Compiler::new(config);
+            for filename in ["/private/compiler/first.c", "/private/compiler/second.c"] {
+                let path = LpcPath::new_server(filename);
+                let compiled = compiler
+                    .compile_string(path.clone(), "int x = 1;")
+                    .await
+                    .unwrap();
+                assert_eq!(*compiled.program.filename, path);
+
+                let error = compiler
+                    .compile_string(path.clone(), "int x = ;")
+                    .await
+                    .unwrap_err();
+                let rendered = error.diagnostic_string();
+                assert!(rendered.contains("<outside mudlib>:1:9"), "{rendered}");
+                assert!(!rendered.contains("/private"), "{rendered}");
+                assert!(!rendered.contains("first.c"), "{rendered}");
+                assert!(!rendered.contains("second.c"), "{rendered}");
+            }
+        }
+
+        #[tokio::test]
+        async fn a_raw_relative_source_keeps_its_absolute_diagnostic_location() {
+            let error = Compiler::new(test_config())
+                .compile_string(LpcPath::in_game("room/../source.c".into()), "int x = ;")
+                .await
+                .unwrap_err();
+            let rendered = error.diagnostic_string();
+            assert!(rendered.contains("┌─ /source.c:1:9"), "{rendered}");
+        }
+
+        #[tokio::test]
         async fn a_compile_error_renders_with_its_label() {
             let code = indoc! { r#"
                 nomask void noooo() {}
@@ -717,11 +742,9 @@ mod tests {
                     .await
                     .unwrap_or_else(|e| panic!("{given}: {}", e.diagnostic_string()));
                 assert_eq!(
-                    compiled
-                        .program
-                        .filename
-                        .as_in_game(lib)
-                        .display()
+                    config
+                        .paths()
+                        .source_name(&compiled.program.filename)
                         .to_string(),
                     expected,
                     "{given}"

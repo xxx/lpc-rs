@@ -248,7 +248,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let Some(initializer) = context.process.program.initializer.clone() else {
             let msg = format!(
                 "Init function not found for `{}`. This should never happen.",
-                context.process.filename()
+                context.process
             );
 
             error!("{msg}");
