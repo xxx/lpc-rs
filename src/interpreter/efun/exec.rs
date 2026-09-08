@@ -19,7 +19,8 @@ pub(crate) const DISPLACED: &str =
 /// The master's `valid_exec(caller, new, old)` gates every well-formed call;
 /// a refusal, a master without the apply, or no master returns 0.
 ///
-/// When `old` was `this_player()`, `new` becomes it (CD, LDMud, FluffOS).
+/// When `old` was `this_player()`, `new` becomes it (CD, LDMud, FluffOS);
+/// likewise `this_interactive()` (CD, LDMud).
 ///
 /// The binding is transactional: the connection cells of both bodies are
 /// written into this transaction, so the rest of the task (and efuns it
@@ -80,13 +81,14 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
             new_process: new_ob.clone(),
             connection,
         });
-        let this_player = context.this_player();
-        if this_player
-            .load()
-            .as_ref()
-            .is_some_and(|player| Arc::ptr_eq(player, &old_ob))
-        {
-            this_player.store(Some(new_ob.clone()));
+        for cell in [context.this_player(), &context.task_context().entry_player] {
+            if cell
+                .load()
+                .as_ref()
+                .is_some_and(|player| Arc::ptr_eq(player, &old_ob))
+            {
+                cell.store(Some(new_ob.clone()));
+            }
         }
         if let Some(previous) = previous {
             context.record_effect(Effect::Disconnect {
@@ -179,6 +181,38 @@ mod tests {
             vm.global_state.committed_global(&main, 1u16),
             LpcRef::from(1)
         );
+    }
+
+    #[tokio::test]
+    async fn the_new_body_becomes_this_interactive_when_the_old_one_was() {
+        let vm = Vm::new(test_config());
+        allow_exec(&vm).await;
+        let a = vm.create_process_from_code("/a.c", "").await.unwrap();
+        let b = vm.create_process_from_code("/b.c", "").await.unwrap();
+        vm.create_process_from_code("/c.c", "").await.unwrap();
+        vm.create_process_from_code("/d.c", "").await.unwrap();
+        let _on_a = connect(&vm, &a).await;
+        let _on_b = connect(&vm, &b).await;
+        // Ten for the exec of another body leaving it alone, one for it
+        // following its own connection.
+        let main = indoc! { r#"
+            int create() {
+                int kept, moved;
+                exec(find_object("/c"), find_object("/b"));
+                kept = this_interactive() == find_object("/a");
+                set_this_player(find_object("/c"));
+                exec(find_object("/d"), find_object("/a"));
+                moved = this_interactive() == find_object("/d");
+                return kept * 10 + moved;
+            }
+        "# };
+        let process = vm.create_process_from_code("/main.c", main).await.unwrap();
+        let template = TaskTemplate::from(vm.global_state.clone());
+        template.set_this_player(Some(a));
+        let task = Task::<16>::initialize_process(template.into_task_context(process))
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(11)));
     }
 
     #[tokio::test]

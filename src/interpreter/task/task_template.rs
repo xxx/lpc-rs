@@ -52,7 +52,7 @@ impl TaskTemplate {
             process,
             result: TaskResult::new(),
             simul_efuns,
-            entry_player: self.this_player.load_full(),
+            entry_player: ArcSwapAny::from(self.this_player.load_full()),
             this_player: self.this_player,
             upvalue_ptrs: self.upvalue_ptrs,
             chain_count: 0,
