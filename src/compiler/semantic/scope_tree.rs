@@ -43,7 +43,7 @@ impl ScopeTree {
     ///
     /// // etc.    ///
     pub fn push_new(&mut self) -> NodeId {
-        let id = self.scopes.count();
+        let id = self.scopes.len();
 
         let scope = LocalScope::new(None);
 
