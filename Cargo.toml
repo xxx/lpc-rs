@@ -12,7 +12,7 @@ categories = ["command-line-utilities", "compilers", "game-engines"]
 
 [build-dependencies]
 lalrpop = "0.23.1"
-syn = { version = "1", features = ["full"] } # version 1 required by factori
+syn = { version = "1", features = ["full"] } # version 3 required by factori
 
 [dependencies]
 lpc-rs-asm = { version = "0.1", path = "./lpc-rs-asm"}

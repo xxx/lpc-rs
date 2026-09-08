@@ -1412,7 +1412,7 @@ dependencies = [
  "smallvec",
  "spin 0.12.3",
  "stable-vec",
- "syn 1.0.109",
+ "syn 3.0.5",
  "thin-vec",
  "tokio",
  "tracing",
