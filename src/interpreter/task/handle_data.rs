@@ -292,6 +292,26 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                 Ok(())
             }
+            LpcRef::Bytes(ref buffer) => {
+                let LpcRef::Int(i) = lpc_ref else {
+                    return Err(self.runtime_error(format!(
+                        "Attempting to access index {} in a bytes of length {}",
+                        lpc_ref,
+                        buffer.len()
+                    )));
+                };
+                let idx = if i.0 >= 0 {
+                    i.0
+                } else {
+                    buffer.len() as LpcIntInner + i.0
+                };
+                let byte = usize::try_from(idx)
+                    .ok()
+                    .and_then(|idx| buffer.get(idx))
+                    .map_or(NULL, |b| LpcRef::from(LpcIntInner::from(*b)));
+
+                set_location(&mut self.stack, &self.context.txn, destination, byte)
+            }
             LpcRef::Mapping(_) => {
                 let key = lpc_ref.mapping_key(&self.context.txn);
                 let var = container_ref

@@ -8,6 +8,7 @@ use indexmap::IndexMap;
 use indoc::indoc;
 use lpc_rs_asm::instruction::{Arg, ArgList};
 use lpc_rs_core::{LpcFloatInner, LpcIntInner, register::RegisterVariant};
+use lpc_rs_utils::lpc_bytes;
 use tokio::sync::mpsc;
 use ustr::ustr;
 
@@ -124,6 +125,7 @@ where
 #[derive(Debug, Eq, Clone)]
 enum BareVal {
     String(String),
+    Bytes(Vec<u8>),
     Int(LpcIntInner),
     Float(LpcFloatInner),
     Array(Vec<BareVal>),
@@ -138,6 +140,7 @@ impl BareVal {
             LpcRef::Float(x) => BareVal::Float(x.0),
             LpcRef::Int(x) => BareVal::Int(x.0),
             LpcRef::String(x) => BareVal::String(x.to_string()),
+            LpcRef::Bytes(x) => BareVal::Bytes(x.to_vec()),
             LpcRef::Array(cell) => {
                 let array = gs
                     .committed_array(cell.id)
@@ -206,6 +209,7 @@ impl Hash for BareVal {
             BareVal::Float(x) => x.hash(state),
             BareVal::Int(x) => x.hash(state),
             BareVal::String(x) => x.hash(state),
+            BareVal::Bytes(x) => x.hash(state),
             BareVal::Array(x) => x.hash(state),
             // `HashMap` has no `Hash`; the length keeps equal mappings hashing equal.
             BareVal::Mapping(x) => x.len().hash(state),
@@ -224,6 +228,7 @@ impl PartialEq for BareVal {
             (BareVal::Float(x), BareVal::Float(y)) => x == y,
             (BareVal::Int(x), BareVal::Int(y)) => x == y,
             (BareVal::String(x), BareVal::String(y)) => x == y,
+            (BareVal::Bytes(x), BareVal::Bytes(y)) => x == y,
             (BareVal::Array(x), BareVal::Array(y)) => x == y,
             (BareVal::Mapping(x), BareVal::Mapping(y)) => x == y,
             (BareVal::Object(x), BareVal::Object(y)) => x == y,
@@ -239,6 +244,7 @@ impl Display for BareVal {
             BareVal::Float(x) => write!(f, "{x}"),
             BareVal::Int(x) => write!(f, "{x}"),
             BareVal::String(x) => write!(f, "\"{x}\""),
+            BareVal::Bytes(x) => write!(f, "{}", lpc_bytes::literal(x)),
             BareVal::Array(x) => write!(f, "{}", format_slice(x)),
             BareVal::Mapping(x) => write!(f, "{}", format_map(x)),
             BareVal::Object(x) => write!(f, "object({x})"),

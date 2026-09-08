@@ -42,7 +42,7 @@ use crate::interpreter::{
     call_stack::CallStack,
     lpc_int::LpcInt,
     lpc_mapping::LpcMapping,
-    lpc_ref::LpcRef,
+    lpc_ref::{BYTES_STRING_MIX, LpcRef},
     process::Process,
     stm::{
         AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, TxnHandle, VarId,
@@ -546,6 +546,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let frame = self.stack.current_frame()?;
         let ref1 = &*frame.get_location(txn, r1)?;
         let ref2 = &*frame.get_location(txn, r2)?;
+        if matches!(
+            (ref1, ref2),
+            (LpcRef::Bytes(_), LpcRef::String(_)) | (LpcRef::String(_), LpcRef::Bytes(_))
+        ) {
+            return Err(self.runtime_error(BYTES_STRING_MIX));
+        }
         Ok(ref1.compare(kind, ref2, txn))
     }
 

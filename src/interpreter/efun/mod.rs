@@ -333,6 +333,11 @@ efuns! {
         arity: 1,
         args: [LpcType::Mixed(false)],
     },
+    bytesp [in type_predicates] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
     call_out => {
         returns: LpcType::Int(false),
         arity: (2, 0, ellipsis),
@@ -595,7 +600,12 @@ efuns! {
     sizeof => {
         returns: LpcType::Int(false),
         arity: 1,
-        args: [LpcType::Mixed(true) | LpcType::Mapping(false) | LpcType::String(false)],
+        args: [
+            LpcType::Mixed(true)
+                | LpcType::Mapping(false)
+                | LpcType::String(false)
+                | LpcType::Bytes(false)
+        ],
     },
     sscanf => {
         returns: LpcType::Int(false),
@@ -1216,6 +1226,7 @@ mod tests {
                 "all_environment",
                 "all_inventory",
                 "arrayp",
+                "bytesp",
                 "call_out",
                 "call_other",
                 "catch",

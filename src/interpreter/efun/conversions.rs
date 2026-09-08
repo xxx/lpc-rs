@@ -115,6 +115,10 @@ pub fn to_string<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()>
             Some(process) => LpcRef::from(in_game_name(context, &process)),
             None => LpcRef::from("0"),
         },
+        LpcRef::Bytes(_) => {
+            return Err(context
+                .runtime_error("to_string: a bytes is converted with to_text(bytes, encoding)"));
+        }
         other => return Err(cannot_convert(context, "to_string", other)),
     };
     context.return_efun_result(result);

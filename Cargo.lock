@@ -1495,6 +1495,7 @@ dependencies = [
 name = "lpc-rs-utils"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "claims",
  "derive_builder",
  "dotenvy",

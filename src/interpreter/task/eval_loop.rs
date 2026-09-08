@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use lpc_rs_asm::instruction::{ArgList, Instruction};
 use lpc_rs_core::{
     LpcIntInner,
@@ -501,6 +502,30 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                                 }
                             })
                             .flatten(),
+                        LpcRef::Bytes(buffer) => {
+                            if buffer.is_empty() {
+                                return Ok(LpcRef::from(Bytes::new()));
+                            }
+
+                            let index1 = &*get_location(stack, &self.context.txn, r2)?;
+                            let index2 = &*get_location(stack, &self.context.txn, r3)?;
+
+                            let (LpcRef::Int(start), LpcRef::Int(end)) = (&index1, &index2) else {
+                                let frame = self.stack.current_frame()?;
+                                return Err(lpc_error!(
+                                    frame.current_debug_span(),
+                                    "Invalid code was generated for a Range instruction.",
+                                ));
+                            };
+
+                            let (real_start, real_end) =
+                                resolve_range(start.0, end.0, buffer.len());
+                            if real_start <= real_end {
+                                Ok(LpcRef::from(buffer.slice(real_start..=real_end)))
+                            } else {
+                                Ok(LpcRef::from(Bytes::new()))
+                            }
+                        }
                         LpcRef::Float(_)
                         | LpcRef::Int(_)
                         | LpcRef::Mapping(_)

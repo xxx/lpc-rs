@@ -363,7 +363,11 @@ impl Committer {
                             }
                         }
                     }
-                    LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::String(_) | LpcRef::Object(_) => {}
+                    LpcRef::Float(_)
+                    | LpcRef::Int(_)
+                    | LpcRef::String(_)
+                    | LpcRef::Bytes(_)
+                    | LpcRef::Object(_) => {}
                 },
             }
         }

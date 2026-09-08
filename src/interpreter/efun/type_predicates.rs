@@ -19,6 +19,11 @@ pub fn arrayp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     type_predicate(context, |r| matches!(r, LpcRef::Array(_)))
 }
 
+/// `bytesp`: 1 if the argument is a `bytes`.
+pub fn bytesp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    type_predicate(context, |r| matches!(r, LpcRef::Bytes(_)))
+}
+
 /// `floatp`: 1 if the argument is a float.
 pub fn floatp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     type_predicate(context, |r| matches!(r, LpcRef::Float(_)))

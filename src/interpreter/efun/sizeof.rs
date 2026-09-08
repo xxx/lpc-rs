@@ -8,8 +8,8 @@ use crate::interpreter::{
     stm::TxnHandle,
 };
 
-/// The item count of an array or mapping, the byte length of a string, `0`
-/// for anything else.
+/// The item count of an array or mapping, the character length of a string,
+/// the byte count of a `bytes`, `0` for anything else.
 pub(crate) fn size_of(lpc_ref: &LpcRef, txn: &TxnHandle) -> Result<LpcRef> {
     Ok(match lpc_ref {
         LpcRef::Array(_) => {
@@ -25,6 +25,7 @@ pub(crate) fn size_of(lpc_ref: &LpcRef, txn: &TxnHandle) -> Result<LpcRef> {
             let l = lpc_ref.with_string(|s| s.char_count())?;
             LpcRef::Int(LpcInt(l as LpcIntInner))
         }
+        LpcRef::Bytes(b) => LpcRef::Int(LpcInt(b.len() as LpcIntInner)),
         LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Object(_) | LpcRef::Function(_) => NULL,
     })
 }
@@ -38,7 +39,17 @@ pub fn sizeof<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{interpreter::lpc_ref::LpcRef, test_support::run_prog};
+    use super::*;
+    use crate::{
+        interpreter::lpc_ref::{LpcRef, test_bytes},
+        test_support::run_prog,
+    };
+
+    #[test]
+    fn a_bytes_is_measured_in_bytes() {
+        let sized = size_of(&test_bytes(b"abc"), &TxnHandle::empty()).unwrap();
+        assert_eq!(sized, LpcRef::from(3));
+    }
 
     #[tokio::test]
     async fn a_sizeof_pointer_measures_like_the_operator() {

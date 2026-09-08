@@ -2706,6 +2706,14 @@ mod tests {
 
     const LIB_DIR: &str = "./tests/fixtures/code";
 
+    /// The `CallEfun` for `name`; the index is the efun's position in the ABI.
+    fn call_efun(name: &str, list: ArgList) -> Instruction {
+        CallEfun(
+            u8::try_from(EFUN_PROTOTYPES.get_index_of(name).unwrap()).unwrap(),
+            list,
+        )
+    }
+
     fn default_walker() -> CodegenWalker {
         let mut walker = CodegenWalker::default();
         walker.setup_init();
@@ -3218,7 +3226,7 @@ mod tests {
                     name: ustr("this_object"),
                     receiver: FunctionReceiver::Efun,
                 },
-                CallEfun(10, ArgList(0)),
+                call_efun("compose", ArgList(0)),
                 Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(3)),
@@ -3253,14 +3261,14 @@ mod tests {
             let mut walker = walk_prog(code).await;
             let expected = vec![
                 Jmp(Address(6)),
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Jncmp(
                     Comparison::Gt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(0)),
                     Address(5),
                 ),
-                CallEfun(15, ArgList(1)),
+                call_efun("dump", ArgList(1)),
                 Jmp(Address(7)),
                 Add(
                     RegisterVariant::Local(Register(1)),
@@ -3308,14 +3316,14 @@ mod tests {
                     RegisterVariant::Local(Register(1)),
                 ),
                 Jmp(Address(8)),
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Jncmp(
                     Comparison::Gt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(1)),
                     Address(6),
                 ),
-                CallEfun(15, ArgList(1)),
+                call_efun("dump", ArgList(1)),
                 Jmp(Address(9)),
                 Add(
                     RegisterVariant::Local(Register(1)),
@@ -3364,14 +3372,14 @@ mod tests {
 
             let mut walker = walk_prog(code).await;
             let expected = vec![
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Jncmp(
                     Comparison::Gt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(0)),
                     Address(4),
                 ),
-                CallEfun(15, ArgList(1)),
+                call_efun("dump", ArgList(1)),
                 Jmp(Address(6)),
                 Add(
                     RegisterVariant::Local(Register(1)),
@@ -3440,10 +3448,10 @@ mod tests {
                     Address(8),
                 ),
                 Jmp(Address(7)),
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Jmp(Address(9)),
-                CallEfun(15, ArgList(1)),
-                CallEfun(15, ArgList(2)),
+                call_efun("dump", ArgList(1)),
+                call_efun("dump", ArgList(2)),
                 Copy(
                     RegisterVariant::Constant(Register(6)),
                     RegisterVariant::Local(Register(0)),
@@ -3503,7 +3511,7 @@ mod tests {
 
             let _ = walker.visit_call(&mut node).await;
 
-            let expected = vec![CallEfun(15, ArgList(0))];
+            let expected = vec![call_efun("dump", ArgList(0))];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
@@ -3770,7 +3778,7 @@ mod tests {
             let _ = walker.visit_call(&mut node).await;
 
             let expected = vec![
-                CallEfun(8, ArgList(0)),
+                call_efun("clone_object", ArgList(0)),
                 Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(1)),
@@ -3788,7 +3796,7 @@ mod tests {
 
             let _ = walker.visit_call(&mut node).await;
 
-            let expected = vec![CallEfun(15, ArgList(0))];
+            let expected = vec![call_efun("dump", ArgList(0))];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
         }
@@ -3848,7 +3856,7 @@ mod tests {
                 PushArrayItem(RegisterVariant::Constant(Register(0))),
                 PushArrayItem(RegisterVariant::Constant(Register(1))),
                 AConst(RegisterVariant::Local(Register(2))),
-                CallEfun(33, ArgList(0)),
+                call_efun("papplyv", ArgList(0)),
                 Copy(
                     RegisterVariant::Local(Register(0)),
                     RegisterVariant::Local(Register(3)),
@@ -3902,7 +3910,7 @@ mod tests {
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(1)),
                 ),
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -3988,7 +3996,7 @@ mod tests {
                         RegisterVariant::Local(Register(1)),
                         RegisterVariant::Local(Register(2))
                     ),
-                    CallEfun(15, ArgList(0)),
+                    call_efun("dump", ArgList(0)),
                     Ret
                 ]
             );
@@ -4240,14 +4248,14 @@ mod tests {
             let mut walker = walk_prog(code).await;
             let expected = vec![
                 Jmp(Address(6)),
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Jncmp(
                     Comparison::Gt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(0)),
                     Address(5),
                 ),
-                CallEfun(15, ArgList(1)),
+                call_efun("dump", ArgList(1)),
                 Jmp(Address(6)),
                 Add(
                     RegisterVariant::Local(Register(1)),
@@ -4295,14 +4303,14 @@ mod tests {
                     RegisterVariant::Local(Register(1)),
                 ),
                 Jmp(Address(8)),
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Jncmp(
                     Comparison::Gt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(1)),
                     Address(6),
                 ),
-                CallEfun(15, ArgList(1)),
+                call_efun("dump", ArgList(1)),
                 Jmp(Address(7)),
                 Add(
                     RegisterVariant::Local(Register(1)),
@@ -4351,14 +4359,14 @@ mod tests {
 
             let mut walker = walk_prog(code).await;
             let expected = vec![
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Jncmp(
                     Comparison::Gt,
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(0)),
                     Address(4),
                 ),
-                CallEfun(15, ArgList(1)),
+                call_efun("dump", ArgList(1)),
                 Jmp(Address(5)),
                 Add(
                     RegisterVariant::Local(Register(1)),
@@ -4469,7 +4477,7 @@ mod tests {
             let _ = walker.visit_do_while(&mut node).await;
 
             let expected = vec![
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Jcmp(
                     Comparison::Eq,
                     RegisterVariant::Constant(Register(1)),
@@ -4549,7 +4557,7 @@ mod tests {
                     RegisterVariant::Local(Register(1)),
                 ),
                 Jmp(Address(0)),
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Sub(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(1)),
@@ -4841,9 +4849,9 @@ mod tests {
                     RegisterVariant::Constant(Register(1)),
                     Address(0),
                 ),
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Jmp(Address(0)),
-                CallEfun(15, ArgList(1)),
+                call_efun("dump", ArgList(1)),
             ];
 
             assert_eq!(walker_init_instructions(&mut walker), expected);
@@ -4970,7 +4978,7 @@ mod tests {
             );
             assert_eq!(
                 f.instructions,
-                vec![CallEfun(15, ArgList(0)), Copy(k(1), l(0)), Ret]
+                vec![call_efun("dump", ArgList(0)), Copy(k(1), l(0)), Ret]
             );
         }
 
@@ -5040,7 +5048,7 @@ mod tests {
             let f = function("void create() { dump(5); }", "create").await;
             assert_eq!(
                 f.instructions,
-                vec![CallEfun(15, ArgList(0)), Copy(k(1), l(0)), Ret]
+                vec![call_efun("dump", ArgList(0)), Copy(k(1), l(0)), Ret]
             );
         }
 
@@ -5427,7 +5435,7 @@ mod tests {
 
             let expected = vec![
                 Call(ustr("f__i____pb__"), ArgList(0)),
-                CallEfun(15, ArgList(1)),
+                call_efun("dump", ArgList(1)),
                 Copy(
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(0)),
@@ -5475,7 +5483,7 @@ mod tests {
             assert_eq!(walker.initializer.unwrap().instructions, expected);
 
             let expected = vec![
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Copy(
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(0)),
@@ -5810,11 +5818,11 @@ mod tests {
                     Address(5),
                 ),
                 Jmp(Address(7)),
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Jmp(Address(8)),
-                CallEfun(15, ArgList(1)),
+                call_efun("dump", ArgList(1)),
                 Jmp(Address(8)),
-                CallEfun(15, ArgList(2)),
+                call_efun("dump", ArgList(2)),
                 Copy(
                     RegisterVariant::Constant(Register(6)),
                     RegisterVariant::Local(Register(0)),
@@ -5840,7 +5848,7 @@ mod tests {
                     Address(2),
                 ),
                 Jmp(Address(3)),
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Copy(
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(0)),
@@ -5866,8 +5874,8 @@ mod tests {
                     RegisterVariant::Constant(Register(0)),
                     Address(2),
                 ),
-                CallEfun(15, ArgList(0)),
-                CallEfun(15, ArgList(1)),
+                call_efun("dump", ArgList(0)),
+                call_efun("dump", ArgList(1)),
                 Copy(
                     RegisterVariant::Constant(Register(3)),
                     RegisterVariant::Local(Register(0)),
@@ -6358,7 +6366,7 @@ mod tests {
 
             // `closure-1` is the outer closure that refers to $1.
             let closure = find_function(&prog.functions, "closure-1").unwrap();
-            assert_eq!(closure.instructions[0], CallEfun(15, ArgList(0)));
+            assert_eq!(closure.instructions[0], call_efun("dump", ArgList(0)));
             assert_eq!(
                 closure.arg_lists[0],
                 vec![
@@ -6550,7 +6558,7 @@ mod tests {
             assert_eq!(
                 f.instructions,
                 vec![
-                    Instruction::CallEfun(15, ArgList(0)),
+                    call_efun("dump", ArgList(0)),
                     Instruction::Copy(constant(0), local(0)),
                     Instruction::Ret,
                 ]
@@ -6704,13 +6712,13 @@ mod tests {
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Instruction::CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Instruction::Sub(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Local(Register(2)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Instruction::CallEfun(15, ArgList(1)),
+                call_efun("dump", ArgList(1)),
                 Instruction::Copy(
                     RegisterVariant::Constant(Register(2)),
                     RegisterVariant::Local(Register(0)),
@@ -6750,7 +6758,7 @@ mod tests {
                     RegisterVariant::Constant(Register(0)),
                     RegisterVariant::Local(Register(3)),
                 ),
-                Instruction::CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Instruction::Add(
                     RegisterVariant::Local(Register(1)),
                     RegisterVariant::Constant(Register(1)),
@@ -7095,7 +7103,7 @@ mod tests {
             assert_eq!(
                 walker_init_instructions(&mut walker),
                 [
-                    CallEfun(8, ArgList(0)),
+                    call_efun("clone_object", ArgList(0)),
                     Copy(
                         RegisterVariant::Local(Register(0)),
                         RegisterVariant::Local(Register(1))
@@ -7271,7 +7279,7 @@ mod tests {
 
             let expected = vec![
                 Jmp(Address(0)),
-                CallEfun(15, ArgList(0)),
+                call_efun("dump", ArgList(0)),
                 Jcmp(
                     Comparison::Eq,
                     RegisterVariant::Constant(Register(1)),

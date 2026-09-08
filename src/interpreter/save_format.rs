@@ -5,6 +5,7 @@ use std::{fmt::Write, sync::Arc};
 
 use indexmap::IndexMap;
 use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_utils::lpc_bytes;
 
 use crate::interpreter::{
     lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, process::Process, stm::TxnHandle,
@@ -109,6 +110,7 @@ pub(crate) fn write_value(
                 .expect("String never fails"),
             None => out.push('0'),
         },
+        LpcRef::Bytes(b) => out.push_str(&lpc_bytes::literal(b)),
         LpcRef::Function(_) => out.push('0'),
     }
     Ok(())

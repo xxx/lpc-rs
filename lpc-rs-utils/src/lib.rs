@@ -6,6 +6,7 @@ use tokio::fs;
 
 pub mod config;
 pub mod debug_log;
+pub mod lpc_bytes;
 pub mod lpc_string;
 pub mod string;
 
