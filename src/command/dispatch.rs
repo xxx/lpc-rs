@@ -299,12 +299,31 @@ mod tests {
         let g = globals(code, 4).await;
         assert_eq!(
             g,
-            vec![
-                s("hello there"),
-                s("'hello"),
-                s("'hello"),
-                s("'hello there")
-            ]
+            vec![s("there"), s("'hello"), s("'hello"), s("'hello there")]
+        );
+    }
+
+    /// CD, FluffOS and LDMud call the handler with no argument when nothing
+    /// follows the verb.
+    #[tokio::test]
+    async fn a_bare_verb_hands_its_handler_no_argument() {
+        let code = indoc! { r#"
+            mixed exact = "unset"; mixed all = "unset"; string with;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                add_action("do_all", "", 1);
+                add_action("do_look", "look");
+                command("look");
+                command("wave");
+                command("wave   at me");
+            }
+            int do_look(mixed a) { exact = a; return 1; }
+            int do_all(mixed a) { if (query_verb() == "wave" && stringp(a)) with = a; else all = a; return 1; }
+        "# };
+        assert_eq!(
+            globals(code, 3).await,
+            vec![LpcRef::from(0), LpcRef::from(0), s("at me")]
         );
     }
 

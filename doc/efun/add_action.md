@@ -14,9 +14,12 @@ the line to the next rule, and any other return handles it. In the handler,
 
 `flag` selects how the verb matches the first word: `0` — the word equals the
 verb; `1` / `AA_SHORT` — the word starts with the verb, `query_verb()` reports
-the whole word, and the rest of the word joins the argument; `AA_NOSPACE` (2) —
-as `AA_SHORT` but `query_verb()` reports the verb as registered;
-`AA_IMM_ARGS` (3) — as `AA_NOSPACE` with only the rest of the word as the argument.
+the whole word, and the argument is what follows the word; `AA_NOSPACE` (2) —
+the word starts with the verb, `query_verb()` reports the verb as registered,
+and the rest of the word joins the argument; `AA_IMM_ARGS` (3) — as
+`AA_NOSPACE` with only the rest of the word as the argument. When the
+argument would be empty the handler is called with no argument, so a
+`string` parameter is 0.
 
 An empty verb (`""`) with a prefix flag matches every line, which is how a
 mudlib registers a catch-all handler.
