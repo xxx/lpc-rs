@@ -4626,6 +4626,31 @@ mod bytes_values {
         }
     }
 
+    /// The conversions a bytes could have been meant for are `%s` and `%d`.
+    #[tokio::test]
+    async fn only_the_text_conversions_name_to_text() {
+        let code = indoc! { r##"
+                bytes b = to_bytes("a", "utf8");
+                string as_int;
+                string as_char;
+                string as_float;
+                void create() {
+                    as_int = catch(sprintf("%d", b));
+                    as_char = catch(sprintf("%c", b));
+                    as_float = catch(sprintf("%f", b));
+                }
+            "##};
+
+        let task = run_prog(code).await;
+        let error = string_global(&task, "as_int");
+        assert!(error.contains("to_text"), "as_int: {error}");
+        for name in ["as_char", "as_float"] {
+            let error = string_global(&task, name);
+            assert!(error.contains("is a bytes"), "{name}: {error}");
+            assert!(!error.contains("to_text"), "{name}: {error}");
+        }
+    }
+
     #[tokio::test]
     async fn a_bytes_element_cannot_be_assigned() {
         let code = indoc! { r##"

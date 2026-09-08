@@ -1,6 +1,6 @@
 # read_bytes
 
-`bytes | int read_bytes(string path, int start = 0, int length = to the end)`
+`bytes read_bytes(string path, int start = 0, int length = to the end)`
 
 Return `length` bytes of the file at `path` from byte `start`, once the
 master's `valid_read` allows it. A negative `start` counts back from the end
@@ -10,8 +10,7 @@ is at or past the end, the result is `0`, not `bytes`. A negative `length`
 is an error.
 
 The result is a `bytes` value; use `to_text` to decode it, or
-`read_chars`/`read_file` for text. A range longer than 8192 bytes is an
-error.
+`read_chars`/`read_file` for text. A read is of any length.
 
 A missing or unreadable file is an error, as is the master's refusal.
 

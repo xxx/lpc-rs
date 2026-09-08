@@ -2,7 +2,6 @@
 //! master's `valid_read` / `valid_write`.
 
 use lpc_rs_errors::Result;
-use lpc_rs_utils::string::MAX_STRING_LENGTH;
 
 use crate::interpreter::{
     VALID_READ, VALID_WRITE,
@@ -35,8 +34,7 @@ pub(super) fn offset(start: i64, size: u64) -> u64 {
 
 /// `read_bytes(path [, start [, length]])`: `length` bytes (to the end when
 /// absent) from byte `start` of the file, the read cut at the end; 0 when
-/// `start` is at or past the end. The result is `bytes`; a range longer
-/// than [`MAX_STRING_LENGTH`] is an error.
+/// `start` is at or past the end. The result is `bytes`, of any length.
 pub async fn read_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let start = if context.arg_count() > 1 {
         int_arg(context, "read_bytes", 1)?
@@ -69,15 +67,7 @@ pub async fn read_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
             return Err(context.runtime_error(format!("read_bytes: {}: {e}", access.in_game)));
         }
         Ok(None) => LpcRef::from(0),
-        Ok(Some(bytes)) => {
-            let n = bytes.len();
-            if n > MAX_STRING_LENGTH {
-                return Err(context.runtime_error(format!(
-                    "read_bytes: {n} bytes exceeds the limit of {MAX_STRING_LENGTH}"
-                )));
-            }
-            LpcRef::from(bytes)
-        }
+        Ok(Some(bytes)) => LpcRef::from(bytes),
     };
     context.return_efun_result(result);
     Ok(())
@@ -134,7 +124,6 @@ mod tests {
     use std::sync::Arc;
 
     use indoc::indoc;
-    use lpc_rs_utils::string::MAX_STRING_LENGTH;
 
     use crate::{
         interpreter::{CommittedReader, lpc_ref::LpcRef, process::Process, vm::Vm},
@@ -160,10 +149,11 @@ mod tests {
         (root, vm)
     }
 
-    /// Run `expr` in a fresh object: global 0 is its value, global 1 the
-    /// error caught, if any.
-    async fn run(vm: &Vm, expr: &str) -> Arc<Process> {
-        let code = format!("mixed got; string err; void create() {{ err = catch(got = {expr}); }}");
+    /// Run `expr` in a fresh object, its value landing in a global declared
+    /// `declared`: global 0 is the value, global 1 the error caught, if any.
+    async fn run_as(vm: &Vm, declared: &str, expr: &str) -> Arc<Process> {
+        let code =
+            format!("{declared} got; string err; void create() {{ err = catch(got = {expr}); }}");
         vm.initialize_process_from_code("/runner.c", &code)
             .await
             .unwrap()
@@ -171,11 +161,25 @@ mod tests {
             .process
     }
 
-    async fn value_of(vm: &Vm, expr: &str) -> LpcRef {
-        let p = run(vm, expr).await;
+    async fn run(vm: &Vm, expr: &str) -> Arc<Process> {
+        run_as(vm, "mixed", expr).await
+    }
+
+    async fn value_from(vm: &Vm, declared: &str, expr: &str) -> LpcRef {
+        let p = run_as(vm, declared, expr).await;
         let err = vm.global_state.committed_global(&p, 1u16);
         assert_eq!(err, LpcRef::from(0), "{expr}");
         vm.global_state.committed_global(&p, 0u16)
+    }
+
+    async fn value_of(vm: &Vm, expr: &str) -> LpcRef {
+        value_from(vm, "mixed", expr).await
+    }
+
+    /// The value of `expr` assigned to a global declared `bytes`, which the
+    /// checker accepts only because `read_bytes` returns that type.
+    async fn bytes_value_of(vm: &Vm, expr: &str) -> LpcRef {
+        value_from(vm, "bytes", expr).await
     }
 
     async fn error_of(vm: &Vm, expr: &str) -> String {
@@ -186,32 +190,32 @@ mod tests {
     #[tokio::test]
     async fn read_bytes_reads_a_range() {
         let (_root, vm) = lib("rb-range").await;
-        let got = value_of(&vm, r#"read_bytes("/d.txt", 6, 5)"#).await;
+        let got = bytes_value_of(&vm, r#"read_bytes("/d.txt", 6, 5)"#).await;
         assert_eq!(got, LpcRef::from(b"world".to_vec()));
     }
 
     #[tokio::test]
     async fn read_bytes_without_a_length_reads_to_the_end() {
         let (_root, vm) = lib("rb-to-end").await;
-        let got = value_of(&vm, r#"read_bytes("/d.txt", 6)"#).await;
+        let got = bytes_value_of(&vm, r#"read_bytes("/d.txt", 6)"#).await;
         assert_eq!(got, LpcRef::from(b"world\n".to_vec()));
-        let got = value_of(&vm, r#"read_bytes("/d.txt")"#).await;
+        let got = bytes_value_of(&vm, r#"read_bytes("/d.txt")"#).await;
         assert_eq!(got, LpcRef::from(b"hello world\n".to_vec()));
     }
 
     #[tokio::test]
     async fn a_negative_start_counts_from_the_end() {
         let (_root, vm) = lib("rb-negative").await;
-        let got = value_of(&vm, r#"read_bytes("/d.txt", -6, 5)"#).await;
+        let got = bytes_value_of(&vm, r#"read_bytes("/d.txt", -6, 5)"#).await;
         assert_eq!(got, LpcRef::from(b"world".to_vec()));
-        let got = value_of(&vm, r#"read_bytes("/d.txt", -100, 5)"#).await;
+        let got = bytes_value_of(&vm, r#"read_bytes("/d.txt", -100, 5)"#).await;
         assert_eq!(got, LpcRef::from(b"hello".to_vec()));
     }
 
     #[tokio::test]
     async fn a_read_past_the_end_is_cut_at_the_end() {
         let (_root, vm) = lib("rb-truncate").await;
-        let got = value_of(&vm, r#"read_bytes("/d.txt", 6, 100)"#).await;
+        let got = bytes_value_of(&vm, r#"read_bytes("/d.txt", 6, 100)"#).await;
         assert_eq!(got, LpcRef::from(b"world\n".to_vec()));
     }
 
@@ -242,47 +246,10 @@ mod tests {
     #[tokio::test]
     async fn read_bytes_answers_bytes_not_a_string() {
         let (_root, vm) = lib("rb-bytes").await;
-        let got = value_of(&vm, r#"read_bytes("/u.txt", 1, 1)"#).await;
+        let got = bytes_value_of(&vm, r#"read_bytes("/u.txt", 1, 1)"#).await;
         assert_eq!(got, LpcRef::from(vec![0xa9]));
-        let got = value_of(&vm, r#"read_bytes("/u.txt")"#).await;
+        let got = bytes_value_of(&vm, r#"read_bytes("/u.txt")"#).await;
         assert_eq!(got, LpcRef::from(vec![0xc3, 0xa9, 0xff]));
-    }
-
-    #[tokio::test]
-    async fn a_read_of_exactly_the_cap_succeeds() {
-        let root = TempLib::new("rb-cap-exact");
-        let n = MAX_STRING_LENGTH;
-        std::fs::write(root.join("exact.txt"), vec![b'x'; n]).unwrap();
-        let vm = Vm::new(temp_lib_config(&root));
-        vm.initialize_process_from_code(
-            "/secure/master.c",
-            "int valid_read(string p, string e, object c, string g) { return 1; }",
-        )
-        .await
-        .unwrap();
-        let got = value_of(&vm, r#"read_bytes("/exact.txt")"#).await;
-        assert_eq!(got, LpcRef::from(vec![b'x'; n]));
-    }
-
-    #[tokio::test]
-    async fn a_read_past_the_cap_is_an_error() {
-        let root = TempLib::new("rb-cap");
-        let n = MAX_STRING_LENGTH + 8;
-        std::fs::write(root.join("big.txt"), vec![b'x'; n]).unwrap();
-        let vm = Vm::new(temp_lib_config(&root));
-        vm.initialize_process_from_code(
-            "/secure/master.c",
-            "int valid_read(string p, string e, object c, string g) { return 1; }",
-        )
-        .await
-        .unwrap();
-        let err = error_of(&vm, r#"read_bytes("/big.txt")"#).await;
-        assert!(
-            err.contains(&format!(
-                "read_bytes: {n} bytes exceeds the limit of {MAX_STRING_LENGTH}"
-            )),
-            "{err}"
-        );
     }
 
     #[tokio::test]
@@ -426,7 +393,7 @@ mod tests {
                 "/wb.c",
                 indoc! { r#"
                     mixed wrote;
-                    mixed reread;
+                    bytes reread;
                     void create() {
                         bytes payload = to_bytes("HELLO", "UTF-8");
                         wrote = write_bytes("/d.txt", 0, payload);

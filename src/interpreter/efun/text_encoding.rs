@@ -51,22 +51,22 @@ impl Encoding {
 }
 
 /// The encoding argument 1 names, or `None` when the call passed only one
-/// argument.
+/// argument; `func` is the calling efun, named in the errors.
 fn encoding_of<const N: usize>(
     context: &EfunContext<'_, N>,
-    name: &str,
+    func: &str,
 ) -> Result<Option<Encoding>> {
     if context.arg_count() < 2 {
         return Ok(None);
     }
     let arg = context.arg(1);
     let Some(spelling) = arg.as_str() else {
-        return Err(context.runtime_error(format!("{name}: {} is not a string", arg.type_name())));
+        return Err(context.runtime_error(format!("{func}: {} is not a string", arg.type_name())));
     };
     match Encoding::parse(spelling) {
         Some(encoding) => Ok(Some(encoding)),
         None => Err(context.runtime_error(format!(
-            "{name}: unknown encoding `{spelling}`; UTF-8 or ISO-8859-1"
+            "{func}: unknown encoding `{spelling}`; UTF-8 or ISO-8859-1"
         ))),
     }
 }

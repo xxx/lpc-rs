@@ -534,7 +534,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             let frame = self.stack.current_frame()?;
                             Err(lpc_error!(
                                 frame.current_debug_span(),
-                                "Range's receiver isn't actually an array or string?",
+                                "Range's receiver isn't actually an array, string or bytes?",
                             ))
                         }
                     }

@@ -3395,6 +3395,17 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn read_bytes_fills_a_declared_bytes() {
+            let code = r#"
+                bytes b = read_bytes("/x");
+                string s = to_text(read_bytes("/x"), "latin1");
+                bytes tail = read_bytes("/x", -4000);
+            "#;
+
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
         async fn bytes_does_not_fill_a_string() {
             let code = r#"
                 bytes b;

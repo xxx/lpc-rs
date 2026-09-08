@@ -975,7 +975,7 @@ efuns! {
         ],
     },
     read_bytes [async in bytes] => {
-        returns: LpcType::Bytes(false) | LpcType::Int(false),
+        returns: LpcType::Bytes(false),
         arity: (3, 2),
         args: [LpcType::String(false), LpcType::Int(false), LpcType::Int(false)],
     },
