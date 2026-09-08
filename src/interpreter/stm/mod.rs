@@ -392,10 +392,6 @@ impl Transaction {
 /// One top-level task = one transaction. Nested sub-tasks join it by
 /// cloning this handle, so a joiner's reads, writes, effects and call outs
 /// are the parent's attempt's and ride the parent's single commit.
-///
-/// A spin mutex, not `parking_lot`: one task drives an attempt at a time,
-/// so the lock is never contended and its uncontended trip (one locked
-/// instruction, a plain store to release) is what every read pays.
 #[derive(Debug, Clone)]
 pub(crate) struct TxnHandle(Arc<spin::Mutex<Transaction>>);
 
