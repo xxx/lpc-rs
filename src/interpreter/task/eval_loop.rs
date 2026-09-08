@@ -9,9 +9,8 @@ use thin_vec::ThinVec;
 use tracing::{error, instrument, trace, warn};
 
 use crate::interpreter::{
-    efun::Efun,
+    efun::{Efun, sizeof::size_of},
     lpc_array::LpcArray,
-    lpc_int::LpcInt,
     lpc_ref::{LpcRef, NULL, int_div, int_rem, int_shl, int_shr},
     task::{CatchPoint, Task, advance::Advance, bump_in_location, get_location, set_location},
 };
@@ -535,30 +534,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             Instruction::Sizeof(r1, r2) => {
                 let lpc_ref = &*get_location(&self.stack, &self.context.txn, r1)?;
-
-                let new_ref = match lpc_ref {
-                    LpcRef::Array(_) => {
-                        let l = lpc_ref.with_array(&self.context.txn, |a| a.len())?;
-
-                        LpcRef::Int(LpcInt(l as LpcIntInner))
-                    }
-                    LpcRef::Mapping(_) => {
-                        let txn = &self.context.txn;
-                        lpc_ref.drop_dead_keys(txn)?;
-                        let l = lpc_ref.with_mapping(txn, |m| m.len())?;
-
-                        LpcRef::Int(LpcInt(l as LpcIntInner))
-                    }
-                    LpcRef::String(_) => {
-                        let l = lpc_ref.with_string(|s| s.len())?;
-
-                        LpcRef::Int(LpcInt(l as LpcIntInner))
-                    }
-                    LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Object(_) | LpcRef::Function(_) => {
-                        NULL
-                    }
-                };
-
+                let new_ref = size_of(lpc_ref, &self.context.txn)?;
                 set_location(&mut self.stack, &self.context.txn, r2, new_ref)?;
             }
             Instruction::Store(value_loc, container_loc, index_loc) => {

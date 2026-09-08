@@ -94,6 +94,7 @@ pub(crate) mod send_mxp;
 pub(crate) mod set_this_player;
 pub(crate) mod shadow;
 pub(crate) mod shutdown;
+pub(crate) mod sizeof;
 pub(crate) mod sort_array;
 pub(crate) mod sprintf;
 pub(crate) mod sscanf;
@@ -590,7 +591,7 @@ efuns! {
         arity: (2, 1),
         args: [LpcType::Object(false), LpcType::Int(false)],
     },
-    sizeof [prototype only] => {
+    sizeof => {
         returns: LpcType::Int(false),
         arity: 1,
         args: [LpcType::Mixed(true) | LpcType::Mapping(false)],
