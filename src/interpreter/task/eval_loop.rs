@@ -190,6 +190,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.unary_operation(r1, r2, |x, _| x.bitnot())?;
             }
             Instruction::Call(name, list) => self.handle_call(name, list)?,
+            Instruction::CallQualified(name, list) => self.handle_call_qualified(name, list)?,
             Instruction::CallEfun(index, list) => {
                 let Some(efun) = Efun::from_index(usize::from(index)) else {
                     return Err(self

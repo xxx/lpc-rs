@@ -4258,6 +4258,7 @@ mod test_instructions {
             functions.insert(ustr("second"), Arc::new(second(&path)));
             let program = Program {
                 filename: path,
+                dispatch: Box::new(crate::interpreter::program::dispatch_table(&functions)),
                 functions: Box::new(functions),
                 initializer: Some(initializer.into()),
                 ..Default::default()

@@ -72,6 +72,11 @@ other languages. An object can inherit from multiple objects, and the order of
 inheritance matters. If two inherited-from objects provide functions with the
 same name, the function that is inherited last will "win".
 
+A call by name reaches the object's last definition of the name wherever the
+call was written, so a parent's call to a function the child redefines runs
+the child's; `::f()` reaches the parent's own. A `private` function is never
+overridden.
+
 ### interactive
 
 An interactive object is one that is currently controlled by a player. NPCs

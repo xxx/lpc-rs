@@ -944,9 +944,47 @@ mod tests {
             let calls: Vec<_> = f
                 .instructions
                 .iter()
-                .filter(|i| matches!(i, Instruction::Call(..) | Instruction::CallFp(..)))
+                .filter(|i| matches!(i, Instruction::CallQualified(..) | Instruction::CallFp(..)))
                 .collect();
-            assert!(matches!(calls[..], [Instruction::Call(..)]), "{calls:?}");
+            assert!(
+                matches!(calls[..], [Instruction::CallQualified(..)]),
+                "{calls:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_parent_call_is_qualified_and_a_plain_call_is_not() {
+            let code = r#"inherit "/std/object";
+                void public_function() { ::public_function(); }
+                void f() { public_function(); }"#;
+            let compiled = compile(code).await.unwrap();
+            let calls = |name: &str| -> Vec<Instruction> {
+                compiled
+                    .program
+                    .functions
+                    .values()
+                    .rev()
+                    .find(|f| f.name() == name)
+                    .unwrap()
+                    .instructions
+                    .iter()
+                    .filter(|i| i.arg_list().is_some())
+                    .cloned()
+                    .collect()
+            };
+            assert!(
+                matches!(
+                    calls("public_function")[..],
+                    [Instruction::CallQualified(..)]
+                ),
+                "{:?}",
+                calls("public_function")
+            );
+            assert!(
+                matches!(calls("f")[..], [Instruction::Call(..)]),
+                "{:?}",
+                calls("f")
+            );
         }
 
         #[tokio::test]

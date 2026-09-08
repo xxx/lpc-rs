@@ -77,7 +77,7 @@ use crate::{
     },
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
-        program::{Program, Region},
+        program::{Program, Region, dispatch_table},
     },
 };
 
@@ -371,6 +371,8 @@ impl CodegenWalker {
             .map(|f| (f.prototype.name.to_string(), f.clone()))
             .collect::<IndexMap<_, _, ahash::RandomState>>();
 
+        let dispatch = dispatch_table(&functions);
+
         let num_globals = self.global_counter.number_emitted();
 
         let filename = Arc::new(LpcPath::InGame(
@@ -394,6 +396,7 @@ impl CodegenWalker {
         Ok(Program {
             filename,
             functions: Box::new(functions),
+            dispatch: Box::new(dispatch),
             initializer: self.initializer,
             unmangled_functions: Box::new(unmangled_functions),
             global_variables: Box::new(global_variables),
@@ -1507,7 +1510,12 @@ impl TreeWalker for CodegenWalker {
                                     name
                                 ));
                             }
-                            Instruction::Call(ustr(&prototype.mangle()), list)
+                            let mangled = ustr(&prototype.mangle());
+                            if namespace == &CallNamespace::Local {
+                                Instruction::Call(mangled, list)
+                            } else {
+                                Instruction::CallQualified(mangled, list)
+                            }
                         }
                         Callee::SimulEfun(_) => Instruction::CallSimulEfun(*name, list),
                         Callee::Efun(_) => {

@@ -214,7 +214,7 @@ async fn call_other_with_too_few_args_into_a_ref_function_is_a_runtime_error() {
 }
 
 #[tokio::test]
-async fn a_child_override_does_not_intercept_the_bases_ref_call() {
+async fn a_child_override_intercepts_the_bases_ref_call() {
     // `inherit` always compiles its target from disk (never from the object
     // space), so `/base` here is `tests/fixtures/code/base.c`.
     let vm = Vm::new(test_config());
@@ -223,15 +223,14 @@ async fn a_child_override_does_not_intercept_the_bases_ref_call() {
             "/child.c",
             indoc! { r#"
                 inherit "/base";
-                void inc(int x) { }
+                void inc(int ref x) { }
                 int create() { return run(); }
             "# },
         )
         .await;
-    // `run()`'s call to `inc` binds statically to `/base.c`'s own `inc` at
-    // compile time, not virtually to the child's override, so `y` becomes 2.
+    // `run()`'s call to `inc` reaches the child's `inc`, which leaves `y` at 1.
     let task = result.unwrap();
-    assert_eq!(task.result(), Some(LpcRef::from(2)));
+    assert_eq!(task.result(), Some(LpcRef::from(1)));
 }
 
 #[tokio::test]

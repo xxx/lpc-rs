@@ -132,8 +132,13 @@ pub enum Instruction {
     /// x.1 = ~x.0
     BitwiseNot(RegisterVariant, RegisterVariant),
 
-    /// Call a function in the current object, by mangled name.
+    /// Call a function in the current object, by mangled name; the name's
+    /// most-derived definition is reached (see `Program::dispatch`).
     Call(Ustr, ArgList),
+
+    /// Call the function with this mangled name itself, for `::f()` and
+    /// `name::f()`.
+    CallQualified(Ustr, ArgList),
 
     /// Call an Efun. x.0 is the index into the `EFUN_PROTOTYPES` map.
     CallEfun(u8, ArgList),
@@ -326,6 +331,7 @@ impl Instruction {
             | Self::Sub(_, _, d)
             | Self::Xor(_, _, d) => Some(d),
             Self::Call(_, _)
+            | Self::CallQualified(_, _)
             | Self::CallEfun(_, _)
             | Self::CallSimulEfun(_, _)
             | Self::CallFp(_, _)
@@ -360,6 +366,7 @@ impl Instruction {
             Self::And(a0, a1, a2) => Self::And(f(a0), f(a1), f(a2)),
             Self::BitwiseNot(a0, a1) => Self::BitwiseNot(f(a0), f(a1)),
             Self::Call(a0, a1) => Self::Call(a0, a1),
+            Self::CallQualified(a0, a1) => Self::CallQualified(a0, a1),
             Self::CallEfun(a0, a1) => Self::CallEfun(a0, a1),
             Self::CallSimulEfun(a0, a1) => Self::CallSimulEfun(a0, a1),
             Self::CallFp(a0, a1) => Self::CallFp(f(a0), a1),
@@ -447,6 +454,7 @@ impl Instruction {
     pub fn arg_list(&self) -> Option<ArgList> {
         match *self {
             Self::Call(_, list)
+            | Self::CallQualified(_, list)
             | Self::CallEfun(_, list)
             | Self::CallSimulEfun(_, list)
             | Self::CallFp(_, list)
@@ -473,7 +481,7 @@ impl Instruction {
 
 impl Instruction {
     /// How many instruction variants exist.
-    pub const COUNT: usize = 44;
+    pub const COUNT: usize = 45;
 
     /// Every mnemonic, ordered by [`Instruction::index`].
     pub const MNEMONICS: [&'static str; Self::COUNT] = [
@@ -482,6 +490,7 @@ impl Instruction {
         "and",
         "bitwise_not",
         "call",
+        "call_qualified",
         "call_efun",
         "call_simul_efun",
         "call_fp",
@@ -531,45 +540,46 @@ impl Instruction {
             Self::And(..) => 2,
             Self::BitwiseNot(..) => 3,
             Self::Call(..) => 4,
-            Self::CallEfun(..) => 5,
-            Self::CallSimulEfun(..) => 6,
-            Self::CallFp(..) => 7,
-            Self::CallOther(..) => 8,
-            Self::Cast(..) => 9,
-            Self::CatchEnd => 10,
-            Self::CatchStart(..) => 11,
-            Self::Cmp(..) => 12,
-            Self::Copy(..) => 13,
-            Self::Dec(..) => 14,
-            Self::Div(..) => 15,
-            Self::FunctionPtrConst { .. } => 16,
-            Self::Inc(..) => 17,
-            Self::Jcmp(..) => 18,
-            Self::Jmp(..) => 19,
-            Self::Jncmp(..) => 20,
-            Self::Jnz(..) => 21,
-            Self::Jz(..) => 22,
-            Self::Load(..) => 23,
-            Self::LoadMappingKey(..) => 24,
-            Self::MapConst(..) => 25,
-            Self::Mod(..) => 26,
-            Self::Mul(..) => 27,
-            Self::Negate(..) => 28,
-            Self::Not(..) => 29,
-            Self::NewUpvalue(..) => 30,
-            Self::Or(..) => 31,
-            Self::PopulateArgv(..) => 32,
-            Self::PopulateDefaults => 33,
-            Self::PushArrayItem(..) => 34,
-            Self::PushPartialArg(..) => 35,
-            Self::Range(..) => 36,
-            Self::Ret => 37,
-            Self::Shl(..) => 38,
-            Self::Shr(..) => 39,
-            Self::Sizeof(..) => 40,
-            Self::Store(..) => 41,
-            Self::Sub(..) => 42,
-            Self::Xor(..) => 43,
+            Self::CallQualified(..) => 5,
+            Self::CallEfun(..) => 6,
+            Self::CallSimulEfun(..) => 7,
+            Self::CallFp(..) => 8,
+            Self::CallOther(..) => 9,
+            Self::Cast(..) => 10,
+            Self::CatchEnd => 11,
+            Self::CatchStart(..) => 12,
+            Self::Cmp(..) => 13,
+            Self::Copy(..) => 14,
+            Self::Dec(..) => 15,
+            Self::Div(..) => 16,
+            Self::FunctionPtrConst { .. } => 17,
+            Self::Inc(..) => 18,
+            Self::Jcmp(..) => 19,
+            Self::Jmp(..) => 20,
+            Self::Jncmp(..) => 21,
+            Self::Jnz(..) => 22,
+            Self::Jz(..) => 23,
+            Self::Load(..) => 24,
+            Self::LoadMappingKey(..) => 25,
+            Self::MapConst(..) => 26,
+            Self::Mod(..) => 27,
+            Self::Mul(..) => 28,
+            Self::Negate(..) => 29,
+            Self::Not(..) => 30,
+            Self::NewUpvalue(..) => 31,
+            Self::Or(..) => 32,
+            Self::PopulateArgv(..) => 33,
+            Self::PopulateDefaults => 34,
+            Self::PushArrayItem(..) => 35,
+            Self::PushPartialArg(..) => 36,
+            Self::Range(..) => 37,
+            Self::Ret => 38,
+            Self::Shl(..) => 39,
+            Self::Shr(..) => 40,
+            Self::Sizeof(..) => 41,
+            Self::Store(..) => 42,
+            Self::Sub(..) => 43,
+            Self::Xor(..) => 44,
         }
     }
 
@@ -601,7 +611,7 @@ impl Display for Instruction {
             Instruction::Cmp(kind, r1, r2, r3) => {
                 write!(f, "{} {kind} {r1}, {r2}, {r3}", self.mnemonic())
             }
-            Instruction::Call(name, list) => {
+            Instruction::Call(name, list) | Instruction::CallQualified(name, list) => {
                 write!(f, "{} {name}, {list}", self.mnemonic())
             }
             Instruction::CallEfun(name_index, list) => {
@@ -743,6 +753,10 @@ mod tests {
             "call foo__v__/a.c__pb__, a0"
         );
         assert_eq!(
+            Instruction::CallQualified(ustr("foo__v__/a.c__pb__"), ArgList(0)).to_string(),
+            "call_qualified foo__v__/a.c__pb__, a0"
+        );
+        assert_eq!(
             Instruction::CallSimulEfun(ustr("bar"), ArgList(1)).to_string(),
             "call_simul_efun bar, a1"
         );
@@ -851,12 +865,12 @@ mod tests {
     }
 
     #[test]
-    fn five_variants_carry_an_argument_list() {
+    fn six_variants_carry_an_argument_list() {
         let carriers = every_variant()
             .iter()
             .filter(|i| i.arg_list().is_some())
             .count();
-        assert_eq!(carriers, 5);
+        assert_eq!(carriers, 6);
     }
 
     #[test]
@@ -874,6 +888,7 @@ mod tests {
             And(r(), r(), r()),
             BitwiseNot(r(), r()),
             Call(ustr("f"), ArgList(0)),
+            CallQualified(ustr("f"), ArgList(0)),
             CallEfun(0, ArgList(0)),
             CallSimulEfun(ustr("f"), ArgList(0)),
             CallFp(r(), ArgList(0)),
@@ -970,7 +985,7 @@ mod tests {
             .iter()
             .filter(|i| i.dest_register().is_none())
             .count();
-        assert_eq!(none_count, 21);
+        assert_eq!(none_count, 22);
         for i in [
             Call(ustr("f"), ArgList(0)),
             CallEfun(0, ArgList(0)),

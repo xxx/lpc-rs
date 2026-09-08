@@ -9,7 +9,7 @@ use derive_builder::Builder;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{
-    RegisterSize,
+    INIT_GLOBALS, INIT_PROGRAM, RegisterSize,
     lpc_path::LpcPath,
     pragma_flags::PragmaFlags,
     register::{Register, RegisterVariant},
@@ -47,6 +47,45 @@ pub struct Region {
     pub init: Ustr,
 }
 
+/// What a plain call of a mangled name reaches.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Target {
+    /// The most-derived definition of the called name.
+    pub function: Arc<ProgramFunction>,
+    /// Whether that is a different function from the one the call was
+    /// compiled against.
+    pub overridden: bool,
+}
+
+/// The [`Program::dispatch`] table of `functions`, which holds inherited
+/// functions first, in inherit order, the program's own last.
+pub fn dispatch_table(
+    functions: &IndexMap<Ustr, Arc<ProgramFunction>, ahash::RandomState>,
+) -> IndexMap<Ustr, Target, ahash::RandomState> {
+    let mut latest: HashMap<&str, &Arc<ProgramFunction>> = HashMap::new();
+    for function in functions.values().filter(|f| !f.is_closure()) {
+        latest.insert(function.prototype.name.as_ref(), function);
+    }
+    functions
+        .iter()
+        .map(|(&mangled, function)| {
+            let name = function.prototype.name.as_ref();
+            let own = function.is_closure()
+                || function.prototype.flags.private()
+                || name == INIT_GLOBALS
+                || name == INIT_PROGRAM;
+            let target = if own { function } else { latest[name] };
+            (
+                mangled,
+                Target {
+                    function: target.clone(),
+                    overridden: !Arc::ptr_eq(target, function),
+                },
+            )
+        })
+        .collect()
+}
+
 #[derive(Debug, Default, PartialEq, Eq, Clone, Builder)]
 #[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
 pub struct Program {
@@ -58,6 +97,12 @@ pub struct Program {
     /// Every function by mangled name, inherited ones first. Keyed by the
     /// interned name so a `Call`'s `Ustr` hashes and compares by pointer.
     pub functions: Box<IndexMap<Ustr, Arc<ProgramFunction>, ahash::RandomState>>,
+
+    /// Every mangled name mapped to what a plain call of it reaches: the
+    /// object's most-derived definition of the same unmangled name, the
+    /// last seen in `functions` order. A closure, an initializer or a
+    /// `private` function reaches itself.
+    pub dispatch: Box<IndexMap<Ustr, Target, ahash::RandomState>>,
 
     /// Function mapping of unmangled name to the function.
     /// This is needed for `call_other`.
@@ -100,6 +145,12 @@ impl Program {
     #[inline]
     pub fn function(&self, mangled: Ustr) -> Option<&Arc<ProgramFunction>> {
         self.functions.get(&mangled)
+    }
+
+    /// What a plain call of `mangled` reaches.
+    #[inline]
+    pub fn target(&self, mangled: Ustr) -> Option<&Target> {
+        self.dispatch.get(&mangled)
     }
 
     /// Look up a function by its unmangled name, then its mangled one,
@@ -311,6 +362,67 @@ mod tests {
         );
         let bases: Vec<_> = program.layout.iter().map(|r| r.base).collect();
         assert_eq!(bases, [10, 0]);
+    }
+
+    #[test]
+    fn a_plain_call_reaches_the_last_definition_of_its_name() {
+        use lpc_rs_core::function_flags::FunctionFlags;
+        use lpc_rs_function_support::function_prototype::{FunctionKind, FunctionPrototypeBuilder};
+        use ustr::ustr;
+
+        let function = |name: &str, file: &str, kind, flags| {
+            let prototype = FunctionPrototypeBuilder::default()
+                .name(name.to_string())
+                .filename(Arc::new(file.into()))
+                .return_type(LpcType::Void)
+                .kind(kind)
+                .flags(flags)
+                .build()
+                .unwrap();
+            Arc::new(ProgramFunction::new(prototype, 0))
+        };
+        let public = FunctionFlags::default();
+        let private = FunctionFlags::from(&["private"][..]);
+        let parents_g = function("g", "/p.c", FunctionKind::Local, public);
+        let parents_h = function("h", "/p.c", FunctionKind::Local, private);
+        let parents_init = function(INIT_GLOBALS, "/p.c", FunctionKind::Local, public);
+        let closure = function("closure-1", "/p.c", FunctionKind::Closure, public);
+        let childs_g = function("g", "/c.c", FunctionKind::Local, public);
+        let childs_h = function("h", "/c.c", FunctionKind::Local, public);
+        let childs_init = function(INIT_GLOBALS, "/c.c", FunctionKind::Local, public);
+        let mut functions: IndexMap<Ustr, Arc<ProgramFunction>, ahash::RandomState> =
+            IndexMap::default();
+        for f in [
+            &parents_g,
+            &parents_h,
+            &parents_init,
+            &closure,
+            &childs_g,
+            &childs_h,
+            &childs_init,
+        ] {
+            functions.insert(ustr(&f.mangle()), Arc::clone(f));
+        }
+
+        let dispatch = dispatch_table(&functions);
+
+        let target = |f: &Arc<ProgramFunction>| &dispatch[&ustr(&f.mangle())];
+        assert!(Arc::ptr_eq(&target(&parents_g).function, &childs_g));
+        assert!(target(&parents_g).overridden);
+        assert!(Arc::ptr_eq(&target(&childs_g).function, &childs_g));
+        assert!(!target(&childs_g).overridden);
+        assert!(
+            Arc::ptr_eq(&target(&parents_h).function, &parents_h),
+            "private is not overridden"
+        );
+        assert!(
+            Arc::ptr_eq(&target(&parents_init).function, &parents_init),
+            "an initializer is its own"
+        );
+        assert!(
+            Arc::ptr_eq(&target(&closure).function, &closure),
+            "a closure is its own"
+        );
     }
 
     fn program_with(name: &'static str) -> Program {
