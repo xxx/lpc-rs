@@ -482,7 +482,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
                                 if let (LpcRef::Int(start), LpcRef::Int(end)) = (&index1, &index2) {
                                     let (real_start, real_end) =
-                                        resolve_range(start.0, end.0, string.len());
+                                        resolve_range(start.0, end.0, string.char_count());
 
                                     if real_start <= real_end {
                                         let len = real_end - real_start + 1;

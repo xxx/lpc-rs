@@ -3464,6 +3464,28 @@ mod test_instructions {
         }
 
         #[tokio::test]
+        async fn string_positions_count_characters_not_bytes() {
+            let code = indoc! { r##"
+                    string s = "héllo";
+                    int n = sizeof(s);
+                    int last = s[-1];
+                    string mid = s[1..2];
+                    string tail = s[3..9];
+                "##};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("n", BareVal::Int(5)),
+                    ("last", BareVal::Int('o' as LpcIntInner)),
+                    ("mid", BareVal::String("él".into())),
+                    ("tail", BareVal::String("lo".into())),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
         async fn a_string_in_a_mixed_is_not_an_array_index() {
             let code = r#"mixed m = "x"; int *a = ({ 1 }); int i = a[m];"#;
 
