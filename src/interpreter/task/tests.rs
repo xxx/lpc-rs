@@ -5177,6 +5177,17 @@ mod destructed_refs {
     }
 
     #[tokio::test]
+    async fn an_untyped_parameter_takes_any_value() {
+        let code = indoc! { r#"
+            mixed echo(x) { return x; }
+            int create() { return echo("s") == "s" && echo(3) == 3; }
+        "# };
+        let task = run_prog(code).await;
+
+        assert_eq!(task.result().unwrap(), LpcRef::from(1));
+    }
+
+    #[tokio::test]
     async fn this_object_reads_as_zero_after_self_destruct() {
         let code = indoc! { r##"
             int this_zero;
