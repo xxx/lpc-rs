@@ -115,6 +115,7 @@ extern {
         "int" => Token::Int(<Span>),
         "float" => Token::Float(<Span>),
         "string" => Token::String(<Span>),
+        "bytes" => Token::Bytes(<Span>),
         "object" => Token::Object(<Span>),
         "mapping" => Token::Mapping(<Span>),
         "mixed" => Token::Mixed(<Span>),
@@ -372,6 +373,7 @@ Type: (Span, &'static str) = {
     "int" => (<>, "int"),
     "float" => (<>, "float"),
     "string" => (<>, "string"),
+    "bytes" => (<>, "bytes"),
     "mixed" => (<>, "mixed"),
     "mapping" => (<>, "mapping"),
     "object" => (<>, "object"),
@@ -735,6 +737,10 @@ CastExpression: ExpressionNode = {
         let span = Span::combine(Some(l), expr.span());
         if cast_type.1 == "void" {
             let error = lpc_error!(span, "cannot cast to `void`");
+            return Err(ParseError::User { error });
+        }
+        if cast_type.1 == "bytes" {
+            let error = lpc_error!(span, "cannot cast to `bytes`; convert with to_bytes()");
             return Err(ParseError::User { error });
         }
         let type_ = LpcType::from(cast_type.1).as_array(star.is_some());
