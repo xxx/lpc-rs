@@ -37,17 +37,6 @@ pub(crate) fn hex_float(f: f64) -> String {
     format!("{sign}0x{lead}{fraction}p{exp:+}")
 }
 
-/// Whether `s` is a valid save-file name: an ASCII identifier,
-/// `[A-Za-z_][A-Za-z0-9_]*`.
-pub(crate) fn is_name(s: &str) -> bool {
-    let mut bytes = s.bytes();
-    match bytes.next() {
-        Some(b) if b.is_ascii_alphabetic() || b == b'_' => {}
-        _ => return false,
-    }
-    bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
-}
-
 /// An error when `depth` has gone past [`MAX_DEPTH`].
 fn too_deep(depth: usize) -> Result<()> {
     if depth > MAX_DEPTH {
@@ -147,33 +136,26 @@ pub(crate) fn write_line(
 /// never loads.
 pub(crate) type ObjectResolver<'a> = &'a dyn Fn(&str) -> Option<Arc<Process>>;
 
-/// The name and the value text of one `name value` line. A blank line, a
-/// separator other than one space, or a name that is not an identifier is
-/// an error.
+/// The name and the value text of one `name value` line. The name is
+/// everything up to the first space and may be empty; the value is
+/// everything after it and must be non-empty and not start with a space
+/// or tab. A line with no space at all is an error.
 pub(crate) fn split_line(line: &str) -> Result<(&str, &str)> {
-    let name_len = line
-        .bytes()
-        .take_while(|b| b.is_ascii_alphanumeric() || *b == b'_')
-        .count();
-    if !is_name(&line[..name_len]) {
-        return Err(LpcError::runtime(
-            "save file: a line must start with a variable name at byte 0",
-        ));
-    }
-    let rest = &line[name_len..];
-    let Some(value) = rest.strip_prefix(' ') else {
+    let Some(space) = line.find(' ') else {
         return Err(LpcError::runtime(format!(
-            "save file: one space must follow the variable name at byte {name_len}"
+            "save file: a line must contain a space, at byte {}",
+            line.len()
         )));
     };
-    if value.starts_with(' ') || value.starts_with('\t') || value.is_empty() {
+    let name = &line[..space];
+    let value = &line[space + 1..];
+    if value.is_empty() || value.starts_with(' ') || value.starts_with('\t') {
         return Err(LpcError::runtime(format!(
-            "save file: no value after `{}` at byte {}",
-            &line[..name_len],
-            name_len + 1
+            "save file: no value after `{name}` at byte {}",
+            space + 1
         )));
     }
-    Ok((&line[..name_len], value))
+    Ok((name, value))
 }
 
 /// Parse the whole of `text` as one value, minting containers into `txn`.
@@ -722,13 +704,20 @@ mod tests {
     }
 
     #[test]
-    fn split_line_takes_a_name_one_space_and_the_rest() {
+    fn split_line_takes_a_name_the_first_space_and_the_rest() {
         assert_eq!(
             split_line("hit_points 7220").unwrap(),
             ("hit_points", "7220")
         );
         assert_eq!(split_line(r#"s "a b""#).unwrap(), ("s", r#""a b""#));
-        for bad in ["", "a  1", "a\t1", "a", "a ", " a 1", "1a 1"] {
+        // A name need not be an identifier.
+        assert_eq!(split_line("a-b 1").unwrap(), ("a-b", "1"));
+        assert_eq!(split_line("1x 1").unwrap(), ("1x", "1"));
+        assert_eq!(split_line("é 1").unwrap(), ("é", "1"));
+        assert_eq!(split_line("({ 1").unwrap(), ("({", "1"));
+        // An empty name is fine: a line beginning with a space.
+        assert_eq!(split_line(" 1").unwrap(), ("", "1"));
+        for bad in ["", "a", "a  1", "a\t1", "a ", "\t4"] {
             assert!(split_line(bad).is_err(), "{bad:?}");
         }
     }

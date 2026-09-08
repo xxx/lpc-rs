@@ -7,14 +7,14 @@ use crate::interpreter::{
         file_access::{authorize_save, record_save},
     },
     lpc_ref::LpcRef,
-    save_format::{is_name, write_line},
+    save_format::write_line,
 };
 
 /// `save_map(m, file)`: the string-keyed mapping `m` as `key value` lines
 /// in `<file>.o`, root-relative, once the master's `valid_write` allows the
-/// unsuffixed path. A non-string key, or a string key that is not a valid
-/// variable name, is an error before anything is checked or written. Built
-/// now, written at commit.
+/// unsuffixed path. A non-string key, or a string key containing whitespace,
+/// is an error before anything is checked or written. Built now, written at
+/// commit.
 pub async fn save_map<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     if !matches!(context.arg(0), LpcRef::Mapping(_)) {
         return Err(context.runtime_error("save_map: the first argument must be a mapping"));
@@ -25,9 +25,9 @@ pub async fn save_map<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
             .map(|(key, value)| match key {
                 LpcRef::String(s) => {
                     let key = s.to_str().to_owned();
-                    if !is_name(&key) {
+                    if key.contains([' ', '\t', '\n', '\r']) {
                         return Err(context.runtime_error(format!(
-                            "save_map: a key must be a variable name, not \"{key}\""
+                            "save_map: a key cannot contain whitespace: \"{key}\""
                         )));
                     }
                     Ok((key, value.clone()))
@@ -110,70 +110,83 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_key_that_is_not_a_variable_name_is_an_error_before_anything_is_written() {
-        let root = TempLib::new("save-map-bad-name");
+    async fn a_key_that_is_not_an_identifier_saves_and_restores() {
+        let root = TempLib::new("save-map-hyphen-key");
         let vm = allowing_vm(&root).await;
-        let w = vm
-            .initialize_process_from_code(
-                "/w.c",
-                r#"string err; void create() { err = catch(save_map(([ "a-b": 1 ]), "/m")); }"#,
-            )
-            .await
-            .unwrap()
-            .context
-            .process;
-        assert!(
-            string_global(&vm, &w, "err")
-                .contains(r#"save_map: a key must be a variable name, not "a-b""#),
-            "{}",
-            string_global(&vm, &w, "err")
+        vm.initialize_process_from_code(
+            "/w.c",
+            r#"void create() { save_map(([ "a-b": 1 ]), "/m"); }"#,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join("m.o")).unwrap(),
+            "a-b 1\n"
         );
-        assert!(!root.join("m.o").exists());
     }
 
     #[tokio::test]
-    async fn a_key_containing_a_newline_is_an_error_before_anything_is_written() {
-        let root = TempLib::new("save-map-newline-key");
-        let vm = allowing_vm(&root).await;
-        let w = vm
-            .initialize_process_from_code(
-                "/w.c",
-                indoc! { r#"
-                    string err;
-                    void create() { err = catch(save_map(([ "a 1\nb": 1 ]), "/m")); }
-                "# },
-            )
-            .await
-            .unwrap()
-            .context
-            .process;
-        assert!(
-            string_global(&vm, &w, "err").contains("save_map: a key must be a variable name"),
-            "{}",
-            string_global(&vm, &w, "err")
-        );
-        assert!(!root.join("m.o").exists());
-    }
-
-    #[tokio::test]
-    async fn an_empty_key_is_an_error_before_anything_is_written() {
+    async fn an_empty_key_saves_as_a_leading_space_and_restores_as_the_empty_string() {
         let root = TempLib::new("save-map-empty-key");
         let vm = allowing_vm(&root).await;
-        let w = vm
+        vm.initialize_process_from_code(
+            "/w.c",
+            r#"void create() { save_map(([ "": 1 ]), "/m"); }"#,
+        )
+        .await
+        .unwrap();
+        assert_eq!(std::fs::read_to_string(root.join("m.o")).unwrap(), " 1\n");
+        let r = vm
             .initialize_process_from_code(
-                "/w.c",
-                r#"string err; void create() { err = catch(save_map(([ "": 1 ]), "/m")); }"#,
+                "/r.c",
+                r#"string check; void create() { mapping m = restore_map("/m"); check = implode(keys(m), ","); }"#,
             )
             .await
             .unwrap()
             .context
             .process;
-        assert!(
-            string_global(&vm, &w, "err")
-                .contains(r#"save_map: a key must be a variable name, not """#),
-            "{}",
-            string_global(&vm, &w, "err")
-        );
+        assert_eq!(string_global(&vm, &r, "check"), "");
+    }
+
+    #[tokio::test]
+    async fn a_key_containing_whitespace_is_an_error_before_anything_is_written() {
+        let root = TempLib::new("save-map-whitespace-key");
+        let vm = allowing_vm(&root).await;
+        for (i, (code, key)) in [
+            (
+                r#"string err; void create() { err = catch(save_map(([ "A B": 1 ]), "/m")); }"#,
+                "A B",
+            ),
+            (
+                r#"string err; void create() { err = catch(save_map(([ "a\tb": 1 ]), "/m")); }"#,
+                "a\tb",
+            ),
+            (
+                r#"string err; void create() { err = catch(save_map(([ "a\nb": 1 ]), "/m")); }"#,
+                "a\nb",
+            ),
+            (
+                r#"string err; void create() { err = catch(save_map(([ "a\rb": 1 ]), "/m")); }"#,
+                "a\rb",
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let w = vm
+                .initialize_process_from_code(format!("/w{i}.c"), code)
+                .await
+                .unwrap()
+                .context
+                .process;
+            assert!(
+                string_global(&vm, &w, "err").contains(&format!(
+                    "save_map: a key cannot contain whitespace: \"{key}\""
+                )),
+                "{}",
+                string_global(&vm, &w, "err")
+            );
+        }
         assert!(!root.join("m.o").exists());
     }
 

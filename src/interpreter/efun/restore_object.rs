@@ -143,6 +143,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_hyphenated_name_is_ignored_whether_or_not_the_object_declares_the_prefix() {
+        let root = TempLib::new("restore-hyphenated-name");
+        std::fs::write(root.join("r.o"), "a-b 1\n").unwrap();
+        let vm = allowing_vm(&root).await;
+        let r = vm
+            .initialize_process_from_code(
+                "/r.c",
+                r#"int a; int got; void create() { got = restore_object("/r"); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(vm.global_state.committed_global(&r, 0u16), LpcRef::from(0));
+        assert_eq!(vm.global_state.committed_global(&r, 1u16), LpcRef::from(1));
+        let z = vm
+            .initialize_process_from_code(
+                "/z.c",
+                r#"int z; int got; void create() { got = restore_object("/r"); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(vm.global_state.committed_global(&z, 0u16), LpcRef::from(0));
+        assert_eq!(vm.global_state.committed_global(&z, 1u16), LpcRef::from(1));
+    }
+
+    #[tokio::test]
     async fn a_file_missing_its_final_newline_still_restores_the_last_line() {
         let root = TempLib::new("restore-no-final-newline");
         std::fs::write(root.join("r.o"), "a 5\nleft 1").unwrap();

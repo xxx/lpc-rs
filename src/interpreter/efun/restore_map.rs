@@ -79,6 +79,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_hyphenated_line_restores_with_its_full_name_as_the_key() {
+        let root = TempLib::new("restore-map-hyphen");
+        std::fs::write(root.join("m.o"), "a-b 1\n").unwrap();
+        let vm = allowing_vm(&root).await;
+        let r = vm
+            .initialize_process_from_code(
+                "/r.c",
+                r#"string check; void create() { mapping m = restore_map("/m"); check = implode(keys(m), ","); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(string_global(&vm, &r, "check"), "a-b");
+    }
+
+    #[tokio::test]
+    async fn a_leading_space_line_restores_with_the_empty_string_key() {
+        let root = TempLib::new("restore-map-empty-key");
+        std::fs::write(root.join("m.o"), " 1\n").unwrap();
+        let vm = allowing_vm(&root).await;
+        let r = vm
+            .initialize_process_from_code(
+                "/r.c",
+                r#"string check; void create() { mapping m = restore_map("/m"); check = implode(keys(m), ","); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(string_global(&vm, &r, "check"), "");
+    }
+
+    #[tokio::test]
     async fn a_missing_file_is_an_empty_mapping() {
         let root = TempLib::new("restore-map-missing");
         let vm = allowing_vm(&root).await;
