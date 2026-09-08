@@ -401,8 +401,7 @@ mod tests {
         assert!(err.contains("to_bytes"), "{err}");
     }
 
-    /// The write lands at commit; a read in the same task already sees it,
-    /// and the raw bytes land on disk once the task commits.
+    /// The write lands at commit; a read in the same task already sees it.
     #[tokio::test]
     async fn write_bytes_lands_bytes() {
         let (root, vm) = lib("wb-lands").await;
