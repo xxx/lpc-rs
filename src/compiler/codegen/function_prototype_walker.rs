@@ -136,8 +136,27 @@ impl TreeWalker for FunctionPrototypeWalker {
             return Err(e);
         }
 
-        // Store the prototype now, to allow for forward references.
         let num_args = RegisterSize::try_from(node.parameters.len())?;
+        // A fixed-count inherited function is redefined with its count, a
+        // varargs one with any (CD); the parent's call sites then fit.
+        if let Some(inherited) = self
+            .context
+            .lookup_function(node.name, &CallNamespace::Parent)
+            && !inherited.flags.varargs()
+            && !inherited.flags.ellipsis()
+            && inherited.arity.num_args != num_args
+        {
+            let e = LpcError::new(format!(
+                "incorrect number of arguments in redefinition of `{}`",
+                node.name
+            ))
+            .with_span(node.span)
+            .with_label("defined here", inherited.span);
+
+            return Err(e);
+        }
+
+        // Store the prototype now, to allow for forward references.
         let num_default_args =
             RegisterSize::try_from(node.parameters.iter().filter(|p| p.value.is_some()).count())?;
 
@@ -255,6 +274,73 @@ mod tests {
         } else {
             panic!("didn't error?")
         }
+    }
+
+    /// Redefine an inherited `g` of `inherited_args` parameters and
+    /// `inherited_flags` with one of `own_args` parameters.
+    async fn redefine(
+        inherited_args: RegisterSize,
+        inherited_flags: FunctionFlags,
+        own_args: usize,
+    ) -> Result<()> {
+        let mut node = FunctionDefNode {
+            return_type: LpcType::Void,
+            name: ustr("g"),
+            parameters: (0..own_args)
+                .map(|i| VarInitNode::new(&format!("p{i}"), LpcType::Int(false)))
+                .collect(),
+            flags: FunctionFlags::default(),
+            body: vec![],
+            span: None,
+        };
+        let mut context = empty_compilation_context();
+        let mut program = Program::default();
+        let prototype = FunctionPrototypeBuilder::default()
+            .name("g")
+            .filename(Arc::new("parent".into()))
+            .return_type(LpcType::Void)
+            .arity(FunctionArity::new(inherited_args))
+            .flags(inherited_flags)
+            .span(Some(Span::new(3, 1..3)))
+            .build()
+            .unwrap();
+        program
+            .functions
+            .insert(ustr("g"), ProgramFunction::new(prototype, 0).into());
+        context.inherits.push(program);
+        let mut walker = FunctionPrototypeWalker::new(context);
+        walker.visit_function_def(&mut node).await
+    }
+
+    #[tokio::test]
+    async fn a_redefinition_keeps_the_inherited_parameter_count() {
+        let public = FunctionFlags::default();
+        assert!(redefine(1, public, 1).await.is_ok());
+        for (inherited, own) in [(0, 1), (1, 0), (1, 2)] {
+            let e = redefine(inherited, public, own).await.unwrap_err();
+            assert_eq!(
+                e.message(),
+                "incorrect number of arguments in redefinition of `g`"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_private_inherited_function_holds_its_count_too() {
+        let e = redefine(0, FunctionFlags::from(&["private"][..]), 1)
+            .await
+            .unwrap_err();
+        assert_regex!(
+            e.message(),
+            "incorrect number of arguments in redefinition of `g`"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_varargs_inherited_function_takes_any_count() {
+        let varargs = FunctionFlags::from(&["varargs"][..]);
+        assert!(redefine(1, varargs, 0).await.is_ok());
+        assert!(redefine(1, varargs, 2).await.is_ok());
     }
 
     #[tokio::test]
