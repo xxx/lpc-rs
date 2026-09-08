@@ -17,10 +17,12 @@ use crate::interpreter::{
 };
 
 /// How a frame is entered: a direct or simul-efun call was compiled against
-/// its callee's parameter list, a door was not.
+/// its callee's parameter list; a virtual call reached a redefinition of
+/// the callee, and a door was compiled against nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CallEntry {
     Direct,
+    Virtual,
     SimulEfun,
     Door,
 }
@@ -28,20 +30,48 @@ pub(crate) enum CallEntry {
 impl CallEntry {
     /// Whether the frame counts as entered from outside its program.
     fn external(self) -> bool {
-        self != Self::Direct
+        !matches!(self, Self::Direct | Self::Virtual)
     }
 
     /// Whether the argument count is held to the callee's parameter list.
+    /// A redefinition runs with the count its parent's call site was
+    /// compiled for: missing arguments are 0, extra ones ignored (CD,
+    /// FluffOS, DGD).
     fn counted(self) -> bool {
-        self != Self::Door
+        matches!(self, Self::Direct | Self::SimulEfun)
     }
 }
 
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
+    /// A plain call by name: the object's most-derived definition of the name.
     #[instrument(level = "debug", skip_all)]
     pub(crate) fn handle_call(&mut self, name: Ustr, list: ArgList) -> lpc_rs_errors::Result<()> {
         let current_frame = self.stack.current_frame()?;
         // Codegen emits `Call` only for a name of this program; a miss is a bug.
+        let Some(target) = current_frame.process.program.target(name) else {
+            return Err(self
+                .stack
+                .runtime_bug(format!("call to unknown local function `{name}`")));
+        };
+        let func = target.function.clone();
+        let entry = if target.overridden {
+            CallEntry::Virtual
+        } else {
+            CallEntry::Direct
+        };
+        let process = current_frame.process.clone();
+
+        self.push_call_frame(process, func, list, entry)
+    }
+
+    /// `::f()` or `name::f()`: the definition the mangled name itself names.
+    #[instrument(level = "debug", skip_all)]
+    pub(crate) fn handle_call_qualified(
+        &mut self,
+        name: Ustr,
+        list: ArgList,
+    ) -> lpc_rs_errors::Result<()> {
+        let current_frame = self.stack.current_frame()?;
         let Some(func) = current_frame.process.program.function(name).cloned() else {
             return Err(self
                 .stack

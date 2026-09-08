@@ -5,6 +5,7 @@ mod call_other;
 mod calling;
 mod catch_result;
 mod entry_args;
+mod inheritance;
 mod loading;
 mod parse_command;
 mod parse_string;

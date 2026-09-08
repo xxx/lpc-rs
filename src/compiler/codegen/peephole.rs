@@ -203,6 +203,7 @@ fn propagation_use(
             || matches!(
                 instruction,
                 Instruction::Call(..)
+                    | Instruction::CallQualified(..)
                     | Instruction::CallEfun(..)
                     | Instruction::CallSimulEfun(..)
                     | Instruction::CallFp(..)
