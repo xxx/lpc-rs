@@ -10,4 +10,4 @@ In `command_not_found`, `previous_object()` is the living.
 
 ### See also
 
-`notify_fail`, `process_input`, `previous_object`
+`notify_fail`, `modify_command`, `process_input`, `previous_object`

@@ -9,7 +9,7 @@ use lpc_rs_utils::lpc_string::LpcString;
 use crate::{
     command::trial,
     interpreter::{
-        COMMAND_NOT_FOUND, PROCESS_INPUT,
+        COMMAND_NOT_FOUND, MODIFY_COMMAND, PROCESS_INPUT,
         apply::{apply_hook, apply_pointer, as_actor, deliver},
         function_type::function_ptr::FunctionPtr,
         lpc_int::LpcInt,
@@ -80,9 +80,55 @@ pub(crate) async fn dispatch_from_connection(
     Ok(Outcome::Unhandled)
 }
 
+/// The line after the master's `modify_command` and the actor's
+/// `process_input`, `None` when either consumed it.
+async fn pre_hook(ctx: &TaskContext, actor: &Arc<Process>, line: &str) -> Result<Option<String>> {
+    let Some(line) = modify_command(ctx, actor, line).await? else {
+        return Ok(None);
+    };
+    process_input(ctx, actor, &line).await
+}
+
+/// `master->modify_command(line, actor)`: a string replaces the line, no
+/// master or no apply passes it through, anything else consumes it
+/// (`None`).
+async fn modify_command(
+    ctx: &TaskContext,
+    actor: &Arc<Process>,
+    line: &str,
+) -> Result<Option<String>> {
+    let Some(master) = ctx.object_space().master_object() else {
+        return Ok(Some(line.to_owned()));
+    };
+    let args = [
+        LpcString::from(line).into(),
+        LpcRef::Object(Arc::downgrade(actor)),
+    ];
+    Ok(
+        match apply_hook(
+            ctx,
+            as_actor(ctx, actor),
+            &master,
+            actor,
+            MODIFY_COMMAND,
+            &args,
+        )
+        .await?
+        {
+            None => Some(line.to_owned()),
+            Some(LpcRef::String(replacement)) => Some(replacement.to_string()),
+            Some(_) => None,
+        },
+    )
+}
+
 /// `process_input`: a string replaces the line, `0` or no hook passes it
 /// through, anything else consumes it (`None`).
-async fn pre_hook(ctx: &TaskContext, actor: &Arc<Process>, line: &str) -> Result<Option<String>> {
+async fn process_input(
+    ctx: &TaskContext,
+    actor: &Arc<Process>,
+    line: &str,
+) -> Result<Option<String>> {
     Ok(
         match apply_hook(
             ctx,
@@ -368,6 +414,70 @@ mod tests {
         assert_eq!(
             globals(pass, 2).await,
             vec![LpcRef::from(1), LpcRef::from(1)]
+        );
+    }
+
+    /// `/secure/master.c` from `master`, then `/player.c` from `player`;
+    /// the player's committed globals in declaration order.
+    async fn globals_under_master(master: &str, player: &str, count: u16) -> Vec<LpcRef> {
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code("/secure/master.c", master)
+            .await
+            .unwrap();
+        let proc = vm
+            .initialize_process_from_code("/player.c", player)
+            .await
+            .unwrap()
+            .context
+            .process;
+        (0..count)
+            .map(|slot| vm.global_state.committed_global(&proc, slot))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn modify_command_rewrites_passes_or_consumes() {
+        let player = indoc! { r#"
+            string arg; int r;
+            void create() { set_this_player(this_object()); enable_commands(); add_action("do_look", "look"); r = command("$look at me"); }
+            int do_look(string a) { arg = a; return 1; }
+        "# };
+        let strip = indoc! { r#"
+            string modify_command(string line, object who) {
+                if (who != find_object("/player")) return "wrong actor";
+                return line[0] == '$' ? line[1..] : line;
+            }
+        "# };
+        assert_eq!(
+            globals_under_master(strip, player, 2).await,
+            vec![s("at me"), LpcRef::from(1)]
+        );
+
+        let consume = "int modify_command(string line, object who) { return 0; }";
+        assert_eq!(
+            globals_under_master(consume, player, 2).await,
+            vec![LpcRef::from(0), LpcRef::from(1)]
+        );
+
+        let absent = "int unrelated() { return 0; }";
+        assert_eq!(
+            globals_under_master(absent, player, 2).await,
+            vec![LpcRef::from(0), LpcRef::from(0)]
+        );
+    }
+
+    #[tokio::test]
+    async fn process_input_sees_the_modified_line() {
+        let player = indoc! { r#"
+            string seen; int r;
+            void create() { set_this_player(this_object()); enable_commands(); add_action("do_look", "look"); r = command("$look"); }
+            string process_input(string line) { seen = line; return line; }
+            int do_look(string a) { return 1; }
+        "# };
+        let strip = "string modify_command(string line, object who) { return line[1..]; }";
+        assert_eq!(
+            globals_under_master(strip, player, 2).await,
+            vec![s("look"), LpcRef::from(1)]
         );
     }
 
