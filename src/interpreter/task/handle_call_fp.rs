@@ -791,4 +791,22 @@ mod tests {
             "runtime error: attempted to call `two` on a destructed object `/other`"
         );
     }
+
+    #[tokio::test]
+    async fn a_union_typed_efun_parameter_takes_a_member_through_a_pointer() {
+        let code = indoc! { r#"
+            int create() {
+                enable_commands();
+                function f = &living();
+                return f(this_object());
+            }
+        "# };
+
+        let proc = Vm::new(test_config())
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap();
+
+        assert_eq!(proc.result().unwrap(), LpcRef::from(1));
+    }
 }
