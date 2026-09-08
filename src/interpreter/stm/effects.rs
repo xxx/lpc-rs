@@ -14,7 +14,13 @@
 //! carries its own send channel. Flushing never re-resolves a transactional
 //! cell, so an effect can never observe end-of-transaction state.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 use tokio::{
     io::{AsyncSeekExt, AsyncWriteExt},
@@ -62,6 +68,10 @@ impl std::fmt::Debug for CallOutSchedule {
             .finish()
     }
 }
+
+/// Ordinal for `WriteFile`'s temp file name, so two concurrent flushes of
+/// the same path never collide.
+static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
 
 /// One physical side effect pending delivery.
 #[derive(Clone)]
@@ -122,6 +132,17 @@ pub(crate) enum Effect {
     /// `write_file`'s append of `contents` to the file at `server`, once the
     /// attempt commits; `in_game` names it in the log when the append fails.
     AppendFile {
+        in_game: String,
+        server: PathBuf,
+        contents: String,
+    },
+
+    /// A save efun's whole-file write of `contents` to `server`, once the
+    /// attempt commits: a temp file beside the target, renamed over it.
+    /// The temp name is unique per flush, so two concurrent flushes of the
+    /// same path never share one. `in_game` names it in the log when the
+    /// write fails.
+    WriteFile {
         in_game: String,
         server: PathBuf,
         contents: String,
@@ -230,6 +251,28 @@ impl Effect {
                     global_state
                         .config
                         .debug_log(format!("write_file: {in_game}: {e}"))
+                        .await;
+                }
+            }
+            Self::WriteFile {
+                in_game,
+                server,
+                contents,
+            } => {
+                let n = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+                let mut temp = server.clone().into_os_string();
+                temp.push(format!(".{n}.tmp"));
+                let temp = PathBuf::from(temp);
+                let written = async {
+                    tokio::fs::write(&temp, contents.as_bytes()).await?;
+                    tokio::fs::rename(&temp, &server).await
+                }
+                .await;
+                if let Err(e) = written {
+                    let _ = tokio::fs::remove_file(&temp).await;
+                    global_state
+                        .config
+                        .debug_log(format!("save file: {in_game}: {e}"))
                         .await;
                 }
             }
@@ -344,6 +387,7 @@ impl std::fmt::Debug for Effect {
             Self::Exec { .. } => f.debug_tuple("Exec").finish(),
             Self::Disconnect { message, .. } => f.debug_tuple("Disconnect").field(message).finish(),
             Self::AppendFile { in_game, .. } => f.debug_tuple("AppendFile").field(in_game).finish(),
+            Self::WriteFile { in_game, .. } => f.debug_tuple("WriteFile").field(in_game).finish(),
             Self::WriteBytes { in_game, .. } => f.debug_tuple("WriteBytes").field(in_game).finish(),
             Self::ReplaceChars { in_game, .. } => {
                 f.debug_tuple("ReplaceChars").field(in_game).finish()
@@ -432,6 +476,41 @@ mod tests {
             .await;
         }
         assert_eq!(std::fs::read_to_string(&server).unwrap(), "one\ntwo\n");
+    }
+
+    #[tokio::test]
+    async fn write_file_replaces_the_whole_file_and_leaves_no_temp() {
+        let root = crate::test_support::TempLib::new("write-file-effect");
+        let server = root.join("save.o");
+        std::fs::write(&server, "old contents that are longer\n").unwrap();
+        let gs = global_state();
+        Effect::WriteFile {
+            in_game: "/save.o".to_owned(),
+            server: server.clone(),
+            contents: "a 1\n".to_owned(),
+        }
+        .flush(&gs)
+        .await;
+        assert_eq!(std::fs::read_to_string(&server).unwrap(), "a 1\n");
+        let entries: Vec<_> = std::fs::read_dir(&*root)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(!entries.iter().any(|f| f.ends_with(".tmp")), "{entries:?}");
+    }
+
+    #[tokio::test]
+    async fn write_file_creates_a_missing_file() {
+        let root = crate::test_support::TempLib::new("write-file-effect-new");
+        let server = root.join("new.o");
+        Effect::WriteFile {
+            in_game: "/new.o".to_owned(),
+            server: server.clone(),
+            contents: "b 2\n".to_owned(),
+        }
+        .flush(&global_state())
+        .await;
+        assert_eq!(std::fs::read_to_string(&server).unwrap(), "b 2\n");
     }
 
     #[tokio::test]

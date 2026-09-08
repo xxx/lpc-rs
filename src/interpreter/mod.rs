@@ -8,6 +8,7 @@ pub(crate) mod continuation;
 pub mod efun;
 pub mod function_type;
 pub(crate) mod json;
+pub(crate) mod save_format;
 
 pub mod lpc_array;
 pub mod lpc_float;
