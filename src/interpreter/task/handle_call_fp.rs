@@ -13,10 +13,10 @@ use ustr::Ustr;
 
 use crate::interpreter::{
     call_frame::CallFrame,
-    efun::Efun,
+    efun::{CALL_OTHER, Efun},
     function_type::{
         function_address::FunctionAddress,
-        function_ptr::{FunctionPtr, ResolvedCall},
+        function_ptr::{FunctionPtr, ResolvedCall, call_other_name, first_arg},
     },
     lpc_ref::{LpcRef, NULL},
     process::{Liveness, Process, shadow::ShadowEntry},
@@ -86,6 +86,8 @@ enum Resolved<'a> {
         ptr: Cow<'a, Arc<FunctionPtr>>,
         name: Ustr,
     },
+    /// `&call_other()`: `&->name()` whose name is its second argument.
+    CallOther { ptr: Cow<'a, Arc<FunctionPtr>> },
 }
 
 /// The error a pointer whose receiver was destructed gives.
@@ -169,6 +171,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         passed,
                     )?)
                 }
+                FunctionAddress::Efun(name) if name == CALL_OTHER => Resolved::CallOther {
+                    ptr: passed.hold(ptr),
+                },
                 FunctionAddress::Efun(name) => {
                     let Some(owner) = ptr
                         .owner
@@ -214,7 +219,17 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     Advance::Suspends => Ok(Called::Pending),
                 }
             }
-            Resolved::Dynamic { ptr, name } => self.call_dynamic_pointer(&ptr, name, passed),
+            Resolved::Dynamic { ptr, name } => {
+                let mut args = ptr.bound_args(&self.passed_values(passed)?);
+                let receiver = first_arg(&mut args);
+                self.call_dynamic(&ptr, name, receiver, args)
+            }
+            Resolved::CallOther { ptr } => {
+                let mut args = ptr.bound_args(&self.passed_values(passed)?);
+                let receiver = first_arg(&mut args);
+                let name = call_other_name(&first_arg(&mut args))?;
+                self.call_dynamic(&ptr, name, receiver, args)
+            }
         }
     }
 
@@ -333,20 +348,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
     }
 
-    /// Call `&->name()` with `passed`: the first bound argument is the
-    /// receiver, resident or the call suspends.
-    fn call_dynamic_pointer(
+    /// Call `name` on `receiver` with `args` for the pointer `ptr`:
+    /// resident, or the call suspends.
+    fn call_dynamic(
         &mut self,
         ptr: &FunctionPtr,
         name: Ustr,
-        passed: Passed<'_>,
+        receiver: LpcRef,
+        args: Vec<LpcRef>,
     ) -> Result<Called> {
-        let mut args = ptr.bound_args(&self.passed_values(passed)?);
-        let receiver = if args.is_empty() {
-            NULL
-        } else {
-            args.remove(0)
-        };
         let process = match &receiver {
             LpcRef::Object(_) | LpcRef::String(_) => {
                 match Self::standing(&receiver, &self.context)? {
@@ -640,6 +650,24 @@ mod tests {
             int one(int x) { return x; }
             int got;
             void create() { object ob = this_object(); function f = &->one(); got = f(ob, 3); }
+        "# };
+        let (mut task, _live) = task_at_first_call_fp(code).await;
+
+        let slice = task.run_slice(&mut 1).unwrap();
+
+        assert!(matches!(slice, Slice::Budget));
+        let frame = task.stack.current_frame().unwrap();
+        assert_eq!(frame.function.name(), "one");
+        assert!(frame.external);
+        assert_eq!(frame.registers[1], LpcRef::from(3));
+    }
+
+    #[tokio::test]
+    async fn a_call_other_pointer_names_its_function_in_its_second_argument() {
+        let code = indoc! { r#"
+            int one(int x) { return x; }
+            int got;
+            void create() { object ob = this_object(); function f = &call_other(); got = f(ob, "one", 3); }
         "# };
         let (mut task, _live) = task_at_first_call_fp(code).await;
 

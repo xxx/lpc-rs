@@ -424,6 +424,67 @@ mod tests {
         );
     }
 
+    /// The port shim's alarm shape: the receiver and name bound, the
+    /// arguments passed at the call.
+    #[tokio::test]
+    async fn a_bound_call_other_pointer_fires_on_a_resident_object() {
+        let vm = vm_with_other().await;
+        let code = indoc! { r#"
+            int got;
+            int add(int x, int y) { return x + y; }
+            void create() {
+                function f = papplyv(&call_other(), ({ this_object(), "add" }));
+                got = f(20, 1);
+            }
+        "# };
+        let process = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&process, 0u16),
+            LpcRef::from(21)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_call_other_pointer_loads_a_path_receiver() {
+        let vm = vm_with_other().await;
+        let code = indoc! { r#"
+            int got;
+            void create() { function f = &call_other(); got = f("/other", "two"); }
+        "# };
+        let process = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&process, 0u16),
+            LpcRef::from(2)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_call_other_pointer_without_a_name_string_is_an_error() {
+        let vm = vm_with_other().await;
+        let code = indoc! { r#"
+            void create() { function f = &call_other(); f(this_object(), 5); }
+        "# };
+        let err = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Invalid name passed to `call_other`: 5"),
+            "{err}"
+        );
+    }
+
     #[tokio::test]
     async fn a_private_function_is_zero() {
         let vm = vm_with_other().await;

@@ -10,15 +10,32 @@ use lpc_rs_core::lpc_path::LpcPath;
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::ThinVec;
+use ustr::Ustr;
 
 use crate::interpreter::stm::{TxnHandle, VarId};
 use crate::interpreter::{
-    efun::EFUN_FUNCTIONS,
+    efun::{CALL_OTHER, EFUN_FUNCTIONS},
     function_type::function_address::FunctionAddress,
     lpc_ref::{LpcRef, NULL},
     process::Process,
     task_context::{Caller, Callers, Loader, ObjectLookup, TaskContext},
 };
+
+/// The first of `args`, taken; `0` when there is none.
+pub(crate) fn first_arg(args: &mut Vec<LpcRef>) -> LpcRef {
+    if args.is_empty() {
+        NULL
+    } else {
+        args.remove(0)
+    }
+}
+
+/// The function a `call_other` pointer's second argument names.
+pub(crate) fn call_other_name(name: &LpcRef) -> Result<Ustr> {
+    name.as_str()
+        .map(Ustr::from)
+        .ok_or_else(|| LpcError::runtime(format!("Invalid name passed to `call_other`: {name}")))
+}
 
 /// A pointer resolved for one call: the receiver, the function, its arguments.
 #[derive(Debug)]
@@ -187,6 +204,60 @@ impl FunctionPtr {
         })
     }
 
+    /// `name` on `receiver` for a call through this pointer, the receiver
+    /// loaded and initialized on a miss; `Ok(None)` when it has no function
+    /// by that name.
+    async fn dynamic_callee(
+        &self,
+        name: Ustr,
+        receiver: LpcRef,
+        ctx: &TaskContext,
+        callers: impl FnOnce() -> Result<Callers>,
+    ) -> Result<Option<(Arc<Process>, Arc<ProgramFunction>)>> {
+        let txn = ctx.txn();
+        let process = match &receiver {
+            LpcRef::Object(_) => {
+                let Some(process) = receiver.live_object(txn) else {
+                    return Err(LpcError::runtime(format!(
+                        "attempted to call `{}` on a destructed object",
+                        name
+                    )));
+                };
+                process
+            }
+            LpcRef::String(_) => {
+                let path =
+                    receiver.with_string(|s| ctx.object_path(s.to_str(), "/", "call_other"))??;
+                match ctx.find_object(&path) {
+                    ObjectLookup::Found(process) => process,
+                    ObjectLookup::Removed => {
+                        return Err(LpcError::runtime(format!(
+                            "attempted to call `{}` on a destructed object `{}`",
+                            name, path
+                        )));
+                    }
+                    ObjectLookup::NotCreated => {
+                        let loader = self.loader(ctx.config().lib_dir.as_str(), callers()?)?;
+                        let process = ctx.compile_process(&path, &loader).await?;
+                        ctx.insert_and_initialize(loader.callers(), &process)
+                            .await?;
+                        process
+                    }
+                }
+            }
+            _ => {
+                return Err(LpcError::runtime(format!(
+                    "`&->{}()` needs an object or path as its receiver, got `{}`",
+                    name, receiver
+                )));
+            }
+        };
+        let Some(function) = process.program.lookup_function(name).cloned() else {
+            return Ok(None);
+        };
+        Ok(Some((process, function)))
+    }
+
     /// Resolve this pointer for a call with `passed` arguments: the receiver
     /// (a dynamic receiver is the first bound argument, created on a miss
     /// through `ctx` for the owner standing in the chain `callers` yields),
@@ -213,53 +284,19 @@ impl FunctionPtr {
                 (process, function.clone())
             }
             FunctionAddress::Dynamic(name) => {
-                let receiver = if args.is_empty() {
-                    NULL
-                } else {
-                    args.remove(0)
-                };
-                let process = match &receiver {
-                    LpcRef::Object(_) => {
-                        let Some(process) = receiver.live_object(txn) else {
-                            return Err(LpcError::runtime(format!(
-                                "attempted to call `{}` on a destructed object",
-                                name
-                            )));
-                        };
-                        process
-                    }
-                    LpcRef::String(_) => {
-                        let path = receiver
-                            .with_string(|s| ctx.object_path(s.to_str(), "/", "call_other"))??;
-                        match ctx.find_object(&path) {
-                            ObjectLookup::Found(process) => process,
-                            ObjectLookup::Removed => {
-                                return Err(LpcError::runtime(format!(
-                                    "attempted to call `{}` on a destructed object `{}`",
-                                    name, path
-                                )));
-                            }
-                            ObjectLookup::NotCreated => {
-                                let loader =
-                                    self.loader(ctx.config().lib_dir.as_str(), callers()?)?;
-                                let process = ctx.compile_process(&path, &loader).await?;
-                                ctx.insert_and_initialize(loader.callers(), &process)
-                                    .await?;
-                                process
-                            }
-                        }
-                    }
-                    _ => {
-                        return Err(LpcError::runtime(format!(
-                            "`&->{}()` needs an object or path as its receiver, got `{}`",
-                            name, receiver
-                        )));
-                    }
-                };
-                let Some(function) = process.program.lookup_function(name).cloned() else {
+                let receiver = first_arg(&mut args);
+                let Some(callee) = self.dynamic_callee(*name, receiver, ctx, callers).await? else {
                     return Ok(None);
                 };
-                (process, function)
+                callee
+            }
+            FunctionAddress::Efun(name) if *name == CALL_OTHER => {
+                let receiver = first_arg(&mut args);
+                let name = call_other_name(&first_arg(&mut args))?;
+                let Some(callee) = self.dynamic_callee(name, receiver, ctx, callers).await? else {
+                    return Ok(None);
+                };
+                callee
             }
             FunctionAddress::Efun(name) => {
                 let Some(owner) = self.owner.upgrade().filter(|p| p.is_live(txn)) else {
