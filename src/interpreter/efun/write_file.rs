@@ -119,10 +119,9 @@ mod tests {
         assert_eq!(std::fs::read_to_string(root.join("o.txt")).unwrap(), "ab");
     }
 
-    /// The append lands at commit; a read in the same task sees the file as
-    /// it was.
+    /// The append lands at commit; a read in the same task already sees it.
     #[tokio::test]
-    async fn a_same_task_read_does_not_see_the_write() {
+    async fn a_same_task_read_sees_the_pending_append() {
         let root = TempLib::new("write-then-read");
         std::fs::write(root.join("o.txt"), "old").unwrap();
         let vm = allowing_vm(&root).await;
@@ -141,11 +140,44 @@ mod tests {
             .unwrap()
             .context
             .process;
-        assert_eq!(committed_string(&vm, &writer, 0), "old");
+        assert_eq!(committed_string(&vm, &writer, 0), "oldnew");
         assert_eq!(
             std::fs::read_to_string(root.join("o.txt")).unwrap(),
             "oldnew"
         );
+    }
+
+    /// A removed then re-created file reads as only the new contents, and a
+    /// removed file reads as missing.
+    #[tokio::test]
+    async fn a_same_task_read_follows_a_removal() {
+        let root = TempLib::new("rm-then-read");
+        std::fs::write(root.join("o.txt"), "old").unwrap();
+        std::fs::write(root.join("gone.txt"), "x").unwrap();
+        let vm = allowing_vm(&root).await;
+        let writer = vm
+            .initialize_process_from_code(
+                "/w.c",
+                indoc! { r#"
+                    string got;
+                    string missing;
+                    void create() {
+                        rm("/o.txt");
+                        write_file("/o.txt", "new");
+                        got = read_file("/o.txt");
+                        rm("/gone.txt");
+                        missing = catch(read_file("/gone.txt"));
+                    }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(committed_string(&vm, &writer, 0), "new");
+        assert!(committed_string(&vm, &writer, 1).contains("No such file"));
+        assert_eq!(std::fs::read_to_string(root.join("o.txt")).unwrap(), "new");
+        assert!(!root.join("gone.txt").exists());
     }
 
     #[tokio::test]

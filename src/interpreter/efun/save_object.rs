@@ -56,7 +56,7 @@ mod tests {
     use indoc::indoc;
 
     use crate::{
-        interpreter::vm::Vm,
+        interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
         test_support::{TempLib, committed_string, lib_holding, string_global, temp_lib_config},
     };
 
@@ -72,6 +72,33 @@ mod tests {
             .await
             .unwrap();
         vm
+    }
+
+    /// The file lands at commit; a restore in the same task already reads it.
+    #[tokio::test]
+    async fn a_same_task_restore_reads_the_pending_save() {
+        let root = TempLib::new("save-then-restore");
+        let vm = allowing_vm(&root).await;
+        let w = vm
+            .initialize_process_from_code(
+                "/w.c",
+                indoc! { r#"
+                    int n = 1;
+                    int found;
+                    void create() {
+                        save_object("/w");
+                        n = 2;
+                        found = restore_object("/w");
+                    }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(vm.global_state.committed_global(&w, 0u16), LpcRef::from(1));
+        assert_eq!(vm.global_state.committed_global(&w, 1u16), LpcRef::from(1));
+        assert!(root.join("w.o").exists());
     }
 
     #[tokio::test]

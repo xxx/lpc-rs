@@ -193,7 +193,71 @@ pub(crate) enum Effect {
     },
 }
 
+/// One of a task's own pending changes to a file, in the form its reads
+/// apply over the disk (see `file_view::read_through`).
+#[derive(Debug, Clone)]
+pub(crate) enum PendingFileOp {
+    /// The whole file becomes `contents`.
+    Replace(String),
+    /// `contents` follows what is there (a missing file is created).
+    Append(String),
+    /// The file is gone.
+    Remove,
+    /// `contents` overwrites the bytes from `start`, a missing file stays missing.
+    WriteBytes { start: u64, contents: String },
+    /// `contents` replaces its own count of characters from character `start`.
+    ReplaceChars { start: usize, contents: String },
+    /// The file is what is on disk at `from` (a rename's source).
+    CopyOf(PathBuf),
+    /// The path becomes a directory.
+    MakeDir,
+    /// The directory is gone.
+    RemoveDir,
+}
+
 impl Effect {
+    /// This effect's change to the file at `server`, if it touches it.
+    pub(crate) fn pending_file_op(&self, server: &std::path::Path) -> Option<PendingFileOp> {
+        match self {
+            Effect::WriteFile {
+                server: s,
+                contents,
+                ..
+            } if s == server => Some(PendingFileOp::Replace(contents.clone())),
+            Effect::AppendFile {
+                server: s,
+                contents,
+                ..
+            } if s == server => Some(PendingFileOp::Append(contents.clone())),
+            Effect::RemoveFile { server: s, .. } if s == server => Some(PendingFileOp::Remove),
+            Effect::WriteBytes {
+                server: s,
+                start,
+                contents,
+                ..
+            } if s == server => Some(PendingFileOp::WriteBytes {
+                start: *start,
+                contents: contents.clone(),
+            }),
+            Effect::ReplaceChars {
+                server: s,
+                start,
+                contents,
+                ..
+            } if s == server => Some(PendingFileOp::ReplaceChars {
+                start: *start,
+                contents: contents.clone(),
+            }),
+            Effect::CreateDir { server: s, .. } if s == server => Some(PendingFileOp::MakeDir),
+            Effect::RemoveDir { server: s, .. } if s == server => Some(PendingFileOp::RemoveDir),
+            Effect::Rename { from, .. } if from == server => Some(PendingFileOp::Remove),
+            Effect::Rename { from, to, .. } if to == server => {
+                Some(PendingFileOp::CopyOf(from.clone()))
+            }
+            _ => None,
+        }
+    }
+
     /// Deliver this effect physically. Object effects go to the passed
     /// state's `ObjectSpace` (the committer's physical map); the others to
     /// config / their own channel. The call-out lock is held only for the

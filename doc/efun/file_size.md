@@ -7,7 +7,9 @@ file, or `-2` when `path` is a directory. The master's `valid_read` is
 asked first, and a refusal answers `-1` too, so the call is a safe probe:
 `file_size(path) < 0` means there is nothing there to read. `path` is
 resolved against the calling object's directory. A non-string `path`, or
-one that leaves the lib, is an error.
+one that leaves the lib, is an error. A write, removal or `mkdir` of the
+path earlier in the same task is already measured, though it lands on disk
+only when the task commits.
 
 ### Examples
 

@@ -10,8 +10,9 @@ program)`. A refusal, or a master that does not define the apply, is the
 runtime error `rm: permission denied`. All are caught by `catch()`.
 
 The file goes when the task commits: a task that errors out removes nothing,
-and a task the driver re-runs removes it once. A failure at that point goes
-to the debug log.
+and a task the driver re-runs removes it once. A read of the path later in
+the same task already finds it missing (`file_size` answers -1). A failure
+at that point goes to the debug log.
 
 ### See also
 

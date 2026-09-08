@@ -2,11 +2,10 @@
 //! master's `valid_read` / `valid_write`.
 
 use lpc_rs_errors::Result;
-use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
 use crate::interpreter::{
     VALID_READ, VALID_WRITE,
-    efun::{efun_context::EfunContext, file_access::authorize},
+    efun::{efun_context::EfunContext, file_access::authorize, file_view::read_through},
     lpc_ref::LpcRef,
     stm::Effect,
 };
@@ -53,16 +52,14 @@ pub async fn read_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
     };
     let access = authorize(context, "read_bytes", VALID_READ, 0).await?;
     let read = async {
-        let mut file = tokio::fs::File::open(&access.server).await?;
-        let size = file.metadata().await?.len();
+        let all = read_through(context, &access.server).await?.into_bytes()?;
+        let size = all.len() as u64;
         let from = offset(start, size);
         if from >= size {
             return Ok(None);
         }
         let to = length.map_or(size, |n| from.saturating_add(n).min(size));
-        file.seek(std::io::SeekFrom::Start(from)).await?;
-        let mut bytes = vec![0; (to - from) as usize];
-        file.read_exact(&mut bytes).await?;
+        let bytes = all[from as usize..to as usize].to_vec();
         Ok::<_, std::io::Error>(Some((from, to, bytes)))
     };
     let result = match read.await {
@@ -352,15 +349,16 @@ mod tests {
         assert_eq!(std::fs::read_to_string(root.join("d.txt")).unwrap(), "x");
     }
 
+    /// The write lands at commit; a read in the same task already sees it.
     #[tokio::test]
-    async fn a_read_in_the_same_task_sees_the_bytes_as_they_were() {
+    async fn a_read_in_the_same_task_sees_the_pending_bytes() {
         let (root, vm) = lib("wb-deferred").await;
         let got = value_of(
             &vm,
             r#"write_bytes("/d.txt", 0, "HELLO") + read_bytes("/d.txt", 0, 5)"#,
         )
         .await;
-        assert_eq!(got, LpcRef::from("1hello"));
+        assert_eq!(got, LpcRef::from("1HELLO"));
         assert_eq!(
             std::fs::read_to_string(root.join("d.txt")).unwrap(),
             "HELLO world\n"

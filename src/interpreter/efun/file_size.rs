@@ -3,21 +3,26 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_READ,
-    efun::{efun_context::EfunContext, file_access::authorize_or_deny},
+    efun::{
+        efun_context::EfunContext,
+        file_access::authorize_or_deny,
+        file_view::{Seen, read_through},
+    },
     lpc_ref::LpcRef,
 };
 
 /// `file_size(path)`: the file's size in bytes; -1 for a missing file or
-/// one the master's `valid_read` refuses, -2 for a directory.
+/// one the master's `valid_read` refuses, -2 for a directory. A write
+/// earlier in this task is seen.
 pub async fn file_size<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let Some(access) = authorize_or_deny(context, "file_size", VALID_READ, 0).await? else {
         context.return_efun_result(LpcRef::from(-1));
         return Ok(());
     };
-    let size = match tokio::fs::metadata(&access.server).await {
-        Ok(m) if m.is_dir() => -2,
-        Ok(m) => LpcIntInner::try_from(m.len()).unwrap_or(LpcIntInner::MAX),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => -1,
+    let size = match read_through(context, &access.server).await {
+        Ok(Seen::Dir) => -2,
+        Ok(Seen::File(bytes)) => LpcIntInner::try_from(bytes.len()).unwrap_or(LpcIntInner::MAX),
+        Ok(Seen::Missing) => -1,
         Err(e) => {
             return Err(context.runtime_error(format!("file_size: {}: {e}", access.in_game)));
         }
@@ -28,8 +33,10 @@ pub async fn file_size<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use crate::{
-        interpreter::{lpc_ref::LpcRef, vm::Vm},
+        interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
         test_support::{TempLib, temp_lib_config},
     };
 
@@ -51,6 +58,43 @@ mod tests {
             .unwrap()
             .result()
             .expect("a result")
+    }
+
+    /// A write or removal earlier in the task is measured, not the disk.
+    #[tokio::test]
+    async fn a_pending_write_or_removal_is_measured() {
+        let root = TempLib::new("size-pending");
+        std::fs::write(root.join("old.txt"), "xyz").unwrap();
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            indoc! { r#"
+                int valid_read(string p, string e, object c, string g) { return 1; }
+                int valid_write(string p, string e, object c, string g) { return 1; }
+            "# },
+        )
+        .await
+        .unwrap();
+        let w = vm
+            .initialize_process_from_code(
+                "/w.c",
+                indoc! { r#"
+                    int made;
+                    int gone;
+                    void create() {
+                        write_file("/new.txt", "hello");
+                        made = file_size("/new.txt");
+                        rm("/old.txt");
+                        gone = file_size("/old.txt");
+                    }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(vm.global_state.committed_global(&w, 0u16), LpcRef::from(5));
+        assert_eq!(vm.global_state.committed_global(&w, 1u16), LpcRef::from(-1));
     }
 
     #[tokio::test]

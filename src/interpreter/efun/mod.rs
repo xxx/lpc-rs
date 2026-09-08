@@ -33,6 +33,7 @@ pub(crate) mod file_access;
 pub(crate) mod file_name;
 pub(crate) mod file_size;
 pub(crate) mod file_time;
+pub(crate) mod file_view;
 pub(crate) mod filter;
 pub(crate) mod filter_map;
 pub(crate) mod find_object;

@@ -17,9 +17,9 @@ to make room. The whole file must be UTF-8, or the call is an error naming
 it.
 
 Like `write_file`, the write is checked now and lands when the task
-commits: a `read_chars` later in the same task sees the characters as they
-were, and two writes in one task land in order, each seeing the other's
-characters.
+commits; a `read_chars` later in the same task already sees the new
+characters, and two writes in one task land in order, each seeing the
+other's characters.
 
 ### Examples
 

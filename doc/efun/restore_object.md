@@ -12,7 +12,8 @@ variable as a string.
 
 Returns 1 on success and 0, without an error, when the file does not exist
 or cannot be read, which is how a lib tells a new player from a returning
-one. A malformed line is the runtime error
+one. A `save_object` of the file earlier in the same task is read back,
+though it lands on disk only when the task commits. A malformed line is the runtime error
 `restore_object: <path> line <n>: <what>`; the lines before it have
 already been applied, so a `catch()` sees a partly restored object, while
 an uncaught error aborts the task and leaves the object as it was.

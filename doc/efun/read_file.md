@@ -20,8 +20,10 @@ is a runtime error naming its in-game path. Both are caught by `catch()`;
 A path that leads out of the lib (`..` past the root) is a runtime error
 before the master is asked.
 
-The read is live: a `write_file` earlier in the same task has not landed yet
-(writes land when the task commits), so `read_file` sees the file as it was.
+Writes land when the task commits, but the task's own reads see them
+already: a `write_file`, `save_object`, `rm` or `rename` of the file earlier
+in the same task is reflected in what `read_file` returns, while every other
+task still sees the file as it is on disk.
 
 ### Examples
 

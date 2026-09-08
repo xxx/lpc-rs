@@ -20,7 +20,10 @@ one is a runtime error naming the suffixed path. Both are caught by
 The file's text is built when the efun runs, so it is one consistent view of
 the object, and written when the task commits, through a temporary file
 renamed over the target: a task that errors out writes nothing, a task the
-driver re-runs writes once, and a reader never sees a half-written file. A
+driver re-runs writes once, and a reader never sees a half-written file. The
+task's own reads see it already: a `restore_object`, `read_file` or
+`file_size` of the file later in the same task reads what was saved, as a
+lib expects when it saves a new player and reloads the file at once. A
 failure at that point (the disk is full, the directory was removed
 meanwhile) goes to the debug log; the efun has already returned.
 
