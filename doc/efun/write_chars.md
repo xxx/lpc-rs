@@ -2,9 +2,9 @@
 
 `int write_chars(string path, int start, string str)`
 
-`write_bytes`, measured in UTF-8 characters: replace the `strlen(str)` characters
-of the file at `path` from character `start` with `str`, once the master's
-`valid_write` allows it, and return 1. A negative `start` counts back from
+`write_bytes`, measured in UTF-8 characters: replace one character of the
+file at `path` per character of `str`, from character `start`, once the
+master's `valid_write` allows it, and return 1. A negative `start` counts back from
 the end of the file; a `start` equal to the file's character count appends;
 a replacement that runs past the end replaces what is there and extends the
 file with the rest. The result is 0, with nothing written, when the file

@@ -14,7 +14,7 @@ The living's own `process_input` then sees the modified line. In
 ```c
 // Strip the "$" that marks a forced command as not to be substituted.
 string modify_command(string line, object living) {
-    while (strlen(line) && line[0] == '$') line = line[1..];
+    while (sizeof(line) && line[0] == '$') line = line[1..];
     return line;
 }
 ```

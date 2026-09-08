@@ -12,7 +12,7 @@ the result is `0`, not a string. A negative `length` is an error.
 A character offset is found by decoding the file from its start, so the
 whole file must be UTF-8; one that is not is an error naming the file, where
 `read_bytes` objects only to the range it touched. Offsets here are the
-ones `strlen` and `str[i]` use, so a value read back with `read_chars` can
+ones `str[i]` uses, so a value read back with `read_chars` can
 be indexed the way it was measured.
 
 A missing or unreadable file is an error, as is the master's refusal.

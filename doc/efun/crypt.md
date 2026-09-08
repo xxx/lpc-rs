@@ -30,7 +30,7 @@ hashes. To move players to SHA-512 as they log in:
 ```c
 if (crypt(p, password) != password)
     return 0;
-if (strlen(password) == 13)      /* classic DES: re-hash on the way in */
+if (sizeof(password) == 13)      /* classic DES: re-hash on the way in */
 {
     password = crypt(p, 0);
     save_me();
