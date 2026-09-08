@@ -74,7 +74,7 @@ pub(crate) async fn read_through<const N: usize>(
                     if bytes.len() < end {
                         bytes.resize(end, 0);
                     }
-                    bytes[start..end].copy_from_slice(contents.as_bytes());
+                    bytes[start..end].copy_from_slice(&contents);
                     Seen::File(bytes)
                 }
                 other => other,

@@ -155,7 +155,7 @@ pub(crate) enum Effect {
         in_game: String,
         server: PathBuf,
         start: u64,
-        contents: String,
+        contents: Vec<u8>,
     },
 
     /// `write_chars`'s replacement of `contents`'s worth of characters at
@@ -204,7 +204,7 @@ pub(crate) enum PendingFileOp {
     /// The file is gone.
     Remove,
     /// `contents` overwrites the bytes from `start`, a missing file stays missing.
-    WriteBytes { start: u64, contents: String },
+    WriteBytes { start: u64, contents: Vec<u8> },
     /// `contents` replaces its own count of characters from character `start`.
     ReplaceChars { start: usize, contents: String },
     /// The file is what is on disk at `from` (a rename's source).
@@ -357,7 +357,7 @@ impl Effect {
                         .open(&server)
                         .await?;
                     file.seek(std::io::SeekFrom::Start(start)).await?;
-                    file.write_all(contents.as_bytes()).await?;
+                    file.write_all(&contents).await?;
                     file.flush().await
                 }
                 .await;

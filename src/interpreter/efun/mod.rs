@@ -975,14 +975,14 @@ efuns! {
         ],
     },
     read_bytes [async in bytes] => {
-        returns: LpcType::Mixed(false),
+        returns: LpcType::Bytes(false) | LpcType::Int(false),
         arity: (3, 2),
         args: [LpcType::String(false), LpcType::Int(false), LpcType::Int(false)],
     },
     write_bytes [async in bytes] => {
         returns: LpcType::Int(false),
         arity: 3,
-        args: [LpcType::String(false), LpcType::Int(false), LpcType::String(false)],
+        args: [LpcType::String(false), LpcType::Int(false), LpcType::Bytes(false)],
     },
     read_chars [async in chars] => {
         returns: LpcType::Mixed(false),
