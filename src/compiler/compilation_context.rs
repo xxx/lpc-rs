@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::compiler::{
     ProgramWarnings, callee::Callee, compile_gate::CompileGate, diagnostics::Diagnostics,
+    source::CompilerSource,
 };
 use derive_builder::Builder;
 use indexmap::IndexMap;
@@ -31,11 +32,14 @@ use crate::{
 /// single file (files `#include`d in that file will share this state object
 /// when they are compiled, as well.) Inherited files will have their own.
 #[derive(Debug, Builder)]
-#[builder(default, build_fn(error = "lpc_rs_errors::LpcError"))]
+#[builder(
+    default,
+    build_fn(private, name = "build_context", error = "lpc_rs_errors::LpcError")
+)]
 pub struct CompilationContext {
-    /// The name of the main file being compiled.
+    /// The identity of the main file being compiled.
     #[builder(setter(into))]
-    pub filename: Arc<LpcPath>,
+    pub source: Arc<CompilerSource>,
 
     /// The configuration being used for this compilation.
     #[builder(setter(into))]
@@ -94,6 +98,17 @@ pub struct CompilationContext {
     pub closure_count: u16,
     /// How many hidden lvalue cells have been named so far.
     pub lvalue_temp_count: u16,
+}
+
+impl CompilationContextBuilder {
+    /// Build the context, resolving an omitted source against the selected configuration.
+    pub fn build(&self) -> lpc_rs_errors::Result<CompilationContext> {
+        let mut context = self.build_context()?;
+        if self.source.is_none() {
+            context.source = Arc::new(CompilerSource::new(LpcPath::default(), &context.config));
+        }
+        Ok(context)
+    }
 }
 
 impl CompilationContext {
@@ -266,9 +281,10 @@ impl CompilationContext {
 
 impl Default for CompilationContext {
     fn default() -> Self {
+        let config = Arc::new(Config::default());
         Self {
-            filename: LpcPath::default().into(),
-            config: Arc::new(Config::default()),
+            source: Arc::new(CompilerSource::new(LpcPath::default(), &config)),
+            config,
             diagnostics: Diagnostics::default(),
             scopes: ScopeTree::default(),
             function_prototypes: HashMap::new(),
@@ -298,6 +314,17 @@ mod tests {
     use ustr::ustr;
 
     use super::*;
+
+    #[test]
+    fn the_default_source_uses_the_selected_mudlib_root() {
+        let context = CompilationContextBuilder::default()
+            .config(crate::test_support::test_config())
+            .build()
+            .unwrap();
+
+        assert_eq!(context.source.name().as_str(), "<outside mudlib>");
+        assert_eq!(**context.source.program_path(), LpcPath::default());
+    }
 
     fn make_function_prototype(name: &'static str) -> FunctionPrototype {
         FunctionPrototypeBuilder::default()

@@ -22,6 +22,7 @@ use crate::{
         compilation_context::CompilationContext,
         lexer::{LexWrapper, Token, logos_token::StringToken},
         preprocessor::preprocessor_node::PreprocessorNode,
+        source::CompilerSource,
     },
 };
 use conditional::Conditionals;
@@ -68,6 +69,7 @@ impl Preprocessor {
     ///
     /// use lpc_rs::compiler::{
     ///     compilation_context::{CompilationContext, CompilationContextBuilder},
+    ///     source::CompilerSource,
     ///     preprocessor::Preprocessor,
     /// };
     /// use lpc_rs_utils::config::ConfigBuilder;
@@ -78,7 +80,7 @@ impl Preprocessor {
     ///     .build()
     ///     .unwrap();
     /// let context = CompilationContextBuilder::default()
-    ///     .filename(Arc::new("test.c".into()))
+    ///     .source(CompilerSource::new("test.c", &config))
     ///     .config(config)
     ///     .build()
     ///     .unwrap();
@@ -118,6 +120,7 @@ impl Preprocessor {
     ///
     /// use lpc_rs::compiler::{
     ///     compilation_context::{CompilationContext, CompilationContextBuilder},
+    ///     source::CompilerSource,
     ///     preprocessor::Preprocessor,
     /// };
     /// use lpc_rs_utils::config::ConfigBuilder;
@@ -128,7 +131,7 @@ impl Preprocessor {
     ///     .build()
     ///     .unwrap();
     /// let context = CompilationContextBuilder::default()
-    ///     .filename(Arc::new("test.c".into()))
+    ///     .source(CompilerSource::new("test.c", &config))
     ///     .config(config)
     ///     .build()
     ///     .unwrap();
@@ -150,21 +153,31 @@ impl Preprocessor {
         P: Into<LpcPath>,
         C: AsRef<str> + Send,
     {
+        let source = CompilerSource::new(path, &self.context.config);
+        self.scan_source(&source, code).await
+    }
+
+    pub(super) async fn scan_source<C>(
+        &mut self,
+        source: &CompilerSource,
+        code: C,
+    ) -> Result<Vec<Token>>
+    where
+        C: AsRef<str> + Send,
+    {
         let mut output = vec![];
 
-        let lpc_path = path.into();
-
-        trace!("scanning {:?} :: {:?}", lpc_path, code.as_ref());
+        trace!("scanning {:?} :: {:?}", source, code.as_ref());
 
         let config = self.context.config.clone();
-        let root_id = self.includes.open_root(&lpc_path, code.as_ref(), &config);
+        let root_id = self.includes.open_root(source, code.as_ref());
 
         // handle auto-include
         if let Some(auto_include) = &config.auto_include_file {
             let auto_include_path =
                 LpcPath::new_server(format!("{}/{}", config.lib_dir, auto_include));
 
-            if auto_include_path != lpc_path {
+            if &auto_include_path != source.input().as_ref() {
                 // On error, this `?` skips the `close()` below, leaving the
                 // root frame on the stack — inert, since this walk is
                 // per-compile.
@@ -726,8 +739,6 @@ fn shift_amount(y: LpcIntInner) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use indoc::indoc;
     use lpc_rs_utils::config::ConfigBuilder;
 
@@ -746,7 +757,7 @@ mod tests {
             .unwrap();
 
         let context = CompilationContextBuilder::default()
-            .filename(Arc::new("test.c".into()))
+            .source(CompilerSource::new("test.c", &config))
             .config(config)
             .build()
             .unwrap();
@@ -929,7 +940,7 @@ mod tests {
                 .build()
                 .unwrap();
             let context = CompilationContextBuilder::default()
-                .filename(Arc::new("test.c".into()))
+                .source(CompilerSource::new("test.c", &config))
                 .config(config)
                 .build()
                 .unwrap();
@@ -1050,7 +1061,7 @@ mod tests {
                 .build()
                 .unwrap();
             let context = CompilationContextBuilder::default()
-                .filename(Arc::new("test.c".into()))
+                .source(CompilerSource::new("test.c", &config))
                 .config(config)
                 .build()
                 .unwrap();
@@ -3147,7 +3158,7 @@ mod tests {
                 .build()
                 .unwrap();
             let context = CompilationContextBuilder::default()
-                .filename(Arc::new("main.c".into()))
+                .source(CompilerSource::new("main.c", &config))
                 .config(config)
                 .build()
                 .unwrap();

@@ -93,7 +93,7 @@ impl TreeWalker for FunctionPrototypeWalker {
             node.name.to_owned(),
             FunctionPrototypeBuilder::default()
                 .name(node.name.to_owned())
-                .filename(self.context.filename.clone())
+                .filename(self.context.source.input().clone())
                 .return_type(node.return_type)
                 .kind(kind)
                 .arity(FunctionArity {
@@ -169,7 +169,7 @@ impl TreeWalker for FunctionPrototypeWalker {
             node.name.to_owned(),
             FunctionPrototypeBuilder::default()
                 .name(node.name.to_owned())
-                .filename(self.context.filename.clone())
+                .filename(self.context.source.input().clone())
                 .return_type(node.return_type)
                 .arity(FunctionArity {
                     num_args,

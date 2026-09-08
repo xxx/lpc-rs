@@ -21,6 +21,7 @@ use lpc_rs_errors::{
 };
 use lpc_rs_utils::{config::Config, read_lpc_file};
 use preprocessor::Preprocessor;
+use source::CompilerSource;
 use tracing::instrument;
 use ustr::ustr;
 
@@ -40,6 +41,7 @@ pub mod lexer;
 pub mod parser;
 pub mod preprocessor;
 pub mod semantic;
+pub mod source;
 
 #[derive(Educe, Default, Builder)]
 #[educe(Debug)]
@@ -118,10 +120,9 @@ impl Compiler {
         T: Into<LpcPath> + Debug + Send,
     {
         Box::pin(async move {
-            let lpc_path = path.into();
-            let source_path = self.config.paths().source(&lpc_path);
-            let name = self.config.paths().source_name(&lpc_path);
-            let absolute = source_path.server();
+            let identity = Arc::new(CompilerSource::new(path, &self.config));
+            let name = identity.name();
+            let absolute = identity.resolved().server();
 
             let source = match read_lpc_file(absolute).await {
                 Ok(source) => source,
@@ -132,7 +133,7 @@ impl Compiler {
                                 return Err(lpc_error!("Cannot read file `{}`: {}", name, e));
                             }
 
-                            let dot_c = lpc_path.with_extension("c");
+                            let dot_c = identity.input().with_extension("c");
                             self.compile_file(dot_c).await
                         }
                         _ => Err(lpc_error!("Cannot read file `{}`: {}", name, e)),
@@ -146,7 +147,7 @@ impl Compiler {
                 diagnostics::latin1_warning(in_game, None)
             });
 
-            self.compile_source(lpc_path, &source.text, warning).await
+            self.compile_source(identity, &source.text, warning).await
         })
         .await
     }
@@ -203,20 +204,20 @@ impl Compiler {
         P: Into<LpcPath> + Debug,
         S: AsRef<str> + Send + Sync,
     {
-        self.preprocess_source(path.into(), code.as_ref(), None)
-            .await
+        let source = Arc::new(CompilerSource::new(path, &self.config));
+        self.preprocess_source(source, code.as_ref(), None).await
     }
 
     /// [`preprocess_string`](Self::preprocess_string), with `warning` recorded before the scan.
     #[instrument(skip(self, code, warning))]
     async fn preprocess_source(
         &self,
-        lpc_path: LpcPath,
+        source: Arc<CompilerSource>,
         code: &str,
         warning: Option<LpcError>,
     ) -> Result<(Vec<Token>, Preprocessor)> {
         let context = CompilationContextBuilder::default()
-            .filename(Arc::new(lpc_path.clone()))
+            .source(source.clone())
             .config(self.config.clone())
             .inherit_depth(self.inherit_depth)
             .simul_efuns(self.simul_efuns.clone())
@@ -229,7 +230,7 @@ impl Compiler {
         }
 
         preprocessor
-            .scan(lpc_path, code)
+            .scan_source(&source, code)
             .await
             .map(|tokens| (tokens, preprocessor))
     }
@@ -267,7 +268,8 @@ impl Compiler {
         T: Into<LpcPath>,
         U: AsRef<str> + Send + Sync,
     {
-        self.compile_source(path.into(), code.as_ref(), None).await
+        let source = Arc::new(CompilerSource::new(path, &self.config));
+        self.compile_source(source, code.as_ref(), None).await
     }
 
     /// [`compile_string`](Self::compile_string), with `warning` seeded
@@ -275,16 +277,16 @@ impl Compiler {
     #[instrument(skip_all)]
     async fn compile_source(
         &self,
-        lpc_path: LpcPath,
+        source: Arc<CompilerSource>,
         code: &str,
         warning: Option<LpcError>,
     ) -> Result<Compiled> {
-        let (mut program_node, context) = self.parse_source(&lpc_path, code, warning).await?;
+        let (mut program_node, context) = self.parse_source(source, code, warning).await?;
 
         // inject the auto-inherit if it's to be used.
         if let Some(dir) = &self.config.auto_inherit_file {
             let lpc_dir = LpcPath::new_in_game(dir.as_str(), "/", &*self.config.lib_dir);
-            if lpc_dir.source_file() != lpc_path.source_file() {
+            if lpc_dir.source_file() != context.source.input().source_file() {
                 let node = InheritNode {
                     path: ustr(dir),
                     namespace: None,
@@ -334,7 +336,8 @@ impl Compiler {
     where
         T: AsRef<str> + Send + Sync,
     {
-        self.parse_source(path, code.as_ref(), None).await
+        let source = Arc::new(CompilerSource::new(path.clone(), &self.config));
+        self.parse_source(source, code.as_ref(), None).await
     }
 
     /// [`parse_string`](Self::parse_string), with `warning` seeded before
@@ -342,11 +345,11 @@ impl Compiler {
     #[instrument(skip(self, code, warning))]
     async fn parse_source(
         &self,
-        path: &LpcPath,
+        source: Arc<CompilerSource>,
         code: &str,
         warning: Option<LpcError>,
     ) -> Result<(ProgramNode, CompilationContext)> {
-        let (tokens, preprocessor) = self.preprocess_source(path.clone(), code, warning).await?;
+        let (tokens, preprocessor) = self.preprocess_source(source, code, warning).await?;
 
         let wrapper = TokenTriples::new(&tokens);
         let mut context = preprocessor.into_context();
@@ -378,6 +381,30 @@ mod tests {
             let compiler = Compiler::new(test_config());
 
             assert!(compiler.compile_file("example").await.is_ok());
+        }
+
+        #[tokio::test]
+        async fn a_missing_raw_source_keeps_its_spelling_after_extension_fallback() {
+            use lpc_rs_utils::config::ConfigBuilder;
+
+            use crate::test_support::TempLib;
+
+            let root = TempLib::new("missing-source");
+            let config = ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .build()
+                .unwrap();
+            let error = Compiler::new(config)
+                .compile_file(LpcPath::in_game("room/../absent.h".into()))
+                .await
+                .unwrap_err();
+
+            assert!(
+                error
+                    .message()
+                    .starts_with("Cannot read file `room/../absent.c`:")
+            );
+            assert!(!error.diagnostic_string().contains(root.to_str().unwrap()));
         }
 
         #[tokio::test]
@@ -757,6 +784,61 @@ mod tests {
         use lpc_rs_utils::config::ConfigBuilder;
 
         use super::*;
+        use crate::test_support::test_config;
+
+        #[tokio::test]
+        async fn a_raw_source_keeps_its_function_keys_and_canonical_span_location() {
+            let path = LpcPath::in_game("room/../source.c".into());
+            let compiled = Compiler::new(test_config())
+                .compile_string(path.clone(), "int marker() { return 1; }")
+                .await
+                .unwrap();
+            let function = &compiled.program.unmangled_functions["marker"];
+
+            assert_eq!(*function.prototype.filename, path);
+            assert_eq!(*compiled.program.filename, path);
+            assert!(compiled.program.functions.keys().any(|key| {
+                key.as_str().starts_with("marker__")
+                    && key.as_str().contains("__room/../source.c__")
+            }));
+            assert!(
+                function
+                    .prototype
+                    .span
+                    .unwrap()
+                    .to_string()
+                    .starts_with("/source.c:")
+            );
+        }
+
+        #[tokio::test]
+        async fn host_and_virtual_sources_keep_their_distinct_inheritance_bases() {
+            use crate::test_support::TempLib;
+
+            let root = TempLib::new("source-inheritance");
+            std::fs::create_dir_all(root.join("room/child.c")).unwrap();
+            std::fs::write(root.join("room/parent.c"), "int virtual_parent;\n").unwrap();
+            std::fs::write(root.join("room/child.c/parent.c"), "int host_parent;\n").unwrap();
+            let config = ConfigBuilder::default()
+                .lib_dir(root.to_str().unwrap())
+                .build()
+                .unwrap();
+            let compiler = Compiler::new(config);
+
+            for (path, expected) in [
+                (LpcPath::from("/room/child.c"), "/room/parent.c"),
+                (
+                    LpcPath::new_server(root.join("room/child.c")),
+                    "/room/child.c/parent.c",
+                ),
+            ] {
+                let compiled = compiler
+                    .compile_string(path, "inherit \"parent\";\n")
+                    .await
+                    .unwrap();
+                assert_eq!(compiled.program.layout[0].filename.to_string(), expected);
+            }
+        }
 
         #[tokio::test]
         async fn a_failed_compile_leads_with_the_error_and_keeps_the_warning_once() {

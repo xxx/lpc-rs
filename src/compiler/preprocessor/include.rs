@@ -2,7 +2,8 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
+    fmt,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -18,6 +19,7 @@ use tracing::instrument;
 use crate::compiler::{
     compile_gate::CompileGate,
     diagnostics::{Diagnostics, latin1_warning},
+    source::CompilerSource,
 };
 
 /// Deepest `#include` nesting allowed, the root file included.
@@ -53,9 +55,15 @@ pub(super) struct Opened {
 }
 
 /// One file on the active include chain.
-#[derive(Debug)]
 struct Frame {
     path: ResolvedPath,
+    cwd: PathBuf,
+}
+
+impl fmt::Debug for Frame {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.path.fmt(f)
+    }
 }
 
 /// The one owner of `#include` traversal for a compile: resolution,
@@ -76,14 +84,17 @@ pub(super) struct IncludeWalk {
 impl IncludeWalk {
     /// Register the root file's text and push its frame. Called once,
     /// first, by `scan`.
-    pub fn open_root(&mut self, path: &LpcPath, code: &str, config: &Config) -> FileId {
-        let path = config.paths().source(path);
+    pub fn open_root(&mut self, source: &CompilerSource, code: &str) -> FileId {
+        let path = source.resolved().clone();
         let canon = path.server().to_owned();
         let file_id = SOURCE_MAP
             .write()
             .add(path.name().to_string(), code.to_owned());
         self.memo.insert(canon, (file_id, Arc::from(code)));
-        self.stack.push(Frame { path });
+        self.stack.push(Frame {
+            path,
+            cwd: source.include_cwd().to_owned(),
+        });
         file_id
     }
 
@@ -183,7 +194,8 @@ impl IncludeWalk {
             }
         };
 
-        self.stack.push(Frame { path });
+        let cwd = config.paths().source_cwd(path.input());
+        self.stack.push(Frame { path, cwd });
         Ok(Some(Opened { file_id, content }))
     }
 
@@ -213,7 +225,7 @@ impl IncludeWalk {
         match source {
             IncludeSource::Configured(path) => path.clone(),
             IncludeSource::Local { path } => {
-                let local = LpcPath::new_in_game(path, self.cwd(config), &*config.lib_dir);
+                let local = LpcPath::new_in_game(path, self.cwd(), &*config.lib_dir);
                 if Self::exists(&local, config).await {
                     return local;
                 }
@@ -222,7 +234,7 @@ impl IncludeWalk {
             IncludeSource::System { path } => self
                 .in_system_dirs(path, config)
                 .await
-                .unwrap_or_else(|| LpcPath::new_in_game(path, self.cwd(config), &*config.lib_dir)),
+                .unwrap_or_else(|| LpcPath::new_in_game(path, self.cwd(), &*config.lib_dir)),
         }
     }
 
@@ -248,11 +260,11 @@ impl IncludeWalk {
     }
 
     /// The including file's directory — the resolution cwd.
-    fn cwd(&self, config: &Config) -> PathBuf {
+    fn cwd(&self) -> &Path {
         self.stack
             .last()
-            .map(|frame| config.paths().source_cwd(frame.path.input()))
-            .unwrap_or_else(|| PathBuf::from("/"))
+            .map(|frame| frame.cwd.as_path())
+            .unwrap_or_else(|| Path::new("/"))
     }
 
     /// The including file — the active frame — as an in-game path.
@@ -291,9 +303,11 @@ mod tests {
     fn rooted(config: &Config) -> IncludeWalk {
         let mut walk = IncludeWalk::default();
         walk.open_root(
-            &LpcPath::new_in_game("/main.c", "/", &*config.lib_dir),
+            &CompilerSource::new(
+                LpcPath::new_in_game("/main.c", "/", &*config.lib_dir),
+                config,
+            ),
             "int x;\n",
-            config,
         );
         walk
     }
@@ -534,9 +548,8 @@ mod tests {
         // A root named by its server path, as `lpcc` does.
         let mut walk = IncludeWalk::default();
         let server_root = walk.open_root(
-            &LpcPath::new_server(root.join("main.c")),
+            &CompilerSource::new(LpcPath::new_server(root.join("main.c")), &config),
             "int x;\n",
-            &config,
         );
         assert_eq!(Span::new(server_root, 0..3).to_string(), "/main.c:1:1");
     }

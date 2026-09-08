@@ -355,15 +355,13 @@ fn is_directive(token: &Token) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use lpc_rs_errors::span::HasSpan;
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
     use crate::compiler::{
         compilation_context::CompilationContextBuilder, lexer::LexWrapper,
-        preprocessor::Preprocessor,
+        preprocessor::Preprocessor, source::CompilerSource,
     };
 
     /// Build a define table by scanning `defines` through the real handlers.
@@ -373,7 +371,7 @@ mod tests {
             .build()
             .unwrap();
         let context = CompilationContextBuilder::default()
-            .filename(Arc::new("expand_test.c".into()))
+            .source(CompilerSource::new("expand_test.c", &config))
             .config(config)
             .build()
             .unwrap();

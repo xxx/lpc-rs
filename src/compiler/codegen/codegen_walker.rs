@@ -274,7 +274,7 @@ impl CodegenWalker {
     pub fn setup_init(&mut self) {
         let prototype = FunctionPrototypeBuilder::default()
             .name(INIT_GLOBALS)
-            .filename(self.context.filename.clone())
+            .filename(self.context.source.input().clone())
             .return_type(LpcType::Void)
             .flags(FunctionFlags::from(&["private"][..]))
             .build()
@@ -290,7 +290,7 @@ impl CodegenWalker {
     async fn build_initializer(&mut self, init_globals: Ustr) -> Result<ProgramFunction> {
         let prototype = FunctionPrototypeBuilder::default()
             .name(INIT_PROGRAM)
-            .filename(self.context.filename.clone())
+            .filename(self.context.source.input().clone())
             .return_type(LpcType::Void)
             .build()
             .expect("Failed to build initializer prototype");
@@ -374,12 +374,7 @@ impl CodegenWalker {
 
         let num_globals = self.global_counter.number_emitted();
 
-        let filename = Arc::new(
-            self.context
-                .config
-                .paths()
-                .program_path(&self.context.filename),
-        );
+        let filename = self.context.source.program_path().clone();
 
         let own = Region {
             filename: Arc::clone(&filename),

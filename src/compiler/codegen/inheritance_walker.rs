@@ -107,11 +107,7 @@ impl TreeWalker for InheritanceWalker {
     async fn visit_inherit(&mut self, node: &mut InheritNode) -> Result<()> {
         self.validate(node)?;
 
-        let cwd = self
-            .context
-            .config
-            .paths()
-            .inheritance_cwd(&self.context.filename);
+        let cwd = self.context.source.inheritance_cwd();
 
         let full_path =
             LpcPath::new_in_game(&*node.path, cwd, self.context.config.lib_dir.as_str());
@@ -151,13 +147,8 @@ impl TreeWalker for InheritanceWalker {
                 .paths()
                 .source_name(&full_path.source_file())
                 .to_string();
-            let child = self
-                .context
-                .config
-                .paths()
-                .source_name(&self.context.filename)
-                .to_string();
-            if !gate.inherit(&parent, &child).await? {
+            let child = self.context.source.name().as_str();
+            if !gate.inherit(&parent, child).await? {
                 return Err(lpc_error!(
                     node.span,
                     "inherit \"{}\": permission denied",
@@ -249,7 +240,7 @@ mod tests {
     use lpc_rs_utils::config::ConfigBuilder;
 
     use super::*;
-    use crate::compiler::compilation_context::CompilationContextBuilder;
+    use crate::compiler::{compilation_context::CompilationContextBuilder, source::CompilerSource};
 
     fn walker() -> InheritanceWalker {
         let config = ConfigBuilder::default()
@@ -258,7 +249,10 @@ mod tests {
             .unwrap();
 
         let context = CompilationContextBuilder::default()
-            .filename(LpcPath::in_game("test.c".into()))
+            .source(CompilerSource::new(
+                LpcPath::in_game("test.c".into()),
+                &config,
+            ))
             .config(config)
             .build()
             .unwrap();
