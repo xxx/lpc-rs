@@ -19,6 +19,8 @@ pub(crate) const DISPLACED: &str =
 /// The master's `valid_exec(caller, new, old)` gates every well-formed call;
 /// a refusal, a master without the apply, or no master returns 0.
 ///
+/// When `old` was `this_player()`, `new` becomes it (CD, LDMud, FluffOS).
+///
 /// The binding is transactional: the connection cells of both bodies are
 /// written into this transaction, so the rest of the task (and efuns it
 /// calls in the same attempt, e.g. `interactive()`) sees the handover before
@@ -78,6 +80,14 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
             new_process: new_ob.clone(),
             connection,
         });
+        let this_player = context.this_player();
+        if this_player
+            .load()
+            .as_ref()
+            .is_some_and(|player| Arc::ptr_eq(player, &old_ob))
+        {
+            this_player.store(Some(new_ob.clone()));
+        }
         if let Some(previous) = previous {
             context.record_effect(Effect::Disconnect {
                 connection: previous,
@@ -133,6 +143,41 @@ mod tests {
         assert_eq!(
             on_a.connection.body().as_ref().map(|p| p.to_string()),
             Some("/b".to_owned())
+        );
+    }
+
+    #[tokio::test]
+    async fn the_new_body_becomes_this_player_when_the_old_one_was() {
+        let vm = Vm::new(test_config());
+        allow_exec(&vm).await;
+        let a = vm.create_process_from_code("/a.c", "").await.unwrap();
+        vm.create_process_from_code("/b.c", "").await.unwrap();
+        vm.create_process_from_code("/c.c", "").await.unwrap();
+        let _on_a = connect(&vm, &a).await;
+        let main = indoc! { r#"
+            int moved, kept;
+            void create() {
+                set_this_player(find_object("/a"));
+                exec(find_object("/b"), find_object("/a"));
+                moved = this_player() == find_object("/b");
+                set_this_player(find_object("/c"));
+                exec(find_object("/a"), find_object("/b"));
+                kept = this_player() == find_object("/c");
+            }
+        "# };
+        let main = vm
+            .initialize_process_from_code("/main.c", main)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&main, 0u16),
+            LpcRef::from(1)
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&main, 1u16),
+            LpcRef::from(1)
         );
     }
 
