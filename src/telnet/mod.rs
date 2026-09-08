@@ -1685,10 +1685,12 @@ mod tests {
             void init() {
                 add_action("do_look", "look");
                 add_action("do_ask", "ask");
+                add_action("do_name", "name");
                 add_action("do_spam", "spam");
             }
             int do_look() { write("seen\n"); return 1; }
             int do_ask() { write("Name: "); input_to(got_name); return 1; }
+            int do_name() { write("Name: "); input_to("got_name"); return 1; }
             void got_name(string s) { write("got " + s + "\n"); }
             int do_spam() {
                 int i;
@@ -1761,6 +1763,19 @@ mod tests {
             let mut expected = b"got bob\r\n> ".to_vec();
             expected.extend([IAC, GA]);
             assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+        }
+
+        /// CD, LDMud and FluffOS take the handler's name.
+        #[tokio::test]
+        async fn a_string_names_the_input_to_handler() {
+            let mut w = wire().await;
+            commanding_body(&w, "").await;
+            w.client.write_all(b"name\r\n").await.unwrap();
+            let mut expected = b"Name: ".to_vec();
+            expected.extend([IAC, GA]);
+            assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+            w.client.write_all(b"bob\r\n").await.unwrap();
+            assert_eq!(read_n(&mut w.client, 9).await, b"got bob\r\n");
         }
 
         #[tokio::test]

@@ -435,9 +435,12 @@ efuns! {
         args: [LpcType::String(true), LpcType::String(false)],
     },
     input_to => {
-        returns: LpcType::Void,
+        returns: LpcType::Int(false),
         arity: (2, 1),
-        args: [LpcType::Function(false), LpcType::Int(false)],
+        args: [
+            LpcType::String(false) | LpcType::Function(false),
+            LpcType::Int(false),
+        ],
     },
     interactive [async] => {
         returns: LpcType::Int(false),
