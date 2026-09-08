@@ -31,7 +31,10 @@ pub async fn write_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(io_error(e)),
         _ => {}
     }
-    if !parent_is_dir(&access.server).await.map_err(io_error)? {
+    if !parent_is_dir(context, &access.server)
+        .await
+        .map_err(io_error)?
+    {
         return Err(context.runtime_error(format!(
             "write_file: {}: parent directory does not exist",
             access.in_game

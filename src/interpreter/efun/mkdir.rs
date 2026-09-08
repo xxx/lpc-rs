@@ -12,11 +12,15 @@ use crate::interpreter::{
 
 /// `mkdir(path)`: make the directory, once the master's `valid_write`
 /// allows it. Checked now (nothing at the path, its parent a directory),
-/// created at commit; 1 on success.
+/// created at commit; 1 on success. This task's later file efuns see the
+/// directory as existing.
 pub async fn mkdir<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "mkdir", VALID_WRITE, 0).await?;
     let io_error =
         |e: std::io::Error| context.runtime_error(format!("mkdir: {}: {e}", access.in_game));
+    if context.has_pending_dir(&access.server) {
+        return Err(context.runtime_error(format!("mkdir: {} exists", access.in_game)));
+    }
     match tokio::fs::symlink_metadata(&access.server).await {
         Ok(_) => {
             return Err(context.runtime_error(format!("mkdir: {} exists", access.in_game)));
@@ -24,7 +28,10 @@ pub async fn mkdir<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(io_error(e)),
         Err(_) => {}
     }
-    if !parent_is_dir(&access.server).await.map_err(io_error)? {
+    if !parent_is_dir(context, &access.server)
+        .await
+        .map_err(io_error)?
+    {
         return Err(context.runtime_error(format!(
             "mkdir: {}: parent directory does not exist",
             access.in_game
@@ -99,6 +106,34 @@ mod tests {
             err.contains("mkdir: /a/b: parent directory does not exist"),
             "{err}"
         );
+    }
+
+    #[tokio::test]
+    async fn a_directory_made_this_task_takes_a_save_and_a_nested_directory() {
+        let root = TempLib::new("mkdir-pending");
+        let vm = allowing_vm(&root).await;
+        vm.initialize_process_from_code(
+            "/m.c",
+            r#"int x = 7; void create() { mkdir("/p"); mkdir("/p/q"); write_file("/p/f", "hi"); save_object("/p/q/m"); }"#,
+        )
+        .await
+        .unwrap();
+        assert!(root.join("p/q").is_dir());
+        assert_eq!(std::fs::read_to_string(root.join("p/f")).unwrap(), "hi");
+        assert!(root.join("p/q/m.o").is_file());
+    }
+
+    #[tokio::test]
+    async fn a_directory_made_this_task_exists_to_a_second_mkdir() {
+        let root = TempLib::new("mkdir-twice");
+        let vm = allowing_vm(&root).await;
+        let err = vm
+            .initialize_process_from_code("/m.c", r#"void create() { mkdir("/d"); mkdir("/d"); }"#)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("mkdir: /d exists"), "{err}");
+        assert!(!root.join("d").exists());
     }
 
     #[tokio::test]

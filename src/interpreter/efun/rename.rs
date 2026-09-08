@@ -30,7 +30,7 @@ pub async fn rename<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => to.server,
         Err(e) => return Err(io_error(&to.in_game, e)),
     };
-    if !parent_is_dir(&target)
+    if !parent_is_dir(context, &target)
         .await
         .map_err(|e| io_error(&to.in_game, e))?
     {
