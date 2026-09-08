@@ -221,9 +221,9 @@ pub struct TaskContext {
     pub this_player: ArcSwapAny<Option<Arc<Process>>>,
 
     /// The command giver this task started with, which `set_this_player`
-    /// never moves: what `this_interactive` answers while it has a
-    /// connection.
-    pub entry_player: Option<Arc<Process>>,
+    /// never moves and `exec` moves with its connection: what
+    /// `this_interactive` answers while it has a connection.
+    pub entry_player: ArcSwapAny<Option<Arc<Process>>>,
 
     /// The upvalue_ptrs to populate the initial frame with, if any.
     pub upvalue_ptrs: Option<ThinVec<VarId>>,
@@ -263,7 +263,7 @@ impl TaskContext {
             process: process.into(),
             result: TaskResult::new(),
             simul_efuns,
-            entry_player: this_player.clone(),
+            entry_player: ArcSwapAny::from(this_player.clone()),
             this_player: ArcSwapAny::from(this_player),
             upvalue_ptrs: None,
             chain_count: 0,
@@ -706,7 +706,7 @@ impl Clone for TaskContext {
             result: TaskResult::new(),
             simul_efuns: self.simul_efuns.clone(),
             this_player: ArcSwapAny::from(self.this_player.load_full()),
-            entry_player: self.entry_player.clone(),
+            entry_player: ArcSwapAny::from(self.entry_player.load_full()),
             upvalue_ptrs: self.upvalue_ptrs.clone(),
             chain_count: self.chain_count,
             // Cloning the handle shares the in-flight transaction.

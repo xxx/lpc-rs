@@ -4,8 +4,8 @@
 
 Move an interactive connection from one object to another. Once complete, the
 object `new` will be the interactive object, and `old` will be non-interactive.
-When `old` was `this_player()`, `new` becomes `this_player()`; `this_object()`
-does not change.
+When `old` was `this_player()`, `new` becomes `this_player()`, and the same
+for `this_interactive()`; `this_object()` does not change.
 
 If `new` has an existing interactive connection, it will be disconnected.
 
@@ -18,4 +18,4 @@ master that does not define it, makes `exec` return `0`.
 
 ### See also:
 
-`valid_exec`, `connect`, `this_player`, `set_this_player`
+`valid_exec`, `connect`, `this_player`, `set_this_player`, `this_interactive`

@@ -5,12 +5,14 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
 
 /// `this_interactive()`: the command giver the task started with, while it
-/// has a connection; `set_this_player` never moves it.
+/// has a connection; `set_this_player` never moves it, `exec` moves it
+/// with its connection.
 pub fn this_interactive<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let txn = context.txn();
     let result = context
         .task_context()
         .entry_player
+        .load()
         .as_ref()
         .filter(|player| {
             player.is_live(txn)
