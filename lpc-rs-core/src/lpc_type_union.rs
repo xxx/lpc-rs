@@ -94,24 +94,7 @@ impl LpcTypeUnion {
                     self.set_function(true)
                 }
             }
-            LpcType::Union(other) => {
-                // merge the other into me
-                self.set_void(other.void());
-                self.set_int(other.int());
-                self.set_int_array(other.int_array());
-                self.set_string(other.string());
-                self.set_string_array(other.string_array());
-                self.set_bytes(other.bytes());
-                self.set_bytes_array(other.bytes_array());
-                self.set_float(other.float());
-                self.set_float_array(other.float_array());
-                self.set_object(other.object());
-                self.set_object_array(other.object_array());
-                self.set_mapping(other.mapping());
-                self.set_mapping_array(other.mapping_array());
-                self.set_mixed(other.mixed());
-                self.set_mixed_array(other.mixed_array());
-            }
+            LpcType::Union(other) => *self = *self | other,
         }
     }
 
@@ -362,6 +345,21 @@ mod tests {
             union.types(),
             vec![LpcType::Int(false), LpcType::String(false)]
         );
+    }
+
+    #[test]
+    fn inserting_a_union_keeps_both_sides() {
+        let LpcType::Union(other) = LpcType::Function(false) | LpcType::Function(true) else {
+            panic!("not a union");
+        };
+        let mut union = LpcTypeUnion::new();
+        union.set_string(true);
+
+        union.insert(LpcType::Union(other));
+
+        assert!(union.string());
+        assert!(union.function());
+        assert!(union.function_array());
     }
 
     #[test]
