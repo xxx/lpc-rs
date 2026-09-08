@@ -5,6 +5,7 @@ use std::{fmt::Write, sync::Arc};
 
 use indexmap::IndexMap;
 use lpc_rs_errors::{LpcError, Result};
+use lpc_rs_utils::lpc_bytes;
 
 use crate::interpreter::{
     lpc_array::LpcArray, lpc_mapping::LpcMapping, lpc_ref::LpcRef, process::Process, stm::TxnHandle,
@@ -49,7 +50,7 @@ fn too_deep(depth: usize) -> Result<()> {
 
 /// Append `value` in the compact form. Containers are read through `txn`;
 /// a live object is `$created@name$`, a dead one and a function pointer
-/// are `0`.
+/// are `0`; a `bytes` value is `b"..."` from [`lpc_bytes::literal`].
 pub(crate) fn write_value(
     out: &mut String,
     value: &LpcRef,
@@ -109,6 +110,7 @@ pub(crate) fn write_value(
                 .expect("String never fails"),
             None => out.push('0'),
         },
+        LpcRef::Bytes(b) => out.push_str(&lpc_bytes::literal(b)),
         LpcRef::Function(_) => out.push('0'),
     }
     Ok(())
@@ -210,6 +212,7 @@ impl Reader<'_> {
         too_deep(depth)?;
         match self.peek() {
             Some(b'"') => self.string(),
+            Some(b'b') if self.text[self.at..].starts_with(b"b\"") => self.bytes(),
             Some(b'#') => self.hex_float(),
             Some(b'$') => self.object(),
             Some(b'(') if self.text[self.at..].starts_with(b"({") => self.array(depth),
@@ -355,6 +358,57 @@ impl Reader<'_> {
         Ok(LpcRef::from(s))
     }
 
+    /// `b"..."` with `\"` and `\\`; `\xNN` is a hex byte; any other byte is
+    /// itself.
+    fn bytes(&mut self) -> Result<LpcRef> {
+        self.expect("b\"")?;
+        let mut bytes = Vec::new();
+        loop {
+            match self.peek() {
+                None => return Err(self.error("unterminated bytes")),
+                Some(b'"') => {
+                    self.at += 1;
+                    break;
+                }
+                Some(b'\\') => {
+                    self.at += 1;
+                    match self.peek() {
+                        Some(b'x') => {
+                            self.at += 1;
+                            bytes.push(self.hex_byte()?);
+                        }
+                        Some(c) => {
+                            bytes.push(c);
+                            self.at += 1;
+                        }
+                        None => return Err(self.error("unterminated bytes")),
+                    }
+                }
+                Some(c) => {
+                    bytes.push(c);
+                    self.at += 1;
+                }
+            }
+        }
+        Ok(LpcRef::from(bytes))
+    }
+
+    /// Two hex digits as a byte.
+    fn hex_byte(&mut self) -> Result<u8> {
+        let byte = self.text.get(self.at..self.at + 2).and_then(|d| {
+            let hi = (d[0] as char).to_digit(16)?;
+            let lo = (d[1] as char).to_digit(16)?;
+            Some((hi * 16 + lo) as u8)
+        });
+        match byte {
+            Some(b) => {
+                self.at += 2;
+                Ok(b)
+            }
+            None => Err(self.error("expected two hex digits")),
+        }
+    }
+
     /// `$<created>@<name>$`: the live object when `resolve` finds it and
     /// its creation time matches, else 0.
     fn object(&mut self) -> Result<LpcRef> {
@@ -463,6 +517,13 @@ mod tests {
             written(&LpcRef::from("q\"b\\n\nt\tuéé"), &txn),
             "\"q\\\"b\\\\n\\nt\tuéé\""
         );
+    }
+
+    #[test]
+    fn bytes_notation_in_a_save_file() {
+        let txn = TxnHandle::empty();
+        let value = LpcRef::from(vec![0x22u8, 0x5c, 0x00, 0xff, b'a']);
+        assert_eq!(written(&value, &txn), r#"b"\"\\\x00\xffa""#);
     }
 
     #[test]
@@ -578,6 +639,26 @@ mod tests {
         assert_eq!(read("\"a\\tb\"", &txn), LpcRef::from("atb"));
         // Trailing spaces after the value are tolerated.
         assert_eq!(read("5  ", &txn), LpcRef::from(5));
+    }
+
+    #[test]
+    fn bytes_round_trip() {
+        let txn = TxnHandle::empty();
+        let value = LpcRef::from((0..=255u8).collect::<Vec<u8>>());
+        let text = written(&value, &txn);
+        assert_eq!(read_value(&text, &txn, &|_| None).unwrap(), value);
+    }
+
+    #[test]
+    fn a_bad_hex_escape_is_an_error() {
+        let err = rejects(r#"b"\xg1""#);
+        assert!(err.contains("expected two hex digits"), "{err}");
+    }
+
+    #[test]
+    fn an_unterminated_bytes_is_an_error() {
+        let err = rejects(r#"b"abc"#);
+        assert!(err.contains("unterminated bytes"), "{err}");
     }
 
     #[test]

@@ -28,6 +28,7 @@ use crate::compiler::{
 
 static KEYWORDS: phf::Set<&'static str> = phf_set! {
     "break",
+    "bytes",
     "case",
     "catch",
     "continue",
@@ -147,6 +148,7 @@ pub fn check_binary_operation_types(
                 | (LpcType::String(false), LpcType::Int(false))
                 | (LpcType::Int(false), LpcType::String(false))
                 | (LpcType::String(false), LpcType::String(false))
+                | (LpcType::Bytes(false), LpcType::Bytes(false))
                 | (LpcType::Float(false), LpcType::Float(false))
                 | (LpcType::Float(false), LpcType::Int(false))
                 | (LpcType::Int(false), LpcType::Float(false))
@@ -200,7 +202,8 @@ pub fn check_binary_operation_types(
         },
         BinaryOperation::Index => {
             if matches!(left_type, LpcType::Mapping(_) | LpcType::Mixed(_))
-                || ((left_type.is_array() || matches!(left_type, LpcType::String(false)))
+                || ((left_type.is_array()
+                    || matches!(left_type, LpcType::String(false) | LpcType::Bytes(false)))
                     && (LpcType::Int(false).matches_type(right_type)
                         || matches!(*node.r, ExpressionNode::Range(_))))
             {
@@ -230,7 +233,8 @@ pub fn check_binary_operation_types(
             match tuple {
                 (LpcType::Int(false), LpcType::Int(false))
                 | (LpcType::Float(false), LpcType::Float(false))
-                | (LpcType::String(false), LpcType::String(false)) => Ok(()),
+                | (LpcType::String(false), LpcType::String(false))
+                | (LpcType::Bytes(false), LpcType::Bytes(false)) => Ok(()),
                 (left_type, right_type) => Err(create_error(node, node.op, left_type, right_type)),
             }
         }
@@ -361,10 +365,10 @@ pub fn conversion_efun(target: LpcType) -> Option<&'static str> {
 
 /// The element type a `foreach` over a collection of static type
 /// `collection` yields, when the type says: `T *` yields `T`, a string
-/// yields the character's code.
+/// yields the character's code, `bytes` yields the byte's value.
 pub fn element_type(collection: LpcType) -> Option<LpcType> {
     match collection {
-        LpcType::String(false) => Some(LpcType::Int(false)),
+        LpcType::String(false) | LpcType::Bytes(false) => Some(LpcType::Int(false)),
         // as_array(false) leaves a union a union, which would demand the variable match every member.
         LpcType::Union(_) => None,
         typed if typed.is_array() => Some(typed.as_array(false)),
@@ -486,6 +490,15 @@ pub fn node_type(node: &ExpressionNode, context: &CompilationContext) -> Result<
                 if left_type == LpcType::String(false) {
                     return Ok(if ranged {
                         LpcType::String(false)
+                    } else {
+                        LpcType::Int(false)
+                    });
+                }
+
+                // A bytes index is the byte's value, 0..255.
+                if left_type == LpcType::Bytes(false) {
+                    return Ok(if ranged {
+                        LpcType::Bytes(false)
                     } else {
                         LpcType::Int(false)
                     });
@@ -675,6 +688,16 @@ mod tests {
                 type_: LpcType::Mixed(true),
                 ..Default::default()
             };
+            let bytes1 = Symbol {
+                name: "bytes1".to_string(),
+                type_: LpcType::Bytes(false),
+                ..Default::default()
+            };
+            let bytes2 = Symbol {
+                name: "bytes2".to_string(),
+                type_: LpcType::Bytes(false),
+                ..Default::default()
+            };
 
             let mut scope_tree = ScopeTree::default();
             scope_tree.push_new();
@@ -691,6 +714,8 @@ mod tests {
             scope.insert(mapping2);
             scope.insert(mixed1);
             scope.insert(mixed_array1);
+            scope.insert(bytes1);
+            scope.insert(bytes2);
 
             CompilationContext {
                 scopes: scope_tree,
@@ -1764,6 +1789,95 @@ mod tests {
             assert!(array_range_vars(BinaryOperation::Shr, &context).is_err());
             assert!(mapping_mapping_vars(BinaryOperation::Shr, &context).is_err());
         }
+
+        #[test]
+        fn bytes_add_bytes_is_allowed() {
+            let context = setup();
+
+            assert!(
+                get_result(
+                    BinaryOperation::Add,
+                    ExpressionNode::from(VarNode::new("bytes1")),
+                    ExpressionNode::from(VarNode::new("bytes2")),
+                    &context,
+                )
+                .is_ok()
+            );
+        }
+
+        #[test]
+        fn bytes_add_string_is_refused() {
+            let context = setup();
+
+            assert!(
+                get_result(
+                    BinaryOperation::Add,
+                    ExpressionNode::from(VarNode::new("bytes1")),
+                    ExpressionNode::from(VarNode::new("string1")),
+                    &context,
+                )
+                .is_err()
+            );
+        }
+
+        #[test]
+        fn bytes_lt_bytes_is_allowed() {
+            let context = setup();
+
+            assert!(
+                get_result(
+                    BinaryOperation::Lt,
+                    ExpressionNode::from(VarNode::new("bytes1")),
+                    ExpressionNode::from(VarNode::new("bytes2")),
+                    &context,
+                )
+                .is_ok()
+            );
+        }
+
+        #[test]
+        fn bytes_lt_string_is_refused() {
+            let context = setup();
+
+            assert!(
+                get_result(
+                    BinaryOperation::Lt,
+                    ExpressionNode::from(VarNode::new("bytes1")),
+                    ExpressionNode::from(VarNode::new("string1")),
+                    &context,
+                )
+                .is_err()
+            );
+        }
+
+        #[test]
+        fn bytes_is_indexed_by_an_int_and_by_a_range() {
+            let context = setup();
+
+            assert!(
+                get_result(
+                    BinaryOperation::Index,
+                    ExpressionNode::from(VarNode::new("bytes1")),
+                    ExpressionNode::from(VarNode::new("int1")),
+                    &context,
+                )
+                .is_ok()
+            );
+
+            assert!(
+                get_result(
+                    BinaryOperation::Index,
+                    ExpressionNode::from(VarNode::new("bytes1")),
+                    ExpressionNode::Range(RangeNode::new(
+                        Some(ExpressionNode::from(0)),
+                        None,
+                        None
+                    )),
+                    &context,
+                )
+                .is_ok()
+            );
+        }
     }
 
     mod check_unary_operation_tests {
@@ -2513,6 +2627,22 @@ mod tests {
                     r: Box::new(Some(ExpressionNode::from(3))),
                     span: None,
                 })
+            }
+
+            #[test]
+            fn test_index_bytes_with_int_is_int() {
+                let context = context_with_foo(LpcType::Bytes(false));
+
+                let indexed = foo_indexed_by(ExpressionNode::from(1));
+                assert_eq!(node_type(&indexed, &context).unwrap(), LpcType::Int(false));
+            }
+
+            #[test]
+            fn test_index_bytes_with_range_is_bytes() {
+                let context = context_with_foo(LpcType::Bytes(false));
+
+                let sliced = foo_indexed_by(one_to_three());
+                assert_eq!(node_type(&sliced, &context).unwrap(), LpcType::Bytes(false));
             }
 
             #[test]

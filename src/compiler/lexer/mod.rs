@@ -234,6 +234,8 @@ pub enum Token {
     Float(Span),
     #[token("string", track_slice)]
     String(Span),
+    #[token("bytes", track_slice)]
+    Bytes(Span),
     #[token("object", track_slice)]
     Object(Span),
     #[token("mapping", track_slice)]
@@ -492,6 +494,7 @@ impl HasSpan for Token {
             | Token::Int(x)
             | Token::Float(x)
             | Token::String(x)
+            | Token::Bytes(x)
             | Token::Object(x)
             | Token::Mapping(x)
             | Token::Mixed(x)
@@ -588,6 +591,7 @@ impl Token {
             | Token::Int(x)
             | Token::Float(x)
             | Token::String(x)
+            | Token::Bytes(x)
             | Token::Object(x)
             | Token::Mapping(x)
             | Token::Mixed(x)
@@ -651,6 +655,7 @@ impl Token {
             Token::Int(_) => "int",
             Token::Float(_) => "float",
             Token::String(_) => "string",
+            Token::Bytes(_) => "bytes",
             Token::Object(_) => "object",
             Token::Mapping(_) => "mapping",
             Token::Mixed(_) => "mixed",
@@ -756,6 +761,7 @@ impl Display for Token {
             | Token::Int(_)
             | Token::Float(_)
             | Token::String(_)
+            | Token::Bytes(_)
             | Token::Object(_)
             | Token::Mapping(_)
             | Token::Mixed(_)
@@ -924,6 +930,13 @@ mod tests {
             .expect("a backtick does not lex");
         assert_eq!(error.span(), Some(Span::new(7, 8..9)));
         assert_eq!(error.to_string(), "Lex Error: Invalid Token ```");
+    }
+
+    #[test]
+    fn bytes_lexes_as_a_keyword() {
+        let vec = lex_vec("bytes b;");
+        assert!(matches!(vec[0], Ok(Token::Bytes(_))));
+        assert_eq!(vec[0].as_ref().unwrap().to_string(), "bytes");
     }
 
     fn lex_vec(prog: &str) -> Vec<Result<Token>> {

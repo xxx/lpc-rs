@@ -7,11 +7,13 @@ use std::{
     sync::{Arc, Weak},
 };
 
+use bytes::Bytes;
 use decorum::Total;
 use lpc_rs_asm::instruction::Comparison;
 use lpc_rs_core::{BaseFloat, LpcFloatInner, LpcIntInner, lpc_type::LpcType};
 use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_function_support::constant::LpcConstant;
+use lpc_rs_utils::lpc_bytes;
 use lpc_rs_utils::lpc_string::LpcString;
 use lpc_rs_utils::string;
 
@@ -30,11 +32,21 @@ use crate::{
 
 pub const NULL: LpcRef = LpcRef::Int(LpcInt(0));
 
+/// The refusal every operator answers for a `bytes` beside a `string`.
+pub(crate) const BYTES_STRING_MIX: &str =
+    "mismatched types: a bytes and a string do not mix; convert with to_text() or to_bytes()";
+
 /// A transaction whose cells the unit tests mint into and read back from;
 /// the payload helpers below need one to resolve array/mapping contents.
 #[cfg(test)]
 fn test_txn() -> TxnHandle {
     TxnHandle::empty()
+}
+
+/// A `bytes` value for the tests; no LPC source can write one.
+#[cfg(test)]
+pub(crate) fn test_bytes(v: &[u8]) -> LpcRef {
+    LpcRef::from(Bytes::copy_from_slice(v))
 }
 
 /// Mint `array` into the test transaction and return its cell handle.
@@ -60,6 +72,10 @@ pub enum LpcRef {
     /// Reference type, and stores a reference-counting pointer to the actual
     /// value. Strings are immutable once created, so no interior mutability.
     String(Arc<LpcString>),
+
+    /// An immutable byte sequence, behind an `Arc` so the register stays 16
+    /// bytes.
+    Bytes(Arc<Bytes>),
 
     /// An array's identity in the transactional world. The contents live in
     /// the world under this handle's var, not here; the handle is a cheap
@@ -137,6 +153,7 @@ impl LpcRef {
             LpcRef::Float(_) => "float",
             LpcRef::Int(_) => "int",
             LpcRef::String(_) => "string",
+            LpcRef::Bytes(_) => "bytes",
             LpcRef::Array(_) => "array",
             LpcRef::Mapping(_) => "mapping",
             LpcRef::Object(_) => "object",
@@ -232,6 +249,14 @@ impl LpcRef {
         }
     }
 
+    /// The byte payload, or `None` for anything but a `bytes`.
+    pub fn as_bytes(&self) -> Option<&[u8]> {
+        match self {
+            LpcRef::Bytes(b) => Some(b),
+            _ => None,
+        }
+    }
+
     fn to_error(&self, op: BinaryOperation, right: &LpcRef) -> LpcError {
         LpcError::runtime(format!(
             "mismatched types: {} ({}) {} {} ({})",
@@ -280,6 +305,7 @@ impl LpcRef {
             LpcRef::Float(_) => LpcType::Float(false),
             LpcRef::Int(_) => LpcType::Int(false),
             LpcRef::String(_) => LpcType::String(false),
+            LpcRef::Bytes(_) => LpcType::Bytes(false),
             LpcRef::Array(_) => LpcType::Mixed(true), // this could be better
             LpcRef::Mapping(_) => LpcType::Mapping(false),
             LpcRef::Object(x) if x.strong_count() == 0 => LpcType::Int(false),
@@ -445,6 +471,10 @@ impl LpcRef {
             (LpcRef::String(s), LpcRef::Int(i)) => {
                 Ok(LpcString::concat(s.to_str(), &i.to_string())?.into())
             }
+            (LpcRef::Bytes(a), LpcRef::Bytes(b)) => Ok(LpcRef::from(lpc_bytes::concat(a, b)?)),
+            (LpcRef::Bytes(_), LpcRef::String(_)) | (LpcRef::String(_), LpcRef::Bytes(_)) => {
+                Err(LpcError::runtime(BYTES_STRING_MIX))
+            }
             (LpcRef::Array(cell), LpcRef::Array(rhs_cell)) => txn.with(|t| {
                 let (a, b) = (t.read_array(cell.id), t.read_array(rhs_cell.id));
                 let (a, b) = match (a, b) {
@@ -582,7 +612,11 @@ impl LpcRef {
             LpcRef::Int(x) => LpcRef::Int(LpcInt((*x == 0) as LpcIntInner)),
             LpcRef::Float(x) => LpcRef::Int(LpcInt((*x == 0.0) as LpcIntInner)),
             LpcRef::Object(_) => LpcRef::from(self.live_object(txn).is_none()),
-            LpcRef::String(_) | LpcRef::Array(_) | LpcRef::Mapping(_) | LpcRef::Function(_) => NULL,
+            LpcRef::String(_)
+            | LpcRef::Bytes(_)
+            | LpcRef::Array(_)
+            | LpcRef::Mapping(_)
+            | LpcRef::Function(_) => NULL,
         }
     }
 
@@ -664,6 +698,20 @@ impl From<LpcString> for LpcRef {
     }
 }
 
+impl From<Bytes> for LpcRef {
+    #[inline]
+    fn from(value: Bytes) -> Self {
+        LpcRef::Bytes(Arc::new(value))
+    }
+}
+
+impl From<Vec<u8>> for LpcRef {
+    #[inline]
+    fn from(value: Vec<u8>) -> Self {
+        LpcRef::from(Bytes::from(value))
+    }
+}
+
 impl From<FunctionPtr> for LpcRef {
     #[inline]
     fn from(value: FunctionPtr) -> Self {
@@ -694,6 +742,7 @@ impl Hash for LpcRef {
             LpcRef::Float(x) => x.hash(state),
             LpcRef::Int(x) => x.hash(state),
             LpcRef::String(s) => s.hash(state),
+            LpcRef::Bytes(b) => b.hash(state),
             LpcRef::Array(x) => x.id.hash(state),
             LpcRef::Mapping(x) => x.id.hash(state),
             LpcRef::Object(x) => x.as_ptr().hash(state),
@@ -709,6 +758,7 @@ impl PartialEq for LpcRef {
             (LpcRef::Float(x), LpcRef::Float(y)) => x == y,
             (LpcRef::Int(x), LpcRef::Int(y)) => x == y,
             (LpcRef::String(a), LpcRef::String(b)) => a == b,
+            (LpcRef::Bytes(a), LpcRef::Bytes(b)) => a == b,
             (LpcRef::Object(x), LpcRef::Object(y)) => Weak::ptr_eq(x, y),
             (LpcRef::Array(x), LpcRef::Array(y)) => x.id == y.id,
             (LpcRef::Mapping(x), LpcRef::Mapping(y)) => x.id == y.id,
@@ -745,6 +795,7 @@ impl PartialOrd for LpcRef {
             (LpcRef::Float(x), LpcRef::Float(y)) => Some(x.cmp(y)),
             (LpcRef::Int(x), LpcRef::Int(y)) => Some(x.cmp(y)),
             (LpcRef::String(a), LpcRef::String(b)) => Some(a.cmp(b)),
+            (LpcRef::Bytes(a), LpcRef::Bytes(b)) => Some(a.cmp(b)),
             _ => None,
         }
     }
@@ -756,6 +807,7 @@ impl Display for LpcRef {
             LpcRef::Float(x) => write!(f, "{x}"),
             LpcRef::Int(x) => write!(f, "{x}"),
             LpcRef::String(s) => write!(f, "{s}"),
+            LpcRef::Bytes(b) => write!(f, "{}", lpc_bytes::literal(b)),
             LpcRef::Array(x) => write!(f, "<array#{}>", x.id.as_u64()),
             LpcRef::Mapping(x) => write!(f, "<mapping#{}>", x.id.as_u64()),
             LpcRef::Object(x) => match x.upgrade() {
@@ -775,6 +827,7 @@ impl Debug for LpcRef {
             LpcRef::Float(x) => write!(f, "{x:?}"),
             LpcRef::Int(x) => write!(f, "{x:?}"),
             LpcRef::String(s) => write!(f, "{s:?}"),
+            LpcRef::Bytes(b) => write!(f, "{}", lpc_bytes::literal(b)),
             LpcRef::Array(x) => write!(f, "Array({})", x.id.as_u64()),
             LpcRef::Mapping(x) => write!(f, "Mapping({})", x.id.as_u64()),
             LpcRef::Object(x) => match x.upgrade() {
@@ -798,6 +851,13 @@ impl Default for LpcRef {
 #[cfg(test)]
 mod tests {
     use claims::assert_err;
+
+    /// A register holds an [`LpcRef`] and is copied on every move, so a new
+    /// variant's payload belongs behind a pointer.
+    #[test]
+    fn lpc_ref_stays_sixteen_bytes() {
+        assert_eq!(std::mem::size_of::<super::LpcRef>(), 16);
+    }
 
     mod compare {
         use lpc_rs_asm::instruction::Comparison;
@@ -1026,6 +1086,33 @@ mod tests {
             assert_eq!(LpcRef::from("hi").as_str(), Some("hi"));
             assert_eq!(LpcRef::from(0).as_str(), None);
             assert_eq!(LpcRef::from(1.5).as_str(), None);
+        }
+    }
+
+    mod bytes_ops {
+        use super::*;
+
+        #[test]
+        fn bytes_add_slices_and_compare_by_content() {
+            let txn = test_txn();
+            let joined = test_bytes(b"ab").add(&test_bytes(b"c"), &txn).unwrap();
+            assert_eq!(joined.as_bytes(), Some(b"abc".as_slice()));
+
+            assert_eq!(test_bytes(b"abc"), test_bytes(b"abc"));
+            assert!(test_bytes(b"a") < test_bytes(b"b"));
+            assert!(test_bytes(b"\xff") > test_bytes(b"a"));
+        }
+
+        #[test]
+        fn bytes_never_mix_with_a_string() {
+            let txn = test_txn();
+            for (a, b) in [
+                (test_bytes(b"a"), LpcRef::from("b")),
+                (LpcRef::from("b"), test_bytes(b"a")),
+            ] {
+                let err = a.add(&b, &txn).unwrap_err().to_string();
+                assert!(err.contains("to_text"), "{err}");
+            }
         }
     }
 

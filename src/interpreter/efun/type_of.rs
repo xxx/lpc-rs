@@ -19,6 +19,8 @@ pub const T_ARRAY: i64 = 5;
 pub const T_MAPPING: i64 = 6;
 /// The tag of a function pointer.
 pub const T_FUNCTION: i64 = 7;
+/// The tag of a `bytes`.
+pub const T_BYTES: i64 = 8;
 
 /// `typeof(x)`: the tag of `x`'s type.
 pub fn r#typeof<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
@@ -33,6 +35,7 @@ pub fn r#typeof<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
         LpcRef::Array(_) => T_ARRAY,
         LpcRef::Mapping(_) => T_MAPPING,
         LpcRef::Function(_) => T_FUNCTION,
+        LpcRef::Bytes(_) => T_BYTES,
     };
     context.return_efun_result(LpcRef::from(tag));
     Ok(())

@@ -50,6 +50,7 @@ fn to_value(value: &LpcRef, txn: &TxnHandle, depth: usize) -> Result<Value> {
             Ok(Value::Object(entries))
         }
         LpcRef::Object(object) if object.upgrade().is_none() => Ok(Value::from(0)),
+        LpcRef::Bytes(b) => Ok(Value::Array(b.iter().map(|&x| Value::from(x)).collect())),
         other => Err(LpcError::runtime(format!(
             "json_encode: cannot encode {}",
             other.type_name()
@@ -170,6 +171,15 @@ mod tests {
         let txn = TxnHandle::empty();
         let items = vec![LpcRef::from(1), LpcRef::from("a"), LpcRef::from(2.5)];
         assert_eq!(encode(&array(&txn, items), &txn).unwrap(), r#"[1,"a",2.5]"#);
+    }
+
+    #[test]
+    fn bytes_encode_as_an_int_array() {
+        let txn = TxnHandle::empty();
+        assert_eq!(
+            encode(&LpcRef::from(vec![104u8, 105]), &txn).unwrap(),
+            "[104,105]"
+        );
     }
 
     #[test]

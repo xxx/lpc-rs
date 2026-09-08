@@ -100,6 +100,7 @@ pub(crate) mod sort_array;
 pub(crate) mod sprintf;
 pub(crate) mod sscanf;
 pub(crate) mod tell_object;
+pub(crate) mod text_encoding;
 pub(crate) mod this_interactive;
 pub(crate) mod this_object;
 pub(crate) mod this_player;
@@ -329,6 +330,11 @@ efuns! {
         args: [LpcType::String(false) | LpcType::Object(false)],
     },
     arrayp [in type_predicates] => {
+        returns: LpcType::Int(false),
+        arity: 1,
+        args: [LpcType::Mixed(false)],
+    },
+    bytesp [in type_predicates] => {
         returns: LpcType::Int(false),
         arity: 1,
         args: [LpcType::Mixed(false)],
@@ -595,7 +601,12 @@ efuns! {
     sizeof => {
         returns: LpcType::Int(false),
         arity: 1,
-        args: [LpcType::Mixed(true) | LpcType::Mapping(false) | LpcType::String(false)],
+        args: [
+            LpcType::Mixed(true)
+                | LpcType::Mapping(false)
+                | LpcType::String(false)
+                | LpcType::Bytes(false)
+        ],
     },
     sscanf => {
         returns: LpcType::Int(false),
@@ -741,6 +752,22 @@ efuns! {
         returns: LpcType::String(false),
         arity: 1,
         args: [LpcType::Mixed(false)],
+    },
+    to_bytes [in text_encoding] => {
+        returns: LpcType::Bytes(false),
+        arity: (2, 1),
+        args: [
+            LpcType::String(false) | LpcType::Bytes(false) | LpcType::Int(true),
+            LpcType::String(false),
+        ],
+    },
+    to_text [in text_encoding] => {
+        returns: LpcType::String(false),
+        arity: (2, 1),
+        args: [
+            LpcType::Bytes(false) | LpcType::String(false) | LpcType::Int(true),
+            LpcType::String(false),
+        ],
     },
     r#typeof [in type_of] => {
         returns: LpcType::Int(false),
@@ -948,14 +975,14 @@ efuns! {
         ],
     },
     read_bytes [async in bytes] => {
-        returns: LpcType::Mixed(false),
+        returns: LpcType::Bytes(false),
         arity: (3, 2),
         args: [LpcType::String(false), LpcType::Int(false), LpcType::Int(false)],
     },
     write_bytes [async in bytes] => {
         returns: LpcType::Int(false),
         arity: 3,
-        args: [LpcType::String(false), LpcType::Int(false), LpcType::String(false)],
+        args: [LpcType::String(false), LpcType::Int(false), LpcType::Bytes(false)],
     },
     read_chars [async in chars] => {
         returns: LpcType::Mixed(false),
@@ -1216,6 +1243,7 @@ mod tests {
                 "all_environment",
                 "all_inventory",
                 "arrayp",
+                "bytesp",
                 "call_out",
                 "call_other",
                 "catch",
@@ -1297,6 +1325,8 @@ mod tests {
                 "to_float",
                 "to_int",
                 "to_string",
+                "to_bytes",
+                "to_text",
                 "typeof",
                 "upper_case",
                 "allocate",

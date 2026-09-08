@@ -66,6 +66,7 @@ impl VarInitNode {
             LpcType::Void => LpcType::Void,
             LpcType::Int(_) => LpcType::Int(self.array),
             LpcType::String(_) => LpcType::String(self.array),
+            LpcType::Bytes(_) => LpcType::Bytes(self.array),
             LpcType::Float(_) => LpcType::Float(self.array),
             LpcType::Object(_) => LpcType::Object(self.array),
             LpcType::Mapping(_) => LpcType::Mapping(self.array),

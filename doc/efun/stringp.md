@@ -6,4 +6,4 @@ Returns 1 if the argument is a string, 0 otherwise.
 
 ### See also:
 
-`intp`, `floatp`, `objectp`, `arrayp`, `mappingp`, `functionp`
+`intp`, `floatp`, `objectp`, `arrayp`, `mappingp`, `functionp`, `bytesp`

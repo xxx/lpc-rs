@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
 use lpc_rs_errors::Result;
+use lpc_rs_utils::lpc_bytes;
 
 use crate::interpreter::{
     efun::{efun_context::EfunContext, write::tell_this_player},
@@ -34,6 +35,12 @@ pub(crate) fn format_ref<const N: usize>(
         LpcRef::Float(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::Int(x) => Ok(format!("{:width$}{}", "", x, width = indent)),
         LpcRef::String(_) => lpc_ref.with_string(|s| format!("{:width$}{}", "", s, width = indent)),
+        LpcRef::Bytes(b) => Ok(format!(
+            "{:width$}{}",
+            "",
+            lpc_bytes::literal(b),
+            width = indent
+        )),
         LpcRef::Object(x) => {
             let val = x.upgrade();
             if let Some(proc) = val {

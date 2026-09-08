@@ -577,6 +577,7 @@ impl TreeWalker for SemanticCheckWalker {
         if !collection_type.is_array()
             && !collection_type.matches_type(LpcType::Mapping(false))
             && !collection_type.matches_type(LpcType::String(false))
+            && !collection_type.matches_type(LpcType::Bytes(false))
         {
             let e = lpc_error!(
                 node.collection.span(),
@@ -602,9 +603,13 @@ impl TreeWalker for SemanticCheckWalker {
         }
 
         // `LoadMappingKey` only runs on a mapping at codegen, so the two-variable form
-        // needs one; a plain string or any array can never provide it.
+        // needs one; a plain string, `bytes` or any array can never provide it.
         if matches!(node.initializer, ForEachInit::Mapping { .. })
-            && (collection_type.is_array() || collection_type == LpcType::String(false))
+            && (collection_type.is_array()
+                || matches!(
+                    collection_type,
+                    LpcType::String(false) | LpcType::Bytes(false)
+                ))
         {
             let e = lpc_error!(
                 node.collection.span(),
@@ -2323,6 +2328,61 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn bytes_yields_ints() {
+            let code = indoc! { r#"
+                void create() {
+                    bytes b;
+                    foreach (int c : b) {
+                        dump(c);
+                    }
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert!(
+                context.diagnostics.errors().is_empty(),
+                "{:?}",
+                context.diagnostics.errors()
+            );
+        }
+
+        #[tokio::test]
+        async fn a_string_variable_over_bytes_is_rejected() {
+            let code = indoc! { r#"
+                void create() {
+                    bytes b;
+                    foreach (string c : b) {
+                        dump(c);
+                    }
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "mismatched types: `foreach` variable `c` (string) over `b` (int elements)"
+            );
+        }
+
+        #[tokio::test]
+        async fn rejects_two_variables_over_bytes() {
+            let code = indoc! { r#"
+                void create() {
+                    bytes b;
+                    foreach (key, value : b) {
+                        dump(key);
+                    }
+                }
+            "# };
+            let context = walk_code(code).await.expect("failed to parse?");
+
+            assert_eq!(
+                context.diagnostics.errors()[0].to_string(),
+                "a two-variable `foreach` needs a mapping, found bytes"
+            );
+        }
+
+        #[tokio::test]
         async fn an_array_variable_over_a_flat_array_is_rejected() {
             let code = indoc! { r#"
                 void create() {
@@ -2421,6 +2481,21 @@ mod tests {
             assert_eq!(
                 context.diagnostics.errors()[0].to_string(),
                 "cast from `mixed *` to `string` can never succeed"
+            );
+        }
+
+        #[tokio::test]
+        async fn rejects_a_cast_to_bytes() {
+            let code = indoc! { r#"
+                void create() {
+                    mixed x = 1;
+                    dump((bytes) x);
+                }
+            "# };
+
+            assert_eq!(
+                messages(code).await,
+                vec!["cannot cast to `bytes`; convert with to_bytes()"]
             );
         }
 
@@ -3304,6 +3379,42 @@ mod tests {
             assert_eq!(
                 context.diagnostics.errors()[0].to_string(),
                 "mismatched types: `s` (string) = `\"a\" == \"b\"` (int)"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_string_does_not_fill_a_bytes() {
+            let code = r#"
+                bytes b = "x";
+            "#;
+
+            assert_eq!(
+                messages(code).await,
+                vec![r#"mismatched types: `b` (bytes) = `"x"` (string)"#]
+            );
+        }
+
+        #[tokio::test]
+        async fn read_bytes_fills_a_declared_bytes() {
+            let code = r#"
+                bytes b = read_bytes("/x");
+                string s = to_text(read_bytes("/x"), "latin1");
+                bytes tail = read_bytes("/x", -4000);
+            "#;
+
+            assert_eq!(messages(code).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn bytes_does_not_fill_a_string() {
+            let code = r#"
+                bytes b;
+                string s = b;
+            "#;
+
+            assert_eq!(
+                messages(code).await,
+                vec!["mismatched types: `s` (string) = `b` (bytes)"]
             );
         }
 

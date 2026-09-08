@@ -13,6 +13,7 @@ pub enum LpcType {
     Float(bool),
     Object(bool),
     String(bool),
+    Bytes(bool),
     Mapping(bool),
     Mixed(bool),
     Function(bool),
@@ -60,6 +61,7 @@ impl LpcType {
             LpcType::Void => false,
             LpcType::Int(arr)
             | LpcType::String(arr)
+            | LpcType::Bytes(arr)
             | LpcType::Float(arr)
             | LpcType::Object(arr)
             | LpcType::Mapping(arr)
@@ -74,6 +76,7 @@ impl LpcType {
         match self {
             LpcType::Int(_) => LpcType::Int(arr),
             LpcType::String(_) => LpcType::String(arr),
+            LpcType::Bytes(_) => LpcType::Bytes(arr),
             LpcType::Float(_) => LpcType::Float(arr),
             LpcType::Mapping(_) => LpcType::Mapping(arr),
             LpcType::Mixed(_) => LpcType::Mixed(arr),
@@ -108,6 +111,13 @@ impl Mangle for LpcType {
                     String::from("s*")
                 } else {
                     String::from("s")
+                }
+            }
+            LpcType::Bytes(a) => {
+                if *a {
+                    String::from("b*")
+                } else {
+                    String::from("b")
                 }
             }
             LpcType::Object(a) => {
@@ -176,6 +186,7 @@ impl Display for LpcType {
             LpcType::Int(array) => format!("int{}", to_star(array)),
             LpcType::Float(array) => format!("float{}", to_star(array)),
             LpcType::String(array) => format!("string{}", to_star(array)),
+            LpcType::Bytes(array) => format!("bytes{}", to_star(array)),
             LpcType::Object(array) => format!("object{}", to_star(array)),
             LpcType::Mapping(array) => format!("mapping{}", to_star(array)),
             LpcType::Mixed(array) => format!("mixed{}", to_star(array)),
@@ -194,6 +205,7 @@ impl From<&str> for LpcType {
             "int" => LpcType::Int(false),
             "float" => LpcType::Float(false),
             "string" => LpcType::String(false),
+            "bytes" => LpcType::Bytes(false),
             "object" => LpcType::Object(false),
             "mapping" => LpcType::Mapping(false),
             "function" => LpcType::Function(false),
@@ -226,6 +238,31 @@ mod tests {
         let found = LpcType::Int(false) | LpcType::String(false);
 
         assert!(expected.matches_type(found));
+    }
+
+    #[test]
+    fn bytes_parses_displays_and_mangles() {
+        assert_eq!(LpcType::from("bytes"), LpcType::Bytes(false));
+        assert_eq!(LpcType::Bytes(true).to_string(), "bytes *");
+        assert_eq!(LpcType::Bytes(false).mangle(), "b");
+        assert_eq!(LpcType::Bytes(true).mangle(), "b*");
+        assert_eq!(LpcType::Bytes(false).as_array(true), LpcType::Bytes(true));
+        assert!(LpcType::Bytes(true).is_array());
+    }
+
+    #[test]
+    fn a_union_holds_bytes() {
+        assert!((LpcType::Bytes(false) | LpcType::Int(false)).matches_type(LpcType::Bytes(false)));
+        assert!(
+            !(LpcType::String(false) | LpcType::Int(false)).matches_type(LpcType::Bytes(false))
+        );
+        assert!(LpcType::Mixed(false).matches_type(LpcType::Bytes(false)));
+        assert!(LpcType::Mixed(true).matches_type(LpcType::Bytes(true)));
+        assert!(!LpcType::String(false).matches_type(LpcType::Bytes(false)));
+        assert_eq!(
+            (LpcType::Bytes(false) | LpcType::Bytes(true)).to_string(),
+            "bytes | bytes *"
+        );
     }
 
     #[test]

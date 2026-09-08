@@ -19,6 +19,11 @@ pub fn arrayp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     type_predicate(context, |r| matches!(r, LpcRef::Array(_)))
 }
 
+/// `bytesp`: 1 if the argument is a `bytes`.
+pub fn bytesp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    type_predicate(context, |r| matches!(r, LpcRef::Bytes(_)))
+}
+
 /// `floatp`: 1 if the argument is a float.
 pub fn floatp<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     type_predicate(context, |r| matches!(r, LpcRef::Float(_)))
@@ -77,11 +82,14 @@ mod tests {
         mixed *l = ({ 1, 2, 3 });
         mixed m = ([ "foo": "bar" ]);
         mixed n = (: 1 :);
+        bytes o = to_bytes("x", "utf8");
+        mixed p = to_bytes("x", "utf8");
 
         int *create() {
             return ({
                 PRED(a), PRED(b), PRED(c), PRED(d), PRED(dd), PRED(e), PRED(f), PRED(g),
                 PRED(h), PRED(i), PRED(j), PRED(k), PRED(kk), PRED(l), PRED(m), PRED(n),
+                PRED(o), PRED(p),
             });
         }
     "# };
@@ -90,16 +98,38 @@ mod tests {
     /// an int.
     #[tokio::test]
     async fn each_predicate_matches_only_its_variant() {
-        const CASES: &[(&str, [i64; 16])] = &[
-            ("intp", [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]),
-            ("floatp", [0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]),
-            ("stringp", [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]),
-            ("objectp", [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]),
-            ("arrayp", [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0]),
-            ("mappingp", [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0]),
+        const CASES: &[(&str, [i64; 18])] = &[
+            (
+                "intp",
+                [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+            ),
+            (
+                "floatp",
+                [0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+            ),
+            (
+                "stringp",
+                [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+            ),
+            (
+                "objectp",
+                [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+            ),
+            (
+                "arrayp",
+                [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+            ),
+            (
+                "mappingp",
+                [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+            ),
             (
                 "functionp",
-                [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+                [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+            ),
+            (
+                "bytesp",
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
             ),
         ];
 

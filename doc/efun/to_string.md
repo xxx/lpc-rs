@@ -10,8 +10,9 @@ Convert `value` to a string:
   destructed object becomes `"0"`.
 
 An array, a mapping or a function is an error: use `dump` or `json_encode`
-to render those.
+to render those. A `bytes` is an error too: it is not text until an encoding
+says so, which is what `to_text` takes.
 
 ### See also
 
-`to_int`, `to_float`, `file_name`, `json_encode`
+`to_int`, `to_float`, `to_text`, `to_bytes`, `file_name`, `json_encode`

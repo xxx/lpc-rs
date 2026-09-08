@@ -34,7 +34,7 @@ pub(super) fn offset(start: i64, size: u64) -> u64 {
 
 /// `read_bytes(path [, start [, length]])`: `length` bytes (to the end when
 /// absent) from byte `start` of the file, the read cut at the end; 0 when
-/// `start` is at or past the end. Bytes that are not UTF-8 are an error.
+/// `start` is at or past the end. The result is `bytes`, of any length.
 pub async fn read_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let start = if context.arg_count() > 1 {
         int_arg(context, "read_bytes", 1)?
@@ -60,41 +60,34 @@ pub async fn read_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
         }
         let to = length.map_or(size, |n| from.saturating_add(n).min(size));
         let bytes = all[from as usize..to as usize].to_vec();
-        Ok::<_, std::io::Error>(Some((from, to, bytes)))
+        Ok::<_, std::io::Error>(Some(bytes))
     };
     let result = match read.await {
         Err(e) => {
             return Err(context.runtime_error(format!("read_bytes: {}: {e}", access.in_game)));
         }
         Ok(None) => LpcRef::from(0),
-        Ok(Some((from, to, bytes))) => match String::from_utf8(bytes) {
-            Ok(s) => LpcRef::from(s),
-            Err(_) => {
-                return Err(context.runtime_error(format!(
-                    "read_bytes: bytes {from}..{to} of {} are not UTF-8",
-                    access.in_game
-                )));
-            }
-        },
+        Ok(Some(bytes)) => LpcRef::from(bytes),
     };
     context.return_efun_result(result);
     Ok(())
 }
 
-/// `write_bytes(path, start, str)`: overwrite the file from byte `start` (a
-/// negative start counts back from the end; the end itself appends) with
-/// `str`; 1 on success, 0 for a missing file or a start past the end.
-/// Checked now, written at commit: a read later in this task sees the
-/// bytes as they were.
+/// `write_bytes(path, start, bytes)`: overwrite the file from byte `start`
+/// (a negative start counts back from the end; the end itself appends)
+/// with `bytes`; 1 on success, 0 for a missing file or a start past the
+/// end. A string is refused; convert it with `to_bytes()`. Checked now,
+/// written at commit: a read later in this task sees the bytes as they
+/// were.
 pub async fn write_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let start = int_arg(context, "write_bytes", 1)?;
-    let Some(contents) = context.arg(2).as_str() else {
+    let Some(contents) = context.arg(2).as_bytes() else {
         return Err(context.runtime_error(format!(
-            "write_bytes: {} is not a string",
+            "write_bytes: {} is not bytes; convert with to_bytes()",
             context.arg(2).type_name()
         )));
     };
-    let contents = contents.to_owned();
+    let contents = contents.to_vec();
     let access = authorize(context, "write_bytes", VALID_WRITE, 0).await?;
     let size = match tokio::fs::metadata(&access.server).await {
         Ok(m) if m.is_file() => m.len(),
@@ -137,12 +130,12 @@ mod tests {
         test_support::{TempLib, committed_string, temp_lib_config},
     };
 
-    /// A lib at `root` holding `/d.txt` and `/u.txt`, with a master that
-    /// allows every read and write.
+    /// A lib at `root` holding `/d.txt` and `/u.txt` (`é` plus a lone
+    /// `0xff` byte), with a master that allows every read and write.
     async fn lib(name: &str) -> (TempLib, Vm) {
         let root = TempLib::new(name);
         std::fs::write(root.join("d.txt"), "hello world\n").unwrap();
-        std::fs::write(root.join("u.txt"), "é").unwrap();
+        std::fs::write(root.join("u.txt"), [0xc3, 0xa9, 0xff]).unwrap();
         let vm = Vm::new(temp_lib_config(&root));
         vm.initialize_process_from_code(
             "/secure/master.c",
@@ -156,10 +149,11 @@ mod tests {
         (root, vm)
     }
 
-    /// Run `expr` in a fresh object: global 0 is its value, global 1 the
-    /// error caught, if any.
-    async fn run(vm: &Vm, expr: &str) -> Arc<Process> {
-        let code = format!("mixed got; string err; void create() {{ err = catch(got = {expr}); }}");
+    /// Run `expr` in a fresh object, its value landing in a global declared
+    /// `declared`: global 0 is the value, global 1 the error caught, if any.
+    async fn run_as(vm: &Vm, declared: &str, expr: &str) -> Arc<Process> {
+        let code =
+            format!("{declared} got; string err; void create() {{ err = catch(got = {expr}); }}");
         vm.initialize_process_from_code("/runner.c", &code)
             .await
             .unwrap()
@@ -167,11 +161,25 @@ mod tests {
             .process
     }
 
-    async fn value_of(vm: &Vm, expr: &str) -> LpcRef {
-        let p = run(vm, expr).await;
+    async fn run(vm: &Vm, expr: &str) -> Arc<Process> {
+        run_as(vm, "mixed", expr).await
+    }
+
+    async fn value_from(vm: &Vm, declared: &str, expr: &str) -> LpcRef {
+        let p = run_as(vm, declared, expr).await;
         let err = vm.global_state.committed_global(&p, 1u16);
         assert_eq!(err, LpcRef::from(0), "{expr}");
         vm.global_state.committed_global(&p, 0u16)
+    }
+
+    async fn value_of(vm: &Vm, expr: &str) -> LpcRef {
+        value_from(vm, "mixed", expr).await
+    }
+
+    /// The value of `expr` assigned to a global declared `bytes`, which the
+    /// checker accepts only because `read_bytes` returns that type.
+    async fn bytes_value_of(vm: &Vm, expr: &str) -> LpcRef {
+        value_from(vm, "bytes", expr).await
     }
 
     async fn error_of(vm: &Vm, expr: &str) -> String {
@@ -182,33 +190,33 @@ mod tests {
     #[tokio::test]
     async fn read_bytes_reads_a_range() {
         let (_root, vm) = lib("rb-range").await;
-        let got = value_of(&vm, r#"read_bytes("/d.txt", 6, 5)"#).await;
-        assert_eq!(got, LpcRef::from("world"));
+        let got = bytes_value_of(&vm, r#"read_bytes("/d.txt", 6, 5)"#).await;
+        assert_eq!(got, LpcRef::from(b"world".to_vec()));
     }
 
     #[tokio::test]
     async fn read_bytes_without_a_length_reads_to_the_end() {
         let (_root, vm) = lib("rb-to-end").await;
-        let got = value_of(&vm, r#"read_bytes("/d.txt", 6)"#).await;
-        assert_eq!(got, LpcRef::from("world\n"));
-        let got = value_of(&vm, r#"read_bytes("/d.txt")"#).await;
-        assert_eq!(got, LpcRef::from("hello world\n"));
+        let got = bytes_value_of(&vm, r#"read_bytes("/d.txt", 6)"#).await;
+        assert_eq!(got, LpcRef::from(b"world\n".to_vec()));
+        let got = bytes_value_of(&vm, r#"read_bytes("/d.txt")"#).await;
+        assert_eq!(got, LpcRef::from(b"hello world\n".to_vec()));
     }
 
     #[tokio::test]
     async fn a_negative_start_counts_from_the_end() {
         let (_root, vm) = lib("rb-negative").await;
-        let got = value_of(&vm, r#"read_bytes("/d.txt", -6, 5)"#).await;
-        assert_eq!(got, LpcRef::from("world"));
-        let got = value_of(&vm, r#"read_bytes("/d.txt", -100, 5)"#).await;
-        assert_eq!(got, LpcRef::from("hello"));
+        let got = bytes_value_of(&vm, r#"read_bytes("/d.txt", -6, 5)"#).await;
+        assert_eq!(got, LpcRef::from(b"world".to_vec()));
+        let got = bytes_value_of(&vm, r#"read_bytes("/d.txt", -100, 5)"#).await;
+        assert_eq!(got, LpcRef::from(b"hello".to_vec()));
     }
 
     #[tokio::test]
     async fn a_read_past_the_end_is_cut_at_the_end() {
         let (_root, vm) = lib("rb-truncate").await;
-        let got = value_of(&vm, r#"read_bytes("/d.txt", 6, 100)"#).await;
-        assert_eq!(got, LpcRef::from("world\n"));
+        let got = bytes_value_of(&vm, r#"read_bytes("/d.txt", 6, 100)"#).await;
+        assert_eq!(got, LpcRef::from(b"world\n".to_vec()));
     }
 
     #[tokio::test]
@@ -229,20 +237,19 @@ mod tests {
         let (_root, vm) = lib("rb-zero").await;
         assert_eq!(
             value_of(&vm, r#"read_bytes("/d.txt", 0, 0)"#).await,
-            LpcRef::from("")
+            LpcRef::from(Vec::<u8>::new())
         );
         let err = error_of(&vm, r#"read_bytes("/d.txt", 0, -1)"#).await;
         assert!(err.contains("read_bytes: negative length -1"), "{err}");
     }
 
     #[tokio::test]
-    async fn a_range_that_is_not_utf8_is_an_error() {
-        let (_root, vm) = lib("rb-utf8").await;
-        let err = error_of(&vm, r#"read_bytes("/u.txt", 0, 1)"#).await;
-        assert!(
-            err.contains("read_bytes: bytes 0..1 of /u.txt are not UTF-8"),
-            "{err}"
-        );
+    async fn read_bytes_answers_bytes_not_a_string() {
+        let (_root, vm) = lib("rb-bytes").await;
+        let got = bytes_value_of(&vm, r#"read_bytes("/u.txt", 1, 1)"#).await;
+        assert_eq!(got, LpcRef::from(vec![0xa9]));
+        let got = bytes_value_of(&vm, r#"read_bytes("/u.txt")"#).await;
+        assert_eq!(got, LpcRef::from(vec![0xc3, 0xa9, 0xff]));
     }
 
     #[tokio::test]
@@ -286,7 +293,11 @@ mod tests {
     #[tokio::test]
     async fn write_bytes_overwrites_in_place_at_commit() {
         let (root, vm) = lib("wb-overwrite").await;
-        let got = value_of(&vm, r#"write_bytes("/d.txt", 6, "there")"#).await;
+        let got = value_of(
+            &vm,
+            r#"write_bytes("/d.txt", 6, to_bytes("there", "UTF-8"))"#,
+        )
+        .await;
         assert_eq!(got, LpcRef::from(1));
         assert_eq!(
             std::fs::read_to_string(root.join("d.txt")).unwrap(),
@@ -297,7 +308,11 @@ mod tests {
     #[tokio::test]
     async fn write_bytes_with_a_negative_start_counts_from_the_end() {
         let (root, vm) = lib("wb-negative").await;
-        value_of(&vm, r#"write_bytes("/d.txt", -6, "WORLD")"#).await;
+        value_of(
+            &vm,
+            r#"write_bytes("/d.txt", -6, to_bytes("WORLD", "UTF-8"))"#,
+        )
+        .await;
         assert_eq!(
             std::fs::read_to_string(root.join("d.txt")).unwrap(),
             "hello WORLD\n"
@@ -307,7 +322,7 @@ mod tests {
     #[tokio::test]
     async fn write_bytes_at_the_end_appends() {
         let (root, vm) = lib("wb-append").await;
-        value_of(&vm, r#"write_bytes("/d.txt", 12, "!")"#).await;
+        value_of(&vm, r#"write_bytes("/d.txt", 12, to_bytes("!", "UTF-8"))"#).await;
         assert_eq!(
             std::fs::read_to_string(root.join("d.txt")).unwrap(),
             "hello world\n!"
@@ -317,7 +332,7 @@ mod tests {
     #[tokio::test]
     async fn write_bytes_past_the_end_is_zero_and_writes_nothing() {
         let (root, vm) = lib("wb-past").await;
-        let got = value_of(&vm, r#"write_bytes("/d.txt", 13, "!")"#).await;
+        let got = value_of(&vm, r#"write_bytes("/d.txt", 13, to_bytes("!", "UTF-8"))"#).await;
         assert_eq!(got, LpcRef::from(0));
         assert_eq!(
             std::fs::read_to_string(root.join("d.txt")).unwrap(),
@@ -328,7 +343,11 @@ mod tests {
     #[tokio::test]
     async fn write_bytes_to_a_missing_file_is_zero() {
         let (root, vm) = lib("wb-missing").await;
-        let got = value_of(&vm, r#"write_bytes("/nope.txt", 0, "x")"#).await;
+        let got = value_of(
+            &vm,
+            r#"write_bytes("/nope.txt", 0, to_bytes("x", "UTF-8"))"#,
+        )
+        .await;
         assert_eq!(got, LpcRef::from(0));
         assert!(!root.join("nope.txt").exists());
     }
@@ -344,21 +363,53 @@ mod tests {
         )
         .await
         .unwrap();
-        let err = error_of(&vm, r#"write_bytes("/d.txt", 0, "y")"#).await;
+        let err = error_of(&vm, r#"write_bytes("/d.txt", 0, to_bytes("y", "UTF-8"))"#).await;
         assert!(err.contains("write_bytes: permission denied"), "{err}");
         assert_eq!(std::fs::read_to_string(root.join("d.txt")).unwrap(), "x");
     }
 
+    #[tokio::test]
+    async fn write_bytes_refuses_a_string() {
+        let (_root, vm) = lib("wb-string").await;
+        let p = vm
+            .initialize_process_from_code(
+                "/refuse.c",
+                r#"string err; void create() { mixed s = "x"; err = catch(write_bytes("/d.txt", 0, s)); }"#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let err = committed_string(&vm, &p, 0);
+        assert!(err.contains("to_bytes"), "{err}");
+    }
+
     /// The write lands at commit; a read in the same task already sees it.
     #[tokio::test]
-    async fn a_read_in_the_same_task_sees_the_pending_bytes() {
-        let (root, vm) = lib("wb-deferred").await;
-        let got = value_of(
-            &vm,
-            r#"write_bytes("/d.txt", 0, "HELLO") + read_bytes("/d.txt", 0, 5)"#,
-        )
-        .await;
-        assert_eq!(got, LpcRef::from("1HELLO"));
+    async fn write_bytes_lands_bytes() {
+        let (root, vm) = lib("wb-lands").await;
+        let p = vm
+            .initialize_process_from_code(
+                "/wb.c",
+                indoc! { r#"
+                    mixed wrote;
+                    bytes reread;
+                    void create() {
+                        bytes payload = to_bytes("HELLO", "UTF-8");
+                        wrote = write_bytes("/d.txt", 0, payload);
+                        reread = read_bytes("/d.txt", 0, 5);
+                    }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(vm.global_state.committed_global(&p, 0u16), LpcRef::from(1));
+        assert_eq!(
+            vm.global_state.committed_global(&p, 1u16),
+            LpcRef::from(b"HELLO".to_vec())
+        );
         assert_eq!(
             std::fs::read_to_string(root.join("d.txt")).unwrap(),
             "HELLO world\n"
@@ -378,7 +429,7 @@ mod tests {
                     mixed n = 1;
                     mixed s = "0";
                     e1 = catch(write_bytes("/d.txt", 0, n));
-                    e2 = catch(write_bytes("/d.txt", s, "x"));
+                    e2 = catch(write_bytes("/d.txt", s, to_bytes("x", "UTF-8")));
                 }
                 "#,
             )
@@ -387,7 +438,7 @@ mod tests {
             .context
             .process;
         let err = committed_string(&vm, &p, 0);
-        assert!(err.contains("write_bytes: int is not a string"), "{err}");
+        assert!(err.contains("write_bytes: int is not bytes"), "{err}");
         let err = committed_string(&vm, &p, 1);
         assert!(err.contains("write_bytes: string is not an int"), "{err}");
     }
