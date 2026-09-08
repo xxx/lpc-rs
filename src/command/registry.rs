@@ -48,6 +48,8 @@ pub enum Reported {
 /// What a prefix verb's handler receives as its argument.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ArgSpan {
+    /// Everything after the first word.
+    AfterWord,
     /// The rest of the first word plus everything after it.
     RestOfLine,
     /// Only the rest of the first word.
@@ -71,7 +73,7 @@ impl VerbMatch {
             0 => Some(VerbMatch::Exact),
             1 => Some(VerbMatch::Prefix {
                 reports: Reported::Full,
-                args: ArgSpan::RestOfLine,
+                args: ArgSpan::AfterWord,
             }),
             2 => Some(VerbMatch::Prefix {
                 reports: Reported::Registered,
@@ -85,8 +87,9 @@ impl VerbMatch {
         }
     }
 
-    /// The `add_action` flag this matching came from; `Full` with
-    /// `RestOfWord`, which no flag makes, answers 1.
+    /// The `add_action` flag this matching came from; `Full` with any
+    /// span answers 1, `Registered` with `AfterWord`, which no flag makes,
+    /// answers 2.
     pub fn flag(self) -> i64 {
         match self {
             VerbMatch::Exact => 0,
@@ -96,7 +99,7 @@ impl VerbMatch {
             } => 1,
             VerbMatch::Prefix {
                 reports: Reported::Registered,
-                args: ArgSpan::RestOfLine,
+                args: ArgSpan::RestOfLine | ArgSpan::AfterWord,
             } => 2,
             VerbMatch::Prefix {
                 reports: Reported::Registered,
@@ -328,7 +331,7 @@ pub(crate) mod tests {
         let owner = Arc::new(Process::default());
         let prefix = VerbMatch::Prefix {
             reports: Reported::Full,
-            args: ArgSpan::RestOfLine,
+            args: ArgSpan::AfterWord,
         };
         let mut short = rule(&owner, "'");
         if let Family::AddAction { matching, .. } = &mut short.family {
@@ -368,7 +371,7 @@ pub(crate) mod tests {
             VerbMatch::from_flag(1),
             Some(VerbMatch::Prefix {
                 reports: Reported::Full,
-                args: ArgSpan::RestOfLine
+                args: ArgSpan::AfterWord
             })
         );
         assert_eq!(

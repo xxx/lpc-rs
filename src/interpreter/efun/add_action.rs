@@ -165,7 +165,7 @@ mod tests {
             rules[1].matching(),
             VerbMatch::Prefix {
                 reports: Reported::Full,
-                args: ArgSpan::RestOfLine
+                args: ArgSpan::AfterWord
             }
         );
         assert_eq!(

@@ -67,9 +67,10 @@ pub fn verb_matches(verb: &str, matching: VerbMatch, first_word: &str) -> bool {
 }
 
 /// The handler's argument: the rest of the line after an exact verb, or
-/// the span `ArgSpan` names after a prefix verb, spacing intact.
-pub fn argument(verb: &str, matching: VerbMatch, parse: &Parse, line: &str) -> String {
-    match matching {
+/// the span `ArgSpan` names after a prefix verb, spacing intact; `None`
+/// when that is empty, so the handler is called with no argument.
+pub fn argument(verb: &str, matching: VerbMatch, parse: &Parse, line: &str) -> Option<String> {
+    let text = match matching {
         VerbMatch::Exact => parse
             .captures()
             .into_iter()
@@ -80,11 +81,13 @@ pub fn argument(verb: &str, matching: VerbMatch, parse: &Parse, line: &str) -> S
             let first = &parse.tokens()[0].range;
             let after_verb = first.start + verb.len();
             match args {
+                ArgSpan::AfterWord => line[first.end..].trim_start().to_owned(),
                 ArgSpan::RestOfWord => line[after_verb..first.end].to_owned(),
                 ArgSpan::RestOfLine => line[after_verb..].trim_start().to_owned(),
             }
         }
-    }
+    };
+    (!text.is_empty()).then_some(text)
 }
 
 /// What `query_verb()` reports for this match.
@@ -102,9 +105,9 @@ pub fn reported_verb(verb: &str, matching: VerbMatch, parse: &Parse, line: &str)
     }
 }
 
-/// The handler's one argument and the verb `query_verb()` reports, for a
-/// line whose first word [`verb_matches`]; `None` when the grammar does
-/// not parse it.
+/// The handler's argument, if any, and the verb `query_verb()` reports,
+/// for a line whose first word [`verb_matches`]; `None` when the grammar
+/// does not parse it.
 pub fn arguments_and_verb(
     verb: &str,
     matching: VerbMatch,
@@ -112,10 +115,11 @@ pub fn arguments_and_verb(
 ) -> Option<(Vec<LpcRef>, String)> {
     let grammar = grammar_for(verb, matching);
     let parsed = parse(&grammar, line, Limits::default()).next()?;
-    Some((
-        vec![LpcString::from(argument(verb, matching, &parsed, line).as_str()).into()],
-        reported_verb(verb, matching, &parsed, line),
-    ))
+    let args = argument(verb, matching, &parsed, line)
+        .map(|text| LpcString::from(text.as_str()).into())
+        .into_iter()
+        .collect();
+    Some((args, reported_verb(verb, matching, &parsed, line)))
 }
 
 #[cfg(test)]
@@ -125,7 +129,7 @@ mod tests {
 
     const SHORT: VerbMatch = VerbMatch::Prefix {
         reports: Reported::Full,
-        args: ArgSpan::RestOfLine,
+        args: ArgSpan::AfterWord,
     };
     const NOSPACE: VerbMatch = VerbMatch::Prefix {
         reports: Reported::Registered,
@@ -137,7 +141,7 @@ mod tests {
     };
 
     /// The dispatch pipeline for one rule: the pre-filter, then the grammar.
-    fn first(verb: &str, matching: VerbMatch, line: &str) -> Option<(String, String)> {
+    fn first(verb: &str, matching: VerbMatch, line: &str) -> Option<(Option<String>, String)> {
         let first_word = line.split_whitespace().next().unwrap_or("");
         if !verb_matches(verb, matching, first_word) {
             return None;
@@ -154,42 +158,55 @@ mod tests {
     fn an_exact_verb_takes_the_rest_of_the_line_verbatim() {
         assert_eq!(
             first("look", VerbMatch::Exact, "look   at   me"),
-            Some(("at   me".into(), "look".into()))
+            Some((Some("at   me".into()), "look".into()))
         );
         assert_eq!(
             first("look", VerbMatch::Exact, "look"),
-            Some((String::new(), "look".into()))
+            Some((None, "look".into()))
         );
         assert_eq!(first("look", VerbMatch::Exact, "lookat me"), None);
         assert_eq!(first("look", VerbMatch::Exact, "Look at me"), None);
     }
 
+    /// CD, FluffOS and LDMud all hand a short verb's handler what follows
+    /// the whole first word.
     #[test]
-    fn a_short_verb_reports_the_typed_word_and_joins_the_line() {
+    fn a_short_verb_reports_the_typed_word_and_takes_what_follows_it() {
         assert_eq!(
             first("'", SHORT, "'hello there"),
-            Some(("hello there".into(), "'hello".into()))
+            Some((Some("there".into()), "'hello".into()))
         );
         assert_eq!(
             first("'", SHORT, "' hello"),
-            Some(("hello".into(), "'".into()))
+            Some((Some("hello".into()), "'".into()))
         );
+        assert_eq!(first("'", SHORT, "'hello"), Some((None, "'hello".into())));
         assert_eq!(first("'", SHORT, "say hi"), None);
     }
 
     #[test]
-    fn a_nospace_verb_reports_the_registered_verb() {
+    fn a_catch_all_verb_takes_what_follows_the_first_word() {
+        assert_eq!(
+            first("", SHORT, "look at me"),
+            Some((Some("at me".into()), "look".into()))
+        );
+        assert_eq!(first("", SHORT, "look"), Some((None, "look".into())));
+    }
+
+    #[test]
+    fn a_nospace_verb_reports_the_registered_verb_and_joins_the_word() {
         assert_eq!(
             first("'", NOSPACE, "'hello there"),
-            Some(("hello there".into(), "'".into()))
+            Some((Some("hello there".into()), "'".into()))
         );
+        assert_eq!(first("'", NOSPACE, "'"), Some((None, "'".into())));
     }
 
     #[test]
     fn an_imm_args_verb_takes_only_the_rest_of_the_word() {
         assert_eq!(
             first("'", IMM_ARGS, "'hello there"),
-            Some(("hello".into(), "'".into()))
+            Some((Some("hello".into()), "'".into()))
         );
     }
 
@@ -197,19 +214,20 @@ mod tests {
     fn a_later_word_starting_with_the_verb_still_parses() {
         assert_eq!(
             first("'", SHORT, "'he said 'hi'"),
-            Some(("he said 'hi'".into(), "'he".into()))
+            Some((Some("said 'hi'".into()), "'he".into()))
         );
         assert_eq!(
             first("kill", SHORT, "kill killer"),
-            Some(("killer".into(), "kill".into()))
+            Some((Some("killer".into()), "kill".into()))
         );
     }
 
     #[test]
     fn a_prefix_verb_with_regex_characters_is_literal() {
+        assert_eq!(first("*", SHORT, "*wave"), Some((None, "*wave".into())));
         assert_eq!(
-            first("*", SHORT, "*wave"),
-            Some(("wave".into(), "*wave".into()))
+            first("*", NOSPACE, "*wave"),
+            Some((Some("wave".into()), "*".into()))
         );
     }
 
