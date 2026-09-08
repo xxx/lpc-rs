@@ -48,7 +48,7 @@ async fn on_disk(server: &Path) -> std::io::Result<Seen> {
 /// `server` as this efun's task will leave it: the disk with the task's
 /// pending changes to the path applied. A rename's source is read as it is
 /// on disk.
-pub(crate) async fn read_through<const N: usize>(
+pub(super) async fn read_through<const N: usize>(
     context: &EfunContext<'_, N>,
     server: &Path,
 ) -> std::io::Result<Seen> {
@@ -66,7 +66,7 @@ pub(crate) async fn read_through<const N: usize>(
             }
             PendingFileOp::Remove | PendingFileOp::RemoveDir => Seen::Missing,
             PendingFileOp::MakeDir => Seen::Dir,
-            PendingFileOp::CopyOf(from) => on_disk(&from).await?,
+            PendingFileOp::CopyOf(from) => on_disk(from.server()).await?,
             PendingFileOp::WriteBytes { start, contents } => match seen {
                 Seen::File(mut bytes) => {
                     let start = usize::try_from(start).unwrap_or(usize::MAX);

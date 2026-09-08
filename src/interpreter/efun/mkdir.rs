@@ -2,10 +2,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_WRITE,
-    efun::{
-        efun_context::EfunContext,
-        file_access::{authorize, parent_is_dir},
-    },
+    efun::{efun_context::EfunContext, file_access::authorize},
     lpc_ref::LpcRef,
     stm::Effect,
 };
@@ -16,28 +13,21 @@ use crate::interpreter::{
 /// directory as existing.
 pub async fn mkdir<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "mkdir", VALID_WRITE, 0).await?;
-    let io_error =
-        |e: std::io::Error| context.runtime_error(format!("mkdir: {}: {e}", access.name()));
-    if context.has_pending_dir(access.server()) {
-        return Err(context.runtime_error(format!("mkdir: {} exists", access.name())));
+    let io_error = |e: std::io::Error| access.error(context, e);
+    if context.has_pending_dir(access.path().server()) {
+        return Err(context.runtime_error(format!("mkdir: {} exists", access)));
     }
-    match tokio::fs::symlink_metadata(access.server()).await {
+    match tokio::fs::symlink_metadata(access.path().server()).await {
         Ok(_) => {
-            return Err(context.runtime_error(format!("mkdir: {} exists", access.name())));
+            return Err(context.runtime_error(format!("mkdir: {} exists", access)));
         }
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(io_error(e)),
         Err(_) => {}
     }
-    if !parent_is_dir(context, access.server())
-        .await
-        .map_err(io_error)?
-    {
-        return Err(context.runtime_error(format!(
-            "mkdir: {}: parent directory does not exist",
-            access.name()
-        )));
-    }
-    context.record_effect(Effect::CreateDir { path: access });
+    access.require_parent(context).await?;
+    context.record_effect(Effect::CreateDir {
+        path: access.into_path(),
+    });
     context.return_efun_result(LpcRef::from(1));
     Ok(())
 }

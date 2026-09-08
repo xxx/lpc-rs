@@ -2,46 +2,32 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_WRITE,
-    efun::{
-        efun_context::EfunContext,
-        file_access::{authorize, parent_is_dir},
-    },
+    efun::{efun_context::EfunContext, file_access::authorize},
     lpc_ref::LpcRef,
     stm::Effect,
 };
 
 /// `write_file(path, contents)`: append `contents`, creating the file, once
-/// the master's `valid_write` allows it. Checked now, written at commit: a
-/// read of the file later in this task sees it as it was.
+/// the master's `valid_write` allows it. Written at commit; later reads in
+/// the same task include the pending append.
 pub async fn write_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let Some(contents) = context.arg(1).as_str() else {
         return Err(context.runtime_error("write_file: contents must be a string"));
     };
     let contents = contents.to_owned();
     let access = authorize(context, "write_file", VALID_WRITE, 0).await?;
-    let io_error =
-        |e: std::io::Error| context.runtime_error(format!("write_file: {}: {e}", access.name()));
-    match tokio::fs::metadata(access.server()).await {
+    let io_error = |e: std::io::Error| access.error(context, e);
+    match tokio::fs::metadata(access.path().server()).await {
         Ok(m) if m.is_dir() => {
-            return Err(
-                context.runtime_error(format!("write_file: {} is a directory", access.name()))
-            );
+            return Err(context.runtime_error(format!("write_file: {} is a directory", access)));
         }
         // Missing is fine: the target may be created.
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(io_error(e)),
         _ => {}
     }
-    if !parent_is_dir(context, access.server())
-        .await
-        .map_err(io_error)?
-    {
-        return Err(context.runtime_error(format!(
-            "write_file: {}: parent directory does not exist",
-            access.name()
-        )));
-    }
+    access.require_parent(context).await?;
     context.record_effect(Effect::AppendFile {
-        path: access,
+        path: access.into_path(),
         contents,
     });
     context.return_efun_result(LpcRef::from(1));

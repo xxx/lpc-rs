@@ -1,37 +1,16 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use lpc_rs_core::{lpc_path::LpcPath, register::RegisterVariant};
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_READ,
-    efun::{
-        efun_context::EfunContext,
-        file_access::{authorize_save, line_error},
-        file_view::{Seen, read_through},
-    },
+    efun::{efun_context::EfunContext, file_access::authorize_save},
     lpc_ref::LpcRef,
     process::Process,
     save_format::{read_value, split_line},
     task_context::ObjectLookup,
 };
-
-/// The save file at `server` as text, a save earlier in this task
-/// included: UTF-8, or Latin-1 when it is not (each byte its own
-/// character). `None` on any I/O failure: the efuns answer that as "no
-/// file".
-pub(crate) async fn read_save_file<const N: usize>(
-    context: &EfunContext<'_, N>,
-    server: &Path,
-) -> Option<String> {
-    let Ok(Seen::File(bytes)) = read_through(context, server).await else {
-        return None;
-    };
-    Some(match String::from_utf8(bytes) {
-        Ok(text) => text,
-        Err(e) => e.into_bytes().iter().map(|&b| b as char).collect(),
-    })
-}
 
 /// The object resolver for `$created@name$` references: the live object
 /// the context finds under `name`, never loaded.
@@ -54,7 +33,7 @@ pub(crate) fn resolve_object<'a, const N: usize>(
 /// an error on a corrupt line (earlier lines stay applied).
 pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize_save(context, "restore_object", VALID_READ, 0).await?;
-    let Some(text) = read_save_file(context, access.server()).await else {
+    let Some(text) = access.read_save(context).await else {
         context.return_efun_result(LpcRef::from(0));
         return Ok(());
     };
@@ -62,15 +41,7 @@ pub async fn restore_object<const N: usize>(context: &mut EfunContext<'_, N>) ->
     {
         let resolve = resolve_object(context);
         for (index, line) in text.lines().enumerate() {
-            let err = |e| {
-                line_error(
-                    context,
-                    "restore_object",
-                    access.name().as_str(),
-                    index + 1,
-                    e,
-                )
-            };
+            let err = |e| access.line_error(context, index + 1, e);
             let (name, value_text) = split_line(line).map_err(err)?;
             let Some(symbol) = process.program.global_variables.get(name) else {
                 continue;

@@ -14,7 +14,7 @@ pub async fn file_time<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         context.return_efun_result(LpcRef::from(-1));
         return Ok(());
     };
-    let time = match tokio::fs::metadata(access.server())
+    let time = match tokio::fs::metadata(access.path().server())
         .await
         .and_then(|m| m.modified())
     {
@@ -26,7 +26,7 @@ pub async fn file_time<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => -1,
         Err(e) => {
-            return Err(context.runtime_error(format!("file_time: {}: {e}", access.name())));
+            return Err(access.error(context, e));
         }
     };
     context.return_efun_result(LpcRef::from(time));

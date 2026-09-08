@@ -5,7 +5,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_READ, VALID_WRITE,
-    efun::{efun_context::EfunContext, file_access::authorize, file_view::read_through},
+    efun::{efun_context::EfunContext, file_access::authorize},
     lpc_ref::LpcRef,
     stm::Effect,
 };
@@ -51,23 +51,15 @@ pub async fn read_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
         None
     };
     let access = authorize(context, "read_bytes", VALID_READ, 0).await?;
-    let read = async {
-        let all = read_through(context, access.server()).await?.into_bytes()?;
-        let size = all.len() as u64;
-        let from = offset(start, size);
-        if from >= size {
-            return Ok(None);
-        }
+    let all = access.read_bytes(context).await?;
+    let size = all.len() as u64;
+    let from = offset(start, size);
+    let result = if from >= size {
+        LpcRef::from(0)
+    } else {
         let to = length.map_or(size, |n| from.saturating_add(n).min(size));
         let bytes = all[from as usize..to as usize].to_vec();
-        Ok::<_, std::io::Error>(Some(bytes))
-    };
-    let result = match read.await {
-        Err(e) => {
-            return Err(context.runtime_error(format!("read_bytes: {}: {e}", access.name())));
-        }
-        Ok(None) => LpcRef::from(0),
-        Ok(Some(bytes)) => LpcRef::from(bytes),
+        LpcRef::from(bytes)
     };
     context.return_efun_result(result);
     Ok(())
@@ -77,8 +69,7 @@ pub async fn read_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
 /// (a negative start counts back from the end; the end itself appends)
 /// with `bytes`; 1 on success, 0 for a missing file or a start past the
 /// end. A string is refused; convert it with `to_bytes()`. Checked now,
-/// written at commit: a read later in this task sees the bytes as they
-/// were.
+/// written at commit; later reads in the same task include the pending overwrite.
 pub async fn write_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let start = int_arg(context, "write_bytes", 1)?;
     let Some(contents) = context.arg(2).as_bytes() else {
@@ -89,19 +80,17 @@ pub async fn write_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     };
     let contents = contents.to_vec();
     let access = authorize(context, "write_bytes", VALID_WRITE, 0).await?;
-    let size = match tokio::fs::metadata(access.server()).await {
+    let size = match tokio::fs::metadata(access.path().server()).await {
         Ok(m) if m.is_file() => m.len(),
         Ok(_) => {
-            return Err(
-                context.runtime_error(format!("write_bytes: {} is not a file", access.name()))
-            );
+            return Err(context.runtime_error(format!("write_bytes: {} is not a file", access)));
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             context.return_efun_result(LpcRef::from(0));
             return Ok(());
         }
         Err(e) => {
-            return Err(context.runtime_error(format!("write_bytes: {}: {e}", access.name())));
+            return Err(access.error(context, e));
         }
     };
     let from = offset(start, size);
@@ -110,7 +99,7 @@ pub async fn write_bytes<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         return Ok(());
     }
     context.record_effect(Effect::WriteBytes {
-        path: access,
+        path: access.into_path(),
         start: from,
         contents,
     });

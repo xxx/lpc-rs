@@ -16,31 +16,26 @@ use crate::interpreter::{
 pub async fn rename<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let from = authorize(context, "rename", VALID_WRITE, 0).await?;
     let to = authorize(context, "rename", VALID_WRITE, 1).await?;
-    let io_error =
-        |path: &str, e: std::io::Error| context.runtime_error(format!("rename: {path}: {e}"));
-    tokio::fs::symlink_metadata(from.server())
+    tokio::fs::symlink_metadata(from.path().server())
         .await
-        .map_err(|e| io_error(from.name().as_str(), e))?;
-    let Some(name) = from.server().file_name() else {
-        return Err(context.runtime_error(format!("rename: {} cannot be moved", from.name())));
+        .map_err(|e| from.error(context, e))?;
+    let Some(directory_target) = from.path().in_directory(to.path()) else {
+        return Err(context.runtime_error(format!("rename: {} cannot be moved", from)));
     };
-    let target = match tokio::fs::metadata(to.server()).await {
-        Ok(m) if m.is_dir() => to.server().join(name),
-        Ok(_) => to.server().to_owned(),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => to.server().to_owned(),
-        Err(e) => return Err(io_error(to.name().as_str(), e)),
+    let target = match tokio::fs::metadata(to.path().server()).await {
+        Ok(m) if m.is_dir() => directory_target,
+        Ok(_) => to.path().clone(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => to.path().clone(),
+        Err(e) => return Err(to.error(context, e)),
     };
-    if !parent_is_dir(context, &target)
+    if !parent_is_dir(context, target.server())
         .await
-        .map_err(|e| io_error(to.name().as_str(), e))?
+        .map_err(|e| to.error(context, e))?
     {
-        return Err(context.runtime_error(format!(
-            "rename: {}: parent directory does not exist",
-            to.name()
-        )));
+        return Err(to.error(context, "parent directory does not exist"));
     }
     context.record_effect(Effect::Rename {
-        path: from,
+        path: from.into_path(),
         to: target,
     });
     context.return_efun_result(LpcRef::from(0));
@@ -49,9 +44,11 @@ pub async fn rename<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use crate::{
         interpreter::{CommittedReader, lpc_ref::LpcRef, vm::Vm},
-        test_support::{TempLib, committed_string, temp_lib_config},
+        test_support::{TempLib, committed_string, string_global, temp_lib_config},
     };
 
     async fn allowing_vm(root: &TempLib) -> Vm {
@@ -105,6 +102,100 @@ mod tests {
             .unwrap();
         assert!(root.join("d/a.txt").is_file());
         assert!(!root.join("a.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn a_directory_rename_authorizes_the_requested_paths_and_exposes_the_pending_target() {
+        let root = TempLib::new("rename-directory-view");
+        std::fs::create_dir_all(root.join("room/archive")).unwrap();
+        std::fs::write(root.join("room/a.txt"), "contents").unwrap();
+        let vm = Vm::new(temp_lib_config(&root));
+        let master = vm
+            .initialize_process_from_code(
+                "/secure/master.c",
+                indoc! { r#"
+                    string paths = "";
+                    int valid_write(string p, string e, object c, string g) {
+                        paths += p + "\n";
+                        return 1;
+                    }
+                    int valid_read(string p, string e, object c, string g) { return 1; }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let mover = vm
+            .initialize_process_from_code(
+                "/room/mover.c",
+                indoc! { r#"
+                    string got;
+                    int old_size;
+                    void create() {
+                        rename("a.txt", "archive");
+                        got = read_file("archive/a.txt");
+                        old_size = file_size("a.txt");
+                    }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+
+        assert_eq!(
+            string_global(&vm, &master, "paths"),
+            "/room/a.txt\n/room/archive\n"
+        );
+        assert_eq!(string_global(&vm, &mover, "got"), "contents");
+        assert_eq!(
+            vm.global_state.committed_global(&mover, 1u16),
+            LpcRef::from(-1)
+        );
+        assert!(!root.join("room/a.txt").exists());
+        assert_eq!(
+            std::fs::read_to_string(root.join("room/archive/a.txt")).unwrap(),
+            "contents"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_pending_rename_reads_its_source_from_disk_before_earlier_writes_commit() {
+        let root = TempLib::new("rename-pending-source");
+        std::fs::write(root.join("a.txt"), "disk").unwrap();
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            indoc! { r#"
+                int valid_write(string p, string e, object c, string g) { return 1; }
+                int valid_read(string p, string e, object c, string g) { return 1; }
+            "# },
+        )
+        .await
+        .unwrap();
+        let mover = vm
+            .initialize_process_from_code(
+                "/mover.c",
+                indoc! { r#"
+                    string got;
+                    void create() {
+                        write_file("/a.txt", "+pending");
+                        rename("/a.txt", "/b.txt");
+                        got = read_file("/b.txt");
+                    }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+
+        assert_eq!(string_global(&vm, &mover, "got"), "disk");
+        assert_eq!(
+            std::fs::read_to_string(root.join("b.txt")).unwrap(),
+            "disk+pending"
+        );
     }
 
     #[tokio::test]

@@ -3,11 +3,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_READ,
-    efun::{
-        efun_context::EfunContext,
-        file_access::authorize_or_deny,
-        file_view::{Seen, read_through},
-    },
+    efun::{efun_context::EfunContext, file_access::authorize_or_deny, file_view::Seen},
     lpc_ref::LpcRef,
 };
 
@@ -19,13 +15,10 @@ pub async fn file_size<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
         context.return_efun_result(LpcRef::from(-1));
         return Ok(());
     };
-    let size = match read_through(context, access.server()).await {
-        Ok(Seen::Dir) => -2,
-        Ok(Seen::File(bytes)) => LpcIntInner::try_from(bytes.len()).unwrap_or(LpcIntInner::MAX),
-        Ok(Seen::Missing) => -1,
-        Err(e) => {
-            return Err(context.runtime_error(format!("file_size: {}: {e}", access.name())));
-        }
+    let size = match access.read(context).await? {
+        Seen::Dir => -2,
+        Seen::File(bytes) => LpcIntInner::try_from(bytes.len()).unwrap_or(LpcIntInner::MAX),
+        Seen::Missing => -1,
     };
     context.return_efun_result(LpcRef::from(size));
     Ok(())

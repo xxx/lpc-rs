@@ -3,10 +3,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_WRITE,
-    efun::{
-        efun_context::EfunContext,
-        file_access::{authorize_save, record_save},
-    },
+    efun::{efun_context::EfunContext, file_access::authorize_save},
     lpc_ref::LpcRef,
     process::Process,
     save_format::write_line,
@@ -35,7 +32,7 @@ pub(crate) fn saved_globals(process: &Process) -> Vec<(&str, RegisterSize)> {
 /// Returns the in-game path written.
 pub async fn save_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize_save(context, "save_object", VALID_WRITE, 0).await?;
-    let in_game = access.name().to_string();
+    let in_game = access.to_string();
     let process = context.process().clone();
     let mut contents = String::new();
     for (name, reg) in saved_globals(&process) {
@@ -46,7 +43,7 @@ pub async fn save_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         write_line(&mut contents, name, &value, context.txn())
             .map_err(|e| e.with_span(context.call_site_span()))?;
     }
-    record_save(context, "save_object", access, contents).await?;
+    access.record_save(context, contents).await?;
     context.return_efun_result(LpcRef::from(in_game));
     Ok(())
 }

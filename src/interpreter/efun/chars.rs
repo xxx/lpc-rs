@@ -9,7 +9,6 @@ use crate::interpreter::{
         bytes::{int_arg, offset},
         efun_context::EfunContext,
         file_access::{FileAccess, authorize},
-        file_view::read_through,
     },
     lpc_ref::LpcRef,
     stm::Effect,
@@ -22,12 +21,9 @@ async fn text_of<const N: usize>(
     name: &str,
     access: &FileAccess,
 ) -> Result<String> {
-    let read = async { read_through(context, access.server()).await?.into_bytes() };
-    match read.await {
-        Err(e) => Err(context.runtime_error(format!("{name}: {}: {e}", access.name()))),
-        Ok(bytes) => String::from_utf8(bytes)
-            .map_err(|_| context.runtime_error(format!("{name}: {} is not UTF-8", access.name()))),
-    }
+    let bytes = access.read_bytes(context).await?;
+    String::from_utf8(bytes)
+        .map_err(|_| context.runtime_error(format!("{name}: {} is not UTF-8", access)))
 }
 
 /// `read_chars(path [, start [, length]])`: `length` characters (to the end
@@ -70,8 +66,8 @@ pub async fn read_chars<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
 /// `write_chars(path, start, str)`: replace `str`'s worth of characters at
 /// character `start` (a negative start counts back from the end; the end
 /// itself appends) with `str`; 1 on success, 0 for a missing file or a
-/// start past the end. Checked now, written at commit: a read later in
-/// this task sees the characters as they were.
+/// start past the end. Checked now, written at commit; later reads in the
+/// same task include the pending replacement.
 pub async fn write_chars<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let start = int_arg(context, "write_chars", 1)?;
     let Some(contents) = context.arg(2).as_str() else {
@@ -82,19 +78,17 @@ pub async fn write_chars<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     };
     let contents = contents.to_owned();
     let access = authorize(context, "write_chars", VALID_WRITE, 0).await?;
-    match tokio::fs::metadata(access.server()).await {
+    match tokio::fs::metadata(access.path().server()).await {
         Ok(m) if m.is_file() => {}
         Ok(_) => {
-            return Err(
-                context.runtime_error(format!("write_chars: {} is not a file", access.name()))
-            );
+            return Err(context.runtime_error(format!("write_chars: {} is not a file", access)));
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             context.return_efun_result(LpcRef::from(0));
             return Ok(());
         }
         Err(e) => {
-            return Err(context.runtime_error(format!("write_chars: {}: {e}", access.name())));
+            return Err(access.error(context, e));
         }
     }
     let count = text_of(context, "write_chars", &access)
@@ -107,7 +101,7 @@ pub async fn write_chars<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
         return Ok(());
     }
     context.record_effect(Effect::ReplaceChars {
-        path: access,
+        path: access.into_path(),
         start: from as usize,
         contents,
     });

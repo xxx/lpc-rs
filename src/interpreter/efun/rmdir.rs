@@ -12,21 +12,22 @@ use crate::interpreter::{
 /// removed at commit; 1 on success.
 pub async fn rmdir<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "rmdir", VALID_WRITE, 0).await?;
-    let io_error =
-        |e: std::io::Error| context.runtime_error(format!("rmdir: {}: {e}", access.name()));
-    let metadata = tokio::fs::symlink_metadata(access.server())
+    let io_error = |e: std::io::Error| access.error(context, e);
+    let metadata = tokio::fs::symlink_metadata(access.path().server())
         .await
         .map_err(io_error)?;
     if !metadata.is_dir() {
-        return Err(context.runtime_error(format!("rmdir: {} is not a directory", access.name())));
+        return Err(context.runtime_error(format!("rmdir: {} is not a directory", access)));
     }
-    let mut entries = tokio::fs::read_dir(access.server())
+    let mut entries = tokio::fs::read_dir(access.path().server())
         .await
         .map_err(io_error)?;
     if entries.next_entry().await.map_err(io_error)?.is_some() {
-        return Err(context.runtime_error(format!("rmdir: {} is not empty", access.name())));
+        return Err(context.runtime_error(format!("rmdir: {} is not empty", access)));
     }
-    context.record_effect(Effect::RemoveDir { path: access });
+    context.record_effect(Effect::RemoveDir {
+        path: access.into_path(),
+    });
     context.return_efun_result(LpcRef::from(1));
     Ok(())
 }

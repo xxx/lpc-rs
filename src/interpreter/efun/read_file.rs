@@ -2,7 +2,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_READ,
-    efun::{efun_context::EfunContext, file_access::authorize, file_view::read_through},
+    efun::{efun_context::EfunContext, file_access::authorize},
     lpc_ref::LpcRef,
 };
 
@@ -13,17 +13,9 @@ pub async fn read_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
     let access = authorize(context, "read_file", VALID_READ, 0).await?;
     let start = line_number(context, 1, "start")?;
     let count = line_number(context, 2, "lines")?;
-    let contents = async {
-        let bytes = read_through(context, access.server()).await?.into_bytes()?;
-        String::from_utf8(bytes).map_err(|_| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "stream did not contain valid UTF-8",
-            )
-        })
-    }
-    .await
-    .map_err(|e| context.runtime_error(format!("read_file: {}: {e}", access.name())))?;
+    let bytes = access.read_bytes(context).await?;
+    let contents = String::from_utf8(bytes)
+        .map_err(|_| access.error(context, "stream did not contain valid UTF-8"))?;
     let contents = if start > 1 || count > 0 {
         lines_of(&contents, start, count)
     } else {

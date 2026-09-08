@@ -11,9 +11,8 @@ use crate::interpreter::{
 /// error.
 pub async fn get_dir<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "get_dir", VALID_READ, 0).await?;
-    let io_error =
-        |e: std::io::Error| context.runtime_error(format!("get_dir: {}: {e}", access.name()));
-    let mut entries = tokio::fs::read_dir(access.server())
+    let io_error = |e: std::io::Error| access.error(context, e);
+    let mut entries = tokio::fs::read_dir(access.path().server())
         .await
         .map_err(io_error)?;
     let mut names = Vec::new();

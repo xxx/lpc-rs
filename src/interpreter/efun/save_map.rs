@@ -2,10 +2,7 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_WRITE,
-    efun::{
-        efun_context::EfunContext,
-        file_access::{authorize_save, record_save},
-    },
+    efun::{efun_context::EfunContext, file_access::authorize_save},
     lpc_ref::LpcRef,
     save_format::write_line,
 };
@@ -45,7 +42,7 @@ pub async fn save_map<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
         write_line(&mut contents, key, value, context.txn())
             .map_err(|e| e.with_span(context.call_site_span()))?;
     }
-    record_save(context, "save_map", access, contents).await?;
+    access.record_save(context, contents).await?;
     context.return_efun_result(LpcRef::from(0));
     Ok(())
 }

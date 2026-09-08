@@ -74,6 +74,21 @@ impl ResolvedPath {
         &self.input
     }
 
+    /// Place this basename under `directory`, preserving the destination's paired identity.
+    pub fn in_directory(&self, directory: &Self) -> Option<Self> {
+        let filename = self.server.file_name()?;
+        Some(Self {
+            input: directory.input.map_path(|path| path.join(filename)),
+            server: directory.server.join(filename),
+            name: SourceName(directory.name.0.as_ref().map(|name| {
+                Path::new(name)
+                    .join(filename)
+                    .to_string_lossy()
+                    .into_owned()
+            })),
+        })
+    }
+
     /// Append the save-file suffix to the location and its in-game identity.
     pub fn save_file(mut self) -> Self {
         self.input = self.input.map_path(|path| {
@@ -323,6 +338,35 @@ mod tests {
             .save_file();
         assert_eq!(path.name().as_str(), "/x.o.o");
         assert_eq!(path.server(), Path::new("/home/mud/lib/x.o.o"));
+    }
+
+    #[test]
+    fn a_directory_destination_keeps_its_origin_and_safe_name() {
+        let root = LibRoot::new("/home/mud/lib");
+        let source = root.resolve("/room/report.txt", "/").unwrap();
+        for (directory, expected, name) in [
+            (
+                LpcPath::from("/archive"),
+                LpcPath::from("/archive/report.txt"),
+                "/archive/report.txt",
+            ),
+            (
+                LpcPath::new_server("/home/mud/lib/archive"),
+                LpcPath::new_server("/home/mud/lib/archive/report.txt"),
+                "/archive/report.txt",
+            ),
+            (
+                LpcPath::new_server("/private/archive"),
+                LpcPath::new_server("/private/archive/report.txt"),
+                "<outside mudlib>",
+            ),
+        ] {
+            let target = source.in_directory(&root.source(&directory)).unwrap();
+            assert_eq!(target.input(), &expected);
+            assert_eq!(target.server(), root.source(&expected).server());
+            assert_eq!(target.name().as_str(), name);
+            assert_eq!(format!("{target:?}"), name);
+        }
     }
 
     #[test]

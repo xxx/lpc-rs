@@ -172,7 +172,10 @@ pub(crate) enum Effect {
     RemoveDir { path: ResolvedPath },
 
     /// `rename`'s move to `to`, applied once the attempt commits.
-    Rename { path: ResolvedPath, to: PathBuf },
+    Rename {
+        path: ResolvedPath,
+        to: ResolvedPath,
+    },
 }
 
 /// One of a task's own pending changes to a file, in the form its reads
@@ -190,7 +193,7 @@ pub(crate) enum PendingFileOp {
     /// `contents` replaces its own count of characters from character `start`.
     ReplaceChars { start: usize, contents: String },
     /// The file is what is on disk at `from` (a rename's source).
-    CopyOf(PathBuf),
+    CopyOf(ResolvedPath),
     /// The path becomes a directory.
     MakeDir,
     /// The directory is gone.
@@ -235,8 +238,8 @@ impl Effect {
                 Some(PendingFileOp::RemoveDir)
             }
             Effect::Rename { path, .. } if path.server() == server => Some(PendingFileOp::Remove),
-            Effect::Rename { path, to, .. } if to == server => {
-                Some(PendingFileOp::CopyOf(path.server().to_owned()))
+            Effect::Rename { path, to, .. } if to.server() == server => {
+                Some(PendingFileOp::CopyOf(path.clone()))
             }
             _ => None,
         }
@@ -391,7 +394,7 @@ impl Effect {
                 }
             }
             Self::Rename { path, to } => {
-                if let Err(e) = tokio::fs::rename(path.server(), &to).await {
+                if let Err(e) = tokio::fs::rename(path.server(), to.server()).await {
                     global_state
                         .config
                         .debug_log(format!("rename: {path}: {e}"))
