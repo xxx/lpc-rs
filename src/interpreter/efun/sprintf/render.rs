@@ -215,8 +215,13 @@ pub(super) fn field<const N: usize>(
     number: usize,
 ) -> Result<Field> {
     let wants = |expected: &str| {
+        // A bytes never converts implicitly, so its refusal names the efun that does.
+        let fix = match value {
+            LpcRef::Bytes(_) => "; convert with to_text()",
+            _ => "",
+        };
         context.runtime_error(format!(
-            "sprintf: argument {number} is {}, %{} wants {expected}",
+            "sprintf: argument {number} is {}, %{} wants {expected}{fix}",
             described(value),
             spec.conversion
         ))

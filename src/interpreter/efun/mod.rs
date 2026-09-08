@@ -100,6 +100,7 @@ pub(crate) mod sort_array;
 pub(crate) mod sprintf;
 pub(crate) mod sscanf;
 pub(crate) mod tell_object;
+pub(crate) mod text_encoding;
 pub(crate) mod this_interactive;
 pub(crate) mod this_object;
 pub(crate) mod this_player;
@@ -752,6 +753,22 @@ efuns! {
         arity: 1,
         args: [LpcType::Mixed(false)],
     },
+    to_bytes [in text_encoding] => {
+        returns: LpcType::Bytes(false),
+        arity: (2, 1),
+        args: [
+            LpcType::String(false) | LpcType::Bytes(false) | LpcType::Int(true),
+            LpcType::String(false),
+        ],
+    },
+    to_text [in text_encoding] => {
+        returns: LpcType::String(false),
+        arity: (2, 1),
+        args: [
+            LpcType::Bytes(false) | LpcType::String(false) | LpcType::Int(true),
+            LpcType::String(false),
+        ],
+    },
     r#typeof [in type_of] => {
         returns: LpcType::Int(false),
         arity: 1,
@@ -1308,6 +1325,8 @@ mod tests {
                 "to_float",
                 "to_int",
                 "to_string",
+                "to_bytes",
+                "to_text",
                 "typeof",
                 "upper_case",
                 "allocate",

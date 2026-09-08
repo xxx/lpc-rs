@@ -58,7 +58,8 @@ fn leading_float(s: &str) -> BaseFloat {
     s[..end].parse().unwrap_or(0.0)
 }
 
-fn cannot_convert<const N: usize>(
+/// The refusal every conversion answers for a value it has no form for.
+pub(super) fn cannot_convert<const N: usize>(
     context: &EfunContext<'_, N>,
     name: &str,
     value: &LpcRef,

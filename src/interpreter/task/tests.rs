@@ -4548,6 +4548,123 @@ mod test_instructions {
     }
 }
 
+/// The `bytes` value in LPC, built through `to_bytes` since there is no
+/// source literal.
+mod bytes_values {
+    use super::*;
+    use crate::compile_time_config::MAX_CALL_STACK_SIZE;
+
+    /// `task`'s committed global `name` as text; anything else panics.
+    fn string_global(task: &Task<MAX_CALL_STACK_SIZE>, name: &str) -> String {
+        let value = committed_global(task, name);
+        match value.as_str() {
+            Some(s) => s.to_owned(),
+            None => panic!("`{name}` is {value}, not a string"),
+        }
+    }
+
+    #[tokio::test]
+    async fn bytes_index_slice_add_compare_sizeof_typeof() {
+        let code = indoc! { r##"
+                bytes b = to_bytes("hello", "utf8");
+                int first = b[0];
+                int last = b[-1];
+                int past_the_end = b[9];
+                bytes mid = b[1..2];
+                bytes joined = b + to_bytes("!", "utf8");
+                int same = b == to_bytes("hello", "utf8");
+                int less = to_bytes("a", "utf8") < to_bytes("b", "utf8");
+                int size = sizeof(b);
+                int tag = typeof(b);
+                int negated = !b;
+                int sum;
+                void create() { foreach (int c : b) { sum += c; } }
+            "##};
+
+        check_committed_globals(
+            code,
+            &[
+                ("first", BareVal::Int('h' as LpcIntInner)),
+                ("last", BareVal::Int('o' as LpcIntInner)),
+                ("past_the_end", BareVal::Int(0)),
+                ("mid", BareVal::Bytes(b"el".to_vec())),
+                ("joined", BareVal::Bytes(b"hello!".to_vec())),
+                ("same", BareVal::Int(1)),
+                ("less", BareVal::Int(1)),
+                ("size", BareVal::Int(5)),
+                ("tag", BareVal::Int(8)),
+                ("negated", BareVal::Int(0)),
+                ("sum", BareVal::Int(532)),
+            ],
+        )
+        .await;
+    }
+
+    /// Each mix reaches the runtime through a `mixed`, which is where the
+    /// checker stops knowing both types.
+    #[tokio::test]
+    async fn a_bytes_beside_a_string_names_the_conversion() {
+        let code = indoc! { r##"
+                bytes b = to_bytes("a", "utf8");
+                mixed s = "x";
+                string added;
+                string compared;
+                string stringified;
+                string printed;
+                void create() {
+                    added = catch(b + s);
+                    compared = catch(b == s);
+                    stringified = catch(to_string(b));
+                    printed = catch(sprintf("%s", b));
+                }
+            "##};
+
+        let task = run_prog(code).await;
+        for name in ["added", "compared", "stringified", "printed"] {
+            let error = string_global(&task, name);
+            assert!(error.contains("to_text"), "{name}: {error}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_bytes_element_cannot_be_assigned() {
+        let code = indoc! { r##"
+                bytes b = to_bytes("ab", "utf8");
+                string err;
+                void create() { err = catch(b[0] = 65); }
+            "##};
+
+        let task = run_prog(code).await;
+        let error = string_global(&task, "err");
+        assert!(error.contains("Invalid attempt to take index"), "{error}");
+        assert_eq!(
+            committed_global(&task, "b").as_bytes(),
+            Some(b"ab".as_slice())
+        );
+    }
+
+    #[tokio::test]
+    async fn a_bytes_prints_in_the_b_notation() {
+        let code = r#"string s = sprintf("%O", to_bytes(({ 34, 92, 0, 255, 97 })));"#;
+
+        check_committed_globals(
+            code,
+            &[("s", BareVal::String(r#"b"\"\\\x00\xffa""#.into()))],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_bytes_key_finds_its_value_by_content() {
+        let code = indoc! { r##"
+                mapping m = ([ to_bytes("k", "utf8"): "v" ]);
+                mixed got = m[to_bytes("k", "utf8")];
+            "##};
+
+        check_committed_globals(code, &[("got", BareVal::String("v".into()))]).await;
+    }
+}
+
 mod test_limits {
 
     use lpc_rs_utils::config::ConfigBuilder;
