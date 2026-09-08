@@ -940,7 +940,11 @@ efuns! {
     unique_array => {
         returns: LpcType::Mixed(true),
         arity: (3, 1),
-        args: [LpcType::Mixed(true), LpcType::Function(false), LpcType::Mixed(false)],
+        args: [
+            LpcType::Mixed(true),
+            LpcType::String(false) | LpcType::Function(false),
+            LpcType::Mixed(false),
+        ],
     },
     read_bytes [async in bytes] => {
         returns: LpcType::Mixed(false),
