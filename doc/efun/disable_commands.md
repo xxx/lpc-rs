@@ -9,7 +9,8 @@ Note that this does _not_ prevent a player entering input as a response to
 an `input_to`, nor from receiving output sent directly via write_socket(). 
 This mostly comes up during the login flow.
 
-After calling `disable_commands`, `living()` will return `0` for this object.
+After calling `disable_commands`, `living()` will return `0` for this object,
+and if it was `this_player()`, `this_player()` is now `0`.
 
 ### See also:
 

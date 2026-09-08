@@ -4,7 +4,8 @@
 
 Move an interactive connection from one object to another. Once complete, the
 object `new` will be the interactive object, and `old` will be non-interactive.
-`this_player()` and `this_object()` do _not_ change.
+When `old` was `this_player()`, `new` becomes `this_player()`; `this_object()`
+does not change.
 
 If `new` has an existing interactive connection, it will be disconnected.
 
