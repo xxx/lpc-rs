@@ -465,6 +465,25 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn an_untyped_parameter_is_mixed_outside_strict_types() {
+            let compiled = compile_root(
+                "untyped-param",
+                &[("root.c", "mixed echo(x) { return x; }\nint n = echo(1);\n")],
+            )
+            .await;
+
+            assert!(compiled.is_ok(), "{:?}", compiled.err());
+        }
+
+        #[tokio::test]
+        async fn the_root_s_own_untyped_parameter_is_refused() {
+            let source = format!("{STRICT}mixed echo(x) {{ return x; }}\n");
+            let compiled = compile_root("strict-param", &[("root.c", &source)]).await;
+
+            assert_eq!(compiled.unwrap_err().message(), "Missing type for argument");
+        }
+
+        #[tokio::test]
         async fn the_root_s_own_untyped_function_is_refused() {
             let source = format!("{STRICT}{UNTYPED}");
             let compiled = compile_root("strict-root", &[("root.c", &source)]).await;

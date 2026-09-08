@@ -353,7 +353,19 @@ ArgName: VarInitNode = {
         init.by_ref = by_ref.is_some();
 
         init
-    }
+    },
+    <by_ref:"ref"?> <mut init:VarInit> =>? {
+        if init.span.is_some_and(|span| context.strict_types_at(span)) {
+            let err = LpcError::new("Missing type for argument")
+                                      .with_span(init.span)
+                                      .with_note("`#pragma strict_types` governs this file, so every parameter it declares needs an explicit type.");
+            return Err(ParseError::User { error: err });
+        }
+        init.type_ = LpcType::Mixed(init.array);
+        init.by_ref = by_ref.is_some();
+
+        Ok(init)
+    },
 };
 
 Type: (Span, &'static str) = {
