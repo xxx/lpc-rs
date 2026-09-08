@@ -13,6 +13,7 @@ Return the tag of `value`'s type:
 | `5` | an array |
 | `6` | a mapping |
 | `7` | a function pointer or closure |
+| `8` | a `bytes` |
 
 The driver ships no header; a mudlib names the tags in one of its own:
 
@@ -24,6 +25,7 @@ The driver ships no header; a mudlib names the tags in one of its own:
 #define T_ARRAY 5
 #define T_MAPPING 6
 #define T_FUNCTION 7
+#define T_BYTES 8
 ```
 
 ### Examples
@@ -36,4 +38,4 @@ if (typeof(x) == T_STRING) {
 
 ### See also
 
-`intp`, `floatp`, `stringp`, `objectp`, `arrayp`, `mappingp`, `functionp`
+`intp`, `floatp`, `stringp`, `objectp`, `arrayp`, `mappingp`, `functionp`, `bytesp`

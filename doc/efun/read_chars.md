@@ -26,4 +26,4 @@ string tail = read_chars("/log/driver", -4000);            /* the last 4000 char
 
 ### See also
 
-`write_chars`, `read_bytes`, `read_file`
+`write_chars`, `read_bytes`, `read_file`, `to_text`, `to_bytes`

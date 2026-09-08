@@ -58,6 +58,34 @@
       x[1] = 'u'; // x becomes "hullo"
       ```
 
+* `bytes`
+    - A `bytes` is an immutable sequence of bytes.
+    - There is no `bytes` literal. A value comes from `read_bytes`, `to_bytes(string, encoding)`,
+      `to_bytes(int *)`, the `+` operator, or slicing an existing `bytes`.
+    - `bytes` values can be concatenated with the `+` operator, which will create a new `bytes`
+      with the contents of both, capped the same way `string` concatenation is. A `bytes` and a
+      `string` never mix: `+`, `==`, `!=`, `<` and the other comparisons between them, `to_string`
+      of a `bytes`, and `%s` of a `bytes` are all runtime errors naming `to_text` or `to_bytes` as
+      the conversion to make instead.
+    - `bytes` can be indexed with the `[]` operator: `b[i]` is the byte value (an `int`, 0 to 255)
+      at index `i` -- 0 when `i` falls outside the buffer -- and `b[a..c]` is the subsequence from
+      `a` to `c` inclusive (a `bytes`). Indexing starts at 0; negative indices count from the end,
+      as with `string`s.
+    - `sizeof(b)` is the number of bytes; `foreach (int c : b)` visits each byte in order.
+    - `==`, `!=`, `<` and the other comparisons between two `bytes` values compare them by
+      content, byte by byte.
+    - `bytes` are immutable: `b[i] = x` is refused.
+    - Printing (`dump`, `%O`, error messages) shows a `bytes` as `b"..."`: printable ASCII as
+      itself, `"` and `\` escaped, every other byte as `\xNN`.
+    - Examples:
+      ```c
+      bytes b = read_bytes("/d/map.m");
+      bytes utf8 = to_bytes("hello", "UTF-8");
+      int first = utf8[0];      // 104
+      bytes tail = utf8[1..3];  // b"ell"
+      bytes both = b + tail;
+      ```
+
 * `object`
     - An `object` is a reference to an instance of a type.
     - In LPC, an object corresponds to code in a single file, and includes the variables
@@ -170,7 +198,7 @@
     - Arrays can be created with the `({ <values> })` syntax.
     - Arrays can be indexed with numeric or range indices.
     - Arrays can be concatenated with the `+` operator.
-    - `a & b` is the members of `a` also found in `b`, in `a`'s order, duplicates kept; `a - b` removes every occurrence of `b`'s members; `a | b` is `a` as it is, then `b`'s members absent from `a` in `b`'s order, duplicates included. Members are compared by content for strings and by identity for objects and nested arrays or mappings.
+    - `a & b` is the members of `a` also found in `b`, in `a`'s order, duplicates kept; `a - b` removes every occurrence of `b`'s members; `a | b` is `a` as it is, then `b`'s members absent from `a` in `b`'s order, duplicates included. Members are compared by content for strings and `bytes` and by identity for objects and nested arrays or mappings.
     - `mixed *` indicates an array, where the values can be of any type, including other arrays.
     - `mixed *` is the only way to create a multidimensional array.
     - Arrays are mutable, and are reference types in LPC, meaning it is a pointer to the actual container, and

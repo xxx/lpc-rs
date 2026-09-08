@@ -29,4 +29,4 @@ write_chars("/d/map.m", y * width + x, "森");
 
 ### See also
 
-`read_chars`, `write_bytes`, `write_file`
+`read_chars`, `write_bytes`, `write_file`, `to_text`, `to_bytes`
