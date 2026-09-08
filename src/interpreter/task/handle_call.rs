@@ -409,7 +409,8 @@ pub(crate) fn check_arg_type(
         return Ok(());
     };
     let ref_type = lpc_ref.as_lpc_type();
-    if ref_type.matches_type(*arg_type) {
+    // Declared against found — reversed, a union parameter rejected its own members.
+    if arg_type.matches_type(ref_type) {
         return Ok(());
     }
     Err(LpcError::runtime(format!(
