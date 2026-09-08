@@ -249,6 +249,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_read_of_exactly_the_cap_succeeds() {
+        let root = TempLib::new("rb-cap-exact");
+        let n = MAX_STRING_LENGTH;
+        std::fs::write(root.join("exact.txt"), vec![b'x'; n]).unwrap();
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            "int valid_read(string p, string e, object c, string g) { return 1; }",
+        )
+        .await
+        .unwrap();
+        let got = value_of(&vm, r#"read_bytes("/exact.txt")"#).await;
+        assert_eq!(got, LpcRef::from(vec![b'x'; n]));
+    }
+
+    #[tokio::test]
     async fn a_read_past_the_cap_is_an_error() {
         let root = TempLib::new("rb-cap");
         let n = MAX_STRING_LENGTH + 8;

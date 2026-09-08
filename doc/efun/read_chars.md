@@ -10,9 +10,9 @@ no `length`, the read runs to the end. When `start` is at or past the end,
 the result is `0`, not a string. A negative `length` is an error.
 
 A character offset is found by decoding the file from its start, so the
-whole file must be UTF-8; one that is not is an error naming the file, where
-`read_bytes` objects only to the range it touched. Offsets here are the
-ones `str[i]` uses, so a value read back with `read_chars` can
+whole file must be UTF-8; one that is not is an error naming the file.
+`read_bytes` never decodes the file, so it never raises this error. Offsets
+here are the ones `str[i]` uses, so a value read back with `read_chars` can
 be indexed the way it was measured.
 
 A missing or unreadable file is an error, as is the master's refusal.
