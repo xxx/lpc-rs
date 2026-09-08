@@ -19,6 +19,8 @@ pub struct LpcTypeUnion {
     pub int_array: bool,
     pub string: bool,
     pub string_array: bool,
+    pub bytes: bool,
+    pub bytes_array: bool,
     pub float: bool,
     pub float_array: bool,
     pub object: bool,
@@ -48,6 +50,13 @@ impl LpcTypeUnion {
                     self.set_string_array(true)
                 } else {
                     self.set_string(true)
+                }
+            }
+            LpcType::Bytes(array) => {
+                if array {
+                    self.set_bytes_array(true)
+                } else {
+                    self.set_bytes(true)
                 }
             }
             LpcType::Float(array) => {
@@ -92,6 +101,8 @@ impl LpcTypeUnion {
                 self.set_int_array(other.int_array());
                 self.set_string(other.string());
                 self.set_string_array(other.string_array());
+                self.set_bytes(other.bytes());
+                self.set_bytes_array(other.bytes_array());
                 self.set_float(other.float());
                 self.set_float_array(other.float_array());
                 self.set_object(other.object());
@@ -130,6 +141,13 @@ impl LpcTypeUnion {
                     self.string()
                 }
             }
+            LpcType::Bytes(array) => {
+                if array {
+                    self.bytes_array()
+                } else {
+                    self.bytes()
+                }
+            }
             LpcType::Float(array) => {
                 if array {
                     self.float_array()
@@ -157,6 +175,7 @@ impl LpcTypeUnion {
                 } else {
                     self.int()
                         || self.string()
+                        || self.bytes()
                         || self.float()
                         || self.object()
                         || self.mapping()
@@ -182,6 +201,8 @@ impl LpcTypeUnion {
             (self.int_array(), LpcType::Int(true)),
             (self.string(), LpcType::String(false)),
             (self.string_array(), LpcType::String(true)),
+            (self.bytes(), LpcType::Bytes(false)),
+            (self.bytes_array(), LpcType::Bytes(true)),
             (self.float(), LpcType::Float(false)),
             (self.float_array(), LpcType::Float(true)),
             (self.object(), LpcType::Object(false)),
@@ -204,6 +225,7 @@ impl LpcTypeUnion {
     pub fn is_array(self) -> bool {
         self.int_array()
             || self.string_array()
+            || self.bytes_array()
             || self.float_array()
             || self.object_array()
             || self.mapping_array()
@@ -247,6 +269,14 @@ impl Mangle for LpcTypeUnion {
 
         if self.string_array() {
             vec.push(LpcType::String(true).mangle());
+        }
+
+        if self.bytes() {
+            vec.push(LpcType::Bytes(false).mangle());
+        }
+
+        if self.bytes_array() {
+            vec.push(LpcType::Bytes(true).mangle());
         }
 
         if self.float() {
