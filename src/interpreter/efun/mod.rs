@@ -595,7 +595,7 @@ efuns! {
     sizeof => {
         returns: LpcType::Int(false),
         arity: 1,
-        args: [LpcType::Mixed(true) | LpcType::Mapping(false)],
+        args: [LpcType::Mixed(true) | LpcType::Mapping(false) | LpcType::String(false)],
     },
     sscanf => {
         returns: LpcType::Int(false),

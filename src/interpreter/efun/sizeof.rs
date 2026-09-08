@@ -22,7 +22,7 @@ pub(crate) fn size_of(lpc_ref: &LpcRef, txn: &TxnHandle) -> Result<LpcRef> {
             LpcRef::Int(LpcInt(l as LpcIntInner))
         }
         LpcRef::String(_) => {
-            let l = lpc_ref.with_string(|s| s.len())?;
+            let l = lpc_ref.with_string(|s| s.char_count())?;
             LpcRef::Int(LpcInt(l as LpcIntInner))
         }
         LpcRef::Float(_) | LpcRef::Int(_) | LpcRef::Object(_) | LpcRef::Function(_) => NULL,
@@ -49,5 +49,11 @@ mod tests {
             }
         "#;
         assert_eq!(run_prog(code).await.result(), Some(LpcRef::from(312)));
+    }
+
+    #[tokio::test]
+    async fn a_string_is_measured_in_characters() {
+        let code = r#"int create() { return sizeof("héllo") * 10 + sizeof(""); }"#;
+        assert_eq!(run_prog(code).await.result(), Some(LpcRef::from(50)));
     }
 }

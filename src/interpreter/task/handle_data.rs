@@ -260,15 +260,15 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 set_location(&mut self.stack, &self.context.txn, destination, to_store)
             }
             LpcRef::String(_) => {
-                let string = container_ref
-                    .with_string(|lpc_string| lpc_string.to_string())
+                let (string, len) = container_ref
+                    .with_string(|lpc_string| (lpc_string.to_string(), lpc_string.char_count()))
                     .unwrap_or_default();
 
                 if let LpcRef::Int(i) = lpc_ref {
                     let idx = if i.0 >= 0 {
                         i.0
                     } else {
-                        string.len() as LpcIntInner + i.0
+                        len as LpcIntInner + i.0
                     };
 
                     if idx >= 0
@@ -286,8 +286,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 } else {
                     return Err(self.runtime_error(format!(
                         "Attempting to access index {} in a string of length {}",
-                        lpc_ref,
-                        string.len()
+                        lpc_ref, len
                     )));
                 }
 

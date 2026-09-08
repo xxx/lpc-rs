@@ -36,6 +36,17 @@ impl LpcString {
         self.to_str().len()
     }
 
+    /// The length LPC sees: characters, not bytes.
+    #[inline]
+    pub fn char_count(&self) -> usize {
+        let s = self.to_str();
+        if s.is_ascii() {
+            s.len()
+        } else {
+            s.chars().count()
+        }
+    }
+
     /// Get whether the string is empty
     #[inline]
     pub fn is_empty(&self) -> bool {
