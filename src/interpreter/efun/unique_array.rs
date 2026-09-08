@@ -5,14 +5,18 @@ use std::{sync::Arc, vec};
 
 use indexmap::IndexMap;
 use lpc_rs_errors::Result;
+use thin_vec::thin_vec;
 
 use crate::interpreter::{
     continuation::{Callee, Continuation, Next},
     efun::{
-        callback::{array_arg, callback_args, function_arg, mint_array},
+        callback::{array_arg, callback_args, mint_array},
         efun_context::EfunContext,
     },
-    function_type::function_ptr::FunctionPtr,
+    function_type::{
+        function_address::FunctionAddress,
+        function_ptr::{FunctionPtr, FunctionPtrBuilder},
+    },
     lpc_ref::LpcRef,
     stm::TxnHandle,
 };
@@ -20,10 +24,11 @@ use crate::interpreter::{
 /// `unique_array(arr, f [, skip])`: an array of the groups of elements for
 /// which `f(element)` returns the same value, groups and their elements in
 /// first-seen order; the group whose key equals `skip` (0 when absent) is
-/// left out.
+/// left out. A string `f` names a function called in each element, and
+/// elements that are not live objects are dropped.
 pub fn unique_array<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let items = array_arg(context, "unique_array")?;
-    let ptr = function_arg(context, "unique_array", 1)?;
+    let (ptr, by_name) = separator_arg(context)?;
     let skip = if context.arg_count() < 3 {
         LpcRef::from(0)
     } else {
@@ -35,6 +40,7 @@ pub fn unique_array<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
     }
     context.continue_with(Box::new(UniqueArray {
         ptr,
+        by_name,
         items,
         skip,
         asked: None,
@@ -43,10 +49,33 @@ pub fn unique_array<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
     Ok(())
 }
 
+/// Argument 1 as the pointer to call per element, and whether it was a
+/// name — a string `f` is `&->f()`.
+fn separator_arg<const N: usize>(context: &EfunContext<'_, N>) -> Result<(Arc<FunctionPtr>, bool)> {
+    match context.arg(1) {
+        LpcRef::Function(f) => Ok((f.clone(), false)),
+        LpcRef::String(name) => {
+            let ptr = FunctionPtrBuilder::default()
+                .owner(Arc::downgrade(context.process()))
+                .address(FunctionAddress::Dynamic(name.to_str().into()))
+                .partial_args(thin_vec![None])
+                .build()
+                .expect("a dynamic pointer needs only its address");
+            Ok((Arc::new(ptr), true))
+        }
+        other => Err(context.runtime_error(format!(
+            "unique_array: {} is not a string or function",
+            other.type_name()
+        ))),
+    }
+}
+
 /// The walk: the element whose key is in flight, and the groups so far.
 #[derive(Debug, Clone)]
 struct UniqueArray {
     ptr: Arc<FunctionPtr>,
+    /// A named function is only called in an element that is a live object.
+    by_name: bool,
     items: vec::IntoIter<LpcRef>,
     skip: LpcRef,
     asked: Option<LpcRef>,
@@ -58,7 +87,11 @@ impl Continuation for UniqueArray {
         if let (Some(key), Some(element)) = (result, self.asked.take()) {
             self.groups.entry(key).or_default().push(element);
         }
-        match self.items.next() {
+        let next = self
+            .items
+            .by_ref()
+            .find(|item| !self.by_name || item.live_object(txn).is_some());
+        match next {
             Some(item) => {
                 self.asked = Some(item.clone());
                 Ok(Next::Call(Callee::Pointer {
@@ -84,7 +117,12 @@ impl Continuation for UniqueArray {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_support::{strings_of, try_run_prog};
+    use indoc::indoc;
+
+    use crate::{
+        interpreter::{lpc_ref::LpcRef, vm::Vm},
+        test_support::{strings_of, test_config, try_run_prog},
+    };
 
     /// Each group joined with commas, so the groups compare as strings.
     fn joined(expr: &str) -> String {
@@ -134,6 +172,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_name_is_called_in_each_element_and_non_objects_are_dropped() {
+        let vm = Vm::new(test_config());
+        for (path, kind) in [("/a.c", "tool"), ("/b.c", "tool"), ("/c.c", "food")] {
+            let code = format!(r#"string short() {{ return "{kind}"; }}"#);
+            vm.initialize_process_from_code(path, code).await.unwrap();
+        }
+        let code = indoc! { r#"
+            string join(mixed *g) { return implode(map(g, (: file_name($1) :)), ","); }
+            string create() {
+                mixed *arr = ({ find_object("/a"), 7, find_object("/b"), "s", find_object("/c") });
+                return implode(map(unique_array(arr, "short"), (: join($1) :)), ";");
+            }
+        "# };
+        let proc = vm
+            .initialize_process_from_code("/main.c", code)
+            .await
+            .unwrap();
+
+        assert_eq!(proc.result().unwrap(), LpcRef::from("/a,/b;/c"));
+    }
+
+    #[tokio::test]
     async fn the_arguments_are_typed() {
         let code = r#"mixed create() { mixed m = ([ ]); return unique_array(m, (: 1 :)); }"#;
         let err = try_run_prog(code).await.unwrap_err().to_string();
@@ -141,10 +201,10 @@ mod tests {
             err.contains("unique_array: mapping is not an array"),
             "{err}"
         );
-        let code = r#"mixed create() { mixed s = "f"; return unique_array(({ 1 }), s); }"#;
+        let code = r#"mixed create() { mixed i = 1; return unique_array(({ 1 }), i); }"#;
         let err = try_run_prog(code).await.unwrap_err().to_string();
         assert!(
-            err.contains("unique_array: string is not a function"),
+            err.contains("unique_array: int is not a string or function"),
             "{err}"
         );
     }
