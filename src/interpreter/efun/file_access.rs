@@ -119,12 +119,19 @@ pub(crate) async fn authorize_save<const N: usize>(
     })
 }
 
-/// Whether `server`'s parent exists and is a directory; a missing parent
-/// is `false`, any other failure the error.
-pub(crate) async fn parent_is_dir(server: &Path) -> std::io::Result<bool> {
+/// Whether `server`'s parent is a directory on disk or one this task's
+/// `mkdir` will create at commit; a missing parent is `false`, any other
+/// failure the error.
+pub(crate) async fn parent_is_dir<const N: usize>(
+    context: &EfunContext<'_, N>,
+    server: &Path,
+) -> std::io::Result<bool> {
     let Some(parent) = server.parent() else {
         return Ok(false);
     };
+    if context.has_pending_dir(parent) {
+        return Ok(true);
+    }
     match tokio::fs::metadata(parent).await {
         Ok(m) => Ok(m.is_dir()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
@@ -143,7 +150,10 @@ pub(crate) async fn record_save<const N: usize>(
 ) -> Result<()> {
     let io_error =
         |e: std::io::Error| context.runtime_error(format!("{efun}: {}: {e}", access.in_game));
-    if !parent_is_dir(&access.server).await.map_err(io_error)? {
+    if !parent_is_dir(context, &access.server)
+        .await
+        .map_err(io_error)?
+    {
         return Err(context.runtime_error(format!(
             "{efun}: {}: parent directory does not exist",
             access.in_game

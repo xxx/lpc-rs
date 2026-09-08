@@ -451,6 +451,11 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         self.txn().with(|t| t.record_effect(effect));
     }
 
+    /// Whether this efun's attempt has recorded a `mkdir` of `server`.
+    pub(crate) fn has_pending_dir(&self, server: &std::path::Path) -> bool {
+        self.txn().with(|t| t.has_pending_dir(server))
+    }
+
     /// Find an object by path, transactionally. Delegates to
     /// [`TaskContext::find_object`]; does not initialize or create.
     pub fn find_object(&self, path: &LpcPath) -> ObjectLookup {
