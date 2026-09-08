@@ -6,6 +6,7 @@ Render `value` as JSON text, compact, with no whitespace between tokens.
 
 - An int or float becomes a number. A float that is not finite is an error.
 - A string becomes a string, escaped.
+- A `bytes` becomes an array of its byte values, 0 to 255.
 - An array becomes an array, element by element.
 - A mapping becomes an object in insertion order. A string key is written as
   it is, an int or float key as its text; any other key is an error.

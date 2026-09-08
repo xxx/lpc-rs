@@ -449,6 +449,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_bytes_global_round_trips_through_save_and_restore() {
+        let root = lib_holding("restore-bytes-round-trip", &[("secure/master.c", ALLOWING)]);
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code("/secure/master.c", ALLOWING)
+            .await
+            .unwrap();
+        vm.initialize_process_from_code(
+            "/w.c",
+            indoc! { r#"
+                bytes b = to_bytes(({ 34, 92, 0, 255, 97 }));
+                void create() { save_object("/data"); }
+            "# },
+        )
+        .await
+        .unwrap();
+        let r = vm
+            .initialize_process_from_code(
+                "/r.c",
+                indoc! { r#"
+                    bytes b;
+                    void create() { restore_object("/data"); }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&r, 0u16),
+            LpcRef::from(vec![34u8, 92, 0, 255, 97])
+        );
+    }
+
+    #[tokio::test]
     async fn an_object_reference_is_re_found_while_the_object_lives() {
         let root = lib_holding("restore-object-ref", &[("secure/master.c", ALLOWING)]);
         let vm = Vm::new(temp_lib_config(&root));

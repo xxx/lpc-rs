@@ -16,6 +16,7 @@ key with any of those is refused before anything is written.
 | int | decimal | `42`, `-17` |
 | float | `#` + C99 hex-float + `#` | `#0x1.ap+1#` (3.25), `#0x0p+0#` |
 | string | double-quoted; `"` `\` and newline as `\"` `\\` `\n`, every other byte raw | `"q\"b\\n\nt	uéé"` |
+| bytes | `b"` then each byte, printable ASCII as itself, `"` `\` as `\"` `\\`, every other byte `\xNN`, then `"` | `b"map\x00\xff"` |
 | array | `({` then each element followed by `,` then `})` | `({1,"two",({}),})` |
 | mapping | `([` then each `key:value` followed by `,` then `])` | `(["k":4,7:"i",])` |
 | object | `$` creation time `@` object name `$` | `$1788811132@/std/player#12$` |
@@ -40,6 +41,9 @@ An object reference restores as the live object of that name when it
 exists and was created in the same second, else as 0. A function pointer
 is never written: a variable holding one is left out of the file, and one
 inside an array or mapping is written as `0`.
+
+CD-lineage libs never write the `bytes` form; it appears only in files
+this driver has saved.
 
 Files are written whole, through a temporary file renamed over the target,
 when the writing task commits.

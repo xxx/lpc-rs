@@ -4655,6 +4655,16 @@ mod bytes_values {
     }
 
     #[tokio::test]
+    async fn a_bytes_value_round_trips_through_json() {
+        let code = indoc! { r##"
+                bytes b = to_bytes(({ 104, 105 }));
+                bytes back = to_bytes(json_decode(json_encode(b)));
+            "##};
+
+        check_committed_globals(code, &[("back", BareVal::Bytes(b"hi".to_vec()))]).await;
+    }
+
+    #[tokio::test]
     async fn a_bytes_key_finds_its_value_by_content() {
         let code = indoc! { r##"
                 mapping m = ([ to_bytes("k", "utf8"): "v" ]);
