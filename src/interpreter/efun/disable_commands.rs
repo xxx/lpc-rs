@@ -1,8 +1,12 @@
+use std::sync::Arc;
+
 use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, process::Process};
 
-/// `disable_commands`, an efun that disables an object from being able to interact with the game world.
+/// `disable_commands`, an efun that disables an object from being able to
+/// interact with the game world; when it was `this_player()`, nobody is
+/// (CD, FluffOS).
 pub fn disable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let proc = context.process();
     let was_enabled = proc.commands_enabled(context.txn());
@@ -15,6 +19,14 @@ pub fn disable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
             Process::unmark_living(t, proc, &env);
         }
     });
+    let this_player = context.this_player();
+    if this_player
+        .load()
+        .as_ref()
+        .is_some_and(|player| Arc::ptr_eq(player, proc))
+    {
+        this_player.store(None);
+    }
 
     Ok(())
 }
@@ -26,11 +38,44 @@ mod tests {
     use crate::{
         interpreter::{
             CommittedReader,
+            lpc_ref::LpcRef,
             task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
             vm::Vm,
         },
         test_support::test_config,
     };
+
+    #[tokio::test]
+    async fn the_object_stops_being_this_player_and_another_player_stays() {
+        let code = indoc! { r#"
+            int cleared, kept;
+            void create() {
+                object other = clone_object("/other");
+                enable_commands();
+                disable_commands();
+                cleared = !this_player();
+                set_this_player(other);
+                disable_commands();
+                kept = this_player() == other;
+            }
+        "# };
+        let vm = Vm::new(test_config());
+        vm.create_process_from_code("/other.c", "").await.unwrap();
+        let proc = vm
+            .initialize_process_from_code("/ob.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&proc, 0u16),
+            LpcRef::from(1)
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&proc, 1u16),
+            LpcRef::from(1)
+        );
+    }
 
     #[tokio::test]
     async fn test_disable_commands() {

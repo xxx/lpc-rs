@@ -2,7 +2,8 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process};
 
-/// `enable_commands`, an efun that enables an object to interact with the game world.
+/// `enable_commands`, an efun that enables an object to interact with the
+/// game world and makes it `this_player()` (CD, FluffOS).
 pub fn enable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let proc = context.process();
     let already = proc.commands_enabled(context.txn());
@@ -14,6 +15,7 @@ pub fn enable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Resu
             Process::mark_living(t, proc, &env);
         }
     });
+    context.this_player().store(Some(proc.clone()));
 
     Ok(())
 }
@@ -54,6 +56,33 @@ mod tests {
         assert_eq!(
             vm.global_state.committed_global(&checker_proc, 0u16),
             LpcRef::from(0)
+        );
+    }
+
+    #[tokio::test]
+    async fn the_object_becomes_this_player() {
+        let code = indoc! { r#"
+            int before, after;
+            void create() {
+                before = this_player() == this_object();
+                enable_commands();
+                after = this_player() == this_object();
+            }
+        "# };
+        let vm = Vm::new(test_config());
+        let proc = vm
+            .initialize_process_from_code("/ob.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&proc, 0u16),
+            LpcRef::from(0)
+        );
+        assert_eq!(
+            vm.global_state.committed_global(&proc, 1u16),
+            LpcRef::from(1)
         );
     }
 
