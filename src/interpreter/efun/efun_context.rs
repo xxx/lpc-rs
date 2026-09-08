@@ -24,7 +24,7 @@ use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
     object_space::ObjectSpace,
     process::Process,
-    stm::{Effect, TxnHandle},
+    stm::{Effect, PendingFileOp, TxnHandle},
     task_context::{Caller, Loader, ObjectLookup, TaskContext},
 };
 
@@ -449,6 +449,11 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// Record a physical side effect on this efun's attempt.
     pub(crate) fn record_effect(&self, effect: Effect) {
         self.txn().with(|t| t.record_effect(effect));
+    }
+
+    /// This efun's attempt's recorded changes to the file at `server`.
+    pub(crate) fn pending_file_ops(&self, server: &std::path::Path) -> Vec<PendingFileOp> {
+        self.txn().with(|t| t.pending_file_ops(server))
     }
 
     /// Whether this efun's attempt has recorded a `mkdir` of `server`.

@@ -9,19 +9,21 @@ use crate::interpreter::{
         bytes::{int_arg, offset},
         efun_context::EfunContext,
         file_access::{FileAccess, authorize},
+        file_view::read_through,
     },
     lpc_ref::LpcRef,
     stm::Effect,
 };
 
-/// The file at `access` decoded; an unreadable or non-UTF-8 file is the
-/// efun's error.
+/// The file at `access` decoded, a write earlier in this task included;
+/// an unreadable or non-UTF-8 file is the efun's error.
 async fn text_of<const N: usize>(
     context: &EfunContext<'_, N>,
     name: &str,
     access: &FileAccess,
 ) -> Result<String> {
-    match tokio::fs::read(&access.server).await {
+    let read = async { read_through(context, &access.server).await?.into_bytes() };
+    match read.await {
         Err(e) => Err(context.runtime_error(format!("{name}: {}: {e}", access.in_game))),
         Ok(bytes) => String::from_utf8(bytes)
             .map_err(|_| context.runtime_error(format!("{name}: {} is not UTF-8", access.in_game))),
@@ -353,15 +355,16 @@ mod tests {
         assert_eq!(contents(&root, "d.txt"), "x");
     }
 
+    /// The write lands at commit; a read in the same task already sees it.
     #[tokio::test]
-    async fn a_read_in_the_same_task_sees_the_characters_as_they_were() {
+    async fn a_read_in_the_same_task_sees_the_pending_characters() {
         let (root, vm) = lib("wc-deferred").await;
         let got = value_of(
             &vm,
             r#"write_chars("/m.txt", 0, "HÉLLO") + read_chars("/m.txt", 0, 5)"#,
         )
         .await;
-        assert_eq!(got, LpcRef::from("1héllo"));
+        assert_eq!(got, LpcRef::from("1HÉLLO"));
         assert_eq!(contents(&root, "m.txt"), "HÉLLO wörld\n");
     }
 

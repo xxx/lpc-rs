@@ -41,7 +41,7 @@ pub(crate) use committer::{
     CommitProtocol, Committer, Conflict, GcPassReply, LiveSnapshot, WorldRoot,
 };
 pub use committer::{GcRefused, GcReport};
-pub(crate) use effects::{CallOutSchedule, Effect, flush_effects};
+pub(crate) use effects::{CallOutSchedule, Effect, PendingFileOp, flush_effects};
 pub(crate) use merge::MergeOp;
 pub use retry::CommittedReader;
 #[cfg(test)]
@@ -310,6 +310,14 @@ impl Transaction {
     /// Record a physical side effect for delivery after this attempt commits.
     pub(crate) fn record_effect(&mut self, effect: Effect) {
         self.effects.push(effect);
+    }
+
+    /// This attempt's recorded changes to the file at `server`, in order.
+    pub(crate) fn pending_file_ops(&self, server: &std::path::Path) -> Vec<PendingFileOp> {
+        self.effects
+            .iter()
+            .filter_map(|e| e.pending_file_op(server))
+            .collect()
     }
 
     /// Whether this attempt has recorded a `mkdir` of `server`.

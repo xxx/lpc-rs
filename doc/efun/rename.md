@@ -11,8 +11,8 @@ directory does not exist, or a refusal by the master for either path is an
 error. Both paths are resolved against the calling object's directory.
 
 The move happens when the task commits; a read of either path later in the
-same task sees the files as they were. A task that ends in an error moves
-nothing.
+same task already sees it (the source as missing, the target holding what
+was on disk at the source). A task that ends in an error moves nothing.
 
 ### Examples
 

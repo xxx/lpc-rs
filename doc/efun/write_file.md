@@ -14,8 +14,9 @@ the in-game path. All are caught by `catch()`.
 
 The append itself happens when the task commits: a task that errors out
 writes nothing, a task the driver re-runs writes once, and two `write_file`s
-in one task land in order. A `read_file` of the same file later in the task
-sees the contents from before the task. A failure at that point (the disk
+in one task land in order. A `read_file`, `file_size` or `read_chars` of
+the same file later in the task already sees the appended contents; other
+tasks see the file as it is until the commit. A failure at that point (the disk
 is full, the directory was removed meanwhile) goes to the debug log; there
 is no caller left to tell.
 

@@ -2,21 +2,28 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_READ,
-    efun::{efun_context::EfunContext, file_access::authorize},
+    efun::{efun_context::EfunContext, file_access::authorize, file_view::read_through},
     lpc_ref::LpcRef,
 };
 
 /// `read_file(path [, start [, lines]])`: the file as a string, once the
 /// master's `valid_read` allows it; `start` a 1-based line (0 is 1), `lines`
-/// a count (0 means to the end). Reads live: a `write_file` earlier in this
-/// task has not landed yet.
+/// a count (0 means to the end). A write earlier in this task is seen.
 pub async fn read_file<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "read_file", VALID_READ, 0).await?;
     let start = line_number(context, 1, "start")?;
     let count = line_number(context, 2, "lines")?;
-    let contents = tokio::fs::read_to_string(&access.server)
-        .await
-        .map_err(|e| context.runtime_error(format!("read_file: {}: {e}", access.in_game)))?;
+    let contents = async {
+        let bytes = read_through(context, &access.server).await?.into_bytes()?;
+        String::from_utf8(bytes).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "stream did not contain valid UTF-8",
+            )
+        })
+    }
+    .await
+    .map_err(|e| context.runtime_error(format!("read_file: {}: {e}", access.in_game)))?;
     let contents = if start > 1 || count > 0 {
         lines_of(&contents, start, count)
     } else {

@@ -9,7 +9,7 @@ appends. The result is 0, with nothing written, when the file does not
 exist or `start` is past its end. The master's refusal is an error.
 
 Like `write_file`, the write is checked now and lands when the task
-commits: a `read_bytes` later in the same task sees the bytes as they were.
+commits; a `read_bytes` later in the same task already sees the new bytes.
 
 ### Examples
 

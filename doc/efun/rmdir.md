@@ -7,8 +7,9 @@ it, and return `1`. A missing path, a path that is not a directory, a
 directory with entries in it, or a refusal by the master is an error.
 `path` is resolved against the calling object's directory.
 
-The directory is removed when the task commits. A task that ends in an
-error removes nothing.
+The directory is removed when the task commits; a `file_size` of it later
+in the same task already answers -1. A task that ends in an error removes
+nothing.
 
 ### See also
 

@@ -20,7 +20,7 @@ use crate::interpreter::{
 pub async fn restore_map<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize_save(context, "restore_map", VALID_READ, 0).await?;
     let mut entries: IndexMap<LpcRef, LpcRef> = IndexMap::new();
-    if let Some(text) = read_save_file(&access.server).await {
+    if let Some(text) = read_save_file(context, &access.server).await {
         let resolve = resolve_object(context);
         for (index, line) in text.lines().enumerate() {
             let err = |e| line_error(context, "restore_map", &access.in_game, index + 1, e);

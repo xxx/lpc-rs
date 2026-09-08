@@ -17,7 +17,8 @@ caller, program)` with `path` as resolved but before the suffix. A refusal,
 or a master that does not define the apply, is the runtime error
 `save_map: permission denied`. The parent directory must exist. The file is
 written when the task commits, through a temporary file renamed over the
-target, as `save_object` does. A failure at that point (the disk is full,
+target, as `save_object` does; a `restore_map` or `restore_object` of it
+later in the same task already reads it. A failure at that point (the disk is full,
 the directory was removed meanwhile) goes to the debug log; the efun has
 already returned.
 
