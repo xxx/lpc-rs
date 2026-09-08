@@ -85,8 +85,8 @@ pub fn add_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
     Ok(())
 }
 
-/// The handler for a rule: a function of this object by name, or a bound
-/// function pointer as `call_out` requires; `efun` prefixes the messages.
+/// A handler for `add_action`, `add_rule` and `input_to`: a function of this
+/// object by name, or a bound function pointer; `efun` prefixes the messages.
 pub(crate) fn handler_from<const N: usize>(
     context: &EfunContext<'_, N>,
     arg: LpcRef,
