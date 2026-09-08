@@ -23,6 +23,7 @@ spaces, any of
 | `'word'` | that word | — |
 | `'get' / 'take'` | any one of the words | — |
 | `[word]` | the word if present | — |
+| `[on] / [over]` | one of the words if present | — |
 | `%w` | one word | string |
 | `%s` | zero or more words | string, spacing intact, `""` when none |
 | `%d` | a run of digits | int |

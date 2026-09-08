@@ -91,7 +91,7 @@ pub enum PatternError {
     BareCapture,
     /// A `%` capture letter this dialect does not have.
     UnknownCapture(char),
-    /// A `/` not between two quoted words.
+    /// A `/` not between two words, quoted or bracketed.
     BadAlternative,
     /// The engine rejected the built grammar.
     Grammar(GrammarError),
@@ -118,7 +118,7 @@ impl fmt::Display for PatternError {
                     "`%{c}` is not a capture; use %w, %s, %d, %o, %l, %L, %i or %p"
                 )
             }
-            PatternError::BadAlternative => write!(f, "`/` must sit between quoted words"),
+            PatternError::BadAlternative => write!(f, "`/` must sit between words"),
             PatternError::Grammar(e) => write!(f, "{e}"),
         }
     }
@@ -276,45 +276,48 @@ pub(crate) enum Group {
     Capture(CaptureKind),
     /// One or more words as one string (`STR`), unlike `Capture(Words)`.
     Text,
-    /// An optional word.
-    Optional(String),
+    /// Words of which one may appear; CD's `[on] / [over]`, where an absent
+    /// optional yields to the next alternative.
+    Optional(Vec<String>),
 }
 
-/// Join `/`-separated quoted words into one group; under [`Verb::Required`]
-/// the first group must be the verb.
+/// Join `/`-separated words into one group, optional when any alternative
+/// was bracketed; under [`Verb::Required`] the first group must be the verb.
 fn group(pieces: Vec<Piece>, verb: Verb) -> Result<Vec<Group>, PatternError> {
     let mut groups: Vec<Group> = Vec::new();
-    // The words a `/` is joining, awaiting the word on its right.
-    let mut pending: Option<Vec<String>> = None;
+    // The words a `/` is joining and whether any was bracketed, awaiting the
+    // word on its right.
+    let mut pending: Option<(Vec<String>, bool)> = None;
     for piece in pieces {
-        match piece {
-            Piece::Quoted(word) => {
-                let mut words = pending.take().unwrap_or_default();
-                words.push(word);
-                groups.push(Group::Words(words));
-            }
+        let (word, bracketed) = match piece {
+            Piece::Quoted(word) => (word, false),
+            Piece::Optional(word) => (word, true),
             Piece::Slash => {
                 if pending.is_some() {
                     return Err(PatternError::BadAlternative);
                 }
-                match groups.pop() {
-                    Some(Group::Words(words)) => pending = Some(words),
+                pending = Some(match groups.pop() {
+                    Some(Group::Words(words)) => (words, false),
+                    Some(Group::Optional(words)) => (words, true),
                     _ => return Err(PatternError::BadAlternative),
-                }
+                });
+                continue;
             }
             Piece::Capture(kind) => {
                 if pending.is_some() {
                     return Err(PatternError::BadAlternative);
                 }
                 groups.push(Group::Capture(kind));
+                continue;
             }
-            Piece::Optional(word) => {
-                if pending.is_some() {
-                    return Err(PatternError::BadAlternative);
-                }
-                groups.push(Group::Optional(word));
-            }
-        }
+        };
+        let (mut words, optional) = pending.take().unwrap_or_default();
+        words.push(word);
+        groups.push(if optional || bracketed {
+            Group::Optional(words)
+        } else {
+            Group::Words(words)
+        });
     }
     if pending.is_some() {
         return Err(PatternError::BadAlternative);
@@ -349,6 +352,14 @@ fn build(groups: &[Group], verb: Verb) -> Result<Compiled, PatternError> {
     assemble(groups, &verbs).map_err(PatternError::Grammar)
 }
 
+/// One of `words`, as a single element.
+fn one_of(b: &mut GrammarBuilder, words: &[String]) -> Element {
+    match dedup_words(words).as_slice() {
+        [word] => lit(word),
+        many => nt(b.alternatives(many.iter().map(|w| lit(w)))),
+    }
+}
+
 /// `S → group…` over plain words, one production; captures are labelled
 /// with their slot and kind.
 fn assemble(groups: &[Group], verbs: &[&str]) -> Result<Compiled, GrammarError> {
@@ -360,15 +371,11 @@ fn assemble(groups: &[Group], verbs: &[&str]) -> Result<Compiled, GrammarError> 
     let mut rhs: Vec<Element> = Vec::with_capacity(groups.len());
     for group in groups {
         let (element, kind) = match group {
-            Group::Words(alternatives) => {
-                let alternatives = dedup_words(alternatives);
-                let element = match alternatives.as_slice() {
-                    [word] => lit(word),
-                    many => nt(b.alternatives(many.iter().map(|w| lit(w)))),
-                };
-                (element, None)
+            Group::Words(words) => (one_of(&mut b, words), None),
+            Group::Optional(words) => {
+                let element = one_of(&mut b, words);
+                (nt(b.optional(element)), None)
             }
-            Group::Optional(word) => (nt(b.optional(lit(word))), None),
             Group::Capture(kind) => {
                 let element = match kind {
                     CaptureKind::Word => nt(b.word_like(&words)),
@@ -558,6 +565,33 @@ mod tests {
     fn an_optional_word_in_final_position_may_be_absent() {
         assert_eq!(args("'look' [around]", "look around"), Some(vec![]));
         assert_eq!(args("'look' [around]", "look"), Some(vec![]));
+    }
+
+    #[test]
+    fn a_bracketed_alternative_makes_the_whole_choice_optional() {
+        let pattern = "'jump' [on] / [over] [the] %w";
+        assert_eq!(args(pattern, "jump over the pit"), Some(vec![s("pit")]));
+        assert_eq!(args(pattern, "jump on the pit"), Some(vec![s("pit")]));
+        assert_eq!(args(pattern, "jump the pit"), Some(vec![s("pit")]));
+        assert_eq!(args(pattern, "jump pit"), Some(vec![s("pit")]));
+        assert_eq!(args(pattern, "jump on over pit"), None);
+
+        let mixed = "'look' 'at' / [in] %w";
+        assert_eq!(args(mixed, "look at box"), Some(vec![s("box")]));
+        assert_eq!(args(mixed, "look in box"), Some(vec![s("box")]));
+        assert_eq!(args(mixed, "look box"), Some(vec![s("box")]));
+        assert_eq!(
+            args("'look' [in] / 'at' %w", "look box"),
+            Some(vec![s("box")])
+        );
+    }
+
+    #[test]
+    fn an_optional_alternative_cannot_be_the_verb() {
+        assert_eq!(
+            compile("[look] / 'see' %w").unwrap_err(),
+            PatternError::NoVerb
+        );
     }
 
     #[test]
