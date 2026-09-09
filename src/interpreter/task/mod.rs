@@ -33,7 +33,7 @@ use thin_vec::{ThinVec, thin_vec};
 use tokio::time::timeout;
 use tracing::{error, instrument, trace, warn};
 
-use lpc_rs_utils::lpc_string::LpcString;
+use lpc_rs_utils::{lpc_string::LpcString, string::MAX_STRING_LENGTH};
 
 #[cfg(test)]
 use crate::interpreter::stm::RetryStats;
@@ -413,7 +413,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         // set up the catch point's return value
-        let value = LpcString::from(error.to_string());
+        let value = LpcString::from(self.catch_message(&error));
         let lpc_ref = value.into();
         set_location(
             &mut self.stack,
@@ -431,6 +431,33 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         frame.set_pc(new_pc);
 
         Ok(())
+    }
+
+    fn catch_message(&self, error: &LpcError) -> String {
+        let Some(diagnostic) = error.catch_diagnostic() else {
+            return error.to_string();
+        };
+
+        // Reserve half the string limit for the mudlib's surrounding error message.
+        const LIMIT: usize = MAX_STRING_LENGTH / 2;
+        const NOTICE: &str = "\n[diagnostic truncated; full diagnostic in debug log]\n";
+        if diagnostic.len() <= LIMIT {
+            return diagnostic;
+        }
+
+        let mut end = LIMIT - NOTICE.len();
+        while !diagnostic.is_char_boundary(end) {
+            end -= 1;
+        }
+        if let Some(boundary) = diagnostic[..end].rfind("\n\n") {
+            end = boundary;
+        }
+        let mut message = diagnostic[..end].to_owned();
+        message.push_str(NOTICE);
+        self.context
+            .txn()
+            .with(|txn| txn.record_effect(Effect::DebugLog(diagnostic)));
+        message
     }
 
     /// `r3 = r1 op r2`; `ints` answers for two register or pool ints, `None`

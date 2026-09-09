@@ -33,7 +33,9 @@ where
         .simul_efuns(get_simul_efuns(config, object_space))
         .gate(gate)
         .build()?;
-    let Compiled { program, warnings } = compile(compiler).await?;
+    let Compiled { program, warnings } = compile(compiler)
+        .await
+        .map_err(LpcError::with_catch_diagnostics)?;
     let warnings = warnings.into_iter().flat_map(|w| w.warnings).collect();
     Ok((Arc::new(Process::new(program)), warnings))
 }

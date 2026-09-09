@@ -106,6 +106,7 @@ struct Inner {
     additional_errors: Vec<LpcError>,
     stack_trace: Option<Vec<String>>,
     severity: LpcErrorSeverity,
+    catch_diagnostics: bool,
 }
 
 impl LpcError {
@@ -121,6 +122,7 @@ impl LpcError {
             additional_errors: vec![],
             stack_trace: None,
             severity,
+            catch_diagnostics: false,
         }))
     }
 
@@ -273,6 +275,17 @@ impl LpcError {
         output_diagnostics(&self.to_diagnostics(), &mut buffer);
 
         String::from_utf8(buffer.into_inner()).unwrap_or_else(|_| self.to_string())
+    }
+
+    /// Preserve compilation diagnostics when LPC catches a failed object load.
+    pub fn with_catch_diagnostics(mut self) -> Self {
+        self.0.catch_diagnostics = true;
+        self
+    }
+
+    /// Compilation diagnostics for LPC `catch()`; other errors retain their message.
+    pub fn catch_diagnostic(&self) -> Option<String> {
+        self.0.catch_diagnostics.then(|| self.diagnostic_string())
     }
 }
 

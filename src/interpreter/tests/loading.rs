@@ -104,6 +104,148 @@ fn lib_with_x(name: &str) -> TempLib {
 }
 
 #[tokio::test]
+async fn caught_compile_errors_include_source_and_include_locations() {
+    let root = TempLib::new("caught-compile-diagnostic");
+    let vm = Vm::new(temp_lib_config(&root));
+    recording_master(&vm, &root).await;
+    write(&root, "x.c", "#include \"/outer.h\"\n");
+    write(&root, "outer.h", "#include \"/broken.h\"\n");
+    write(&root, "broken.h", "\nint value; #define VALUE 1\n");
+
+    let caught = message(&cloner_caught(&vm).await);
+    for expected in [
+        "preprocessor directives must appear on their own line.",
+        "/broken.h:2:12",
+        "int value; #define VALUE 1",
+        "/outer.h:1:1",
+        "/x.c:1:1",
+        "included from here",
+        "/a.c:1:40",
+        "loaded from here",
+    ] {
+        assert!(caught.contains(expected), "missing {expected:?}:\n{caught}");
+    }
+    assert_eq!(caught.matches("included from here").count(), 2, "{caught}");
+    assert!(!caught.contains('\u{1b}'), "{caught:?}");
+    assert!(!caught.contains(root.to_str().unwrap()), "{caught}");
+}
+
+#[tokio::test]
+async fn oversized_caught_diagnostics_can_be_printed_and_are_logged_in_full() {
+    use lpc_rs_utils::{config::ConfigBuilder, debug_log::DebugLog, string::MAX_STRING_LENGTH};
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let long_line = format!("int value; #define VALUE \"{}END\"\n", "界🦀".repeat(2000));
+    for (source, error_message) in [
+        (
+            format!(
+                "{}int value = \"bad\";\n",
+                "#pragma save_binary\n".repeat(100)
+            ),
+            "mismatched types",
+        ),
+        (
+            long_line,
+            "preprocessor directives must appear on their own line.",
+        ),
+    ] {
+        let root = TempLib::new("large-caught-diagnostic");
+        let (writer, reader) = tokio::io::duplex(64 * 1024);
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .debug_log(DebugLog::new(writer))
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        recording_master(&vm, &root).await;
+        write(&root, "x.c", &source);
+        let caller = run(
+            &vm,
+            "/loader.c",
+            indoc! { r#"
+                mixed err;
+                string printed;
+                void create() {
+                    string file = "/x";
+                    err = catch(clone_object(file));
+                    printed = "\tCan not load: " + file + ":\n     " + err + "\n";
+                    write(printed);
+                }
+            "# },
+        )
+        .await;
+        let caught = committed_string(&vm, &caller, 0);
+        let printed = committed_string(&vm, &caller, 1);
+        assert!(
+            caught.len() <= MAX_STRING_LENGTH / 2,
+            "{} bytes",
+            caught.len()
+        );
+        assert!(printed.len() <= MAX_STRING_LENGTH);
+        assert!(caught.contains(error_message), "{caught}");
+        assert!(caught.contains("/x.c:"));
+        assert!(
+            caught.ends_with("[diagnostic truncated; full diagnostic in debug log]\n"),
+            "{caught}"
+        );
+
+        const DONE: &str = "diagnostic-test-finished\n";
+        vm.global_state.config.debug_log(DONE).await;
+        let logged = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let mut reader = BufReader::new(reader);
+            let mut logged = String::new();
+            loop {
+                let mut line = String::new();
+                assert_ne!(reader.read_line(&mut line).await.unwrap(), 0);
+                if line == DONE {
+                    break logged;
+                }
+                logged.push_str(&line);
+            }
+        })
+        .await
+        .expect("the debug log flushes");
+        let full = logged
+            .strip_suffix(&printed)
+            .expect("write() follows the full report");
+        assert!(full.len() > MAX_STRING_LENGTH);
+        assert!(full.contains(source.lines().last().unwrap()));
+        assert!(full.contains("/loader.c:5:"));
+        assert!(full.contains("loaded from here"));
+        assert_eq!(full.matches(&format!("error: {error_message}")).count(), 1);
+        assert_eq!(
+            full.matches("warning: pragma `save_binary`").count(),
+            source.matches("#pragma save_binary").count(),
+        );
+    }
+}
+
+#[tokio::test]
+async fn catching_loaded_objects_runtime_errors_keeps_the_message() {
+    let long_message = "x".repeat(lpc_rs_utils::string::MAX_STRING_LENGTH / 2 + 1);
+    for (code, expected) in [
+        (
+            "void create() { throw(\"custom failure\"); }".to_owned(),
+            "custom failure".to_owned(),
+        ),
+        (
+            "void create() { int zero; int value = 1 / zero; }".to_owned(),
+            "runtime error: Division by zero".to_owned(),
+        ),
+        (
+            format!("void create() {{ throw(\"{long_message}\"); }}"),
+            long_message,
+        ),
+    ] {
+        let root = TempLib::new("caught-runtime-message");
+        let vm = Vm::new(temp_lib_config(&root));
+        recording_master(&vm, &root).await;
+        write(&root, "x.c", &code);
+        assert_eq!(message(&cloner_caught(&vm).await), expected);
+    }
+}
+
+#[tokio::test]
 async fn configured_include_failures_never_disclose_host_paths_to_lpc() {
     use crate::interpreter::task::{
         apply_function::{apply_function_by_name, apply_runtime_error},
