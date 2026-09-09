@@ -8,7 +8,7 @@ use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
 };
 
-/// `hash_string(str, algorithm)`: CD's unsalted, lowercase hexadecimal digest.
+/// `hash_string(str, algorithm)`: an unsalted, lowercase hexadecimal digest.
 pub fn hash_string<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let input = match context.arg(0) {
         LpcRef::Int(_) => {
@@ -26,7 +26,6 @@ pub fn hash_string<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
     let LpcRef::Int(algorithm) = context.arg(1) else {
         return Err(context.runtime_error("hash_string: algorithm is not an int"));
     };
-    // CD passes length -1 to GLib, so its input ends at the first NUL.
     let input = input
         .split_once('\0')
         .map_or(input, |(prefix, _)| prefix)
@@ -57,7 +56,7 @@ mod tests {
     };
 
     #[tokio::test]
-    async fn matches_the_cd_driver_vectors_for_every_algorithm() {
+    async fn matches_known_digests_for_every_algorithm() {
         let digests = strings_of(indoc! { r#"
             mixed create() {
                 string s = "The quick brown fox jumped over the lazy dog.";
@@ -114,7 +113,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stops_at_the_first_nul_like_cd() {
+    async fn stops_at_the_first_nul() {
         let digests = strings_of(indoc! { r#"
             mixed create() {
                 return ({ hash_string("foobar" + sprintf("%c", 0) + "ignored", 1) });
@@ -125,7 +124,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn integers_return_zero_like_cd() {
+    async fn integers_return_zero() {
         let task = run_prog(indoc! { r#"
             int *create() {
                 return ({ hash_string(0, 1) == 0, hash_string(666, 1) == 0,
