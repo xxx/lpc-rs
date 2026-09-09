@@ -397,7 +397,21 @@ Statement: AstNode = {
 };
 
 Statements: Vec<AstNode> = {
-    <Statement*>
+    <mut statements:Statement*> <trailing:TrailingLabels?> => {
+        if let Some(labels) = trailing {
+            statements.push(labels);
+        }
+        statements
+    }
+};
+
+// Labels immediately before a block's closing brace have an empty statement.
+TrailingLabels: AstNode = {
+    <label:Label> <statement:TrailingLabels?> =>? {
+        let span = label.span;
+        let labeled = LabeledStatementNode::new(statement.unwrap_or(AstNode::NoOp), label);
+        Ok(guard(AstNode::from(labeled), span)?)
+    }
 };
 
 SimpleStatement: AstNode = {

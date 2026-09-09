@@ -1027,6 +1027,97 @@ mod test_instructions {
         use super::*;
 
         #[tokio::test]
+        async fn an_empty_final_case_continues_after_the_switch() {
+            let code = indoc! { r#"
+                int fallthrough; int empty; int miss;
+                int f(int x) {
+                    int result;
+                    switch (x) {
+                        case 1: result = 10;
+                        case 2:
+                    }
+                    return result + 1;
+                }
+                void create() {
+                    fallthrough = f(1);
+                    empty = f(2);
+                    miss = f(3);
+                }
+            "# };
+
+            check_committed_globals(
+                code,
+                &[
+                    ("fallthrough", BareVal::Int(11)),
+                    ("empty", BareVal::Int(1)),
+                    ("miss", BareVal::Int(1)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn stacked_empty_final_labels_continue_after_the_switch() {
+            let code = indoc! { r#"
+                int first; int second; int other;
+                int f(int x) {
+                    switch (x) {
+                        case 1:
+                        case 2:
+                        default:
+                    }
+                    return 7;
+                }
+                void create() {
+                    first = f(1);
+                    second = f(2);
+                    other = f(3);
+                }
+            "# };
+
+            check_committed_globals(
+                code,
+                &[
+                    ("first", BareVal::Int(7)),
+                    ("second", BareVal::Int(7)),
+                    ("other", BareVal::Int(7)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn an_empty_case_at_a_nested_block_end_does_not_break_the_switch() {
+            let code = indoc! { r#"
+                int first; int nested; int other;
+                int f(int x) {
+                    switch (x) {
+                        case 1:
+                            if (0) { case 2: }
+                            return 5;
+                        default:
+                    }
+                    return 9;
+                }
+                void create() {
+                    first = f(1);
+                    nested = f(2);
+                    other = f(3);
+                }
+            "# };
+
+            check_committed_globals(
+                code,
+                &[
+                    ("first", BareVal::Int(5)),
+                    ("nested", BareVal::Int(5)),
+                    ("other", BareVal::Int(9)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
         async fn a_matching_case_falls_through_to_the_next_body() {
             let code = indoc! { r##"
                     int one; int two; int three; int none;

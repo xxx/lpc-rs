@@ -2793,6 +2793,18 @@ mod tests {
         use super::*;
 
         #[tokio::test]
+        async fn disallows_empty_labels_outside_of_switch() {
+            for (label, expected) in [
+                ("case 12:", "invalid `case` statement."),
+                ("default:", "invalid `default`."),
+            ] {
+                let code = format!("void create() {{ {label} }}");
+
+                assert_eq!(messages(&code).await, [expected], "for {label}");
+            }
+        }
+
+        #[tokio::test]
         async fn disallows_inside_a_closure_within_a_switch() {
             let code = r#"
                 void create() {
