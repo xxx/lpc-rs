@@ -5,7 +5,7 @@ use lpc_rs_errors::Result;
 use pwhash::{
     HashSetup,
     bcrypt::{self, BcryptSetup, BcryptVariant},
-    md5_crypt, sha256_crypt, sha512_crypt, unix,
+    md5_crypt, sha1_crypt, sha256_crypt, sha512_crypt, unix,
 };
 
 use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
@@ -51,13 +51,16 @@ pub fn crypt<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     }
 }
 
-/// A bare family prefix (`$6$`, `$6$rounds=N$`, `$2b$`, `$2b$NN$`, ...)
+/// A bare family prefix (`$6$`, `$6$rounds=N$`, `$sha1$N$`, `$2b$NN$`, ...)
 /// gets a fresh salt; anything else is a salt or stored hash, dispatched
 /// on its prefix like `crypt(3)`.
 fn hash_with_salt(password: &str, salt: &str) -> pwhash::Result<String> {
     if salt == "$1$" {
         #[expect(deprecated, reason = "the lib asked for this family by name")]
         return md5_crypt::hash(password);
+    }
+    if let Some(rounds) = salt.strip_prefix("$sha1$").and_then(bare_count) {
+        return sha1_crypt::hash_with(HashSetup { salt: None, rounds }, password);
     }
     if let Some(rounds) = salt.strip_prefix("$5$").and_then(bare_rounds) {
         #[expect(deprecated, reason = "the lib asked for this family by name")]
@@ -66,7 +69,7 @@ fn hash_with_salt(password: &str, salt: &str) -> pwhash::Result<String> {
     if let Some(rounds) = salt.strip_prefix("$6$").and_then(bare_rounds) {
         return sha512_crypt::hash_with(HashSetup { salt: None, rounds }, password);
     }
-    if let Some(cost) = salt.strip_prefix("$2b$").and_then(bare_cost) {
+    if let Some(cost) = salt.strip_prefix("$2b$").and_then(bare_count) {
         let setup = BcryptSetup {
             salt: None,
             cost,
@@ -86,8 +89,8 @@ fn bare_rounds(rest: &str) -> Option<Option<u32>> {
     n.parse().ok().map(Some)
 }
 
-/// `""` is `Some(None)` and `NN$` is `Some(Some(NN))`; a salt follows otherwise.
-fn bare_cost(rest: &str) -> Option<Option<u32>> {
+/// `""` is `Some(None)` and `N$` is `Some(Some(N))`; a salt follows otherwise.
+fn bare_count(rest: &str) -> Option<Option<u32>> {
     if rest.is_empty() {
         return Some(None);
     }
@@ -102,6 +105,8 @@ mod tests {
     const DES: &str = "abJnggxhB/yWI";
     /// `openssl passwd -1 -salt saltsalt password`.
     const MD5: &str = "$1$saltsalt$qjXMvbEw8oaL.CzflDtaK/";
+    /// The NetBSD SHA-1 test vector in `pwhash::sha1_crypt`.
+    const SHA1: &str = "$sha1$19703$iVdJqfSE$v4qYKl1zqYThwpjJAoKX6UvlHq/a";
     /// `openssl passwd -5 -salt saltsalt password`.
     const SHA256: &str = "$5$saltsalt$gOjOtoMpVhru2uyjeJSEc/JaLQWOXMNmlOnj6T4AtC.";
     /// `openssl passwd -6 -salt saltsalt password`.
@@ -147,6 +152,62 @@ mod tests {
     async fn a_stored_glibc_hash_is_its_own_salt() {
         let stored = format!(r#""password", "{SHA512}""#);
         assert_eq!(crypts(&[&stored]).await, [SHA512]);
+    }
+
+    #[tokio::test]
+    async fn a_sha1_salt_reproduces_the_netbsd_test_vector() {
+        assert_eq!(
+            crypts(&[r#""password", "$sha1$19703$iVdJqfSE$""#]).await,
+            [SHA1]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_stored_sha1_hash_verifies_only_the_right_password() {
+        let right = format!(r#""password", "{SHA1}""#);
+        let wrong = format!(r#""nope", "{SHA1}""#);
+        let results = crypts(&[&right, &wrong]).await;
+        assert_eq!(results[0], SHA1);
+        assert_ne!(results[1], SHA1);
+    }
+
+    #[tokio::test]
+    async fn sha1_prefixes_generate_fresh_salts_with_default_or_explicit_rounds() {
+        let results = crypts(&[r#""password", "$sha1$""#, r#""password", "$sha1$100$""#]).await;
+        assert!(results[1].starts_with("$sha1$100$"), "{}", results[1]);
+        for hash in &results {
+            let parts: Vec<_> = hash.split('$').collect();
+            assert_eq!(parts.len(), 5, "{hash}");
+            assert_eq!(parts[1], "sha1", "{hash}");
+            assert!(parts[2].parse::<u32>().unwrap() > 0, "{hash}");
+            assert_eq!(
+                parts[3].len(),
+                pwhash::sha1_crypt::DEFAULT_SALT_LEN,
+                "{hash}"
+            );
+            assert_eq!(parts[4].len(), 28, "{hash}");
+            let again = format!(r#""password", "{hash}""#);
+            assert_eq!(crypts(&[&again]).await, std::slice::from_ref(hash));
+        }
+        let again = crypts(&[r#""password", "$sha1$100$""#]).await;
+        assert_ne!(results[1], again[0], "salts are random");
+    }
+
+    #[tokio::test]
+    async fn invalid_sha1_rounds_and_salts_are_errors() {
+        for salt in [
+            "$sha1$0$",
+            "$sha1$4294967296$",
+            "$sha1$abc$",
+            "$sha1$1$bad!$",
+        ] {
+            let call = format!(r#"crypt("password", "{salt}")"#);
+            let err = error_of(&call).await;
+            assert!(
+                err.contains(&format!("crypt: invalid salt {salt:?}:")),
+                "{err}"
+            );
+        }
     }
 
     #[tokio::test]

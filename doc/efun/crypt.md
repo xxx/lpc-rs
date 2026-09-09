@@ -3,17 +3,24 @@
 `string crypt(string str, string|int salt = 0)`
 
 Hash the password `str` the way Unix `crypt(3)` does and return the hash.
-The salt names the algorithm:
+The salt selects the algorithm using its Unix crypt format identifier:
 
 - Absent, an int, or `""`: a fresh SHA-512 hash (`$6$`, a random
   16-character salt, 5000 rounds). This is the default for new passwords.
 - A stored hash: the same algorithm and salt, so `crypt(p, stored) == stored`
-  verifies `p`. Every family glibc's `crypt(3)` has produced is recognized:
+  verifies `p`. Recognized formats include
   classic DES (a 2-character salt or a 13-character hash), `$1$` MD5, `$5$`
-  SHA-256, `$6$` SHA-512, and `$2a$` / `$2b$` / `$2y$` bcrypt.
+  SHA-256, `$6$` SHA-512, `$sha1$` NetBSD HMAC-SHA1, and `$2a$` / `$2b$` /
+  `$2y$` bcrypt.
 - A bare family prefix: a fresh salt for that family. `$6$`, `$6$rounds=N$`,
-  `$5$`, `$5$rounds=N$`, `$1$`, `$2b$` and `$2b$NN$` (bcrypt cost `NN`, 4 to
-  31, 10 when omitted; each step doubles the time).
+  `$5$`, `$5$rounds=N$`, `$1$`, `$sha1$`, `$sha1$N$`, `$2b$` and `$2b$NN$`
+  (bcrypt cost `NN`, 4 to 31, 10 when omitted; each step doubles the time).
+
+SHA-1 uses the NetBSD password hash format `$sha1$rounds$salt$checksum`.
+`$sha1$` generates an 8-character salt and a randomized round count based
+on 24680. `$sha1$N$` generates a salt with exactly `N`
+rounds (1 to 4294967295). A salt such as `$sha1$19703$iVdJqfSE$`, or a
+complete stored hash, preserves both the supplied salt and round count.
 
 Any other salt is an error. DES reads only the first 8 characters of the
 password and bcrypt the first 72 bytes; MD5 and the SHA families read all
@@ -45,6 +52,7 @@ recognized.
 ```c
 string hashed = crypt(new_password, 0);        /* "$6$..." */
 string strong = crypt(new_password, "$2b$12$"); /* bcrypt, cost 12 */
+string sha1 = crypt(new_password, "$sha1$20000$"); /* NetBSD SHA-1, 20000 rounds */
 if (crypt(typed, hashed) == hashed)
     write("Welcome back.\n");
 ```
