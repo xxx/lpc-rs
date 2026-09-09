@@ -25,6 +25,21 @@ fn default_compiler() -> Compiler {
 }
 
 #[tokio::test]
+async fn minimum_int_macro_compiles_and_runs() {
+    for minus in ["-", "−"] {
+        let code = format!(
+            "#define MININT ({minus}9223372036854775808)\n\
+             #if MININT != (-9223372036854775807 - 1)\n\
+             #error incorrect minimum integer\n\
+             #endif\n\
+             int create() {{ return MININT; }}"
+        );
+        let task = run_prog(&code).await;
+        assert_eq!(task.context.result().unwrap(), LpcRef::Int(LpcInt::MIN));
+    }
+}
+
+#[tokio::test]
 async fn errors_on_max_inherit_depth() {
     let code = r#"inherit "/std/inherit_loop1";"#;
 

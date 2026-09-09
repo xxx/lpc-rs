@@ -17,7 +17,7 @@ pub fn collapse_unary_op(node: UnaryOpNode) -> Result<ExpressionNode, LpcError> 
     let folded = match node.op {
         UnaryOperation::Negate => match &*node.expr {
             ExpressionNode::Int(x) => ExpressionNode::Int(IntNode {
-                value: -x.value,
+                value: x.value.wrapping_neg(),
                 span: node.span,
             }),
             ExpressionNode::Float(x) => ExpressionNode::Float(FloatNode {

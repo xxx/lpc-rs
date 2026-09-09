@@ -1,4 +1,4 @@
-use lpc_rs_core::{BaseFloat, LpcIntInner};
+use lpc_rs_core::BaseFloat;
 use lpc_rs_errors::span::Span;
 
 /// Some small wrappers to store both a [`Span`] and a value for compatibility
@@ -8,7 +8,7 @@ use lpc_rs_errors::span::Span;
 pub struct FloatToken(pub Span, pub BaseFloat);
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct IntToken(pub Span, pub LpcIntInner);
+pub struct IntToken(pub Span, pub u64);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StringToken(pub Span, pub String);

@@ -49,7 +49,7 @@ use lpc_rs_errors::span::Span;
 use crate::compiler::lexer::Token;
 use lpc_rs_errors::{LpcError, lpc_error, lpc_bug, lpc_warning};
 use crate::compiler::lexer::logos_token::{StringToken, IntToken, FloatToken};
-use lpc_rs_core::LpcFloatInner;
+use lpc_rs_core::{LpcFloatInner, LpcIntInner};
 use crate::compiler::compilation_context::CompilationContext;
 use lpc_rs_core::function_flags::FunctionFlags;
 use lpc_rs_core::global_var_flags::GlobalVarFlags;
@@ -150,6 +150,7 @@ extern {
 
         "StringLiteral" => Token::StringLiteral(<StringToken>),
         "IntLiteral" => Token::IntLiteral(<IntToken>),
+        "MinIntMagnitude" => Token::MinIntMagnitude(<Span>),
         "FloatLiteral" => Token::FloatLiteral(<FloatToken>),
         "ID" => Token::Id(<StringToken>),
         "ClosureArgVar" => Token::ClosureArgVar(<StringToken>),
@@ -717,6 +718,15 @@ PostfixExpression: ExpressionNode = {
 
 UnaryExpression: ExpressionNode = {
     <PostfixExpression>,
+    <op:UnaryOp> <magnitude:"MinIntMagnitude"> =>? {
+        let span = Some(Span::join(op.1, magnitude));
+        if op.0 != UnaryOperation::Negate {
+            return Err(ParseError::User {
+                error: lpc_error!(span, "integer literal out of range"),
+            });
+        }
+        Ok(ExpressionNode::Int(IntNode { value: LpcIntInner::MIN, span }))
+    },
     <op:UnaryOp> <expr:CastExpression> =>? {
         let span = Span::combine(Some(op.1), expr.span());
 
@@ -1102,13 +1112,14 @@ Var: ExpressionNode = {
 };
 
 Int: ExpressionNode = {
-    <i:"IntLiteral"> => {
-        ExpressionNode::Int(
+    <i:"IntLiteral"> =>? {
+        Ok(ExpressionNode::Int(
             IntNode {
-                value: i.1,
+                value: LpcIntInner::try_from(i.1)
+                    .map_err(|_| lpc_error!(Some(i.0), "integer literal out of range"))?,
                 span: Some(i.0),
             }
-        )
+        ))
     },
 };
 

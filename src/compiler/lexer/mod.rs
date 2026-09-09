@@ -79,6 +79,11 @@ impl Iterator for LexWrapper<'_> {
             let token = self.lexer.next()?;
 
             match token {
+                Ok(Token::IntLiteral(IntToken(span, magnitude)))
+                    if magnitude == LpcIntInner::MIN.unsigned_abs() =>
+                {
+                    return Some(Ok(Token::MinIntMagnitude(span)));
+                }
                 Ok(t) => return Some(Ok(t)),
                 Err(_) => {
                     // A lone backslash with nothing left in the input is an
@@ -140,6 +145,7 @@ pub enum Token {
     #[token("+", track_slice)]
     Plus(Span),
     #[token("-", track_slice)]
+    #[token("−", track_slice)]
     Minus(Span),
     #[token("*", track_slice)]
     Mul(Span),
@@ -325,61 +331,18 @@ pub enum Token {
     };
 
     match c {
-        Some(c) => Ok(IntToken(span, c as LpcIntInner)),
+        Some(c) => Ok(IntToken(span, c as u64)),
         None => Err(()),
     }
     })]
-    #[regex(r"[1-9][0-9_]*|0", |lex| {
-        let span = track_slice(lex);
-
-        match LpcIntInner::from_str(&lex.slice().replace('_', "")) {
-            Ok(i) => Ok(IntToken(span, i)),
-            Err(_e) => Err(())
-        }
-    }, priority = 2)]
-    #[regex(r"0[xX][0-9a-fA-F][0-9a-fA-F_]*", |lex| {
-        let span = track_slice(lex);
-
-        let r = LpcIntInner::from_str_radix(
-            lex.slice().replace('_', "")
-                .trim_start_matches("0x")
-                .trim_start_matches("0X"),
-            16);
-
-        match r {
-            Ok(i) => Ok(IntToken(span, i)),
-            Err(_e) => Err(())
-        }
-    }, priority = 2)]
-    #[regex(r"0[oO]?[0-7][0-7_]*", |lex| {
-        let span = track_slice(lex);
-
-        let r = LpcIntInner::from_str_radix(
-            lex.slice().replace('_', "")
-                .trim_start_matches("0o")
-                .trim_start_matches("0O"),
-            8);
-
-        match r {
-            Ok(i) => Ok(IntToken(span, i)),
-            Err(_e) => Err(())
-        }
-    }, priority = 2)]
-    #[regex(r"0[bB][01][01_]*", |lex| {
-        let span = track_slice(lex);
-
-        let r = LpcIntInner::from_str_radix(
-            lex.slice().replace('_', "")
-                .trim_start_matches("0b")
-                .trim_start_matches("0B"),
-            2);
-
-        match r {
-            Ok(i) => Ok(IntToken(span, i)),
-            Err(_e) => Err(())
-        }
-    }, priority = 2)]
+    #[regex(r"[1-9][0-9_]*|0", |lex| int_literal(lex, 10), priority = 2)]
+    #[regex(r"0[xX][0-9a-fA-F][0-9a-fA-F_]*", |lex| int_literal(lex, 16), priority = 2)]
+    #[regex(r"0[oO]?[0-7][0-7_]*", |lex| int_literal(lex, 8), priority = 2)]
+    #[regex(r"0[bB][01][01_]*", |lex| int_literal(lex, 2), priority = 2)]
     IntLiteral(IntToken),
+
+    /// The magnitude of the minimum signed integer, valid only after unary minus.
+    MinIntMagnitude(Span),
 
     #[regex(
         r#"[0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][-+]?[0-9][0-9_]*)?"#,
@@ -415,6 +378,24 @@ fn track_slice(lex: &mut Lexer<Token>) -> Span {
     Span::new(lex.extras.current_file_id, base + span.start..base + end)
 }
 
+fn int_literal(lex: &mut Lexer<Token>, radix: u32) -> std::result::Result<IntToken, ()> {
+    let span = track_slice(lex);
+    let digits = lex.slice().replace('_', "");
+    let digits = if matches!(
+        digits.get(..2),
+        Some("0x" | "0X" | "0o" | "0O" | "0b" | "0B")
+    ) {
+        &digits[2..]
+    } else {
+        &digits
+    };
+    let magnitude = u64::from_str_radix(digits, radix).map_err(|_| ())?;
+    if magnitude > LpcIntInner::MIN.unsigned_abs() {
+        return Err(());
+    }
+    Ok(IntToken(span, magnitude))
+}
+
 fn string_token(lex: &mut Lexer<Token>) -> StringToken {
     let span = track_slice(lex);
 
@@ -448,6 +429,7 @@ impl HasSpan for Token {
         match self {
             Token::Plus(x)
             | Token::Minus(x)
+            | Token::MinIntMagnitude(x)
             | Token::Mul(x)
             | Token::Div(x)
             | Token::Mod(x)
@@ -545,6 +527,7 @@ impl Token {
         match self {
             Token::Plus(x)
             | Token::Minus(x)
+            | Token::MinIntMagnitude(x)
             | Token::Mul(x)
             | Token::Div(x)
             | Token::Mod(x)
@@ -741,6 +724,7 @@ impl Display for Token {
             Token::Ellipsis(_) => "...",
             Token::Range(_) => "..",
             Token::IntLiteral(i) => return write!(f, "{}", i.1),
+            Token::MinIntMagnitude(_) => return write!(f, "{}", LpcIntInner::MIN.unsigned_abs()),
             Token::FloatLiteral(fl) => return write!(f, "{}", fl.1),
 
             Token::StringLiteral(s)
@@ -808,6 +792,34 @@ mod tests {
             .unwrap()
             .expect_err("a backtick does not lex");
         assert_eq!(error.span(), Some(Span::new(4, 100..101)));
+    }
+
+    #[test]
+    fn unicode_minus_preserves_byte_spans() {
+        let tokens = LexWrapper::new_at("−42", 4, 100)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(
+            tokens,
+            [
+                Token::Minus(Span::new(4, 100..103)),
+                Token::IntLiteral(IntToken(Span::new(4, 103..105), 42)),
+            ]
+        );
+    }
+
+    #[test]
+    fn unicode_minus_in_strings_and_characters_is_preserved() {
+        let tokens = LexWrapper::new("\"−\" '−'", 0)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(
+            tokens,
+            [
+                Token::StringLiteral(StringToken(Span::new(0, 0..5), "−".into())),
+                Token::IntLiteral(IntToken(Span::new(0, 6..11), '−' as u64)),
+            ]
+        );
     }
 
     #[test]

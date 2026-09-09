@@ -8,6 +8,7 @@
 //! as whitespace (C strips them before directive parsing); `defined` and
 //! `not` mean something only inside a `#if` operand.
 
+use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::{
     LpcError, Result, lpc_error, lpc_warning,
     span::{HasSpan, Span},
@@ -723,6 +724,9 @@ impl ExprParser {
             _ => return self.primary(),
         };
         self.pos += 1;
+        if op == UnaryOperation::Negate && self.eat(|t| matches!(t, Token::MinIntMagnitude(_))) {
+            return Ok((PreprocessorNode::Int(LpcIntInner::MIN), 1));
+        }
         self.descend(span)?;
         let inner = self.unary();
         self.ascend();
@@ -739,7 +743,13 @@ impl ExprParser {
             return Err(self.end_err());
         };
         match token {
-            Token::IntLiteral(t) => Ok((PreprocessorNode::Int(t.1), 1)),
+            Token::IntLiteral(t) => Ok((
+                PreprocessorNode::Int(
+                    LpcIntInner::try_from(t.1)
+                        .map_err(|_| Self::err_at(t.0, "integer literal out of range"))?,
+                ),
+                1,
+            )),
             Token::StringLiteral(t) => Ok((PreprocessorNode::String(t.1), 1)),
             Token::LParen(sp) => {
                 // A paren counts as a level here: each one costs this

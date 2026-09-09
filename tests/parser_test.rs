@@ -175,6 +175,53 @@ fn int_literal_binary() {
 }
 
 #[test]
+fn negative_int_literals() {
+    for expr in ["-42", "−42", "- 42", "-0x2a", "-052", "-0b101010"] {
+        assert_int(-42, expr);
+    }
+    assert_int(7, "10-3");
+    assert_int(7, "10−3");
+    assert_int(13, "10- -3");
+}
+
+#[test]
+fn minimum_int_literals() {
+    for expr in [
+        "-9223372036854775808",
+        "−9223372036854775808",
+        "- 9_223_372_036_854_775_808",
+        "- /* minimum */ 9223372036854775808",
+        "-0x8000_0000_0000_0000",
+        "-0o1000000000000000000000",
+        "-01000000000000000000000",
+        "-0b1000000000000000000000000000000000000000000000000000000000000000",
+        "- -9223372036854775808",
+    ] {
+        assert_int(LpcIntInner::MIN, expr);
+    }
+}
+
+#[test]
+fn out_of_range_int_literals_are_rejected() {
+    for expr in [
+        "9223372036854775808",
+        "-9223372036854775809",
+        "-18446744073709551616",
+        "-0x8000000000000001",
+        "-0o1000000000000000000001",
+        "-0b1000000000000000000000000000000000000000000000000000000000000001",
+        "0-9223372036854775808",
+    ] {
+        let code = format!("void create() {{ {expr}; }}");
+        let result = lpc_parser::ProgramParser::new().parse(
+            &mut CompilationContext::default(),
+            LexWrapper::new(&code, 0).triples(),
+        );
+        assert!(result.is_err(), "accepted out-of-range literal: {expr}");
+    }
+}
+
+#[test]
 fn float_literal_underscores() {
     let expr = "void create() { 1_1.234_332e2_2; }";
     let lexer = LexWrapper::new(expr, 0).triples();
