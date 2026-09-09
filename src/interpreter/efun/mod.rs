@@ -850,7 +850,7 @@ efuns! {
     },
     sort_array => {
         returns: LpcType::Mixed(true),
-        arity: 2,
+        arity: (2, 1),
         args: [LpcType::Mixed(true), LpcType::Function(false) | LpcType::Int(false)],
     },
     present => {

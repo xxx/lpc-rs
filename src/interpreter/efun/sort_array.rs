@@ -1,6 +1,6 @@
-//! `sort_array(array, f | direction)`: a fresh array ordered by the
+//! `sort_array(array[, f | direction])`: a fresh array ordered by the
 //! comparator `f(a, b)` (positive when `a` goes after `b`), or naturally,
-//! `1` ascending and `-1` descending. Binary insertion: stable.
+//! ascending by default (`0`) and descending for `-1`. Binary insertion: stable.
 
 use std::{cmp::Ordering, sync::Arc, vec};
 
@@ -18,9 +18,9 @@ use crate::interpreter::{
     stm::TxnHandle,
 };
 
-/// `sort_array(array, f | direction)`: a fresh array ordered by the
+/// `sort_array(array[, f | direction])`: a fresh array ordered by the
 /// comparator `f(a, b)` (positive when `a` goes after `b`), or naturally,
-/// `1` ascending and `-1` descending. Binary insertion: stable.
+/// ascending by default (`0`) and descending for `-1`. Binary insertion: stable.
 pub fn sort_array<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let items: Vec<LpcRef> = match context.arg(0) {
         array @ LpcRef::Array(_) => array.with_array(context.txn(), |a| a.to_vec())?,
@@ -188,6 +188,26 @@ mod tests {
     #[tokio::test]
     async fn an_int_direction_sorts_in_natural_order() {
         let code = r#"string *create() { return sort_array(({ "b", "a", "c" }), 1); }"#;
+        assert_eq!(strings_of(code).await, ["a", "b", "c"]);
+    }
+
+    #[tokio::test]
+    async fn an_omitted_direction_sorts_ascending_like_zero() {
+        for direction in ["", ", 0"] {
+            let code =
+                format!("mixed *create() {{ return sort_array(({{ 3, 1.5, 1 }}){direction}); }}");
+            assert_eq!(strings_of(&code).await, ["1", "1.5", "3"]);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_sort_array_pointer_defaults_to_ascending() {
+        let code = indoc! { r#"
+            string *create() {
+                function sort = &sort_array();
+                return sort(({ "b", "a", "c" }));
+            }
+        "# };
         assert_eq!(strings_of(code).await, ["a", "b", "c"]);
     }
 
