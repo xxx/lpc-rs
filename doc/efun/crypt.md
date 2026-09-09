@@ -31,6 +31,11 @@ password and salt give the same hash on every platform.
 
 ### Porting a password file
 
+Passwords previously stored by `hash_string(p, 4)` are raw SHA-512 digests,
+so verify those with `hash_string(p, 4) == stored`. After a successful check,
+replace the stored value with `crypt(p, 0)` and save it. Changing calls to
+`crypt` does not convert existing password records.
+
 An old lib's `crypt(p, stored) == stored` check works unchanged on its DES
 hashes. To move players to SHA-512 as they log in:
 

@@ -40,6 +40,7 @@ pub(crate) mod find_object;
 pub(crate) mod function_exists;
 pub(crate) mod function_name;
 pub(crate) mod get_dir;
+pub(crate) mod hash_string;
 pub(crate) mod implode;
 pub(crate) mod input_to;
 pub(crate) mod interactive;
@@ -1107,6 +1108,11 @@ efuns! {
         arity: 1,
         args: [LpcType::Object(false)],
     },
+    hash_string => {
+        returns: LpcType::String(false),
+        arity: 2,
+        args: [LpcType::String(false) | LpcType::Int(false), LpcType::Int(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1428,6 +1434,7 @@ mod tests {
                 "function_name",
                 "regmatch",
                 "object_clones",
+                "hash_string",
             ]
         );
     }
