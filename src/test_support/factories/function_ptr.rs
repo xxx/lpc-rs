@@ -1,6 +1,6 @@
 use std::sync::{Arc, Weak};
 
-use factori::factori;
+use factori_imp::factori;
 use thin_vec::{ThinVec, thin_vec};
 use ustr::ustr;
 

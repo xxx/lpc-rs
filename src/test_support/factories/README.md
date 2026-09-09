@@ -1,12 +1,10 @@
-This project uses both [`factori`](https://docs.rs/factori/latest/factori/)
-and [`beaver`](https://docs.rs/beaver/latest/beaver/) to create fixtures, because they
-each have frustrating drawbacks that the other doesn't.
+This project uses [`factori-imp`](https://docs.rs/factori-imp/latest/factori_imp/)
+to define test factories and [`fake`](https://docs.rs/fake/latest/fake/)
+to generate fixture values.
 
-Factori requires the factory to be in the same crate as the type, so it
+Factories without custom builders must be in the same crate as the type, so they
 can't be used for third-party types, or even types defined in other lpc-rs
-crates.
+crates; `SymbolFactory` provides a handwritten builder for `Symbol`.
 
-Beaver requires the type to be both `Serializable` and `Deserializable`, which
-is a tall order for some types.
-
-Sigh.
+`factori-imp` enables the `syn` features its macros need, so no explicit `syn`
+build dependency is necessary; it still depends on `syn` 1 transitively.

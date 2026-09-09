@@ -612,7 +612,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::compiler::ast::closure_node::ClosureNode;
-    use factori::create;
+    use factori_imp::create;
     use lpc_rs_core::call_namespace::CallNamespace;
     use lpc_rs_function_support::symbol::Symbol;
     use ustr::ustr;

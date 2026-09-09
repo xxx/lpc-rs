@@ -1,4 +1,4 @@
-use factori::factori;
+use factori_imp::factori;
 use fake::Fake;
 use lpc_rs_core::call_namespace::CallNamespace;
 use ustr::ustr;

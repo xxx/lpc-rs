@@ -12,7 +12,6 @@ categories = ["command-line-utilities", "compilers", "game-engines"]
 
 [build-dependencies]
 lalrpop = "0.23.1"
-syn = { version = "1", features = ["full"] } # version 1 required by factori
 
 [dependencies]
 lpc-rs-asm = { version = "0.1", path = "./lpc-rs-asm"}
@@ -62,7 +61,7 @@ ustr = "1.1.0"
 [dev-dependencies]
 claims = "0.8.0"
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support", "async_tokio"] }
-factori = "1.1.0"
+factori-imp = "0.9.3"
 fake = "5.1.0"
 indoc = "2.0.0"
 pprof = { version = "0.15.0", default-features = false, features = ["flamegraph"] }

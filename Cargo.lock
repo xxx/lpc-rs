@@ -811,19 +811,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "factori"
-version = "1.1.0"
+name = "factori-imp"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ff6b50917609e530c145de1c6aa8df9c38c40562375e8aa5eeaaf6c737a0b31"
+checksum = "9227cbd1533677be959f34e87f52bff66328becfabee895864a680d9c9a82dd3"
 dependencies = [
- "factori-impl",
+ "factori-imp-impl",
 ]
 
 [[package]]
-name = "factori-impl"
-version = "1.1.0"
+name = "factori-imp-impl"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d6344ded92b0a4a1d90a816632f7ff2a12e01401d325d6295810dacca1dbdd6"
+checksum = "d41b5510f3cb7fdfe02ea2c8163b60d33c95a2b36ccb40fe57f68bb41ab26f6d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1378,7 +1378,7 @@ dependencies = [
  "derive_builder",
  "dns-lookup",
  "educe",
- "factori",
+ "factori-imp",
  "fake",
  "fastrand",
  "flume",
@@ -1412,7 +1412,6 @@ dependencies = [
  "smallvec",
  "spin 0.12.3",
  "stable-vec",
- "syn 1.0.109",
  "thin-vec",
  "tokio",
  "tracing",
