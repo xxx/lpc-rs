@@ -308,7 +308,7 @@ pub enum Token {
     #[token("..", track_slice)]
     Range(Span),
 
-    #[regex(r#""(\\.|[^"])*""#, string_token_without_startend)]
+    #[regex(r#""(\\[\s\S]|[^"\\])*""#, string_token_without_startend)]
     StringLiteral(StringToken),
 
     // `'''` is CD-flavoured LPC's spelling of the apostrophe char literal,
@@ -356,12 +356,57 @@ pub enum Token {
     #[regex(r"\$[1-9]\d*", string_token, priority = 2)]
     ClosureArgVar(StringToken),
 
-    // A `#` grabs the whole logical line: one token, and the directive
-    // grammar (`preprocessor::directive`) owns everything after the `#`.
-    // Whether it is actually a directive is positional — the scan loop
-    // judges placement — mid-line and dead it is plain text.
-    #[regex(r"#(?:[^\\\n]|\\\r?\n|\\)*\n?", string_token, allow_greedy = true)]
+    // The preprocessor judges placement and parses the complete logical line.
+    #[token("#", directive_token)]
     DirectiveLine(StringToken),
+}
+
+fn directive_token(lex: &mut Lexer<Token>) -> StringToken {
+    let source = lex.remainder();
+    let bytes = source.as_bytes();
+    let mut end = 0;
+    let mut quote = None;
+    let mut line_comment = false;
+
+    while end < bytes.len() {
+        match bytes[end] {
+            b'\n' => {
+                let continued = bytes[..end].ends_with(b"\\") || bytes[..end].ends_with(b"\\\r");
+                end += 1;
+                if !continued {
+                    break;
+                }
+            }
+            _ if line_comment => end += 1,
+            b'\\' if quote.is_some() => end = (end + 2).min(bytes.len()),
+            byte if quote.is_some() => {
+                if quote == Some(byte) {
+                    quote = None;
+                }
+                end += 1;
+            }
+            b'/' if bytes[end..].starts_with(b"/*") => {
+                // Newlines inside a block comment do not end the directive.
+                end += 2;
+                end = source[end..]
+                    .find("*/")
+                    .map_or(bytes.len(), |len| end + len + 2);
+            }
+            b'/' if bytes[end..].starts_with(b"//") => {
+                line_comment = true;
+                end += 2;
+            }
+            b'\'' if bytes[end..].starts_with(b"'''") => end += 3,
+            byte @ (b'"' | b'\'') => {
+                quote = Some(byte);
+                end += 1;
+            }
+            _ => end += 1,
+        }
+    }
+
+    lex.bump(end);
+    string_token(lex)
 }
 
 #[inline]
@@ -832,6 +877,30 @@ mod tests {
     }
 
     #[test]
+    fn escaped_backslashes_do_not_consume_a_strings_closing_quote() {
+        for (literal, expected) in [(r#""/-\\""#, "/-\\"), (r#""\\\\""#, "\\\\")] {
+            let source = format!("{literal}; \"next\"");
+            let tokens = LexWrapper::new(&source, 0)
+                .collect::<Result<Vec<_>>>()
+                .unwrap();
+            assert_eq!(
+                tokens,
+                [
+                    Token::StringLiteral(StringToken(
+                        Span::new(0, 0..literal.len()),
+                        expected.into(),
+                    )),
+                    Token::Semi(Span::new(0, literal.len()..literal.len() + 1)),
+                    Token::StringLiteral(StringToken(
+                        Span::new(0, literal.len() + 2..source.len()),
+                        "next".into(),
+                    )),
+                ],
+            );
+        }
+    }
+
+    #[test]
     fn an_apostrophe_char_literal_is_the_triple_quote() {
         let vec = lex_vec("'''");
         let Ok(Token::IntLiteral(IntToken(_, i))) = &vec[0] else {
@@ -922,6 +991,76 @@ mod tests {
         // The span still trims only the final newline.
         assert_eq!(st.0, Span::new(0, 0..21));
         assert_eq!(vec[1].as_ref().unwrap().to_string(), "int");
+    }
+
+    #[test]
+    fn a_directive_line_keeps_whole_block_comments_and_source_spans() {
+        for newline in ["\n", "\r\n"] {
+            let directive = format!("#define FOO 1 /* α{newline} ** / β */ + 2{newline}");
+            let source = format!("{directive}int");
+            let tokens = LexWrapper::new_at(&source, 7, 20)
+                .collect::<Result<Vec<_>>>()
+                .unwrap();
+
+            assert_eq!(
+                tokens,
+                [
+                    Token::DirectiveLine(StringToken(
+                        Span::new(7, 20..20 + directive.len() - 1),
+                        directive.clone(),
+                    )),
+                    Token::Int(Span::new(7, 20 + directive.len()..20 + source.len())),
+                ],
+            );
+        }
+    }
+
+    #[test]
+    fn a_directive_line_splices_after_escaped_backslashes_in_strings() {
+        for newline in ["\n", "\r\n"] {
+            let directive = format!("#define FOO \"\\\\{newline}continued\"{newline}");
+            let source = format!("{directive}int");
+            let tokens = LexWrapper::new(&source, 0)
+                .collect::<Result<Vec<_>>>()
+                .unwrap();
+
+            assert_eq!(tokens.len(), 2);
+            assert_eq!(tokens[0].to_string(), directive);
+            assert_eq!(tokens[1].to_string(), "int");
+        }
+    }
+
+    #[test]
+    fn comment_openers_in_directive_literals_and_line_comments_are_text() {
+        for body in [
+            r#""/*""#,
+            r#""//" /* a complete comment */"#,
+            r#""escaped \" /*""#,
+            r#""\\" /* a complete comment */"#,
+            r#"'"' "/*""#,
+            r#"'\'' "/*""#,
+            r#"''' "/*""#,
+            "1 // /*",
+            "1 // \" /*",
+        ] {
+            let directive = format!("#define FOO {body}\n");
+            let source = format!("{directive}int");
+            let tokens = LexWrapper::new(&source, 0)
+                .collect::<Result<Vec<_>>>()
+                .unwrap();
+
+            assert_eq!(
+                tokens,
+                [
+                    Token::DirectiveLine(StringToken(
+                        Span::new(0, 0..directive.len() - 1),
+                        directive.clone(),
+                    )),
+                    Token::Int(Span::new(0, directive.len()..source.len())),
+                ],
+                "for {body}",
+            );
+        }
     }
 
     #[test]

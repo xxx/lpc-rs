@@ -821,6 +821,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn multiline_directive_comments_can_contain_conditional_directives() {
+        let input = "#if 1 /*\n#endif\n*/\nint live;\n#endif /*\n end */\n";
+
+        test_valid(input, &["int", "live", ";"]).await;
+    }
+
+    #[tokio::test]
+    async fn multiline_directive_comments_are_consumed_in_dead_regions() {
+        let input = "#if 0\n#define X /*\n#else\n*/\n#endif\nint live;\n";
+
+        test_valid(input, &["int", "live", ";"]).await;
+    }
+
+    #[tokio::test]
     async fn crlf_directives_and_code_preprocess() {
         let input = "#define X 1\r\n#if X\r\nint a = X;\r\n#else\r\nint b;\r\n#endif\r\n";
 
@@ -1142,6 +1156,48 @@ mod tests {
         use super::*;
 
         #[tokio::test]
+        async fn a_define_can_have_a_multiline_block_comment() {
+            let input = indoc! { r#"
+                #define UGLY_FIX 2      /* This depends on MAXY and MINY.
+                                        * If MINY < 0 and MAXY - abs(MINY) == 1
+                                        * then UGLY_FIX should be 2
+                                        */
+                #if UGLY_FIX == 2
+                int fix = UGLY_FIX;
+                #endif
+            "# };
+
+            test_valid(input, &["int", "fix", "=", "2", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn multiline_block_comments_are_whitespace_in_a_function_macro() {
+            let input = indoc! { r#"
+                #define ADD(a, /* parameters
+                */ b) a /* body
+                */ + b /* trailing
+                */
+                ADD(1, 2);
+            "# };
+
+            test_valid(input, &["1", "+", "2", ";"]).await;
+        }
+
+        #[tokio::test]
+        async fn a_define_block_comment_can_end_at_eof() {
+            let mut preprocessor = fixture();
+            preprocessor
+                .scan("/test.c", "#define UGLY_FIX 2 /* first line\n last line */")
+                .await
+                .unwrap();
+
+            let Define::Object(define) = &preprocessor.defines["UGLY_FIX"] else {
+                panic!("expected an object macro");
+            };
+            assert_eq!(define.expr, Some(PreprocessorNode::Int(2)));
+        }
+
+        #[tokio::test]
         async fn test_object_define() {
             let input = indoc! { r#"
                 #define ASS 1234
@@ -1213,6 +1269,31 @@ mod tests {
                     assert_eq!(e.to_string(), "duplicate `#define`: `ASS`");
                 }
             }
+        }
+
+        #[tokio::test]
+        async fn a_string_ending_in_a_backslash_does_not_hide_the_next_directive() {
+            let source = indoc! { r##"
+                string a = "/-\\";
+                #define ASCII_SYMS "!@#$%^&*()_+=-.?/<>,{}[]|"
+                string b = ASCII_SYMS;
+            "## };
+            test_valid(
+                source,
+                &[
+                    "string",
+                    "a",
+                    "=",
+                    "/-\\",
+                    ";",
+                    "string",
+                    "b",
+                    "=",
+                    "!@#$%^&*()_+=-.?/<>,{}[]|",
+                    ";",
+                ],
+            )
+            .await;
         }
 
         #[tokio::test]
