@@ -72,6 +72,31 @@ async fn a_simul_efun_runs_in_the_simul_efun_object() {
 }
 
 #[tokio::test]
+async fn pointers_to_simul_efuns_resolve_and_run_in_the_simul_efun_object() {
+    let simul = "string me(string prefix) { return prefix + file_name(this_object()); }";
+    for (pointer, argument) in [
+        ("me", "\"bound:\""),
+        ("&me()", "\"bound:\""),
+        ("&me(\"bound:\")", ""),
+    ] {
+        let user = format!(
+            "function callback = {pointer}; string got; void create() {{ got = callback({argument}); }}"
+        );
+        assert_eq!(
+            got_from_user(
+                "simul-pointers",
+                "/secure/simul_efuns",
+                &[("secure/simul_efuns.c", simul)],
+                &user,
+            )
+            .await,
+            "bound:/secure/simul_efuns",
+            "{pointer}",
+        );
+    }
+}
+
+#[tokio::test]
 async fn the_config_may_name_the_file_with_its_extension() {
     assert_eq!(
         me_from_user("simul-dot-c", "/secure/simul_efuns.c").await,
