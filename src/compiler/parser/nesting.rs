@@ -205,7 +205,7 @@ fn push_children<'a>(node: Child<'a>, out: &mut Vec<Child<'a>>) {
                     ..
                 } => out.push(Child::Expr(rcvr)),
                 CallChain::Root { receiver: None, .. } => {}
-                CallChain::Node(inner) => out.push(Child::Call(inner)),
+                CallChain::Node(inner) => out.push(Child::Expr(inner)),
             }
             out.extend(n.arguments.iter().map(Child::Expr));
         }
@@ -329,6 +329,7 @@ mod tests {
         assert_eq!(height_of("mixed f(mixed a) { return f(a); }").await, 5);
         assert_eq!(height_of("mixed f(mixed a) { return a->f(); }").await, 5); // receiver
         assert_eq!(height_of("mixed f(mixed a) { return f(a)(); }").await, 6); // Node, Root, Var
+        assert_eq!(height_of("mixed f(mixed a) { return a[0](); }").await, 6);
         assert_eq!(height_of("mixed f(mixed a) { return (: 1 :); }").await, 5);
         assert_eq!(
             height_of("mixed f(mixed a) { return (: [int p = 1] 2 :); }").await,
@@ -466,6 +467,7 @@ mod tests {
             "call_args" => expr(nest("f(", ")", "a")),
             "call_receiver" => expr(format!("a{}", rep("->f()"))),
             "call_node" => expr(format!("f(a){}", "()".repeat(n - 1))),
+            "indexed_call" => expr(format!("a{}", rep("[0]()"))),
             "closure_body" => expr(nest("(: ", " :)", "1")),
             "closure_param" => expr(nest("(: [mixed p = ", "] :)", "1")),
             "fptr_args" => expr(nest("&f(", ")", "1")),
@@ -524,6 +526,7 @@ mod tests {
         ("call_args", 252),
         ("call_receiver", 252),
         ("call_node", 252),
+        ("indexed_call", 126),
         ("closure_body", 252),
         ("closure_param", 126),
         ("fptr_args", 252),

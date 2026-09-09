@@ -648,6 +648,43 @@ PrimaryExpression: ExpressionNode = {
 
 PostfixExpression: ExpressionNode = {
     <PrimaryExpression>,
+    <IndexExpression>,
+    <Call> => ExpressionNode::from(<>),
+    <e:PostfixExpression> "->" <name:"ID"> =>? {
+        let span = Span::combine(e.span(), Some(name.0));
+        let node = FunctionPtrNode {
+            receiver: Some(FunctionPtrReceiver::Static(Box::new(e))),
+            arguments: None,
+            name: ustr(&name.1),
+            span,
+        };
+        Ok(guard(ExpressionNode::from(node), span)?)
+    },
+    <e:PostfixExpression> "++" =>? {
+        let span = e.span();
+        let n = UnaryOpNode {
+            expr: Box::new(e),
+            op: UnaryOperation::Inc,
+            is_post: true,
+            span
+        };
+
+        Ok(collapse_unary_op(n)?)
+    },
+    <e:PostfixExpression> "--" =>? {
+        let span = e.span();
+        let n = UnaryOpNode {
+            expr: Box::new(e),
+            op: UnaryOperation::Dec,
+            is_post: true,
+            span
+        };
+
+        Ok(collapse_unary_op(n)?)
+    },
+};
+
+IndexExpression: ExpressionNode = {
     <l:PostfixExpression> "[" <r:Expression> <right:"]"> =>? {
         let span = Span::combine(l.span(), Some(right));
 
@@ -685,48 +722,6 @@ PostfixExpression: ExpressionNode = {
         });
 
         collapse_binary_op(BinaryOperation::Index, l, r, span)
-    },
-    <e:(<PostfixExpression> "->")?> <mut c:Call> =>? {
-        if let Some(rcvr) = e {
-            let span = Span::combine(rcvr.span(), c.span);
-            c.set_receiver(rcvr);
-            c.span = span;
-            Ok(guard(ExpressionNode::from(c), span)?)
-        } else {
-            Ok(ExpressionNode::from(c))
-        }
-    },
-    <e:PostfixExpression> "->" <name:"ID"> =>? {
-        let span = Span::combine(e.span(), Some(name.0));
-        let node = FunctionPtrNode {
-            receiver: Some(FunctionPtrReceiver::Static(Box::new(e))),
-            arguments: None,
-            name: ustr(&name.1),
-            span,
-        };
-        Ok(guard(ExpressionNode::from(node), span)?)
-    },
-    <e:PostfixExpression> "++" =>? {
-        let span = e.span();
-        let n = UnaryOpNode {
-            expr: Box::new(e),
-            op: UnaryOperation::Inc,
-            is_post: true,
-            span
-        };
-
-        Ok(collapse_unary_op(n)?)
-    },
-    <e:PostfixExpression> "--" =>? {
-        let span = e.span();
-        let n = UnaryOpNode {
-            expr: Box::new(e),
-            op: UnaryOperation::Dec,
-            is_post: true,
-            span
-        };
-
-        Ok(collapse_unary_op(n)?)
     },
 };
 
@@ -1014,23 +1009,24 @@ MappingInitializer: (ExpressionNode, ExpressionNode) = {
 }
 
 Call: CallNode = {
-    <ns:CallNamespace?> <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> =>? {
+    <receiver:(<PostfixExpression> "->")?> <ns:CallNamespace?> <name:"ID"> "(" <list:ArgumentExpressionList?> <right:")"> =>? {
         let arguments = list.unwrap_or_else(|| vec![]);
 
         let (left, namespace) = ns.unwrap_or_else(|| (name.0, CallNamespace::default()));
-        let span = Some(Span::join(left, right));
+        let span = Span::combine(receiver.as_ref().and_then(|r| r.span()), Some(Span::join(left, right)));
 
         Ok(guard(CallNode {
             chain: CallChain::Root {
-                receiver: None,
+                receiver: receiver.map(Box::new),
                 name: ustr(&name.1),
                 namespace
             },
             arguments,
             span,
-         lvalue_temps: Vec::new(), }, span)?)
+            lvalue_temps: Vec::new(),
+        }, span)?)
     },
-    <expr:Call> <lparen:"("> <list:ArgumentExpressionList?> <right:")"> =>? {
+    <expr:ComputedCallee> <lparen:"("> <list:ArgumentExpressionList?> <right:")"> =>? {
         let arguments = list.unwrap_or_else(|| vec![]);
         let span = Span::combine(expr.span().or(Some(lparen)), Some(right));
 
@@ -1038,8 +1034,14 @@ Call: CallNode = {
             chain: CallChain::Node(Box::new(expr)),
             arguments,
             span,
-         lvalue_temps: Vec::new(), }, span)?)
+            lvalue_temps: Vec::new(),
+        }, span)?)
     }
+};
+
+ComputedCallee: ExpressionNode = {
+    <Call> => ExpressionNode::from(<>),
+    <IndexExpression>,
 };
 
 CallNamespace: (Span, CallNamespace) = {

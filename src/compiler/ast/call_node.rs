@@ -17,7 +17,7 @@ use crate::compiler::{
     codegen::tree_walker::TreeWalker,
 };
 
-/// Help handle chained calls, like foo("bar")("baz");
+/// A named function or a computed function value being called.
 #[derive(Hash, Debug, Eq, PartialEq, PartialOrd, Clone)]
 pub enum CallChain {
     Root {
@@ -30,13 +30,13 @@ pub enum CallChain {
         /// The name of the function being called
         name: Ustr,
     },
-    Node(Box<CallNode>),
+    Node(Box<ExpressionNode>),
 }
 
 /// Representation of a function call.
 #[derive(Hash, Debug, Eq, PartialEq, PartialOrd, Clone)]
 pub struct CallNode {
-    /// Is this call chained off of another call?
+    /// The function being called.
     pub chain: CallChain,
 
     /// The list of function arguments being passed.
@@ -48,19 +48,6 @@ pub struct CallNode {
     /// Indexed arguments in an efun's implicit-lvalue positions, each with
     /// the hidden cell standing in for it.
     pub lvalue_temps: Vec<(usize, Ustr)>,
-}
-
-impl CallNode {
-    pub fn set_receiver(&mut self, new_receiver: ExpressionNode) {
-        match &mut self.chain {
-            CallChain::Root { receiver, .. } => {
-                *receiver = Some(Box::new(new_receiver));
-            }
-            CallChain::Node(node) => {
-                node.set_receiver(new_receiver);
-            }
-        }
-    }
 }
 
 impl SpannedNode for CallNode {

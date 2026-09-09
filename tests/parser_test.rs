@@ -7,6 +7,7 @@ use lpc_rs::{
             assignment_node::AssignmentNode,
             ast_node::AstNode,
             binary_op_node::{BinaryOpNode, BinaryOperation},
+            call_node::CallChain,
             cast_node::CastNode,
             decl_node::DeclNode,
             expression_node::ExpressionNode,
@@ -873,6 +874,37 @@ async fn parse_prog(prog: &str) -> Result<ProgramNode> {
     lpc_parser::ProgramParser::new()
         .parse(&mut context, code)
         .map_err(lpc_rs_errors::LpcError::from)
+}
+
+#[test]
+fn an_indexed_call_preserves_its_callee_arguments_and_span() {
+    let expression = "callbacks[i](arg)";
+    let prog = format!("void f() {{ {expression}; }}");
+    let lexer = LexWrapper::new(&prog, 0).triples();
+    let node = lpc_parser::ProgramParser::new()
+        .parse(&mut CompilationContext::default(), lexer)
+        .unwrap();
+    let AstNode::FunctionDef(def) = &node.body[0] else {
+        panic!("expected a function");
+    };
+    let AstNode::Expression(ExpressionNode::Call(call)) = &def.body[0] else {
+        panic!("expected a call");
+    };
+    let CallChain::Node(callee) = &call.chain else {
+        panic!("expected a computed callee");
+    };
+    let ExpressionNode::BinaryOp(index) = callee.as_ref() else {
+        panic!("expected an index");
+    };
+    assert_eq!(index.op, BinaryOperation::Index);
+    assert!(matches!(index.l.as_ref(), ExpressionNode::Var(v) if v.name == "callbacks"));
+    assert!(matches!(index.r.as_ref(), ExpressionNode::Var(v) if v.name == "i"));
+    assert!(matches!(&call.arguments[..], [ExpressionNode::Var(v)] if v.name == "arg"));
+    let start = prog.find(expression).unwrap();
+    assert_eq!(
+        call.span,
+        Some(Span::new(0, start..start + expression.len()))
+    );
 }
 
 #[test]

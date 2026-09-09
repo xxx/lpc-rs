@@ -18,7 +18,7 @@ factori!(CallChain, {
 
     builder {
         if node.is_some() {
-            CallChain::Node(Box::new(node.unwrap()))
+            CallChain::Node(Box::new(node.unwrap().into()))
         } else {
             CallChain::Root { receiver, namespace, name }
         }

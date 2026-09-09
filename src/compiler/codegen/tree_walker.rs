@@ -174,7 +174,7 @@ where
     Ok(())
 }
 
-/// Visit a chained call's inner call, then the outer arguments.
+/// Visit a computed callee, then its arguments.
 pub async fn walk_call_chain<W>(walker: &mut W, node: &mut CallNode) -> Result<()>
 where
     W: TreeWalker + Send,
@@ -958,7 +958,7 @@ mod tests {
                 lvalue_temps: Vec::new(),
             };
             let mut node = CallNode {
-                chain: CallChain::Node(Box::new(inner)),
+                chain: CallChain::Node(Box::new(inner.into())),
                 arguments: vec![var("a")],
                 span: None,
                 lvalue_temps: Vec::new(),
