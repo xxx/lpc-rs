@@ -337,15 +337,20 @@ impl CodegenWalker {
         // These are expected and assumed to be in 1:1 correspondence at runtime
         self.ensure_sync()?;
 
-        // get a combined hashmap of all inherited global variables
         let inherits = std::mem::take(&mut self.context.inherits);
-        let mut global_variables = inherits.into_iter().map(|i| i.global_variables).fold(
-            HashMap::new(),
-            |mut acc, vars| {
-                acc.extend(*vars);
-                acc
-            },
-        );
+        let mut global_variables: HashMap<String, Symbol> = HashMap::new();
+        for parent in inherits {
+            for (name, symbol) in *parent.global_variables {
+                // Match inherited lookup: private siblings cannot hide a visible declaration.
+                if symbol.visible_to_children()
+                    || !global_variables
+                        .get(&name)
+                        .is_some_and(Symbol::visible_to_children)
+                {
+                    global_variables.insert(name, symbol);
+                }
+            }
+        }
         self.context.scopes.goto_root();
         global_variables.extend(std::mem::take(
             &mut self.context.scopes.current_mut().unwrap().symbols,

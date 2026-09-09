@@ -12,6 +12,8 @@ pub struct GlobalVarFlags {
     #[bits = 2]
     pub visibility: Visibility,
     pub is_static: bool,
+    /// Prevent inheriting programs from redeclaring this variable.
+    pub nomask: bool,
 }
 
 impl Display for GlobalVarFlags {
@@ -19,6 +21,9 @@ impl Display for GlobalVarFlags {
         let mut s = self.visibility().to_string();
         if self.is_static() {
             s.push_str(" static");
+        }
+        if self.nomask() {
+            s.push_str(" nomask");
         }
         write!(f, "{s}")
     }
@@ -30,7 +35,7 @@ impl GlobalVarFlags {
         let mut invalid = vec![];
         for s in strs.iter() {
             match *s {
-                "public" | "private" | "protected" | "static" => {}
+                "public" | "private" | "protected" | "static" | "nomask" => {}
                 _ => {
                     invalid.push(*s);
                 }
@@ -61,6 +66,9 @@ where
                 "static" => {
                     flags.set_is_static(true);
                 }
+                "nomask" => {
+                    flags.set_nomask(true);
+                }
                 _ => {}
             }
         }
@@ -87,5 +95,17 @@ mod tests {
         let vec: Vec<&'static str> = vec![];
         let flags = GlobalVarFlags::from(vec);
         assert_eq!(flags.visibility(), Visibility::Public);
+    }
+
+    #[test]
+    fn nomask_combines_with_visibility_and_storage_flags() {
+        let names = vec!["protected", "static", "nomask"];
+        assert!(GlobalVarFlags::validate(&names).is_empty());
+        let flags = GlobalVarFlags::from(names);
+        assert!(flags.nomask());
+        assert!(flags.is_static());
+        assert_eq!(flags.visibility(), Visibility::Protected);
+        assert_eq!(flags.to_string(), "protected static nomask");
+        assert!(!GlobalVarFlags::default().nomask());
     }
 }

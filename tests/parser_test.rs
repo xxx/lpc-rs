@@ -755,17 +755,20 @@ async fn error_on_varargs_var() {
 }
 
 #[tokio::test]
-async fn error_on_nomask_var() {
+async fn nomask_global_variables_parse() {
     let prog = indoc! { r#"
-        nomask string a;
+        nomask string a, *b;
     "# };
 
-    let program = parse_prog(prog).await;
-
-    assert_eq!(
-        &program.unwrap_err().to_string(),
-        "`nomask` is intended for functions only"
-    );
+    let program = parse_prog(prog).await.unwrap();
+    let AstNode::Decl(decl) = &program.body[0] else {
+        panic!("expected a declaration");
+    };
+    assert_eq!(decl.initializations.len(), 2);
+    for variable in &decl.initializations {
+        assert!(variable.global);
+        assert!(variable.flags.unwrap().nomask());
+    }
 }
 
 #[tokio::test]

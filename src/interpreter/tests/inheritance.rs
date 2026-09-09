@@ -15,6 +15,169 @@ const MASTER: &str = "int valid_load(mixed a, mixed b, mixed c, mixed d) { retur
 /// `f()` calls `g()` and `x()` reads what `g` set.
 const PARENT: &str = "int x;\nvoid g() { x = 1; }\nvoid f() { g(); }\nint x() { return x; }\n";
 
+mod nomask_variables {
+    use lpc_rs_errors::Result;
+
+    use super::*;
+    use crate::compiler::{Compiled, Compiler};
+
+    async fn compile(files: &[(&str, &str)], code: &str) -> Result<Compiled> {
+        let root = lib_holding("nomask-variables", files);
+        let config = ConfigBuilder::default()
+            .lib_dir(root.to_str().unwrap())
+            .build()
+            .unwrap();
+        Compiler::new(config).compile_string("/child.c", code).await
+    }
+
+    #[tokio::test]
+    async fn a_child_cannot_redeclare_a_nomask_variable() {
+        let error = compile(
+            &[("parent.c", "nomask int value;")],
+            "inherit \"/parent\"; int value;",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "attempt to redefine nomask variable `value`"
+        );
+        let rendered = error.diagnostic_string();
+        assert!(rendered.contains("/child.c"), "{rendered}");
+        assert!(rendered.contains("/parent.c"), "{rendered}");
+        assert!(rendered.contains("defined here"), "{rendered}");
+    }
+
+    #[tokio::test]
+    async fn a_grandchild_cannot_redeclare_a_nomask_variable() {
+        let error = compile(
+            &[
+                ("base.c", "protected nomask int value;"),
+                ("parent.c", "inherit \"/base\";"),
+            ],
+            "inherit \"/parent\"; private int value;",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "attempt to redefine nomask variable `value`"
+        );
+    }
+
+    #[tokio::test]
+    async fn unrelated_parents_cannot_mask_a_nomask_variable_in_either_order() {
+        let files = [
+            ("sealed.c", "nomask int value;"),
+            ("ordinary.c", "int value;"),
+        ];
+        for code in [
+            "inherit \"/sealed\"; inherit \"/ordinary\";",
+            "inherit \"/ordinary\"; inherit \"/sealed\";",
+        ] {
+            let error = compile(&files, code).await.unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                "attempt to redefine nomask variable `value`",
+                "{code}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_diamond_can_share_a_nomask_variable() {
+        let program = compile(
+            &[
+                ("padding.c", "int padding;"),
+                ("base.c", "nomask int value;"),
+                ("left.c", "inherit \"/padding\"; inherit \"/base\";"),
+                ("right.c", "inherit \"/base\";"),
+            ],
+            "inherit \"/left\"; inherit \"/right\"; int get() { return value; }",
+        )
+        .await
+        .unwrap();
+        assert_eq!(program.program.num_globals, 2);
+        assert!(program.program.global_variables["value"].flags.nomask());
+    }
+
+    #[tokio::test]
+    async fn a_private_nomask_variable_does_not_reserve_its_name_in_children() {
+        compile(
+            &[("parent.c", "private nomask int value;")],
+            "inherit \"/parent\"; int value;",
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_hidden_sibling_cannot_erase_an_inherited_nomask_flag() {
+        let error = compile(
+            &[
+                ("sealed.c", "nomask int value;"),
+                ("hidden.c", "private int value;"),
+                ("parent.c", "inherit \"/sealed\"; inherit \"/hidden\";"),
+            ],
+            "inherit \"/parent\"; int value;",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "attempt to redefine nomask variable `value`"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_hidden_sibling_keeps_the_nomask_variable_visible_to_grandchildren() {
+        let x = x_after_f(&[
+            ("base.c", "nomask int x; int x() { return x; }"),
+            ("hidden.c", "private int x;"),
+            ("parent.c", "inherit \"/base\"; inherit \"/hidden\";"),
+            ("child.c", "inherit \"/parent\"; void f() { x = 42; }"),
+        ])
+        .await;
+        assert_eq!(x, 42);
+    }
+
+    #[tokio::test]
+    async fn locals_and_parameters_can_shadow_a_nomask_global() {
+        compile(
+            &[("parent.c", "nomask int value;")],
+            "inherit \"/parent\"; int f(int value) { return value; } int g() { int value = 2; return value; }",
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_nomask_declaration_can_replace_an_ordinary_inherited_variable() {
+        compile(
+            &[("parent.c", "int value;")],
+            "inherit \"/parent\"; nomask int value;",
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_nomask_variable_remains_assignable_by_a_child() {
+        let x = x_after_f(&[
+            (
+                "parent.c",
+                "nomask int x; void f() { x = 1; } int x() { return x; }",
+            ),
+            (
+                "child.c",
+                "inherit \"/parent\"; void f() { ::f(); x += 41; }",
+            ),
+        ])
+        .await;
+        assert_eq!(x, 42);
+    }
+}
+
 /// Clone `/child.c` from `files` plus the master, call `f()`, return `x()`.
 async fn x_after_f(files: &[(&str, &str)]) -> i64 {
     let root = lib_holding("inheritance", files);

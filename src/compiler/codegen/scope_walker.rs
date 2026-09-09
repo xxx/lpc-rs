@@ -117,6 +117,23 @@ impl ScopeWalker {
             .collect()
     }
 
+    fn check_nomask_redefinition(&self, node: &VarInitNode) -> Result<()> {
+        if node.global
+            && let Some((_, symbol)) = self
+                .inherited_declarations(&node.name)
+                .into_iter()
+                .find(|(_, symbol)| symbol.flags.nomask())
+        {
+            return Err(lpc_error!(
+                node.span,
+                "attempt to redefine nomask variable `{}`",
+                node.name
+            )
+            .with_label("defined here", symbol.span));
+        }
+        Ok(())
+    }
+
     /// The warning for a declaration of `node.name` when an enclosing scope,
     /// this file's globals, or a parent already declares that name.
     fn shadow_warning(&self, node: &VarInitNode) -> Option<LpcError> {
@@ -616,7 +633,9 @@ impl TreeWalker for ScopeWalker {
             });
         }
 
-        match check_var_redefinition(node, scope.unwrap()) {
+        match check_var_redefinition(node, scope.unwrap())
+            .and_then(|()| self.check_nomask_redefinition(node))
+        {
             Err(e) => self.context.diagnostics.record(e),
             Ok(()) => {
                 if let Some(w) = self.shadow_warning(node) {

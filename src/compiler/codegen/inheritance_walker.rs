@@ -9,7 +9,7 @@ use crate::compiler::{
     compilation_context::CompilationContext,
     diagnostics::Diagnostics,
 };
-use crate::interpreter::program::Region;
+use crate::interpreter::program::{Program, Region};
 
 /// A walker to handle compiling and linking inherited files.
 #[derive(Debug, Default)]
@@ -49,6 +49,35 @@ impl InheritanceWalker {
             }
         }
 
+        Ok(())
+    }
+
+    fn check_nomask_variables(&self, program: &Program, span: Option<Span>) -> Result<()> {
+        for symbol in program
+            .global_variables
+            .values()
+            .filter(|s| s.visible_to_children())
+        {
+            for previous in self.context.inherits.iter().filter_map(|parent| {
+                parent
+                    .global_variables
+                    .get(&symbol.name)
+                    .filter(|s| s.visible_to_children())
+            }) {
+                // Relocated slots identify the same declaration reached through a diamond.
+                if previous.location != symbol.location
+                    && (previous.flags.nomask() || symbol.flags.nomask())
+                {
+                    return Err(lpc_error!(
+                        span,
+                        "attempt to redefine nomask variable `{}`",
+                        symbol.name
+                    )
+                    .with_label("defined here", previous.span)
+                    .with_label("conflicting declaration here", symbol.span));
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -220,6 +249,7 @@ impl TreeWalker for InheritanceWalker {
                 )
                 .map_err(|e| self.context.diagnostics.fail(e))?;
                 program.relocate_globals(&targets);
+                self.check_nomask_variables(&program, node.span)?;
                 self.context.inherited_functions.extend(
                     program
                         .functions

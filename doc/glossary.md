@@ -77,6 +77,13 @@ call was written, so a parent's call to a function the child redefines runs
 the child's; `::f()` reaches the parent's own. A `private` function is never
 overridden.
 
+A global declared `nomask`, such as `nomask int count;`, cannot be redeclared
+by an inheriting program while it is visible to that program. Distinct visible
+declarations inherited from separate parents also conflict if either is
+`nomask`; a diamond sharing one declaration is allowed. The variable remains
+assignable, and locals and parameters may shadow its name. A parent's `private`
+variable does not reserve its name in children, even when declared `nomask`.
+
 ### interactive
 
 An interactive object is one that is currently controlled by a player. NPCs
