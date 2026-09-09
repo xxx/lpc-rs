@@ -397,6 +397,7 @@ impl CodegenWalker {
             num_globals,
             layout,
             pragmas: self.context.pragmas,
+            clones: Default::default(),
         })
     }
 

@@ -16,3 +16,5 @@ This function is the primary way of constructing new object instances in LPC.
 A `create()` that clones again nests one driver task per level; sixty-four levels
 deep, the next `clone_object` is a runtime error. A clone whose `create()`
 throws is not left resident.
+
+Use `object_clones` to list the live clones of the same compiled program.

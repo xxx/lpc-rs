@@ -56,6 +56,7 @@ pub(crate) mod min_max;
 pub(crate) mod mkdir;
 pub(crate) mod move_object;
 pub(crate) mod notify_fail;
+pub(crate) mod object_clones;
 pub(crate) mod object_time;
 pub(crate) mod papplyv;
 pub(crate) mod parse_add_rule;
@@ -1101,6 +1102,11 @@ efuns! {
             LpcType::Int(false),
         ],
     },
+    object_clones => {
+        returns: LpcType::Object(true),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1421,6 +1427,7 @@ mod tests {
                 "reduce",
                 "function_name",
                 "regmatch",
+                "object_clones",
             ]
         );
     }

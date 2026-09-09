@@ -24,7 +24,7 @@ use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
     object_space::ObjectSpace,
     process::Process,
-    stm::{Effect, PendingFileOp, TxnHandle},
+    stm::{Effect, MergeOp, PendingFileOp, TxnHandle},
     task_context::{Caller, Loader, ObjectLookup, TaskContext},
 };
 
@@ -502,6 +502,12 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         }
         self.txn().with(|t| {
             t.drop_var(var_id);
+            if process.is_clone() {
+                t.merge(
+                    process.program.clones.id,
+                    MergeOp::ArrayRemoveValue(LpcRef::from(Arc::downgrade(&process))),
+                );
+            }
             t.drop_var(process.rules.id);
             t.drop_var(process.position.livings.id);
             if is_living && let Some(env) = &environment {

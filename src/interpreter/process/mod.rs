@@ -28,7 +28,7 @@ use crate::{
     telnet::connection::Connection,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 /// A type to represent the position of a [`Process`] in the game world.
 ///
 /// Both slots are transactional cells: the process holds only the cell
@@ -46,16 +46,6 @@ pub struct ProcessPosition {
 
     /// The living objects among this object's contents.
     pub livings: SVar<LpcArray>,
-}
-
-impl Default for ProcessPosition {
-    fn default() -> Self {
-        Self {
-            environment: SVar::new(),
-            inventory: SVar::new(),
-            livings: SVar::new(),
-        }
-    }
 }
 
 /// How a process is named: what `file_name` answers and the object space
@@ -454,6 +444,7 @@ impl Process {
                 self.position.inventory.id,
                 self.position.livings.id,
                 self.connection.id,
+                self.program.clones.id,
             ])
             .collect()
     }

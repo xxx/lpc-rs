@@ -487,6 +487,12 @@ pub(crate) fn txn_insert_process(
     txn.with(|t| {
         t.track_read(var_id);
         t.write_process(var_id, process.clone());
+        if process.is_clone() {
+            t.merge(
+                process.program.clones.id,
+                MergeOp::ArrayAppend(vec![LpcRef::from(Arc::downgrade(process))]),
+            );
+        }
         t.record_effect(Effect::InsertObject {
             key,
             process: process.clone(),
@@ -502,6 +508,12 @@ pub(crate) fn txn_undo_insert(txn: &TxnHandle, object_space: &ObjectSpace, proce
     let var_id = *process.cell.get_or_init(|| object_space.cell_id(&key));
     txn.with(|t| {
         t.drop_var(var_id);
+        if process.is_clone() {
+            t.merge(
+                process.program.clones.id,
+                MergeOp::ArrayRemoveValue(LpcRef::from(Arc::downgrade(process))),
+            );
+        }
         t.record_effect(Effect::RemoveObject {
             key,
             process: process.clone(),
@@ -601,11 +613,17 @@ impl AttemptBody for ResolvePointerCallBody<'_> {
 /// Identity cell for one transactional slot (a global or an upvalue cell).
 /// The slot owns only its [`VarId`]; the *committed value* lives only in
 /// the committer's world.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SVar<T> {
     /// The slot's stable identity in the committer's world.
     pub id: VarId,
     _phantom: PhantomData<T>,
+}
+
+impl<T> Default for SVar<T> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T> SVar<T> {

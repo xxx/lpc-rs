@@ -18,6 +18,8 @@ use lpc_rs_function_support::{program_function::ProgramFunction, symbol::Symbol}
 use path_dedot::*;
 use ustr::{Ustr, existing_ustr};
 
+use crate::interpreter::{lpc_array::LpcArray, stm::SVar};
+
 /// The in-game directory of `path`: its parent with `.`/`..` folded, rooted
 /// at `/`.
 pub(crate) fn in_game_dir(path: &Path) -> PathBuf {
@@ -127,6 +129,9 @@ pub struct Program {
 
     /// Which pragmas have been set for this program?
     pub pragmas: PragmaFlags,
+
+    /// The transactional list of clones sharing this compiled program.
+    pub clones: SVar<LpcArray>,
 }
 
 impl Program {

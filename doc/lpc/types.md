@@ -98,6 +98,7 @@
       its prototype object has not been loaded, or a string is used as the receiver 
       for `call_other` (e.g. `"/secure/mail_daemon"->send_all()`)
     - New clones are created with the efun `clone_object`. This is the only way to create them.
+    - `object_clones(ob)` lists the live clones sharing `ob`'s compiled program.
     - _Existing_ clones can be found with `find_object`, by using their path, followed by a `#` and
       the clone number. For example, if you have a clone of `/std/goblin` with clone number
       3, you can find it with `find_object("/std/goblin#3")`. This same string syntax
