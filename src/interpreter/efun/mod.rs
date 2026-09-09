@@ -100,6 +100,7 @@ pub(crate) mod sort_array;
 pub(crate) mod sprintf;
 pub(crate) mod sscanf;
 pub(crate) mod tell_object;
+pub(crate) mod terminal_colour;
 pub(crate) mod text_encoding;
 pub(crate) mod this_interactive;
 pub(crate) mod this_object;
@@ -1066,6 +1067,17 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false)],
     },
+    terminal_colour => {
+        returns: LpcType::String(false),
+        arity: (5, 4),
+        args: [
+            LpcType::String(false),
+            LpcType::Int(false) | LpcType::Mapping(false) | LpcType::Function(false),
+            LpcType::Int(false),
+            LpcType::Int(false),
+            LpcType::Int(false) | LpcType::Object(false),
+        ],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1382,6 +1394,7 @@ mod tests {
                 "restore_object",
                 "save_map",
                 "restore_map",
+                "terminal_colour",
             ]
         );
     }

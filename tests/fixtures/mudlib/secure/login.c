@@ -17,6 +17,7 @@ private void get_name(string input) {
     enable_commands();
     add_action("do_look", "look");
     add_action("do_stats", "stats");
+    add_action("do_colour", "colour");
     add_action("do_gmcp", "gmcp");
     add_action("do_mxp", "mxp");
     add_action("do_quit", "quit");
@@ -59,6 +60,15 @@ private int do_stats(string arg) {
     write("gmcp: " + m["gmcp"] + "\n");
     write("mxp: " + m["mxp"] + "\n");
     write("eor: " + m["eor"] + "\n");
+    write("colour_depth: " + m["colour_depth"] + "\n");
+    write("client_name: " + m["client_name"] + "\n");
+    write("terminal_type: " + m["terminal_type"] + "\n");
+    write("mtts: " + m["mtts"] + "\n");
+    return 1;
+}
+
+private int do_colour(string arg) {
+    write(terminal_colour("%^#f00%^red%^RESET%^\n"));
     return 1;
 }
 

@@ -8,6 +8,7 @@ use crate::{
     opt::{DO, DONT, EOR_CMD, GA, Opt, WILL, WONT},
     parser::{Frame, Parser},
     table::{Reply, Table},
+    terminal::{Terminal, TerminalInfo},
     wire,
 };
 
@@ -103,7 +104,7 @@ enum Remote {
 
 type Policy = fn(Opt) -> (Local, Remote);
 
-/// The v1 policy (spec D5, D9).
+/// Which side may enable each option.
 fn v1(opt: Opt) -> (Local, Remote) {
     match opt {
         Opt::Echo => (Local::OnDemand, Remote::Refuse),
@@ -114,18 +115,20 @@ fn v1(opt: Opt) -> (Local, Remote) {
         Opt::Gmcp => (Local::Offer, Remote::Refuse),
         Opt::Mxp => (Local::Offer, Remote::Refuse),
         Opt::Mssp => (Local::Offer, Remote::Refuse),
-        Opt::Ttype | Opt::Mccp2 | Opt::Other(_) => (Local::Refuse, Remote::Refuse),
+        Opt::Ttype => (Local::Refuse, Remote::Request),
+        Opt::Mccp2 | Opt::Other(_) => (Local::Refuse, Remote::Refuse),
     }
 }
 
 /// The offers made at connect, in wire order.
-const OFFERS: [Opt; 6] = [
+const OFFERS: [Opt; 7] = [
     Opt::Naws,
     Opt::Charset,
     Opt::Gmcp,
     Opt::Mxp,
     Opt::Eor,
     Opt::Mssp,
+    Opt::Ttype,
 ];
 
 // MXP line modes: [1z opens one secure line; [7z locks the client's
@@ -156,6 +159,7 @@ pub struct Session {
     after_cr: bool,
     naws: Option<(u16, u16)>,
     charset: Option<String>,
+    terminal: Terminal,
     events: VecDeque<Event>,
     out: BytesMut,
     stats: Stats,
@@ -184,6 +188,7 @@ impl Session {
             after_cr: false,
             naws: None,
             charset: None,
+            terminal: Terminal::default(),
             events: VecDeque::new(),
             out: BytesMut::new(),
             stats: Stats::default(),
@@ -292,13 +297,13 @@ impl Session {
         self.out.clear();
     }
 
-    /// Whether the option is in effect: the client's side for NAWS, ours
+    /// Whether the option is in effect: the client's side for NAWS and TTYPE, ours
     /// otherwise — `is_on(Sga)` means we suppress go-ahead, since RFC 858 is
     /// about our own transmissions.
     pub fn is_on(&self, opt: Opt) -> bool {
         let raw = u8::from(opt);
         match opt {
-            Opt::Naws => self.table.him_on(raw),
+            Opt::Naws | Opt::Ttype => self.table.him_on(raw),
             _ => self.table.us_on(raw),
         }
     }
@@ -311,6 +316,11 @@ impl Session {
     /// The charset agreed on, if any; output is UTF-8 regardless.
     pub fn charset(&self) -> Option<&str> {
         self.charset.as_deref()
+    }
+
+    /// The client's TTYPE/MTTS reports, if negotiated.
+    pub fn terminal(&self) -> &TerminalInfo {
+        &self.terminal.info
     }
 
     /// Counters so far.
@@ -361,6 +371,7 @@ impl Session {
         let opt = Opt::from(raw);
         let (local, remote) = (self.policy)(opt);
         let was_on = self.table.us_on(raw);
+        let was_remote_on = self.table.him_on(raw);
         let reply = match command {
             DO => self
                 .table
@@ -375,6 +386,14 @@ impl Session {
         self.reply(reply);
         if !was_on && self.table.us_on(raw) {
             self.enabled_us(opt);
+        }
+        if opt == Opt::Ttype && was_remote_on != self.table.him_on(raw) {
+            if self.table.him_on(raw) {
+                self.terminal.start();
+                wire::subnegotiation(&mut self.out, raw, &[1]);
+            } else {
+                self.terminal = Terminal::default();
+            }
         }
     }
 
@@ -397,6 +416,11 @@ impl Session {
 
     fn subnegotiation(&mut self, opt: Opt, payload: &[u8]) {
         match opt {
+            Opt::Ttype => {
+                if self.is_on(opt) && self.terminal.receive(payload) {
+                    wire::subnegotiation(&mut self.out, opt.into(), &[1]);
+                }
+            }
             Opt::Naws => {
                 if let [c1, c2, r1, r2] = *payload {
                     let size = (u16::from_be_bytes([c1, c2]), u16::from_be_bytes([r1, r2]));
@@ -510,13 +534,13 @@ mod tests {
     }
 
     #[test]
-    fn connect_offers_the_v1_set_in_order() {
+    fn connect_offers_extensions_in_order() {
         let mut session = Session::new();
         assert_eq!(
             out(&mut session),
             [
                 IAC, DO, NAWS, IAC, WILL, CHARSET, IAC, WILL, GMCP, IAC, WILL, MXP, IAC, WILL, EOR,
-                IAC, WILL, MSSP
+                IAC, WILL, MSSP, IAC, DO, 24
             ]
         );
     }
@@ -527,6 +551,65 @@ mod tests {
         s.feed(&[IAC, DO, GMCP]);
         assert!(out(&mut s).is_empty());
         assert!(s.is_on(Opt::Gmcp));
+    }
+
+    #[test]
+    fn ttype_is_negotiated_once_and_fragmented_reports_request_the_next_name() {
+        let mut s = connected();
+        s.feed(b"\xff\xfa\x18\0MTTS 269\xff\xf0");
+        assert_eq!(s.terminal().colour_depth, None);
+        s.feed(&[IAC, WILL, 24]);
+        assert_eq!(out(&mut s), [IAC, SB, 24, 1, IAC, SE]);
+        s.feed(&[IAC, WILL, 24]);
+        assert!(out(&mut s).is_empty());
+        for byte in b"\xff\xfa\x18\0CLIENT\xff\xf0" {
+            s.feed(&[*byte]);
+        }
+        assert_eq!(out(&mut s), [IAC, SB, 24, 1, IAC, SE]);
+        s.feed(b"\xff\xfa\x18\0XTERM-256COLOR\xff\xf0");
+        assert_eq!(out(&mut s), [IAC, SB, 24, 1, IAC, SE]);
+        s.feed(b"\xff\xfa\x18\0MTTS 269\xff\xf0");
+        assert!(out(&mut s).is_empty());
+        assert_eq!(
+            s.terminal().colour_depth,
+            Some(crate::ColourDepth::TrueColour)
+        );
+        assert_eq!(s.terminal().mtts, Some(269));
+        s.feed(b"\xff\xfa\x18\0MTTS 0\xff\xf0");
+        assert_eq!(s.terminal().mtts, Some(269));
+    }
+
+    #[test]
+    fn disabling_ttype_clears_capabilities_and_a_new_exchange_starts_fresh() {
+        let mut s = connected();
+        s.feed(&[IAC, WILL, 24]);
+        out(&mut s);
+        s.feed(b"\xff\xfa\x18\0MTTS 269\xff\xf0");
+        s.feed(&[IAC, WONT, 24]);
+        assert!(!s.is_on(Opt::Ttype));
+        assert_eq!(s.terminal(), &TerminalInfo::default());
+        out(&mut s);
+        s.feed(&[IAC, WILL, 24]);
+        assert_eq!(out(&mut s), [IAC, DO, 24, IAC, SB, 24, 1, IAC, SE]);
+        s.feed(b"\xff\xfa\x18\0DUMB\xff\xf0");
+        assert_eq!(s.terminal().colour_depth, Some(crate::ColourDepth::Plain));
+    }
+
+    #[test]
+    fn ttype_refusal_and_malformed_reports_do_not_generate_request_loops() {
+        let mut s = connected();
+        s.feed(&[IAC, WONT, 24]);
+        assert!(out(&mut s).is_empty());
+        s.feed(&[IAC, WILL, 24]);
+        out(&mut s);
+        s.feed(b"\xff\xfa\x18\x01ANSI\xff\xf0");
+        s.feed(b"\xff\xfa\x18\0ANSI\n\xff\xf0");
+        assert!(out(&mut s).is_empty());
+        assert_eq!(s.terminal(), &TerminalInfo::default());
+        s.feed(b"\xff\xfa\x18\0ANSI\xff\xf0");
+        assert_eq!(out(&mut s), [IAC, SB, 24, 1, IAC, SE]);
+        s.feed(b"\xff\xfa\x18\0ANSI\xff\xf0");
+        assert!(out(&mut s).is_empty());
     }
 
     #[test]

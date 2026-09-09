@@ -1127,10 +1127,10 @@ mod tests {
             })
             .await;
             assert_eq!(
-                read_n(&mut client, 18).await,
+                read_n(&mut client, 21).await,
                 [
                     IAC, DO, NAWS, IAC, WILL, CHARSET, IAC, WILL, GMCP, IAC, WILL, MXP, IAC, WILL,
-                    EOR, IAC, WILL, MSSP
+                    EOR, IAC, WILL, MSSP, IAC, DO, 24
                 ]
             );
             Wired {

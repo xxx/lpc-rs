@@ -8,7 +8,7 @@ use std::{
 };
 
 use arc_swap::{ArcSwap, ArcSwapOption};
-use lpc_rs_telnet::{Opt, Session};
+use lpc_rs_telnet::{Opt, Session, TerminalInfo};
 use tokio::sync::mpsc::{UnboundedSender, error::SendError};
 
 use crate::{
@@ -50,6 +50,8 @@ pub struct Snapshot {
     pub mxp: bool,
     /// EOR is on.
     pub eor: bool,
+    /// Client names and color capabilities reported through TTYPE/MTTS.
+    pub terminal: TerminalInfo,
 }
 
 impl Snapshot {
@@ -63,6 +65,7 @@ impl Snapshot {
             gmcp: session.is_on(Opt::Gmcp),
             mxp: session.is_on(Opt::Mxp),
             eor: session.is_on(Opt::Eor),
+            terminal: session.terminal().clone(),
         }
     }
 }
@@ -284,6 +287,7 @@ mod tests {
                 gmcp: true,
                 mxp: false,
                 eor: false,
+                terminal: TerminalInfo::default(),
             }
         );
     }

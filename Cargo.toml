@@ -57,6 +57,8 @@ thin-vec = "0.2.12"
 tokio = { version = "1", features = ["io-std", "io-util", "sync", "fs", "rt-multi-thread", "signal", "parking_lot", "net", "time", "macros"] }
 tracing = "~0.1"
 ustr = "1.1.0"
+unicode-segmentation = "1.13.3"
+unicode-width = "0.2.2"
 
 [dev-dependencies]
 claims = "0.8.0"

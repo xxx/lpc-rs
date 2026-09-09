@@ -20,7 +20,8 @@ pub fn query_connection<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
         Some(charset) => LpcString::from(charset.as_str()).into(),
         None => LpcRef::from(0),
     };
-    let entries: [(&str, LpcRef); 10] = [
+    let terminal = &snapshot.terminal;
+    let entries: [(&str, LpcRef); 14] = [
         (
             "ip",
             LpcString::from(connection.address.ip().to_string()).into(),
@@ -37,6 +38,35 @@ pub fn query_connection<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
         ("eor", LpcRef::from(snapshot.eor)),
         ("idle", LpcRef::from(connection.idle() as LpcIntInner)),
         ("overflowed", LpcRef::from(connection.is_overflowed())),
+        (
+            "client_name",
+            terminal
+                .client_name
+                .as_deref()
+                .map(LpcRef::from)
+                .unwrap_or_default(),
+        ),
+        (
+            "terminal_type",
+            terminal
+                .terminal_type
+                .as_deref()
+                .map(LpcRef::from)
+                .unwrap_or_default(),
+        ),
+        (
+            "mtts",
+            LpcRef::from(terminal.mtts.map(i64::from).unwrap_or(-1)),
+        ),
+        (
+            "colour_depth",
+            LpcRef::from(
+                terminal
+                    .colour_depth
+                    .map(|depth| depth as i64)
+                    .unwrap_or(-1),
+            ),
+        ),
     ];
     let mapping: IndexMap<LpcRef, LpcRef> = entries
         .into_iter()
@@ -76,6 +106,9 @@ mod tests {
         let connected = connect(&vm, &player).await;
         let mut session = Session::new();
         session.feed(&[IAC, DO, GMCP, IAC, SB, NAWS, 0, 100, 0, 40, IAC, SE]);
+        session.feed(b"\xff\xfb\x18\xff\xfa\x18\0CLIENT\xff\xf0");
+        session.feed(b"\xff\xfa\x18\0XTERM\xff\xf0");
+        session.feed(b"\xff\xfa\x18\0MTTS 269\xff\xf0");
         connected.connection.refresh(&session);
         connected.connection.set_overflowed(true);
 
@@ -104,7 +137,11 @@ mod tests {
         assert_eq!(get("eor"), LpcRef::from(0));
         assert_eq!(get("idle"), LpcRef::from(0));
         assert_eq!(get("overflowed"), LpcRef::from(1));
-        assert_eq!(m.len(), 10, "the key set is fixed");
+        assert_eq!(get("client_name"), LpcRef::from("CLIENT"));
+        assert_eq!(get("terminal_type"), LpcRef::from("XTERM"));
+        assert_eq!(get("mtts"), LpcRef::from(269));
+        assert_eq!(get("colour_depth"), LpcRef::from(24));
+        assert_eq!(m.len(), 14, "the key set is fixed");
     }
 
     #[tokio::test]
@@ -128,6 +165,11 @@ mod tests {
             panic!("a mapping");
         };
         let m = vm.global_state.committed_mapping(cell.id).unwrap();
+        assert_eq!(m.get(&LpcRef::from("mtts")), Some(&LpcRef::from(-1)));
+        assert_eq!(
+            m.get(&LpcRef::from("colour_depth")),
+            Some(&LpcRef::from(-1))
+        );
         assert_eq!(
             m.get(&LpcString::from("port").into()),
             Some(&LpcRef::from(23123))

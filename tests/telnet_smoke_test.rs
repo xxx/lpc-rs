@@ -24,6 +24,7 @@ const DO: u8 = 253;
 const GA: u8 = 249;
 const EOR_CMD: u8 = 239;
 const NAWS: u8 = 31;
+const TTYPE: u8 = 24;
 const EOR: u8 = 25;
 const MSSP: u8 = 70;
 const MXP: u8 = 91;
@@ -104,6 +105,7 @@ async fn the_whole_telnet_surface_over_a_real_socket() {
         assert!(contains(&greeting, &[IAC, WILL, offer]), "offers {offer}");
     }
     assert!(contains(&greeting, &[IAC, DO, NAWS]), "asks for NAWS");
+    assert!(contains(&greeting, &[IAC, DO, TTYPE]), "asks for TTYPE");
     assert!(contains(&greeting, b"What is your name? "), "{greeting:?}");
 
     // Accept everything offered and report a 100x40 window.
@@ -123,6 +125,18 @@ async fn the_whole_telnet_surface_over_a_real_socket() {
         contains(&answers, b"\x01FAMILY\x02LPMud"),
         "and the master's extra variable: {answers:?}"
     );
+
+    client.write_all(&[IAC, WILL, TTYPE]).await.unwrap();
+    read_until(&mut client, &[IAC, SB, TTYPE, 1, IAC, SE]).await;
+    for name in ["SMOKE", "XTERM-256COLOR", "MTTS 269"] {
+        let mut report = vec![IAC, SB, TTYPE, 0];
+        report.extend_from_slice(name.as_bytes());
+        report.extend_from_slice(&[IAC, SE]);
+        client.write_all(&report).await.unwrap();
+        if !name.starts_with("MTTS") {
+            read_until(&mut client, &[IAC, SB, TTYPE, 1, IAC, SE]).await;
+        }
+    }
 
     // Logging in lands in the room; the prompt gets the negotiated EOR mark.
     client.write_all(b"smoke\r\n").await.unwrap();
@@ -147,9 +161,32 @@ async fn the_whole_telnet_surface_over_a_real_socket() {
         b"gmcp: 1\r\n",
         b"mxp: 1\r\n",
         b"eor: 1\r\n",
+        b"colour_depth: 24\r\n",
+        b"client_name: SMOKE\r\n",
+        b"terminal_type: XTERM-256COLOR\r\n",
+        b"mtts: 269\r\n",
     ] {
         assert!(contains(&stats, line), "{stats:?}");
     }
+
+    client.write_all(b"colour\r\n").await.unwrap();
+    let rgb = read_until(&mut client, &[IAC, EOR_CMD]).await;
+    assert!(
+        contains(&rgb, b"\x1b[38;2;255;0;0mred\x1b[0m\r\n"),
+        "{rgb:?}"
+    );
+
+    client
+        .write_all(&[IAC, 252, TTYPE, IAC, WILL, TTYPE])
+        .await
+        .unwrap();
+    read_until(&mut client, &[IAC, SB, TTYPE, 1, IAC, SE]).await;
+    client
+        .write_all(b"\xff\xfa\x18\0MTTS 1\xff\xf0colour\r\n")
+        .await
+        .unwrap();
+    let ansi = read_until(&mut client, &[IAC, EOR_CMD]).await;
+    assert!(contains(&ansi, b"\x1b[31mred\x1b[0m\r\n"), "{ansi:?}");
 
     // A GMCP message from the client reaches the body's gmcp() apply.
     let mut hello = vec![IAC, SB, GMCP];
