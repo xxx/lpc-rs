@@ -31,4 +31,4 @@ regexp(({ "x", "ay", "az" }), "a", 1)         /* ({ 2, "ay", 3, "az" }) */
 
 ### See also
 
-`filter`, `explode`, `sscanf`
+[regmatch](regmatch.md), `filter`, `explode`, `sscanf`

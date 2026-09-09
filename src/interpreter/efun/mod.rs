@@ -82,6 +82,7 @@ pub(crate) mod random;
 pub(crate) mod read_file;
 pub(crate) mod reduce;
 pub(crate) mod regexp;
+pub(crate) mod regmatch;
 pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
 pub(crate) mod remove_rule;
@@ -1090,6 +1091,16 @@ efuns! {
         arity: 1,
         args: [LpcType::Function(false)],
     },
+    regmatch => {
+        returns: LpcType::Mixed(false),
+        arity: (4, 2),
+        args: [
+            LpcType::String(false),
+            LpcType::String(false),
+            LpcType::Int(false),
+            LpcType::Int(false),
+        ],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1409,6 +1420,7 @@ mod tests {
                 "terminal_colour",
                 "reduce",
                 "function_name",
+                "regmatch",
             ]
         );
     }
