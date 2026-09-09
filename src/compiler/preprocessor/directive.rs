@@ -10,7 +10,7 @@
 
 use lpc_rs_core::LpcIntInner;
 use lpc_rs_errors::{
-    LpcError, Result, lpc_error, lpc_warning,
+    LpcError, Result, lpc_error,
     span::{HasSpan, Span},
 };
 
@@ -223,9 +223,8 @@ pub fn classify(line: &str) -> DirectiveKind {
 enum Trailing {
     /// C's rule: an error.
     Error,
-    /// CD's headers carry `#endif NAME`, `#else NAME` and `#undef NAME
-    /// junk`: the directive applies, the text is warned about.
-    Warn,
+    /// Accept trailing text after `#else`, `#endif`, or `#undef name`.
+    Ignore,
 }
 
 /// A cursor over one directive line. Offsets are line-relative and map
@@ -234,19 +233,13 @@ struct Cursor<'a> {
     text: &'a str,
     pos: usize,
     span: Span,
-    warnings: Vec<LpcError>,
 }
 
 impl<'a> Cursor<'a> {
     fn new(line: &'a str, span: Span) -> Self {
         let text = trim_directive_line(line);
         debug_assert!(text.starts_with('#'), "a directive line starts with `#`");
-        Self {
-            text,
-            pos: 1,
-            span,
-            warnings: vec![],
-        }
+        Self { text, pos: 1, span }
     }
 
     /// A span for `lo..hi` of this line, in file coordinates. A collapsed
@@ -282,8 +275,7 @@ impl<'a> Cursor<'a> {
         read_name_raw(self.text, &mut self.pos)
     }
 
-    /// Only whitespace and comments may remain; anything else is an
-    /// error or a warning, by `trailing`.
+    /// Handle text after whitespace and comments according to `trailing`.
     fn end_of_line(&mut self, directive: &str, trailing: Trailing) -> Result<()> {
         self.skip_ws()?;
         if self.at_end() {
@@ -294,14 +286,7 @@ impl<'a> Cursor<'a> {
             Trailing::Error => {
                 Err(self.err(lo, hi, format!("unexpected tokens after `#{directive}`")))
             }
-            Trailing::Warn => {
-                self.warnings.push(lpc_warning!(
-                    Some(self.sub_span(lo, hi)),
-                    "extra tokens after `#{}`",
-                    directive
-                ));
-                Ok(())
-            }
+            Trailing::Ignore => Ok(()),
         }
     }
 
@@ -432,7 +417,7 @@ impl<'a> Cursor<'a> {
         Ok(parsed)
     }
 
-    /// `#else` / `#endif`: nothing but EOL.
+    /// Parse `#else` / `#endif` using the given policy for trailing text.
     fn bare(&mut self, directive: Directive, name: &str, trailing: Trailing) -> Result<Directive> {
         self.end_of_line(name, trailing)?;
         Ok(directive)
@@ -515,7 +500,7 @@ impl<'a> Cursor<'a> {
             DirectiveKind::Include => self.include(),
             DirectiveKind::Define => self.define(),
             DirectiveKind::Undef => {
-                self.named(|name| Directive::Undef { name }, "undef", Trailing::Warn)
+                self.named(|name| Directive::Undef { name }, "undef", Trailing::Ignore)
             }
             DirectiveKind::If => self.if_expr(),
             DirectiveKind::IfDef => {
@@ -524,8 +509,8 @@ impl<'a> Cursor<'a> {
             DirectiveKind::IfNDef => {
                 self.named(|name| Directive::IfNDef { name }, "ifndef", Trailing::Error)
             }
-            DirectiveKind::Else => self.bare(Directive::Else, "else", Trailing::Warn),
-            DirectiveKind::Endif => self.bare(Directive::Endif, "endif", Trailing::Warn),
+            DirectiveKind::Else => self.bare(Directive::Else, "else", Trailing::Ignore),
+            DirectiveKind::Endif => self.bare(Directive::Endif, "endif", Trailing::Ignore),
             DirectiveKind::Elif => self.elif(),
             DirectiveKind::Pragma => self.pragma(),
             DirectiveKind::Error => self.error_directive(),
@@ -539,14 +524,9 @@ impl<'a> Cursor<'a> {
     }
 }
 
-/// Parse one directive line, plus any warnings its trailing text raised, in
-/// order. `span` is the [`Token::DirectiveLine`]'s span (its `l()` is the
-/// `#`'s file offset), so every diagnostic points at the offending slice of
-/// the line.
-pub fn parse(line: &str, span: Span) -> Result<(Directive, Vec<LpcError>)> {
-    let mut c = Cursor::new(line, span);
-    let directive = c.parse_directive()?;
-    Ok((directive, c.warnings))
+/// Parse one directive line, locating errors within the [`Token::DirectiveLine`]'s span.
+pub fn parse(line: &str, span: Span) -> Result<Directive> {
+    Cursor::new(line, span).parse_directive()
 }
 
 /// Parse a `#if` operand (also an object-macro body, for `#if FOO`).
@@ -811,16 +791,7 @@ mod tests {
     use super::*;
 
     fn p(line: &str) -> Result<Directive> {
-        parse(line, Span::new(0, 0..line.len())).map(|(d, _)| d)
-    }
-
-    /// The directive and its warning messages.
-    fn pw(line: &str) -> (Directive, Vec<String>) {
-        let (d, warnings) = parse(line, Span::new(0, 0..line.len())).unwrap();
-        (
-            d,
-            warnings.iter().map(|w| w.message().to_string()).collect(),
-        )
+        parse(line, Span::new(0, 0..line.len()))
     }
 
     fn perr(line: &str) -> String {
@@ -1028,30 +999,17 @@ mod tests {
         assert_eq!(perr("#ifdef"), "expected an identifier after `#ifdef`");
         assert_eq!(perr("#ifndef 1"), "expected an identifier after `#ifndef`");
         assert_eq!(
-            pw("#undef FOO bar"),
-            (
-                Directive::Undef { name: "FOO".into() },
-                vec!["extra tokens after `#undef`".into()]
-            )
+            p("#undef FOO bar").unwrap(),
+            Directive::Undef { name: "FOO".into() }
         );
         assert_eq!(perr("#ifdef FOO bar"), "unexpected tokens after `#ifdef`");
     }
 
     #[test]
-    fn else_and_endif_tolerate_trailing_text_with_a_warning() {
-        assert_eq!(
-            pw("#endif FILES_DEFINED"),
-            (Directive::Endif, vec!["extra tokens after `#endif`".into()])
-        );
-        assert_eq!(
-            pw("#else /* c */ x"),
-            (Directive::Else, vec!["extra tokens after `#else`".into()])
-        );
-        assert_eq!(pw("#endif // just a comment"), (Directive::Endif, vec![]));
-        let (_, warnings) = parse("#endif FILES_DEFINED", Span::new(3, 10..30)).unwrap();
-        // The caret covers the trailing text, in file coordinates.
-        assert_eq!(warnings[0].span(), Some(Span::new(3, 17..30)));
-        assert!(warnings[0].is_warning());
+    fn else_and_endif_tolerate_trailing_text() {
+        assert_eq!(p("#endif FILES_DEFINED").unwrap(), Directive::Endif);
+        assert_eq!(p("#else /* c */ x").unwrap(), Directive::Else);
+        assert_eq!(p("#endif // just a comment").unwrap(), Directive::Endif);
     }
 
     #[test]

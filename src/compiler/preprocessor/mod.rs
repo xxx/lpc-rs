@@ -309,10 +309,7 @@ impl Preprocessor {
             }
         }
 
-        let (directive, warnings) = directive::parse(&token.1, token.0)?;
-        for warning in warnings {
-            self.context.diagnostics.record(warning);
-        }
+        let directive = directive::parse(&token.1, token.0)?;
 
         match directive {
             Directive::Include { path, sys } => {
@@ -1739,7 +1736,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn trailing_tokens_after_else_warn() {
+        async fn trailing_tokens_after_else_are_ignored() {
             let prog = indoc! { r#"
                 #ifdef ASD
                 #else 1 + 4
@@ -1748,15 +1745,16 @@ mod tests {
             };
 
             test_valid(prog, &[]).await;
-            assert_eq!(warnings_of(prog).await, ["extra tokens after `#else`"]);
+            assert!(warnings_of(prog).await.is_empty());
         }
 
         #[tokio::test]
-        async fn a_trailing_endif_operand_warns() {
-            // The closing `#endif` is always parsed, dead region or not.
-            let prog = "#ifdef FOO\n#endif garbage\n";
-            test_valid(prog, &[]).await;
-            assert_eq!(warnings_of(prog).await, ["extra tokens after `#endif`"]);
+        async fn trailing_tokens_after_endif_are_ignored() {
+            for condition in [0, 1] {
+                let prog = format!("#if {condition}\n#endif garbage\nint after;\n");
+                test_valid(&prog, &["int", "after", ";"]).await;
+                assert!(warnings_of(&prog).await.is_empty());
+            }
         }
 
         #[tokio::test]
@@ -1777,7 +1775,7 @@ mod tests {
         use super::*;
 
         #[tokio::test]
-        async fn undef_else_and_endif_apply_and_warn() {
+        async fn undef_else_and_endif_ignore_trailing_tokens() {
             let prog = indoc! { r#"
                 #define FOO 1
                 #undef FOO junk
@@ -1788,14 +1786,7 @@ mod tests {
                 #endif FOO
             "# };
             test_valid(prog, &["int", "yes", ";"]).await;
-            assert_eq!(
-                warnings_of(prog).await,
-                [
-                    "extra tokens after `#undef`",
-                    "extra tokens after `#else`",
-                    "extra tokens after `#endif`",
-                ]
-            );
+            assert!(warnings_of(prog).await.is_empty());
         }
 
         #[tokio::test]
@@ -1805,7 +1796,7 @@ mod tests {
                 #undef FOO junk
                 #endif FOO
             "# };
-            assert_eq!(warnings_of(prog).await, ["extra tokens after `#endif`"]);
+            assert!(warnings_of(prog).await.is_empty());
         }
     }
 
