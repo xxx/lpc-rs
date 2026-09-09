@@ -97,6 +97,24 @@ async fn pointers_to_simul_efuns_resolve_and_run_in_the_simul_efun_object() {
 }
 
 #[tokio::test]
+async fn function_name_uses_the_simul_efun_object_and_masks_bound_arguments() {
+    let user = r#"
+        string got;
+        void create() { got = function_name(&me()) + " " + function_name(&me("secret")); }
+    "#;
+    assert_eq!(
+        got_from_user(
+            "simul-function-name",
+            "/secure/simul_efuns",
+            &[("secure/simul_efuns.c", "string me(string s) { return s; }")],
+            user,
+        )
+        .await,
+        r#""/secure/simul_efuns"->me &"/secure/simul_efuns"->me(?)"#,
+    );
+}
+
+#[tokio::test]
 async fn the_config_may_name_the_file_with_its_extension() {
     assert_eq!(
         me_from_user("simul-dot-c", "/secure/simul_efuns.c").await,

@@ -38,6 +38,7 @@ pub(crate) mod filter;
 pub(crate) mod filter_map;
 pub(crate) mod find_object;
 pub(crate) mod function_exists;
+pub(crate) mod function_name;
 pub(crate) mod get_dir;
 pub(crate) mod implode;
 pub(crate) mod input_to;
@@ -79,6 +80,7 @@ pub(crate) mod query_resident_memory;
 pub(crate) mod query_verb;
 pub(crate) mod random;
 pub(crate) mod read_file;
+pub(crate) mod reduce;
 pub(crate) mod regexp;
 pub(crate) mod remove_action;
 pub(crate) mod remove_call_out;
@@ -1078,6 +1080,16 @@ efuns! {
             LpcType::Int(false) | LpcType::Object(false),
         ],
     },
+    reduce => {
+        returns: LpcType::Mixed(false),
+        arity: (3, 1),
+        args: [LpcType::Mixed(true), LpcType::Function(false), LpcType::Mixed(false)],
+    },
+    function_name => {
+        returns: LpcType::String(false),
+        arity: 1,
+        args: [LpcType::Function(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1395,6 +1407,8 @@ mod tests {
                 "save_map",
                 "restore_map",
                 "terminal_colour",
+                "reduce",
+                "function_name",
             ]
         );
     }

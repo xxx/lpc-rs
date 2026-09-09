@@ -27,4 +27,4 @@ mapping doubled = map(([ "a": 1 ]), (: $2 * 2 :));           // ([ "a": 2 ])
 
 ### See also
 
-`filter`, `sort_array`
+`filter`, `reduce`, `sort_array`
