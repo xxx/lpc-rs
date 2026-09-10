@@ -1345,6 +1345,24 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn for_loop_initializers_do_not_shadow_themselves() {
+            let code = indoc::indoc! { r#"
+                #define SS_STR 0
+                #define SS_DIS 5
+                void f(int me) {
+                    if (me) {
+                        int j;
+                        for (j = SS_STR; j <= SS_DIS; ++j) {}
+                    } else {
+                        for (int j = SS_STR; j <= SS_DIS; ++j) {}
+                    }
+                }
+            "# };
+            let warnings = warnings_of(code).await;
+            assert!(warnings.is_empty(), "{warnings:?}");
+        }
+
+        #[tokio::test]
         async fn a_global_shadowing_an_inherited_global_is_a_warning() {
             assert_eq!(
                 warnings_of(r#"inherit "/parent"; int b;"#).await,
