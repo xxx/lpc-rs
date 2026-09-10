@@ -3,6 +3,8 @@
 
 use std::collections::VecDeque;
 
+use super::display;
+
 /// What a field contributes: one line, or a column's or table's lines.
 pub(super) struct Field {
     pub lines: Vec<String>,
@@ -32,8 +34,6 @@ struct Pending {
 pub(super) struct Layout {
     out: String,
     row: String,
-    /// `row`'s width in characters.
-    row_len: usize,
     last: Option<Kind>,
     pending: Vec<Pending>,
 }
@@ -46,33 +46,29 @@ impl Layout {
             return;
         }
         self.row.push(c);
-        self.row_len += 1;
         self.last = Some(Kind::Literal);
     }
 
     /// A field's first line into the row; the rest wait for the rows that
     /// follow.
     pub(super) fn field(&mut self, field: Field) {
-        let offset = self.row_len;
         let mut lines: VecDeque<String> = field.lines.into();
         let first = lines.pop_front().unwrap_or_default();
-        self.row_len += first.chars().count();
-        self.row.push_str(&first);
-        self.last = Some(field.kind);
         if !lines.is_empty() {
             self.pending.push(Pending {
-                offset,
+                offset: display::width(&self.row),
                 lines,
                 kind: field.kind,
             });
         }
+        self.row.push_str(&first);
+        self.last = Some(field.kind);
     }
 
     /// Close the row and the continuation rows under it, each followed by
     /// a newline when `newline`, else joined by one.
     fn finish_row(&mut self, newline: bool) {
         let mut rows = vec![Self::stripped(std::mem::take(&mut self.row), self.last)];
-        self.row_len = 0;
         self.last = None;
         while self.pending.iter().any(|p| !p.lines.is_empty()) {
             let mut row = String::new();
@@ -86,7 +82,7 @@ impl Layout {
                     row.push_str(&" ".repeat(pending.offset - len));
                     len = pending.offset;
                 }
-                len += line.chars().count();
+                len += display::width(&line);
                 row.push_str(&line);
                 last = Some(pending.kind);
             }

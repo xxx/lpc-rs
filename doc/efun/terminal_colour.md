@@ -135,6 +135,11 @@ raises an error rather than returning truncated text.
 
 ## Compatibility
 
+`sprintf` preserves `%^` in its format string and measures expanded ANSI colours
+by visible width. Format plain arguments before expanding surrounding markup;
+expand markup inside an argument before passing it to a width-sensitive field.
+See `sprintf` for examples and precision behavior.
+
 Unlike FluffOS, ordinary words are never looked up as tokens and input mappings are
 not modified. Unlike LDMud, `0` strips tokens rather than selecting pure wrapping.
 `break_string` remains available for ordinary text wrapping.

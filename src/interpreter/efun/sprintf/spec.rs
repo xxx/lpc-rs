@@ -29,12 +29,12 @@ pub(super) enum Pad {
 }
 
 impl Pad {
-    /// `n` characters of padding.
+    /// `n` terminal columns of padding.
     pub(super) fn run(&self, n: usize) -> String {
         match self {
             Pad::Space => " ".repeat(n),
             Pad::Zero => "0".repeat(n),
-            Pad::Custom(s) => s.chars().cycle().take(n).collect(),
+            Pad::Custom(s) => super::display::padding(s, n),
         }
     }
 }

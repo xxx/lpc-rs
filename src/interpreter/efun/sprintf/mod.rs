@@ -1,6 +1,7 @@
 //! `sprintf`: LPC's format string, in the dialect LDMud and FluffOS
 //! share; `%=` columns and `%#` tables lay out across rows.
 
+mod display;
 mod layout;
 mod render;
 mod spec;
@@ -42,6 +43,12 @@ pub fn sprintf<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
         if chars.peek() == Some(&'%') {
             chars.next();
             layout.text_char('%');
+            continue;
+        }
+        if chars.peek() == Some(&'^') {
+            chars.next();
+            layout.text_char('%');
+            layout.text_char('^');
             continue;
         }
         let spec = spec::parse(&mut chars).map_err(|e| {
@@ -118,6 +125,148 @@ mod tests {
             (r#""100%%""#, "100%"),
             (r#""%s", "foo""#, "foo"),
             (r#""a%sb%sc", "1", "2""#, "a1b2c"),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn colour_markers_in_the_format_do_not_consume_arguments() {
+        check(&[
+            (
+                r#""%^RED%^%-5s%^RESET%^:%d", "red", 7"#,
+                "%^RED%^red  %^RESET%^:7",
+            ),
+            (r#""%^""#, "%^"),
+            (r#""%^RED%^""#, "%^RED%^"),
+            (r#""%%^RED%%^ %s", "x""#, "%^RED%^ x"),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn ansi_fields_are_aligned_by_their_visible_width() {
+        check(&[
+            (
+                "\"|%6s|\", \"\x1b[31mred\x1b[0m\"",
+                "|   \x1b[31mred\x1b[0m|",
+            ),
+            (
+                "\"|%-6s|\", \"\x1b[31mred\x1b[0m\"",
+                "|\x1b[31mred\x1b[0m   |",
+            ),
+            (
+                "\"|%|6s|\", \"\x1b[31mred\x1b[0m\"",
+                "|  \x1b[31mred\x1b[0m |",
+            ),
+            (
+                "\"|%4s|\", \"\x1b[1;38;2;255;0;0m界\x1b[0m\"",
+                "|  \x1b[1;38;2;255;0;0m界\x1b[0m|",
+            ),
+            ("\"|%3s|\", \"\x1b[31m\x1b[0m\"", "|   \x1b[31m\x1b[0m|"),
+            (r#""%-5s", "%^RED%^red%^RESET%^""#, "%^RED%^red%^RESET%^"),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn precision_uses_columns_and_preserves_sgr_resets() {
+        check(&[
+            (
+                "\"|%6.2s|\", \"\x1b[31mred\x1b[0m\"",
+                "|    \x1b[31mre\x1b[0m|",
+            ),
+            ("\"|%:1s|\", \"\x1b[31m界\x1b[0m\"", "| \x1b[31m\x1b[0m|"),
+            ("\"%.0s\", \"\x1b[31mred\x1b[0m\"", "\x1b[31m\x1b[0m"),
+            ("\"%4.1s\", \"e\u{301}x\"", "   e\u{301}"),
+            (r#""%.2s", "👩‍💻x""#, "👩‍💻"),
+            (
+                "\"%.2s\", \"e\x1b[31m\u{301}👩\x1b[0m‍💻\"",
+                "e\x1b[31m\u{301}\x1b[0m",
+            ),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn colour_conversion_composes_before_or_after_formatting() {
+        let result = run_prog(
+            r#"
+            string create() {
+                return terminal_colour(sprintf("%^RED%^%-6s%^RESET%^", "red"), 1, 0, 0, 3)
+                    + "|" + sprintf("%-6s", terminal_colour("%^RED%^red%^RESET%^", 1, 0, 0, 3));
+            }
+        "#,
+        )
+        .await
+        .result();
+        assert_eq!(
+            result.and_then(|value| value.as_str().map(str::to_owned)),
+            Some("\x1b[31mred   \x1b[0m|\x1b[31mred\x1b[0m   ".to_owned())
+        );
+    }
+
+    #[tokio::test]
+    async fn unicode_and_coloured_custom_padding_fill_terminal_columns() {
+        check(&[
+            (r#""%5'界's", "x""#, "界界x"),
+            (r#""%4'界's", "x""#, "界 x"),
+            ("\"%3'e\u{301}'s\", \"x\"", "e\u{301}e\u{301}x"),
+            (
+                "\"%3'\x1b[31m.\x1b[0m's\", \"x\"",
+                "\x1b[31m.\x1b[0m\x1b[31m.\x1b[0mx",
+            ),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn coloured_columns_wrap_without_splitting_controls_or_graphemes() {
+        check(&[
+            (
+                "\"%=-4s\", \"\x1b[31maa bb\x1b[0m\"",
+                "\x1b[31maa\nbb\x1b[0m",
+            ),
+            (
+                "\"%=-3s\", \"\x1b[31mabcdefg\x1b[0m\"",
+                "\x1b[31mabc\ndef\ng\x1b[0m",
+            ),
+            (r#""%=-3s", "界界x""#, "界\n界x\n"),
+            (r#""%=-1s", "界x""#, "界\nx\n"),
+            ("\"%=-2s\", \"e\u{301}e\u{301}x\"", "e\u{301}e\u{301}\nx"),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn continuation_columns_use_visible_offsets_in_fields_and_literals() {
+        check(&[
+            (
+                "\"\x1b[31m界\x1b[0m%=-3s\", \"ab cd\"",
+                "\x1b[31m界\x1b[0mab\n  cd",
+            ),
+            (
+                "\"%s%=-3s\", \"\x1b[31m界\x1b[0m\", \"ab cd\"",
+                "\x1b[31m界\x1b[0mab\n  cd",
+            ),
+            (
+                "\"%=-3s|%=-3s\", \"\x1b[31mab\x1b[0m cd\", \"xy z\"",
+                "\x1b[31mab\x1b[0m |xy\ncd  z",
+            ),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn table_columns_fit_visible_names() {
+        check(&[
+            (
+                "\"%#-10s\", \"\x1b[31mone\x1b[0m\\ntwo\\n界\"",
+                "\x1b[31mone\x1b[0m  界\ntwo  ",
+            ),
+            (
+                "\"%#-8.2s\", \"\x1b[31m界\x1b[0m\\nb\\nc\\nd\"",
+                "\x1b[31m界\x1b[0m  c\nb   d",
+            ),
         ])
         .await;
     }

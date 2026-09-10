@@ -5,6 +5,7 @@ use lpc_rs_core::BaseFloat;
 use lpc_rs_errors::Result;
 
 use super::{
+    display::{self, Text},
     layout::{Field, Kind},
     spec::{Align, Mode, Pad, Sign, Spec},
 };
@@ -25,7 +26,7 @@ fn padded(text: &str, width: Option<usize>, align: Align, pad: &Pad) -> String {
     let Some(width) = width else {
         return text.to_owned();
     };
-    let len = text.chars().count();
+    let len = display::width(text);
     if len >= width {
         return text.to_owned();
     }
@@ -143,7 +144,8 @@ fn wrapped(text: &str, width: usize) -> Vec<String> {
         let mut line = String::new();
         let mut line_len = 0;
         for word in paragraph.split(' ').filter(|w| !w.is_empty()) {
-            let word_len = word.chars().count();
+            let parsed = Text::new(word);
+            let word_len = parsed.width();
             if line_len > 0 && line_len + 1 + word_len <= width {
                 line.push(' ');
                 line.push_str(word);
@@ -159,13 +161,16 @@ fn wrapped(text: &str, width: usize) -> Vec<String> {
                 line_len = word_len;
                 continue;
             }
-            let pieces: Vec<char> = word.chars().collect();
-            for piece in pieces.chunks(width) {
-                if piece.len() == width {
-                    lines.push(piece.iter().collect());
-                } else {
-                    line = piece.iter().collect();
-                    line_len = piece.len();
+            for unit in parsed.units() {
+                if line_len > 0 && line_len + unit.width > width {
+                    lines.push(std::mem::take(&mut line));
+                    line_len = 0;
+                }
+                line.push_str(unit.raw);
+                line_len += unit.width;
+                if line_len >= width {
+                    lines.push(std::mem::take(&mut line));
+                    line_len = 0;
                 }
             }
         }
@@ -181,7 +186,7 @@ fn table(words: &[&str], width: usize, columns: Option<usize>, align: Align) -> 
     if words.is_empty() {
         return Vec::new();
     }
-    let longest = words.iter().map(|w| w.chars().count()).max().unwrap_or(0);
+    let longest = words.iter().map(|w| display::width(w)).max().unwrap_or(0);
     let columns = columns
         .unwrap_or_else(|| width / (longest + 2))
         .clamp(1, words.len());
@@ -233,7 +238,7 @@ pub(super) fn field<const N: usize>(
                 return Err(wants("a string"));
             };
             let text: String = match precision {
-                Some(p) if spec.mode == Mode::Plain => s.chars().take(p).collect(),
+                Some(p) if spec.mode == Mode::Plain => Text::new(s).truncate(p),
                 _ => s.to_owned(),
             };
             match spec.mode {
