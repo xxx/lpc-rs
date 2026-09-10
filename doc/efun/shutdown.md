@@ -12,9 +12,6 @@ calling `shutdown` stops nothing. When it lands, the driver leaves its main
 loop, tells every connection, runs the master's `shutdown()` apply, closes
 every connection, and exits with `code`.
 
-FluffOS's convention is that a restart script treats `-1` as "stay down";
-a reboot command calls `shutdown()` and a halt command `shutdown(-1)`.
-
 ### Examples
 
 ```c

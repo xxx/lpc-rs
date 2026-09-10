@@ -53,9 +53,8 @@ resolver found for their slot (an unreachable match, per
 filled, the current slot holding that one candidate (bare object, even for a
 many slot), and later slots still `0`; once every slot is chosen, `direct_`
 and `indirect_` are each called once more on the objects finally chosen,
-every argument filled — MudOS's guarantee that a handler eventually sees the
-whole sentence. `do_` is called once, after that re-ask, with every slot
-filled.
+with every argument filled. `do_` is called once, after that re-ask, with
+every slot filled.
 
 ### Returns
 

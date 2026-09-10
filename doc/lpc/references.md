@@ -58,9 +58,9 @@ at the call, so a `ref` parameter never silently receives a copy.
 
 ## Efuns take lvalues implicitly
 
-`sscanf(str, fmt, a, b)` writes into `a` and `b` without `ref`, as in every
-driver: the efun's prototype marks those positions, and the compiler
-requires a variable or an indexed element there (`argument N of `sscanf`
+`sscanf(str, fmt, a, b)` writes into `a` and `b` without `ref`: the efun's
+prototype marks those positions, and the compiler requires a variable or
+an indexed element there (`argument N of `sscanf`
 must be a variable`). An element such as `a[i]` or `m[key]` is read into a
 hidden cell before the call and written back after it, so it ends up
 exactly as a variable in that position would; the container and index are

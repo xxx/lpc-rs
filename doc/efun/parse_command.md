@@ -85,8 +85,8 @@ if (parse_command(str, environment(this_player()), "[the] %i %p [the] %o", items
 
 ### A master in English
 
-The driver holds no language. This master gives an English mud CD's
-behaviour; adapt the tables for another language.
+The driver has no built-in language. This example master supplies English
+words and pluralisation rules; adapt the tables for another language.
 
 ```c
 string parse_command_all_word() { return "all"; }

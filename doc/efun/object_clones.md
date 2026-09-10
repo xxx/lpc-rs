@@ -19,9 +19,8 @@ object *swords = object_clones(sword);
 // Also: object_clones(find_object("/obj/sword"))
 ```
 
-This follows CD's `object_clones(object)`. LDMud calls its equivalent
-`clones` and offers version-selection flags; FluffOS's `children(string)`
-also includes the prototype.
+Unlike FluffOS's `children(string)`, `object_clones` takes an object and
+excludes the prototype.
 
 ### See also
 

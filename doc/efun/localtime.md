@@ -3,7 +3,7 @@
 `int *localtime(int t = time())`
 
 Return `t`, seconds since the Unix epoch, broken down in the driver's local
-time zone as nine ints in LDMud's order:
+time zone as nine ints in this order:
 
 | Index | Field | Range |
 |---|---|---|

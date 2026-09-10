@@ -40,11 +40,11 @@ the second the *indirect* one. Extra whitespace between tokens is ignored.
 ### Handler names and slugs
 
 Each object slot and `STR`/`WRD` token, in rule order, contributes a slug
-word: `obj` for `OBJ`, `liv` for `LIV`, `wrd` for `WRD`, `str` for `STR`, and
-— this is the one irregular case, kept from MudOS — `obj`/`liv` for `OBS`/
-`LVS` too, except in `do_` names, where they contribute `obs`/`lvs`. A
-literal word contributes itself, lowercased. The slug is these words joined
-with `_`; a bare-verb rule has no slug. It names four applies:
+word: `obj` for `OBJ`, `liv` for `LIV`, `wrd` for `WRD`, and `str` for `STR`.
+`OBS`/`LVS` contribute `obj`/`liv` too, except in `do_` names, where they
+contribute `obs`/`lvs`. A literal word contributes itself, lowercased. The
+slug is these words joined with `_`; a bare-verb rule has no slug. It names
+four applies:
 
 | where | name | fallback |
 |---|---|---|

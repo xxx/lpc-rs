@@ -68,23 +68,23 @@ count together — at 16 deep, `parse_sentence: nesting deeper than 16`.
 
 ### Departures from MudOS/FluffOS
 
-| MudOS | here | why |
-|---|---|---|
-| parser rules reached only by the lib calling `parse_sentence` | also by the dispatcher, after the actor's rules for the verb | ruled 2026-08-26 (one system) |
-| default English messages when the master gives none | none: `-2`/`-3`, then the dispatcher's fallback | the driver holds no natural language |
-| `a`, `any`, `my`, `the` recognised by the parser | the master's adjective list | same rule |
-| `ERR_IS_NOT` vs `ERR_THERE_IS_NO` | only `THERE_IS_NO` | no game-wide vocabulary to know a noun "exists elsewhere" |
-| `ERR_MANY_PATHS` cap | never raised | slots resolve one at a time; no combinatorial paths |
-| `:c` "choose the first" rule modifier | not recognised | a documented mistake in MudOS's own notes |
-| `parse_sentence` codes `1/0/-1/-2` | plus `-3` | distinguishes "nothing resolved" from "a handler refused" once there is no default message |
-| `debug` argument | ignored | no debug tracer |
-| `parse_refresh` invalidates cached names | no-op | nothing is cached across calls |
-| nested scope arrays mean containment | flattened; containment is `environment()` | one scope shape |
-| livingness by the package's own test | `enable_commands`, as `parse_command`'s `%l` | one definition |
-| error reported: the last match's | the furthest parse's | deterministic and explainable |
-| verb matched by MudOS's own rules | exact first word | the dispatcher's registry does the pre-filter |
-| `parse_add_synonym(new, old)` | optional third argument, one rule | Lima's verb base calls it so |
-| `parse_my_rules` shape unspecified | `"verb rule"` strings | FluffOS's page says strings |
+| MudOS | lpc-rs |
+|---|---|
+| parser rules reached only by the lib calling `parse_sentence` | also by the dispatcher, after the actor's rules for the verb |
+| default English messages when the master gives none | none: `-2`/`-3`, then the dispatcher's fallback |
+| `a`, `any`, `my`, `the` recognised by the parser | the master's adjective list |
+| `ERR_IS_NOT` vs `ERR_THERE_IS_NO` | only `THERE_IS_NO` |
+| `ERR_MANY_PATHS` cap | never raised |
+| `:c` "choose the first" rule modifier | not recognised |
+| `parse_sentence` codes `1/0/-1/-2` | plus `-3` |
+| `debug` argument | ignored |
+| `parse_refresh` invalidates cached names | no-op |
+| nested scope arrays mean containment | flattened; containment is `environment()` |
+| livingness by the package's own test | `enable_commands`, as `parse_command`'s `%l` |
+| error reported: the last match's | the furthest parse's |
+| verb matched by MudOS's own rules | exact first word |
+| `parse_add_synonym(new, old)` | optional third argument, one rule |
+| `parse_my_rules` shape unspecified | `"verb rule"` strings |
 
 ### See also
 

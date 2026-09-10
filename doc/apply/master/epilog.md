@@ -12,8 +12,7 @@ with its type. An error thrown by `epilog` goes to `error_handler` and
 boot continues without preloads. An entry that is not a string is
 skipped, with a line in the debug log naming its type.
 
-`load_empty` is always 0. It is the flag other drivers pass when started
-with a "load empty" option; lpc-rs has no such option.
+`load_empty` is always 0; lpc-rs has no "load empty" startup option.
 
 `epilog` runs before the main loop: `this_player()` and `previous_object()`
 are 0 and no connection exists yet. A `call_out` it schedules fires once
