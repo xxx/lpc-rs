@@ -12,7 +12,8 @@ that leads out of the lib fails before this apply.
 
 - `path` is the canonical absolute in-game path being read: leading `/`, no
   `.` or `..`, a relative argument already resolved against the caller's
-  directory.
+  directory. For `get_dir`, this includes any wildcard pattern; the apply
+  runs once for the listing, before directory entries are read.
 - `func` is the efun's name (`"read_file"`), or `"include"` for an
   `#include`, so one apply serves them all. (`efun` itself is a reserved
   word: `efun::name()` calls the real efun.)
