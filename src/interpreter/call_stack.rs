@@ -189,16 +189,12 @@ impl<const STACKSIZE: usize> CallStack<STACKSIZE> {
             .filter_map(|(i, _)| self.stack.get(i.checked_sub(1)?))
     }
 
-    /// The chain a task started by the code in the frame at `index` is
-    /// entered with: that frame, the door crossers beneath it, then
-    /// `tail` — this task's own chain.
+    /// Capture every frame through `index` ahead of `tail` for a nested task.
     pub fn chain(&self, index: usize, tail: Callers) -> Arc<Caller> {
-        let crossers: Vec<&CallFrame> = self.door_crossers(index).collect();
-        let rest = crossers
-            .into_iter()
-            .rev()
-            .fold(tail, |rest, frame| Some(Caller::link_frame(frame, rest)));
-        Caller::link_frame(&self.stack[index], rest)
+        let rest = self.stack[..=index].windows(2).fold(tail, |rest, pair| {
+            Some(Caller::link_frame(&pair[0], pair[1].external, rest))
+        });
+        Caller::link_frame(&self.stack[index], true, rest)
     }
 
     /// Get the stack trace information for the stack

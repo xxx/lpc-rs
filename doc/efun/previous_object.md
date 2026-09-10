@@ -9,6 +9,10 @@ a task. A local call, own or inherited, is not a door, a simul efun calling
 another function of its file included: inside it `previous_object()` answers
 what it answered in the caller.
 
+Use `calling_object()` to inspect every calling frame, including local
+calls, with `calling_function()` and `calling_program()` naming the
+function and its defining file at the same depth.
+
 At the start of a task it is the object whose code started the task:
 `create()` sees the object that cloned, found or called it, a load or
 compile apply (`valid_load`, `compile_object`, `warning_handler`) and a
@@ -53,4 +57,4 @@ void probe() {
 
 ### See Also
 
-`this_object`, `call_other`, `call_out`, `add_action`, `calling_function`, `calling_program`
+`this_object`, `call_other`, `call_out`, `add_action`, `calling_object`, `calling_function`, `calling_program`

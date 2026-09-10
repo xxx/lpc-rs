@@ -1,5 +1,4 @@
-//! `calling_function` and `calling_program`: the function that called
-//! through the door `previous_object` names, and its defining file.
+//! The object, function, and defining file of each calling frame.
 
 use std::sync::Arc;
 
@@ -10,14 +9,25 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use crate::interpreter::{
     efun::efun_context::EfunContext,
     lpc_ref::{LpcRef, NULL},
+    process::Process,
 };
 
-/// `calling_function([step])`: the name of the function that called
-/// through the door `previous_object(step)` names; 0 where the driver
-/// fired the call. `-1` is the whole chain as an array.
+/// The object of the calling frame, including local calls; `-1` returns all callers.
+pub fn calling_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+    let txn = context.txn().clone();
+    answer(context, "calling_object", |process, _| {
+        if process.is_live(&txn) {
+            LpcRef::from(Arc::downgrade(process))
+        } else {
+            NULL
+        }
+    })
+}
+
+/// The calling function's name, including local calls; 0 for a driver frame.
 pub fn calling_function<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
-    answer(context, "calling_function", |function| {
-        LpcRef::from(function.name().as_ref())
+    answer(context, "calling_function", |_, function| {
+        function.map_or(NULL, |function| LpcRef::from(function.name().as_ref()))
     })
 }
 
@@ -26,31 +36,33 @@ pub fn calling_function<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
 /// (`/secure/master.c`); 0 where the driver fired the call.
 pub fn calling_program<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let lib_dir = context.config().lib_dir;
-    answer(context, "calling_program", |function| {
-        let path = LibRoot::new(lib_dir.as_str()).source_name(&function.prototype.filename);
-        LpcRef::from(path.to_string())
+    answer(context, "calling_program", |_, function| {
+        function.map_or(NULL, |function| {
+            let path = LibRoot::new(lib_dir.as_str()).source_name(&function.prototype.filename);
+            LpcRef::from(path.to_string())
+        })
     })
 }
 
-/// What `name` makes of the caller `step` back — 0 for one with no
-/// function — or of every caller for `-1`; another negative step is an
-/// error naming `efun`.
 fn answer<const N: usize>(
     context: &mut EfunContext<'_, N>,
     efun: &str,
-    name: impl Fn(&ProgramFunction) -> LpcRef,
+    name: impl Fn(&Arc<Process>, Option<&Arc<ProgramFunction>>) -> LpcRef,
 ) -> Result<()> {
     let step = match context.try_arg(0) {
         Some(LpcRef::Int(n)) => n.0,
         _ => 0,
     };
-    let of = |function: Option<&Arc<ProgramFunction>>| function.map_or(NULL, |f| name(f));
     let result = match step {
-        -1 => context.mint_array(context.callers().map(|(_, function)| of(function))),
+        -1 => context.mint_array(
+            context
+                .calling_frames()
+                .map(|(object, function)| name(object, function)),
+        ),
         n if n >= 0 => usize::try_from(n)
             .ok()
-            .and_then(|n| context.callers().nth(n))
-            .map_or(NULL, |(_, function)| of(function)),
+            .and_then(|n| context.calling_frames().nth(n))
+            .map_or(NULL, |(object, function)| name(object, function)),
         n => {
             return Err(
                 context.runtime_error(format!("{efun}: expected a step back or -1, got {n}"))

@@ -2,22 +2,22 @@
 
 `string | string *calling_function([int step = 0])`
 
-The name of the function that called the current one through a door — the
-function `previous_object()` was executing when it called: a `->`, a
-function-pointer call, a simul-efun call, or the code that started this
-task (`create()` of a clone sees the function that called `clone_object`).
-A local call, own or inherited, is not a door: inside one
-`calling_function()` answers what it answered in the caller. Where the
-driver fired the call — a `call_out` or `input_to` callback, a command
-handler, an apply, boot — the answer is 0 although `previous_object()`
-still names the object. A destructed caller still names its function,
-where `previous_object()` answers 0.
+The name of the function that called the current one. Every call counts,
+including local and inherited calls, function pointers, and simul efuns.
+Synchronous nested tasks retain their calling frames: a clone's `create()`
+sees the function that called `clone_object`, followed by that function's
+callers.
 
-`step` counts back exactly as `previous_object(step)` does:
-`calling_function(1)` is the function `previous_object(1)` called from,
-past the end of the chain the answer is 0, and `calling_function(-1)` is
-the whole chain as an array, innermost first, with 0 in an unknown
-position. Any other negative step is an error.
+Where the driver fired a call without an LPC function — a `call_out` or
+`input_to` callback, a command handler, or boot — the answer is 0.
+An efun pointer's internal frame also has no LPC function. A destructed
+caller still names its function, where `calling_object()` answers 0.
+
+`step` selects the same frame as `calling_object(step)`: `0` is the
+immediate caller, `1` its caller, and so on. Past the end the answer is 0.
+`calling_function(-1)` returns all callers' function names as an array,
+innermost first, with 0 in an unknown position. Any other negative step
+is an error.
 
 ### Examples
 
@@ -29,10 +29,11 @@ void probe() {
     check();                 // a local call
 }
 void check() {
-    calling_function();      // still "open_soul"
+    calling_function();      // "probe"
+    calling_function(1);     // "open_soul"
 }
 ```
 
 ### See also
 
-`calling_program`, `previous_object`, `call_other`
+`calling_object`, `calling_program`, `previous_object`, `call_other`

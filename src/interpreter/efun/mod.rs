@@ -1037,6 +1037,11 @@ efuns! {
             LpcType::Int(false) | LpcType::String(false),
         ],
     },
+    calling_object [in calling] => {
+        returns: LpcType::Mixed(false),
+        arity: (1, 1),
+        args: [LpcType::Int(false)],
+    },
     calling_function [in calling] => {
         returns: LpcType::Mixed(false),
         arity: (1, 1),
@@ -1422,6 +1427,7 @@ mod tests {
                 "object_time",
                 "wildmatch",
                 "break_string",
+                "calling_object",
                 "calling_function",
                 "calling_program",
                 "commands",

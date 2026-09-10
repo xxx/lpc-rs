@@ -1,5 +1,4 @@
-//! `calling_function` and `calling_program`: the function that called
-//! through the door `previous_object` names, and its file.
+//! Call-stack inspection includes local calls and survives nested task entries.
 
 use indoc::indoc;
 
@@ -33,14 +32,88 @@ async fn a_call_other_callee_sees_the_calling_function_and_its_file() {
 }
 
 #[tokio::test]
-async fn a_local_call_keeps_the_callers_calling_function() {
+async fn a_local_call_sees_its_immediate_calling_function() {
     let r = run(
         "",
         &[X],
         r#"mixed *create() { return ({ "/x"->via_local() }); }"#,
     )
     .await;
-    assert_eq!(r, vec![s("create")]);
+    assert_eq!(r, vec![s("via_local")]);
+}
+
+#[tokio::test]
+async fn a_local_call_can_name_this_object_while_previous_object_names_another() {
+    let r = run(
+        "",
+        &[(
+            "/x.c",
+            indoc! { r#"
+                mixed *inner() {
+                    return ({
+                        calling_object() == this_object(),
+                        file_name(previous_object()),
+                        calling_function(),
+                        calling_program(),
+                        file_name(calling_object(1)),
+                        calling_function(1),
+                        calling_program(1),
+                        calling_object(2),
+                    });
+                }
+                mixed *outer() { return inner(); }
+            "# },
+        )],
+        r#"mixed *create() { return "/x"->outer(); }"#,
+    )
+    .await;
+    assert_eq!(
+        r,
+        vec![
+            LpcRef::from(1),
+            s("/main"),
+            s("outer"),
+            s("/x.c"),
+            s("/main"),
+            s("create"),
+            s("/main.c"),
+            LpcRef::from(0),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn recursive_local_calls_occupy_separate_stack_positions() {
+    let r = run(
+        "",
+        &[],
+        indoc! { r#"
+            mixed *recurse(int depth) {
+                if (depth) { return recurse(depth - 1); }
+                object *objects = calling_object(-1);
+                return ({
+                    implode(calling_function(-1), " "),
+                    implode(calling_program(-1), " "),
+                    sizeof(objects),
+                    objects[0] == this_object() && objects[1] == this_object()
+                        && objects[2] == this_object(),
+                    previous_object(),
+                });
+            }
+            mixed *create() { return recurse(2); }
+        "# },
+    )
+    .await;
+    assert_eq!(
+        r,
+        vec![
+            s("recurse recurse create"),
+            s("/main.c /main.c /main.c"),
+            LpcRef::from(3),
+            LpcRef::from(1),
+            LpcRef::from(0),
+        ]
+    );
 }
 
 #[tokio::test]
@@ -55,6 +128,36 @@ async fn the_program_is_the_file_that_defines_the_calling_function() {
     )
     .await;
     assert_eq!(r, vec![s("/calling_base.c")]);
+}
+
+#[tokio::test]
+async fn inherited_local_calls_keep_the_object_and_use_the_defining_program() {
+    let r = run(
+        "",
+        &[(
+            "/x.c",
+            indoc! { r#"
+                inherit "/calling_base";
+                mixed *inspect() {
+                    return ({ calling_object() == this_object(), calling_function(),
+                        calling_program(), calling_function(1), calling_program(1) });
+                }
+                mixed *go() { return inspect_local(); }
+            "# },
+        )],
+        r#"mixed *create() { return "/x"->go(); }"#,
+    )
+    .await;
+    assert_eq!(
+        r,
+        vec![
+            LpcRef::from(1),
+            s("inspect_local"),
+            s("/calling_base.c"),
+            s("go"),
+            s("/x.c")
+        ]
+    );
 }
 
 #[tokio::test]
@@ -79,14 +182,55 @@ async fn create_sees_the_function_that_cloned() {
 }
 
 #[tokio::test]
+async fn nested_tasks_retain_local_frames_on_both_sides_of_the_boundary() {
+    let r = run(
+        "",
+        &[(
+            "/y.c",
+            indoc! { r#"
+                mixed *seen;
+                void inspect() {
+                    object *objects = calling_object(-1);
+                    seen = ({ implode(calling_function(-1), " "),
+                        implode(calling_program(-1), " "), sizeof(objects),
+                        objects[0] == this_object(), file_name(objects[1]),
+                        file_name(objects[2]), file_name(previous_object()),
+                        sizeof(previous_object(-1)) });
+                }
+                void create() { if (previous_object()) { inspect(); } }
+                mixed *seen() { return seen; }
+            "# },
+        )],
+        indoc! { r#"
+            mixed *make() { return clone_object("/y")->seen(); }
+            mixed *create() { return make(); }
+        "# },
+    )
+    .await;
+    assert_eq!(
+        r,
+        vec![
+            s("create make create"),
+            s("/y.c /main.c /main.c"),
+            LpcRef::from(3),
+            LpcRef::from(1),
+            s("/main"),
+            s("/main"),
+            s("/main"),
+            LpcRef::from(1),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn the_driver_entry_has_no_calling_function() {
     let r = run(
         "",
         &[],
-        r#"mixed *create() { return ({ calling_function(), calling_program() }); }"#,
+        r#"mixed *create() { return ({ calling_object(), calling_function(), calling_program(), sizeof(calling_object(-1)) }); }"#,
     )
     .await;
-    assert_eq!(r, vec![LpcRef::from(0), LpcRef::from(0)]);
+    assert_eq!(r, vec![LpcRef::from(0); 4]);
 }
 
 #[tokio::test]
@@ -138,6 +282,64 @@ async fn another_negative_step_is_an_error() {
     assert!(
         err.contains("calling_function: expected a step back or -1, got -2"),
         "{err}"
+    );
+}
+
+#[tokio::test]
+async fn calling_object_rejects_an_invalid_negative_step() {
+    let err = fails(
+        "",
+        &[],
+        r#"mixed *create() { return ({ calling_object(-2) }); }"#,
+    )
+    .await;
+    assert!(
+        err.contains("calling_object: expected a step back or -1, got -2"),
+        "{err}"
+    );
+}
+
+#[tokio::test]
+async fn efun_pointers_inspect_the_frame_that_fired_them() {
+    let r = run(
+        "",
+        &[("/x.c", r#"mixed *fire(function ob, function name, function program) { return ({ file_name(ob()), name(), program() }); }"#)],
+        r#"mixed *create() { return "/x"->fire(&calling_object(), &calling_function(), &calling_program()); }"#,
+    ).await;
+    assert_eq!(r, vec![s("/x"), s("fire"), s("/x.c")]);
+}
+
+#[tokio::test]
+async fn destructed_callers_keep_their_stack_position_and_function() {
+    let r = run(
+        "",
+        &[
+            ("/a.c", r#"mixed *go() { return "/x"->inspect(); }"#),
+            (
+                "/x.c",
+                indoc! { r#"
+                mixed *inspect() {
+                    destruct(calling_object());
+                    object *objects = calling_object(-1);
+                    return ({ calling_object(), sizeof(objects), objects[0],
+                        file_name(objects[1]), calling_function(), calling_program() });
+                }
+            "# },
+            ),
+        ],
+        r#"mixed *create() { return clone_object("/a")->go(); }"#,
+    )
+    .await;
+    assert_eq!(
+        r,
+        vec![
+            LpcRef::from(0),
+            LpcRef::from(2),
+            LpcRef::from(0),
+            s("/main"),
+            s("go"),
+            s("/a.c")
+        ]
     );
 }
 

@@ -7,7 +7,7 @@ use std::{
 use arc_swap::ArcSwapAny;
 use delegate::delegate;
 use lpc_rs_asm::instruction::{Arg, ArgList};
-use lpc_rs_core::{RegisterSize, lpc_path::LpcPath};
+use lpc_rs_core::{INIT_PROGRAM, RegisterSize, lpc_path::LpcPath};
 use lpc_rs_errors::{LpcError, Result, span::Span};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
@@ -551,6 +551,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
             .flat_map(|index| self.stack.door_crossers(index))
             .map(frame_caller);
         let chain = Caller::links(&self.task_context.callers)
+            .filter(|caller| caller.external)
             .map(|caller| (&caller.object, caller.function.as_ref()));
         firer.into_iter().chain(crossers).chain(chain)
     }
@@ -558,6 +559,21 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// The objects of [`callers`](Self::callers).
     pub fn previous_objects(&self) -> impl Iterator<Item = &Arc<Process>> {
         self.callers().map(|(object, _)| object)
+    }
+
+    /// Every calling frame, nearest first, followed by frames captured at task boundaries.
+    pub fn calling_frames(
+        &self,
+    ) -> impl Iterator<Item = (&Arc<Process>, Option<&Arc<ProgramFunction>>)> {
+        let skip =
+            usize::from(self.fired.is_none() || self.stack.last().is_some_and(CallFrame::is_entry));
+        let frames = self.stack.iter().rev().skip(skip).map(frame_caller);
+        let chain = Caller::links(&self.task_context.callers)
+            .map(|caller| (&caller.object, caller.function.as_ref()));
+        // The initialization dispatcher only schedules global initializers and `create()`.
+        frames
+            .chain(chain)
+            .filter(|(_, function)| !function.is_some_and(|f| f.name() == INIT_PROGRAM))
     }
 
     /// The chain a load or apply made by this efun is entered with.

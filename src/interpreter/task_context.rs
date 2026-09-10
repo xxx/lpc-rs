@@ -108,17 +108,18 @@ pub enum ObjectLookup {
     NotCreated,
 }
 
-/// One object that called through a door on the way to a task, and what
-/// `previous_object` answered where it stood; innermost first. Immutable,
-/// so a nested task shares its parent's tail.
+/// A caller captured at a task boundary, with local frames retained for
+/// stack inspection and external calls marked for `previous_object`.
 #[derive(Debug)]
 pub struct Caller {
-    /// The object that called through.
+    /// The object that made the call.
     pub object: Arc<Process>,
     /// The function it called through from; `None` where the driver fired
     /// the call (a pointer, a command, an apply).
     pub function: Option<Arc<ProgramFunction>>,
-    /// The chain behind it.
+    /// Whether this call contributes to `previous_object`.
+    pub external: bool,
+    /// The calling frames behind it, innermost first.
     pub rest: Callers,
 }
 
@@ -131,16 +132,17 @@ impl Caller {
         Arc::new(Self {
             object,
             function: None,
+            external: true,
             rest,
         })
     }
 
-    /// `frame`'s object in front of `rest`, called through from `frame`'s
-    /// function.
-    pub fn link_frame(frame: &CallFrame, rest: Callers) -> Arc<Self> {
+    /// Capture `frame` in front of `rest`, marking whether its callee was external.
+    pub fn link_frame(frame: &CallFrame, external: bool, rest: Callers) -> Arc<Self> {
         Arc::new(Self {
             object: frame.process.clone(),
             function: frame.lpc_function().cloned(),
+            external,
             rest,
         })
     }
@@ -150,9 +152,11 @@ impl Caller {
         std::iter::successors(chain.as_deref(), |caller| caller.rest.as_deref())
     }
 
-    /// The objects of `chain`, innermost first.
+    /// The previous objects of `chain`, innermost first.
     pub fn objects(chain: &Callers) -> impl Iterator<Item = &Arc<Process>> {
-        Self::links(chain).map(|caller| &caller.object)
+        Self::links(chain)
+            .filter(|caller| caller.external)
+            .map(|caller| &caller.object)
     }
 }
 
@@ -240,9 +244,8 @@ pub struct TaskContext {
     /// context so a handler's `query_verb()` sees the dispatch that called it.
     pub(crate) command: Arc<parking_lot::Mutex<Vec<CommandState>>>,
 
-    /// The objects that called through doors to reach this task, innermost
-    /// first: what `previous_object` answers past the entry frame. `None`
-    /// where the driver stood.
+    /// Calling frames captured at task boundaries, innermost first, with
+    /// external calls marked for `previous_object`; `None` at a driver entry.
     pub callers: Callers,
 }
 

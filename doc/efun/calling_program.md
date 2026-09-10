@@ -17,4 +17,4 @@ if (calling_program()[0..4] != "/std/") return;
 
 ### See also
 
-`calling_function`, `previous_object`, `file_name`
+`calling_object`, `calling_function`, `previous_object`, `file_name`
