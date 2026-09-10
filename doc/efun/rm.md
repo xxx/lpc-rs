@@ -2,8 +2,11 @@
 
 `int rm(string path)`
 
-Remove the file at `path`. Returns 1. A `path` that does not exist, or that
-is a directory, is a runtime error naming its in-game path.
+Remove the file at `path`. Returns 1 when removal is scheduled, or 0 without
+an error when the path does not exist, including a missing parent directory.
+A directory or another filesystem failure raises a runtime error naming
+the in-game path. Symlinks are removed as links, even if their targets are
+missing.
 
 Every call is first put to the master's `valid_write(path, "rm", caller,
 program)`. A refusal, or a master that does not define the apply, is the

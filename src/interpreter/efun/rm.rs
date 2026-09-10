@@ -8,13 +8,18 @@ use crate::interpreter::{
 };
 
 /// `rm(path)`: unlink the file, once the master's `valid_write` allows it.
-/// Checked now — it exists and is a file or a symlink — and removed at
-/// commit. A symlink is unlinked as a link, never followed.
+/// Return 0 for a missing path, or 1 when removal is scheduled at commit.
+/// A symlink is unlinked as a link, never followed.
 pub async fn rm<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let access = authorize(context, "rm", VALID_WRITE, 0).await?;
-    let metadata = tokio::fs::symlink_metadata(access.path().server())
-        .await
-        .map_err(|e| access.error(context, e))?;
+    let metadata = match tokio::fs::symlink_metadata(access.path().server()).await {
+        Ok(metadata) => metadata,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            context.return_efun_result(LpcRef::from(0));
+            return Ok(());
+        }
+        Err(e) => return Err(access.error(context, e)),
+    };
     if !(metadata.is_file() || metadata.is_symlink()) {
         return Err(context.runtime_error(format!("rm: {} is not a file", access)));
     }
@@ -62,19 +67,79 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_missing_file_is_a_runtime_error() {
+    async fn a_missing_file_returns_zero() {
         let root = TempLib::new("rm-missing");
         let vm = allowing_vm(&root).await;
+        let task = vm
+            .initialize_process_from_code("/r.c", r#"int create() { return rm("/o.txt"); }"#)
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(0)));
+    }
+
+    #[tokio::test]
+    async fn a_missing_parent_directory_returns_zero() {
+        let root = TempLib::new("rm-missing-parent");
+        let vm = allowing_vm(&root).await;
+        let task = vm
+            .initialize_process_from_code(
+                "/r.c",
+                r#"int create() { return rm("/missing/o.txt"); }"#,
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(0)));
+    }
+
+    #[tokio::test]
+    async fn a_non_directory_path_component_is_still_an_error() {
+        let root = TempLib::new("rm-nondirectory-parent");
+        std::fs::write(root.join("f.txt"), "x").unwrap();
+        let vm = allowing_vm(&root).await;
         let err = vm
-            .initialize_process_from_code("/r.c", r#"void create() { rm("/o.txt"); }"#)
+            .initialize_process_from_code("/r.c", r#"void create() { rm("/f.txt/o.txt"); }"#)
             .await
             .unwrap_err()
             .to_string();
-        assert!(err.contains("rm: /o.txt:"), "{err}");
-        assert!(
-            !err.contains(vm.global_state.config.lib_dir.as_str()),
-            "server path leaked: {err}"
+        assert!(err.contains("rm: /f.txt/o.txt:"), "{err}");
+        assert!(!err.contains(root.to_str().unwrap()), "{err}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_dangling_symlink_is_removed() {
+        let root = TempLib::new("rm-dangling-symlink");
+        std::os::unix::fs::symlink(root.join("missing.txt"), root.join("link")).unwrap();
+        let vm = allowing_vm(&root).await;
+        let task = vm
+            .initialize_process_from_code("/r.c", r#"int create() { return rm("/link"); }"#)
+            .await
+            .unwrap();
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert_eq!(
+            std::fs::symlink_metadata(root.join("link"))
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::NotFound
         );
+    }
+
+    #[tokio::test]
+    async fn a_missing_file_still_requires_authorization() {
+        let root = TempLib::new("rm-missing-denied");
+        let vm = Vm::new(temp_lib_config(&root));
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            "int valid_write(string p, string e, object c, string g) { return 0; }",
+        )
+        .await
+        .unwrap();
+        let err = vm
+            .initialize_process_from_code("/r.c", r#"void create() { rm("/missing.txt"); }"#)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("rm: permission denied"), "{err}");
     }
 
     /// A symlink to a directory is unlinked as a link; the directory it
