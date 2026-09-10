@@ -18,9 +18,11 @@ the task chain.
 With an object, return `ob` when it is in the calling object's inventory or
 in its environment's inventory; with `env`, when it is in `env`'s inventory.
 
-Returns `0` when nothing matches, when `ob` is elsewhere, or when `env` has
-been destructed. A first argument that is neither a string nor an object,
-or an `env` that is neither an object nor `0`, is an error.
+Returns `0` when nothing matches, when `ob` is elsewhere or destructed, or
+when `env` has been destructed. An integer first argument at runtime also
+returns `0`, including a missing object represented by `0`, so an `objectp()`
+guard is unnecessary. Other first-argument types are errors. An `env` that
+is neither an object nor `0` is an error; `env=0` retains the default search.
 
 ### Examples
 

@@ -82,6 +82,10 @@ pub fn present<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
             context.return_efun_result(result);
             Ok(())
         }
+        LpcRef::Int(_) => {
+            context.return_efun_result(NULL);
+            Ok(())
+        }
         other => Err(context.runtime_error(format!(
             "present: {} is not a string or object",
             other.type_name()
@@ -329,16 +333,80 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_first_argument_that_is_neither_is_an_error() {
+    async fn an_integer_search_target_is_zero() {
+        for value in [0, 1, -1] {
+            for args in ["value", "value, this_object()"] {
+                let vm = Vm::new(test_config());
+                let code = format!(
+                    "object found; void create() {{ mixed value = {value}; found = present({args}); }}"
+                );
+                let caller = vm
+                    .initialize_process_from_code("/caller.c", &code)
+                    .await
+                    .unwrap()
+                    .context
+                    .process;
+                assert_eq!(
+                    vm.global_state.committed_global(&caller, 0u16),
+                    LpcRef::from(0),
+                    "present({args}) with value = {value}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_missing_object_search_target_is_zero() {
         let w = world().await;
-        let err = w
-            .vm
-            .initialize_process_from_code("/caller.c", "void create() { mixed x = 1; present(x); }")
+        let r = found(&w, r#""/finder"->here(find_object("/missing"))"#).await;
+        assert_eq!(r, LpcRef::from(0));
+    }
+
+    #[tokio::test]
+    async fn a_destructed_object_search_target_is_zero() {
+        let w = world().await;
+        let caller =
+            w.vm.initialize_process_from_code(
+                "/caller.c",
+                r#"
+                    object found;
+                    void create() {
+                        object ob = find_object("/room_sword");
+                        destruct(ob);
+                        found = "/finder"->here(ob);
+                    }
+                "#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            w.vm.global_state.committed_global(&caller, 0u16),
+            LpcRef::from(0)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_zero_environment_keeps_the_default_search() {
+        let w = world().await;
+        let r = found(&w, r#""/finder"->find_in("sword", 0)"#).await;
+        assert_eq!(r, object(&w.hand_sword));
+    }
+
+    #[tokio::test]
+    async fn a_float_search_target_is_an_error() {
+        let w = world().await;
+        let err =
+            w.vm.initialize_process_from_code(
+                "/caller.c",
+                "void create() { mixed x = 1.5; present(x); }",
+            )
             .await
             .unwrap_err()
             .to_string();
         assert!(
-            err.contains("present: int is not a string or object"),
+            err.contains("present: float is not a string or object"),
             "{err}"
         );
     }
