@@ -1410,7 +1410,7 @@ dependencies = [
  "regex-automata",
  "rpds",
  "serde_json",
- "sha-1",
+ "sha-1 0.10.1",
  "sha2",
  "smallvec",
  "spin 0.12.3",
@@ -1872,7 +1872,7 @@ dependencies = [
  "hmac",
  "md-5",
  "rand 0.8.8",
- "sha-1",
+ "sha-1 0.9.8",
  "sha2",
 ]
 
@@ -2149,6 +2149,17 @@ dependencies = [
  "cpufeatures 0.2.17",
  "digest 0.9.0",
  "opaque-debug",
+]
+
+[[package]]
+name = "sha-1"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5058ada175748e33390e40e872bd0fe59a19f265d0158daa551c5a88a76009c"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.2.17",
+ "digest 0.10.7",
 ]
 
 [[package]]
