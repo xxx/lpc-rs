@@ -5,7 +5,7 @@ use crate::{
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},
 };
 
-/// `command`, an efun that runs a line as `this_player()` (or a given
+/// `command`, an efun that runs a line as `this_object()` (or a given
 /// living) inside the caller's transaction; 1 when handled.
 pub async fn command<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let LpcRef::String(line) = context.arg(0).clone() else {
@@ -13,8 +13,8 @@ pub async fn command<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
     };
     // An omitted default argument arrives as a NULL-filled register, not an absent one.
     let actor = match context.try_arg(1) {
-        None => context.this_player().load_full(),
-        Some(given) if given.is_null() => context.this_player().load_full(),
+        None => Some(context.process().clone()),
+        Some(given) if given.is_null() => Some(context.process().clone()),
         Some(given @ LpcRef::Object(_)) => given.live_object(context.txn()),
         Some(_) => return Err(context.runtime_error("command: the actor must be an object")),
     };

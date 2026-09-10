@@ -388,6 +388,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn command_defaults_to_this_object_without_this_player() {
+        let code = indoc! { r#"
+            int omitted; int zero; object after;
+            void create() {
+                enable_commands();
+                add_action("do_look", "look");
+                set_this_player(0);
+                omitted = command("look");
+                zero = command("look", 0);
+                after = this_player();
+            }
+            int do_look() { return this_player() == this_object(); }
+        "# };
+        assert_eq!(
+            globals(code, 3).await,
+            vec![LpcRef::from(1), LpcRef::from(1), LpcRef::from(0)]
+        );
+    }
+
+    #[tokio::test]
+    async fn command_defaults_to_this_object_when_called_by_another_player() {
+        let npc = indoc! { r#"
+            int calls;
+            void create() {
+                enable_commands();
+                add_action("do_look", "look");
+            }
+            int do_look() { calls++; return this_player() == this_object(); }
+            int run() {
+                int handled = command("look");
+                handled += command("look", 0);
+                handled += command("look", this_player());
+                return handled;
+            }
+        "# };
+        let player = indoc! { r#"
+            int calls; int handled; int restored;
+            void create() {
+                enable_commands();
+                add_action("do_look", "look");
+                handled = find_object("/npc")->run();
+                restored = this_player() == this_object();
+            }
+            int do_look() { calls++; return this_player() == this_object(); }
+        "# };
+        let vm = Vm::new(test_config());
+        let npc_proc = vm
+            .initialize_process_from_code("/npc.c", npc)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let player_proc = vm
+            .initialize_process_from_code("/player.c", player)
+            .await
+            .unwrap()
+            .context
+            .process;
+        assert_eq!(
+            vm.global_state.committed_global(&npc_proc, 0u16),
+            LpcRef::from(2)
+        );
+        let player_globals: Vec<_> = (0..3u16)
+            .map(|slot| vm.global_state.committed_global(&player_proc, slot))
+            .collect();
+        assert_eq!(
+            player_globals,
+            vec![LpcRef::from(1), LpcRef::from(3), LpcRef::from(1)]
+        );
+    }
+
+    #[tokio::test]
     async fn an_explicit_actor_runs_its_own_rules() {
         let code = indoc! { r#"
             int r; string arg;
