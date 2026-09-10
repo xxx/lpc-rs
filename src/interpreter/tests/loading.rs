@@ -598,6 +598,197 @@ mod doors {
     }
 }
 
+mod bound_pointers {
+    use super::*;
+
+    #[tokio::test]
+    async fn taking_a_pointer_loads_and_initializes_without_calling_it() {
+        let root = TempLib::new("bound-pointer-load");
+        let vm = Vm::new(temp_lib_config(&root));
+        let master = recording_master(&vm, &root).await;
+        write(
+            &root,
+            "x.c",
+            indoc! { r#"
+                int initialized; int calls; string creator;
+                void create() { initialized++; creator = file_name(previous_object()); }
+                int send(object caller, int pkg, int data) { calls++; return pkg + data; }
+            "# },
+        );
+        run(
+            &vm,
+            "/writer.c",
+            indoc! { r#"
+                #define GMCP_HANDLER "/x"
+                function make() { return &(GMCP_HANDLER)->send(this_object(), 20, 22); }
+            "# },
+        )
+        .await;
+        let caller = run(
+            &vm,
+            "/caller.c",
+            r#"function callback; void create() { callback = "/writer"->make(); }"#,
+        )
+        .await;
+        let target = vm.global_state.object_space.lookup("/x").unwrap();
+        assert_eq!(count(&vm, &target, 0), 1);
+        assert_eq!(count(&vm, &target, 1), 0);
+        assert_eq!(committed_string(&vm, &target, 2), "/writer");
+        assert_eq!(committed_string(&vm, &master, SEEN_PATH), "/x.c");
+        assert_eq!(committed_string(&vm, &master, SEEN_FUNC), "call_other");
+        assert_eq!(committed_string(&vm, &master, SEEN_CALLER), "/writer");
+        assert_eq!(committed_string(&vm, &master, SEEN_PROGRAM), "/writer.c");
+        assert_eq!(count(&vm, &master, LOADS), 1);
+        assert!(matches!(
+            vm.global_state.committed_global(&caller, 0u16),
+            LpcRef::Function(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn bound_arguments_survive_loading_and_repeated_pointers_reuse_the_object() {
+        let root = TempLib::new("bound-pointer-arguments");
+        let vm = Vm::new(temp_lib_config(&root));
+        let master = recording_master(&vm, &root).await;
+        write(
+            &root,
+            "x.c",
+            indoc! { r#"
+                int initialized;
+                void create() { initialized++; previous_object()->change(); }
+                int f(int a, int b, int c) { return a + 10 * b + 100 * c; }
+            "# },
+        );
+        let caller = run(
+            &vm,
+            "/dir/caller.c",
+            indoc! { r#"
+                int value = 1; int result; int reused; int evaluations;
+                void change() { value = 9; }
+                string target() { evaluations++; return "x"; }
+                void create() {
+                    function f = &(target())->f(value,,3);
+                    function g = &("/x.c")->f(4,5,6);
+                    result = f(2);
+                    reused = g();
+                }
+            "# },
+        )
+        .await;
+        assert_eq!(count(&vm, &caller, 0), 9);
+        assert_eq!(count(&vm, &caller, 1), 321);
+        assert_eq!(count(&vm, &caller, 2), 654);
+        assert_eq!(count(&vm, &caller, 3), 1);
+        assert_eq!(count(&vm, &master, LOADS), 1);
+        let target = vm.global_state.object_space.lookup("/x").unwrap();
+        assert_eq!(count(&vm, &target, 0), 1);
+    }
+
+    #[tokio::test]
+    async fn a_denied_pointer_load_is_catchable_and_clears_bound_arguments() {
+        let root = lib_with_x("bound-pointer-denied");
+        let vm = Vm::new(temp_lib_config(&root));
+        run(
+            &vm,
+            "/secure/master.c",
+            "int valid_load(string p, string f, object c, string g) { return 0; }",
+        )
+        .await;
+        let caller = run(
+            &vm,
+            "/caller.c",
+            indoc! { r#"
+                string err; int result;
+                int local(int a, int b) { return a * 10 + b; }
+                void create() {
+                    err = catch(&("/x")->f(99,,88));
+                    function f = &local(4,2);
+                    result = f();
+                }
+            "# },
+        )
+        .await;
+        let err = committed_string(&vm, &caller, 0);
+        assert!(err.contains("call_other: permission denied"), "{err}");
+        assert_eq!(count(&vm, &caller, 1), 42);
+        assert!(vm.global_state.object_space.lookup("/x").is_none());
+    }
+
+    #[tokio::test]
+    async fn a_throwing_initializer_leaves_the_pointer_receiver_absent() {
+        let root = TempLib::new("bound-pointer-initialize-error");
+        let vm = Vm::new(temp_lib_config(&root));
+        recording_master(&vm, &root).await;
+        write(
+            &root,
+            "x.c",
+            "void create() { throw(\"boom\"); } void f() {}\n",
+        );
+        let caller = run(
+            &vm,
+            "/caller.c",
+            r#"string err; void create() { err = catch(&("/x")->f()); }"#,
+        )
+        .await;
+        let err = committed_string(&vm, &caller, 0);
+        assert!(err.contains("boom"), "{err}");
+        assert!(vm.global_state.object_space.lookup("/x").is_none());
+    }
+
+    #[tokio::test]
+    async fn a_loaded_pointer_receiver_still_checks_function_existence_and_visibility() {
+        for (source, expected) in [
+            ("void other() {}", "Unable to find function `f`"),
+            (
+                "private void f() {}",
+                "cannot take a pointer to private function `f`",
+            ),
+            (
+                "protected void f() {}",
+                "cannot take a pointer to protected function `f`",
+            ),
+        ] {
+            let root = TempLib::new("bound-pointer-function-error");
+            let vm = Vm::new(temp_lib_config(&root));
+            recording_master(&vm, &root).await;
+            write(&root, "x.c", source);
+            let caller = run(
+                &vm,
+                "/caller.c",
+                r#"string err; void create() { err = catch(&("/x")->f()); }"#,
+            )
+            .await;
+            let err = committed_string(&vm, &caller, 0);
+            assert!(err.contains(expected), "{err}");
+            assert!(vm.global_state.object_space.lookup("/x").is_some());
+        }
+    }
+
+    #[tokio::test]
+    async fn taking_a_pointer_does_not_reload_a_destructed_receiver() {
+        let root = TempLib::new("bound-pointer-destructed");
+        let vm = Vm::new(temp_lib_config(&root));
+        let master = recording_master(&vm, &root).await;
+        run(&vm, "/x.c", "void f() {}\n").await;
+        let caller = run(
+            &vm,
+            "/caller.c",
+            indoc! { r#"
+                string err;
+                void create() {
+                    destruct(find_object("/x"));
+                    err = catch(&("/x")->f());
+                }
+            "# },
+        )
+        .await;
+        let err = committed_string(&vm, &caller, 0);
+        assert!(err.contains("Unable to find object `/x`"), "{err}");
+        assert_eq!(count(&vm, &master, LOADS), 0);
+        assert!(vm.global_state.object_space.lookup("/x").is_none());
+    }
+}
+
 mod paths {
     use super::*;
 
@@ -641,7 +832,7 @@ mod paths {
 
     /// Leaving the lib is a mechanical error, not a policy question.
     #[tokio::test]
-    async fn an_escape_errors_at_both_doors_without_consulting_the_master() {
+    async fn an_escape_errors_at_loading_doors_without_consulting_the_master() {
         let root = TempLib::new("path-escape");
         let vm = Vm::new(temp_lib_config(&root));
         let master = recording_master(&vm, &root).await;
@@ -649,10 +840,11 @@ mod paths {
             &vm,
             "/a.c",
             indoc! { r#"
-                string e1; string e2;
+                string e1; string e2; string e3;
                 void create() {
                     e1 = catch(clone_object("/../../../../../../../../etc/passwd"));
                     e2 = catch("/../../../../../../../../etc/passwd"->f());
+                    e3 = catch(&("/../../../../../../../../etc/passwd")->f());
                 }
             "# },
         )
@@ -670,6 +862,12 @@ mod paths {
             "{e2}"
         );
         assert!(!e2.contains(lib_dir), "server path leaked: {e2}");
+        let e3 = committed_string(&vm, &a, 2);
+        assert!(
+            e3.contains("call_other: `/../../../../../../../../etc/passwd` is not a valid path"),
+            "{e3}"
+        );
+        assert!(!e3.contains(lib_dir), "server path leaked: {e3}");
         assert_eq!(count(&vm, &master, LOADS), 0, "the master was never asked");
     }
 

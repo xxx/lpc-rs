@@ -166,34 +166,41 @@ async fn call_other_cross_object_rmw_is_atomic() {
     );
 }
 
-/// Eight tasks `call_other` a path nobody has loaded. Every create-on-miss
-/// but one must lose at commit and re-run to find the winner, so all callers
-/// reach the one physical object.
+/// Concurrent calls and bound pointers to an unloaded path converge on one committed object.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn concurrent_cold_call_others_create_one_object() {
-    let touch = r#"
+    for touch in [
+        r#"
         object touch() {
             return "/cold_target"->who();
         }
-    "#;
-    let vm = boot_vm(race_config()).await;
-    let touch_proc = vm
-        .create_process_from_code("/touch.c", touch)
-        .await
-        .unwrap();
+    "#,
+        r#"
+        object touch() {
+            function who = &("/cold_target")->who();
+            return who();
+        }
+    "#,
+    ] {
+        let vm = boot_vm(race_config()).await;
+        let touch_proc = vm
+            .create_process_from_code("/touch.c", touch)
+            .await
+            .unwrap();
 
-    let results = spawn_applies(&vm, touch_proc, "touch", 8, 1).await;
-    assert_all_ok(&results);
+        let results = spawn_applies(&vm, touch_proc, "touch", 8, 1).await;
+        assert_all_ok(&results);
 
-    let physical = vm
-        .global_state
-        .object_space
-        .lookup("/cold_target")
-        .expect("the target must be physically present");
+        let physical = vm
+            .global_state
+            .object_space
+            .lookup("/cold_target")
+            .expect("the target must be physically present");
 
-    let expected = LpcRef::from(Arc::downgrade(&physical));
-    for result in &results {
-        assert_eq!(result.as_ref().unwrap(), &expected);
+        let expected = LpcRef::from(Arc::downgrade(&physical));
+        for result in &results {
+            assert_eq!(result.as_ref().unwrap(), &expected);
+        }
     }
 }
 

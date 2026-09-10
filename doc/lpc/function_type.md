@@ -99,6 +99,19 @@ Breaking it down by syntax, functions can take the following forms:
     f(); // 30
     ```
     
+For bound receiver forms (`&(object)->name(...)` and `object->name`), a string
+receiver names an absolute object path (`"foo"` means `/foo`). If the object is
+not loaded, creating the pointer loads and initializes it first, using the same
+`valid_load` checks and virtual object loading as `call_other`. Loading or
+initialization errors propagate to the code creating the pointer. The named
+function must exist and be accessible there. Creating the pointer binds its
+arguments but does not call the named function:
+
+```c
+function send = &(GMCP_HANDLER)->send(this_object(), pkg, data);
+send();
+```
+
 Visibility is in the context of the object where the variable is created. If a `private` function is accessible to an object,
 that object can create a `function` variable pointing to it, and it will be callable from within any other object.
 

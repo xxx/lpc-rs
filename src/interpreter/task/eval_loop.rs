@@ -13,7 +13,10 @@ use crate::interpreter::{
     efun::{Efun, sizeof::size_of},
     lpc_array::LpcArray,
     lpc_ref::{LpcRef, NULL, int_div, int_rem, int_shl, int_shr},
-    task::{CatchPoint, Task, advance::Advance, bump_in_location, get_location, set_location},
+    task::{
+        CatchPoint, Task, advance::Advance, bump_in_location, get_location,
+        handle_data::UnloadedFunctionPtr, set_location,
+    },
 };
 
 /// Empty a staging vector once its consuming instruction has run, whether or
@@ -42,6 +45,7 @@ pub(crate) enum AsyncCall {
     /// An efun that can suspend, with the calling instruction's list.
     Efun(Efun, ArgList),
     FunctionPointer(RegisterVariant, ArgList),
+    FunctionPointerConst(Box<UnloadedFunctionPtr>),
     Other(RegisterVariant, RegisterVariant, ArgList),
     /// The top frame's pending call needs the async arm.
     Pending,
@@ -128,6 +132,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         match call {
             AsyncCall::Efun(efun, list) => self.prepare_and_call_efun(efun, list).await,
             AsyncCall::FunctionPointer(location, list) => self.handle_call_fp(location, list).await,
+            AsyncCall::FunctionPointerConst(pointer) => match self.load_functionptr(*pointer).await
+            {
+                Ok(()) => Ok(()),
+                Err(e) => Err(e.or_span(self.stack.current_frame()?.current_debug_span())),
+            },
             AsyncCall::Other(receiver, name, list) => {
                 self.handle_call_other(receiver, name, list).await
             }
@@ -271,7 +280,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 name,
             } => {
                 let result = self.handle_functionptrconst(location, receiver, name);
-                consumed(&mut self.partial_args, result)?;
+                if let Some(pointer) = consumed(&mut self.partial_args, result)? {
+                    return Ok(Step::Await(AsyncCall::FunctionPointerConst(pointer)));
+                }
             }
             Instruction::Div(r1, r2, r3) => {
                 self.binary_operation(r1, r2, r3, int_div, |x, y, _| x.div(y))?;

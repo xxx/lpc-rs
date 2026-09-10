@@ -630,6 +630,30 @@ mod doors {
     }
 
     #[tokio::test]
+    async fn a_bound_pointer_materializes_and_calls_a_virtual_room() {
+        for expression in [
+            r#"&("/inst/17/d/room1")->rd()"#,
+            r#""/inst/17/d/room1"->rd"#,
+        ] {
+            let (_root, vm, master) = instancing_lib("virt-door-bound-pointer").await;
+            let caller = run(
+                &vm,
+                "/caller.c",
+                &format!(
+                    "string result; void create() {{ function f = {expression}; result = f(); }}"
+                ),
+            )
+            .await;
+            assert_eq!(committed_string(&vm, &caller, 0), "hello\n");
+            let room = resident(&vm, "/inst/17/d/room1");
+            assert_eq!(count(&vm, &room, 0), 1);
+            assert_eq!(committed_string(&vm, &master, SEEN_FUNC), "call_other");
+            assert_eq!(committed_string(&vm, &master, SEEN_CALLER), "/caller");
+            assert_eq!(committed_string(&vm, &master, SEEN_PROGRAM), "/caller.c");
+        }
+    }
+
+    #[tokio::test]
     async fn a_call_out_receiver_materializes_a_virtual_room() {
         let (_root, vm, master) = instancing_lib("virt-door-call-out").await;
         run(
