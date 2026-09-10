@@ -34,9 +34,6 @@ function_name(&write("secret"));  // "&write(?)"
 function_name(&->query_name());   // "->query_name"
 ```
 
-Named functions and argument masks follow CD's
-[`function_name` implementation](https://github.com/cotillion/cd-gamedriver/blob/master/interpret.c).
-
 ### See also
 
 `functionp`, `function_exists`, `calling_function`, `papplyv`

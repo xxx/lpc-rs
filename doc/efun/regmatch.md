@@ -33,9 +33,7 @@ These flags apply to `regmatch`; `regexp` has its own flag meanings.
 | `RE_UNGREEDY` | `0x0400` | Swap greedy and lazy repetition. |
 | `RE_MATCH_SUBS` | `0x1000` | Return captures and the continuation index. |
 
-The call shape and flag values follow
-[LDMud](https://github.com/ldmud/ldmud/blob/master/doc/efun/regmatch), while patterns
-use the same Rust `regex` dialect as [regexp](regexp.md), including inline flags.
+Patterns use the same Rust `regex` dialect as [regexp](regexp.md), including inline flags.
 Back-references, look-around, and selection of other regex engines are unsupported.
 Invalid patterns, unsupported flag bits, wrong argument types, and out-of-range
 start indices raise runtime errors. The pattern is compiled once per call.
