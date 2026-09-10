@@ -4,13 +4,12 @@
 use std::sync::Arc;
 
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::{LpcError, Result, span::Span};
+use lpc_rs_errors::Result;
 use lpc_rs_function_support::program_function::ProgramFunction;
 
 use crate::interpreter::{
     call_frame::{CallFrame, CollectionCall},
     continuation::{Callee, Next, Pending},
-    efun::Efun,
     lpc_array::LpcArray,
     lpc_mapping::LpcMapping,
     lpc_ref::{LpcRef, NULL},
@@ -66,31 +65,34 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 }
             },
             Pending::Efun(cont) => {
-                let (efun, span) = (cont.efun, cont.span);
-                let next = cont
-                    .state
-                    .advance(result, &self.context.txn)
-                    .map_err(|e| e.or_span(span))?;
-                match next {
-                    Next::Done(value) => {
-                        self.stack.current_frame_mut()?.registers[0] = value;
-                        Ok(Advance::Running)
-                    }
-                    Next::Call(callee) => {
-                        match self.call_callee_now(&callee).map_err(|e| e.or_span(span))? {
-                            Called::Framed => {
-                                self.restore_pending(owner, pending)?;
-                                Ok(Advance::Running)
-                            }
-                            Called::Pending => {
-                                self.restore_pending(owner, pending)?;
-                                return Ok(Advance::Suspends);
-                            }
-                            Called::Unresolved => Err(unresolved(efun, span)),
-                            Called::Suspends => {
-                                cont.suspended = Some(callee);
-                                self.restore_pending(owner, pending)?;
-                                return Ok(Advance::Suspends);
+                let span = cont.span;
+                let mut result = result;
+                loop {
+                    let next = cont
+                        .state
+                        .advance(result.take(), &self.context.txn)
+                        .map_err(|e| e.or_span(span))?;
+                    match next {
+                        Next::Done(value) => {
+                            self.stack.current_frame_mut()?.registers[0] = value;
+                            break Ok(Advance::Running);
+                        }
+                        Next::Call(callee) => {
+                            match self.call_callee_now(&callee).map_err(|e| e.or_span(span))? {
+                                Called::Framed => {
+                                    self.restore_pending(owner, pending)?;
+                                    break Ok(Advance::Running);
+                                }
+                                Called::Pending => {
+                                    self.restore_pending(owner, pending)?;
+                                    return Ok(Advance::Suspends);
+                                }
+                                Called::Unresolved => result = Some(NULL),
+                                Called::Suspends => {
+                                    cont.suspended = Some(callee);
+                                    self.restore_pending(owner, pending)?;
+                                    return Ok(Advance::Suspends);
+                                }
                             }
                         }
                     }
@@ -244,7 +246,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                     }
                 }
                 Pending::Efun(cont) => {
-                    let (efun, span) = (cont.efun, cont.span);
+                    let span = cont.span;
                     let Some(Callee::Pointer { ptr, args }) = cont.suspended.take() else {
                         return Err(
                             self.runtime_bug("a suspended callback with no pointer to call")
@@ -256,7 +258,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         .map_err(|e| e.or_span(span))?
                     {
                         Called::Framed => Resolved::Framed,
-                        Called::Unresolved => return Err(unresolved(efun, span)),
+                        Called::Unresolved => {
+                            self.stack.current_frame_mut()?.registers[0] = NULL;
+                            Resolved::Continue { answered: true }
+                        }
                         Called::Suspends | Called::Pending => {
                             return Err(self.runtime_bug("the slow pointer door suspended"));
                         }
@@ -316,11 +321,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         frame.external = true;
         self.stack.push(frame)
     }
-}
-
-/// The error for a callback pointer that names no function.
-fn unresolved(efun: Efun, span: Option<Span>) -> LpcError {
-    LpcError::runtime(format!("{}: the function no longer resolves", efun.name())).with_span(span)
 }
 
 /// What one collection step produced.

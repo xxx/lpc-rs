@@ -375,11 +375,9 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// the loop makes them and lands the answer in the frame's `r0`.
     pub(crate) fn continue_with(&mut self, state: Box<dyn Continuation>) {
         let span = self.call_site_span();
-        let efun = self.efun;
         let frame = self.stack.last_mut().expect(NO_CALLING_FRAME);
         debug_assert!(frame.pending.is_none(), "one pending call per frame");
         frame.pending = Some(Box::new(Pending::Efun(EfunContinuation {
-            efun,
             state,
             span,
             suspended: None,

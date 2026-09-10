@@ -50,6 +50,8 @@ Breaking it down by syntax, functions can take the following forms:
 * `&->function_name()` - This is a reference to a function defined in another object.
   The object is filled-in when the function is called, with the first argument.
   Subsequent arguments are passed to the function. Partial application can be used.
+  If the receiver has no function by that name, the call returns `0`, including
+  when the pointer is used as an efun callback such as `filter` or `map`.
 
 * `operator(op)` - An operator as a function. `operator(+)` is the function
   that adds its two arguments exactly as `a + b` would, for every operand

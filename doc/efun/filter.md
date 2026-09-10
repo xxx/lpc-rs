@@ -16,6 +16,10 @@ stack, so nesting is bounded by the call stack rather than the task chain.
 A first argument that is neither an array nor a mapping, or an `f` that is
 not a function, is an error.
 
+With a dynamic pointer such as `&->query_wearable_item()`, each array item is
+the receiver. A missing method returns `0`, so that item is excluded, just as
+with `(: $1->query_wearable_item() :)`.
+
 ### Examples
 
 ```c

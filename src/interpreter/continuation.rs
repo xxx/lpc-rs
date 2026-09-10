@@ -8,8 +8,8 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use smallvec::SmallVec;
 
 use crate::interpreter::{
-    call_frame::CollectionCall, efun::Efun, function_type::function_ptr::FunctionPtr,
-    lpc_ref::LpcRef, process::Process, stm::TxnHandle,
+    call_frame::CollectionCall, function_type::function_ptr::FunctionPtr, lpc_ref::LpcRef,
+    process::Process, stm::TxnHandle,
 };
 
 /// An efun's callbacks one at a time: the next call, or the answer.
@@ -54,8 +54,6 @@ pub(crate) enum Callee {
 /// An efun's walk over its callbacks, on the frame that called the efun.
 #[derive(Debug, Clone)]
 pub(crate) struct EfunContinuation {
-    /// The efun that installed this walk.
-    pub efun: Efun,
     /// The efun's own state: what to call next, or the answer.
     pub state: Box<dyn Continuation>,
     /// The efun's call site, recorded when the continuation is installed: an
