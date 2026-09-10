@@ -16,7 +16,7 @@ pub(crate) const DISPLACED: &str =
 
 /// `exec`, an efun for moving a connection into an object.
 ///
-/// The master's `valid_exec(caller, new, old)` gates every well-formed call;
+/// The master's `valid_exec(program, new, old)` gates every well-formed call;
 /// a refusal, a master without the apply, or no master returns 0.
 ///
 /// When `old` was `this_player()`, `new` becomes it (CD, LDMud, FluffOS);
@@ -42,8 +42,12 @@ pub async fn exec<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
             return Err(context.runtime_error("exec: `new` and `old` are the same object"));
         }
 
+        let program = context.calling_program();
+        let program = program
+            .as_str()
+            .map_or(NULL, |name| LpcRef::from(name.trim_start_matches('/')));
         let args = [
-            LpcRef::from(Arc::downgrade(context.process())),
+            program,
             LpcRef::from(Arc::downgrade(&new_ob)),
             LpcRef::from(Arc::downgrade(&old_ob)),
         ];
@@ -117,7 +121,9 @@ mod tests {
             task::task_template::TaskTemplate, vm::Vm,
         },
         telnet::{connection::Connection, ops::ConnectionOp},
-        test_support::{allow_exec, connect, test_config},
+        test_support::{
+            PERMISSIVE_MASTER, TempLib, allow_exec, connect, temp_lib_config, test_config,
+        },
     };
 
     #[tokio::test]
@@ -299,7 +305,7 @@ mod tests {
         vm.global_state
             .initialize_process_from_code(
                 "/secure/master.c",
-                "int valid_exec(object caller, object new, object old) { return 0; }",
+                "int valid_exec(string program, object new, object old) { return 0; }",
             )
             .await
             .unwrap();
@@ -332,7 +338,7 @@ mod tests {
         vm.global_state
             .initialize_process_from_code(
                 "/secure/master.c",
-                r#"int valid_exec(object c, object n, object o) { throw("not today"); }"#,
+                r#"int valid_exec(string p, object n, object o) { throw("not today"); }"#,
             )
             .await
             .unwrap();
@@ -355,11 +361,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_master_hears_the_caller_and_both_bodies() {
+    async fn the_master_hears_the_calling_program_and_both_bodies() {
         let vm = Vm::new(test_config());
         let master = indoc! { r#"
-            int valid_exec(object caller, object new, object old) {
-                return file_name(caller) == "/main"
+            int valid_exec(string program, object new, object old) {
+                return program == "main.c"
                     && file_name(new) == "/b"
                     && file_name(old) == "/a";
             }
@@ -377,6 +383,112 @@ mod tests {
             on_a.connection.body().as_ref().map(|p| p.to_string()),
             Some("/b".to_owned())
         );
+    }
+
+    #[tokio::test]
+    async fn a_login_can_hand_off_to_a_clone_and_destruct_itself() {
+        let vm = Vm::new(test_config());
+        vm.global_state
+            .initialize_process_from_code(
+                "/secure/master.c",
+                r#"int valid_exec(string name, object to, object from) {
+                    return name == "secure/login.c";
+                }"#,
+            )
+            .await
+            .unwrap();
+        vm.create_process_from_code(
+            "/body.c",
+            r#"void enter_new_player() {
+                if (!interactive(this_object())) {
+                    throw("I'm linkdead, bye bye!");
+                }
+                write_socket("Welcome!\n");
+            }"#,
+        )
+        .await
+        .unwrap();
+        let login = vm
+            .create_process_from_code(
+                "/secure/login.c",
+                r#"void create() {
+                    object body = clone_object("/body");
+                    exec(body, this_object());
+                    body->enter_new_player();
+                    destruct(this_object());
+                }"#,
+            )
+            .await
+            .unwrap();
+        let mut connected = connect(&vm, &login).await;
+
+        Task::<32>::initialize_process(
+            TaskTemplate::from(vm.global_state.clone()).into_task_context(login),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(connected.rx.try_recv(), Ok(ConnectionOp::Attached));
+        assert_eq!(
+            connected.rx.try_recv(),
+            Ok(ConnectionOp::SendMessage("Welcome!\n".into()))
+        );
+        assert!(connected.rx.try_recv().is_err());
+        assert_eq!(
+            connected.connection.body().map(|body| body.to_string()),
+            Some("/body#0".to_owned())
+        );
+        assert!(
+            vm.global_state
+                .object_space
+                .lookup("/secure/login")
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn inherited_code_and_efun_pointers_authorize_their_defining_program() {
+        let root = TempLib::new("exec-program");
+        std::fs::write(
+            root.join("handoff.c"),
+            r#"int hand_off(object to, object from) { return exec(to, from); }
+            function mover() { return &exec(); }"#,
+        )
+        .unwrap();
+        for call in ["hand_off", "mover()"] {
+            let vm = Vm::new(temp_lib_config(&root));
+            let master = format!(
+                r#"{PERMISSIVE_MASTER}
+                int valid_exec(string program, object to, object from) {{
+                    return program == "handoff.c";
+                }}"#
+            );
+            vm.initialize_process_from_code("/secure/master.c", &master)
+                .await
+                .unwrap();
+            let a = vm.create_process_from_code("/a.c", "").await.unwrap();
+            vm.create_process_from_code("/b.c", "").await.unwrap();
+            let connected = connect(&vm, &a).await;
+            let child = format!(
+                r#"inherit "/handoff";
+                int result;
+                void create() {{ result = {call}(find_object("/b"), find_object("/a")); }}"#
+            );
+            let task = vm
+                .initialize_process_from_code("/child.c", &child)
+                .await
+                .unwrap();
+            assert_eq!(
+                vm.global_state
+                    .committed_global(&task.context.process, 0u16),
+                LpcRef::from(1),
+                "{call} must be authorized as handoff.c"
+            );
+            assert_eq!(
+                connected.connection.body().map(|body| body.to_string()),
+                Some("/b".to_owned())
+            );
+        }
     }
 
     /// Build a [`Connection`] whose own channels are dropped after the test.

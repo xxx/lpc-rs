@@ -33,6 +33,13 @@ impl GlobalState {
         };
         let noun = if files.len() == 1 { "file" } else { "files" };
         if !master.program.unmangled_functions.contains_key(PRELOAD) {
+            tracing::warn!(
+                target: "lpc_rs::applies",
+                apply = PRELOAD,
+                object = %master.filename(),
+                files = files.len(),
+                "Missing apply; epilog's preload list cannot be loaded"
+            );
             self.config
                 .debug_log(format!(
                     "epilog listed {} {noun} but the master defines no `preload`",

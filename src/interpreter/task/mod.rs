@@ -11,11 +11,7 @@ pub mod task_template;
 #[cfg(test)]
 mod tests;
 
-use std::{
-    fmt::{Debug, Display},
-    sync::Arc,
-    time::Duration,
-};
+use std::{fmt::Debug, sync::Arc, time::Duration};
 
 use educe::Educe;
 pub(crate) use location::{bump_in_location, get_location, set_location};
@@ -38,6 +34,7 @@ use lpc_rs_utils::{lpc_string::LpcString, string::MAX_STRING_LENGTH};
 #[cfg(test)]
 use crate::interpreter::stm::RetryStats;
 use crate::interpreter::{
+    apply::diagnostics,
     call_frame::CallFrame,
     call_stack::CallStack,
     lpc_int::LpcInt,
@@ -384,12 +381,34 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// error; a `timeout_ms` of 0 means no timeout.
     pub(crate) async fn timed_eval_seed(&mut self, seed: TaskSeed, timeout_ms: u64) -> Result<()> {
         Box::pin(async move {
+            let entry = seed.entry.clone();
+            let name = match &entry {
+                SeedEntry::Function(function) => function.name().as_ref(),
+                SeedEntry::Named(name) => name.as_str(),
+            };
+            diagnostics::started(
+                name,
+                &seed.process,
+                seed.args.iter().map(|arg| match arg {
+                    SeedArg::Value(value) => value.type_name(),
+                    SeedArg::FreshMapping(_) => "mapping",
+                }),
+            );
+            let initializes = seed.initializes;
             self.timeout_ms = (timeout_ms != 0).then_some(timeout_ms);
             self.seed = Some(seed);
             let tx = self.context.global_state.committer_tx.clone();
             let telemetry = self.context.global_state.attempt_telemetry.clone();
             let commit_watch = self.context.global_state.commit_watch.clone();
             let (res, _) = run_attempts(&tx, &telemetry, Some(commit_watch), self).await;
+            let value = self.result();
+            if res.is_err() || value.is_some() || !initializes {
+                diagnostics::finished(
+                    name,
+                    self.context.process(),
+                    res.as_ref().map(|()| value.as_ref()),
+                );
+            }
             res
         })
         .await
@@ -613,12 +632,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     #[inline]
-    fn array_index_error<T>(&self, index: T, length: usize) -> LpcError
-    where
-        T: Display,
-    {
+    fn array_index_error(&self, index: &LpcRef, length: usize) -> LpcError {
+        let type_error = match index {
+            LpcRef::Int(_) => String::new(),
+            other => format!("; expected int, got {}", other.type_name()),
+        };
         self.runtime_error(format!(
-            "Attempting to access index {index} in an array of length {length}"
+            "Attempting to access index {index} in an array of length {length}{type_error}"
         ))
     }
     /// Pop the top frame: its `r0` becomes the caller's, or the task's

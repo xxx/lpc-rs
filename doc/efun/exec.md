@@ -13,8 +13,9 @@ Returns `1` on success, `0` when `old` has no connection to move. Passing the
 same object as both `new` and `old` is a runtime error.
 
 This efun is very powerful, and can be used to take over the game. Every call
-is first put to the master's `valid_exec(caller, new, old)`; a refusal, or a
-master that does not define it, makes `exec` return `0`.
+is first put to the master's `valid_exec(program, new, old)`, where `program`
+is the defining file, including `.c` and without a leading slash. A refusal,
+or a master that does not define it, makes `exec` return `0`.
 
 ### See also:
 

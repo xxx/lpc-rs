@@ -1,12 +1,16 @@
 # valid_exec
 
-`int valid_exec(object caller, object new, object old)`
+`int valid_exec(string program, object new, object old)`
 
 The driver applies `valid_exec` in the master before every `exec(new, old)`,
-with `caller` the object whose code called `exec` — the same object
-`this_object()` would name there, so an `exec` wrapped in a simul_efun hands
-the master the simul_efun object. A non-zero return allows the handover; zero
-refuses it, and `exec` returns `0` having changed nothing.
+with `program` the file defining the code that called `exec`, including `.c`
+and without a leading slash or clone suffix (for example, `"secure/login.c"`).
+An inherited function names its defining file; a simul_efun wrapper names
+the simul_efun's file. An efun pointer names the file that created it, or `0`
+when no defining program is available.
+
+A non-zero return allows the handover; zero refuses it, and `exec` returns
+`0` having changed nothing.
 
 `exec` is refused when the master does not define `valid_exec`, so a master
 that never defines it has no `exec` at all.
@@ -18,9 +22,8 @@ the caller's error.
 ### Examples
 
 ```c
-int valid_exec(object caller, object new, object old) {
-    // Only the login object may hand a connection to a body.
-    return file_name(caller) == "/secure/login";
+int valid_exec(string program, object new, object old) {
+    return program == "secure/login.c";
 }
 ```
 

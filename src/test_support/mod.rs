@@ -44,6 +44,7 @@ use crate::{
 };
 
 pub mod factories;
+pub(crate) mod log_capture;
 
 // /// init() acts as a global test setup.
 // #[ctor::ctor]
@@ -108,7 +109,7 @@ pub async fn allow_exec(vm: &Vm) -> Arc<Process> {
     vm.global_state
         .initialize_process_from_code(
             "/secure/master.c",
-            "int valid_exec(object caller, object new, object old) { return 1; }",
+            "int valid_exec(string program, object new, object old) { return 1; }",
         )
         .await
         .expect("the master compiles")

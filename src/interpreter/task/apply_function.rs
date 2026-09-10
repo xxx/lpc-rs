@@ -10,7 +10,7 @@ use crate::{
     compile_time_config::MAX_CALL_STACK_SIZE,
     interpreter::{
         ERROR_HANDLER,
-        apply::in_game_location,
+        apply::{diagnostics, in_game_location},
         lpc_array::LpcArray,
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
@@ -179,6 +179,7 @@ where
 {
     let name = name.as_ref();
     if !proc.ever_in_a_chain() && !proc.program.unmangled_functions.contains_key(name) {
+        diagnostics::missing(name, Some(&proc));
         return None;
     }
 
@@ -243,6 +244,7 @@ where
     S: AsRef<str>,
 {
     let Some(master) = template.global_state.object_space.master_object() else {
+        diagnostics::missing(name.as_ref(), None);
         return Some(Err(lpc_error!("No master object defined.")));
     };
 
@@ -256,12 +258,19 @@ pub async fn apply_runtime_error(
     template: TaskTemplate,
 ) -> Option<Result<LpcRef>> {
     let mut mapping = IndexMap::new();
-    let master = template.global_state.object_space.master_object()?;
-    let error_handler = master
+    let Some(master) = template.global_state.object_space.master_object() else {
+        diagnostics::missing(ERROR_HANDLER, None);
+        return None;
+    };
+    let Some(error_handler) = master
         .program
         .unmangled_functions
-        .get(ERROR_HANDLER)?
-        .clone();
+        .get(ERROR_HANDLER)
+        .cloned()
+    else {
+        diagnostics::missing(ERROR_HANDLER, Some(&master));
+        return None;
+    };
     let mut ctx = template.into_task_context(master);
     ctx.callers = proc.clone().map(|erring| Caller::link(erring, None));
 
@@ -292,19 +301,28 @@ pub async fn apply_runtime_error(
     Some(apply_function_seeded(error_handler, args, ctx, Some(300)).await)
 }
 
-/// Report an uncaught runtime `error` in `proc` to the master's
-/// `error_handler`, or to the debug log when the master has none or the
-/// handler itself throws.
+/// Log an uncaught error to the server and notify the master's `error_handler`,
+/// falling back to the debug log when the handler is absent or throws.
 pub async fn report_runtime_error(
     error: &LpcError,
     proc: Option<Arc<Process>>,
     template: TaskTemplate,
 ) {
+    tracing::error!(
+        target: "lpc_rs::applies",
+        object = %proc.as_deref().map_or_else(|| "<no object>".into(), Process::filename),
+        "Uncaught LPC error:\n{}", error.diagnostic_string()
+    );
     let config = template.global_state.config.clone();
     match apply_runtime_error(error, proc, template).await {
         Some(Ok(_)) => {}
         None => config.debug_log(error.diagnostic_string()).await,
         Some(Err(handler_error)) => {
+            tracing::error!(
+                target: "lpc_rs::applies",
+                apply = ERROR_HANDLER,
+                "Error handler failed:\n{}", handler_error.diagnostic_string()
+            );
             config.debug_log(error.diagnostic_string()).await;
             config
                 .debug_log(format!(
@@ -319,11 +337,13 @@ pub async fn report_runtime_error(
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
+    use lpc_rs_utils::{config::ConfigBuilder, debug_log::DebugLog};
+    use tracing::instrument::WithSubscriber;
 
     use super::*;
     use crate::{
         interpreter::{CommittedReader, vm::Vm, vm::global_state::GlobalState},
-        test_support::{compile_prog, test_config},
+        test_support::{compile_prog, log_capture::LogCapture, test_config},
     };
 
     #[tokio::test]
@@ -436,5 +456,125 @@ mod tests {
             "the rendered key: {d}"
         );
         assert!(!d.to_str().contains('\u{1b}'), "plain text: {d:?}");
+    }
+
+    #[tokio::test]
+    async fn a_silent_error_handler_cannot_hide_an_apply_failure_from_the_server_log() {
+        let vm = Vm::new(test_config());
+        let master = vm
+            .initialize_process_from_code(
+                "/secure/master.c",
+                "int handled; void error_handler(mapping e) { handled++; }",
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let login = vm
+            .initialize_process_from_code("/login.c", "int logon() { throw(\"login exploded\"); }")
+            .await
+            .unwrap()
+            .context
+            .process;
+        let log = LogCapture::default();
+        async {
+            let template = TaskTemplate::from(vm.global_state.clone());
+            let error = apply_function_by_name("logon", &[], login.clone(), template.clone(), None)
+                .await
+                .unwrap()
+                .unwrap_err();
+            report_runtime_error(&error, Some(login), template).await;
+        }
+        .with_subscriber(log.subscriber("info"))
+        .await;
+
+        let logged = log.contents();
+        assert!(logged.contains("ERROR lpc_rs::applies"), "{logged}");
+        assert!(
+            logged.contains("Apply failed apply=\"logon\" object=/login"),
+            "{logged}"
+        );
+        assert!(logged.contains("Uncaught LPC error"), "{logged}");
+        assert!(logged.contains("login exploded"), "{logged}");
+        assert!(logged.contains("/login.c:1:"), "{logged}");
+        assert!(logged.contains("throw(\"login exploded\")"), "{logged}");
+        assert_eq!(
+            vm.global_state.committed_global(&master, 0u16),
+            LpcRef::from(1)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failing_error_handler_logs_both_diagnostics_without_recursing() {
+        let config = crate::test_config_builder!()
+            .debug_log(DebugLog::new(tokio::io::sink()))
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            "void error_handler(mapping e) { throw(\"handler exploded\"); }",
+        )
+        .await
+        .unwrap();
+        let log = LogCapture::default();
+        report_runtime_error(
+            &LpcError::runtime("original failure"),
+            None,
+            TaskTemplate::from(vm.global_state.clone()),
+        )
+        .with_subscriber(log.subscriber("info"))
+        .await;
+
+        let logged = log.contents();
+        assert_eq!(logged.matches("Uncaught LPC error").count(), 1, "{logged}");
+        assert_eq!(
+            logged.matches("Error handler failed:").count(),
+            1,
+            "{logged}"
+        );
+        assert!(logged.contains("original failure"), "{logged}");
+        assert!(logged.contains("handler exploded"), "{logged}");
+        assert!(logged.contains("/secure/master.c:1:"), "{logged}");
+    }
+
+    #[tokio::test]
+    async fn errors_without_a_master_still_reach_the_server_log() {
+        let config = crate::test_config_builder!()
+            .debug_log(DebugLog::new(tokio::io::sink()))
+            .build()
+            .unwrap();
+        let vm = Vm::new(config);
+        let log = LogCapture::default();
+        report_runtime_error(
+            &LpcError::runtime("no master available"),
+            None,
+            TaskTemplate::from(vm.global_state.clone()),
+        )
+        .with_subscriber(log.subscriber("info"))
+        .await;
+
+        let logged = log.contents();
+        assert!(logged.contains("no master available"), "{logged}");
+        assert!(logged.contains("object=<no object>"), "{logged}");
+    }
+
+    #[tokio::test]
+    async fn object_initialization_errors_are_logged_before_returning_to_the_loader() {
+        let vm = Vm::new(test_config());
+        let log = LogCapture::default();
+        let result = vm
+            .initialize_process_from_code(
+                "/broken.c",
+                "void create() { throw(\"broken initializer\"); }",
+            )
+            .with_subscriber(log.subscriber("info"))
+            .await;
+
+        assert!(result.is_err());
+        let logged = log.contents();
+        assert!(logged.contains("Apply failed"), "{logged}");
+        assert!(logged.contains("object=/broken"), "{logged}");
+        assert!(logged.contains("broken initializer"), "{logged}");
     }
 }

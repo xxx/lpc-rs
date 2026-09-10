@@ -37,17 +37,13 @@ impl Vm {
         tokio::spawn(async move {
             debug!("initiating login for {}", connection.address);
 
-            // Abort the login; no object to blame means the master object
-            // itself is bad, so `error_handler` is not applied.
             let fail = async |error: LpcError, object: Option<Arc<Process>>| {
                 global_state
                     .detach(&connection, Some(error.to_string()))
                     .await;
 
-                if object.is_some() {
-                    let template = TaskTemplate::from(global_state.clone());
-                    report_runtime_error(&error, object, template).await;
-                }
+                let template = TaskTemplate::from(global_state.clone());
+                report_runtime_error(&error, object, template).await;
             };
 
             // get the master object

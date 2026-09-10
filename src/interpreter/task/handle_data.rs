@@ -245,13 +245,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                             if idx >= 0 {
                                 match vec.get(idx as usize) {
                                     Some(v) => Ok(v.clone()),
-                                    None => Err(self.array_index_error(idx, vec.len())),
+                                    None => Err(self.array_index_error(&lpc_ref, vec.len())),
                                 }
                             } else {
-                                Err(self.array_index_error(idx, vec.len()))
+                                Err(self.array_index_error(&lpc_ref, vec.len()))
                             }
                         } else {
-                            Err(self.array_index_error(lpc_ref, vec.len()))
+                            Err(self.array_index_error(&lpc_ref, vec.len()))
                         }
                     })
                     .flatten()?;
@@ -398,7 +398,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                         cell_len as LpcIntInner + array_idx
                     };
                     if !(idx >= 0 && (idx as usize) < cell_len) {
-                        return Err(self.array_index_error(idx, cell_len));
+                        return Err(self.array_index_error(index, cell_len));
                     }
                     vec[idx as usize] = value;
                     Ok(())

@@ -10,7 +10,7 @@ use crate::interpreter::{
     ID, PARSE_COMMAND_ADJECTIV_ID_LIST, PARSE_COMMAND_ALL_WORD, PARSE_COMMAND_ID_LIST,
     PARSE_COMMAND_NUMERAL, PARSE_COMMAND_PLURAL_ID_LIST, PARSE_COMMAND_PLURALIZE,
     PARSE_COMMAND_PREPOS_LIST,
-    apply::apply_nested,
+    apply::{apply_nested, diagnostics},
     lpc_array::LpcArray,
     lpc_int::LpcInt,
     lpc_ref::LpcRef,
@@ -87,6 +87,7 @@ impl<'a> LpcVocabulary<'a> {
         let (target, function) = match Process::shadow_entry(self.ctx.txn(), target, name, target) {
             ShadowEntry::Unshadowed => {
                 let Some(function) = target.program.unmangled_functions.get(name).cloned() else {
+                    diagnostics::missing(name, Some(target));
                     return Ok(None);
                 };
                 (target.clone(), function)
@@ -94,6 +95,7 @@ impl<'a> LpcVocabulary<'a> {
             ShadowEntry::Found(process, function) => (process, function),
             ShadowEntry::Fallback(real) => {
                 let Some(function) = real.program.unmangled_functions.get(name).cloned() else {
+                    diagnostics::missing(name, Some(&real));
                     return Ok(None);
                 };
                 (real, function)
@@ -120,6 +122,7 @@ impl<'a> LpcVocabulary<'a> {
 
     async fn master_strings(&self, name: &str, args: &[LpcRef]) -> Result<Vec<String>> {
         let Some(master) = self.ctx.object_space().master_object() else {
+            diagnostics::missing(name, None);
             return Ok(Vec::new());
         };
         let value = self.apply(&master, name, args).await?;

@@ -1418,6 +1418,7 @@ dependencies = [
  "thin-vec",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "unicode-segmentation",
  "unicode-width",
  "ustr",

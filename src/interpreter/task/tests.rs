@@ -3518,6 +3518,52 @@ mod test_instructions {
         use super::*;
 
         #[tokio::test]
+        async fn negative_array_indices_count_back_from_the_end() {
+            let code = indoc! { r#"
+                int *single = ({ 42 });
+                int *values = ({ 10, 20, 30 });
+                mixed index = -1;
+                int only = single[-1];
+                int dynamic = single[index];
+                int last = values[-1];
+                int first = values[-sizeof(values)];
+            "# };
+
+            check_committed_globals(
+                code,
+                &[
+                    ("only", BareVal::Int(42)),
+                    ("dynamic", BareVal::Int(42)),
+                    ("last", BareVal::Int(30)),
+                    ("first", BareVal::Int(10)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn out_of_bounds_array_reads_report_the_requested_index() {
+            for (array, index, length) in [
+                ("({ 42 })", -2, 1),
+                ("({ 10, 20, 30 })", -4, 3),
+                ("({ })", -1, 0),
+                ("({ 42 })", i64::MIN, 1),
+                ("({ 42 })", i64::MAX, 1),
+            ] {
+                let code = format!("int *a = {array}; int value = a[({index})];");
+                let error = try_run_prog(&code)
+                    .await
+                    .expect_err("index is out of bounds");
+                assert_eq!(
+                    error.to_string(),
+                    format!(
+                        "runtime error: Attempting to access index {index} in an array of length {length}"
+                    )
+                );
+            }
+        }
+
+        #[tokio::test]
         async fn stores_the_value() {
             let code = indoc! { r##"
                     int *i = ({ 1, 2, 3 });
@@ -3583,19 +3629,23 @@ mod test_instructions {
         }
 
         #[tokio::test]
-        async fn a_string_in_a_mixed_is_not_an_array_index() {
-            let code = r#"mixed m = "x"; int *a = ({ 1 }); int i = a[m];"#;
-
-            let error = try_run_prog(code)
-                .await
-                .expect_err("a string index needs a mapping");
-
-            assert!(
-                error
-                    .to_string()
-                    .starts_with("runtime error: Attempting to access index"),
-                "{error}"
-            );
+        async fn a_non_int_array_index_reports_its_type() {
+            for (value, type_name) in [
+                (r#""x""#, "string"),
+                (r#""-1""#, "string"),
+                ("-1.0", "float"),
+            ] {
+                let code = format!("mixed m = {value}; int *a = ({{ 1 }}); int i = a[m];");
+                let error = try_run_prog(&code)
+                    .await
+                    .expect_err("array indices must be ints");
+                assert!(
+                    error
+                        .to_string()
+                        .ends_with(&format!("expected int, got {type_name}")),
+                    "{error}"
+                );
+            }
         }
     }
 
@@ -4584,6 +4634,57 @@ mod test_instructions {
         use super::*;
 
         #[tokio::test]
+        async fn negative_array_indices_support_assignment_and_updates() {
+            let code = indoc! { r#"
+                void create() {
+                    int *single = ({ 42 });
+                    int *values = ({ 10, 20, 30 });
+                    mixed index = -1;
+                    single[index] = 50;
+                    single[-1] += 2;
+                    int previous = single[-1]++;
+                    values[-sizeof(values)] = 11;
+                    ++values[-1];
+                }
+            "# };
+
+            check_popped_vars(
+                code,
+                &[
+                    ("single", BareVal::Array(vec![BareVal::Int(53)])),
+                    ("previous", BareVal::Int(52)),
+                    (
+                        "values",
+                        BareVal::Array(vec![BareVal::Int(11), BareVal::Int(20), BareVal::Int(31)]),
+                    ),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn out_of_bounds_array_writes_report_the_requested_index() {
+            for (array, index, length) in [
+                ("({ 42 })", -2, 1),
+                ("({ 10, 20, 30 })", -4, 3),
+                ("({ })", -1, 0),
+                ("({ 42 })", i64::MIN, 1),
+                ("({ 42 })", i64::MAX, 1),
+            ] {
+                let code = format!("void create() {{ int *a = {array}; a[({index})] = 99; }}");
+                let error = try_run_prog(&code)
+                    .await
+                    .expect_err("index is out of bounds");
+                assert_eq!(
+                    error.to_string(),
+                    format!(
+                        "runtime error: Attempting to access index {index} in an array of length {length}"
+                    )
+                );
+            }
+        }
+
+        #[tokio::test]
         async fn stores_the_value() {
             let code = indoc! { r##"
                     void create() {
@@ -4604,7 +4705,11 @@ mod test_instructions {
 
         #[tokio::test]
         async fn a_non_int_index_is_not_stored() {
-            for value in [r#""x""#, "1.5"] {
+            for (value, type_name) in [
+                (r#""x""#, "string"),
+                (r#""-1""#, "string"),
+                ("-1.0", "float"),
+            ] {
                 let code = format!(
                     "int *a = ({{ 1, 2, 3 }}); mixed m = {value}; void create() {{ a[m] = 99; }}"
                 );
@@ -4616,7 +4721,7 @@ mod test_instructions {
                 assert!(
                     error
                         .to_string()
-                        .starts_with("runtime error: Attempting to access index"),
+                        .ends_with(&format!("expected int, got {type_name}")),
                     "{error}"
                 );
             }

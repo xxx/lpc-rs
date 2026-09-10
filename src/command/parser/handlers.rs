@@ -9,7 +9,7 @@ use super::{Verdict, attempt::Target};
 use crate::{
     command::frontend::parser::ParserRule,
     interpreter::{
-        apply::{apply_on, as_actor},
+        apply::{apply_on, as_actor, diagnostics},
         lpc_int::LpcInt,
         lpc_ref::LpcRef,
         process::Process,
@@ -114,6 +114,8 @@ pub(crate) async fn call(
         prefixed.extend_from_slice(args);
         (f.clone(), prefixed)
     } else {
+        diagnostics::missing(&specific, Some(target));
+        diagnostics::missing(generic, Some(target));
         return Ok(Reply::Absent);
     };
     let result = apply_on(ctx, as_actor(ctx, actor), target, actor, function, &args).await?;

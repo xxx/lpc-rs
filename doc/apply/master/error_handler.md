@@ -24,9 +24,20 @@ error: call to unknown function `clone_obect`
    │            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ```
 
-Defining `error_handler` is optional, and errors will instead be written to the
-debug log if not defined. An error thrown by `error_handler` itself goes to the
-debug log too, after the error it was handling.
+Uncaught errors always go to the server log, including their source diagnostic
+and LPC stack trace when available, even when `error_handler` handles them.
+Defining `error_handler` is optional. Without it, the error also goes to the
+debug log. If the handler throws, both errors go to the server and debug logs;
+the driver does not call the handler recursively.
+
+For porting diagnostics, set `RUST_LOG=info,lpc_rs::applies=debug` and restart
+the driver. This includes missing optional applies, argument types, return
+types, integer results, and security decisions. Apply failures and missing
+security or login applies are logged at the default `info` setting. Argument
+values and string results are omitted from apply tracing. These messages go
+to `SERVER_LOG_FILE` (or `LPC_SERVER_LOG_FILE`), independently of `DEBUG_LOG_FILE`.
+Debug tracing is available in default debug and release builds; builds that
+explicitly select `release_max_level_info` or a lower level omit it in release.
 
 A `call_out` or `input_to` callback has no caller to receive its error, so an
 uncaught error there arrives here with the receiver as `error["object"]`. When

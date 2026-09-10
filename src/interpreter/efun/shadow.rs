@@ -48,6 +48,7 @@ pub async fn shadow<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
             .contains_key(QUERY_ALLOW_SHADOW)
     });
     if !defined {
+        crate::interpreter::apply::diagnostics::missing(QUERY_ALLOW_SHADOW, master.as_deref());
         return Err(context.runtime_error(refuse(
             "Shadowing is disabled: the master defines no query_allow_shadow.".to_string(),
         )));

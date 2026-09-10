@@ -1,6 +1,8 @@
 //! Applies made on a command's behalf: nested in the caller's transaction,
 //! bounded by the configured execution time and `MAX_TASK_CHAIN` levels.
 
+pub(crate) mod diagnostics;
+
 use std::sync::Arc;
 
 use indexmap::IndexMap;
@@ -67,6 +69,7 @@ pub(crate) async fn apply_hook(
     args: &[LpcRef],
 ) -> Result<Option<LpcRef>> {
     let Some((target, function)) = Process::apply_entry(ctx.txn(), target, name) else {
+        diagnostics::missing(name, Some(target));
         return Ok(None);
     };
     apply_on(ctx, callers, &target, this_player, function, args)
@@ -122,9 +125,11 @@ pub(crate) async fn master_apply(
     args: &[LpcRef],
 ) -> Result<Option<LpcRef>> {
     let Some(master) = ctx.object_space().master_object() else {
+        diagnostics::missing(name, None);
         return Ok(None);
     };
     let Some(function) = master.program.unmangled_functions.get(name).cloned() else {
+        diagnostics::missing(name, Some(&master));
         return Ok(None);
     };
     apply_nested(ctx, callers, &master, function, args)
@@ -142,7 +147,16 @@ pub(crate) async fn valid_apply(
     args: &[LpcRef],
 ) -> Result<bool> {
     let verdict = master_apply(ctx, callers, name, args).await?;
-    Ok(verdict.is_some_and(|v| v.is_truthy(ctx.txn())))
+    let allowed = verdict.as_ref().is_some_and(|v| v.is_truthy(ctx.txn()));
+    tracing::debug!(
+        target: "lpc_rs::applies",
+        apply = name,
+        caller = %ctx.process().filename(),
+        allowed,
+        missing = verdict.is_none(),
+        "Security apply decision"
+    );
+    Ok(allowed)
 }
 
 /// `message` to `target`: through `catch_tell`, walking `target`'s shadow
@@ -171,6 +185,7 @@ pub(crate) async fn deliver(
         };
         return Ok(true);
     }
+    diagnostics::missing(CATCH_TELL, Some(target));
     let connection = ctx.txn().with(|t| t.read_connection(target.connection.id));
     let (effect, received) = match connection {
         Some(connection) => (
@@ -203,6 +218,12 @@ pub(crate) async fn report_warnings(
             .cloned()?;
         Some((master, function))
     });
+    if handler.is_none() && !warnings.is_empty() {
+        diagnostics::missing(
+            WARNING_HANDLER,
+            ctx.object_space().master_object().as_deref(),
+        );
+    }
     for warning in warnings {
         let Some((master, function)) = &handler else {
             ctx.txn()
@@ -252,13 +273,171 @@ async fn timed(
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
+    use tracing::instrument::WithSubscriber;
 
     use super::*;
     use crate::{
         compile_time_config::MAX_TASK_CHAIN,
-        interpreter::{CommittedReader, vm::Vm},
-        test_support::{PERMISSIVE_MASTER, test_config},
+        interpreter::{
+            CommittedReader, INIT, VALID_EXEC, WRITE_PROMPT,
+            task::{apply_function::apply_function_by_name, task_template::TaskTemplate},
+            vm::Vm,
+        },
+        test_support::{PERMISSIVE_MASTER, log_capture::LogCapture, test_config},
     };
+
+    #[tokio::test]
+    async fn missing_security_applies_warn_while_optional_applies_need_debug_logging() {
+        let vm = Vm::new(test_config());
+        let master = vm
+            .initialize_process_from_code("/secure/master.c", "void create() {}")
+            .await
+            .unwrap()
+            .context
+            .process;
+        for filter in ["info", "info,lpc_rs::applies=debug"] {
+            let log = LogCapture::default();
+            async {
+                let template = TaskTemplate::from(vm.global_state.clone());
+                assert!(
+                    apply_function_by_name(
+                        WRITE_PROMPT,
+                        &[],
+                        master.clone(),
+                        template.clone(),
+                        None
+                    )
+                    .await
+                    .is_none()
+                );
+                let ctx = template.into_task_context(master.clone());
+                assert!(
+                    apply_hook(&ctx, None, &master, &master, INIT, &[])
+                        .await
+                        .unwrap()
+                        .is_none()
+                );
+                assert!(!valid_apply(&ctx, None, VALID_EXEC, &[]).await.unwrap());
+            }
+            .with_subscriber(log.subscriber(filter))
+            .await;
+
+            let logged = log.contents();
+            assert!(logged.contains("WARN lpc_rs::applies"), "{logged}");
+            assert!(
+                logged.contains(
+                    "Missing apply; operation refused apply=\"valid_exec\" object=/secure/master"
+                ),
+                "{logged}"
+            );
+            for name in [INIT, WRITE_PROMPT] {
+                assert_eq!(
+                    logged.contains(&format!("apply=\"{name}\"")),
+                    filter.ends_with("debug"),
+                    "{logged}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn apply_debug_logging_shows_denials_and_types_without_string_values() {
+        let vm = Vm::new(test_config());
+        let master = vm
+            .initialize_process_from_code(
+                "/secure/master.c",
+                "int valid_exec(string program, object to, object from) { return 0; }",
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let login = vm
+            .initialize_process_from_code(
+                "/login.c",
+                "string password(string typed) { return typed; }",
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let log = LogCapture::default();
+        async {
+            let template = TaskTemplate::from(vm.global_state.clone());
+            let ctx = template.clone().into_task_context(login.clone());
+            let args = [
+                LpcRef::from("login.c"),
+                LpcRef::from(Arc::downgrade(&login)),
+                LpcRef::from(Arc::downgrade(&master)),
+            ];
+            assert!(!valid_apply(&ctx, None, VALID_EXEC, &args).await.unwrap());
+            assert_eq!(
+                apply_function_by_name(
+                    "password",
+                    &[LpcRef::from("private-password-value")],
+                    login,
+                    template,
+                    None
+                )
+                .await
+                .unwrap()
+                .unwrap(),
+                LpcRef::from("private-password-value")
+            );
+        }
+        .with_subscriber(log.subscriber("info,lpc_rs::applies=debug"))
+        .await;
+
+        let logged = log.contents();
+        assert!(
+            logged.contains("argument_types=[\"string\", \"object\", \"object\"]"),
+            "{logged}"
+        );
+        assert!(logged.contains("integer=0"), "{logged}");
+        assert!(logged.contains("allowed=false missing=false"), "{logged}");
+        assert!(logged.contains("caller=/login"), "{logged}");
+        assert!(logged.contains("result_type=\"string\""), "{logged}");
+        assert!(!logged.contains("private-password-value"), "{logged}");
+    }
+
+    #[tokio::test]
+    async fn a_caught_security_apply_error_still_identifies_the_failing_hook() {
+        let vm = Vm::new(test_config());
+        vm.initialize_process_from_code(
+            "/secure/master.c",
+            "int valid_read(string p, string e, object c, string g) { throw(\"bad read policy\"); }",
+        ).await.unwrap();
+        let reader = vm
+            .initialize_process_from_code(
+                "/reader.c",
+                "string run() { return catch(read_file(\"/missing\")); }",
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let log = LogCapture::default();
+        let result = apply_function_by_name(
+            "run",
+            &[],
+            reader,
+            TaskTemplate::from(vm.global_state.clone()),
+            None,
+        )
+        .with_subscriber(log.subscriber("info"))
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert!(matches!(result, LpcRef::String(_)));
+        let logged = log.contents();
+        assert!(
+            logged.contains("Apply failed apply=\"valid_read\" object=/secure/master"),
+            "{logged}"
+        );
+        assert!(logged.contains("bad read policy"), "{logged}");
+        assert!(!logged.contains("Uncaught LPC error"), "{logged}");
+    }
 
     /// A `catch_tell` that writes back nests until the budget refuses it.
     #[tokio::test]

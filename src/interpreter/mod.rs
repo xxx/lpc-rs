@@ -40,7 +40,7 @@ pub const CATCH_TELL: &str = "catch_tell";
 pub const COMMAND_NOT_FOUND: &str = "command_not_found";
 /// Master apply: rewrites or consumes every command line before dispatch (`doc/apply/master/modify_command.md`).
 pub const MODIFY_COMMAND: &str = "modify_command";
-/// Master apply: whether the calling object may `exec` (`doc/apply/master/valid_exec.md`).
+/// Master apply: whether the calling program may `exec` (`doc/apply/master/valid_exec.md`).
 pub const VALID_EXEC: &str = "valid_exec";
 /// Master apply: whether the calling object may shadow another (`doc/apply/master/query_allow_shadow.md`).
 pub const QUERY_ALLOW_SHADOW: &str = "query_allow_shadow";

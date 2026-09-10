@@ -73,13 +73,14 @@ pprof = { version = "0.15.0", default-features = false, features = ["flamegraph"
 rpds = "1.2.1"
 # Adds test-util (the paused clock) to test builds; production builds carry no dev-deps.
 tokio = { version = "1", features = ["test-util"] }
+tracing-subscriber = { version = "0.3.1", features = ["env-filter"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"
 jemalloc-ctl = "0.5.0"
 
 [features]
-default = ["max_level_trace", "release_max_level_info"]
+default = ["max_level_trace", "release_max_level_debug"]
 
 # Per-opcode dispatch counters in the eval loop.
 opcode-profile = []
