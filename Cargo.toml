@@ -52,7 +52,7 @@ readonly = "0.2.3"
 regex = "1"
 regex-automata = "0.4"
 serde_json = { version = "1", features = ["preserve_order"] }
-sha-1 = "0.9"
+sha-1 = "0.10"
 sha2 = "0.9"
 stable-vec = "0.4.0"
 smallvec = "1.15"
