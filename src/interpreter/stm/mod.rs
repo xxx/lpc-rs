@@ -568,6 +568,10 @@ struct ResolvePointerCallBody<'a> {
 
 #[async_trait::async_trait]
 impl AttemptBody for ResolvePointerCallBody<'_> {
+    fn timeout_ms(&self) -> u64 {
+        self.gs.config.max_execution_time
+    }
+
     async fn begin_attempt(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,

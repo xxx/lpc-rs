@@ -11,7 +11,7 @@ pub mod task_template;
 #[cfg(test)]
 mod tests;
 
-use std::{fmt::Debug, sync::Arc, time::Duration};
+use std::{fmt::Debug, sync::Arc};
 
 use educe::Educe;
 pub(crate) use location::{bump_in_location, get_location, set_location};
@@ -26,7 +26,6 @@ use lpc_rs_core::{
 use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::{ThinVec, thin_vec};
-use tokio::time::timeout;
 use tracing::{error, instrument, trace, warn};
 
 use lpc_rs_utils::{lpc_string::LpcString, string::MAX_STRING_LENGTH};
@@ -176,7 +175,7 @@ pub struct Task<const STACKSIZE: usize> {
     /// points.
     seed: Option<TaskSeed>,
 
-    /// The per-attempt execution timeout, set by the top-level entry point.
+    /// The execution allowance shared by all retries of this entry point.
     timeout_ms: Option<u64>,
 
     /// The most recently popped frame other than the initializer's driver
@@ -266,7 +265,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 
     /// Open a transaction against the current world and run one attempt to
-    /// completion under `self.timeout_ms`. Returns the attempt's
+    /// completion. Returns the attempt's
     /// [`LiveSnapshot`], to be released only after the commit reply, or
     /// `None` for a joiner.
     async fn open_attempt(
@@ -297,24 +296,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Ok(live);
         }
 
-        // One timeout per attempt; the committer's conflict rule is the sole
-        // serialization control.
-        let outcome = match self.timeout_ms {
-            Some(ms) => timeout(Duration::from_millis(ms), self.run_entry(&seed)).await,
-            None => Ok(self.run_entry(&seed).await),
-        };
-        let run_result = match outcome {
-            Ok(run) => run,
-            Err(_) => {
-                return Err(lpc_error!(
-                    "evaluation limit of {}ms has been reached",
-                    self.timeout_ms.unwrap_or(0)
-                )
-                .with_stack_trace(self.stack.stack_trace()));
-            }
-        };
-
-        if let Err(e) = run_result {
+        if let Err(e) = self.run_entry(&seed).await {
             // A failed run holds nothing the committer needs.
             drop(live);
             return Err(e);
@@ -708,6 +690,18 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
 
 #[async_trait::async_trait]
 impl<const STACKSIZE: usize> AttemptBody for Task<STACKSIZE> {
+    fn timeout_ms(&self) -> u64 {
+        self.timeout_ms.unwrap_or(0)
+    }
+
+    fn timeout_error(&self) -> LpcError {
+        lpc_error!(
+            "evaluation limit of {}ms has been reached",
+            self.timeout_ms()
+        )
+        .with_stack_trace(self.stack.stack_trace())
+    }
+
     async fn begin_attempt(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
@@ -742,6 +736,8 @@ impl<const STACKSIZE: usize> AttemptBody for Task<STACKSIZE> {
 
 #[cfg(test)]
 mod stm_retry_tests {
+    use std::time::Duration;
+
     use indoc::indoc;
     use lpc_rs_utils::debug_log::DebugLog;
 

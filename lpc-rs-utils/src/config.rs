@@ -46,6 +46,7 @@ pub struct Config {
     #[builder(default = "ustr(\"/secure/master.c\")")]
     pub master_object: Ustr,
 
+    /// Evaluation allowance in milliseconds across all conflict retries; zero disables it.
     #[builder(setter(into), default = "DEFAULT_MAX_EXECUTION_TIME")]
     pub max_execution_time: u64,
 

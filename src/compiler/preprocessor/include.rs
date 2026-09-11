@@ -48,7 +48,7 @@ pub(super) enum IncludeSource<'a> {
 /// A successfully opened include: its registered id and its text.
 #[derive(Debug)]
 pub(super) struct Opened {
-    /// The file's `SOURCE_MAP` id — one per file per compile.
+    /// The `SOURCE_MAP` id for this version of the file.
     pub file_id: FileId,
     /// The file's text, shared with the memo.
     pub content: Arc<str>,

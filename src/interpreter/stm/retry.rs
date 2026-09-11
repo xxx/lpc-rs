@@ -11,7 +11,8 @@ use std::{
 };
 
 use lpc_rs_core::RegisterSize;
-use lpc_rs_errors::{Result, lpc_error};
+use lpc_rs_errors::{LpcError, Result, lpc_error};
+use tokio::time::{Instant, timeout_at};
 
 use crate::{
     command::registry::RuleList,
@@ -137,6 +138,19 @@ pub struct AttemptTelemetrySnapshot {
 ///   leaves nothing physical behind.
 #[async_trait::async_trait]
 pub(crate) trait AttemptBody {
+    /// Wall-clock allowance for evaluation across all attempts; zero disables it.
+    fn timeout_ms(&self) -> u64 {
+        0
+    }
+
+    /// The evaluation-limit error, with any execution context the body retains.
+    fn timeout_error(&self) -> LpcError {
+        lpc_error!(
+            "evaluation limit of {}ms has been reached",
+            self.timeout_ms()
+        )
+    }
+
     /// Open one attempt against the committer's current world, reset the
     /// body, run its work. `None` means nothing to commit (a joiner, or a
     /// read that answered); the loop stops after that attempt.
@@ -167,6 +181,8 @@ pub(crate) trait AttemptBody {
 /// `begin_attempt` stops after that single attempt without committing.
 /// `commit_watch` lets the sleep tier wake on the committer's watermark
 /// instead of running its full cap.
+/// The body's time allowance spans evaluation and backoff across retries;
+/// commit and delivery finish without cancellation once a commit is sent.
 pub(crate) async fn run_attempts<B: AttemptBody>(
     tx: &flume::Sender<CommitProtocol>,
     telemetry: &AttemptTelemetry,
@@ -174,6 +190,8 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
     body: &mut B,
 ) -> (Result<()>, RetryStats) {
     let started = std::time::Instant::now();
+    let timeout_ms = body.timeout_ms();
+    let deadline = (timeout_ms != 0).then(|| Instant::now() + Duration::from_millis(timeout_ms));
     let mut attempts = 0u64;
     let mut backoff = match commit_watch {
         Some(watch) => Backoff::watching(watch),
@@ -181,9 +199,19 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
     };
 
     let result = loop {
+        if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+            break Err(body.timeout_error());
+        }
         attempts += 1;
 
-        let live = match body.begin_attempt(tx).await {
+        let attempt = match deadline {
+            Some(deadline) => match timeout_at(deadline, body.begin_attempt(tx)).await {
+                Ok(attempt) => attempt,
+                Err(_) => break Err(body.timeout_error()),
+            },
+            None => body.begin_attempt(tx).await,
+        };
+        let live = match attempt {
             Ok(live) => live,
             Err(e) => break Err(e),
         };
@@ -205,7 +233,14 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
         if commit.is_ok() {
             break body.deliver(effects).await;
         }
-        backoff.stagger().await;
+        match deadline {
+            Some(deadline) => {
+                if timeout_at(deadline, backoff.stagger()).await.is_err() {
+                    break Err(body.timeout_error());
+                }
+            }
+            None => backoff.stagger().await,
+        }
     };
 
     let stats = RetryStats {
@@ -215,6 +250,17 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
         backoff: backoff.spent(),
     };
     telemetry.record(&stats, result.is_err());
+    if let Err(error) = &result
+        && stats.conflicts > 0
+    {
+        tracing::warn!(
+            attempts = stats.attempts,
+            conflicts = stats.conflicts,
+            elapsed = ?stats.duration,
+            error = %error,
+            "Transaction failed after retries"
+        );
+    }
     (result, stats)
 }
 
@@ -561,6 +607,140 @@ mod async_tests {
         let mut seed = Changeset::new(committer.current_version());
         seed.write(var, WorldValue::ref_of(LpcRef::from(value)));
         committer.commit(seed).expect("seed should commit");
+    }
+
+    struct TimedBody {
+        inner: IncBody,
+        limit_ms: u64,
+        work: Duration,
+        commit_delay: Duration,
+        delivered: usize,
+    }
+
+    #[async_trait::async_trait]
+    impl AttemptBody for TimedBody {
+        fn timeout_ms(&self) -> u64 {
+            self.limit_ms
+        }
+
+        async fn begin_attempt(
+            &mut self,
+            tx: &flume::Sender<CommitProtocol>,
+        ) -> Result<Option<LiveSnapshot>> {
+            let live = self.inner.begin_attempt(tx).await?;
+            tokio::time::sleep(self.work).await;
+            Ok(live)
+        }
+
+        async fn commit_phase(
+            &mut self,
+            tx: &flume::Sender<CommitProtocol>,
+            live: LiveSnapshot,
+        ) -> Result<(
+            std::result::Result<(), Conflict>,
+            Vec<crate::interpreter::stm::Effect>,
+        )> {
+            tokio::time::sleep(self.commit_delay).await;
+            self.inner.commit_phase(tx, live).await
+        }
+
+        async fn deliver(&mut self, effects: Vec<crate::interpreter::stm::Effect>) -> Result<()> {
+            self.delivered += 1;
+            self.inner.deliver(effects).await
+        }
+    }
+
+    async fn run_timed_body(
+        limit_ms: u64,
+        work_ms: u64,
+        commit_ms: u64,
+        mut rejections: usize,
+    ) -> (Result<()>, RetryStats, usize, LpcRef) {
+        let (tx, rx) = flume::unbounded();
+        let mut committer = Committer::new();
+        let counter = VarId::new();
+        seed(&mut committer, counter, 0);
+        let committer_tx = tx.clone();
+        let handle = tokio::spawn(async move {
+            while let Ok(message) = rx.recv_async().await {
+                if rejections > 0
+                    && let CommitProtocol::Commit {
+                        changeset,
+                        releases_base,
+                        reply,
+                    } = message
+                {
+                    rejections -= 1;
+                    if releases_base {
+                        committer.process(
+                            CommitProtocol::Drop(changeset.base_version()),
+                            &committer_tx,
+                        );
+                    }
+                    reply.send(Err(Conflict)).unwrap();
+                } else if !committer.process(message, &committer_tx) {
+                    break;
+                }
+            }
+            committer.snapshot_clone()
+        });
+        let mut body = TimedBody {
+            inner: IncBody::new(counter),
+            limit_ms,
+            work: Duration::from_millis(work_ms),
+            commit_delay: Duration::from_millis(commit_ms),
+            delivered: 0,
+        };
+        let telemetry = AttemptTelemetry::default();
+        let (result, stats) = run_attempts(&tx, &telemetry, None, &mut body).await;
+        assert_eq!(telemetry.snapshot().errors, u64::from(result.is_err()));
+        assert_eq!(committer_stats(&tx).await.unwrap().live_snapshots, 0);
+        tx.send(CommitProtocol::Close).unwrap();
+        let snapshot = handle.await.unwrap();
+        let Some(WorldValue::Ref(value)) = snapshot.read(counter) else {
+            panic!("counter should remain an integer");
+        };
+        (result, stats, body.delivered, value)
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn retries_share_one_evaluation_limit_and_release_the_interrupted_attempt() {
+        let (result, stats, delivered, value) = run_timed_body(100, 40, 0, usize::MAX).await;
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "evaluation limit of 100ms has been reached"
+        );
+        assert_eq!(stats.attempts, 3);
+        assert_eq!(stats.conflicts, 2);
+        assert_eq!(delivered, 0);
+        assert_eq!(value, LpcRef::from(0));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_evaluation_limit_also_stops_backoff() {
+        let (result, stats, delivered, value) = run_timed_body(100, 0, 0, usize::MAX).await;
+        assert!(result.is_err());
+        assert!(stats.conflicts >= 7);
+        assert_eq!(delivered, 0);
+        assert_eq!(value, LpcRef::from(0));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn zero_disables_the_limit_across_retries() {
+        let (result, stats, delivered, value) = run_timed_body(0, 40, 0, 2).await;
+        result.unwrap();
+        assert_eq!(stats.attempts, 3);
+        assert_eq!(delivered, 1);
+        assert_eq!(value, LpcRef::from(1));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_commit_that_crosses_the_deadline_still_delivers_once() {
+        let (result, stats, delivered, value) = run_timed_body(100, 40, 150, 0).await;
+        result.unwrap();
+        assert_eq!(stats.attempts, 1);
+        assert_eq!(delivered, 1);
+        assert_eq!(value, LpcRef::from(1));
     }
 
     #[tokio::test]
