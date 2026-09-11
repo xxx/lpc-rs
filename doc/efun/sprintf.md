@@ -29,12 +29,12 @@ An argument of the wrong type, a missing argument, an unknown letter, or a
 | Form | Effect |
 |---|---|
 | `n` | the field width in terminal columns; a shorter text is padded to it |
-| `.n` | the precision: a string is cut to at most `n` terminal columns, a float gets `n` decimals |
+| `.n` | the precision: a string is cut to at most `n` terminal columns, an integer gets at least `n` digits, a float gets `n` decimals (significant digits for `g`/`G`) |
 | `:n` | width and precision both `n` |
-| `*` | the width (or precision, after `.`) is the next int argument; a negative width aligns left |
+| `*` | the width (or precision, after `.`) is the next int argument; a negative width aligns left, a negative precision is treated as omitted |
 | `-` | left-aligned in the field (the default is right) |
 | `\|` | centred, the odd space on the left |
-| `0` | before the width: pad a number with zeroes behind its sign |
+| `0` | before the width: pad a number with zeroes behind its sign; ignored for integers with a precision |
 | `'X'` | pad with the quoted text, repeated; `\'` is a quote |
 | `+`, ` ` | prefix a non-negative number with `+`, or a space |
 
@@ -44,6 +44,21 @@ sprintf("%05d %+d % d", -12, 3, 3)               // "-0012 +3  3"
 sprintf("%'.'7s %-7'+-'s", "foo", "foo")         // "....foo foo+-+-"
 sprintf("%6.3s|%*d", "foobar", 5, 42)            // "   foo|   42"
 sprintf("%8.3f %12.4e %g", 123.5, 123.5, 123.5)  // " 123.500   1.2350e+02 123.5"
+```
+
+Integer precision applies to `d`, `i`, `b`, `o`, `x`, and `X`: leading zeroes
+fill the minimum digit count, the sign does not count, and longer numbers
+are never truncated. A zero value with zero precision emits no digits;
+sign flags and field width still apply. Field padding is added around the
+result, with the `0` flag ignored when a precision is present; an explicit
+quoted pad string still applies.
+
+```c
+sprintf("%.5d|%.2d", 42, 1234)   // "00042|1234"
+sprintf("%.5d", -42)            // "-00042"
+sprintf("%08.5d", 42)           // "   00042"
+sprintf("%.4x", 123)            // "007b"
+sprintf("[%.0d]", 0)            // "[]"
 ```
 
 ### Colour and display width

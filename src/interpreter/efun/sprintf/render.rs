@@ -63,17 +63,22 @@ fn prefix(sign: Sign, negative: bool) -> &'static str {
     }
 }
 
-fn int_text(spec: &Spec, i: i64) -> String {
+fn int_text(spec: &Spec, i: i64, precision: Option<usize>) -> String {
+    let precision = precision.unwrap_or(1);
     let magnitude = i.unsigned_abs();
-    let digits = match spec.conversion {
-        'b' => format!("{magnitude:b}"),
-        'o' => format!("{magnitude:o}"),
-        'x' => format!("{magnitude:x}"),
-        'X' => format!("{magnitude:X}"),
-        _ => magnitude.to_string(),
+    let digits = if i == 0 && precision == 0 {
+        String::new()
+    } else {
+        match spec.conversion {
+            'b' => format!("{magnitude:b}"),
+            'o' => format!("{magnitude:o}"),
+            'x' => format!("{magnitude:x}"),
+            'X' => format!("{magnitude:X}"),
+            _ => magnitude.to_string(),
+        }
     };
     let sign = if i < 0 { "-" } else { prefix(spec.sign, false) };
-    format!("{sign}{digits}")
+    format!("{sign}{digits:0>precision$}")
 }
 
 /// `f` in C's `%e` form: a mantissa with `precision` decimals and a
@@ -284,7 +289,12 @@ pub(super) fn field<const N: usize>(
             let LpcRef::Int(i) = value else {
                 return Err(wants("an int"));
             };
-            padded_number(&int_text(spec, i.0), width, align, &spec.pad)
+            let pad = if precision.is_some() && spec.pad == Pad::Zero {
+                &Pad::Space
+            } else {
+                &spec.pad
+            };
+            padded_number(&int_text(spec, i.0, precision), width, align, pad)
         }
         'e' | 'E' | 'f' | 'g' | 'G' => {
             let f = match value {
