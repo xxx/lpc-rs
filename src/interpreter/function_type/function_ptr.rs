@@ -14,7 +14,7 @@ use ustr::Ustr;
 
 use crate::interpreter::stm::{TxnHandle, VarId};
 use crate::interpreter::{
-    efun::{CALL_OTHER, EFUN_FUNCTIONS},
+    efun::{CALL_OTHER, EFUN_FUNCTIONS, compose::COMPOSE_RECEIVER_EXECUTOR},
     function_type::function_address::FunctionAddress,
     lpc_ref::{LpcRef, NULL},
     process::Process,
@@ -163,11 +163,19 @@ impl FunctionPtr {
         Ok(())
     }
 
-    /// Whether a call can find this pointer's receiver without arguments:
-    /// always, unless it is `&->name()` with the receiver hole unfilled.
+    /// Whether a call can find this pointer's receiver without arguments,
+    /// including the receiver preserved by a composition.
     pub fn receiver_bound(&self) -> bool {
-        !matches!(self.address, FunctionAddress::Dynamic(_))
-            || matches!(self.partial_args.first(), Some(Some(_)))
+        let index = match &self.address {
+            FunctionAddress::Dynamic(_) => 0,
+            FunctionAddress::Local(_, function)
+                if Arc::ptr_eq(function, &COMPOSE_RECEIVER_EXECUTOR) =>
+            {
+                2
+            }
+            _ => return true,
+        };
+        matches!(self.partial_args.get(index), Some(Some(_)))
     }
 
     /// Whether [`prepare_call`](Self::prepare_call) would find its receiver alive.

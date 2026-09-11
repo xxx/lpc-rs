@@ -118,6 +118,8 @@ Visibility is in the context of the object where the variable is created. If a `
 that object can create a `function` variable pointing to it, and it will be callable from within any other object.
 
 All `function` variables can be used in compositions with the `@` operator, or the `compose` efun.
+An unbound receiver in the left function stays open: `(&->move() @ &present("quay"))(actor)`
+calls `actor->move(present("quay"))`. See [`compose`](../efun/compose.md) for argument binding.
 
 `&f(a, , b)` builds a new value over an existing `function` variable, appending `a`, a hole and `b` after
 `f`'s own bound arguments; `f`'s existing holes are left open. `papplyv(f, args)` instead fills `f`'s
