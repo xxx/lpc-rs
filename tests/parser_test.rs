@@ -16,6 +16,7 @@ use lpc_rs::{
             function_def_node::FunctionDefNode,
             function_ptr_node::FunctionPtrNode,
             if_node::IfNode,
+            inherit_node::InheritNode,
             int_node::IntNode,
             operator_node::{Operator, OperatorNode},
             program_node::ProgramNode,
@@ -59,6 +60,66 @@ fn assert_int(value: LpcIntInner, expr: &str) {
     });
 
     assert_eq!(expr_node, expected);
+}
+
+#[test]
+fn inherit_constant_string_expressions() {
+    for path in [
+        r#""/armour/base""#,
+        r#""/armour" "/base""#,
+        r#"("/armour/base")"#,
+        r#"("/armour" + "/base")"#,
+        r#""/armour" + "/base""#,
+        r#"(("/" + "armour") + ("/" + "base"))"#,
+    ] {
+        for namespace in [None, Some("armour")] {
+            let alias = namespace.map_or(String::new(), |name| format!(" {name}"));
+            let code = format!("inherit {path}{alias};");
+            let lexer = LexWrapper::new(&code, 0).triples();
+            let node = lpc_parser::ProgramParser::new()
+                .parse(&mut CompilationContext::default(), lexer)
+                .unwrap();
+
+            assert_eq!(
+                node.inherits,
+                vec![InheritNode {
+                    path: ustr("/armour/base"),
+                    namespace: namespace.map(ustr),
+                    span: Some(Span::new(0, 0..code.len())),
+                }],
+                "{code}"
+            );
+        }
+    }
+}
+
+#[test]
+fn inherit_rejects_paths_that_do_not_resolve_to_strings() {
+    for path in [
+        "42",
+        "(1 + 2)",
+        "ARMOUR",
+        r#"(ARMOUR + "/base")"#,
+        "make_path()",
+        r#"({ "/armour/base" })"#,
+        r#"(path = "/armour/base")"#,
+    ] {
+        let code = format!("inherit {path};");
+        let lexer = LexWrapper::new(&code, 0).triples();
+        let error = lpc_parser::ProgramParser::new()
+            .parse(&mut CompilationContext::default(), lexer)
+            .unwrap_err();
+        let lalrpop_util::ParseError::User { error } = error else {
+            panic!("expected an inherit path diagnostic for {code}, got {error}");
+        };
+
+        assert_eq!(
+            error.to_string(),
+            "inherit path must be a constant string expression",
+            "{code}"
+        );
+        assert_eq!(error.span(), Some(Span::new(0, 0..code.len())));
+    }
 }
 
 #[test]

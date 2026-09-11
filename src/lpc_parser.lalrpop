@@ -166,13 +166,11 @@ pub Program: ProgramNode = <inherits:Inherit*> <body:Def*> =>? {
 };
 
 Inherit: InheritNode = {
-    <l:"inherit"> <path_node:String> <namespace:"ID"?> <r:";"> =>? {
+    <l:"inherit"> <path_node:Expression> <namespace:"ID"?> <r:";"> =>? {
         let span = Span::join(l, r);
 
-        let path = if let ExpressionNode::String(StringNode { value, .. }) = path_node {
-            value
-        } else {
-            let error = lpc_bug!(Some(span), "Inherit path isn't a string? This should not have even parsed.");
+        let ExpressionNode::String(StringNode { value: path, .. }) = path_node else {
+            let error = lpc_error!(Some(span), "inherit path must be a constant string expression");
 
             return Err(ParseError::User { error });
         };

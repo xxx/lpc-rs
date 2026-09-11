@@ -20,6 +20,18 @@ private void set_name(string n) {
 }
 ```
 
+An `inherit` path can be a constant string expression, including concatenation
+of macros defined earlier in the source or an included header:
+
+```c
+#define ARMOUR "/std/armour"
+inherit (ARMOUR + "/base");
+```
+
+Parentheses are optional, and a namespace can follow the expression:
+`inherit ARMOUR + "/base" armour;`. The expression must resolve to a string
+at compile time; runtime variables and function calls are rejected.
+
 notes:
 
 - no prototypes necessary

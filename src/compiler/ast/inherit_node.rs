@@ -15,11 +15,12 @@ use crate::compiler::{
 /// A node representing an `inherit` statement.
 #[derive(Hash, Debug, Clone, Eq, PartialOrd, PartialEq)]
 pub struct InheritNode {
+    /// The path after compile-time expression evaluation.
     pub path: Ustr,
 
     pub namespace: Option<Ustr>,
 
-    /// The span of the string in the original file
+    /// The span of the inherit statement in the original file.
     pub span: Option<Span>,
 }
 

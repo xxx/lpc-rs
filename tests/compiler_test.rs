@@ -75,6 +75,62 @@ async fn test_inheritance() {
 }
 
 #[tokio::test]
+async fn inherit_macro_string_expression_compiles_and_runs() {
+    let code = indoc! { r#"
+        #define ARMOUR "/std"
+        inherit (ARMOUR + "/object");
+
+        string create() {
+            return public_function();
+        }
+    "# };
+
+    let task = run_prog(code).await;
+    assert_eq!(
+        task.context.result().unwrap().to_string(),
+        "/std/object public"
+    );
+}
+
+#[tokio::test]
+async fn inherit_nested_macro_expression_preserves_namespace() {
+    let code = indoc! { r#"
+        #define ROOT "/"
+        #define ARMOUR (ROOT + "std")
+        #define BASE(dir) (dir + "/object")
+        inherit BASE(ARMOUR) armour;
+
+        string create() {
+            return armour::public_function();
+        }
+
+        string public_function() {
+            return "child";
+        }
+    "# };
+
+    let task = run_prog(code).await;
+    assert_eq!(
+        task.context.result().unwrap().to_string(),
+        "/std/object public"
+    );
+}
+
+#[tokio::test]
+async fn inherit_undefined_macro_reports_constant_string_error() {
+    let compiler = default_compiler();
+    let error = compiler
+        .compile_string("foo.c", r#"inherit (ARMOUR + "/base");"#)
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "inherit path must be a constant string expression"
+    );
+}
+
+#[tokio::test]
 async fn test_dynamic_receiver() {
     let code = indoc! { r##"
         void create() {
