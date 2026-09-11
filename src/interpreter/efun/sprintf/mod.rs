@@ -51,41 +51,64 @@ pub fn sprintf<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
             layout.text_char('^');
             continue;
         }
-        let spec = spec::parse(&mut chars).map_err(|e| {
+        let mut spec = spec::parse(&mut chars).map_err(|e| {
             context.runtime_error(match e {
                 SpecError::Unknown(c) => format!("sprintf: unknown conversion `{c}`"),
                 SpecError::Unterminated => "sprintf: unterminated conversion".to_owned(),
             })
         })?;
         let mut align = spec.align;
-        let mut size = |size: Option<Size>, context: &EfunContext<'_, N>| -> Result<Option<i64>> {
-            Ok(match size {
-                None => None,
-                Some(Size::Fixed(n)) => Some(n as i64),
-                Some(Size::FromArg) => {
-                    let (number, value) = take(context)?;
-                    let LpcRef::Int(i) = value else {
-                        return Err(context.runtime_error(format!(
-                            "sprintf: argument {number} is {}, `*` wants an int",
-                            render::described(&value)
-                        )));
-                    };
-                    Some(i.0)
-                }
+        let sizes = (0..spec.size_args)
+            .map(|_| {
+                let (number, value) = take(context)?;
+                let LpcRef::Int(i) = value else {
+                    return Err(context.runtime_error(format!(
+                        "sprintf: argument {number} is {}, `*` wants an int",
+                        render::described(&value)
+                    )));
+                };
+                Ok(i.0)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let size = |size: Option<Size>| {
+            size.map(|size| match size {
+                Size::Fixed(n) => n as i128,
+                Size::FromArg(index) => sizes[index] as i128,
+                Size::AbsoluteFromArg(index) => sizes[index].unsigned_abs() as i128,
             })
         };
-        let width = match size(spec.width, context)? {
+        let width = match size(spec.width) {
             Some(w) if w < 0 => {
                 align = Align::Left;
+                spec.justify = false;
                 Some(w.unsigned_abs() as usize)
             }
             Some(w) => Some(w as usize),
             None => None,
         };
-        let precision = size(spec.precision, context)?.and_then(|p| usize::try_from(p).ok());
+        let precision = size(spec.precision).and_then(|p| usize::try_from(p).ok());
         let (number, value) = take(context)?;
-        let field = render::field(context, &spec, align, width, precision, &value, number)?;
-        layout.field(field);
+        if spec.array {
+            if !matches!(value, LpcRef::Array(_)) {
+                return Err(context.runtime_error(format!(
+                    "sprintf: argument {number} is {}, `@` wants an array",
+                    render::described(&value)
+                )));
+            }
+            value.with_array(context.txn(), |values| -> Result<()> {
+                for (index, value) in values.iter().enumerate() {
+                    let argument = format!("{number}[{index}]");
+                    layout.field(render::field(
+                        context, &spec, align, width, precision, value, &argument,
+                    )?);
+                }
+                Ok(())
+            })??;
+        } else {
+            layout.field(render::field(
+                context, &spec, align, width, precision, &value, &number,
+            )?);
+        }
     }
     let result = layout.finish();
     context.return_efun_result(LpcRef::from(result));
@@ -314,6 +337,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn colon_star_shares_one_size_and_stars_follow_format_order() {
+        check(&[
+            (r#""%:*s|%d", 3, "foobar", 9"#, "foo|9"),
+            (r#""%:*s", -5, "foo""#, "foo  "),
+            (r#""%:*s", -3, "foobar""#, "foo"),
+            (r#""%:*d", 5, 42"#, "00042"),
+            (r#""%.**s", 2, 4, "foobar""#, "  fo"),
+            (r#""%:*8s", 3, "foobar""#, "     foo"),
+            (r#""%:*.*s|%d", 5, 2, "abcdef", 7"#, "   ab|7"),
+            (r#""%.*:*s", 2, 4, "foobar""#, "foob"),
+        ])
+        .await;
+        let err = error_of(r#""%:*s", 3"#).await;
+        assert!(err.contains("argument 2 is missing"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn array_formatting_reuses_sizes_and_consumes_one_array_argument() {
+        check(&[
+            (r#""%@-4s", ({ "oak", "elm" })"#, "oak elm "),
+            (r#""%@04d:%d", ({ 1, -2 }), 7"#, "0001-002:7"),
+            (r#""%@*.*s|%d", 4, 2, ({ "abcd", "xyz" }), 9"#, "  ab  xy|9"),
+            (r#""%@:*s", 3, ({ "abcdef", "x" })"#, "abc  x"),
+            (r#""%@@s", ({ "a", "b" })"#, "ab"),
+            (r#""<%@s>%d", ({}), 7"#, "<>7"),
+            (r#""<%@*s>%d", 4, ({}), 7"#, "<>7"),
+            (r#""%@#Q", ({ ({ "x" }), ({ "y" }) })"#, r#"({"x"})({"y"})"#),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn array_fields_share_column_layout_and_display_width() {
+        check(&[
+            (r#""%@=-4s", ({ "aa bb", "x y z" })"#, "aa  x y\nbb  z"),
+            (
+                "\"%@-4s\", ({ \"界\", \"e\u{301}\", \"👩‍💻\" })",
+                "界  e\u{301}   👩‍💻  ",
+            ),
+            (
+                "\"%@-4s\", ({ \"\x1b[31m界\x1b[0m\", \"x\" })",
+                "\x1b[31m界\x1b[0m  x   ",
+            ),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn array_format_errors_identify_the_argument_and_element() {
+        let err = error_of(r#""%@s", "abc""#).await;
+        assert!(
+            err.contains("argument 1 is a string, `@` wants an array"),
+            "{err}"
+        );
+        let err = error_of(r#""%@s", ({ "abc", 12 })"#).await;
+        assert!(
+            err.contains("argument 1[1] is an int, %s wants a string"),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
     async fn ints_take_width_alignment_and_sign_flags() {
         check(&[
             (r#""%d", 123"#, "123"),
@@ -409,12 +494,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn commas_group_integer_digits_after_precision_and_before_field_padding() {
+        check(&[
+            (r#""%,d", 999"#, "999"),
+            (r#""%,d", 1000"#, "1,000"),
+            (r#""%,d", 123456789"#, "123,456,789"),
+            (r#""%+,i", 1234"#, "+1,234"),
+            (
+                r#""%,d", -9223372036854775807 - 1"#,
+                "-9,223,372,036,854,775,808",
+            ),
+            (r#""%,.7d", 42"#, "0,000,042"),
+            (r#""%,010d", 1234"#, "000001,234"),
+            (r#""%,-10d", 1234"#, "1,234     "),
+            (r#""%,'.'10d", 1234"#, ".....1,234"),
+            (r#""%+,.0d", 0"#, "+"),
+            (
+                r#""%,x %,X %,o", 0xabcdef, 0xabcdef, 0o123456"#,
+                "abc,def ABC,DEF 123,456",
+            ),
+            (r#""%,.8B", 5"#, "00,000,101"),
+            (r#""%@@,d", ({ 1000, 2000 })"#, "1,0002,000"),
+            (r#""%,.2f", 1234.5"#, "1234.50"),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
     async fn ints_render_in_octal_hex_binary_and_as_characters() {
         check(&[
             (r#""%o", 16"#, "20"),
             (r#""%x", 123"#, "7b"),
             (r#""%X", 123"#, "7B"),
             (r#""%b", 5"#, "101"),
+            (r#""%B", -5"#, "-101"),
             (r#""%c", 65"#, "A"),
             (r#""%c%c", 0x00e9, 0x4e2d"#, "é中"),
         ])
@@ -426,6 +539,7 @@ mod tests {
         check(&[
             (r#""%f", 123.5"#, "123.500000"),
             (r#""%8.3f", 123.5"#, " 123.500"),
+            (r#""%8.2F", 3.5"#, "    3.50"),
             (r#""%.2f", 2"#, "2.00"),
             (r#""%12.4e", 123.5"#, "  1.2350e+02"),
             (r#""%E", 123.5"#, "1.235000E+02"),
@@ -445,6 +559,117 @@ mod tests {
             (r#""%O", "s""#, "s"),
             (r#""%O", ({ 1, 2 })"#, "({\n  1,\n  2\n})"),
             (r#""%O", ([ "a": 1 ])"#, "([\n  a: 1\n])"),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn percent_q_quotes_strings_and_escapes_control_characters() {
+        check(&[
+            (r#""%Q", "a\nb""#, r#""a\nb""#),
+            (r#""%Q", "a\"b\\c""#, r#""a\"b\\c""#),
+            (r#""%Q", "\a\b\t\n\v\f\r""#, r#""\a\b\t\n\v\f\r""#),
+            (
+                r#""%Q", sprintf("%c%c%c", 0, 27, 127)"#,
+                r#""\x00\x1b\x7f""#,
+            ),
+            ("\"%Q\", \"界e\u{301}👩‍💻\"", "\"界e\u{301}👩‍💻\""),
+            (r#""%8Q", "x""#, "     \"x\""),
+            (r#""%.3Q", "abc""#, "\"ab"),
+            (
+                r#""%Q", to_bytes(({ 0, 34, 92, 255 }))"#,
+                r#"b"\x00\"\\\xff""#,
+            ),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn debug_formats_quote_recursively_and_compact_collection_layout() {
+        check(&[
+            (r#""%Q", ({ "x", "y" })"#, "({\n  \"x\",\n  \"y\"\n})"),
+            (r#""%Q", ([ "a": "b" ])"#, "([\n  \"a\": \"b\"\n])"),
+            (r#""%#O", ({ 1, "two" })"#, "({1,two})"),
+            (r#""%#O", ([ "a": 1 ])"#, "([a:1])"),
+            (r#""%#Q %#O", ({}), ([])"#, "({}) ([])"),
+            (
+                r#""%#Q", ({ "a\nb", ([ "key": ({ "quoted", "x" }) ]) })"#,
+                r#"({"a\nb",(["key":({"quoted","x"})])})"#,
+            ),
+            (r#""%10#Q", ({ 1, 2 })"#, "   ({1,2})"),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn debug_formats_read_transactional_updates_and_bound_recursion() {
+        let code = r#"
+            string create() {
+                mixed a = ({ ({ "old" }) });
+                a[0][0] = "new";
+                return sprintf("%#Q", a);
+            }
+        "#;
+        assert_eq!(
+            run_prog(code).await.result().unwrap().as_str(),
+            Some(r#"({({"new"})})"#)
+        );
+        for conversion in ["Q", "#O", "#Q"] {
+            for setup in ["mixed a = ({ 0 }); a[0] = a;", "mixed a = ([]); a[0] = a;"] {
+                let code =
+                    format!("string create() {{ {setup} return sprintf(\"%{conversion}\", a); }}");
+                let err = try_run_prog(&code).await.unwrap_err().to_string();
+                assert!(err.contains("Too deep recursion"), "{err}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn justification_spreads_spaces_without_splitting_graphemes_or_controls() {
+        check(&[
+            (r#""%$9s", "aa bb cc""#, "aa  bb cc"),
+            (r#""%$8s", "  aa   bb  ""#, "aa    bb"),
+            (r#""%$8s", "aa""#, "aa      "),
+            (r#""%$4s", "aa bb""#, "aa bb"),
+            (r#""%$-8s", "aa bb""#, "aa bb   "),
+            (r#""%-$8d", 12"#, "12      "),
+            (r#""%$*s", -8, "aa bb""#, "aa bb   "),
+            (r#""%$6s", "👩‍💻 x""#, "👩‍💻   x"),
+            ("\"%$5s\", \"e\u{301} x\"", "e\u{301}   x"),
+            (
+                "\"%$8s\", \"\x1b[31m   界 aa \x1b[0m\"",
+                "\x1b[31m界    aa\x1b[0m",
+            ),
+            ("\"%$3s\", \"\x1b[0m\"", "\x1b[0m   "),
+        ])
+        .await;
+    }
+
+    #[tokio::test]
+    async fn justified_columns_leave_each_paragraphs_last_line_left_aligned() {
+        check(&[
+            (
+                r#""%=$9s", "aa bb cc dd ee\nff gg\n""#,
+                "aa  bb cc\ndd ee\nff gg\n",
+            ),
+            (
+                r#""%=$9s|%=-4s\n", "aa bb cc dd", "x y z""#,
+                "aa  bb cc|x y\ndd        z\n",
+            ),
+            (r#""%=$9.6s", "aa bb cc""#, "aa     bb\ncc"),
+            (r#""%#$12.2s", "a b\nc d""#, "a    bc d"),
+            (
+                "\"%=$5s\", \"\x1b[31maa bb cc\x1b[0m\"",
+                "\x1b[31maa bb\ncc\x1b[0m",
+            ),
+            (
+                "\"%=$5s\", \"\x1b[31maa bb \x1b[0m\"",
+                "\x1b[31maa bb\x1b[0m",
+            ),
+            (
+                "\"%=-5s\", \"\x1b[31maa bb \x1b[0m\"",
+                "\x1b[31maa bb\x1b[0m",
+            ),
         ])
         .await;
     }

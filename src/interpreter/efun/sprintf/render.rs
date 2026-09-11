@@ -9,7 +9,10 @@ use super::{
     layout::{Field, Kind},
     spec::{Align, Mode, Pad, Sign, Spec},
 };
-use crate::interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef};
+use crate::interpreter::{
+    efun::{dump, efun_context::EfunContext},
+    lpc_ref::LpcRef,
+};
 
 /// The type of `value` with its article, for a message.
 pub(super) fn described(value: &LpcRef) -> String {
@@ -63,6 +66,17 @@ fn prefix(sign: Sign, negative: bool) -> &'static str {
     }
 }
 
+fn grouped_digits(digits: &str) -> String {
+    let mut result = String::new();
+    for (index, c) in digits.char_indices() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            result.push(',');
+        }
+        result.push(c);
+    }
+    result
+}
+
 fn int_text(spec: &Spec, i: i64, precision: Option<usize>) -> String {
     let precision = precision.unwrap_or(1);
     let magnitude = i.unsigned_abs();
@@ -70,7 +84,7 @@ fn int_text(spec: &Spec, i: i64, precision: Option<usize>) -> String {
         String::new()
     } else {
         match spec.conversion {
-            'b' => format!("{magnitude:b}"),
+            'b' | 'B' => format!("{magnitude:b}"),
             'o' => format!("{magnitude:o}"),
             'x' => format!("{magnitude:x}"),
             'X' => format!("{magnitude:X}"),
@@ -78,7 +92,12 @@ fn int_text(spec: &Spec, i: i64, precision: Option<usize>) -> String {
         }
     };
     let sign = if i < 0 { "-" } else { prefix(spec.sign, false) };
-    format!("{sign}{digits:0>precision$}")
+    if spec.grouping {
+        let digits = format!("{digits:0>precision$}");
+        format!("{sign}{}", grouped_digits(&digits))
+    } else {
+        format!("{sign}{digits:0>precision$}")
+    }
 }
 
 /// `f` in C's `%e` form: a mantissa with `precision` decimals and a
@@ -134,10 +153,54 @@ fn float_text(spec: &Spec, f: BaseFloat, precision: Option<usize>) -> String {
         'E' => exponent_text(f, precision, true),
         'g' => general_text(f, precision, false),
         'G' => general_text(f, precision, true),
+        'F' => format!("{f:.precision$}").to_ascii_uppercase(),
         _ => format!("{f:.precision$}"),
     };
     let negative = body.starts_with('-');
     format!("{}{body}", prefix(spec.sign, negative))
+}
+
+fn justified(text: &str, width: usize, pad: &Pad) -> String {
+    let parsed = Text::new(text);
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut word_width = 0;
+    for unit in parsed.units() {
+        if unit.text == " " {
+            word.extend(unit.raw.chars().filter(|c| *c != ' '));
+            if word_width > 0 {
+                words.push(std::mem::take(&mut word));
+                word_width = 0;
+            }
+        } else {
+            word.push_str(unit.raw);
+            word_width += unit.width;
+        }
+    }
+    if word_width > 0 || words.is_empty() {
+        // A string containing only SGR has no grapheme units.
+        words.push(if parsed.width() == 0 {
+            text.to_owned()
+        } else {
+            word
+        });
+    } else if let Some(last) = words.last_mut() {
+        last.push_str(&word);
+    }
+    if words.len() == 1 {
+        return padded(&words[0], Some(width), Align::Left, pad);
+    }
+    let gaps = words.len() - 1;
+    let letters: usize = words.iter().map(|word| display::width(word)).sum();
+    let spaces = width.saturating_sub(letters).max(gaps);
+    let mut result = String::new();
+    for (index, word) in words.iter().enumerate() {
+        if index > 0 {
+            result.push_str(&" ".repeat(spaces / gaps + usize::from(index <= spaces % gaps)));
+        }
+        result.push_str(word);
+    }
+    result
 }
 
 /// `text` word-wrapped to `width`: paragraphs split at newlines, words at
@@ -151,6 +214,10 @@ fn wrapped(text: &str, width: usize) -> Vec<String> {
         for word in paragraph.split(' ').filter(|w| !w.is_empty()) {
             let parsed = Text::new(word);
             let word_len = parsed.width();
+            if word_len == 0 {
+                line.push_str(word);
+                continue;
+            }
             if line_len > 0 && line_len + 1 + word_len <= width {
                 line.push(' ');
                 line.push_str(word);
@@ -187,7 +254,13 @@ fn wrapped(text: &str, width: usize) -> Vec<String> {
 /// `words` (one per line of the argument) laid out column-major in
 /// `columns` columns of `width / columns`, `ls` style; the last column is
 /// never padded.
-fn table(words: &[&str], width: usize, columns: Option<usize>, align: Align) -> Vec<String> {
+fn table(
+    words: &[&str],
+    width: usize,
+    columns: Option<usize>,
+    align: Align,
+    justify: bool,
+) -> Vec<String> {
     if words.is_empty() {
         return Vec::new();
     }
@@ -204,6 +277,8 @@ fn table(words: &[&str], width: usize, columns: Option<usize>, align: Align) -> 
                 let word = words.get(column * rows + row).copied().unwrap_or("");
                 if column + 1 == columns {
                     line.push_str(word);
+                } else if justify {
+                    line.push_str(&justified(word, column_width, &Pad::Space));
                 } else {
                     line.push_str(&padded(word, Some(column_width), align, &Pad::Space));
                 }
@@ -222,7 +297,7 @@ pub(super) fn field<const N: usize>(
     width: Option<usize>,
     precision: Option<usize>,
     value: &LpcRef,
-    number: usize,
+    number: &dyn std::fmt::Display,
 ) -> Result<Field> {
     let wants = |expected: &str| {
         // A bytes stands in for text under %s and %d, so those two name the
@@ -247,19 +322,38 @@ pub(super) fn field<const N: usize>(
                 _ => s.to_owned(),
             };
             match spec.mode {
-                Mode::Plain => padded(&text, width, align, &spec.pad),
+                Mode::Plain => match width {
+                    Some(width) if spec.justify => text
+                        .split('\n')
+                        .map(|line| justified(line, width, &spec.pad))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                    _ => padded(&text, width, align, &spec.pad),
+                },
                 Mode::Column => {
                     let Some(width) = width else {
                         return Err(context.runtime_error("sprintf: %= needs a field width"));
                     };
-                    let lines = wrapped(&text, precision.unwrap_or(width))
-                        .iter()
-                        .map(|line| {
-                            if line.is_empty() {
-                                String::new()
-                            } else {
-                                padded(line, Some(width), align, &spec.pad)
-                            }
+                    let wrap_width = if spec.justify {
+                        precision.unwrap_or(width).min(width)
+                    } else {
+                        precision.unwrap_or(width)
+                    };
+                    let lines = text
+                        .split('\n')
+                        .flat_map(|paragraph| {
+                            let lines = wrapped(paragraph, wrap_width);
+                            let last = lines.iter().rposition(|line| !line.is_empty());
+                            lines.into_iter().enumerate().map(move |(index, line)| {
+                                if line.is_empty() {
+                                    String::new()
+                                } else if spec.justify && Some(index) != last {
+                                    justified(&line, width, &spec.pad)
+                                } else {
+                                    let align = if spec.justify { Align::Left } else { align };
+                                    padded(&line, Some(width), align, &spec.pad)
+                                }
+                            })
                         })
                         .collect();
                     return Ok(Field {
@@ -279,13 +373,13 @@ pub(super) fn field<const N: usize>(
                         .split('\n')
                         .collect();
                     return Ok(Field {
-                        lines: table(&words, width, precision, align),
+                        lines: table(&words, width, precision, align, spec.justify),
                         kind: Kind::Table,
                     });
                 }
             }
         }
-        'd' | 'i' | 'b' | 'o' | 'x' | 'X' => {
+        'd' | 'i' | 'b' | 'B' | 'o' | 'x' | 'X' => {
             let LpcRef::Int(i) = value else {
                 return Err(wants("an int"));
             };
@@ -296,7 +390,7 @@ pub(super) fn field<const N: usize>(
             };
             padded_number(&int_text(spec, i.0, precision), width, align, pad)
         }
-        'e' | 'E' | 'f' | 'g' | 'G' => {
+        'e' | 'E' | 'f' | 'F' | 'g' | 'G' => {
             let f = match value {
                 LpcRef::Int(i) => i.0 as BaseFloat,
                 LpcRef::Float(f) => f.0.into_inner(),
@@ -316,8 +410,15 @@ pub(super) fn field<const N: usize>(
             padded(&c.to_string(), width, align, &spec.pad)
         }
         _ => {
-            let dumped =
-                crate::interpreter::efun::dump::format_ref(value, context, context.txn(), 0, 0)?;
+            let options = dump::FormatOptions {
+                quote_strings: spec.conversion == 'Q',
+                compact: spec.mode == Mode::Table,
+            };
+            let dumped = dump::format_ref(value, context, context.txn(), 0, 0, options)?;
+            let dumped = match precision {
+                Some(precision) => Text::new(&dumped).truncate(precision),
+                None => dumped,
+            };
             padded(&dumped, width, align, &spec.pad)
         }
     };
@@ -358,6 +459,14 @@ mod tests {
     }
 
     #[test]
+    fn uppercase_fixed_float_capitalizes_nonfinite_values() {
+        let spec = super::super::spec::parse(&mut "F".chars().peekable()).unwrap();
+        assert_eq!(float_text(&spec, BaseFloat::INFINITY, None), "INF");
+        assert_eq!(float_text(&spec, BaseFloat::NEG_INFINITY, None), "-INF");
+        assert_eq!(float_text(&spec, BaseFloat::NAN, None), "NAN");
+    }
+
+    #[test]
     fn wrapping_cuts_a_word_wider_than_the_line() {
         assert_eq!(wrapped("ab sentence", 6), ["ab", "senten", "ce"]);
     }
@@ -369,7 +478,7 @@ mod tests {
 
     #[test]
     fn a_table_picks_as_many_columns_as_fit_the_longest_word_plus_two() {
-        let rows = table(&["one", "two", "three"], 20, None, Align::Left);
+        let rows = table(&["one", "two", "three"], 20, None, Align::Left, false);
         // 20 / (5 + 2) = 2 columns of 10.
         assert_eq!(rows, ["one       three", "two       "]);
     }

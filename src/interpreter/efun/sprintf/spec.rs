@@ -43,7 +43,9 @@ impl Pad {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Size {
     Fixed(usize),
-    FromArg,
+    FromArg(usize),
+    /// `:*` precision uses the absolute width, even if a later flag replaces it.
+    AbsoluteFromArg(usize),
 }
 
 /// How a string is laid out.
@@ -64,7 +66,11 @@ pub(super) struct Spec {
     pub width: Option<Size>,
     pub precision: Option<Size>,
     pub mode: Mode,
-    /// `s d i b o x X e E f g G c O`.
+    pub array: bool,
+    pub grouping: bool,
+    pub justify: bool,
+    pub size_args: usize,
+    /// `s d i b B o x X e E f F g G c O Q`.
     pub conversion: char,
 }
 
@@ -85,12 +91,18 @@ fn number(first: Option<char>, chars: &mut Peekable<Chars>) -> usize {
     n
 }
 
+fn argument(size_args: &mut usize) -> Size {
+    let index = *size_args;
+    *size_args += 1;
+    Size::FromArg(index)
+}
+
 /// A number or `*`; `None` for neither.
-fn size(chars: &mut Peekable<Chars>) -> Option<Size> {
+fn size(chars: &mut Peekable<Chars>, size_args: &mut usize) -> Option<Size> {
     match chars.peek() {
         Some('*') => {
             chars.next();
-            Some(Size::FromArg)
+            Some(argument(size_args))
         }
         Some(c) if c.is_ascii_digit() => Some(Size::Fixed(number(None, chars))),
         _ => None,
@@ -106,6 +118,10 @@ pub(super) fn parse(chars: &mut Peekable<Chars>) -> Result<Spec, SpecError> {
         width: None,
         precision: None,
         mode: Mode::Plain,
+        array: false,
+        grouping: false,
+        justify: false,
+        size_args: 0,
         conversion: 's',
     };
     loop {
@@ -113,14 +129,21 @@ pub(super) fn parse(chars: &mut Peekable<Chars>) -> Result<Spec, SpecError> {
             return Err(SpecError::Unterminated);
         };
         match c {
-            '-' => spec.align = Align::Left,
-            '|' => spec.align = Align::Center,
+            '-' => {
+                spec.align = Align::Left;
+                spec.justify = false;
+            }
+            '|' => {
+                spec.align = Align::Center;
+                spec.justify = false;
+            }
             '+' => spec.sign = Sign::Plus,
             ' ' => spec.sign = Sign::Space,
             '=' => spec.mode = Mode::Column,
             '#' => spec.mode = Mode::Table,
-            // Justified text is laid out as left-aligned.
-            '$' => {}
+            '$' => spec.justify = true,
+            '@' => spec.array = true,
+            ',' => spec.grouping = true,
             '\'' => {
                 let mut pad = String::new();
                 loop {
@@ -136,29 +159,31 @@ pub(super) fn parse(chars: &mut Peekable<Chars>) -> Result<Spec, SpecError> {
                 }
                 spec.pad = Pad::Custom(pad);
             }
-            '*' => spec.width = Some(Size::FromArg),
-            '.' => spec.precision = Some(size(chars).unwrap_or(Size::Fixed(0))),
+            '*' => spec.width = Some(argument(&mut spec.size_args)),
+            '.' => {
+                spec.precision = Some(size(chars, &mut spec.size_args).unwrap_or(Size::Fixed(0)));
+            }
             ':' => {
                 if chars.peek() == Some(&'0') {
                     spec.pad = Pad::Zero;
                 }
-                let both = size(chars).unwrap_or(Size::Fixed(0));
+                let both = size(chars, &mut spec.size_args).unwrap_or(Size::Fixed(0));
                 spec.width = Some(both);
-                spec.precision = Some(both);
+                spec.precision = Some(match both {
+                    Size::FromArg(index) => Size::AbsoluteFromArg(index),
+                    other => other,
+                });
             }
             '0' if spec.width.is_none() => {
                 spec.pad = Pad::Zero;
-                if let Some(width) = size(chars) {
+                if let Some(width) = size(chars, &mut spec.size_args) {
                     spec.width = Some(width);
                 }
             }
             '0'..='9' => spec.width = Some(Size::Fixed(number(Some(c), chars))),
-            's' | 'd' | 'i' | 'b' | 'o' | 'x' | 'X' | 'e' | 'E' | 'f' | 'g' | 'G' | 'c' | 'O' => {
+            's' | 'd' | 'i' | 'b' | 'B' | 'o' | 'x' | 'X' | 'e' | 'E' | 'f' | 'F' | 'g' | 'G'
+            | 'c' | 'O' | 'Q' => {
                 spec.conversion = c;
-                return Ok(spec);
-            }
-            'Q' => {
-                spec.conversion = 'O';
                 return Ok(spec);
             }
             other => return Err(SpecError::Unknown(other)),
@@ -218,8 +243,8 @@ mod tests {
     #[test]
     fn stars_take_the_sizes_from_the_arguments() {
         let spec = parsed("*.*s");
-        assert_eq!(spec.width, Some(Size::FromArg));
-        assert_eq!(spec.precision, Some(Size::FromArg));
+        assert_eq!(spec.width, Some(Size::FromArg(0)));
+        assert_eq!(spec.precision, Some(Size::FromArg(1)));
     }
 
     #[test]

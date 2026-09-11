@@ -19,6 +19,7 @@ pub(super) struct Text<'a> {
 
 pub(super) struct Unit<'a> {
     pub raw: &'a str,
+    pub text: &'a str,
     pub width: usize,
 }
 
@@ -77,6 +78,7 @@ impl<'a> Text<'a> {
             raw_start = raw_end;
             Unit {
                 raw,
+                text,
                 width: text.width(),
             }
         })
