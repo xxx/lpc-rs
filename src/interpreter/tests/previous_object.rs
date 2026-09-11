@@ -227,14 +227,14 @@ mod entries {
     }
 
     #[tokio::test]
-    async fn create_through_find_object_sees_the_finder() {
-        let root = TempLib::new("previous-object-find");
+    async fn create_through_load_object_sees_the_loader() {
+        let root = TempLib::new("previous-object-load");
         write(&root, "x.c", MADE.1);
         let r = run_with(
             temp_lib_config(&root),
             PERMISSIVE_MASTER,
             &[],
-            r#"mixed *create() { return ({ find_object("/x")->who_made() }); }"#,
+            r#"mixed *create() { return ({ load_object("/x")->who_made() }); }"#,
         )
         .await;
         assert_eq!(r, vec![s("/main")]);
@@ -295,7 +295,7 @@ mod entries {
             &[MADE],
             indoc! { r#"
                 mixed *create() {
-                    string made = find_object("/inst/1/x")->who_made();
+                    string made = load_object("/inst/1/x")->who_made();
                     return ({ made, "/secure/master"->who_asked() });
                 }
             "# },

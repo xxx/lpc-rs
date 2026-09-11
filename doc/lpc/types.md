@@ -94,9 +94,9 @@
        Any further differentiation is left to the mudlib.
     - `object`s can either be a reference to a prototype object, sometimes called the master, 
       or a reference to a copy of the prototype, called a clone.
-    - Masters are created by the VM when `clone_object` is called on an object where
-      its prototype object has not been loaded, or a string is used as the receiver 
-      for `call_other` (e.g. `"/secure/mail_daemon"->send_all()`)
+    - Masters are loaded by `load_object`, by `clone_object` when the prototype
+      is not loaded, or by using a string receiver for `call_other`
+      (e.g. `"/secure/mail_daemon"->send_all()`).
     - New clones are created with the efun `clone_object`. This is the only way to create them.
     - `object_clones(ob)` lists the live clones sharing `ob`'s compiled program.
     - _Existing_ clones can be found with `find_object`, by using their path, followed by a `#` and
@@ -107,7 +107,7 @@
       changes to the instance will be reflected in all references to it.
     - Examples:
         ```c
-        object gobbo = find_object("/std/goblin");
+        object gobbo = load_object("/std/goblin");
         object gobbo2 = clone_object("/std/goblin");
         object gobbo3 = gobbo2;
         gobbo3->set_name("gobbo3");

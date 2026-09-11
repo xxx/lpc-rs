@@ -451,30 +451,30 @@ mod doors {
     }
 
     #[tokio::test]
-    async fn find_objects_denied_load_is_zero() {
-        let root = lib_with_x("door-find");
+    async fn load_objects_denied_load_is_zero() {
+        let root = lib_with_x("door-load");
         let vm = Vm::new(temp_lib_config(&root));
         run(
             &vm,
             "/secure/master.c",
-            r#"int valid_load(string p, string f, object c, string g) { return f != "find_object"; }"#,
+            r#"int valid_load(string p, string f, object c, string g) { return f != "load_object"; }"#,
         )
         .await;
         let a = run(
             &vm,
             "/a.c",
-            r#"mixed got; void create() { got = find_object("/x"); }"#,
+            r#"mixed got; void create() { got = load_object("/x"); }"#,
         )
         .await;
         assert_eq!(vm.global_state.committed_global(&a, 0u16), LpcRef::from(0));
         assert!(vm.global_state.object_space.lookup("/x").is_none());
     }
 
-    /// An error out of `valid_load` is a failed load, which `find_object`
+    /// An error out of `valid_load` is a failed load, which `load_object`
     /// reports as `0`.
     #[tokio::test]
-    async fn find_objects_throwing_valid_load_is_zero() {
-        let root = lib_with_x("door-find-throw");
+    async fn load_objects_throwing_valid_load_is_zero() {
+        let root = lib_with_x("door-load-throw");
         let vm = Vm::new(temp_lib_config(&root));
         run(
             &vm,
@@ -485,7 +485,7 @@ mod doors {
         let a = run(
             &vm,
             "/a.c",
-            r#"mixed got; void create() { got = find_object("/x"); }"#,
+            r#"mixed got; void create() { got = load_object("/x"); }"#,
         )
         .await;
         assert_eq!(vm.global_state.committed_global(&a, 0u16), LpcRef::from(0));
@@ -807,7 +807,7 @@ mod paths {
         .into_iter()
         .enumerate()
         {
-            let code = format!(r#"void create() {{ find_object("{arg}"); }}"#);
+            let code = format!(r#"void create() {{ load_object("{arg}"); }}"#);
             run(&vm, &format!("/probe{i}.c"), &code).await;
             assert_eq!(committed_string(&vm, &master, SEEN_PATH), expected, "{arg}");
             assert_eq!(count(&vm, &master, LOADS), loads, "{arg}");
@@ -897,7 +897,7 @@ mod paths {
         write(
             &root,
             "d/room1.c",
-            r#"object f() { return find_object("room2"); }"#,
+            r#"object f() { return load_object("room2"); }"#,
         );
         write(&root, "d/room2.c", "int r;\n");
         let a = run(

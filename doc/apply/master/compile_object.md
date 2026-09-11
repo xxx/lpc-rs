@@ -3,9 +3,9 @@
 `mixed compile_object(string path, string func, object caller, string program)`
 
 The driver applies `compile_object` in the master when a load names a path
-that has no source file: `find_object`, `move_object`, `tell_object`,
+that has no source file: `load_object`, `move_object`, `tell_object`,
 `clone_object`, a string receiver of `->`, a `&->f()` pointer whose
-receiver argument is a path, and any other efun that takes an object by
+receiver argument is a path, and other efuns that load an object by
 path. A string return names the blueprint whose
 program the driver runs under `path`; the result is a *virtual object*: its
 `file_name` is `path`, it is not a clone, and it holds its own globals.
@@ -18,7 +18,7 @@ for `<path>.c` and, if it allows, the compile fails to read it. A path
 ending in `#<n>` is never put here.
 
 - `path` is the object name requested, as `file_name` will answer it:
-  leading `/`, no `.c` (`find_object("/inst/17/d/room1")` and
+  leading `/`, no `.c` (`load_object("/inst/17/d/room1")` and
   `"/inst/17/d/room1.c"->f()` both ask about `"/inst/17/d/room1"`).
 - `func`, `caller` and `program` are what `valid_load` receives for the same
   door: the efun or `"call_other"`, the object whose code asked, and the
@@ -47,7 +47,7 @@ permission first, or register lazily. Two tasks materializing one path get
 one object.
 
 Relative object paths resolve against the executing object's own
-directory, so a room written with `find_object("room2")` reaches
+directory, so a room written with `load_object("room2")` reaches
 `/inst/17/d/room2` from `/inst/17/d/room1` and `/d/room2` from
 `/d/room1`. The `program` seen by `valid_read`, `valid_write` and
 `valid_load` for code running in a virtual object is the blueprint's file:
@@ -68,4 +68,4 @@ mixed compile_object(string path, string func, object caller, string program) {
 
 ### See also
 
-`valid_load`, `find_object`, `clone_object`, `file_name`
+`valid_load`, `load_object`, `clone_object`, `file_name`

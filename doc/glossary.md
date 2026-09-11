@@ -138,7 +138,8 @@ sometimes it makes sense to have a single system-wide object that is not cloned,
 to act as a central point of control. The master object is an example of this.
 
 To interact with a prototype, you can use its string file path when using
-`call_other`, or you can use the `find_object` efun to get a reference to it.
+`call_other`, or use `load_object` to get a reference, loading it if needed.
+Use `find_object` to look up an already loaded object without creating it.
 
 All objects in the game have a prototype. When an object is cloned, the prototype
 is first loaded if it hasn't been already, and then the clone is created from it.

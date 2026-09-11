@@ -2,13 +2,18 @@
 
 `object find_object(string path)`
 
-Find the object in the object space at `path`, and return it. `path` is an 
-in-game path, rooted at `LIB_DIR`. It can also include a trailing `#` and a
-number, which will be used to find a specific instance of an object. If no
-object is found, `0` is returned.
+Return the existing object at `path`, or `0` if it is not loaded. This does
+not compile or initialize an object, or call the master's `valid_load` or
+`compile_object` hooks. Use `load_object` to load an object if needed.
 
-An object that is not resident is loaded, which asks the master's
-`valid_load` with `func` `"find_object"`; a refused or failed load returns
-`0` — a `valid_load` that throws is a failed load — as does a path that names
-no file. A path with no source file is put to the master's `compile_object`,
-which may name a blueprint to run under that path.
+`path` is an in-game path, rooted at `LIB_DIR`; relative paths resolve
+against the executing object's directory. A trailing `.c` is optional.
+A trailing `#` and number identifies an existing clone. Invalid paths
+return `0`.
+
+Objects loaded or cloned earlier in the same transaction can be found;
+objects destructed in that transaction return `0`.
+
+### See also
+
+`load_object`, `clone_object`, `file_name`

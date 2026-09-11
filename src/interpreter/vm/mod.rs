@@ -501,13 +501,13 @@ mod tests {
 
         let code = indoc! { r##"
             mixed *create() {
-                object a = find_object("/example2");
+                object a = load_object("/example2");
                 destruct(a);
-                object b = find_object("/example2");
+                object b = load_object("/example2");
                 destruct(b);
-                object c = find_object("/example2");
+                object c = load_object("/example2");
                 destruct(c);
-                object d = find_object("/example2");
+                object d = load_object("/example2");
                 return ({ a, b, c, d });
             }
         "## };

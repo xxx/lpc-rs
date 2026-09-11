@@ -631,7 +631,7 @@ mod tests {
     async fn an_efun_pointer_that_suspends_awaits() {
         let code = indoc! { r#"
             mixed got;
-            void create() { function f = &find_object(); got = f("/nowhere"); }
+            void create() { function f = &load_object(); got = f("/nowhere"); }
         "# };
         let (mut task, _live) = task_at_first_call_fp(code).await;
 

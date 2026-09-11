@@ -589,7 +589,7 @@ mod tests {
                     object o;
                     void create() {
                         err = catch(clone_object("/warns"));
-                        o = find_object("/warns");
+                        o = load_object("/warns");
                     }
                 "# },
             )

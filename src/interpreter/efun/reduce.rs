@@ -239,7 +239,7 @@ mod tests {
     async fn callback_can_suspend_and_observe_its_caller() {
         let code = indoc! { r#"
             int fold(int acc, int item) {
-                find_object("/nowhere");
+                load_object("/nowhere");
                 if (previous_object() != this_object()) { throw("wrong caller"); }
                 return acc + item;
             }

@@ -5,16 +5,22 @@ use lpc_rs_errors::Result;
 use crate::interpreter::{
     efun::efun_context::EfunContext,
     lpc_ref::{LpcRef, NULL},
+    task_context::ObjectLookup,
 };
 
-/// `find_object`, an efun for finding and returning an object from the [`ObjectSpace`]
-/// from its path and clone number.
-pub async fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
+/// Find an existing object by path without loading or initializing it.
+pub fn find_object<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> {
     let lpc_ref = context.arg(0);
-    let result = match lpc_ref.as_str() {
-        Some(path) => match context.load_object(path).await {
-            Ok(proc) => LpcRef::from(Arc::downgrade(&proc)),
-            Err(_) => NULL,
+    let path = lpc_ref.as_str().and_then(|path| {
+        context
+            .task_context()
+            .object_path(path, context.in_game_cwd(), "find_object")
+            .ok()
+    });
+    let result = match path {
+        Some(path) => match context.find_object(&path) {
+            ObjectLookup::Found(proc) => LpcRef::from(Arc::downgrade(&proc)),
+            ObjectLookup::Removed | ObjectLookup::NotCreated => NULL,
         },
         None => NULL,
     };
@@ -43,7 +49,7 @@ mod tests {
             task_context::TaskContext,
             vm::{Vm, global_state::GlobalState, vm_op::VmOp},
         },
-        test_support::{compile_prog, permissive_master, test_config},
+        test_support::{TempLib, compile_prog, permissive_master, temp_lib_config, test_config},
     };
 
     fn task_context_fixture(
@@ -121,34 +127,137 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_creates_object() {
-        let master = indoc! { r#"
-            object create() {
-                return find_object("/empty");
-            }
-        "# };
-
-        let vm = Vm::new(test_config());
-        permissive_master(&vm.global_state.object_space).await;
-
-        let master_proc = vm
-            .initialize_process_from_code("/master.c", master)
+    async fn missing_objects_do_not_load_or_consult_the_master() {
+        let root = TempLib::new("find-without-loading");
+        std::fs::write(root.join("target.c"), "void create() {}\n").unwrap();
+        let vm = Vm::new(temp_lib_config(&root));
+        let master = vm
+            .initialize_process_from_code(
+                "/secure/master.c",
+                indoc! { r#"
+                    int loads; int virtuals;
+                    int valid_load(string p, string f, object c, string g) {
+                        loads++;
+                        return 1;
+                    }
+                    string compile_object(string p, string f, object c, string g) {
+                        virtuals++;
+                        return "/target";
+                    }
+                "# },
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let task = vm
+            .initialize_process_from_code(
+                "/finder.c",
+                indoc! { r#"
+                    int create() {
+                        return find_object("/target") == 0
+                            && find_object("/virtual") == 0
+                            && find_object("/target#42") == 0
+                            && find_object("/../target") == 0
+                            && find_object("") == 0;
+                    }
+                "# },
+            )
             .await
             .unwrap();
 
-        assert!(
-            master_proc
-                .context
-                .object_space()
-                .lookup("/empty")
-                .is_some()
-        );
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert_eq!(vm.global_state.committed_global(&master, 0u16), NULL);
+        assert_eq!(vm.global_state.committed_global(&master, 1u16), NULL);
+        assert!(vm.global_state.object_space.lookup("/target").is_none());
+        assert!(vm.global_state.object_space.lookup("/virtual").is_none());
     }
 
-    // A clone created this transaction is not yet in the physical object map
-    // (its insert is deferred to commit). So the same-transaction
-    // `find_object` can only see it through the transactional cell. This is
-    // the "clone usable immediately" behavior.
+    #[tokio::test]
+    async fn existing_objects_resolve_relative_paths_without_initialization() {
+        let vm = Vm::new(test_config());
+        let target = vm
+            .create_process_from_code("/d/target.c", r#"void create() { throw("initialized"); }"#)
+            .await
+            .unwrap();
+        vm.initialize_process_from_code(
+            "/d/finder.c",
+            indoc! { r#"
+                int check() {
+                    object target = find_object("target");
+                    function lookup = &find_object();
+                    return objectp(target)
+                        && target == lookup("target")
+                        && target == find_object("target.c")
+                        && target == find_object("/d/target")
+                        && target == find_object("/d/target.c");
+                }
+            "# },
+        )
+        .await
+        .unwrap();
+        let task = vm
+            .initialize_process_from_code(
+                "/caller.c",
+                r#"int create() { return "/d/finder"->check(); }"#,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert!(!vm.global_state.is_initialized(&target));
+    }
+
+    #[tokio::test]
+    async fn finds_objects_loaded_this_transaction_until_destructed() {
+        let vm = Vm::new(test_config());
+        permissive_master(&vm.global_state.object_space).await;
+        let task = vm
+            .initialize_process_from_code(
+                "/finder.c",
+                indoc! { r#"
+                    int create() {
+                        object target = load_object("/empty");
+                        int found = objectp(target) && find_object("/empty") == target;
+                        destruct(target);
+                        return found && find_object("/empty") == 0;
+                    }
+                "# },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert!(vm.global_state.object_space.lookup("/empty").is_none());
+    }
+
+    #[tokio::test]
+    async fn finds_committed_objects_until_destructed() {
+        let vm = Vm::new(test_config());
+        permissive_master(&vm.global_state.object_space).await;
+        vm.initialize_process_from_code("/loader.c", r#"void create() { load_object("/empty"); }"#)
+            .await
+            .unwrap();
+        let task = vm
+            .initialize_process_from_code(
+                "/finder.c",
+                indoc! { r#"
+                    int create() {
+                        object target = find_object("/empty");
+                        int found = objectp(target);
+                        destruct(target);
+                        return found && find_object("/empty") == 0;
+                    }
+                "# },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        assert!(vm.global_state.object_space.lookup("/empty").is_none());
+    }
+
+    // The clone's physical insert is deferred until commit.
     #[tokio::test]
     async fn test_finds_clone_created_this_transaction() {
         let code = indoc! { r#"

@@ -211,7 +211,7 @@ mod tests {
         let vm = Vm::new(test_config());
         let code = indoc! { r#"
             mixed *got;
-            void create() { got = map(({ "/nowhere" }), &find_object()); }
+            void create() { got = map(({ "/nowhere" }), &load_object()); }
         "# };
         let (mut task, _live) =
             task_at(&vm, code, |at| matches!(at, Instruction::CallEfun(..))).await;
@@ -225,7 +225,7 @@ mod tests {
     #[tokio::test]
     async fn map_with_a_suspending_efun_pointer_answers() {
         let code =
-            r#"mixed *create() { return map(({ "/nowhere", "/nowhere" }), &find_object()); }"#;
+            r#"mixed *create() { return map(({ "/nowhere", "/nowhere" }), &load_object()); }"#;
         assert_eq!(strings_of(code).await, ["0", "0"]);
     }
 
@@ -234,7 +234,7 @@ mod tests {
         let vm = Vm::new(test_config());
         let code = indoc! { r#"
             int *got;
-            void create() { got = map(({ ({ "/nowhere" }) }), &map(, &find_object())); }
+            void create() { got = map(({ ({ "/nowhere" }) }), &map(, &load_object())); }
         "# };
         let (mut task, _live) =
             task_at(&vm, code, |at| matches!(at, Instruction::CallEfun(..))).await;
@@ -253,7 +253,7 @@ mod tests {
     async fn a_callback_efun_whose_own_callback_suspends_answers() {
         let code = indoc! { r#"
             int create() {
-                mixed *r = map(({ ({ "/nowhere", "/nowhere" }) }), &map(, &find_object()));
+                mixed *r = map(({ ({ "/nowhere", "/nowhere" }) }), &map(, &load_object()));
                 return sizeof(r[0]);
             }
         "# };

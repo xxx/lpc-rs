@@ -5,11 +5,11 @@
 The driver applies `valid_load` in the master before it compiles a file into
 an object on LPC's behalf: `clone_object` of a prototype that is not
 resident, and a string receiver — `"/x"->f()`, a `&->f()` pointer whose
-receiver argument is a path, `move_object`, `tell_object`, `find_object`, or
-any other efun that takes an object by path — that names an object not yet
+receiver argument is a path, `move_object`, `tell_object`, `load_object`, or
+other efuns that load an object by path — that names an object not yet
 loaded. A non-zero return allows the compile;
 zero refuses it, and the efun raises `<func>: permission denied` in the
-caller (`find_object` returns 0). A path that leads out of the lib fails
+caller (`load_object` returns 0). A path that leads out of the lib fails
 before this apply. An object that is already resident is found, not loaded,
 and nothing is asked; cloning a resident prototype is not a load. A path
 that names no source file is put to `compile_object` first; if that names a
@@ -60,4 +60,4 @@ int valid_load(string path, string func, object caller, string program) {
 
 ### See also
 
-`valid_inherit`, `valid_read`, `clone_object`, `call_other`
+`valid_inherit`, `valid_read`, `load_object`, `clone_object`, `call_other`

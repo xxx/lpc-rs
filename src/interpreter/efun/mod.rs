@@ -48,6 +48,7 @@ pub(crate) mod json_decode;
 pub(crate) mod json_encode;
 pub(crate) mod keys_values;
 pub(crate) mod living;
+pub(crate) mod load_object;
 pub(crate) mod localtime;
 pub(crate) mod m_delete;
 pub(crate) mod map;
@@ -428,7 +429,7 @@ efuns! {
         arity: 1,
         args: [LpcType::Object(false)],
     },
-    find_object [async] => {
+    find_object => {
         returns: LpcType::Object(false),
         arity: 1,
         args: [LpcType::String(false)],
@@ -1118,6 +1119,11 @@ efuns! {
         arity: 2,
         args: [LpcType::String(false) | LpcType::Int(false), LpcType::Int(false)],
     },
+    load_object [async] => {
+        returns: LpcType::Object(false),
+        arity: 1,
+        args: [LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1256,6 +1262,8 @@ mod tests {
     #[test]
     fn suspends_follows_the_rows() {
         assert!(Efun::clone_object.suspends());
+        assert!(Efun::load_object.suspends());
+        assert!(!Efun::find_object.suspends());
         assert!(!Efun::this_object.suspends());
         assert!(!Efun::intp.suspends());
     }
@@ -1441,6 +1449,7 @@ mod tests {
                 "regmatch",
                 "object_clones",
                 "hash_string",
+                "load_object",
             ]
         );
     }

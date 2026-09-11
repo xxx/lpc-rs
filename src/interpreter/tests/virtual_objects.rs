@@ -55,12 +55,12 @@ const LOADS: u16 = 9;
 const READ_PROGRAM: u16 = 10;
 const READ_CALLER: u16 = 11;
 
-/// `/d/room1.c`: counts its creates, and `f()` finds `room2` relative to
+/// `/d/room1.c`: counts its creates, and `f()` loads `room2` relative to
 /// itself; `/d/room2.c`.
 const ROOM1: &str = indoc! { r#"
     int creates;
     void create() { creates++; }
-    object f() { return find_object("room2"); }
+    object f() { return load_object("room2"); }
     string rd() { return read_file("/data.txt"); }
 "# };
 const ROOM2: &str = "int r = 2;\n";
@@ -102,8 +102,8 @@ mod the_apply {
             indoc! { r#"
                 string name;
                 void create() {
-                    find_object("/d/room1");
-                    name = file_name(find_object("/inst/17/d/room1"));
+                    load_object("/d/room1");
+                    name = file_name(load_object("/inst/17/d/room1"));
                 }
             "# },
         )
@@ -119,7 +119,7 @@ mod the_apply {
             committed_string(&vm, &master, SEEN_PATH),
             "/inst/17/d/room1"
         );
-        assert_eq!(committed_string(&vm, &master, SEEN_FUNC), "find_object");
+        assert_eq!(committed_string(&vm, &master, SEEN_FUNC), "load_object");
         assert_eq!(committed_string(&vm, &master, SEEN_CALLER), "/a");
         assert_eq!(committed_string(&vm, &master, SEEN_PROGRAM), "/a.c");
         assert_eq!(count(&vm, &master, ASKS), 1);
@@ -130,12 +130,12 @@ mod the_apply {
     #[tokio::test]
     async fn valid_load_is_not_asked_for_a_fileless_path() {
         let (_root, vm, master) = instancing_lib("virt-no-valid-load").await;
-        run(&vm, "/a.c", r#"void create() { find_object("/d/room1"); }"#).await;
+        run(&vm, "/a.c", r#"void create() { load_object("/d/room1"); }"#).await;
         assert_eq!(count(&vm, &master, LOADS), 1);
         run(
             &vm,
             "/b.c",
-            r#"void create() { find_object("/inst/17/d/room1"); }"#,
+            r#"void create() { load_object("/inst/17/d/room1"); }"#,
         )
         .await;
         assert_eq!(count(&vm, &master, LOADS), 1);
@@ -251,7 +251,7 @@ mod the_apply {
             indoc! { r#"
                 string e;
                 void create() {
-                    destruct(find_object("/d/room1"));
+                    destruct(load_object("/d/room1"));
                     e = catch(move_object("/inst/17/d/room1"));
                 }
             "# },
@@ -270,7 +270,7 @@ mod the_apply {
         let a = run(
             &vm,
             "/a.c",
-            r#"mixed got; void create() { got = find_object("/inst/1/d/room1#3"); }"#,
+            r#"mixed got; void create() { got = load_object("/inst/1/d/room1#3"); }"#,
         )
         .await;
         assert_eq!(vm.global_state.committed_global(&a, 0u16), LpcRef::from(0));
@@ -287,11 +287,11 @@ mod the_blueprint {
         run(
             &vm,
             "/a.c",
-            r#"void create() { find_object("/inst/17/d/room1"); }"#,
+            r#"void create() { load_object("/inst/17/d/room1"); }"#,
         )
         .await;
         assert_eq!(committed_string(&vm, &master, LOAD_PATH), "/d/room1.c");
-        assert_eq!(committed_string(&vm, &master, LOAD_FUNC), "find_object");
+        assert_eq!(committed_string(&vm, &master, LOAD_FUNC), "load_object");
         assert_eq!(committed_string(&vm, &master, LOAD_CALLER), "/a");
         assert_eq!(committed_string(&vm, &master, LOAD_PROGRAM), "/a.c");
         assert_eq!(count(&vm, &master, LOADS), 1);
@@ -418,7 +418,7 @@ mod the_blueprint {
         run(
             &vm,
             "/a.c",
-            r#"void create() { find_object("/inst/17/d/room1"); find_object("/inst/18/d/room1"); }"#,
+            r#"void create() { load_object("/inst/17/d/room1"); load_object("/inst/18/d/room1"); }"#,
         )
         .await;
         let blueprint = resident(&vm, "/d/room1");
@@ -683,9 +683,7 @@ mod doors {
         assert!(name.starts_with("/d/room1#"), "{name}");
     }
 
-    /// `find_object`, `->`, and `move_object` reaching one virtual path in
-    /// the same `create()` share one materialization (spec R7: each door
-    /// reaches the same object afterwards).
+    /// Every loading operation and lookup reaches the same virtual object.
     #[tokio::test]
     async fn every_door_reaches_the_same_object() {
         let (_root, vm, master) = instancing_lib("virt-door-identity").await;
@@ -695,7 +693,10 @@ mod doors {
             indoc! { r#"
                 string found; string env;
                 void create() {
-                    found = file_name(find_object("/inst/17/d/room1"));
+                    if (find_object("/inst/17/d/room1")) throw("unexpected object");
+                    object room = load_object("/inst/17/d/room1");
+                    if (find_object("/inst/17/d/room1") != room) throw("lookup missed");
+                    found = file_name(room);
                     "/inst/17/d/room1"->rd();
                     move_object("/inst/17/d/room1");
                     env = file_name(environment(this_object()));
@@ -725,8 +726,8 @@ mod doors {
             &vm,
             "/a.c",
             indoc! { r#"
-                void create() { find_object("/d/room1"); }
-                object go() { return find_object("/inst/17/d/room1"); }
+                void create() { load_object("/d/room1"); }
+                object go() { return load_object("/inst/17/d/room1"); }
             "# },
         )
         .await;
