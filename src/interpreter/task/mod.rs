@@ -23,7 +23,7 @@ use lpc_rs_core::{
     LpcIntInner, RegisterSize,
     register::{Register, RegisterVariant},
 };
-use lpc_rs_errors::{LpcError, Result, lpc_bug, lpc_error};
+use lpc_rs_errors::{LpcError, Result, lpc_bug};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use thin_vec::{ThinVec, thin_vec};
 use tracing::{error, instrument, trace, warn};
@@ -296,7 +296,16 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             return Ok(live);
         }
 
-        if let Err(e) = self.run_entry(&seed).await {
+        let result = {
+            let mut running = RunningTask {
+                task: self,
+                finished: false,
+            };
+            let result = running.task.run_entry(&seed).await;
+            running.finished = true;
+            result
+        };
+        if let Err(e) = result {
             // A failed run holds nothing the committer needs.
             drop(live);
             return Err(e);
@@ -688,6 +697,28 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     }
 }
 
+/// Saves stacks only on cancellation, without sampling the instruction loop.
+struct RunningTask<'a, const N: usize> {
+    task: &'a mut Task<N>,
+    finished: bool,
+}
+
+impl<const N: usize> Drop for RunningTask<'_, N> {
+    fn drop(&mut self) {
+        if !self.finished && !self.task.stack.is_empty() {
+            let span = self
+                .task
+                .stack
+                .last()
+                .and_then(CallFrame::current_debug_span);
+            self.task
+                .context
+                .txn()
+                .record_interruption(span, self.task.stack.stack_trace());
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl<const STACKSIZE: usize> AttemptBody for Task<STACKSIZE> {
     fn timeout_ms(&self) -> u64 {
@@ -695,11 +726,12 @@ impl<const STACKSIZE: usize> AttemptBody for Task<STACKSIZE> {
     }
 
     fn timeout_error(&self) -> LpcError {
-        lpc_error!(
-            "evaluation limit of {}ms has been reached",
-            self.timeout_ms()
-        )
-        .with_stack_trace(self.stack.stack_trace())
+        self.context
+            .txn()
+            .with_interruption(LpcError::runtime(format!(
+                "evaluation limit of {}ms has been reached",
+                self.timeout_ms()
+            )))
     }
 
     async fn begin_attempt(

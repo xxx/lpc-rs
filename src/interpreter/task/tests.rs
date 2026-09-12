@@ -2465,6 +2465,8 @@ mod test_instructions {
                 .await
                 .unwrap_err();
             assert!(stack_trace_of(&e).contains(" in create()"), "{e:?}");
+            assert!(e.message().starts_with("runtime error: evaluation limit"));
+            assert!(e.span().is_some(), "{e:?}");
         }
     }
 
@@ -4935,7 +4937,7 @@ mod test_limits {
 
         assert_eq!(
             r.unwrap_err().to_string(),
-            "evaluation limit of 40ms has been reached"
+            "runtime error: evaluation limit of 40ms has been reached"
         );
     }
 }

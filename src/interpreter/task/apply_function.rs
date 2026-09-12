@@ -15,10 +15,11 @@ use crate::{
         lpc_mapping::LpcMapping,
         lpc_ref::LpcRef,
         process::Process,
-        stm::TxnHandle,
+        stm::{CommittedReader, TxnHandle},
         task::{Task, task_template::TaskTemplate},
         task_context::{Caller, TaskContext},
     },
+    telnet::ops::ConnectionOp,
 };
 
 /// A function's result with the transaction it was computed in: the
@@ -255,8 +256,9 @@ where
 pub async fn apply_runtime_error(
     error: &LpcError,
     proc: Option<Arc<Process>>,
-    template: TaskTemplate,
+    mut template: TaskTemplate,
 ) -> Option<Result<LpcRef>> {
+    template.txn = TxnHandle::default();
     let mut mapping = IndexMap::new();
     let Some(master) = template.global_state.object_space.master_object() else {
         diagnostics::missing(ERROR_HANDLER, None);
@@ -302,7 +304,7 @@ pub async fn apply_runtime_error(
 }
 
 /// Log an uncaught error to the server and notify the master's `error_handler`,
-/// falling back to the debug log when the handler is absent or throws.
+/// falling back to the player's connection and debug log when the handler is absent or throws.
 pub async fn report_runtime_error(
     error: &LpcError,
     proc: Option<Arc<Process>>,
@@ -314,8 +316,13 @@ pub async fn report_runtime_error(
         "Uncaught LPC error:\n{}", error.diagnostic_string()
     );
     let config = template.global_state.config.clone();
+    let connection = template
+        .this_player
+        .load_full()
+        .or_else(|| proc.clone())
+        .and_then(|player| template.global_state.committed_connection(&player));
     match apply_runtime_error(error, proc, template).await {
-        Some(Ok(_)) => {}
+        Some(Ok(_)) => return,
         None => config.debug_log(error.diagnostic_string()).await,
         Some(Err(handler_error)) => {
             tracing::error!(
@@ -331,6 +338,12 @@ pub async fn report_runtime_error(
                 ))
                 .await;
         }
+    }
+    if let Some(connection) = connection {
+        let _ = connection.send(ConnectionOp::SendMessage(format!(
+            "\n{}\n",
+            error.diagnostic_string()
+        )));
     }
 }
 

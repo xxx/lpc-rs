@@ -4,8 +4,9 @@
 
 Call a function after a delay, and possibly repeating on a regular interval.
 
-If `seconds_delay` is 0 or negative, the function will be immediately prioritized
-for calling when the current Task yields.
+The call out is scheduled only when the current transaction commits; a failed
+transaction schedules nothing. If `seconds_delay` is 0 or negative, the function
+is prioritized immediately after that commit.
 
 If `seconds_repeat` is positive, the function will be called repeatedly at that
 interval, after the initial delay.
@@ -19,6 +20,15 @@ A firing that cannot start, because the receiver could not be loaded or has no
 such function, removes the call out, repeating or not; a firing that ran and
 threw leaves a repeating call out repeating. Either error goes to the master's
 `error_handler`.
+
+The callback runs in its own transaction with a fresh execution allowance.
+Calling `reset_room()` directly from `create_room()` keeps NPC creation,
+movement, and their callbacks inside the room's creation transaction. Using
+`call_out(reset_room, 0)` lets room creation commit before that work starts.
+Use this when the room may safely exist before its reset finishes; it changes
+the ordering and rollback behavior. It does not fix an infinite loop in the
+reset itself. If either transaction times out, its runtime diagnostic names
+the interrupted source location and shows the available LPC stack.
 
 Because call outs are executed outside the user's REPL, `this_player()` will return
 0 when called from within a call out. If you need access to the player, you can either

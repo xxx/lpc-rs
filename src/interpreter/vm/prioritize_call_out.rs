@@ -300,6 +300,59 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn callback_and_receiver_initialization_timeouts_reach_the_master() {
+            for initializes in [false, true] {
+                let root = TempLib::new("call-out-timeout");
+                std::fs::write(
+                    root.join("hang.c"),
+                    if initializes {
+                        "void create() { while (1) {} } void fire() {}"
+                    } else {
+                        "void fire() { while (1) {} }"
+                    },
+                )
+                .unwrap();
+                let config = ConfigBuilder::default()
+                    .lib_dir(root.to_str().unwrap())
+                    .max_execution_time(100_u64)
+                    .build()
+                    .unwrap();
+                let vm = Vm::new(config);
+                let master = master(
+                    &vm,
+                    &format!(
+                        r#"
+                    {}
+                    string diagnostic; string location; int reports;
+                    void error_handler(mapping e) {{
+                        diagnostic = e["diagnostic"]; location = e["location"]; reports++;
+                    }}
+                "#,
+                        crate::test_support::PERMISSIVE_MASTER
+                    ),
+                )
+                .await;
+                fire(
+                    &vm,
+                    r#"void create() { call_out(papplyv(&->fire(), ({ "/hang" })), 100); }"#,
+                )
+                .await;
+                let diagnostic = committed_string(&vm, &master, 0);
+                assert!(
+                    diagnostic.contains("runtime error: evaluation limit"),
+                    "{diagnostic}"
+                );
+                assert!(diagnostic.contains("while (1)"), "{diagnostic}");
+                assert!(committed_string(&vm, &master, 1).starts_with("/hang.c:1:"));
+                assert_eq!(
+                    vm.global_state.committed_global(&master, 2u16),
+                    LpcRef::from(1)
+                );
+                assert!(queue_is_empty(&vm));
+            }
+        }
+
+        #[tokio::test]
         async fn a_refused_receiver_is_reported_once_and_the_entry_dropped() {
             let root = lib("call-out-refused");
             let vm = Vm::new(temp_lib_config(&root));

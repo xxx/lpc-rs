@@ -7,7 +7,7 @@ use std::{
 };
 
 use lpc_rs_core::lpc_path::LpcPath;
-use lpc_rs_errors::Result;
+use lpc_rs_errors::{LpcError, Result, span::Span};
 
 use crate::{
     command::registry::RuleList,
@@ -102,6 +102,14 @@ pub(crate) struct Transaction {
     /// empty one minted for top-level contexts, whose holder must open its
     /// own attempt.
     joinable: bool,
+    /// Cancelled nested tasks leave their source locations here before their stacks drop.
+    interrupted: Option<InterruptedExecution>,
+}
+
+#[derive(Debug, Clone)]
+struct InterruptedExecution {
+    span: Option<Span>,
+    frames: Vec<String>,
 }
 
 impl Transaction {
@@ -114,6 +122,7 @@ impl Transaction {
             pending_call_outs: Vec::new(),
             cancelled_call_outs: HashSet::new(),
             joinable: true,
+            interrupted: None,
         }
     }
 
@@ -438,6 +447,27 @@ impl TxnHandle {
     pub(crate) fn joinable(&self) -> bool {
         self.0.lock().joinable
     }
+
+    /// Capture cancelled tasks as they unwind, preserving the innermost location.
+    pub(crate) fn record_interruption(&self, span: Option<Span>, mut frames: Vec<String>) {
+        self.with(|txn| {
+            let span = if let Some(inner) = txn.interrupted.take() {
+                frames.extend(inner.frames);
+                inner.span.or(span)
+            } else {
+                span
+            };
+            txn.interrupted = Some(InterruptedExecution { span, frames });
+        });
+    }
+
+    /// Attach and consume the trace saved when evaluation was cancelled.
+    pub(crate) fn with_interruption(&self, error: LpcError) -> LpcError {
+        self.with(|txn| match txn.interrupted.take() {
+            Some(trace) => error.or_span(trace.span).with_stack_trace(trace.frames),
+            None => error,
+        })
+    }
 }
 
 impl Default for TxnHandle {
@@ -572,12 +602,25 @@ impl AttemptBody for ResolvePointerCallBody<'_> {
         self.gs.config.max_execution_time
     }
 
+    fn timeout_error(&self) -> LpcError {
+        let error = LpcError::runtime(format!(
+            "evaluation limit of {}ms has been reached while resolving a callback in {}",
+            self.timeout_ms(),
+            self.seat.filename()
+        ));
+        match &self.txn {
+            Some(txn) => txn.with_interruption(error),
+            None => error,
+        }
+    }
+
     async fn begin_attempt(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
     ) -> Result<Option<LiveSnapshot>> {
         let live = start_txn(tx).await?;
         let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+        self.txn = Some(txn.clone());
 
         // The verdict and the create commit together: the apply joins this
         // attempt's transaction.

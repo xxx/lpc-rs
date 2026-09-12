@@ -9,7 +9,8 @@ client negotiated it, else GA — unless the client asked us to suppress
 go-aheads (SGA), in which case no mark is sent at all. It may also `write` its
 prompt and return nothing, and the mark still follows. A body that does not
 define `write_prompt` gets no prompt and no mark. A `write_prompt` that
-errors gets the mark alone; the error goes to the master's `error_handler`.
+errors supplies no prompt text; the error goes to the master's `error_handler`,
+with the same connection fallback as other runtime errors, before the mark.
 
 When the command or callback left another `input_to` pending, `write_prompt`
 is not applied and the mark alone is sent, whether or not the body defines it:

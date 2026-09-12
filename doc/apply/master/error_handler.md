@@ -27,8 +27,20 @@ error: call to unknown function `clone_obect`
 Uncaught errors always go to the server log, including their source diagnostic
 and LPC stack trace when available, even when `error_handler` handles them.
 Defining `error_handler` is optional. Without it, the error also goes to the
-debug log. If the handler throws, both errors go to the server and debug logs;
-the driver does not call the handler recursively.
+debug log and directly to the command giver's connection, when one exists.
+If the handler throws or times out, both errors go to the server and debug
+logs, and the original diagnostic goes to that connection; the driver does
+not call the handler recursively. A successful handler controls player output.
+The handler runs in a fresh transaction, so its output survives the failed
+operation's rollback. Legacy `runtime_error(...)` applies are not called.
+
+An exhausted execution limit is a runtime error too. Its diagnostic includes
+the interrupted LPC source line and nested call stack when evaluation was
+in progress, plus attempt and conflict counts. A timeout during retry backoff
+has no active LPC frame. Conflicts indicate concurrent changes invalidated
+earlier attempts; zero conflicts means the operation exhausted its allowance
+without a rejected commit. Uncommitted state, output, and scheduled call outs
+are discarded, and the connection can accept another command.
 
 For porting diagnostics, set `RUST_LOG=info,lpc_rs::applies=debug` and restart
 the driver. This includes missing optional applies, argument types, return

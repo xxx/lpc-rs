@@ -145,10 +145,10 @@ pub(crate) trait AttemptBody {
 
     /// The evaluation-limit error, with any execution context the body retains.
     fn timeout_error(&self) -> LpcError {
-        lpc_error!(
+        LpcError::runtime(format!(
             "evaluation limit of {}ms has been reached",
             self.timeout_ms()
-        )
+        ))
     }
 
     /// Open one attempt against the committer's current world, reset the
@@ -200,14 +200,14 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
 
     let result = loop {
         if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
-            break Err(body.timeout_error());
+            break Err(attempt_timeout(body, attempts, backoff.losses()));
         }
         attempts += 1;
 
         let attempt = match deadline {
             Some(deadline) => match timeout_at(deadline, body.begin_attempt(tx)).await {
                 Ok(attempt) => attempt,
-                Err(_) => break Err(body.timeout_error()),
+                Err(_) => break Err(attempt_timeout(body, attempts, backoff.losses())),
             },
             None => body.begin_attempt(tx).await,
         };
@@ -236,7 +236,7 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
         match deadline {
             Some(deadline) => {
                 if timeout_at(deadline, backoff.stagger()).await.is_err() {
-                    break Err(body.timeout_error());
+                    break Err(attempt_timeout(body, attempts, backoff.losses()));
                 }
             }
             None => backoff.stagger().await,
@@ -262,6 +262,17 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
         );
     }
     (result, stats)
+}
+
+fn attempt_timeout(body: &impl AttemptBody, attempts: u64, conflicts: u64) -> LpcError {
+    let error = body.timeout_error().with_note(format!(
+        "Transaction aborted after {attempts} attempt(s) and {conflicts} conflict(s); uncommitted changes and output were discarded."
+    ));
+    if conflicts > 0 {
+        error.with_note("Concurrent changes forced retries. Check shared state accessed by this operation and reduce the work done in one transaction.")
+    } else {
+        error
+    }
 }
 
 /// Send one request to the committer and await its reply on the runtime.
@@ -706,9 +717,19 @@ mod async_tests {
     #[tokio::test(start_paused = true)]
     async fn retries_share_one_evaluation_limit_and_release_the_interrupted_attempt() {
         let (result, stats, delivered, value) = run_timed_body(100, 40, 0, usize::MAX).await;
+        let error = result.unwrap_err();
         assert_eq!(
-            result.unwrap_err().to_string(),
-            "evaluation limit of 100ms has been reached"
+            error.to_string(),
+            "runtime error: evaluation limit of 100ms has been reached"
+        );
+        let diagnostic = error.diagnostic_string();
+        assert!(
+            diagnostic.contains("3 attempt(s) and 2 conflict(s)"),
+            "{diagnostic}"
+        );
+        assert!(
+            diagnostic.contains("Concurrent changes forced retries"),
+            "{diagnostic}"
         );
         assert_eq!(stats.attempts, 3);
         assert_eq!(stats.conflicts, 2);

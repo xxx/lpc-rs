@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use lpc_rs_errors::{Result, lpc_bug};
+use lpc_rs_errors::{LpcError, Result, lpc_bug};
 
 use crate::{
     command::dispatch::{Outcome, dispatch_from_connection},
@@ -47,6 +47,18 @@ impl AttemptBody for CommandTask {
         self.template.global_state.config.max_execution_time
     }
 
+    fn timeout_error(&self) -> LpcError {
+        let error = LpcError::runtime(format!(
+            "evaluation limit of {}ms has been reached while running a command for {}",
+            self.timeout_ms(),
+            self.actor.filename()
+        ));
+        match &self.context {
+            Some(ctx) => ctx.txn().with_interruption(error),
+            None => error,
+        }
+    }
+
     async fn begin_attempt(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
@@ -56,10 +68,10 @@ impl AttemptBody for CommandTask {
         template.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
         template.set_this_player(Some(self.actor.clone()));
         let ctx = template.into_task_context(self.actor.clone());
-        match dispatch_from_connection(&ctx, self.actor.clone(), &self.line).await {
+        let ctx = self.context.insert(ctx);
+        match dispatch_from_connection(ctx, self.actor.clone(), &self.line).await {
             Ok(outcome) => {
                 self.outcome = outcome;
-                self.context = Some(ctx);
                 Ok(Some(live))
             }
             Err(e) => {
@@ -352,7 +364,7 @@ mod tests {
         .expect("compile-error retries must honor the command's execution limit");
         assert_eq!(
             result.unwrap_err().to_string(),
-            "evaluation limit of 1000ms has been reached"
+            "runtime error: evaluation limit of 1000ms has been reached"
         );
         assert!(stats.conflicts > 1, "{stats:?}");
         let ctx = command.0.context.as_ref().unwrap();

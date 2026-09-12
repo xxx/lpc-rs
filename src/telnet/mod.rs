@@ -854,6 +854,131 @@ mod tests {
         use crate::test_support::{TempLib, committed_string, connect, temp_lib_config};
 
         #[tokio::test]
+        async fn command_timeouts_reach_the_player_with_the_cancelled_initializers_trace() {
+            use lpc_rs_utils::{config::ConfigBuilder, debug_log::DebugLog};
+
+            for handler in [
+                None,
+                Some("void runtime_error(string e, object ob, string prog, string file) {}"),
+                Some("void error_handler(mapping e) { throw(\"handler failed\"); }"),
+                Some("void error_handler(mapping e) { while (1) {} }"),
+                Some(
+                    "void error_handler(mapping e) { tell_object(this_interactive(), e[\"diagnostic\"]); }",
+                ),
+            ] {
+                let vm = Vm::new(
+                    crate::test_config_builder!()
+                        .max_execution_time(100_u64)
+                        .debug_log(DebugLog::new(tokio::io::sink()))
+                        .build()
+                        .unwrap(),
+                );
+                if let Some(code) = handler {
+                    vm.initialize_process_from_code("/secure/master.c", code)
+                        .await
+                        .unwrap();
+                }
+                vm.create_process_from_code("/npc.c", "void create() { while (1) {} }")
+                    .await
+                    .unwrap();
+                vm.create_process_from_code(
+                    "/room.c",
+                    r#"
+                    void reset_room() { clone_object("/npc"); }
+                    void create_room() { reset_room(); }
+                    void create() { create_room(); }
+                    void poke() {}
+                "#,
+                )
+                .await
+                .unwrap();
+                let player = vm
+                    .initialize_process_from_code(
+                        "/player.c",
+                        r#"
+                    int touched;
+                    void catch_tell(string message) { write_socket(message); }
+                    int process_input(string line) {
+                        if (line == "hang") {
+                            touched = 1;
+                            write_socket("uncommitted output");
+                            "/room"->poke();
+                        } else {
+                            touched = 2;
+                            write_socket("ready");
+                        }
+                        return 1;
+                    }
+                "#,
+                    )
+                    .await
+                    .unwrap()
+                    .context
+                    .process;
+                let mut connected = connect(&vm, &player).await;
+                let template = TaskTemplate::from(vm.global_state.clone());
+                let mut session = Session::new();
+                Telnet::handle_event(
+                    Event::Line("hang".into()),
+                    &mut session,
+                    &connected.connection,
+                    &template,
+                    false,
+                    &mut None,
+                )
+                .await;
+
+                let ConnectionOp::SendMessage(message) = connected.rx.try_recv().unwrap() else {
+                    panic!("the timeout must be sent before the prompt");
+                };
+                assert!(
+                    message.contains("runtime error: evaluation limit"),
+                    "{message}"
+                );
+                assert!(message.contains("/npc.c:1:"), "{message}");
+                assert!(message.contains("while (1)"), "{message}");
+                for function in ["process_input()", "create_room()", "reset_room()"] {
+                    assert!(message.contains(function), "{message}");
+                }
+                assert!(message.contains("0 conflict(s)"), "{message}");
+                assert_eq!(connected.rx.try_recv(), Ok(ConnectionOp::PromptCycle));
+                assert!(
+                    connected.rx.try_recv().is_err(),
+                    "report the error exactly once"
+                );
+                assert_eq!(
+                    vm.global_state.committed_global(&player, 0u16),
+                    LpcRef::from(0)
+                );
+
+                Telnet::handle_event(
+                    Event::Line("look".into()),
+                    &mut session,
+                    &connected.connection,
+                    &template,
+                    false,
+                    &mut None,
+                )
+                .await;
+                assert_eq!(
+                    connected.rx.try_recv(),
+                    Ok(ConnectionOp::SendMessage("ready".into()))
+                );
+                assert_eq!(
+                    vm.global_state.committed_global(&player, 0u16),
+                    LpcRef::from(2)
+                );
+                assert_eq!(
+                    crate::interpreter::stm::committer_stats(&vm.global_state.committer_tx)
+                        .await
+                        .unwrap()
+                        .live_snapshots,
+                    0
+                );
+            }
+        }
+
+        #[tokio::test]
         async fn a_refused_receiver_is_reported_and_canceled() {
             let root = TempLib::new("input-to-refused");
             std::fs::write(root.join("refused.c"), "void f(string s) {}\n").unwrap();
@@ -1791,13 +1916,29 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn a_write_prompt_that_errors_gets_the_mark_alone() {
+        async fn a_write_prompt_error_is_reported_before_its_mark() {
             let mut w = wire().await;
             commanding_body(&w, "void write_prompt() { int zero; zero = 1 / zero; }").await;
             w.client.write_all(b"look\r\n").await.unwrap();
-            let mut expected = b"seen\r\n".to_vec();
-            expected.extend([IAC, GA]);
-            assert_eq!(read_n(&mut w.client, expected.len()).await, expected);
+            let output = tokio::time::timeout(Duration::from_secs(2), async {
+                let mut output = Vec::new();
+                let mut buf = [0; 1024];
+                while !output.ends_with(&[IAC, GA]) {
+                    let n = w.client.read(&mut buf).await.unwrap();
+                    assert!(n > 0, "the connection closed before its prompt mark");
+                    output.extend_from_slice(&buf[..n]);
+                }
+                output
+            })
+            .await
+            .unwrap();
+            assert!(output.starts_with(b"seen\r\n"));
+            let message = String::from_utf8_lossy(&output[..output.len() - 2]);
+            assert!(
+                message.contains("runtime error: Division by zero"),
+                "{message}"
+            );
+            assert!(message.contains(" in write_prompt()"), "{message}");
         }
 
         #[tokio::test]
