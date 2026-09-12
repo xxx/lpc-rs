@@ -886,6 +886,41 @@ impl CodegenWalker {
         Address::from(a)
     }
 
+    /// A trailing `Ret` can still be bypassed by a branch to the end of the body.
+    fn needs_implicit_return(&mut self) -> Result<bool> {
+        let func = self.function_stack.last_mut().unwrap();
+        if func.instructions.last() != Some(&Instruction::Ret) {
+            return Ok(true);
+        }
+
+        Self::backpatch(self.backpatch_maps.last().unwrap(), func)?;
+        let mut visited = BitSet::with_capacity(func.instructions.len());
+        let mut pending = vec![0];
+        while let Some(at) = pending.pop() {
+            if at == func.instructions.len() {
+                return Ok(true);
+            }
+            if !visited.insert(at) {
+                continue;
+            }
+            match func.instructions[at] {
+                Instruction::Ret => {}
+                Instruction::Jmp(address) => pending.push(address.0),
+                Instruction::PopulateDefaults => {
+                    // Default initializers are appended later and jump back to the body.
+                    pending.push(at + 1 + usize::from(func.arity().num_default_args));
+                }
+                instruction => {
+                    pending.push(at + 1);
+                    if let Some(address) = instruction.address() {
+                        pending.push(address.0);
+                    }
+                }
+            }
+        }
+        Ok(false)
+    }
+
     #[inline]
     fn insert_label<T>(&mut self, label: T, address: Address)
     where
@@ -1645,8 +1680,6 @@ impl TreeWalker for CodegenWalker {
             ));
         };
 
-        let len = self.current_address();
-
         self.register_counter.push();
 
         let declared_arg_locations = if let Some(parameters) = &node.parameters {
@@ -1670,21 +1703,19 @@ impl TreeWalker for CodegenWalker {
             expression.visit(self).await?;
         }
 
-        // return the current result if there is no explicit return.
-        {
-            let sym = self.function_stack.last_mut().unwrap();
-            if sym.instructions.len() == len.0
-                || (!sym.instructions.is_empty()
-                    && *sym.instructions.last().unwrap() != Instruction::Ret)
-            {
-                let target = RegisterVariant::Local(Register(0));
-
-                if self.current_result != target {
-                    sym.push_instruction(Instruction::Copy(self.current_result, target), node.span);
-                }
-
-                sym.push_instruction(Instruction::Ret, node.span);
+        if self.needs_implicit_return()? {
+            let target = Register(0).as_local();
+            // A skipped explicit return has no expression result to copy.
+            if self.function_stack.last().unwrap().instructions.last() == Some(&Instruction::Ret) {
+                self.zero_result(node.span)?;
+            } else if self.current_result != target {
+                push_instruction!(
+                    self,
+                    Instruction::Copy(self.current_result, target),
+                    node.span
+                );
             }
+            push_instruction!(self, Instruction::Ret, node.span);
         }
 
         let declared_arg_locations = self.closure_arg_locations.pop().unwrap();
@@ -1947,7 +1978,6 @@ impl TreeWalker for CodegenWalker {
         self.function_stack.push(sym);
         self.backpatch_maps.push(HashMap::new());
 
-        let len = self.current_address();
         self.register_counter.push();
 
         self.context.scopes.goto_function(&node.name)?;
@@ -1966,22 +1996,16 @@ impl TreeWalker for CodegenWalker {
             expression.visit(self).await?;
         }
 
-        // insert a final return if one isn't already there.
-        {
+        if self.needs_implicit_return()? {
             let sym = self.function_stack.last().unwrap();
-            if sym.instructions.len() == len.0
-                || (!sym.instructions.is_empty()
-                    && *sym.instructions.last().unwrap() != Instruction::Ret)
-            {
-                if sym.return_type() != LpcType::Void {
-                    self.context.diagnostics.record(lpc_warning!(
-                        node.span,
-                        "non-void function does not return a value. defaulting to 0."
-                    ));
-                }
-                self.zero_result(node.span)?;
-                push_instruction!(self, Instruction::Ret, node.span);
+            if sym.return_type() != LpcType::Void {
+                self.context.diagnostics.record(lpc_warning!(
+                    node.span,
+                    "non-void function does not return a value. defaulting to 0."
+                ));
             }
+            self.zero_result(node.span)?;
+            push_instruction!(self, Instruction::Ret, node.span);
         }
 
         debug_assert_eq!(declared_arg_count as usize, declared_arg_locations.len());
@@ -4576,6 +4600,24 @@ mod tests {
 
     mod test_visit_function_def {
         use super::*;
+
+        #[tokio::test]
+        async fn returning_on_every_branch_does_not_warn_about_a_missing_return() {
+            let programs = [
+                "int main(int flag = 1) { if (flag) return 42; else return 23; }",
+                "int main(int flag) { switch (flag) { case 1: return 42; default: return 23; } }",
+                "int main(int flag) { if (flag) { if (flag > 1) return 42; else return 23; } else return 0; }",
+            ];
+
+            for code in programs {
+                let walker = walk_prog(code).await;
+                assert!(
+                    walker.context.diagnostics.errors().is_empty(),
+                    "{code}: {:?}",
+                    walker.context.diagnostics.errors()
+                );
+            }
+        }
 
         async fn assert_compiles_to(code: &str, expected: Vec<Instruction>) {
             let mut prototype_walker = FunctionPrototypeWalker::default();

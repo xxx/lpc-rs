@@ -4077,6 +4077,110 @@ mod test_instructions {
         use super::*;
 
         #[tokio::test]
+        async fn a_conditional_return_can_fall_through() {
+            let code = indoc! { r#"
+                int value(int flag) { if (flag) return 42; }
+                int taken = value(1);
+                int skipped = value(0);
+            "#};
+
+            check_committed_globals(
+                code,
+                &[("taken", BareVal::Int(42)), ("skipped", BareVal::Int(0))],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_closure_conditional_return_can_fall_through() {
+            let code = indoc! { r#"
+                int previous() { return 99; }
+                function value = (: previous(); if ($1) return 42; :);
+                int taken = value(1);
+                int skipped = value(0);
+            "#};
+
+            check_committed_globals(
+                code,
+                &[("taken", BareVal::Int(42)), ("skipped", BareVal::Int(0))],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_conditional_return_with_defaults_can_fall_through() {
+            let code = indoc! { r#"
+                int value(int flag = 1) { if (flag) return 42; }
+                function closure = (: [int flag = 1] if (flag) return 42; :);
+                int taken = value();
+                int skipped = value(0);
+                int closure_taken = closure();
+                int closure_skipped = closure(0);
+            "#};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("taken", BareVal::Int(42)),
+                    ("skipped", BareVal::Int(0)),
+                    ("closure_taken", BareVal::Int(42)),
+                    ("closure_skipped", BareVal::Int(0)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_void_conditional_return_can_fall_through() {
+            let code = indoc! { r#"
+                int calls;
+                void value(int flag) { calls++; if (flag) return; }
+                void create() { value(1); value(0); calls++; }
+            "#};
+
+            check_committed_globals(code, &[("calls", BareVal::Int(3))]).await;
+        }
+
+        #[tokio::test]
+        async fn a_final_else_return_can_fall_through_the_if_branch() {
+            let code = indoc! { r#"
+                int calls;
+                int value(int flag) {
+                    if (flag) { calls++; } else { return 42; }
+                }
+                int taken = value(0);
+                int skipped = value(1);
+            "#};
+
+            check_committed_globals(
+                code,
+                &[
+                    ("calls", BareVal::Int(1)),
+                    ("taken", BareVal::Int(42)),
+                    ("skipped", BareVal::Int(0)),
+                ],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn a_switch_ending_in_a_return_can_fall_through() {
+            let code = indoc! { r#"
+                int value(int flag) {
+                    switch (flag) { case 1: return 42; }
+                }
+                int taken = value(1);
+                int skipped = value(0);
+            "#};
+
+            check_committed_globals(
+                code,
+                &[("taken", BareVal::Int(42)), ("skipped", BareVal::Int(0))],
+            )
+            .await;
+        }
+
+        #[tokio::test]
         async fn stores_the_value() {
             let code = indoc! { r##"
                     int create() { return 666; }

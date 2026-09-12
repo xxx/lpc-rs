@@ -7,7 +7,7 @@ use lpc_rs_core::{
 use lpc_rs_errors::{LpcError, lpc_error};
 use lpc_rs_utils::lpc_string::LpcString;
 use thin_vec::ThinVec;
-use tracing::{error, instrument, trace, warn};
+use tracing::{error, instrument, trace};
 
 use crate::interpreter::{
     efun::{Efun, sizeof::size_of},
@@ -152,24 +152,19 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     #[inline(always)]
     #[instrument(level = "debug", skip_all)]
     fn step(&mut self) -> lpc_rs_errors::Result<Step> {
-        if self.stack.is_empty() {
-            return Ok(Step::Halt);
-        }
-
         let instruction = {
-            let frame = match self.stack.current_frame_mut() {
-                Ok(x) => x,
-                Err(_) => {
-                    warn!("Expected to get an instruction, but there are no more frames.");
-
-                    return Ok(Step::Halt);
-                }
+            let Some(frame) = self.stack.last_mut() else {
+                return Ok(Step::Halt);
             };
 
             let Some(instruction) = frame.instruction() else {
-                warn!("No more instructions. Missing Ret instruction?");
-
-                return Ok(Step::Halt);
+                return Err(frame.runtime_bug(format!(
+                    "no instruction at pc {} in `{}` ({}, {} instructions); missing Ret or invalid jump",
+                    frame.pc(),
+                    frame.function.name(),
+                    frame.process.filename(),
+                    frame.function.instructions.len(),
+                )));
             };
             trace!("about to evaluate: {}", instruction);
 
@@ -589,5 +584,61 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
 
         Ok(Step::Next)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use lpc_rs_asm::address::Address;
+
+    use super::*;
+    use crate::{
+        interpreter::vm::Vm,
+        test_support::{task_at, test_config},
+    };
+
+    #[tokio::test]
+    async fn instruction_exhaustion_is_an_uncatchable_bug_with_a_stack_trace() {
+        let r0 = Register(0).as_local();
+        let cases = [
+            (vec![], 0),
+            (vec![Instruction::CatchStart(r0, Address(0))], 1),
+            (
+                vec![
+                    Instruction::CatchStart(r0, Address(0)),
+                    Instruction::Jmp(Address(20)),
+                ],
+                20,
+            ),
+        ];
+
+        for (instructions, pc) in cases {
+            let vm = Vm::new(test_config());
+            let (mut task, _live) = task_at(&vm, "void create() { catch(1 / 0); }", |i| {
+                matches!(i, Instruction::CatchStart(..))
+            })
+            .await;
+            let frame = task.stack.current_frame_mut().unwrap();
+            frame.set_pc(0usize);
+            let func = Arc::make_mut(&mut frame.function);
+            let len = instructions.len();
+            func.instructions = instructions;
+            func.debug_spans.resize(len, None);
+
+            let error = task.resume().await.expect_err("invalid bytecode must fail");
+
+            assert!(error.is_bug(), "{error}");
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "runtime bug: no instruction at pc {pc} in `create` (/main, {len} instructions); missing Ret or invalid jump"
+                )
+            );
+            let diagnostic = error.diagnostic_string();
+            assert!(diagnostic.contains("Stack trace:"), "{diagnostic}");
+            assert!(diagnostic.contains("create()"), "{diagnostic}");
+        }
     }
 }
