@@ -53,14 +53,15 @@ mod tests {
             .with_array(task.context.txn(), |array| {
                 assert_eq!(array.len(), 2);
 
-                for call_out in array.iter() {
+                for (id, call_out) in array.iter().enumerate() {
                     call_out
                         .with_array(task.context.txn(), |arr| {
-                            assert_eq!(arr.len(), 4);
+                            assert_eq!(arr.len(), 5);
                             assert!(matches!(arr[0], LpcRef::Object(_)));
                             assert!(matches!(arr[1], LpcRef::Function(_)));
                             assert!(matches!(arr[2], LpcRef::Int(_)));
                             assert_eq!(arr[3], LpcRef::Int(LpcInt(0)));
+                            assert_eq!(arr[4], LpcRef::from(id as i64));
                         })
                         .unwrap();
                 }
@@ -111,18 +112,77 @@ mod tests {
             .with_array(task.context.txn(), |array| {
                 assert_eq!(array.len(), 2);
 
-                for call_out in array.iter() {
+                for (id, call_out) in array.iter().enumerate() {
                     call_out
                         .with_array(task.context.txn(), |arr| {
-                            assert_eq!(arr.len(), 4);
+                            assert_eq!(arr.len(), 5);
                             assert!(matches!(arr[0], LpcRef::Object(_)));
                             assert!(matches!(arr[1], LpcRef::Function(_)));
                             assert!(matches!(arr[2], LpcRef::Int(_)));
                             assert_eq!(arr[3], LpcRef::Int(LpcInt(0)));
+                            assert_eq!(arr[4], LpcRef::from(id as i64));
                         })
                         .unwrap();
                 }
             })
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn filtered_ids_remove_committed_and_pending_call_outs() {
+        let code = r#"
+            int kept;
+            int committed;
+
+            void keep_me() {}
+            void cancel_me() {}
+
+            void create() {
+                int discarded = call_out(keep_me, 100);
+                remove_call_out(discarded);
+                kept = call_out(keep_me, 100, 10);
+                committed = call_out(cancel_me, 100);
+            }
+
+            int prune() {
+                int discarded = call_out(keep_me, 100);
+                remove_call_out(discarded);
+                int pending = call_out(cancel_me, 100, 5);
+                mixed *matches = filter(query_call_outs(),
+                    (: wildmatch("*->cancel_me", function_name($1[1])) :));
+                if (sizeof(matches) != 2) throw("expected two matching call outs");
+
+                foreach (mixed *row : matches) {
+                    int id = row[4];
+                    if (id != committed && id != pending) throw("wrong call out ID");
+                    if (query_call_out(id)[4] != id) throw("query ID mismatch");
+                    if (remove_call_out(id) < 0) throw("call out not removed");
+                    if (query_call_out(id)) throw("removed call out still visible");
+                }
+
+                mixed *remaining = query_call_outs();
+                if (sizeof(remaining) != 1 || remaining[0][4] != kept)
+                    throw("wrong call outs remain");
+                return kept;
+            }
+        "#;
+
+        let mut task = run_prog(code).await;
+        let prune = task
+            .context
+            .process
+            .program
+            .lookup_function("prune")
+            .unwrap()
+            .clone();
+        task.timed_eval(prune, &[], 500)
+            .await
+            .unwrap_or_else(|e| panic!("{}", e.diagnostic_string()));
+
+        assert_eq!(task.result(), Some(LpcRef::from(1)));
+        task.context.global_state.with_call_outs(|co| {
+            let ids: Vec<_> = co.queue().iter().map(|(_, call_out)| call_out.id).collect();
+            assert_eq!(ids, vec![1]);
+        });
     }
 }

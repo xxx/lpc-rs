@@ -169,13 +169,14 @@ mod tests {
         task.result()
             .unwrap()
             .with_array(task.context.txn(), |arr| {
-                assert_eq!(arr.len(), 4);
+                assert_eq!(arr.len(), 5);
                 assert!(matches!(arr[0], LpcRef::Object(_)));
                 assert!(matches!(arr[1], LpcRef::Function(_)));
                 // A pending entry's timer has not started: the full delay is
                 // the remaining time.
                 assert_eq!(arr[2], LpcRef::Int(LpcInt(100_000)));
                 assert_eq!(arr[3], LpcRef::Int(LpcInt(0)));
+                assert_eq!(arr[4], LpcRef::from(0));
             })
             .expect("expected an array result");
 

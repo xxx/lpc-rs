@@ -5,7 +5,7 @@ use std::{
 
 use arc_swap::ArcSwapAny;
 use chrono::Duration;
-use lpc_rs_core::lpc_path::LpcPath;
+use lpc_rs_core::{LpcIntInner, lpc_path::LpcPath};
 use lpc_rs_errors::{LpcError, Result, lpc_bug};
 use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
@@ -484,8 +484,8 @@ impl TaskContext {
     }
 
     /// Query a call out transactionally: `(pending - shadow) ∪ (physical - shadow)`.
-    /// Returns an owned 4-field array
-    /// (`[object, function, ms remaining, ms repeat]`), or `None` when the ID is
+    /// Returns an owned 5-field array
+    /// (`[object, function, ms remaining, ms repeat, id]`), or `None` when the ID is
     /// unknown or this attempt canceled it. The caller mints the result cell
     /// after the scan.
     pub fn query_call_out(&self, id: u64) -> Option<Vec<LpcRef>> {
@@ -501,6 +501,7 @@ impl TaskContext {
                 s.func_ref,
                 LpcRef::Int(s.delay.num_milliseconds().into()),
                 LpcRef::Int(s.repeat.map(|d| d.num_milliseconds()).unwrap_or(0).into()),
+                LpcRef::from(s.id as LpcIntInner),
             ]
         });
         if pending_view.is_some() {
@@ -525,6 +526,7 @@ impl TaskContext {
                             .unwrap_or(0)
                             .into(),
                     ),
+                    LpcRef::from(call_out.id as LpcIntInner),
                 ]
             })
         })
@@ -547,6 +549,7 @@ impl TaskContext {
                     s.func_ref,
                     LpcRef::Int(s.delay.num_milliseconds().into()),
                     LpcRef::Int(s.repeat.map(|d| d.num_milliseconds()).unwrap_or(0).into()),
+                    LpcRef::from(s.id as LpcIntInner),
                 ]);
             }
         }
@@ -575,6 +578,7 @@ impl TaskContext {
                                 .unwrap_or(0)
                                 .into(),
                         ),
+                        LpcRef::from(call_out.id as LpcIntInner),
                     ]);
                 }
             }

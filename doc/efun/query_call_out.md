@@ -10,10 +10,13 @@ The information returned is an array, with the following members:
 ({
   object - The object that the call out was defined in (i.e. where 'call_out' was called),
   function - The function to be called,
-  int - The number of milliseconds remaining until the call out will be made.
-  int - The number of milliseconds between repeats, or 0 if the call out is not repeating.
+  int - The number of milliseconds remaining until the call out will be made,
+  int - The number of milliseconds between repeats, or 0 if the call out is not repeating,
+  int - The call out ID, as returned by call_out
 })
 ```
+
+The ID is at index `4` and can be passed to `remove_call_out`.
 
 If the call out was not found, `NULL` is returned.
 
