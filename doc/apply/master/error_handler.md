@@ -15,6 +15,30 @@ The error mapping has the following keys:
 * `error["diagnostic"]` (string) - The rendered diagnostic, source excerpt
   included, no terminal color codes.
 
+To find the player to show the error to, call `this_interactive()` inside the
+handler. For a command or `input_to` failure, it returns the connected player
+whose input triggered the operation, including when a room or NPC callback
+failed. The failed operation's `set_this_player()` calls do not change this
+recipient. `error["object"]` and `previous_object()` identify the object being
+reported and may be a different object.
+
+```c
+void error_handler(mapping error) {
+    object player = this_interactive();
+    if (player) {
+        tell_object(player, error["diagnostic"]);
+    }
+}
+```
+
+The mudlib can check the player's wizard level here to choose between the full
+diagnostic and a generic error message. The driver always logs the full error.
+
+A `call_out` or boot apply has no initiating player: `this_interactive()`
+returns `0`, even if a player originally scheduled the call out. For those
+errors, the mudlib can use `error["object"]` to find an object's creator or
+other recipients according to its own rules, or rely on the server log.
+
 Diagnostic example:
 ```c
 error: call to unknown function `clone_obect`
@@ -68,4 +92,4 @@ behind it; 0 when there is no object.
 
 ### See also
 
-`warning_handler`, `previous_object`
+`warning_handler`, `previous_object`, `this_interactive`, `tell_object`

@@ -663,6 +663,8 @@ impl Telnet {
             session.send(Op::EchoOn);
         }
 
+        let template = template.clone();
+        template.set_this_player(connection.body());
         let input: LpcRef = LpcString::from(msg).into();
         let prepared = template
             .global_state
@@ -988,11 +990,15 @@ mod tests {
                 .initialize_process_from_code(
                     "/secure/master.c",
                     r#"
-                    string error; mixed blamed;
+                    string error; mixed blamed; object recipient;
                     int valid_load(string path, string func, object caller, mixed program) {
                         return path != "/refused.c";
                     }
-                    void error_handler(mapping e) { error = e["error"]; blamed = e["object"]; }
+                    void error_handler(mapping e) {
+                        error = e["error"]; blamed = e["object"];
+                        recipient = this_interactive();
+                        if (recipient) tell_object(recipient, error);
+                    }
                 "#,
                 )
                 .await
@@ -1006,7 +1012,7 @@ mod tests {
                 .unwrap()
                 .context
                 .process;
-            let connected = connect(&vm, &body).await;
+            let mut connected = connect(&vm, &body).await;
             let ptr = FunctionPtrBuilder::default()
                 .owner(Arc::downgrade(&body))
                 .address(FunctionAddress::Dynamic("f".into()))
@@ -1035,9 +1041,112 @@ mod tests {
                 LpcRef::from(Arc::downgrade(&body)),
                 "blamed on the player"
             );
+            assert_eq!(
+                vm.global_state.committed_global(&master, 2u16),
+                LpcRef::from(Arc::downgrade(&body))
+            );
+            assert_eq!(
+                connected.rx.try_recv(),
+                Ok(ConnectionOp::SendMessage(error))
+            );
             let mut out = BytesMut::new();
             session.drain_output(&mut out);
             assert!(String::from_utf8_lossy(&out).contains("Canceled."));
+        }
+
+        #[tokio::test]
+        async fn input_to_errors_preserve_the_recipient_when_the_callback_runs_in_another_object() {
+            use lpc_rs_utils::config::ConfigBuilder;
+
+            for failure in ["throw(\"callback failed\");", "while (1) {}"] {
+                let vm = Vm::new(
+                    crate::test_config_builder!()
+                        .max_execution_time(100_u64)
+                        .build()
+                        .unwrap(),
+                );
+                let master = vm
+                    .initialize_process_from_code(
+                        "/secure/master.c",
+                        r#"
+                    object recipient; object blamed;
+                    void error_handler(mapping e) {
+                        recipient = this_interactive();
+                        blamed = e["object"];
+                        if (recipient) tell_object(recipient, e["error"]);
+                    }
+                "#,
+                    )
+                    .await
+                    .unwrap()
+                    .context
+                    .process;
+                let body = vm
+                    .initialize_process_from_code("/player.c", "")
+                    .await
+                    .unwrap()
+                    .context
+                    .process;
+                let receiver = vm
+                    .initialize_process_from_code(
+                        "/worker.c",
+                        format!(
+                            r#"
+                    void answer(string line) {{
+                        set_this_player(this_object());
+                        {failure}
+                    }}
+                "#
+                        ),
+                    )
+                    .await
+                    .unwrap()
+                    .context
+                    .process;
+                let ptr = FunctionPtrBuilder::default()
+                    .owner(Arc::downgrade(&body))
+                    .address(FunctionAddress::Local(
+                        Arc::downgrade(&receiver),
+                        receiver.program.lookup_function("answer").unwrap().clone(),
+                    ))
+                    .build()
+                    .unwrap();
+                let input_to = InputTo {
+                    ptr: Arc::new(ptr),
+                    no_echo: false,
+                };
+                let mut connected = connect(&vm, &body).await;
+                let mut session = Session::new();
+                Telnet::resolve_input_to(
+                    &input_to,
+                    "hello",
+                    &mut session,
+                    &connected.connection,
+                    &TaskTemplate::from(vm.global_state.clone()),
+                )
+                .await;
+
+                assert_eq!(
+                    vm.global_state.committed_global(&master, 0u16),
+                    LpcRef::from(Arc::downgrade(&body))
+                );
+                assert_eq!(
+                    vm.global_state.committed_global(&master, 1u16),
+                    LpcRef::from(Arc::downgrade(&receiver))
+                );
+                let ConnectionOp::SendMessage(message) = connected.rx.try_recv().unwrap() else {
+                    panic!("the handler must send the error to the player");
+                };
+                assert!(
+                    message.contains(if failure.starts_with("throw") {
+                        "callback failed"
+                    } else {
+                        "runtime error: evaluation limit"
+                    }),
+                    "{message}"
+                );
+                assert!(connected.rx.try_recv().is_err(), "only one error is sent");
+            }
         }
     }
 
