@@ -57,4 +57,4 @@ function_info(write)["receiver"] == this_object(); // 1
 
 ### See also
 
-`function_object`, `function_name`, `functionp`, `papplyv`, `compose`
+`function_object`, `function_name`, `function_description`, `functionp`, `papplyv`, `compose`

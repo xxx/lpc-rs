@@ -128,6 +128,8 @@ existing holes from `args` first, then appends any left over, so `papplyv(&add3(
 
 Use [`function_object`](../efun/function_object.md) to get a pointer's receiver,
 [`function_info`](../efun/function_info.md) to inspect its owner, receiver, and
-partially applied arguments, and [`function_name`](../efun/function_name.md) for
-a printable name. Bare local and efun pointers use their owner as the receiver;
+partially applied arguments. [`function_name`](../efun/function_name.md) returns
+the bare function name; [`function_description`](../efun/function_description.md)
+includes the receiver and masked argument positions for display.
+Bare local and efun pointers use their owner as the receiver;
 an unbound dynamic pointer has no receiver until one is supplied.

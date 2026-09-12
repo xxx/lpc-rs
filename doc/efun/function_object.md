@@ -32,4 +32,4 @@ function_object(&->foo());                    // 0: receiver still unbound
 
 ### See also
 
-`function_info`, `function_name`, `functionp`, `find_object`
+`function_info`, `function_name`, `function_description`, `functionp`, `find_object`

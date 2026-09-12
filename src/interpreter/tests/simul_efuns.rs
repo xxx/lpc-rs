@@ -97,14 +97,14 @@ async fn pointers_to_simul_efuns_resolve_and_run_in_the_simul_efun_object() {
 }
 
 #[tokio::test]
-async fn function_name_uses_the_simul_efun_object_and_masks_bound_arguments() {
+async fn function_description_uses_the_simul_efun_object_and_masks_bound_arguments() {
     let user = r#"
         string got;
-        void create() { got = function_name(&me()) + " " + function_name(&me("secret")); }
+        void create() { got = function_description(&me()) + " " + function_description(&me("secret")); }
     "#;
     assert_eq!(
         got_from_user(
-            "simul-function-name",
+            "simul-function-description",
             "/secure/simul_efuns",
             &[("secure/simul_efuns.c", "string me(string s) { return s; }")],
             user,

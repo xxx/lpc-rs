@@ -170,8 +170,8 @@ mod tests {
                     function_info(ef)["owner"] == maker,
                     function_object(local) == maker,
                     function_object(ef) == maker,
-                    function_name(local) == "\"/maker\"->foo",
-                    function_name(ef) == "\"/maker\"->write"
+                    function_description(local) == "\"/maker\"->foo",
+                    function_description(ef) == "\"/maker\"->write"
                 });
             }
         "# },

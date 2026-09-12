@@ -114,7 +114,7 @@ mod tests {
                 destruct(maker);
                 return ({ function_info(f)["owner"] == 0,
                     function_object(f) == find_object("/target"), function_object(ef) == 0,
-                    function_name(ef) == 0 });
+                    function_description(ef) == 0 });
             }
         "# },
         )

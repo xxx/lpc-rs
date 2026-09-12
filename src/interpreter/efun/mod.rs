@@ -37,6 +37,7 @@ pub(crate) mod file_view;
 pub(crate) mod filter;
 pub(crate) mod filter_map;
 pub(crate) mod find_object;
+pub(crate) mod function_description;
 pub(crate) mod function_exists;
 pub(crate) mod function_info;
 pub(crate) mod function_name;
@@ -1136,6 +1137,11 @@ efuns! {
         arity: 1,
         args: [LpcType::Function(false)],
     },
+    function_description => {
+        returns: LpcType::String(false),
+        arity: 1,
+        args: [LpcType::Function(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1464,6 +1470,7 @@ mod tests {
                 "load_object",
                 "function_object",
                 "function_info",
+                "function_description",
             ]
         );
     }

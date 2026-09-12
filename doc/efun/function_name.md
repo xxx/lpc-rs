@@ -2,39 +2,36 @@
 
 `string function_name(function f)`
 
-Return the printable name of a function pointer without invoking it.
-Object functions are named `"/object"->function`, with the receiving object's
-in-game name, including its clone suffix. Inherited functions use the
-receiving object; simul-efuns use the resident simul-efun object. Efuns use
-the pointer's owner as their receiver. Bare names (`function f = foo`) and
-`&foo()` print identically; a bare local pointer's receiver is its owner.
+Return the function pointer's bare function name, without a receiver, argument
+list, or partial-application marker. Bare names (`function f = foo`), `&foo()`,
+and partial applications of the same function return the same name.
 
-Partially applied pointers have a leading `&` and an argument list: `?`
-marks a bound value and `_` marks a hole. These argument values are never printed.
+This reads the name stored in the pointer without invoking it, looking up its
+receiver, or loading an object. The name remains available when the owner or
+receiver is destructed, a dynamic receiver is unbound or invalid, or a simul-efun
+target is unavailable. It does not establish that the function can be called.
 
-Dynamic pointers use `->function` until their receiver is bound, then
-`"/object"->function` for an object or `"path"->function` for a path.
-The receiver is separate from the displayed argument list; method argument
-values are masked. Naming one does not resolve or load its receiver.
-Closures, operators, and composed functions expose their generated names;
-these names are implementation details and may change when code is compiled.
+Closures, operators, and compositions return their generated names, which are
+implementation details and may change when code is compiled. A non-function
+argument is an error.
 
-Return `0` for a destructed receiver, an invalid bound dynamic receiver,
-or an unavailable simul-efun target.
-A non-function argument, or a result exceeding the maximum string length,
-is an error.
+The result is the same as `function_info(f)["name"]`, without allocating the
+metadata mapping and its arrays. Use `function_description(f)` for a formatted
+representation including the receiver and masked argument positions.
 
 ### Examples
 
 ```c
-// In /example.c, with a local function add(a, b):
-function_name(&add());            // "\"/example\"->add"
-function_name(&add(10, ));        // "&\"/example\"->add(?,_)"
-function_name(&write());          // "\"/example\"->write"
-function_name(&write("secret"));  // "&\"/example\"->write(?)"
-function_name(&->query_name());   // "->query_name"
+function_name(add);               // "add"
+function_name(&add());            // "add"
+function_name(&add(10, ));        // "add"
+function_name(&target->add());    // "add"
+function_name(&write("secret"));  // "write"
+function_name(&->query_name());   // "query_name"
+
+filter(query_call_outs(), (: function_name($1[1]) == "cancel_me" :));
 ```
 
 ### See also
 
-`function_object`, `function_info`, `functionp`, `function_exists`, `calling_function`, `papplyv`
+`function_description`, `function_object`, `function_info`, `functionp`, `function_exists`

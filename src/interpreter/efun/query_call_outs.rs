@@ -149,7 +149,7 @@ mod tests {
                 remove_call_out(discarded);
                 int pending = call_out(cancel_me, 100, 5);
                 mixed *matches = filter(query_call_outs(),
-                    (: wildmatch("*->cancel_me", function_name($1[1])) :));
+                    (: function_name($1[1]) == "cancel_me" :));
                 if (sizeof(matches) != 2) throw("expected two matching call outs");
 
                 foreach (mixed *row : matches) {
