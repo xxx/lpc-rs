@@ -2378,9 +2378,17 @@ mod test_instructions {
                 }
             "##};
             let e = try_run_prog(code).await.unwrap_err();
+            let diagnostics = e.to_diagnostics();
+            let transaction = diagnostics[0]
+                .notes
+                .iter()
+                .find(|note| note.starts_with("Transaction /my_file::init-program:"))
+                .expect("the owning task reports its timing");
             assert_eq!(
                 e.diagnostic_string(),
-                "error: runtime error: Division by zero\n  ┌─ /my_file.c:3:13\n  │\n3 │     int x = 10 / j;\n  │             ^^^^^^\n  │\n  = Stack trace:\n    \n    /my_file.c:3:13 in create()\n    (unknown) in init-program()\n\n"
+                format!(
+                    "error: runtime error: Division by zero\n  ┌─ /my_file.c:3:13\n  │\n3 │     int x = 10 / j;\n  │             ^^^^^^\n  │\n  = {transaction}\n  = Stack trace:\n    \n    /my_file.c:3:13 in create()\n    (unknown) in init-program()\n\n"
+                )
             );
         }
 

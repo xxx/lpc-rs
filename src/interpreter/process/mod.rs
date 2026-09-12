@@ -430,6 +430,45 @@ impl Process {
         self.globals[reg as usize].id
     }
 
+    /// Resolve structural and global cell names only when emitting a diagnostic.
+    pub(crate) fn describe_cell(&self, cell: VarId) -> Option<String> {
+        for (id, field) in [
+            (self.initialized.id, "initialized"),
+            (self.commands_enabled.id, "commands_enabled"),
+            (self.rules.id, "rules"),
+            (self.position.environment.id, "environment"),
+            (self.position.inventory.id, "inventory"),
+            (self.position.livings.id, "livings"),
+            (self.connection.id, "connection"),
+            (self.shadow.shadows.id, "shadows"),
+            (self.shadow.shadowing.id, "shadowing"),
+        ] {
+            if cell == id {
+                return Some(format!("{}.{field}", self.filename()));
+            }
+        }
+        if cell == self.program.clones.id {
+            return Some(format!("{}.clones", self.program.filename));
+        }
+        let index = self.globals.iter().position(|slot| slot.id == cell)?;
+        let name = self
+            .program
+            .global_variables
+            .iter()
+            .find_map(|(name, symbol)| match symbol.location {
+                Some(lpc_rs_core::register::RegisterVariant::Global(register))
+                    if usize::from(register.index()) == index =>
+                {
+                    Some(name.as_str())
+                }
+                _ => None,
+            });
+        Some(match name {
+            Some(name) => format!("{}.global.{name}", self.filename()),
+            None => format!("{}.global[{index}]", self.filename()),
+        })
+    }
+
     /// The world ids a live object keeps alive, rooted even when the object
     /// has no committed `Process` cell.
     pub(crate) fn world_var_ids(&self) -> Vec<VarId> {

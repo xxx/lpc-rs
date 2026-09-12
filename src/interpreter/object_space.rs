@@ -89,6 +89,21 @@ impl ObjectSpace {
         &self.config
     }
 
+    /// Best-effort names from physical metadata, never a transactional read.
+    pub(crate) fn describe_cell(&self, cell: VarId) -> Option<String> {
+        if cell == self.verb_rules.id {
+            return Some("object_space.verb_rules".to_owned());
+        }
+        for process in self.processes.iter() {
+            if let Some(label) = process.describe_cell(cell) {
+                return Some(label);
+            }
+        }
+        self.cell_ids.iter().find_map(|entry| {
+            (*entry.value() == cell).then(|| format!("object_space[{}]", entry.key()))
+        })
+    }
+
     /// Compile `code` (masquerading as `filename`) and physically insert it
     /// (blind, no cell, no initialization). Test fixtures only; in-game
     /// creation goes through `insert_process_transactional`.

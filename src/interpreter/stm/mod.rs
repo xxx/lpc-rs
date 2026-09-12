@@ -28,6 +28,7 @@ use crate::{
 mod backoff;
 mod changeset;
 mod committer;
+mod diagnostics;
 mod effects;
 mod merge;
 mod retry;
@@ -37,10 +38,9 @@ mod world_value;
 pub(crate) use changeset::Changeset;
 /// Public API surface re-exports (read-only, for benches/tooling/tests).
 pub use committer::CommitterStats;
-pub(crate) use committer::{
-    CommitProtocol, Committer, Conflict, GcPassReply, LiveSnapshot, WorldRoot,
-};
+pub(crate) use committer::{CommitProtocol, Committer, GcPassReply, LiveSnapshot, WorldRoot};
 pub use committer::{GcRefused, GcReport};
+pub(crate) use diagnostics::{CommitOrigin, Conflict};
 pub(crate) use effects::{CallOutSchedule, Effect, PendingFileOp, flush_effects};
 pub(crate) use merge::MergeOp;
 pub use retry::CommittedReader;
@@ -104,6 +104,7 @@ pub(crate) struct Transaction {
     joinable: bool,
     /// Cancelled nested tasks leave their source locations here before their stacks drop.
     interrupted: Option<InterruptedExecution>,
+    compilation: diagnostics::CompilationTiming,
 }
 
 #[derive(Debug, Clone)]
@@ -123,7 +124,16 @@ impl Transaction {
             cancelled_call_outs: HashSet::new(),
             joinable: true,
             interrupted: None,
+            compilation: diagnostics::CompilationTiming::default(),
         }
+    }
+
+    pub(crate) fn set_origin(&mut self, process: &Process, entry: &str) {
+        self.changeset.origin = Some(Arc::new(CommitOrigin::new(process, entry)));
+    }
+
+    pub(crate) fn take_compilation_time(&mut self) -> std::time::Duration {
+        std::mem::take(&mut self.compilation.elapsed)
     }
 
     /// Read a slot value (globals, upvalues) — the changeset first, so an
@@ -598,6 +608,22 @@ struct ResolvePointerCallBody<'a> {
 
 #[async_trait::async_trait]
 impl AttemptBody for ResolvePointerCallBody<'_> {
+    fn origin(&self) -> Option<CommitOrigin> {
+        Some(CommitOrigin::new(&self.seat, "resolve_callback"))
+    }
+
+    fn describe_cell(&self, cell: VarId) -> Option<String> {
+        self.txn
+            .as_ref()
+            .and_then(|txn| txn.with(|txn| txn.describe_cell(&self.gs.object_space, cell)))
+    }
+
+    fn take_compilation_time(&mut self) -> std::time::Duration {
+        self.txn.as_ref().map_or(std::time::Duration::ZERO, |txn| {
+            txn.with(|txn| txn.take_compilation_time())
+        })
+    }
+
     fn timeout_ms(&self) -> u64 {
         self.gs.config.max_execution_time
     }
@@ -620,6 +646,7 @@ impl AttemptBody for ResolvePointerCallBody<'_> {
     ) -> Result<Option<LiveSnapshot>> {
         let live = start_txn(tx).await?;
         let txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+        txn.with(|txn| txn.set_origin(&self.seat, "resolve_callback"));
         self.txn = Some(txn.clone());
 
         // The verdict and the create commit together: the apply joins this

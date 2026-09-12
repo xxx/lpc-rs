@@ -8,7 +8,7 @@ use crate::interpreter::{
     lpc_array::LpcArray,
     lpc_mapping::LpcMapping,
     lpc_ref::LpcRef,
-    stm::{MergeOp, VarId, Version, WorldValue, merge::MergeMismatch},
+    stm::{CommitOrigin, MergeOp, VarId, Version, WorldValue},
 };
 
 /// This attempt's own change to one var: at most one kind at a time, a
@@ -60,6 +60,7 @@ impl Entry {
 pub(crate) struct Changeset {
     version: Version,
     entries: AHashMap<VarId, Entry>,
+    pub(crate) origin: Option<Arc<CommitOrigin>>,
 }
 
 impl Changeset {
@@ -67,6 +68,7 @@ impl Changeset {
         Self {
             version,
             entries: AHashMap::new(),
+            origin: None,
         }
     }
 
@@ -169,13 +171,15 @@ impl Changeset {
     pub(crate) fn fold_merges(
         &mut self,
         world: impl Fn(VarId) -> Option<WorldValue>,
-    ) -> Result<(), MergeMismatch> {
+    ) -> Result<(), VarId> {
         for (var_id, entry) in &mut self.entries {
             let Change::Merge(ops) = &mut entry.change else {
                 continue;
             };
             let ops = std::mem::take(ops);
-            let value = MergeOp::fold_onto(world(*var_id), &ops)?.expect("at least one op ran");
+            let value = MergeOp::fold_onto(world(*var_id), &ops)
+                .map_err(|_| *var_id)?
+                .expect("at least one op ran");
             entry.change = Change::Write(value);
         }
         Ok(())
@@ -239,18 +243,23 @@ impl Changeset {
         }
     }
 
-    /// Whether any var this attempt read is in `written` — the read side of
-    /// the conflict rule.
-    pub(crate) fn conflicts_with(&self, written: &AHashSet<VarId>) -> bool {
+    /// One tracked read invalidated by `written`, found during validation's existing scan.
+    pub(crate) fn conflicting_read(&self, written: &AHashSet<VarId>) -> Option<VarId> {
         if written.len() <= self.entries.len() {
             written
                 .iter()
-                .any(|var| self.entries.get(var).is_some_and(Entry::is_tracked))
+                .find(|var| self.entries.get(var).is_some_and(Entry::is_tracked))
+                .copied()
         } else {
-            self.entries
-                .iter()
-                .any(|(var, entry)| entry.is_tracked() && written.contains(var))
+            self.entries.iter().find_map(|(var, entry)| {
+                (entry.is_tracked() && written.contains(var)).then_some(*var)
+            })
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn conflicts_with(&self, written: &AHashSet<VarId>) -> bool {
+        self.conflicting_read(written).is_some()
     }
 
     /// The version that was current when this changeset was created.

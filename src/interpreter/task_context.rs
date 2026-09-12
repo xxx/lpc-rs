@@ -363,8 +363,10 @@ impl TaskContext {
             )));
         }
         let gate = MasterGate::new(self, loader.callers());
+        let compiling = self.txn().time_compilation();
         let (process, warnings) =
             compile_process_from_path(self.object_space(), path, Some(gate)).await?;
+        drop(compiling);
         report_warnings(self, loader.callers(), &process.program.filename, warnings).await?;
         Ok(process)
     }

@@ -43,6 +43,28 @@ impl CommandTask {
 
 #[async_trait::async_trait]
 impl AttemptBody for CommandTask {
+    fn origin(&self) -> Option<crate::interpreter::stm::CommitOrigin> {
+        Some(crate::interpreter::stm::CommitOrigin::new(
+            &self.actor,
+            "command",
+        ))
+    }
+
+    fn describe_cell(&self, cell: crate::interpreter::stm::VarId) -> Option<String> {
+        self.context.as_ref().and_then(|ctx| {
+            ctx.txn()
+                .with(|txn| txn.describe_cell(ctx.object_space(), cell))
+        })
+    }
+
+    fn take_compilation_time(&mut self) -> std::time::Duration {
+        self.context
+            .as_ref()
+            .map_or(std::time::Duration::ZERO, |ctx| {
+                ctx.txn().with(|txn| txn.take_compilation_time())
+            })
+    }
+
     fn timeout_ms(&self) -> u64 {
         self.template.global_state.config.max_execution_time
     }
@@ -66,6 +88,9 @@ impl AttemptBody for CommandTask {
         let live = start_txn(tx).await?;
         let mut template = self.template.clone();
         template.txn = TxnHandle::new(Transaction::new(live.inner.clone()));
+        template
+            .txn
+            .with(|txn| txn.set_origin(&self.actor, "command"));
         template.set_this_player(Some(self.actor.clone()));
         let ctx = template.into_task_context(self.actor.clone());
         let ctx = self.context.insert(ctx);
@@ -264,6 +289,7 @@ mod tests {
     #[tokio::test]
     async fn a_caught_missing_semicolon_cannot_retry_the_command_forever() {
         use std::time::Duration;
+        use tracing::instrument::WithSubscriber;
 
         use lpc_rs_utils::config::ConfigBuilder;
 
@@ -276,6 +302,18 @@ mod tests {
 
         #[async_trait::async_trait]
         impl AttemptBody for ConflictedCommand {
+            fn origin(&self) -> Option<crate::interpreter::stm::CommitOrigin> {
+                self.0.origin()
+            }
+
+            fn describe_cell(&self, cell: crate::interpreter::stm::VarId) -> Option<String> {
+                self.0.describe_cell(cell)
+            }
+
+            fn take_compilation_time(&mut self) -> Duration {
+                self.0.take_compilation_time()
+            }
+
             fn timeout_ms(&self) -> u64 {
                 self.0.timeout_ms()
             }
@@ -294,6 +332,7 @@ mod tests {
             ) -> Result<(std::result::Result<(), Conflict>, Vec<Effect>)> {
                 let mut concurrent = start_txn(tx).await?;
                 let mut txn = Transaction::new(concurrent.inner.clone());
+                txn.set_origin(&self.0.actor, "concurrent_update");
                 txn.write(self.0.actor.var_id(0), LpcRef::from(0));
                 concurrent.disarm();
                 txn.commit(tx).await?.0.unwrap();
@@ -351,6 +390,7 @@ mod tests {
             player.clone(),
             "north".into(),
         ));
+        let capture = crate::test_support::log_capture::LogCapture::default();
         let (result, stats) = tokio::time::timeout(
             Duration::from_secs(5),
             run_attempts(
@@ -360,12 +400,34 @@ mod tests {
                 &mut command,
             ),
         )
+        .with_subscriber(capture.subscriber("lpc_rs::transactions=warn"))
         .await
         .expect("compile-error retries must honor the command's execution limit");
+        let error = result.unwrap_err();
         assert_eq!(
-            result.unwrap_err().to_string(),
+            error.to_string(),
             "runtime error: evaluation limit of 1000ms has been reached"
         );
+        let diagnostic = error.diagnostic_string();
+        assert!(
+            diagnostic.contains("Transaction /player::command"),
+            "{diagnostic}"
+        );
+        assert!(
+            diagnostic.contains("writer=/player::concurrent_update"),
+            "{diagnostic}"
+        );
+        assert!(
+            diagnostic.contains("field=/player.global.touched"),
+            "{diagnostic}"
+        );
+        assert!(stats.phases.compilation > Duration::ZERO, "{stats:?}");
+        assert!(
+            stats.phases.compilation <= stats.phases.attempt,
+            "{stats:?}"
+        );
+        let logs = capture.contents();
+        assert_eq!(logs.matches("Transaction failed").count(), 1, "{logs}");
         assert!(stats.conflicts > 1, "{stats:?}");
         let ctx = command.0.context.as_ref().unwrap();
         let caught = ctx.txn().with(|txn| txn.read(player.var_id(1)).unwrap());

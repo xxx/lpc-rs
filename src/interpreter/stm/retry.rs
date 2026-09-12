@@ -22,10 +22,10 @@ use crate::{
         lpc_ref::{LpcRef, NULL},
         process::Process,
         stm::{
-            GcPassReply, VarId, Version, WorldRoot, WorldValue,
+            CommitOrigin, Conflict, GcPassReply, VarId, Version, WorldRoot, WorldValue,
             backoff::{Backoff, BackoffSpent},
             changeset::Changeset,
-            committer::{CommitProtocol, CommitterStats, Conflict, LiveSnapshot},
+            committer::{CommitProtocol, CommitterStats, LiveSnapshot},
         },
         vm::global_state::GlobalState,
     },
@@ -44,6 +44,17 @@ pub(crate) struct RetryStats {
     pub(crate) duration: Duration,
     /// Realized backoff totals for the loop.
     pub(crate) backoff: BackoffSpent,
+    pub(crate) phases: PhaseTimes,
+    pub(crate) last_conflict: Option<Conflict>,
+}
+
+/// Attempt time includes snapshot acquisition; compilation is a subset of it.
+#[derive(Debug, Default)]
+pub(crate) struct PhaseTimes {
+    pub(crate) attempt: Duration,
+    pub(crate) compilation: Duration,
+    pub(crate) commit: Duration,
+    pub(crate) delivery: Duration,
 }
 
 /// Attempt-loop lifetime totals, recorded once per apply by `run_attempts`.
@@ -138,6 +149,22 @@ pub struct AttemptTelemetrySnapshot {
 ///   leaves nothing physical behind.
 #[async_trait::async_trait]
 pub(crate) trait AttemptBody {
+    fn is_nested(&self) -> bool {
+        false
+    }
+
+    fn origin(&self) -> Option<CommitOrigin> {
+        None
+    }
+
+    fn describe_cell(&self, _cell: VarId) -> Option<String> {
+        None
+    }
+
+    fn take_compilation_time(&mut self) -> Duration {
+        Duration::ZERO
+    }
+
     /// Wall-clock allowance for evaluation across all attempts; zero disables it.
     fn timeout_ms(&self) -> u64 {
         0
@@ -193,24 +220,31 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
     let timeout_ms = body.timeout_ms();
     let deadline = (timeout_ms != 0).then(|| Instant::now() + Duration::from_millis(timeout_ms));
     let mut attempts = 0u64;
+    let mut phases = PhaseTimes::default();
+    let mut last_conflict = None;
     let mut backoff = match commit_watch {
         Some(watch) => Backoff::watching(watch),
         None => Backoff::new(),
     };
 
-    let result = loop {
+    let mut result = loop {
         if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
             break Err(attempt_timeout(body, attempts, backoff.losses()));
         }
         attempts += 1;
 
+        let attempt_started = Instant::now();
         let attempt = match deadline {
             Some(deadline) => match timeout_at(deadline, body.begin_attempt(tx)).await {
                 Ok(attempt) => attempt,
-                Err(_) => break Err(attempt_timeout(body, attempts, backoff.losses())),
+                Err(_) => Err(attempt_timeout(body, attempts, backoff.losses())),
             },
             None => body.begin_attempt(tx).await,
         };
+        phases.attempt += attempt_started.elapsed();
+        if !body.is_nested() {
+            phases.compilation += body.take_compilation_time();
+        }
         let live = match attempt {
             Ok(live) => live,
             Err(e) => break Err(e),
@@ -223,15 +257,24 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
 
         // Disarmed: the commit releases the pin, not the handle's drop.
         live.disarm();
-        let (commit, effects) = match body.commit_phase(tx, live).await {
+        let commit_started = Instant::now();
+        let committed = body.commit_phase(tx, live).await;
+        phases.commit += commit_started.elapsed();
+        let (commit, effects) = match committed {
             Ok(c) => c,
             Err(e) => break Err(e),
         };
 
         // The commit is permanent, so deliver now. A rejected attempt never
         // reaches this: its recorded output is dropped with the attempt.
-        if commit.is_ok() {
-            break body.deliver(effects).await;
+        match commit {
+            Ok(()) => {
+                let delivery_started = Instant::now();
+                let delivered = body.deliver(effects).await;
+                phases.delivery += delivery_started.elapsed();
+                break delivered;
+            }
+            Err(conflict) => last_conflict = Some(conflict),
         }
         match deadline {
             Some(deadline) => {
@@ -248,20 +291,52 @@ pub(crate) async fn run_attempts<B: AttemptBody>(
         conflicts: backoff.losses(),
         duration: started.elapsed(),
         backoff: backoff.spent(),
+        phases,
+        last_conflict,
     };
     telemetry.record(&stats, result.is_err());
-    if let Err(error) = &result
-        && stats.conflicts > 0
-    {
-        tracing::warn!(
-            attempts = stats.attempts,
-            conflicts = stats.conflicts,
-            elapsed = ?stats.duration,
-            error = %error,
-            "Transaction failed after retries"
-        );
+    if !body.is_nested() && (result.is_err() || stats.conflicts > 0) {
+        if let Err(error) = result {
+            let summary = diagnostic_summary(body, &stats);
+            tracing::warn!(target: "lpc_rs::transactions", diagnostic = %summary, error = %error, "Transaction failed");
+            result = Err(error.with_note(summary));
+        } else if tracing::enabled!(target: "lpc_rs::transactions", tracing::Level::DEBUG) {
+            tracing::debug!(target: "lpc_rs::transactions", diagnostic = %diagnostic_summary(body, &stats), "Transaction committed after retries");
+        }
     }
     (result, stats)
+}
+
+fn diagnostic_summary(body: &impl AttemptBody, stats: &RetryStats) -> String {
+    let origin = body
+        .origin()
+        .map_or_else(|| "unknown".to_owned(), |origin| origin.to_string());
+    let conflict = stats.last_conflict.as_ref().map_or_else(
+        || "none".to_owned(),
+        |conflict| {
+            let label = conflict.cell().and_then(|cell| body.describe_cell(cell));
+            match label {
+                Some(label) => format!("{conflict}, field={label}"),
+                None => conflict.to_string(),
+            }
+        },
+    );
+    let ms = |duration: Duration| duration.as_secs_f64() * 1000.0;
+    format!(
+        "Transaction {origin}: attempts={}, conflicts={}, elapsed_ms={:.3}, evaluation_and_snapshot_ms={:.3}, compilation_ms={:.3}, commit_phase_ms={:.3}, backoff_yield_ms={:.3}, backoff_sleep_ms={:.3}, delivery_ms={:.3}; last_conflict=[{conflict}]",
+        stats.attempts,
+        stats.conflicts,
+        ms(stats.duration),
+        ms(stats
+            .phases
+            .attempt
+            .saturating_sub(stats.phases.compilation)),
+        ms(stats.phases.compilation),
+        ms(stats.phases.commit),
+        ms(stats.backoff.yielded),
+        ms(stats.backoff.slept),
+        ms(stats.phases.delivery),
+    )
 }
 
 fn attempt_timeout(body: &impl AttemptBody, attempts: u64, conflicts: u64) -> LpcError {
@@ -688,7 +763,7 @@ mod async_tests {
                             &committer_tx,
                         );
                     }
-                    reply.send(Err(Conflict)).unwrap();
+                    reply.send(Err(Conflict::Forced)).unwrap();
                 } else if !committer.process(message, &committer_tx) {
                     break;
                 }
@@ -733,6 +808,16 @@ mod async_tests {
         );
         assert_eq!(stats.attempts, 3);
         assert_eq!(stats.conflicts, 2);
+        assert_eq!(stats.phases.attempt, Duration::from_millis(100));
+        assert_eq!(stats.last_conflict, Some(Conflict::Forced));
+        assert!(
+            diagnostic.contains("evaluation_and_snapshot_ms=100.000"),
+            "{diagnostic}"
+        );
+        assert!(
+            diagnostic.contains("last_conflict=[forced test rejection]"),
+            "{diagnostic}"
+        );
         assert_eq!(delivered, 0);
         assert_eq!(value, LpcRef::from(0));
     }
@@ -762,6 +847,9 @@ mod async_tests {
         assert_eq!(stats.attempts, 1);
         assert_eq!(delivered, 1);
         assert_eq!(value, LpcRef::from(1));
+        assert_eq!(stats.phases.attempt, Duration::from_millis(40));
+        assert_eq!(stats.phases.commit, Duration::from_millis(150));
+        assert!(stats.last_conflict.is_none());
     }
 
     #[tokio::test]

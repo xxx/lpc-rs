@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::Deref,
+    sync::Arc,
 };
 
 use tokio::sync::watch;
@@ -8,7 +9,10 @@ use tracing::error;
 
 use crate::interpreter::{
     lpc_ref::LpcRef,
-    stm::{VarId, Version, WorldValue, changeset::Changeset, snapshot::Snapshot},
+    stm::{
+        CommitOrigin, Conflict, VarId, Version, WorldValue, changeset::Changeset,
+        snapshot::Snapshot,
+    },
 };
 
 /// A unit of work in the world mark: either a var whose contents to read, or
@@ -74,11 +78,11 @@ impl CommitterStats {
     }
 }
 
-/// A rejected commit: the changeset read state a later commit wrote. The
-/// changeset itself is not returned — the loser re-runs from a fresh
-/// snapshot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Conflict;
+#[derive(Debug)]
+struct CommittedWrite {
+    vars: ahash::AHashSet<VarId>,
+    origin: Option<Arc<CommitOrigin>>,
+}
 
 /// Channel protocol for communication with [`Committer`]s.
 ///
@@ -189,7 +193,7 @@ pub(crate) struct Committer {
     /// The current snapshot of the world
     snapshot: Snapshot,
     /// The history of written variables by version, used to check for conflicts during commit operations.
-    write_history: BTreeMap<Version, ahash::AHashSet<VarId>>,
+    write_history: BTreeMap<Version, CommittedWrite>,
     /// The oldest retained version. If we are trying to commit a [`Changeset`] with a base version
     /// that is older than this, it automatically fails.
     oldest_retained: Version,
@@ -483,17 +487,24 @@ impl Committer {
         // Should not occur in practice - it implies versions are being created in more than one place.
         if current_version < changeset_version {
             self.stats.conflict();
-            return Err(Conflict);
+            return Err(Conflict::FutureVersion {
+                base: changeset_version,
+                current: current_version,
+            });
         }
 
         // changeset's base evicted → not enough history to resolve the conflict rule
         if changeset_version < self.oldest_retained {
             self.stats.conflict();
-            return Err(Conflict);
+            return Err(Conflict::HistoryUnavailable {
+                base: changeset_version,
+                oldest: self.oldest_retained,
+                current: current_version,
+            });
         }
 
         // check the conflict rule
-        for (version, written_vars) in self
+        for (version, written) in self
             .write_history
             .range(changeset_version..=current_version)
         {
@@ -502,20 +513,27 @@ impl Committer {
             }
 
             self.stats.validation_scanned_versions += 1;
-            if changeset.conflicts_with(written_vars) {
+            if let Some(cell) = changeset.conflicting_read(&written.vars) {
                 self.stats.conflict();
-                return Err(Conflict);
+                return Err(Conflict::ReadInvalidated {
+                    cell,
+                    base: changeset_version,
+                    current: current_version,
+                    written_at: *version,
+                    writer: written.origin.clone(),
+                });
             }
         }
 
         // The merges fold onto the committed values here, where a type
         // mismatch rejects the whole changeset before anything applies.
-        if changeset
-            .fold_merges(|var_id| self.snapshot.peek(var_id).cloned())
-            .is_err()
-        {
+        if let Err(cell) = changeset.fold_merges(|var_id| self.snapshot.peek(var_id).cloned()) {
             self.stats.conflict();
-            return Err(Conflict);
+            return Err(Conflict::MergeMismatch {
+                cell,
+                base: changeset_version,
+                current: current_version,
+            });
         }
 
         let written_vars = changeset.touched_vars();
@@ -526,12 +544,19 @@ impl Committer {
         }
 
         let new_version = Version::new();
+        let origin = changeset.origin.clone();
         let new_snapshot = self.snapshot.apply(new_version, changeset);
         self.snapshot = new_snapshot;
 
         // Keep history insert after the snapshot apply, else a problem in apply leads to
         // all transactions conflicting in the future.
-        self.write_history.insert(new_version, written_vars);
+        self.write_history.insert(
+            new_version,
+            CommittedWrite {
+                vars: written_vars,
+                origin,
+            },
+        );
         self.stats.commit();
         self.commit_watch.send_replace(new_version);
 
@@ -596,7 +621,7 @@ impl Committer {
                 if releases_base {
                     self.release(changeset.base_version());
                 }
-                let _ = reply.send(Err(Conflict));
+                let _ = reply.send(Err(Conflict::Forced));
                 continue;
             }
             if !self.process(msg, &tx) {
@@ -988,6 +1013,99 @@ mod tests {
         assert_eq!(
             committer.snapshot.read(var_id2).unwrap(),
             WorldValue::ref_of(LpcRef::from(456))
+        );
+    }
+
+    #[test]
+    fn conflict_identifies_the_invalidated_read_and_its_writer() {
+        use crate::interpreter::process::Process;
+
+        let mut committer = Committer::new();
+        let base = committer.current_version();
+        let cell = VarId::new();
+        let reader = {
+            let mut changeset = Changeset::new(base);
+            changeset.track_read(cell);
+            changeset
+        };
+        let process = Arc::new(Process::new_virtual(Arc::default(), "/writer".to_owned()));
+        let weak_process = Arc::downgrade(&process);
+        let origin = Arc::new(CommitOrigin::new(&process, "populate"));
+        let weak_origin = Arc::downgrade(&origin);
+        let mut writer = Changeset::new(base);
+        writer.origin = Some(origin.clone());
+        writer.merge(cell, super::super::MergeOp::IntAdd(1));
+        committer.commit(writer).unwrap();
+        let written_at = committer.current_version();
+        drop(process);
+        assert!(weak_process.upgrade().is_none());
+
+        let mut unrelated = Changeset::new(written_at);
+        unrelated.write(VarId::new(), WorldValue::ref_of(1.into()));
+        committer.commit(unrelated).unwrap();
+        let current = committer.current_version();
+        let conflict = committer.commit(reader).unwrap_err();
+        assert_eq!(
+            conflict,
+            Conflict::ReadInvalidated {
+                cell,
+                base,
+                current,
+                written_at,
+                writer: Some(origin.clone()),
+            }
+        );
+        assert!(conflict.to_string().contains("writer=/writer::populate"));
+        drop(conflict);
+        drop(origin);
+        committer.evict_old_versions();
+        assert!(weak_origin.upgrade().is_none());
+    }
+
+    #[test]
+    fn merge_type_conflicts_name_the_cell_without_applying_any_writes() {
+        let mut committer = Committer::new();
+        let cell = VarId::new();
+        let untouched = VarId::new();
+        let mut seed = Changeset::new(committer.current_version());
+        seed.write(cell, WorldValue::ref_of("text".into()));
+        committer.commit(seed).unwrap();
+        let base = committer.current_version();
+        let mut changeset = Changeset::new(base);
+        changeset.merge(cell, super::super::MergeOp::IntAdd(1));
+        changeset.write(untouched, WorldValue::ref_of(1.into()));
+        assert_eq!(
+            committer.commit(changeset),
+            Err(Conflict::MergeMismatch {
+                cell,
+                base,
+                current: base
+            })
+        );
+        assert!(committer.snapshot.read(untouched).is_none());
+        assert_eq!(
+            committer.snapshot.read(cell),
+            Some(WorldValue::ref_of("text".into()))
+        );
+    }
+
+    #[test]
+    fn an_evicted_base_reports_missing_history() {
+        let mut committer = Committer::new();
+        let base = committer.current_version();
+        let stale = Changeset::new(base);
+        let mut writer = Changeset::new(base);
+        writer.write(VarId::new(), WorldValue::ref_of(1.into()));
+        committer.commit(writer).unwrap();
+        committer.evict_old_versions();
+        let current = committer.current_version();
+        assert_eq!(
+            committer.commit(stale),
+            Err(Conflict::HistoryUnavailable {
+                base,
+                oldest: current,
+                current
+            })
         );
     }
 

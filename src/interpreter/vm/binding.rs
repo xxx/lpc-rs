@@ -159,12 +159,24 @@ struct AttachBody {
 
 #[async_trait::async_trait]
 impl AttemptBody for AttachBody {
+    fn origin(&self) -> Option<crate::interpreter::stm::CommitOrigin> {
+        Some(crate::interpreter::stm::CommitOrigin::new(
+            &self.process,
+            "attach",
+        ))
+    }
+
+    fn describe_cell(&self, cell: crate::interpreter::stm::VarId) -> Option<String> {
+        self.global_state.object_space.describe_cell(cell)
+    }
+
     async fn begin_attempt(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
     ) -> Result<Option<LiveSnapshot>> {
         let live = start_txn(tx).await?;
         let mut txn = Transaction::new(live.inner.clone());
+        txn.set_origin(&self.process, "attach");
 
         // The connection currently bound to `process`; the handover
         // displaces it.
@@ -219,12 +231,24 @@ struct DetachBody {
 
 #[async_trait::async_trait]
 impl AttemptBody for DetachBody {
+    fn origin(&self) -> Option<crate::interpreter::stm::CommitOrigin> {
+        Some(crate::interpreter::stm::CommitOrigin::new(
+            &self.process,
+            "detach",
+        ))
+    }
+
+    fn describe_cell(&self, cell: crate::interpreter::stm::VarId) -> Option<String> {
+        self.process.describe_cell(cell)
+    }
+
     async fn begin_attempt(
         &mut self,
         tx: &flume::Sender<CommitProtocol>,
     ) -> Result<Option<LiveSnapshot>> {
         let live = start_txn(tx).await?;
         let mut txn = Transaction::new(live.inner.clone());
+        txn.set_origin(&self.process, "detach");
         self.held = txn
             .read_connection(self.process.connection.id)
             .is_some_and(|held| Arc::ptr_eq(&held, &self.connection));

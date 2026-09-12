@@ -80,6 +80,15 @@ pub enum SeedEntry {
     Named(String),
 }
 
+impl SeedEntry {
+    fn name(&self) -> &str {
+        match self {
+            Self::Function(function) => function.name().as_ref(),
+            Self::Named(name) => name,
+        }
+    }
+}
+
 /// The inputs needed to (re)start a task's entry call, hoisted out of the
 /// `CallStack` so a rejected commit can rebuild the task from scratch.
 #[derive(Debug, Clone)]
@@ -287,6 +296,12 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             .seed
             .clone()
             .expect("top-level attempt has a seed; joiners never open");
+
+        if live.is_some() {
+            self.context
+                .txn
+                .with(|txn| txn.set_origin(&seed.process, seed.entry.name()));
+        }
 
         self.reset();
 
@@ -721,6 +736,26 @@ impl<const N: usize> Drop for RunningTask<'_, N> {
 
 #[async_trait::async_trait]
 impl<const STACKSIZE: usize> AttemptBody for Task<STACKSIZE> {
+    fn is_nested(&self) -> bool {
+        self.joins_parent
+    }
+
+    fn origin(&self) -> Option<crate::interpreter::stm::CommitOrigin> {
+        self.seed.as_ref().map(|seed| {
+            crate::interpreter::stm::CommitOrigin::new(&seed.process, seed.entry.name())
+        })
+    }
+
+    fn describe_cell(&self, cell: crate::interpreter::stm::VarId) -> Option<String> {
+        self.context
+            .txn
+            .with(|txn| txn.describe_cell(self.context.object_space(), cell))
+    }
+
+    fn take_compilation_time(&mut self) -> std::time::Duration {
+        self.context.txn.with(|txn| txn.take_compilation_time())
+    }
+
     fn timeout_ms(&self) -> u64 {
         self.timeout_ms.unwrap_or(0)
     }
