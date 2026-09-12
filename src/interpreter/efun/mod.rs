@@ -38,7 +38,9 @@ pub(crate) mod filter;
 pub(crate) mod filter_map;
 pub(crate) mod find_object;
 pub(crate) mod function_exists;
+pub(crate) mod function_info;
 pub(crate) mod function_name;
+pub(crate) mod function_object;
 pub(crate) mod get_dir;
 pub(crate) mod hash_string;
 pub(crate) mod implode;
@@ -1124,6 +1126,16 @@ efuns! {
         arity: 1,
         args: [LpcType::String(false)],
     },
+    function_object => {
+        returns: LpcType::Object(false),
+        arity: 1,
+        args: [LpcType::Function(false)],
+    },
+    function_info => {
+        returns: LpcType::Mapping(false),
+        arity: 1,
+        args: [LpcType::Function(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1450,6 +1462,8 @@ mod tests {
                 "object_clones",
                 "hash_string",
                 "load_object",
+                "function_object",
+                "function_info",
             ]
         );
     }

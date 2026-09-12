@@ -125,3 +125,9 @@ calls `actor->move(present("quay"))`. See [`compose`](../efun/compose.md) for ar
 `f`'s own bound arguments; `f`'s existing holes are left open. `papplyv(f, args)` instead fills `f`'s
 existing holes from `args` first, then appends any left over, so `papplyv(&add3(, 2), ({ 1 }))` binds
 `1` into the hole while `&f(1)` (over the same `f`) would leave the hole and append `1` after it.
+
+Use [`function_object`](../efun/function_object.md) to get a pointer's receiver,
+[`function_info`](../efun/function_info.md) to inspect its owner, receiver, and
+partially applied arguments, and [`function_name`](../efun/function_name.md) for
+a printable name. Bare local and efun pointers use their owner as the receiver;
+an unbound dynamic pointer has no receiver until one is supplied.

@@ -53,7 +53,7 @@ fn target_name<const N: usize>(context: &EfunContext<'_, N>, ptr: &FunctionPtr) 
             target.program.lookup_function(name)?;
             target.clone()
         }
-        FunctionAddress::Efun(name) => return Some(name.to_string()),
+        FunctionAddress::Efun(_) => ptr.owner.upgrade()?,
         FunctionAddress::Dynamic(name) => {
             return match ptr.partial_args().first() {
                 Some(Some(receiver @ LpcRef::Object(_))) => {
@@ -133,7 +133,7 @@ mod tests {
             strings_of(code).await,
             [
                 r#"&"/my_file"->add(?,_,?)"#,
-                "&write(?)",
+                r#"&"/my_file"->write(?)"#,
                 r#"&"/my_file"->add(_,_,_)"#
             ]
         );
@@ -143,10 +143,18 @@ mod tests {
     async fn efun_names_work_through_a_function_name_pointer() {
         let code = indoc! { r#"
             mixed *create() {
-                return map(({ &write(), &reduce(), &function_name() }), &function_name());
+                return map(({ write, &write(), reduce, &function_name() }), &function_name());
             }
         "# };
-        assert_eq!(strings_of(code).await, ["write", "reduce", "function_name"]);
+        assert_eq!(
+            strings_of(code).await,
+            [
+                r#""/my_file"->write"#,
+                r#""/my_file"->write"#,
+                r#""/my_file"->reduce"#,
+                r#""/my_file"->function_name"#
+            ]
+        );
     }
 
     #[tokio::test]

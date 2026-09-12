@@ -6,7 +6,8 @@ Return the printable name of a function pointer without invoking it.
 Object functions are named `"/object"->function`, with the receiving object's
 in-game name, including its clone suffix. Inherited functions use the
 receiving object; simul-efuns use the resident simul-efun object. Efuns use
-their bare name.
+the pointer's owner as their receiver. Bare names (`function f = foo`) and
+`&foo()` print identically; a bare local pointer's receiver is its owner.
 
 Partially applied pointers have a leading `&` and an argument list: `?`
 marks a bound value and `_` marks a hole. These argument values are never printed.
@@ -29,11 +30,11 @@ is an error.
 // In /example.c, with a local function add(a, b):
 function_name(&add());            // "\"/example\"->add"
 function_name(&add(10, ));        // "&\"/example\"->add(?,_)"
-function_name(&write());          // "write"
-function_name(&write("secret"));  // "&write(?)"
+function_name(&write());          // "\"/example\"->write"
+function_name(&write("secret"));  // "&\"/example\"->write(?)"
 function_name(&->query_name());   // "->query_name"
 ```
 
 ### See also
 
-`functionp`, `function_exists`, `calling_function`, `papplyv`
+`function_object`, `function_info`, `functionp`, `function_exists`, `calling_function`, `papplyv`
