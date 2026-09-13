@@ -1,5 +1,8 @@
 use bytes::Bytes;
-use lpc_rs_asm::instruction::{ArgList, Instruction};
+use lpc_rs_asm::{
+    address::Address,
+    instruction::{ArgList, Instruction},
+};
 use lpc_rs_core::{
     LpcIntInner,
     register::{Register, RegisterVariant},
@@ -10,9 +13,11 @@ use thin_vec::ThinVec;
 use tracing::{error, instrument, trace};
 
 use crate::interpreter::{
+    call_frame::CallFrame,
     efun::{Efun, sizeof::size_of},
     lpc_array::LpcArray,
     lpc_ref::{LpcRef, NULL, int_div, int_rem, int_shl, int_shr},
+    stm::TxnHandle,
     task::{
         CatchPoint, Task, advance::Advance, bump_in_location, get_location,
         handle_data::UnloadedFunctionPtr, set_location,
@@ -64,6 +69,90 @@ pub(crate) enum Slice {
     Await(AsyncCall),
 }
 
+enum IntegerAction {
+    Store(RegisterVariant, LpcIntInner),
+    Branch(bool, Address),
+}
+
+#[inline(always)]
+fn integer_action(frame: &CallFrame, instruction: &Instruction) -> Option<IntegerAction> {
+    use IntegerAction::{Branch, Store};
+
+    Some(match *instruction {
+        Instruction::Add(r1, r2, r3) => {
+            Store(r3, frame.peek_int(r1)?.wrapping_add(frame.peek_int(r2)?))
+        }
+        Instruction::Sub(r1, r2, r3) => {
+            Store(r3, frame.peek_int(r1)?.wrapping_sub(frame.peek_int(r2)?))
+        }
+        Instruction::Mul(r1, r2, r3) => {
+            Store(r3, frame.peek_int(r1)?.wrapping_mul(frame.peek_int(r2)?))
+        }
+        Instruction::Copy(r1, r2) => Store(r2, frame.peek_int(r1)?),
+        Instruction::Inc(r) => Store(r, frame.peek_int(r)?.wrapping_add(1)),
+        Instruction::Dec(r) => Store(r, frame.peek_int(r)?.wrapping_sub(1)),
+        Instruction::Cmp(kind, r1, r2, r3) => Store(
+            r3,
+            kind.holds(frame.peek_int(r1)?, frame.peek_int(r2)?) as LpcIntInner,
+        ),
+        Instruction::Jcmp(kind, r1, r2, address) => Branch(
+            kind.holds(frame.peek_int(r1)?, frame.peek_int(r2)?),
+            address,
+        ),
+        Instruction::Jncmp(kind, r1, r2, address) => Branch(
+            !kind.holds(frame.peek_int(r1)?, frame.peek_int(r2)?),
+            address,
+        ),
+        Instruction::Jmp(address) => Branch(true, address),
+        Instruction::Jz(r, address) => Branch(frame.peek_int(r)? == 0, address),
+        Instruction::Jnz(r, address) => Branch(frame.peek_int(r)? != 0, address),
+        _ => return None,
+    })
+}
+
+/// Keep one frame borrowed until an instruction needs the full dispatcher.
+#[inline(never)]
+fn run_integer_frame(
+    frame: &mut CallFrame,
+    txn: &TxnHandle,
+    left: &mut u32,
+) -> lpc_rs_errors::Result<()> {
+    while *left != 0 {
+        let Some(instruction) = frame.function.instructions.get(frame.pc()) else {
+            break;
+        };
+        let Some(action) = integer_action(frame, instruction) else {
+            break;
+        };
+
+        *left -= 1;
+        let span;
+        let _guard;
+        if tracing::level_enabled!(tracing::Level::DEBUG)
+            || tracing::if_log_enabled!(tracing::Level::DEBUG, { true } else { false })
+        {
+            span = tracing::debug_span!("step");
+            _guard = span.enter();
+        }
+        trace!("about to evaluate: {}", instruction);
+        #[cfg(feature = "opcode-profile")]
+        let counted_instruction = *instruction;
+        frame.inc_pc();
+        #[cfg(feature = "opcode-profile")]
+        crate::interpreter::opcode_profile::record(&counted_instruction);
+
+        match action {
+            IntegerAction::Store(location, value) => frame.set_int(txn, location, value)?,
+            IntegerAction::Branch(taken, address) => {
+                if taken {
+                    frame.set_pc(address);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 impl<const STACKSIZE: usize> Task<STACKSIZE> {
     /// Resume execution of a New or Paused Task. Assumes the stack has already been set up
     #[instrument(skip_all)]
@@ -112,6 +201,11 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     pub(crate) fn run_slice(&mut self, budget: &mut u32) -> lpc_rs_errors::Result<Slice> {
         let mut left = *budget;
         let slice = loop {
+            if let Some(frame) = self.stack.last_mut()
+                && let Err(error) = run_integer_frame(frame, &self.context.txn, &mut left)
+            {
+                break Err(error);
+            }
             if left == 0 {
                 break Ok(Slice::Budget);
             }
@@ -640,5 +734,150 @@ mod tests {
             assert!(diagnostic.contains("Stack trace:"), "{diagnostic}");
             assert!(diagnostic.contains("create()"), "{diagnostic}");
         }
+    }
+
+    #[tokio::test]
+    async fn integer_slices_match_single_steps_across_branches_and_type_changes() {
+        use lpc_rs_asm::instruction::Comparison::{Eq, Gt, Lt};
+        use lpc_rs_function_support::constant::LpcConstant;
+
+        use crate::interpreter::bank::RefBank;
+
+        let vm = Vm::new(test_config());
+        let (mut task, _live) = task_at(&vm, "void create() {}", |_| true).await;
+        let [r0, r1, r2, r3, r4] = [0, 1, 2, 3, 4].map(|i| Register(i).as_local());
+        let c0 = Register(0).as_constant();
+        let c1 = Register(1).as_constant();
+        let frame = task.stack.current_frame_mut().unwrap();
+        frame.registers = RefBank::new(vec![
+            0.into(),
+            5.into(),
+            0.into(),
+            LpcIntInner::MAX.into(),
+            0.5.into(),
+        ]);
+        let function = Arc::make_mut(&mut frame.function);
+        function.constants = vec![LpcConstant::Int(0), LpcConstant::Int(2)];
+        function.instructions = vec![
+            Instruction::Jncmp(Lt, r0, r1, Address(5)),
+            Instruction::Add(r2, r0, r2),
+            Instruction::Inc(r0),
+            Instruction::Inc(r3),
+            Instruction::Jmp(Address(0)),
+            Instruction::Add(r2, r4, r2),
+            Instruction::Dec(r0),
+            Instruction::Jcmp(Gt, r0, c0, Address(5)),
+            Instruction::Copy(c1, r0),
+            Instruction::Mul(r2, r0, r2),
+            Instruction::Cmp(Eq, r1, r1, r1),
+            Instruction::Jz(r0, Address(0)),
+            Instruction::Sub(r0, r0, r0),
+            Instruction::Jnz(r1, Address(0)),
+        ];
+        function
+            .debug_spans
+            .resize(function.instructions.len(), None);
+        let mut reference = task.clone();
+
+        for count in [0, 1, 2, 3, 7, 13, 29, 1000] {
+            let mut budget = count;
+            assert!(matches!(
+                task.run_slice(&mut budget).unwrap(),
+                Slice::Budget
+            ));
+            for _ in 0..count {
+                assert!(matches!(reference.step().unwrap(), Step::Next));
+            }
+
+            let actual = task.stack.current_frame().unwrap();
+            let expected = reference.stack.current_frame().unwrap();
+            assert_eq!(budget, 0);
+            assert_eq!(actual.pc(), expected.pc());
+            assert_eq!(actual.registers, expected.registers);
+        }
+    }
+
+    #[tokio::test]
+    async fn an_integer_write_error_preserves_the_consumed_budget_and_pc() {
+        use lpc_rs_function_support::constant::LpcConstant;
+
+        let vm = Vm::new(test_config());
+        let (mut task, _live) = task_at(&vm, "void create() {}", |_| true).await;
+        let r0 = Register(0).as_local();
+        let c0 = Register(0).as_constant();
+        let frame = task.stack.current_frame_mut().unwrap();
+        let function = Arc::make_mut(&mut frame.function);
+        function.constants = vec![LpcConstant::Int(5)];
+        function.instructions = vec![
+            Instruction::Jmp(Address(1)),
+            Instruction::Inc(r0),
+            Instruction::Add(r0, r0, c0),
+            Instruction::Ret,
+        ];
+        function.debug_spans.resize(4, None);
+        let mut reference = task.clone();
+        reference.step().unwrap();
+        reference.step().unwrap();
+        let Err(expected) = reference.step() else {
+            panic!("a constant cannot be written");
+        };
+
+        let mut budget = 7;
+        let Err(actual) = task.run_slice(&mut budget) else {
+            panic!("a constant cannot be written");
+        };
+
+        assert_eq!(actual.to_string(), expected.to_string());
+        assert_eq!(actual.is_bug(), expected.is_bug());
+        assert_eq!(budget, 4);
+        assert_eq!(task.stack.current_frame().unwrap().pc(), 3);
+    }
+
+    #[tokio::test]
+    async fn integer_and_general_instructions_each_emit_one_step_span() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        use tracing::{
+            Subscriber,
+            span::{Attributes, Id},
+        };
+        use tracing_subscriber::{Layer, layer::Context, prelude::*};
+
+        struct Steps(Arc<AtomicUsize>);
+        impl<S: Subscriber> Layer<S> for Steps {
+            fn on_new_span(&self, attrs: &Attributes<'_>, _: &Id, _: Context<'_, S>) {
+                if attrs.metadata().name() == "step" {
+                    self.0.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
+
+        let vm = Vm::new(test_config());
+        let (mut task, _live) = task_at(&vm, "void create() {}", |_| true).await;
+        let r0 = Register(0).as_local();
+        let frame = task.stack.current_frame_mut().unwrap();
+        let function = Arc::make_mut(&mut frame.function);
+        function.instructions = vec![
+            Instruction::Jmp(Address(1)),
+            Instruction::Inc(r0),
+            Instruction::Div(r0, r0, r0),
+            Instruction::Inc(r0),
+            Instruction::Ret,
+        ];
+        function.debug_spans.resize(5, None);
+        let count = Arc::new(AtomicUsize::new(0));
+        let subscriber = tracing_subscriber::registry().with(Steps(count.clone()));
+        let mut budget = 9;
+
+        let result = tracing::subscriber::with_default(subscriber, || task.run_slice(&mut budget));
+
+        assert!(matches!(result.unwrap(), Slice::Halt));
+        assert_eq!(budget, 4);
+        let expected = if tracing::Level::DEBUG <= tracing::level_filters::STATIC_MAX_LEVEL {
+            5
+        } else {
+            0
+        };
+        assert_eq!(count.load(Ordering::Relaxed), expected);
     }
 }
