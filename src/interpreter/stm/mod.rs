@@ -142,6 +142,19 @@ impl Transaction {
         self.read_value(var_id).map(WorldValue::lpc_ref)
     }
 
+    /// Borrow two slot values, tracking the snapshot reads that supply them.
+    pub(crate) fn read_pair(&mut self, left: VarId, right: VarId) -> [Option<&LpcRef>; 2] {
+        let snapshot = &self.snapshot;
+        self.changeset
+            .read_pair(left, right, |var_id| snapshot.read(var_id))
+            .map(|value| {
+                value.map(|value| match value {
+                    WorldValue::Ref(value) => value,
+                    _ => unreachable!("a payload or identity var read through a slot access"),
+                })
+            })
+    }
+
     /// Read the world value of a var: `Ref` for slots, payload contents for
     /// payload vars. The changeset decides what this attempt sees; the
     /// snapshot only answers its miss, so a var this attempt removed is

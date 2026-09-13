@@ -20,6 +20,7 @@ use lpc_rs_function_support::{
     constant::LpcConstant, function_prototype::FunctionPrototypeBuilder,
     program_function::ProgramFunction,
 };
+use lpc_rs_utils::lpc_string::LpcString;
 use thin_vec::ThinVec;
 
 use crate::interpreter::{
@@ -424,6 +425,49 @@ impl CallFrame {
             RegisterVariant::Global(reg) => Cow::Owned(read_cell(txn, self.global(reg))),
             RegisterVariant::Upvalue(reg) => Cow::Owned(read_cell(txn, self.upvalue(reg)?)),
         })
+    }
+
+    /// Add two operands, borrowing cell strings until concatenation finishes.
+    #[inline(never)]
+    pub(crate) fn add(
+        &mut self,
+        txn: &TxnHandle,
+        r1: RegisterVariant,
+        r2: RegisterVariant,
+        r3: RegisterVariant,
+    ) -> Result<()> {
+        enum CellAddition {
+            Strings(Result<LpcRef>),
+            Values([LpcRef; 2]),
+        }
+
+        let result = if let (Slot::Cell(left), Slot::Cell(right)) = (self.slot(r1)?, self.slot(r2)?)
+        {
+            let operands = txn.with(|t| {
+                let values = t.read_pair(left, right);
+                match values {
+                    [Some(LpcRef::String(left)), Some(LpcRef::String(right))] => {
+                        CellAddition::Strings(
+                            LpcString::concat(left.to_str(), right.to_str()).map(LpcRef::from),
+                        )
+                    }
+                    _ => CellAddition::Values(values.map(|value| value.cloned().unwrap_or(NULL))),
+                }
+            });
+            // Collection addition needs the transaction lock after the operand borrows end.
+            match operands {
+                CellAddition::Strings(result) => result,
+                CellAddition::Values([left, right]) => left.add(&right, txn),
+            }
+        } else {
+            let left = self.get_location(txn, r1)?;
+            let right = self.get_location(txn, r2)?;
+            left.add(&right, txn)
+        };
+        match result {
+            Ok(value) => self.set_location(txn, r3, value),
+            Err(error) => Err(error.or_span(self.current_debug_span())),
+        }
     }
 
     /// The int at `location` when it sits in a register or the pool; `None`

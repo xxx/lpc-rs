@@ -419,13 +419,9 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 self.handle_load_mapping_key(container, index, destination)?;
             }
             Instruction::Add(r1, r2, r3) => {
-                self.binary_operation(
-                    r1,
-                    r2,
-                    r3,
-                    |x, y| Some(x.wrapping_add(y)),
-                    |x, y, txn| x.add(y, txn),
-                )?;
+                self.stack
+                    .current_frame_mut()?
+                    .add(&self.context.txn, r1, r2, r3)?;
             }
             Instruction::MapConst(location) => {
                 let result = self.handle_mapconst(location);

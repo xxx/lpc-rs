@@ -264,6 +264,84 @@ impl Display for BareVal {
 
 mod test_instructions {
     use super::*;
+    mod cell_addition {
+        use super::*;
+
+        #[tokio::test]
+        async fn aliased_global_strings_can_overwrite_the_source() {
+            let code = r#"
+                string value = "ab";
+                void create() { value = value + value; }
+            "#;
+            check_committed_globals(code, &[("value", BareVal::String("abab".into()))]).await;
+        }
+
+        #[tokio::test]
+        async fn captured_strings_can_overwrite_an_operand() {
+            let code = r#"
+                string result;
+                void create() {
+                    string left = "ab";
+                    string right = "cd";
+                    function f = (: left = left + right :);
+                    result = f();
+                }
+            "#;
+            check_committed_globals(code, &[("result", BareVal::String("abcd".into()))]).await;
+        }
+
+        #[tokio::test]
+        async fn global_arrays_use_the_transactional_arithmetic_path() {
+            let code = r#"
+                mixed *left = ({ 1 });
+                mixed *right = ({ 2 });
+                mixed *result;
+                void create() { result = left + right; }
+            "#;
+            check_committed_globals(
+                code,
+                &[(
+                    "result",
+                    BareVal::Array(vec![BareVal::Int(1), BareVal::Int(2)]),
+                )],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn overflowing_global_strings_keep_the_expression_span() {
+            let half = MAX_STRING_LENGTH / 2 + 1;
+            let code = format!(
+                r#"
+                    string left = "x" * {half};
+                    string right = left;
+                    string result;
+                    void create() {{ result = left + right; }}
+                "#
+            );
+            let error = try_run_prog(&code).await.unwrap_err();
+
+            assert!(
+                error
+                    .to_string()
+                    .contains("overflow in string concatenation")
+            );
+            let span = error.span().expect("the addition has a source span");
+            assert!(code[span.l()..span.r()].contains("left + right"));
+        }
+
+        #[tokio::test]
+        async fn mixed_global_operands_keep_string_integer_addition() {
+            let code = r#"
+                mixed left = "value";
+                mixed right = 7;
+                string result;
+                void create() { result = left + right; }
+            "#;
+            check_committed_globals(code, &[("result", BareVal::String("value7".into()))]).await;
+        }
+    }
+
     mod test_aconst {
         use super::*;
 

@@ -24,6 +24,36 @@ use crate::interpreter::{
 };
 
 #[test]
+fn paired_read_conflicts_when_either_operand_changes() {
+    for changed in [0, 1] {
+        let mut committer = Committer::new();
+        let vars = [VarId::new(), VarId::new()];
+        let mut seed = Changeset::new(committer.current_version());
+        seed.write(vars[0], WorldValue::ref_of("left".into()));
+        seed.write(vars[1], WorldValue::ref_of("right".into()));
+        committer.commit(seed).unwrap();
+        let mut reader = Transaction::new(committer.snapshot_clone());
+
+        assert_eq!(
+            reader.read_pair(vars[0], vars[1]),
+            [Some(&LpcRef::from("left")), Some(&LpcRef::from("right"))]
+        );
+        let mut writer = Changeset::new(committer.current_version());
+        writer.write(vars[changed], WorldValue::ref_of("changed".into()));
+        committer.commit(writer).unwrap();
+        let (_, reads) = reader.into_parts();
+
+        assert!(
+            matches!(
+                committer.commit(reads),
+                Err(super::Conflict::ReadInvalidated { cell, .. }) if cell == vars[changed]
+            ),
+            "operand {changed} must be tracked"
+        );
+    }
+}
+
+#[test]
 fn multiple_variables_are_isolated() {
     let var_id = VarId::new();
     let mut map = HashMap::new();

@@ -46,6 +46,18 @@ struct Entry {
 }
 
 impl Entry {
+    fn value(&self) -> Option<&WorldValue> {
+        match &self.change {
+            Change::Remove => None,
+            Change::Write(value) => Some(value),
+            Change::None => match &self.observed {
+                Observed::Cached(value) => value.as_ref(),
+                _ => unreachable!("the world answer must be cached before borrowing"),
+            },
+            Change::Merge(_) => unreachable!("pending merges must be folded before borrowing"),
+        }
+    }
+
     fn is_tracked(&self) -> bool {
         !matches!(self.observed, Observed::Nothing)
     }
@@ -55,7 +67,7 @@ impl Entry {
     }
 }
 
-/// One entry per touched var, so a read is one lookup.
+/// One entry per touched var holds its observed value and own change.
 #[derive(Debug, Clone)]
 pub(crate) struct Changeset {
     version: Version,
@@ -91,29 +103,39 @@ impl Changeset {
         var_id: VarId,
         world: impl FnOnce() -> Option<WorldValue>,
     ) -> Option<WorldValue> {
+        self.observe(var_id, world).value().cloned()
+    }
+
+    /// Borrow two transaction-visible values after preparing both entries.
+    pub(crate) fn read_pair(
+        &mut self,
+        left: VarId,
+        right: VarId,
+        world: impl Fn(VarId) -> Option<WorldValue>,
+    ) -> [Option<&WorldValue>; 2] {
+        self.observe(left, || world(left));
+        self.observe(right, || world(right));
+        [self.entries[&left].value(), self.entries[&right].value()]
+    }
+
+    fn observe(&mut self, var_id: VarId, world: impl FnOnce() -> Option<WorldValue>) -> &Entry {
         let entry = self.entry(var_id);
-        match &entry.change {
-            Change::Remove => return None,
-            Change::Write(value) => return Some(value.clone()),
-            Change::None | Change::Merge(_) => {}
-        }
-        let committed = match &entry.observed {
-            Observed::Cached(value) => value.clone(),
-            Observed::Nothing | Observed::Tracked => {
-                let value = world();
-                entry.observed = Observed::Cached(value.clone());
-                value
+        if matches!(entry.change, Change::None | Change::Merge(_)) {
+            if !matches!(entry.observed, Observed::Cached(_)) {
+                entry.observed = Observed::Cached(world());
             }
-        };
-        let Change::Merge(ops) = &mut entry.change else {
-            return committed;
-        };
-        let ops = std::mem::take(ops);
-        let value = MergeOp::fold_onto(committed, &ops)
-            .expect("the caller peeks the type before merging")
-            .expect("at least one op ran");
-        entry.change = Change::Write(value.clone());
-        Some(value)
+            if let Change::Merge(ops) = &mut entry.change {
+                let Observed::Cached(committed) = &entry.observed else {
+                    unreachable!("the world answer was cached before folding merges");
+                };
+                let ops = std::mem::take(ops);
+                let value = MergeOp::fold_onto(committed.clone(), &ops)
+                    .expect("the caller peeks the type before merging")
+                    .expect("at least one op ran");
+                entry.change = Change::Write(value);
+            }
+        }
+        entry
     }
 
     /// The attempt's own written array payload for `var_id`, mutably —
@@ -301,6 +323,70 @@ impl Changeset {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn paired_read_of_one_cell_caches_the_world_once() {
+        let mut changeset = Changeset::new(Version(0));
+        let var = VarId::new();
+        let value = WorldValue::ref_of("shared".into());
+        let reads = std::cell::Cell::new(0);
+
+        let pair = changeset.read_pair(var, var, |_| {
+            reads.set(reads.get() + 1);
+            Some(value.clone())
+        });
+
+        assert_eq!(pair, [Some(&value), Some(&value)]);
+        assert_eq!(reads.get(), 1);
+        assert!(changeset.conflicts_with(&[var].into_iter().collect()));
+    }
+
+    #[test]
+    fn paired_read_memoizes_missing_cells() {
+        let mut changeset = Changeset::new(Version(0));
+        let left = VarId::new();
+        let right = VarId::new();
+
+        assert_eq!(changeset.read_pair(left, right, |_| None), [None, None]);
+        assert_eq!(
+            changeset.read_pair(left, right, |_| panic!("absence was cached")),
+            [None, None]
+        );
+        assert!(changeset.conflicts_with(&[left].into_iter().collect()));
+        assert!(changeset.conflicts_with(&[right].into_iter().collect()));
+    }
+
+    #[test]
+    fn paired_read_uses_own_writes_and_removals_without_the_world() {
+        let mut changeset = Changeset::new(Version(0));
+        let left = VarId::new();
+        let right = VarId::new();
+        let value = WorldValue::ref_of("written".into());
+        changeset.write(left, value.clone());
+        changeset.drop_var(right);
+
+        assert_eq!(
+            changeset.read_pair(left, right, |_| panic!("both cells have own changes")),
+            [Some(&value), None]
+        );
+        assert!(!changeset.conflicts_with(&[left, right].into_iter().collect()));
+    }
+
+    #[test]
+    fn paired_read_folds_an_aliased_merge_only_once() {
+        let mut changeset = Changeset::new(Version(0));
+        let var = VarId::new();
+        changeset.merge(var, MergeOp::IntAdd(2));
+        let expected = WorldValue::ref_of(7.into());
+
+        assert_eq!(
+            changeset.read_pair(var, var, |_| Some(WorldValue::ref_of(5.into()))),
+            [Some(&expected), Some(&expected)]
+        );
+        assert!(changeset.pending_merges(var).is_empty());
+        assert_eq!(changeset.written(var), Some(&expected));
+        assert!(changeset.conflicts_with(&[var].into_iter().collect()));
+    }
 
     #[test]
     fn a_merge_tracks_no_read() {
