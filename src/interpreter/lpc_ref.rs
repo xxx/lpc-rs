@@ -372,6 +372,7 @@ impl LpcRef {
     /// Copy-on-write this array cell: clone the world's contents into the
     /// attempt's changeset, run `f` on the clone, and write it back under the
     /// same var. The committed contents are never mutated in place.
+    #[cfg(test)]
     pub(crate) fn with_array_cow<F>(&self, txn: &TxnHandle, f: F) -> Result<()>
     where
         F: FnOnce(&mut LpcArray) -> Result<()>,
@@ -401,7 +402,7 @@ impl LpcRef {
         Ok(())
     }
 
-    /// Copy-on-write this mapping cell, as in [`with_array_cow`].
+    /// Copy-on-write this mapping into the attempt's changeset, leaving the committed contents unchanged.
     pub(crate) fn with_mapping_cow<F>(&self, txn: &TxnHandle, f: F) -> Result<()>
     where
         F: FnOnce(&mut LpcMapping) -> Result<()>,

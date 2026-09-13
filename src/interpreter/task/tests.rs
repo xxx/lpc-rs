@@ -4748,6 +4748,97 @@ mod test_instructions {
         use super::*;
 
         #[tokio::test]
+        async fn stores_a_local_reference_independently_of_its_source_register() {
+            let code = indoc! { r#"
+                void create() {
+                    string value = "before";
+                    mixed *saved = ({ 0 });
+                    saved[0] = value;
+                    value = "after";
+                }
+            "# };
+
+            check_popped_vars(
+                code,
+                &[(
+                    "saved",
+                    BareVal::Array(vec![BareVal::String("before".into())]),
+                )],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn stores_a_global_reference_independently_of_its_source_cell() {
+            let code = indoc! { r#"
+                string value = "before";
+                mixed *saved = ({ 0 });
+                void create() {
+                    saved[0] = value;
+                    value = "after";
+                }
+            "# };
+
+            check_committed_globals(
+                code,
+                &[(
+                    "saved",
+                    BareVal::Array(vec![BareVal::String("before".into())]),
+                )],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn stores_an_upvalue_reference_independently_of_its_source_cell() {
+            let code = indoc! { r#"
+                mixed *saved = ({ 0 });
+                void create() {
+                    string value = "before";
+                    function copy = (: saved[0] = value :);
+                    copy();
+                    value = "after";
+                }
+            "# };
+
+            check_committed_globals(
+                code,
+                &[(
+                    "saved",
+                    BareVal::Array(vec![BareVal::String("before".into())]),
+                )],
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn replaces_array_elements_across_value_types() {
+            let code = indoc! { r#"
+                mixed *saved = ({ "old", 0, 0.0, ({ 0 }) });
+                void create() {
+                    saved[0] = 7;
+                    saved[1] = "new";
+                    saved[2] = -17;
+                    saved[3] = 9223372036854775807;
+                }
+            "# };
+
+            check_committed_globals(
+                code,
+                &[(
+                    "saved",
+                    BareVal::Array(vec![
+                        BareVal::Int(7),
+                        BareVal::String("new".into()),
+                        BareVal::Int(-17),
+                        BareVal::Int(i64::MAX),
+                    ]),
+                )],
+            )
+            .await;
+        }
+
+        #[tokio::test]
         async fn negative_array_indices_support_assignment_and_updates() {
             let code = indoc! { r#"
                 void create() {

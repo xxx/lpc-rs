@@ -16,7 +16,7 @@ use crate::interpreter::{
     lpc_mapping::LpcMapping,
     lpc_ref::{LpcRef, NULL},
     process::Process,
-    stm::MergeOp,
+    stm::{MergeOp, VarId},
     task::{Task, get_location, set_location},
     task_context::ObjectLookup,
 };
@@ -428,28 +428,10 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         let index = &*get_location(&self.stack, &self.context.txn, index_loc)?;
 
         match &container {
-            LpcRef::Array(_) => {
-                // The value read happens before the COW: the closure runs
-                // under the transaction write lock and cannot re-enter it.
-                let value = (*get_location(&self.stack, &self.context.txn, value_loc)?).clone();
-                container.with_array_cow(&self.context.txn, |vec| {
-                    let cell_len = vec.len();
-                    let LpcRef::Int(i) = index else {
-                        return Err(self.array_index_error(index, cell_len));
-                    };
-                    let array_idx = i.0;
-                    let idx = if array_idx >= 0 {
-                        array_idx
-                    } else {
-                        cell_len as LpcIntInner + array_idx
-                    };
-                    if !(idx >= 0 && (idx as usize) < cell_len) {
-                        return Err(self.array_index_error(index, cell_len));
-                    }
-                    vec[idx as usize] = value;
-                    Ok(())
-                })?;
-                Ok(())
+            LpcRef::Array(cell) => {
+                // Read before the COW closure acquires the transaction lock.
+                let value = &*get_location(&self.stack, &self.context.txn, value_loc)?;
+                self.store_array_value(cell.id, index, value)
             }
             LpcRef::Mapping(cell) => {
                 let value = get_location(&self.stack, &self.context.txn, value_loc)?.into_owned();
@@ -463,5 +445,37 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             }
             x => Err(self.runtime_error(format!("Invalid attempt to take index of `{}`", x))),
         }
+    }
+
+    // Keep array-store temporaries out of the instruction dispatch loop.
+    #[inline(never)]
+    fn store_array_value(
+        &self,
+        array: VarId,
+        index: &LpcRef,
+        value: &LpcRef,
+    ) -> lpc_rs_errors::Result<()> {
+        self.context.txn.with(|txn| {
+            txn.with_array_cow(array, |vec| {
+                let cell_len = vec.len();
+                let LpcRef::Int(i) = index else {
+                    return Err(self.array_index_error(index, cell_len));
+                };
+                let array_idx = i.0;
+                let idx = if array_idx >= 0 {
+                    array_idx
+                } else {
+                    cell_len as LpcIntInner + array_idx
+                };
+                if !(idx >= 0 && (idx as usize) < cell_len) {
+                    return Err(self.array_index_error(index, cell_len));
+                }
+                match (&mut vec[idx as usize], value) {
+                    (LpcRef::Int(slot), LpcRef::Int(value)) => *slot = *value,
+                    (slot, value) => *slot = value.clone(),
+                }
+                Ok(())
+            })
+        })
     }
 }
