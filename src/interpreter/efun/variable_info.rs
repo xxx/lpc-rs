@@ -232,9 +232,15 @@ mod tests {
             ("destruct(target); return 1;", Some(0)),
         ] {
             let vm = Vm::new(test_config());
-            vm.create_process_from_code("/secure/master.c", format!(
-                "int valid_variable_info(object caller, object target, string program) {{ {body} }}"
-            )).await.unwrap();
+            vm.create_process_from_code(
+                "/secure/master.c",
+                format!(
+                "int valid_variable_info(object caller, object target, string program) {{ {body} }}
+                 int valid_destruct(object caller, object target, string program) {{ return 1; }}"
+            ),
+            )
+            .await
+            .unwrap();
             vm.initialize_process_from_code("/target.c", "private int secret = 42;")
                 .await
                 .unwrap();

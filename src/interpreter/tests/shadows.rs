@@ -20,6 +20,7 @@ use crate::{
 /// A master that allows every shadow and records who asked.
 const ALLOWING: &str = indoc! { r#"
     string asker;
+    int valid_destruct(object caller, object target, string program) { return 1; }
     int query_allow_shadow(object ob) { asker = file_name(previous_object()); return 1; }
     string asker() { return asker; }
 "# };

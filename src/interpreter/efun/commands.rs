@@ -129,6 +129,7 @@ mod tests {
     #[tokio::test]
     async fn a_destructed_owner_is_zero_in_its_row() {
         let vm = Vm::new(test_config());
+        crate::test_support::allow_destruct(&vm).await;
         vm.initialize_process_from_code(
             "/d.c",
             indoc! { r#"

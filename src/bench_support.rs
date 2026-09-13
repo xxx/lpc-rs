@@ -721,6 +721,7 @@ mod tests {
             .build()
             .unwrap();
         let vm = Vm::new(config);
+        crate::test_support::allow_destruct(&vm).await;
         vm.initialize_process_from_code("/bench_victim.c", "void create() {}")
             .await
             .expect("the victim prototype failed to initialize");

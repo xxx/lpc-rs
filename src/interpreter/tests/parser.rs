@@ -174,6 +174,7 @@ async fn parse_refresh_is_accepted() {
 // fixtures below as test data only.
 
 const MASTER: &str = indoc! { r#"
+    int valid_destruct(object caller, object target, string program) { return 1; }
     string *parse_command_id_list() { return ({}); }
     string *parse_command_adjectiv_id_list() { return ({ "the", "a" }); }
     string parse_command_all_word() { return "all"; }
@@ -885,7 +886,7 @@ const PEAR: (&str, &str) = (
 async fn a_nested_scope_array_flattens_and_skips_non_objects() {
     let dead = ("/dead_thing.c", "");
     let r = run(
-        "",
+        crate::test_support::ALLOW_DESTRUCT,
         &[APPLE, PEAR, VERBS, dead],
         r#"mixed *create() {
             enable_commands();

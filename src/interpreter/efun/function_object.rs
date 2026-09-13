@@ -42,7 +42,7 @@ mod tests {
     #[tokio::test]
     async fn finds_transactional_clones_and_observes_their_destruction() {
         let results = run(
-            "",
+            crate::test_support::ALLOW_DESTRUCT,
             &[("/target.c", "void foo() {}")],
             indoc! { r#"
                 mixed *create() {
@@ -95,7 +95,7 @@ mod tests {
     #[tokio::test]
     async fn a_destroyed_owner_does_not_replace_a_live_explicit_receiver() {
         let results = run(
-            "",
+            crate::test_support::ALLOW_DESTRUCT,
             &[
                 ("/target.c", "void foo() {}"),
                 (

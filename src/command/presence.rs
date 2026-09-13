@@ -426,6 +426,7 @@ mod tests {
             void create() { enable_commands(); move_object("/room"); }
         "# };
         let master = indoc! { r#"
+            int valid_destruct(object caller, object target, string program) { return 1; }
             void create() { destruct(find_object("/sign")); }
         "# };
         let vm = Vm::new(test_config());
@@ -615,6 +616,7 @@ mod tests {
             }
         "# };
         let vm = Vm::new(test_config());
+        crate::test_support::allow_destruct(&vm).await;
         let log = vm
             .initialize_process_from_code("/log.c", LOG)
             .await
@@ -638,6 +640,7 @@ mod tests {
             int do_read(string arg) { return 1; }
         "# };
         let master = indoc! { r#"
+            int valid_destruct(object caller, object target, string program) { return 1; }
             void create() { destruct(find_object("/sign")); }
         "# };
         let vm = Vm::new(test_config());
@@ -730,6 +733,7 @@ mod tests {
             void create() { enable_commands(); move_object("/room"); }
         "# };
         let master = indoc! { r#"
+            int valid_destruct(object caller, object target, string program) { return 1; }
             void create() { destruct(find_object("/doomed")); }
         "# };
         let vm = Vm::new(test_config());
@@ -781,6 +785,7 @@ mod tests {
             void create() { enable_commands(); move_object("/room"); }
         "# };
         let master = indoc! { r#"
+            int valid_destruct(object caller, object target, string program) { return 1; }
             void create() { destruct(find_object("/occupant")); }
         "# };
         let vm = Vm::new(test_config());

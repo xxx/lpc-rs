@@ -50,7 +50,7 @@ mod tests {
     #[tokio::test]
     async fn names_survive_receiver_and_owner_destruction() {
         let results = run(
-            "",
+            crate::test_support::ALLOW_DESTRUCT,
             &[(
                 "/target.c",
                 indoc! { r#"

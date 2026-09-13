@@ -784,6 +784,7 @@ mod tests {
             void create() { object v = find_object("/victim"); destruct(v); r = command("look", v); }
         "# };
         let vm = Vm::new(test_config());
+        crate::test_support::allow_destruct(&vm).await;
         let victim_proc = vm
             .initialize_process_from_code("/victim.c", victim)
             .await
@@ -822,6 +823,7 @@ mod tests {
             int do_look(string a) { arg = a; return 1; }
         "# };
         let vm = Vm::new(test_config());
+        crate::test_support::allow_destruct(&vm).await;
         vm.create_process_from_code("/third.c", third)
             .await
             .unwrap();

@@ -104,12 +104,13 @@ pub async fn connect(vm: &Vm, process: &Arc<Process>) -> Connected {
     Connected { rx, connection }
 }
 
-/// A master whose `valid_exec` allows everything.
+/// A master that allows connection handovers and destruction of the old body.
 pub async fn allow_exec(vm: &Vm) -> Arc<Process> {
     vm.global_state
         .initialize_process_from_code(
             "/secure/master.c",
-            "int valid_exec(string program, object new, object old) { return 1; }",
+            "int valid_exec(string program, object new, object old) { return 1; }
+             int valid_destruct(object caller, object target, string program) { return 1; }",
         )
         .await
         .expect("the master compiles")
@@ -117,11 +118,23 @@ pub async fn allow_exec(vm: &Vm) -> Arc<Process> {
         .process
 }
 
-/// A master that allows every load, inherit and include: what `run_prog`'s
+/// An unrestricted destruction policy for tests of object lifetime.
+pub const ALLOW_DESTRUCT: &str =
+    "int valid_destruct(object caller, object target, string program) { return 1; }";
+
+/// Install a master whose only policy is [`ALLOW_DESTRUCT`].
+pub async fn allow_destruct(vm: &Vm) -> Arc<Process> {
+    vm.create_process_from_code("/secure/master.c", ALLOW_DESTRUCT)
+        .await
+        .expect("the master compiles")
+}
+
+/// A master that allows every load, inherit, include and destruct: what `run_prog`'s
 /// programs load under.
 pub const PERMISSIVE_MASTER: &str = "\
 int valid_load(string path, string func, object caller, string program) { return 1; }
 int valid_inherit(string path, string from) { return 1; }
+int valid_destruct(object caller, object target, string program) { return 1; }
 int valid_read(string path, string func, object caller, string program) { return func == \"include\"; }
 ";
 

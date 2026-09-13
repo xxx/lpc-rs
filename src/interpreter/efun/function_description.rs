@@ -219,6 +219,7 @@ mod tests {
     #[tokio::test]
     async fn destructed_receivers_return_zero_within_the_transaction() {
         let vm = Vm::new(test_config());
+        crate::test_support::allow_destruct(&vm).await;
         vm.initialize_process_from_code(
             "/target.c",
             "void method() {} function pointer() { return &method(); }",

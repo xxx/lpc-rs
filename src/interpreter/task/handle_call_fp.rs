@@ -760,6 +760,7 @@ mod tests {
     #[tokio::test]
     async fn a_dynamic_pointer_to_a_destructed_string_receiver_names_the_path() {
         let vm = Vm::new(test_config());
+        crate::test_support::allow_destruct(&vm).await;
         vm.initialize_process_from_code("/other.c", OTHER)
             .await
             .unwrap();

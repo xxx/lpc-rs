@@ -348,6 +348,7 @@ void preload(string file) { loaded += file + ";"; }
     #[tokio::test]
     async fn the_master_destructing_itself_ends_the_list() {
         let master_source = r#"
+int valid_destruct(object caller, object target, string program) { return 1; }
 string *epilog(int load_empty) { return ({ "/good", "/also" }); }
 void preload(string file) {
     if (file == "/good") destruct(this_object());

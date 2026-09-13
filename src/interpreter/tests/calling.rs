@@ -312,7 +312,7 @@ async fn efun_pointers_inspect_the_frame_that_fired_them() {
 #[tokio::test]
 async fn destructed_callers_keep_their_stack_position_and_function() {
     let r = run(
-        "",
+        crate::test_support::ALLOW_DESTRUCT,
         &[
             ("/a.c", r#"mixed *go() { return "/x"->inspect(); }"#),
             (

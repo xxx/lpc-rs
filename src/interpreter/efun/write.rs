@@ -150,6 +150,7 @@ mod tests {
             void catch_tell(string s) { got = s; }
         "# };
         let vm = Vm::new(test_config());
+        crate::test_support::allow_destruct(&vm).await;
         let player = vm
             .create_process_from_code("/player.c", player)
             .await

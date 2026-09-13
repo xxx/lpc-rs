@@ -393,6 +393,9 @@ mod tests {
                 "/secure/master.c",
                 r#"int valid_exec(string name, object to, object from) {
                     return name == "secure/login.c";
+                }
+                int valid_destruct(object caller, object target, string program) {
+                    return caller == target;
                 }"#,
             )
             .await

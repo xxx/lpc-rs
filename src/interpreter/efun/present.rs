@@ -365,6 +365,7 @@ mod tests {
     #[tokio::test]
     async fn a_destructed_object_search_target_is_zero() {
         let w = world().await;
+        crate::test_support::allow_destruct(&w.vm).await;
         let caller =
             w.vm.initialize_process_from_code(
                 "/caller.c",

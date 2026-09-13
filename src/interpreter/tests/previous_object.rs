@@ -429,7 +429,7 @@ mod entries {
     #[tokio::test]
     async fn a_destructed_previous_object_is_zero() {
         let r = run(
-            "",
+            crate::test_support::ALLOW_DESTRUCT,
             &[
                 ("/a.c", r#"mixed *go() { return "/x"->kill_and_ask(); }"#),
                 (

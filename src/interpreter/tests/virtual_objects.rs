@@ -22,6 +22,7 @@ const INSTANCING_MASTER: &str = indoc! { r#"
     string load_path; string load_func; string load_caller; mixed load_program; int loads;
     mixed read_program; string read_caller;
     string deny_path;
+    int valid_destruct(object caller, object target, string program) { return 1; }
     mixed compile_object(string path, string func, object caller, mixed program) {
         int n; string rest;
         seen_path = path; seen_func = func; seen_caller = file_name(caller);

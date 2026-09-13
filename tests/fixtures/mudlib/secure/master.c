@@ -14,6 +14,10 @@ int valid_inherit(string path, string from) {
     return 1;
 }
 
+int valid_destruct(object caller, object target, string program) {
+    return caller == target;
+}
+
 void error_handler(mapping error) {
     dump("runtime error:", error, "\n");
 }

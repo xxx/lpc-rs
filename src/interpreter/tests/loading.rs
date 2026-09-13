@@ -19,6 +19,7 @@ pub(crate) const RECORDING_MASTER: &str = indoc! { r#"
     string inherit_path; string inherit_from;
     string include_path; mixed include_caller; string include_from;
     int loads; int inherits; int includes;
+    int valid_destruct(object caller, object target, string program) { return 1; }
     int valid_load(string path, string func, object caller, mixed program) {
         seen_path = path; seen_func = func; seen_caller = file_name(caller);
         seen_program = program; loads++;

@@ -3,9 +3,9 @@
 use lpc_rs_errors::LpcError;
 
 use crate::interpreter::{
-    CONNECT, LOGON, QUERY_ALLOW_SHADOW, VALID_EXEC, VALID_INHERIT, VALID_LOAD, VALID_READ,
-    VALID_SHUTDOWN, VALID_VARIABLE_INFO, VALID_WRITE, apply::in_game_location, lpc_ref::LpcRef,
-    process::Process,
+    CONNECT, LOGON, QUERY_ALLOW_SHADOW, VALID_DESTRUCT, VALID_EXEC, VALID_INHERIT, VALID_LOAD,
+    VALID_READ, VALID_SHUTDOWN, VALID_VARIABLE_INFO, VALID_WRITE, apply::in_game_location,
+    lpc_ref::LpcRef, process::Process,
 };
 
 /// Missing security and login applies prevent the requested operation.
@@ -15,6 +15,7 @@ pub(crate) fn missing(name: &str, process: Option<&Process>) {
         CONNECT
             | LOGON
             | QUERY_ALLOW_SHADOW
+            | VALID_DESTRUCT
             | VALID_EXEC
             | VALID_INHERIT
             | VALID_LOAD

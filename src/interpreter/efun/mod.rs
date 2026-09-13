@@ -399,7 +399,7 @@ efuns! {
         arity: (1, 1),
         args: [LpcType::String(false) | LpcType::Object(false)],
     },
-    destruct => {
+    destruct [async] => {
         returns: LpcType::Void,
         arity: 1,
         args: [LpcType::Object(false) | LpcType::Object(true)],

@@ -68,6 +68,7 @@ mod tests {
     #[tokio::test]
     async fn a_body_destructed_in_this_task_is_not_a_user() {
         let vm = Vm::new(test_config());
+        crate::test_support::allow_destruct(&vm).await;
         let a = vm.create_process_from_code("/a.c", "").await.unwrap();
         let _a = connect(&vm, &a).await;
         let code = r#"object *create() { destruct(find_object("/a")); return users(); }"#;
