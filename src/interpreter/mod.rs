@@ -42,6 +42,8 @@ pub const COMMAND_NOT_FOUND: &str = "command_not_found";
 pub const MODIFY_COMMAND: &str = "modify_command";
 /// Master apply: whether the calling program may `exec` (`doc/apply/master/valid_exec.md`).
 pub const VALID_EXEC: &str = "valid_exec";
+/// Master apply: whether calling code may inspect another object's globals.
+pub const VALID_VARIABLE_INFO: &str = "valid_variable_info";
 /// Master apply: whether the calling object may shadow another (`doc/apply/master/query_allow_shadow.md`).
 pub const QUERY_ALLOW_SHADOW: &str = "query_allow_shadow";
 /// Master apply: whether the calling code may `shutdown` (`doc/apply/master/valid_shutdown.md`).

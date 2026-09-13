@@ -9,4 +9,4 @@ as `b"..."`: printable ASCII as itself, `"` and `\` escaped, every other byte
 as `\xNN`.
 
 ### See Also
-`write`
+`write`, `variable_info`, `inherit_list`, `deep_inherit_list`, `transaction_stats`

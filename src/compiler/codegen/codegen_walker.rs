@@ -76,7 +76,7 @@ use crate::{
     },
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
-        program::{Program, Region, dispatch_table},
+        program::{GlobalVariable, Program, Region, dispatch_table},
     },
 };
 
@@ -338,8 +338,11 @@ impl CodegenWalker {
         self.ensure_sync()?;
 
         let inherits = std::mem::take(&mut self.context.inherits);
+        let direct_inherits = inherits.iter().map(|p| p.filename.clone()).collect();
+        let mut global_variable_info = Vec::new();
         let mut global_variables: HashMap<String, Symbol> = HashMap::new();
         for parent in inherits {
+            global_variable_info.extend(parent.global_variable_info.into_vec());
             for (name, symbol) in *parent.global_variables {
                 // Match inherited lookup: private siblings cannot hide a visible declaration.
                 if symbol.visible_to_children()
@@ -352,9 +355,21 @@ impl CodegenWalker {
             }
         }
         self.context.scopes.goto_root();
-        global_variables.extend(std::mem::take(
-            &mut self.context.scopes.current_mut().unwrap().symbols,
-        ));
+        let own_symbols = std::mem::take(&mut self.context.scopes.current_mut().unwrap().symbols);
+        for symbol in own_symbols.values() {
+            if let Some(RegisterVariant::Global(register)) = symbol.location {
+                global_variable_info.push(GlobalVariable {
+                    name: symbol.name.clone(),
+                    filename: self.context.source.program_path().clone(),
+                    type_: symbol.type_,
+                    flags: symbol.flags,
+                    slot: register.index(),
+                });
+            }
+        }
+        global_variable_info.sort_unstable_by_key(|variable| variable.slot);
+        global_variable_info.dedup_by_key(|variable| variable.slot);
+        global_variables.extend(own_symbols);
 
         let functions: IndexMap<_, _, ahash::RandomState> = self
             .context
@@ -399,6 +414,8 @@ impl CodegenWalker {
             initializer: self.initializer,
             unmangled_functions: Box::new(unmangled_functions),
             global_variables: Box::new(global_variables),
+            global_variable_info: global_variable_info.into_boxed_slice(),
+            direct_inherits,
             num_globals,
             layout,
             pragmas: self.context.pragmas,

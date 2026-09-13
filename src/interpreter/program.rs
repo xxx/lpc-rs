@@ -10,7 +10,9 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use lpc_rs_core::{
     INIT_GLOBALS, INIT_PROGRAM, RegisterSize,
+    global_var_flags::GlobalVarFlags,
     lpc_path::LpcPath,
+    lpc_type::LpcType,
     pragma_flags::PragmaFlags,
     register::{Register, RegisterVariant},
 };
@@ -47,6 +49,21 @@ pub struct Region {
     pub count: RegisterSize,
     /// The mangled name of the function that initializes the block.
     pub init: Ustr,
+}
+
+/// One global declaration, including declarations hidden by inherited name lookup.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct GlobalVariable {
+    /// The declared name, which need not be unique across ancestors.
+    pub name: String,
+    /// The source identity of the declaring program.
+    pub filename: Arc<LpcPath>,
+    /// The declared type, independent of the current value.
+    pub type_: LpcType,
+    /// Declaration visibility and storage modifiers.
+    pub flags: GlobalVarFlags,
+    /// The declaration's relocated slot in the containing program.
+    pub slot: RegisterSize,
 }
 
 /// What a plain call of a mangled name reaches.
@@ -118,6 +135,12 @@ pub struct Program {
 
     /// The map of global variables in this program.
     pub global_variables: Box<HashMap<String, Symbol>>,
+
+    /// Every global declaration in slot order, with shared ancestor slots listed once.
+    pub global_variable_info: Box<[GlobalVariable]>,
+
+    /// Direct parents in declaration order, including automatically inherited programs.
+    pub direct_inherits: Box<[Arc<LpcPath>]>,
 
     /// How many globals does this program need storage for?
     /// Note that this number includes inherited globals.
@@ -214,6 +237,13 @@ impl Program {
         }
         for symbol in self.global_variables.values_mut() {
             symbol.location = symbol.location.map(relocate);
+        }
+        for variable in &mut self.global_variable_info {
+            if let RegisterVariant::Global(register) =
+                relocate(RegisterVariant::Global(Register(variable.slot)))
+            {
+                variable.slot = register.index();
+            }
         }
         self.layout = layout
             .iter()

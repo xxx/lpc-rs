@@ -4,6 +4,10 @@ Transaction failures emit one `lpc_rs::transactions` warning for the owning task
 RUST_LOG=info,lpc_rs::transactions=debug
 ```
 
+For measurements from LPC, [`transaction_stats()`](efun/transaction_stats.md)
+returns cumulative counters and current gauges for retries, backoff, committer
+load, and retained history.
+
 The summary identifies the owning object and entry point. A player command is labelled `command`; callback resolution and connection binding use `resolve_callback`, `attach`, or `detach`. It does not record argument values or command text. The competing writer's label identifies its owning entry point, which may have made the actual write in a nested apply.
 
 | Field | Meaning |

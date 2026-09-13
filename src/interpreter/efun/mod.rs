@@ -45,6 +45,7 @@ pub(crate) mod function_object;
 pub(crate) mod get_dir;
 pub(crate) mod hash_string;
 pub(crate) mod implode;
+pub(crate) mod inherit_list;
 pub(crate) mod input_to;
 pub(crate) mod interactive;
 pub(crate) mod json_decode;
@@ -116,10 +117,12 @@ pub(crate) mod this_object;
 pub(crate) mod this_player;
 pub(crate) mod throw;
 pub(crate) mod time;
+pub(crate) mod transaction_stats;
 pub(crate) mod type_of;
 pub(crate) mod type_predicates;
 pub(crate) mod unique_array;
 pub(crate) mod users;
+pub(crate) mod variable_info;
 pub(crate) mod wildmatch;
 pub(crate) mod word_wrap;
 pub(crate) mod write;
@@ -1142,6 +1145,24 @@ efuns! {
         arity: 1,
         args: [LpcType::Function(false)],
     },
+    transaction_stats [async] => {
+        returns: LpcType::Mapping(false),
+    },
+    variable_info [async] => {
+        returns: LpcType::Mapping(true),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
+    inherit_list => {
+        returns: LpcType::String(true),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
+    deep_inherit_list [in inherit_list] => {
+        returns: LpcType::String(true),
+        arity: 1,
+        args: [LpcType::Object(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1205,6 +1226,18 @@ async fn arg_or_this_object<const N: usize>(
         LpcRef::String(path) => Some(context.load_object(path.to_str()).await?),
         _ => arg_ref.live_object(context.txn()),
     })
+}
+
+/// Inspection never loads objects or substitutes the caller for a null target.
+fn inspection_target<const N: usize>(
+    context: &EfunContext<'_, N>,
+    name: &str,
+) -> Result<Option<Arc<Process>>> {
+    match context.arg(0) {
+        LpcRef::Int(LpcInt(0)) => Ok(None),
+        value @ LpcRef::Object(_) => Ok(value.live_object(context.txn())),
+        _ => Err(context.runtime_error(format!("{name}: expected an object"))),
+    }
 }
 
 /// `process`'s file as an in-game path without its extension
@@ -1471,6 +1504,10 @@ mod tests {
                 "function_object",
                 "function_info",
                 "function_description",
+                "transaction_stats",
+                "variable_info",
+                "inherit_list",
+                "deep_inherit_list",
             ]
         );
     }
