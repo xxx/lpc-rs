@@ -24,9 +24,10 @@ impl RefBank {
         let dynamic_length = usize::from(runtime_arg_count) + num_locals + 1;
         let reservation = std::cmp::max(static_length, dynamic_length);
 
-        RefBank {
-            registers: thin_vec::thin_vec![NULL; reservation],
-        }
+        let mut registers = ThinVec::with_capacity(reservation);
+        registers.extend((0..reservation).map(|_| NULL));
+
+        RefBank { registers }
     }
 }
 
