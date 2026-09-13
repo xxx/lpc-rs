@@ -222,13 +222,13 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             Resolved::Dynamic { ptr, name } => {
                 let mut args = ptr.bound_args(&self.passed_values(passed)?);
                 let receiver = first_arg(&mut args);
-                self.call_dynamic(&ptr, name, receiver, args)
+                self.call_dynamic(name, receiver, args)
             }
             Resolved::CallOther { ptr } => {
                 let mut args = ptr.bound_args(&self.passed_values(passed)?);
                 let receiver = first_arg(&mut args);
                 let name = call_other_name(&first_arg(&mut args))?;
-                self.call_dynamic(&ptr, name, receiver, args)
+                self.call_dynamic(name, receiver, args)
             }
         }
     }
@@ -300,7 +300,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             )?;
             frame.push_arg(txn, i, value)
         })?;
-        frame.origin = ptr.origin.clone();
         frame.external = true;
         Ok(frame)
     }
@@ -348,15 +347,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         }
     }
 
-    /// Call `name` on `receiver` with `args` for the pointer `ptr`:
-    /// resident, or the call suspends.
-    fn call_dynamic(
-        &mut self,
-        ptr: &FunctionPtr,
-        name: Ustr,
-        receiver: LpcRef,
-        args: Vec<LpcRef>,
-    ) -> Result<Called> {
+    /// Call `name` on `receiver` with `args`: resident, or the call suspends.
+    fn call_dynamic(&mut self, name: Ustr, receiver: LpcRef, args: Vec<LpcRef>) -> Result<Called> {
         let process = match &receiver {
             LpcRef::Object(_) | LpcRef::String(_) => {
                 match Self::standing(&receiver, &self.context)? {
@@ -416,7 +408,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
                 &prototype.name,
             )?;
         }
-        self.push_external_frame(process, function, args.into_iter(), ptr.origin.clone())?;
+        self.push_external_frame(process, function, args.into_iter(), None)?;
         Ok(Called::Framed)
     }
 
@@ -474,7 +466,6 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         for (i, arg) in args.into_iter().enumerate() {
             new_frame.push_arg(&self.context.txn, i, arg)?;
         }
-        new_frame.origin = ptr.origin.clone();
         new_frame.external = true;
         self.stack.push(new_frame)?;
         Ok(Called::Framed)
