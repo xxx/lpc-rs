@@ -325,6 +325,7 @@ impl Committer {
     /// Mark the world from `roots` and drop every unreachable `Ref`, `Array`
     /// and `Mapping` var; object and connection identities are never dropped.
     /// Returns the number of vars dropped.
+    #[inline(never)]
     fn mark_world(&mut self, roots: &[WorldRoot]) -> usize {
         let mut marked: BTreeSet<VarId> = BTreeSet::new();
         let mut work: Vec<MarkWork> = Vec::with_capacity(roots.len());
@@ -344,7 +345,7 @@ impl Committer {
                     let Some(world_value) = self.snapshot.read(var_id) else {
                         continue;
                     };
-                    work.extend(Self::edges_of(&world_value));
+                    Self::mark_edges(&world_value, &mut work);
                 }
                 MarkWork::Ref(lpc_ref) => match lpc_ref {
                     LpcRef::Array(svar) => {
@@ -358,9 +359,12 @@ impl Committer {
                         }
                     }
                     LpcRef::Function(fun) => {
-                        for arg_ref in fun.partial_args().iter().flatten() {
-                            work.push(MarkWork::Ref(arg_ref.clone()));
-                        }
+                        work.extend(
+                            fun.partial_args()
+                                .iter()
+                                .flatten()
+                                .filter_map(Self::mark_ref),
+                        );
                         for cell in &fun.upvalue_ptrs {
                             if marked.insert(*cell) {
                                 work.push(MarkWork::Var(*cell));
@@ -395,46 +399,53 @@ impl Committer {
         reclaimed
     }
 
-    /// The outgoing edges from one world entry: the payload vars its contents
-    /// name, and the child cells an identity entry owns.
-    fn edges_of(world_value: &WorldValue) -> Vec<MarkWork> {
+    /// Append outgoing payload and capture references to the mark stack.
+    fn mark_edges(world_value: &WorldValue, work: &mut Vec<MarkWork>) {
         match world_value {
-            WorldValue::Ref(lpc_ref) => vec![MarkWork::Ref(lpc_ref.clone())],
-            WorldValue::Array(array) => array
-                .array
-                .iter()
-                .map(|member| MarkWork::Ref(member.clone()))
-                .collect(),
-            WorldValue::Mapping(mapping) => {
-                let mut out = Vec::with_capacity(mapping.mapping.len() * 2);
-                for (key, value) in mapping.mapping.iter() {
-                    out.push(MarkWork::Ref(key.clone()));
-                    out.push(MarkWork::Ref(value.clone()));
-                }
-                out
+            WorldValue::Ref(lpc_ref) => work.extend(Self::mark_ref(lpc_ref)),
+            WorldValue::Array(array) => {
+                work.extend(array.array.iter().filter_map(Self::mark_ref));
             }
-            WorldValue::Process(process) => process
-                .world_var_ids()
-                .into_iter()
-                .map(MarkWork::Var)
-                .collect(),
+            WorldValue::Mapping(mapping) => {
+                work.extend(
+                    mapping
+                        .mapping
+                        .iter()
+                        .flat_map(|(key, value)| [key, value])
+                        .filter_map(Self::mark_ref),
+                );
+            }
+            WorldValue::Process(process) => {
+                work.extend(process.world_var_ids().into_iter().map(MarkWork::Var));
+            }
             WorldValue::Connection(maybe_connection) => {
-                // The connection's `input_to` target is a strong ref: it keeps
-                // its function alive for the next input line.
                 if let Some(connection) = maybe_connection
                     && let Some(input_to) = connection.input_to()
                 {
-                    vec![MarkWork::Ref(LpcRef::Function(input_to.ptr.clone()))]
-                } else {
-                    Vec::new()
+                    work.push(MarkWork::Ref(LpcRef::Function(input_to.ptr.clone())));
                 }
             }
-            // A registered rule keeps its handler's function pointer alive.
-            WorldValue::Rules(rules) => rules
-                .iter()
-                .filter_map(|rule| rule.pointer())
-                .map(|pointer| MarkWork::Ref(LpcRef::Function(pointer.clone())))
-                .collect(),
+            WorldValue::Rules(rules) => {
+                work.extend(
+                    rules
+                        .iter()
+                        .filter_map(|rule| rule.pointer())
+                        .map(|pointer| MarkWork::Ref(LpcRef::Function(pointer.clone()))),
+                );
+            }
+        }
+    }
+
+    fn mark_ref(value: &LpcRef) -> Option<MarkWork> {
+        match value {
+            LpcRef::Array(_) | LpcRef::Mapping(_) | LpcRef::Function(_) => {
+                Some(MarkWork::Ref(value.clone()))
+            }
+            LpcRef::Float(_)
+            | LpcRef::Int(_)
+            | LpcRef::String(_)
+            | LpcRef::Bytes(_)
+            | LpcRef::Object(_) => None,
         }
     }
 
@@ -1575,5 +1586,72 @@ mod tests {
             committer.committed(cell),
             WorldValue::ref_of(LpcRef::from(9))
         );
+    }
+    #[test]
+    fn gc_traces_mapping_keys_partial_arguments_and_cycles() {
+        use crate::interpreter::lpc_mapping::LpcMapping;
+
+        let mut committer = Committer::new();
+        let root = SVar::<LpcArray>::new();
+        let key = SVar::<LpcArray>::new();
+        let partial = SVar::<LpcArray>::new();
+        let mapping = SVar::<LpcMapping>::new();
+        let dead = SVar::<LpcArray>::new();
+        let capture = VarId::new();
+        let ptr = FunctionPtrBuilder::default()
+            .address(FunctionAddress::Efun(ustr("dump")))
+            .partial_args(thin_vec![
+                Some(LpcRef::Array(partial.clone())),
+                Some(LpcRef::from(7))
+            ])
+            .upvalue_ptrs(thin_vec![capture])
+            .build()
+            .unwrap();
+        let mut seed = Changeset::new(committer.snapshot.version());
+        seed.write(
+            root.id,
+            WorldValue::Array(Arc::new(LpcArray::new([
+                LpcRef::from(1),
+                LpcRef::Mapping(mapping.clone()),
+            ]))),
+        );
+        seed.write(
+            key.id,
+            WorldValue::Array(Arc::new(LpcArray::new([LpcRef::from(2)]))),
+        );
+        seed.write(
+            partial.id,
+            WorldValue::Array(Arc::new(LpcArray::new([LpcRef::Array(root.clone())]))),
+        );
+        seed.write(
+            mapping.id,
+            WorldValue::Mapping(Arc::new(LpcMapping::new(
+                [
+                    (LpcRef::Array(key.clone()), LpcRef::Function(Arc::new(ptr))),
+                    (LpcRef::from(3), LpcRef::from(4)),
+                ]
+                .into_iter()
+                .collect(),
+            ))),
+        );
+        seed.write(capture, WorldValue::ref_of(LpcRef::Array(root.clone())));
+        seed.write(
+            dead.id,
+            WorldValue::Array(Arc::new(LpcArray::new([LpcRef::Array(dead.clone())]))),
+        );
+        committer.commit(seed).unwrap();
+
+        assert_eq!(
+            committer.mark_world(&[WorldRoot::Ref(LpcRef::Array(root.clone()))]),
+            1
+        );
+        for id in [root.id, key.id, partial.id, mapping.id, capture] {
+            assert!(
+                committer.snapshot.peek(id).is_some(),
+                "reachable var {id:?}"
+            );
+        }
+        assert!(committer.snapshot.peek(dead.id).is_none());
+        assert_eq!(committer.mark_world(&[]), 5);
     }
 }
