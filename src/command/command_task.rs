@@ -330,6 +330,18 @@ mod tests {
                 tx: &flume::Sender<CommitProtocol>,
                 live: LiveSnapshot,
             ) -> Result<(std::result::Result<(), Conflict>, Vec<Effect>)> {
+                // The execution limit can interrupt a later attempt before it stores the error.
+                let ctx = self.0.context.as_ref().unwrap();
+                let caught = ctx.txn().with(|txn| {
+                    txn.read(self.0.actor.var_id(1))
+                        .expect("a completed handler stores its caught compile error")
+                });
+                assert!(
+                    caught.to_string().contains("Unrecognized Token"),
+                    "{caught}"
+                );
+                assert!(caught.to_string().contains("/cover.c"), "{caught}");
+
                 let mut concurrent = start_txn(tx).await?;
                 let mut txn = Transaction::new(concurrent.inner.clone());
                 txn.set_origin(&self.0.actor, "concurrent_update");
@@ -429,13 +441,6 @@ mod tests {
         let logs = capture.contents();
         assert_eq!(logs.matches("Transaction failed").count(), 1, "{logs}");
         assert!(stats.conflicts > 1, "{stats:?}");
-        let ctx = command.0.context.as_ref().unwrap();
-        let caught = ctx.txn().with(|txn| txn.read(player.var_id(1)).unwrap());
-        assert!(
-            caught.to_string().contains("Unrecognized Token"),
-            "{caught}"
-        );
-        assert!(caught.to_string().contains("/cover.c"), "{caught}");
         for slot in [0, 1] {
             assert_eq!(
                 vm.global_state.committed_global(&player, slot),
