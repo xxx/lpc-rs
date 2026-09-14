@@ -18,8 +18,8 @@ lpc-rs-utils = { version = "0.1", path = "../lpc-rs-utils" }
 
 derive_builder = "0.20.2"
 itertools = "0.15.0"
-readonly = "0.2.3"
-tracing = "~0.1"
+readonly = "0.2.14"
+tracing = "~0.1.44"
 
 [dev-dependencies]
 ustr = "1.1.0"

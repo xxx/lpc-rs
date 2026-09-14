@@ -31,11 +31,11 @@ pub fn hash_string<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
         .map_or(input, |(prefix, _)| prefix)
         .as_bytes();
     let digest = match algorithm.0 {
-        0 => format!("{:x}", Md5::digest(input)),
-        1 => format!("{:x}", Sha1::digest(input)),
-        2 => format!("{:x}", Sha256::digest(input)),
-        3 => format!("{:x}", Sha384::digest(input)),
-        4 => format!("{:x}", Sha512::digest(input)),
+        0 => hex::encode(Md5::digest(input)),
+        1 => hex::encode(Sha1::digest(input)),
+        2 => hex::encode(Sha256::digest(input)),
+        3 => hex::encode(Sha384::digest(input)),
+        4 => hex::encode(Sha512::digest(input)),
         n => {
             return Err(context.runtime_error(format!(
                 "hash_string: invalid algorithm {n}; expected 0 (MD5), 1 (SHA1), 2 (SHA256), 3 (SHA384), or 4 (SHA512)"

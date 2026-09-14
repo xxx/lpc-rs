@@ -11,4 +11,4 @@ keywords = ["lpc", "mud", "driver", "telnet"]
 categories = ["network-programming", "game-engines"]
 
 [dependencies]
-bytes = "1.4.0"
+bytes = "1.12.1"
