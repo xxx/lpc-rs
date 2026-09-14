@@ -26,9 +26,9 @@ impl GlobalState {
                     LpcRef::Function(ref func) => Ok(func.clone()),
                     _ => Err(lpc_error!("invalid function sent to `call_out`")),
                 };
-                Some((func, call_out.is_repeating(), call_out.process().upgrade()))
+                Some((func, call_out.process().upgrade()))
             });
-            let Some((func, repeating, owner)) = entry else {
+            let Some((func, owner)) = entry else {
                 return;
             };
 
@@ -48,13 +48,21 @@ impl GlobalState {
                 }
             };
 
-            global_state.with_call_outs_mut(|co| {
-                if repeating {
-                    co.get_mut_by_id(id).unwrap().refresh();
+            // Cancellation can commit while receiver preparation is awaiting.
+            let still_scheduled = global_state.with_call_outs_mut(|co| {
+                let Some(call_out) = co.get_mut_by_id(id) else {
+                    return false;
+                };
+                if call_out.is_repeating() {
+                    call_out.refresh();
                 } else {
                     co.remove_by_id(id);
                 }
+                true
             });
+            if !still_scheduled {
+                return;
+            }
 
             let max_execution_time = global_state.config.max_execution_time;
             let receiver = prepared.context.process.clone();
@@ -130,6 +138,71 @@ mod tests {
         );
         vm.global_state
             .with_call_outs(|co| assert!(co.get_by_id(0).is_none()));
+    }
+
+    mod cancellation {
+        use super::*;
+
+        async fn scheduled_receiver(repeating: bool) -> (Vm, Arc<Process>) {
+            let vm = Vm::new(test_config());
+            let proc = vm
+                .create_process_from_code(
+                    "/receiver.c",
+                    r#"
+                        int runs;
+                        void create() { remove_call_out(0); }
+                        void tick() { runs++; }
+                    "#,
+                )
+                .await
+                .unwrap();
+            let ptr = FunctionPtrBuilder::default()
+                .address(FunctionAddress::Local(
+                    Arc::downgrade(&proc),
+                    proc.program.lookup_function("tick").unwrap().clone(),
+                ))
+                .build()
+                .unwrap();
+            let mut builder = CallOutBuilder::default()
+                .id(0)
+                .process(Arc::downgrade(&proc))
+                .func_ref(ptr.into())
+                ._handle(tokio::spawn(async {}));
+            if repeating {
+                builder = builder.repeat_duration(chrono::Duration::seconds(100));
+            }
+            vm.global_state
+                .with_call_outs_mut(|co| co.push(builder.build().unwrap()));
+            (vm, proc)
+        }
+
+        #[tokio::test]
+        async fn repeating_call_out_cancelled_during_preparation_does_not_fire() {
+            let (vm, proc) = scheduled_receiver(true).await;
+
+            vm.global_state.prioritize_call_out(0).await.await.unwrap();
+
+            assert!(vm.global_state.is_initialized(&proc));
+            assert_eq!(
+                vm.global_state.committed_global(&proc, 0u16),
+                LpcRef::from(0)
+            );
+            vm.global_state.with_call_outs(|co| assert!(co.is_empty()));
+        }
+
+        #[tokio::test]
+        async fn one_shot_call_out_cancelled_during_preparation_does_not_fire() {
+            let (vm, proc) = scheduled_receiver(false).await;
+
+            vm.global_state.prioritize_call_out(0).await.await.unwrap();
+
+            assert!(vm.global_state.is_initialized(&proc));
+            assert_eq!(
+                vm.global_state.committed_global(&proc, 0u16),
+                LpcRef::from(0)
+            );
+            vm.global_state.with_call_outs(|co| assert!(co.is_empty()));
+        }
     }
 
     mod test_string_receivers {
