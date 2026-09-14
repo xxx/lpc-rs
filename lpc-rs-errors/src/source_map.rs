@@ -1,4 +1,9 @@
-use std::{collections::HashMap, hash::BuildHasher, ops::Range, sync::LazyLock};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::BuildHasher,
+    ops::Range,
+    sync::LazyLock,
+};
 
 use codespan_reporting::files::{Error, Files, SimpleFile, SimpleFiles};
 use parking_lot::RwLock;
@@ -20,6 +25,23 @@ pub struct SourceMap {
     by_content: HashMap<u64, Vec<FileId>>,
 }
 
+/// Retained source storage, excluding allocator overhead and hidden container capacities.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct SourceMapStats {
+    /// Number of distinct filename/content pairs.
+    pub file_versions: usize,
+    /// Number of distinct filenames across all versions.
+    pub unique_files: usize,
+    /// UTF-8 text bytes across all versions, excluding spare capacity.
+    pub source_bytes: usize,
+    /// Source string buffer capacities, including spare capacity.
+    pub source_capacity_bytes: usize,
+    /// Filename string buffer capacities across all versions.
+    pub filename_capacity_bytes: usize,
+    /// Bytes occupied by line-start entries, excluding their vector's spare capacity.
+    pub line_index_bytes: usize,
+}
+
 impl SourceMap {
     /// Register a source version, reusing its id when its name and text match.
     pub fn add(&mut self, name: String, source: String) -> FileId {
@@ -39,6 +61,27 @@ impl SourceMap {
     /// The immutable source version associated with an id.
     pub fn get(&self, id: FileId) -> Result<&SimpleFile<String, String>, Error> {
         self.files.get(id)
+    }
+
+    /// Inspect retained versions without copying or scanning their source text.
+    ///
+    /// The temporary filename set is excluded from the returned measurements.
+    /// Returns an error if a registered file or its line index cannot be read.
+    pub fn stats(&self) -> Result<SourceMapStats, Error> {
+        let mut stats = SourceMapStats::default();
+        let mut names = HashSet::new();
+        for &id in self.by_content.values().flatten() {
+            let file = self.files.get(id)?;
+            names.insert(file.name().as_str());
+            stats.file_versions += 1;
+            stats.source_bytes += file.source().len();
+            stats.source_capacity_bytes += file.source().capacity();
+            stats.filename_capacity_bytes += file.name().capacity();
+            let lines = file.line_index((), file.source().len())? + 1;
+            stats.line_index_bytes += lines * size_of::<usize>();
+        }
+        stats.unique_files = names.len();
+        Ok(stats)
     }
 }
 
@@ -69,14 +112,49 @@ mod tests {
     use super::*;
 
     #[test]
+    fn stats_distinguish_text_bytes_from_buffer_capacity() {
+        let mut sources = SourceMap::default();
+        assert_eq!(sources.stats().unwrap(), SourceMapStats::default());
+        let mut name = String::with_capacity(64);
+        name.push_str("/café.c");
+        let mut text = String::with_capacity(128);
+        text.push_str("// café\n\n");
+        let expected = SourceMapStats {
+            file_versions: 1,
+            unique_files: 1,
+            source_bytes: text.len(),
+            source_capacity_bytes: text.capacity(),
+            filename_capacity_bytes: name.capacity(),
+            line_index_bytes: 3 * size_of::<usize>(),
+        };
+        sources.add(name, text);
+        assert_eq!(sources.stats().unwrap(), expected);
+        assert_eq!(sources.stats().unwrap(), expected);
+    }
+
+    #[test]
+    fn line_index_bytes_include_empty_and_unterminated_lines() {
+        let mut sources = SourceMap::default();
+        for (name, text) in [("/empty.c", ""), ("/one.c", "x"), ("/two.c", "x\ny")] {
+            sources.add(name.into(), text.into());
+        }
+        assert_eq!(
+            sources.stats().unwrap().line_index_bytes,
+            4 * size_of::<usize>()
+        );
+    }
+
+    #[test]
     fn repeated_failed_source_versions_share_one_entry() {
         let mut sources = SourceMap::default();
         let source = "int move() {\n    return 1\n}\n";
         let id = sources.add("/cover.c".into(), source.into());
+        let before = sources.stats().unwrap();
         for _ in 0..1000 {
             assert_eq!(sources.add("/cover.c".into(), source.into()), id);
         }
         assert!(sources.get(id + 1).is_err());
+        assert_eq!(sources.stats().unwrap(), before);
     }
 
     #[test]
@@ -100,6 +178,9 @@ mod tests {
             0
         );
         assert_eq!(sources.add("/cover.c".into(), old.into()), old_id);
+        let stats = sources.stats().unwrap();
+        assert_eq!((stats.file_versions, stats.unique_files), (2, 1));
+        assert_eq!(stats.source_bytes, old.len() + fixed.len());
     }
 
     #[test]
@@ -110,5 +191,8 @@ mod tests {
         assert_ne!(first, second);
         assert_eq!(sources.name(first).unwrap(), "/first.c");
         assert_eq!(sources.name(second).unwrap(), "/second.c");
+        let stats = sources.stats().unwrap();
+        assert_eq!((stats.file_versions, stats.unique_files), (2, 2));
+        assert_eq!(stats.source_bytes, 2 * "int x;".len());
     }
 }

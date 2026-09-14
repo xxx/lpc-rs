@@ -107,6 +107,7 @@ pub(crate) mod shadow;
 pub(crate) mod shutdown;
 pub(crate) mod sizeof;
 pub(crate) mod sort_array;
+pub(crate) mod source_cache_stats;
 pub(crate) mod sprintf;
 pub(crate) mod sscanf;
 pub(crate) mod tell_object;
@@ -1163,6 +1164,9 @@ efuns! {
         arity: 1,
         args: [LpcType::Object(false)],
     },
+    source_cache_stats => {
+        returns: LpcType::Mapping(false),
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1508,6 +1512,7 @@ mod tests {
                 "variable_info",
                 "inherit_list",
                 "deep_inherit_list",
+                "source_cache_stats",
             ]
         );
     }
