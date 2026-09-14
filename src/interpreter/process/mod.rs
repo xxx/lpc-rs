@@ -328,6 +328,7 @@ impl Process {
                 Self::mark_living(t, object, new_environment);
             }
             t.write(object_cell, new_env_ref);
+            t.mark_presence_changed();
             Ok(())
         })
     }

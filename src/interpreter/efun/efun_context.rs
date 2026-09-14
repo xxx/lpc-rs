@@ -504,6 +504,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         ActorRules::new(self.txn(), &process).clear();
         self.txn().with(|t| {
             t.drop_var(var_id);
+            t.mark_presence_changed();
             if process.is_clone() {
                 t.merge(
                     process.program.clones.id,

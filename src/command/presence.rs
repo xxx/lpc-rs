@@ -1,6 +1,11 @@
 //! Presence events: `init()` on movement, and the rules a move or a
 //! destruct takes away.
 
+#[cfg(test)]
+mod reentrant_tests;
+#[cfg(test)]
+mod transaction_tests;
+
 use std::sync::Arc;
 
 use lpc_rs_errors::Result;
@@ -74,7 +79,17 @@ pub(crate) async fn after_move(
     new_env: &Arc<Process>,
 ) -> Result<()> {
     let txn = ctx.txn();
+    if !mover.is_live(txn) || !new_env.is_live(txn) {
+        return Ok(());
+    }
     let env_is_living = new_env.commands_enabled(txn);
+    let arrival = Arrival {
+        ctx,
+        callers,
+        mover,
+        destination: new_env,
+        revision: txn.with(|t| t.presence_revision()),
+    };
 
     if mover.commands_enabled(txn) {
         // The inventory can still name an object this attempt destructed.
@@ -86,36 +101,74 @@ pub(crate) async fn after_move(
             .iter()
             .filter(|ob| ob.commands_enabled(txn))
             .collect();
-        fire_init(ctx, &callers, new_env, mover).await?;
+        if !arrival.meet(new_env, mover).await? {
+            return Ok(());
+        }
         for ob in &others {
-            fire_init(ctx, &callers, ob, mover).await?;
+            if !arrival.meet(ob, mover).await? {
+                return Ok(());
+            }
         }
         for living in &livings {
-            fire_init(ctx, &callers, mover, living).await?;
+            if !arrival.meet(mover, living).await? {
+                return Ok(());
+            }
         }
     } else {
-        for living in Process::livings_of(txn, new_env) {
-            fire_init(ctx, &callers, mover, &living).await?;
+        for living in Process::livings_of(txn, new_env)
+            .into_iter()
+            .filter(|object| object.is_live(txn))
+        {
+            if !arrival.meet(mover, &living).await? {
+                return Ok(());
+            }
         }
     }
     if env_is_living {
-        fire_init(ctx, &callers, mover, new_env).await?;
+        arrival.meet(mover, new_env).await?;
     }
     Ok(())
 }
 
-/// `target->init()` with `this_player` set, entered for that living in
-/// front of `callers`, if the target defines it.
-pub(crate) async fn fire_init(
-    ctx: &TaskContext,
-    callers: &Callers,
-    target: &Arc<Process>,
-    this_player: &Arc<Process>,
-) -> Result<()> {
-    let chain = Some(Caller::link(this_player.clone(), callers.clone()));
-    apply_hook(ctx, chain, target, this_player, INIT, &[])
-        .await
-        .map(|_| ())
+struct Arrival<'a> {
+    ctx: &'a TaskContext,
+    callers: Callers,
+    mover: &'a Arc<Process>,
+    destination: &'a Arc<Process>,
+    revision: u64,
+}
+
+impl Arrival<'_> {
+    fn present(&self, object: &Arc<Process>) -> bool {
+        object.is_live(self.ctx.txn())
+            && Process::environment_of(self.ctx.txn(), object)
+                .is_some_and(|env| Arc::ptr_eq(&env, self.destination))
+    }
+
+    fn participant(&self, object: &Arc<Process>) -> bool {
+        Arc::ptr_eq(object, self.mover)
+            || Arc::ptr_eq(object, self.destination)
+            || self.present(object)
+    }
+
+    /// Whether the arrival can continue after meeting this pair.
+    async fn meet(&self, target: &Arc<Process>, this_player: &Arc<Process>) -> Result<bool> {
+        // Snapshot membership stays valid until a hook changes presence in this attempt.
+        if self.ctx.txn().with(|txn| txn.presence_revision()) != self.revision {
+            if !self.destination.is_live(self.ctx.txn()) || !self.present(self.mover) {
+                return Ok(false);
+            }
+            if !self.participant(target)
+                || !self.participant(this_player)
+                || !this_player.commands_enabled(self.ctx.txn())
+            {
+                return Ok(true);
+            }
+        }
+        let chain = Some(Caller::link(this_player.clone(), self.callers.clone()));
+        apply_hook(self.ctx, chain, target, this_player, INIT, &[]).await?;
+        Ok(true)
+    }
 }
 
 #[cfg(test)]

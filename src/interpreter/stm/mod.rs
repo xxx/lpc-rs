@@ -108,6 +108,7 @@ pub(crate) struct Transaction {
     /// Cancelled nested tasks leave their source locations here before their stacks drop.
     interrupted: Option<InterruptedExecution>,
     compilation: diagnostics::CompilationTiming,
+    presence_revision: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -128,6 +129,7 @@ impl Transaction {
             joinable: true,
             interrupted: None,
             compilation: diagnostics::CompilationTiming::default(),
+            presence_revision: 0,
         }
     }
 
@@ -143,6 +145,16 @@ impl Transaction {
     /// attempt sees its own writes, then the committed world.
     pub(crate) fn read(&mut self, var_id: VarId) -> Option<LpcRef> {
         self.read_value(var_id).map(WorldValue::lpc_ref)
+    }
+
+    /// Changes that can invalidate arrival participants within this attempt.
+    pub(crate) fn presence_revision(&self) -> u64 {
+        self.presence_revision
+    }
+
+    /// Movement, destruction, and command disabling must invalidate arrival guards.
+    pub(crate) fn mark_presence_changed(&mut self) {
+        self.presence_revision = self.presence_revision.wrapping_add(1);
     }
 
     /// Borrow two slot values, tracking the snapshot reads that supply them.

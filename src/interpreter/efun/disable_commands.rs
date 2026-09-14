@@ -18,6 +18,7 @@ pub fn disable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
     ActorRules::new(context.txn(), proc).clear();
     context.txn().with(|t| {
         t.drop_var(proc.commands_enabled.id);
+        t.mark_presence_changed();
         if was_enabled && let Some(env) = environment {
             Process::unmark_living(t, proc, &env);
         }
