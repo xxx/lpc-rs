@@ -94,7 +94,7 @@ pub(crate) async fn apply_pointer(
 /// Resolve `pointer` in `handler_ctx` and run it there.
 async fn fire(
     ctx: &TaskContext,
-    handler_ctx: TaskContext,
+    mut handler_ctx: TaskContext,
     callers: Callers,
     pointer: &FunctionPtr,
     args: &[LpcRef],
@@ -105,6 +105,7 @@ async fn fire(
     else {
         return Ok(None);
     };
+    handler_ctx.upvalue_ptrs = Some(pointer.upvalue_ptrs.clone());
     timed(
         ctx,
         handler_ctx.with_process(resolved.process),

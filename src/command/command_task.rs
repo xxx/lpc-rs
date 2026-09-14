@@ -280,6 +280,83 @@ mod tests {
         );
     }
 
+    async fn captured_rule_survives_gc(registration: &str) {
+        let vm = Vm::new(test_config());
+        let code = format!(
+            r#"
+            int seen;
+            void create() {{
+                set_this_player(this_object());
+                enable_commands();
+                int *values = ({{ 42 }});
+                {registration}
+            }}
+        "#
+        );
+        let player = vm
+            .initialize_process_from_code("/player.c", &code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let template = TaskTemplate::from(vm.global_state.clone());
+        for expected in [43, 44] {
+            let outcome = run_command_line(&template, player.clone(), "look".into())
+                .await
+                .unwrap();
+            assert_eq!(outcome, Outcome::Handled);
+            assert_eq!(
+                vm.global_state.committed_global(&player, 0u16),
+                LpcRef::from(expected)
+            );
+            vm.global_state.gc().await.unwrap().unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn an_action_closure_keeps_its_captures_across_commands_and_gc() {
+        captured_rule_survives_gc(r#"add_action((: seen = ++values[0] :), "look");"#).await;
+    }
+
+    #[tokio::test]
+    async fn a_native_rule_closure_keeps_its_captures_across_commands_and_gc() {
+        captured_rule_survives_gc(r#"add_rule("'look'", (: seen = ++values[0] :));"#).await;
+    }
+
+    #[tokio::test]
+    async fn a_throwing_command_closure_rolls_back_its_capture_writes() {
+        let code = indoc! { r#"
+            int seen;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                int count = 40;
+                add_action((: count++; throw("boom"); :), "boom");
+                add_action((: seen = count :), "read");
+            }
+        "# };
+        let vm = Vm::new(test_config());
+        let player = vm
+            .initialize_process_from_code("/player.c", code)
+            .await
+            .unwrap()
+            .context
+            .process;
+        let template = TaskTemplate::from(vm.global_state.clone());
+        let error = run_command_line(&template, player.clone(), "boom".into())
+            .await
+            .expect_err("the handler throws after incrementing its capture");
+        assert!(error.to_string().contains("boom"), "{error}");
+        let outcome = run_command_line(&template, player.clone(), "read".into())
+            .await
+            .unwrap();
+        assert_eq!(outcome, Outcome::Handled);
+        assert_eq!(
+            vm.global_state.committed_global(&player, 0u16),
+            LpcRef::from(40)
+        );
+    }
+
     #[tokio::test]
     async fn a_caught_missing_semicolon_cannot_retry_the_command_forever() {
         use std::time::Duration;

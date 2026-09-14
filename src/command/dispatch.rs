@@ -660,6 +660,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_notify_fail_closure_reads_the_declining_handlers_captures() {
+        let code = indoc! { r#"
+            string heard;
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                add_action("do_open", "open");
+                command("open door");
+            }
+            int do_open(string arg) {
+                string message = "Cannot open " + arg + ".\n";
+                notify_fail((: message :));
+                return 0;
+            }
+            void catch_tell(string message) { heard = message; }
+        "# };
+        assert_eq!(globals(code, 1).await, vec![s("Cannot open door.\n")]);
+    }
+
+    #[tokio::test]
+    async fn nested_command_handlers_use_their_own_captures() {
+        let code = indoc! { r#"
+            int seen; int inner; string named;
+            void register_inner() {
+                int count = 20;
+                add_action((: inner = ++count :), "inner");
+            }
+            int do_named(string arg) {
+                function read = (: arg :);
+                named = read();
+                return 1;
+            }
+            void create() {
+                set_this_player(this_object());
+                enable_commands();
+                register_inner();
+                add_action("do_named", "named");
+                int count = 40;
+                add_action((:
+                    command("inner");
+                    command("named target");
+                    seen = ++count;
+                :), "outer");
+                command("outer");
+                command("outer");
+            }
+        "# };
+        assert_eq!(
+            globals(code, 3).await,
+            vec![LpcRef::from(42), LpcRef::from(22), s("target")]
+        );
+    }
+
+    #[tokio::test]
     async fn a_notify_fail_closure_sees_the_typed_verb_after_other_rules_were_tried() {
         let code = indoc! { r#"
             string heard;

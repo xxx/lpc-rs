@@ -289,6 +289,7 @@ impl TaskContext {
     /// The context for a task nested under this one in `process`, entered
     /// through `callers`, one level deeper in the chain; an error past
     /// `MAX_TASK_CHAIN`.
+    /// Capture cells belong to the entry function pointer and are not inherited.
     pub fn nested<P>(&self, callers: Callers, process: P) -> Result<Self>
     where
         P: Into<Arc<Process>>,
@@ -299,6 +300,7 @@ impl TaskContext {
             )));
         }
         let mut nested = self.clone().with_process(process);
+        nested.upvalue_ptrs = None;
         nested.chain_count = self.chain_count + 1;
         nested.callers = callers;
         Ok(nested)

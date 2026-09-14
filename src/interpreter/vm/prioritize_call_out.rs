@@ -222,6 +222,25 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn a_nested_hook_cannot_overwrite_the_calling_closures_captures() {
+            let code = r#"
+                int result;
+                void create() {
+                    int value = 5;
+                    call_out((:
+                        tell_object(this_object(), "hi");
+                        result = value;
+                    :), 100);
+                }
+                void catch_tell(string message) {
+                    function read = (: message :);
+                    read();
+                }
+            "#;
+            assert_eq!(fire_the_one_call_out(code).await, LpcRef::from(5));
+        }
+
+        #[tokio::test]
         async fn a_bound_dynamic_receiver_fires() {
             let code = r##"
                 int result;
