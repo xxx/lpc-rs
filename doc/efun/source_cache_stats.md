@@ -13,15 +13,16 @@ an LPC integer saturate at its maximum positive value.
 | `source_bytes` | Uncompressed UTF-8 text bytes across all versions |
 | `source_capacity_bytes` | Source string buffer capacities, including spare capacity |
 | `filename_capacity_bytes` | Filename string buffer capacities across all versions |
-| `line_index_bytes` | Line-start entries times the native pointer size, excluding spare capacity |
+| `line_index_bytes` | Line-start array bytes: 4 bytes per entry, or the native pointer size for sources beyond the 32-bit offset range |
 
 `source_bytes` is included in `source_capacity_bytes`; do not add them together.
 The sum of `source_capacity_bytes`, `filename_capacity_bytes`, and
 `line_index_bytes` is a lower bound on retained heap storage. It excludes the
-file table, content lookup index, spare line-index capacity, and allocator
+file table, content lookup index, and allocator
 rounding and metadata. These fields do not measure resident pages or temporary
 compiler buffers. The line index has an entry for an empty source and for the
-empty line following a trailing newline.
+empty line following a trailing newline. Line indexes are built eagerly with
+exactly sized arrays; their allocation size can still be rounded by the allocator.
 
 Files retain their full text, including comments and whitespace. Identical text
 under the same filename reuses an entry; edits retain another full version.

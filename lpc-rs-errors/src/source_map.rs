@@ -5,8 +5,12 @@ use std::{
     sync::LazyLock,
 };
 
-use codespan_reporting::files::{Error, Files, SimpleFile, SimpleFiles};
+use codespan_reporting::files::{Error, Files};
 use parking_lot::RwLock;
+
+mod source_file;
+
+pub use source_file::SourceFile;
 
 /// For readability
 pub type FileId = usize;
@@ -21,7 +25,7 @@ pub static SOURCE_MAP: LazyLock<RwLock<SourceMap>> =
 /// Immutable diagnostic sources, shared across recompiles by name and contents.
 #[derive(Debug, Default)]
 pub struct SourceMap {
-    files: SimpleFiles<String, String>,
+    files: Vec<SourceFile>,
     by_content: HashMap<u64, Vec<FileId>>,
 }
 
@@ -38,7 +42,7 @@ pub struct SourceMapStats {
     pub source_capacity_bytes: usize,
     /// Filename string buffer capacities across all versions.
     pub filename_capacity_bytes: usize,
-    /// Bytes occupied by line-start entries, excluding their vector's spare capacity.
+    /// Bytes occupied by the line-start arrays, excluding allocator rounding.
     pub line_index_bytes: usize,
 }
 
@@ -53,32 +57,32 @@ impl SourceMap {
                 return id;
             }
         }
-        let id = self.files.add(name, source);
+        let id = self.files.len();
+        self.files.push(SourceFile::new(name, source));
         bucket.push(id);
         id
     }
 
     /// The immutable source version associated with an id.
-    pub fn get(&self, id: FileId) -> Result<&SimpleFile<String, String>, Error> {
-        self.files.get(id)
+    pub fn get(&self, id: FileId) -> Result<&SourceFile, Error> {
+        self.files.get(id).ok_or(Error::FileMissing)
     }
 
     /// Inspect retained versions without copying or scanning their source text.
     ///
     /// The temporary filename set is excluded from the returned measurements.
-    /// Returns an error if a registered file or its line index cannot be read.
+    /// Returns an error if a registered file cannot be read.
     pub fn stats(&self) -> Result<SourceMapStats, Error> {
         let mut stats = SourceMapStats::default();
         let mut names = HashSet::new();
         for &id in self.by_content.values().flatten() {
-            let file = self.files.get(id)?;
+            let file = self.get(id)?;
             names.insert(file.name().as_str());
             stats.file_versions += 1;
             stats.source_bytes += file.source().len();
             stats.source_capacity_bytes += file.source().capacity();
             stats.filename_capacity_bytes += file.name().capacity();
-            let lines = file.line_index((), file.source().len())? + 1;
-            stats.line_index_bytes += lines * size_of::<usize>();
+            stats.line_index_bytes += file.line_index_bytes();
         }
         stats.unique_files = names.len();
         Ok(stats)
@@ -91,25 +95,87 @@ impl<'a> Files<'a> for SourceMap {
     type Source = &'a str;
 
     fn name(&self, id: FileId) -> Result<String, Error> {
-        self.files.name(id)
+        Ok(self.get(id)?.name().clone())
     }
 
     fn source(&self, id: FileId) -> Result<&str, Error> {
-        self.files.source(id)
+        Ok(self.get(id)?.source())
     }
 
     fn line_index(&self, id: FileId, byte_index: usize) -> Result<usize, Error> {
-        self.files.line_index(id, byte_index)
+        self.get(id)?.line_index((), byte_index)
     }
 
     fn line_range(&self, id: FileId, line_index: usize) -> Result<Range<usize>, Error> {
-        self.files.line_range(id, line_index)
+        self.get(id)?.line_range((), line_index)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use codespan_reporting::{
+        diagnostic::{Diagnostic, Label},
+        files::SimpleFiles,
+        term::{self, termcolor::NoColor},
+    };
+
     use super::*;
+
+    #[test]
+    fn missing_file_ids_report_file_missing() {
+        let mut sources = SourceMap::default();
+        sources.add("/present.c".into(), "int x;".into());
+        for id in [1, usize::MAX] {
+            assert!(matches!(sources.get(id), Err(Error::FileMissing)));
+            assert!(matches!(sources.name(id), Err(Error::FileMissing)));
+            assert!(matches!(sources.source(id), Err(Error::FileMissing)));
+            assert!(matches!(sources.line_index(id, 0), Err(Error::FileMissing)));
+            assert!(matches!(sources.line_range(id, 0), Err(Error::FileMissing)));
+        }
+    }
+
+    #[test]
+    fn compact_storage_preserves_rendered_diagnostics_across_source_versions() {
+        let inputs = [
+            ("/source.c", "int value = 1;\n// café 💖\n"),
+            ("/source.c", "int value = 2;\n"),
+            ("/include.h", "#define VALUE 2\n"),
+            ("/empty.c", ""),
+        ];
+        let mut original = SimpleFiles::new();
+        let mut compact = SourceMap::default();
+        for (name, source) in inputs {
+            let expected = original.add(name.to_owned(), source.to_owned());
+            assert_eq!(compact.add(name.to_owned(), source.to_owned()), expected);
+        }
+        let heart = inputs[0].1.find('💖').unwrap();
+        let diagnostics = [
+            Diagnostic::error()
+                .with_message("source locations")
+                .with_labels(vec![
+                    Label::primary(0, heart..heart + '💖'.len_utf8()).with_message("old version"),
+                    Label::secondary(1, 0..3).with_message("new version"),
+                    Label::secondary(2, 0..7).with_message("include"),
+                ]),
+            Diagnostic::warning().with_labels(vec![Label::primary(3, 0..0)]),
+            Diagnostic::error().with_labels(vec![Label::primary(0, 0..inputs[0].1.len())]),
+        ];
+        fn render<'a>(
+            files: &'a impl Files<'a, FileId = FileId>,
+            diagnostic: &Diagnostic<FileId>,
+        ) -> Vec<u8> {
+            let mut writer = NoColor::new(Vec::new());
+            term::emit_to_write_style(&mut writer, &term::Config::default(), files, diagnostic)
+                .unwrap();
+            writer.into_inner()
+        }
+        for diagnostic in diagnostics {
+            assert_eq!(
+                render(&compact, &diagnostic),
+                render(&original, &diagnostic)
+            );
+        }
+    }
 
     #[test]
     fn stats_distinguish_text_bytes_from_buffer_capacity() {
@@ -125,7 +191,7 @@ mod tests {
             source_bytes: text.len(),
             source_capacity_bytes: text.capacity(),
             filename_capacity_bytes: name.capacity(),
-            line_index_bytes: 3 * size_of::<usize>(),
+            line_index_bytes: 3 * size_of::<u32>(),
         };
         sources.add(name, text);
         assert_eq!(sources.stats().unwrap(), expected);
@@ -140,7 +206,7 @@ mod tests {
         }
         assert_eq!(
             sources.stats().unwrap().line_index_bytes,
-            4 * size_of::<usize>()
+            4 * size_of::<u32>()
         );
     }
 

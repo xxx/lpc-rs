@@ -1503,6 +1503,7 @@ dependencies = [
  "codespan-reporting",
  "derive_builder",
  "lalrpop-util",
+ "memchr",
  "parking_lot",
 ]
 
