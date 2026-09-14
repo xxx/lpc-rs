@@ -25,6 +25,7 @@ use crate::{
     telnet::connection::Connection,
 };
 
+mod admission;
 mod backoff;
 mod changeset;
 mod committer;
@@ -43,13 +44,15 @@ pub use committer::{GcRefused, GcReport};
 pub(crate) use diagnostics::{CommitOrigin, Conflict};
 pub(crate) use effects::{CallOutSchedule, Effect, PendingFileOp, flush_effects};
 pub(crate) use merge::MergeOp;
-pub use retry::CommittedReader;
 #[cfg(test)]
-pub(crate) use retry::RetryStats;
+pub(crate) use retry::AttemptTelemetry;
+pub use retry::AttemptTelemetrySnapshot;
+pub use retry::CommittedReader;
 pub(crate) use retry::{
-    AttemptBody, commit_changeset, committer_stats, gc_pass, run_attempts, start_txn,
+    AttemptBody, AttemptRunner, commit_changeset, committer_stats, gc_pass, start_txn,
 };
-pub use retry::{AttemptTelemetry, AttemptTelemetrySnapshot};
+#[cfg(test)]
+pub(crate) use retry::{RetryStats, run_attempts};
 pub(crate) use snapshot::Snapshot;
 pub(crate) use world_value::WorldValue;
 
@@ -596,13 +599,7 @@ pub(crate) async fn resolve_pointer_call(
         txn: None,
         resolved: None,
     };
-    let (res, _) = run_attempts(
-        &gs.committer_tx,
-        &gs.attempt_telemetry,
-        Some(gs.commit_watch.clone()),
-        &mut body,
-    )
-    .await;
+    let (res, _) = gs.attempt_runner.run(&mut body).await;
     res?;
     Ok(body.resolved)
 }

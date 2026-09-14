@@ -3,7 +3,8 @@
 //! The runner owns the committer protocol (open, commit, release-after-reply,
 //! re-base, stats); the body owns the attempt-level work and its physical
 //! output. Production runs a [`Task`](crate::interpreter::task::Task) or a
-//! `GlobalState::attach`; tests run a bare [`Transaction`].
+//! `GlobalState::attach`; tests run a bare
+//! [`Transaction`](crate::interpreter::stm::Transaction).
 
 use std::{
     sync::{Arc, atomic::AtomicU64},
@@ -23,6 +24,7 @@ use crate::{
         process::Process,
         stm::{
             CommitOrigin, Conflict, GcPassReply, VarId, Version, WorldRoot, WorldValue,
+            admission::Admission,
             backoff::{Backoff, BackoffSpent},
             changeset::Changeset,
             committer::{CommitProtocol, CommitterStats, LiveSnapshot},
@@ -36,7 +38,7 @@ use crate::{
 /// see retries, only this loop can.
 #[derive(Debug, Default)]
 pub(crate) struct RetryStats {
-    /// The first attempt plus one per conflict.
+    /// Attempts whose evaluation was started.
     pub(crate) attempts: u64,
     /// Conflicts observed across attempts.
     pub(crate) conflicts: u64,
@@ -46,6 +48,14 @@ pub(crate) struct RetryStats {
     pub(crate) backoff: BackoffSpent,
     pub(crate) phases: PhaseTimes,
     pub(crate) last_conflict: Option<Conflict>,
+    pub(crate) admission: AdmissionStats,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct AdmissionStats {
+    pub(crate) acquisitions: u64,
+    pub(crate) waited: Duration,
+    pub(crate) timeouts: u64,
 }
 
 /// Attempt time includes snapshot acquisition; compilation is a subset of it.
@@ -57,7 +67,7 @@ pub(crate) struct PhaseTimes {
     pub(crate) delivery: Duration,
 }
 
-/// Attempt-loop lifetime totals, recorded once per apply by `run_attempts`.
+/// Attempt-loop lifetime totals, recorded once per finished invocation.
 #[derive(Debug, Default)]
 pub struct AttemptTelemetry {
     applies: AtomicU64,
@@ -70,12 +80,27 @@ pub struct AttemptTelemetry {
     backoff_sleep_requested_ns: AtomicU64,
     backoff_commit_wakes: AtomicU64,
     backoff_cap_expiries: AtomicU64,
+    owning_tasks: AtomicU64,
+    owning_attempts: AtomicU64,
+    admission_acquisitions: AtomicU64,
+    admission_wait_ns: AtomicU64,
+    admission_timeouts: AtomicU64,
 }
 
 impl AttemptTelemetry {
     /// Fold one finished attempt loop into the totals.
-    fn record(&self, stats: &RetryStats, errored: bool) {
+    fn record(&self, stats: &RetryStats, errored: bool, owning: bool) {
         use std::sync::atomic::Ordering::Relaxed;
+        if owning {
+            self.owning_tasks.fetch_add(1, Relaxed);
+            self.owning_attempts.fetch_add(stats.attempts, Relaxed);
+            self.admission_acquisitions
+                .fetch_add(stats.admission.acquisitions, Relaxed);
+            self.admission_wait_ns
+                .fetch_add(stats.admission.waited.as_nanos() as u64, Relaxed);
+            self.admission_timeouts
+                .fetch_add(stats.admission.timeouts, Relaxed);
+        }
         self.applies.fetch_add(1, Relaxed);
         self.attempts.fetch_add(stats.attempts, Relaxed);
         self.conflicts.fetch_add(stats.conflicts, Relaxed);
@@ -99,6 +124,11 @@ impl AttemptTelemetry {
     pub fn snapshot(&self) -> AttemptTelemetrySnapshot {
         use std::sync::atomic::Ordering::Relaxed;
         AttemptTelemetrySnapshot {
+            owning_tasks: self.owning_tasks.load(Relaxed),
+            owning_attempts: self.owning_attempts.load(Relaxed),
+            admission_acquisitions: self.admission_acquisitions.load(Relaxed),
+            admission_wait: Duration::from_nanos(self.admission_wait_ns.load(Relaxed)),
+            admission_timeouts: self.admission_timeouts.load(Relaxed),
             applies: self.applies.load(Relaxed),
             attempts: self.attempts.load(Relaxed),
             conflicts: self.conflicts.load(Relaxed),
@@ -118,9 +148,19 @@ impl AttemptTelemetry {
 /// One read of `AttemptTelemetry`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AttemptTelemetrySnapshot {
+    /// Finished owning tasks, excluding nested applies.
+    pub owning_tasks: u64,
+    /// Started attempts of finished owning tasks.
+    pub owning_attempts: u64,
+    /// Retry turns acquired by finished owning tasks.
+    pub admission_acquisitions: u64,
+    /// Time acquiring retry turns, including waits that reached the deadline.
+    pub admission_wait: Duration,
+    /// Finished owning tasks whose admission wait exhausted their allowance.
+    pub admission_timeouts: u64,
     /// Finished attempt loops.
     pub applies: u64,
-    /// Attempts across all loops: each apply's first plus one per conflict.
+    /// Started attempts across all finished loops, including nested applies.
     pub attempts: u64,
     /// Conflicts observed across all loops.
     pub conflicts: u64,
@@ -203,108 +243,185 @@ pub(crate) trait AttemptBody {
     async fn deliver(&mut self, effects: Vec<crate::interpreter::stm::Effect>) -> Result<()>;
 }
 
-/// Re-run `body`'s attempts until one commits, staggering repeat losers by
-/// [`Backoff`]; each attempt re-bases on the newest world. `None` from
-/// `begin_attempt` stops after that single attempt without committing.
-/// `commit_watch` lets the sleep tier wake on the committer's watermark
-/// instead of running its full cap.
-/// The body's time allowance spans evaluation and backoff across retries;
-/// commit and delivery finish without cancellation once a commit is sent.
+/// One VM's attempt execution, waiting policy, and measurements.
+#[derive(Debug)]
+pub(crate) struct AttemptRunner {
+    tx: flume::Sender<CommitProtocol>,
+    telemetry: AttemptTelemetry,
+    commit_watch: Option<tokio::sync::watch::Receiver<Version>>,
+    admission: Admission,
+}
+
+impl AttemptRunner {
+    pub(crate) fn new(
+        tx: flume::Sender<CommitProtocol>,
+        commit_watch: Option<tokio::sync::watch::Receiver<Version>>,
+    ) -> Self {
+        Self {
+            tx,
+            telemetry: AttemptTelemetry::default(),
+            commit_watch,
+            admission: Admission::default(),
+        }
+    }
+
+    pub(crate) fn telemetry(&self) -> AttemptTelemetrySnapshot {
+        self.telemetry.snapshot()
+    }
+
+    /// Execute an owner or joiner within its original evaluation allowance.
+    pub(crate) async fn run<B: AttemptBody>(&self, body: &mut B) -> (Result<()>, RetryStats) {
+        self.execute(body, &self.telemetry).await
+    }
+
+    async fn execute<B: AttemptBody>(
+        &self,
+        body: &mut B,
+        telemetry: &AttemptTelemetry,
+    ) -> (Result<()>, RetryStats) {
+        let started = std::time::Instant::now();
+        let owning = !body.is_nested();
+        let timeout_ms = body.timeout_ms();
+        let deadline =
+            (timeout_ms != 0).then(|| Instant::now() + Duration::from_millis(timeout_ms));
+        let mut attempts = 0u64;
+        let mut conflicts = 0u64;
+        let mut phases = PhaseTimes::default();
+        let mut admission = AdmissionStats::default();
+        let mut last_conflict = None;
+        let mut retry_cell = None;
+        let mut backoff = match self.commit_watch.clone() {
+            Some(watch) => Backoff::watching(watch),
+            None => Backoff::new(),
+        };
+
+        let mut result = loop {
+            if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                break Err(attempt_timeout(body, attempts, conflicts));
+            }
+            let turn = if let Some(cell) = retry_cell.take() {
+                let waiting = Instant::now();
+                let acquired = match deadline {
+                    Some(deadline) => timeout_at(deadline, self.admission.acquire(cell)).await,
+                    None => Ok(self.admission.acquire(cell).await),
+                };
+                admission.waited += waiting.elapsed();
+                match acquired {
+                    Ok(Ok(turn)) => {
+                        admission.acquisitions += 1;
+                        if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                            admission.timeouts += 1;
+                            break Err(attempt_timeout(body, attempts, conflicts));
+                        }
+                        Some(turn)
+                    }
+                    Ok(Err(error)) => break Err(error),
+                    Err(_) => {
+                        admission.timeouts += 1;
+                        break Err(attempt_timeout(body, attempts, conflicts));
+                    }
+                }
+            } else {
+                None
+            };
+            attempts += 1;
+
+            let attempt_started = Instant::now();
+            let attempt = match deadline {
+                Some(deadline) => match timeout_at(deadline, body.begin_attempt(&self.tx)).await {
+                    Ok(attempt) => attempt,
+                    Err(_) => Err(attempt_timeout(body, attempts, conflicts)),
+                },
+                None => body.begin_attempt(&self.tx).await,
+            };
+            phases.attempt += attempt_started.elapsed();
+            if owning {
+                phases.compilation += body.take_compilation_time();
+            }
+            let live = match attempt {
+                Ok(live) => live,
+                Err(e) => break Err(e),
+            };
+
+            let Some(mut live) = live else {
+                break Ok(());
+            };
+
+            // The commit releases the pin, including when its reply crosses the deadline.
+            live.disarm();
+            let commit_started = Instant::now();
+            let committed = body.commit_phase(&self.tx, live).await;
+            phases.commit += commit_started.elapsed();
+            drop(turn);
+            let (commit, effects) = match committed {
+                Ok(c) => c,
+                Err(e) => break Err(e),
+            };
+
+            match commit {
+                Ok(()) => {
+                    let delivery_started = Instant::now();
+                    let delivered = body.deliver(effects).await;
+                    phases.delivery += delivery_started.elapsed();
+                    break delivered;
+                }
+                Err(conflict) => {
+                    conflicts += 1;
+                    if owning && let Conflict::ReadInvalidated { cell, .. } = &conflict {
+                        retry_cell = Some(*cell);
+                    }
+                    last_conflict = Some(conflict);
+                }
+            }
+            if retry_cell.is_none() {
+                match deadline {
+                    Some(deadline) => {
+                        if timeout_at(deadline, backoff.stagger(conflicts))
+                            .await
+                            .is_err()
+                        {
+                            break Err(attempt_timeout(body, attempts, conflicts));
+                        }
+                    }
+                    None => backoff.stagger(conflicts).await,
+                }
+            }
+        };
+
+        let stats = RetryStats {
+            attempts,
+            conflicts,
+            duration: started.elapsed(),
+            backoff: backoff.spent(),
+            phases,
+            last_conflict,
+            admission,
+        };
+        telemetry.record(&stats, result.is_err(), owning);
+        if owning && (result.is_err() || stats.conflicts > 0) {
+            if let Err(error) = result {
+                let summary = diagnostic_summary(body, &stats);
+                tracing::warn!(target: "lpc_rs::transactions", diagnostic = %summary, error = %error, "Transaction failed");
+                result = Err(error.with_note(summary));
+            } else if tracing::enabled!(target: "lpc_rs::transactions", tracing::Level::DEBUG) {
+                tracing::debug!(target: "lpc_rs::transactions", diagnostic = %diagnostic_summary(body, &stats), "Transaction committed after retries");
+            }
+        }
+        (result, stats)
+    }
+}
+
+/// An isolated runner for existing committer/body fixtures.
+#[cfg(test)]
 pub(crate) async fn run_attempts<B: AttemptBody>(
     tx: &flume::Sender<CommitProtocol>,
     telemetry: &AttemptTelemetry,
     commit_watch: Option<tokio::sync::watch::Receiver<Version>>,
     body: &mut B,
 ) -> (Result<()>, RetryStats) {
-    let started = std::time::Instant::now();
-    let timeout_ms = body.timeout_ms();
-    let deadline = (timeout_ms != 0).then(|| Instant::now() + Duration::from_millis(timeout_ms));
-    let mut attempts = 0u64;
-    let mut phases = PhaseTimes::default();
-    let mut last_conflict = None;
-    let mut backoff = match commit_watch {
-        Some(watch) => Backoff::watching(watch),
-        None => Backoff::new(),
-    };
-
-    let mut result = loop {
-        if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
-            break Err(attempt_timeout(body, attempts, backoff.losses()));
-        }
-        attempts += 1;
-
-        let attempt_started = Instant::now();
-        let attempt = match deadline {
-            Some(deadline) => match timeout_at(deadline, body.begin_attempt(tx)).await {
-                Ok(attempt) => attempt,
-                Err(_) => Err(attempt_timeout(body, attempts, backoff.losses())),
-            },
-            None => body.begin_attempt(tx).await,
-        };
-        phases.attempt += attempt_started.elapsed();
-        if !body.is_nested() {
-            phases.compilation += body.take_compilation_time();
-        }
-        let live = match attempt {
-            Ok(live) => live,
-            Err(e) => break Err(e),
-        };
-
-        // A joiner: the caller's commit carries the writes.
-        let Some(mut live) = live else {
-            break Ok(());
-        };
-
-        // Disarmed: the commit releases the pin, not the handle's drop.
-        live.disarm();
-        let commit_started = Instant::now();
-        let committed = body.commit_phase(tx, live).await;
-        phases.commit += commit_started.elapsed();
-        let (commit, effects) = match committed {
-            Ok(c) => c,
-            Err(e) => break Err(e),
-        };
-
-        // The commit is permanent, so deliver now. A rejected attempt never
-        // reaches this: its recorded output is dropped with the attempt.
-        match commit {
-            Ok(()) => {
-                let delivery_started = Instant::now();
-                let delivered = body.deliver(effects).await;
-                phases.delivery += delivery_started.elapsed();
-                break delivered;
-            }
-            Err(conflict) => last_conflict = Some(conflict),
-        }
-        match deadline {
-            Some(deadline) => {
-                if timeout_at(deadline, backoff.stagger()).await.is_err() {
-                    break Err(attempt_timeout(body, attempts, backoff.losses()));
-                }
-            }
-            None => backoff.stagger().await,
-        }
-    };
-
-    let stats = RetryStats {
-        attempts,
-        conflicts: backoff.losses(),
-        duration: started.elapsed(),
-        backoff: backoff.spent(),
-        phases,
-        last_conflict,
-    };
-    telemetry.record(&stats, result.is_err());
-    if !body.is_nested() && (result.is_err() || stats.conflicts > 0) {
-        if let Err(error) = result {
-            let summary = diagnostic_summary(body, &stats);
-            tracing::warn!(target: "lpc_rs::transactions", diagnostic = %summary, error = %error, "Transaction failed");
-            result = Err(error.with_note(summary));
-        } else if tracing::enabled!(target: "lpc_rs::transactions", tracing::Level::DEBUG) {
-            tracing::debug!(target: "lpc_rs::transactions", diagnostic = %diagnostic_summary(body, &stats), "Transaction committed after retries");
-        }
-    }
-    (result, stats)
+    AttemptRunner::new(tx.clone(), commit_watch)
+        .execute(body, telemetry)
+        .await
 }
 
 fn diagnostic_summary(body: &impl AttemptBody, stats: &RetryStats) -> String {
@@ -323,7 +440,7 @@ fn diagnostic_summary(body: &impl AttemptBody, stats: &RetryStats) -> String {
     );
     let ms = |duration: Duration| duration.as_secs_f64() * 1000.0;
     format!(
-        "Transaction {origin}: attempts={}, conflicts={}, elapsed_ms={:.3}, evaluation_and_snapshot_ms={:.3}, compilation_ms={:.3}, commit_phase_ms={:.3}, backoff_yield_ms={:.3}, backoff_sleep_ms={:.3}, delivery_ms={:.3}; last_conflict=[{conflict}]",
+        "Transaction {origin}: attempts={}, conflicts={}, elapsed_ms={:.3}, evaluation_and_snapshot_ms={:.3}, compilation_ms={:.3}, commit_phase_ms={:.3}, backoff_yield_ms={:.3}, backoff_sleep_ms={:.3}, admission_wait_ms={:.3}, delivery_ms={:.3}; last_conflict=[{conflict}]",
         stats.attempts,
         stats.conflicts,
         ms(stats.duration),
@@ -335,6 +452,7 @@ fn diagnostic_summary(body: &impl AttemptBody, stats: &RetryStats) -> String {
         ms(stats.phases.commit),
         ms(stats.backoff.yielded),
         ms(stats.backoff.slept),
+        ms(stats.admission.waited),
         ms(stats.phases.delivery),
     )
 }
@@ -1017,5 +1135,481 @@ mod async_tests {
             .expect("committer channel closed");
         drop(tx);
         handle.join().expect("committer panicked");
+    }
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use std::{
+        future::Future,
+        pin::Pin,
+        sync::atomic::{AtomicUsize, Ordering::SeqCst},
+        task::{Context, Poll, Waker},
+    };
+
+    use tokio::sync::Barrier;
+
+    use super::*;
+    use crate::interpreter::stm::{Committer, Effect, Snapshot, tests::IncBody};
+
+    struct Harness {
+        runner: Arc<AttemptRunner>,
+        handle: Option<tokio::task::JoinHandle<Snapshot>>,
+    }
+
+    impl Harness {
+        fn new(cells: &[VarId]) -> Self {
+            let mut committer = Committer::new();
+            let mut seed = Changeset::new(committer.current_version());
+            for cell in cells {
+                seed.write(*cell, WorldValue::ref_of(0.into()));
+            }
+            committer.commit(seed).unwrap();
+            let (tx, rx) = flume::unbounded();
+            let runner = Arc::new(AttemptRunner::new(
+                tx.clone(),
+                Some(committer.commit_watch()),
+            ));
+            let handle = tokio::spawn(async move {
+                while let Ok(message) = rx.recv_async().await {
+                    if !committer.process(message, &tx) {
+                        break;
+                    }
+                }
+                committer.snapshot_clone()
+            });
+            Self {
+                runner,
+                handle: Some(handle),
+            }
+        }
+
+        async fn finish(mut self) -> Snapshot {
+            assert!(self.runner.admission.is_idle());
+            assert_eq!(
+                committer_stats(&self.runner.tx)
+                    .await
+                    .unwrap()
+                    .live_snapshots,
+                0
+            );
+            self.runner.tx.send(CommitProtocol::Close).unwrap();
+            self.handle.take().unwrap().await.unwrap()
+        }
+    }
+
+    impl Drop for Harness {
+        fn drop(&mut self) {
+            if self.handle.is_some() {
+                let _ = self.runner.tx.send(CommitProtocol::Close);
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, PartialEq)]
+    enum PauseAt {
+        FirstRejection,
+        RetryEvaluation,
+        RetryReply,
+        Delivery,
+    }
+
+    struct Gate {
+        entered: flume::Sender<()>,
+        resume: flume::Receiver<()>,
+    }
+
+    impl Gate {
+        fn new() -> (Self, flume::Receiver<()>, flume::Sender<()>) {
+            let (entered, observed) = flume::bounded(1);
+            let (resume, waiting) = flume::bounded(1);
+            (
+                Self {
+                    entered,
+                    resume: waiting,
+                },
+                observed,
+                resume,
+            )
+        }
+
+        async fn wait(&self) {
+            self.entered.send(()).unwrap();
+            self.resume.recv_async().await.unwrap();
+        }
+    }
+
+    struct Body {
+        inner: IncBody,
+        runner: Arc<AttemptRunner>,
+        invalidate: Vec<VarId>,
+        begins: usize,
+        timeout: u64,
+        barrier: Option<Arc<Barrier>>,
+        pause: Option<(PauseAt, Gate)>,
+        fail_retry: bool,
+        deliveries: Arc<AtomicUsize>,
+    }
+
+    impl Body {
+        fn new(runner: &Arc<AttemptRunner>, cell: VarId) -> Self {
+            Self {
+                inner: IncBody::new(cell),
+                runner: runner.clone(),
+                invalidate: vec![cell],
+                begins: 0,
+                timeout: 0,
+                barrier: None,
+                pause: None,
+                fail_retry: false,
+                deliveries: Arc::new(AtomicUsize::new(0)),
+            }
+        }
+
+        fn pause_at(&mut self, phase: PauseAt) -> (flume::Receiver<()>, flume::Sender<()>) {
+            let (gate, entered, resume) = Gate::new();
+            self.pause = Some((phase, gate));
+            (entered, resume)
+        }
+
+        async fn pause(&self, phase: PauseAt) {
+            if let Some((at, gate)) = &self.pause
+                && *at == phase
+            {
+                gate.wait().await;
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AttemptBody for Body {
+        fn timeout_ms(&self) -> u64 {
+            self.timeout
+        }
+
+        async fn begin_attempt(
+            &mut self,
+            tx: &flume::Sender<CommitProtocol>,
+        ) -> Result<Option<LiveSnapshot>> {
+            if let Some(cell) = self.invalidate.get(self.begins) {
+                self.inner.counter = *cell;
+            }
+            self.begins += 1;
+            let live = self.inner.begin_attempt(tx).await?;
+            if self.begins == 1
+                && let Some(barrier) = &self.barrier
+            {
+                barrier.wait().await;
+            }
+            if self.begins <= self.invalidate.len() {
+                // A fresh owner invalidates this snapshot even when a retry turn is held.
+                self.runner
+                    .run(&mut IncBody::new(self.inner.counter))
+                    .await
+                    .0?;
+            }
+            if self.begins > 1 {
+                self.pause(PauseAt::RetryEvaluation).await;
+                if self.fail_retry {
+                    return Err(lpc_error!("retry evaluation failed"));
+                }
+            }
+            Ok(live)
+        }
+
+        async fn commit_phase(
+            &mut self,
+            tx: &flume::Sender<CommitProtocol>,
+            live: LiveSnapshot,
+        ) -> Result<(std::result::Result<(), Conflict>, Vec<Effect>)> {
+            let result = self.inner.commit_phase(tx, live).await;
+            if self.begins == 1 && matches!(result, Ok((Err(_), _))) {
+                self.pause(PauseAt::FirstRejection).await;
+            }
+            if self.begins > 1 {
+                self.pause(PauseAt::RetryReply).await;
+            }
+            result
+        }
+
+        async fn deliver(&mut self, _effects: Vec<Effect>) -> Result<()> {
+            self.deliveries.fetch_add(1, SeqCst);
+            self.pause(PauseAt::Delivery).await;
+            Ok(())
+        }
+    }
+
+    fn poll<F: Future>(future: Pin<&mut F>) -> Poll<F::Output> {
+        future.poll(&mut Context::from_waker(Waker::noop()))
+    }
+
+    #[tokio::test]
+    async fn aligned_owners_preserve_updates_with_one_retry_per_loser() {
+        let cell = VarId::new();
+        let harness = Harness::new(&[cell]);
+        let barrier = Arc::new(Barrier::new(8));
+        let mut tasks = tokio::task::JoinSet::new();
+        for _ in 0..8 {
+            let runner = harness.runner.clone();
+            let mut body = Body::new(&runner, cell);
+            body.invalidate.clear();
+            body.barrier = Some(barrier.clone());
+            tasks.spawn(async move {
+                let (result, stats) = runner.run(&mut body).await;
+                result.unwrap();
+                assert_eq!(body.deliveries.load(SeqCst), 1);
+                assert_eq!(stats.attempts, stats.conflicts + 1);
+                assert_eq!(stats.admission.acquisitions, stats.conflicts);
+            });
+        }
+        while let Some(result) = tasks.join_next().await {
+            result.unwrap();
+        }
+        let totals = harness.runner.telemetry();
+        assert_eq!(totals.owning_tasks, 8);
+        assert_eq!(totals.owning_attempts, 15);
+        assert_eq!(totals.conflicts, 7);
+        assert_eq!(totals.admission_acquisitions, 7);
+        assert_eq!(totals.backoff_sleep, Duration::ZERO);
+        assert_eq!(
+            harness.finish().await.read(cell),
+            Some(WorldValue::ref_of(8.into()))
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn admission_timeout_does_not_start_or_pin_another_attempt() {
+        let cell = VarId::new();
+        let harness = Harness::new(&[cell]);
+        let held = harness.runner.admission.acquire(cell).await.unwrap();
+        let mut body = Body::new(&harness.runner, cell);
+        body.timeout = 10;
+        let (result, stats) = harness.runner.run(&mut body).await;
+        assert!(result.unwrap_err().to_string().contains("evaluation limit"));
+        assert_eq!(body.begins, 1);
+        assert_eq!(stats.attempts, 1);
+        assert_eq!(stats.conflicts, 1);
+        assert_eq!(stats.admission.acquisitions, 0);
+        assert_eq!(stats.admission.timeouts, 1);
+        assert_eq!(stats.admission.waited, Duration::from_millis(10));
+        assert_eq!(body.deliveries.load(SeqCst), 0);
+        assert_eq!(harness.runner.telemetry().admission_timeouts, 1);
+        drop(held);
+        assert_eq!(
+            harness.finish().await.read(cell),
+            Some(WorldValue::ref_of(1.into()))
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelling_a_queued_owner_releases_enrollment() {
+        let cell = VarId::new();
+        let harness = Harness::new(&[cell]);
+        let held = harness.runner.admission.acquire(cell).await.unwrap();
+        let mut body = Body::new(&harness.runner, cell);
+        let (entered, resume) = body.pause_at(PauseAt::FirstRejection);
+        let mut run = Box::pin(harness.runner.run(&mut body));
+        tokio::select! {
+            result = &mut run => panic!("finished before pause: {result:?}"),
+            result = entered.recv_async() => result.unwrap(),
+        }
+        resume.send(()).unwrap();
+        assert!(poll(run.as_mut()).is_pending());
+        drop(run);
+        assert_eq!(body.begins, 1);
+        drop(held);
+        harness.finish().await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cancelling_or_timing_out_admitted_evaluation_releases_turn_and_pin() {
+        for timeout in [0, 10] {
+            let cell = VarId::new();
+            let harness = Harness::new(&[cell]);
+            let mut body = Body::new(&harness.runner, cell);
+            body.timeout = timeout;
+            let (entered, _resume) = body.pause_at(PauseAt::RetryEvaluation);
+            let mut run = Box::pin(harness.runner.run(&mut body));
+            tokio::select! {
+                result = &mut run => panic!("finished before pause: {result:?}"),
+                result = entered.recv_async() => result.unwrap(),
+            }
+            assert_eq!(
+                committer_stats(&harness.runner.tx)
+                    .await
+                    .unwrap()
+                    .live_snapshots,
+                1
+            );
+            if timeout != 0 {
+                let (result, stats) = run.await;
+                assert!(result.is_err());
+                assert_eq!(stats.admission.acquisitions, 1);
+                assert_eq!(stats.admission.timeouts, 0);
+            } else {
+                drop(run);
+            }
+            assert_eq!(body.deliveries.load(SeqCst), 0);
+            assert_eq!(
+                harness.finish().await.read(cell),
+                Some(WorldValue::ref_of(1.into()))
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn evaluation_errors_release_admission_without_committing() {
+        let cell = VarId::new();
+        let harness = Harness::new(&[cell]);
+        let mut body = Body::new(&harness.runner, cell);
+        body.fail_retry = true;
+        let (result, stats) = harness.runner.run(&mut body).await;
+        assert!(result.is_err());
+        assert_eq!(stats.admission.acquisitions, 1);
+        assert_eq!(body.deliveries.load(SeqCst), 0);
+        assert_eq!(
+            harness.finish().await.read(cell),
+            Some(WorldValue::ref_of(1.into()))
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn commit_reply_keeps_the_turn_past_the_evaluation_deadline() {
+        let cell = VarId::new();
+        let harness = Harness::new(&[cell]);
+        let mut body = Body::new(&harness.runner, cell);
+        body.timeout = 10;
+        let (entered, resume) = body.pause_at(PauseAt::RetryReply);
+        let mut run = Box::pin(harness.runner.run(&mut body));
+        tokio::select! {
+            result = &mut run => panic!("finished before pause: {result:?}"),
+            result = entered.recv_async() => result.unwrap(),
+        }
+        tokio::time::advance(Duration::from_millis(20)).await;
+        let mut next = Box::pin(harness.runner.admission.acquire(cell));
+        assert!(poll(next.as_mut()).is_pending());
+        assert!(poll(run.as_mut()).is_pending());
+        resume.send(()).unwrap();
+        run.await.0.unwrap();
+        drop(next.await.unwrap());
+        assert_eq!(body.deliveries.load(SeqCst), 1);
+        assert_eq!(
+            harness.finish().await.read(cell),
+            Some(WorldValue::ref_of(2.into()))
+        );
+    }
+
+    #[tokio::test]
+    async fn delivery_can_start_another_owner_that_retries_on_the_same_cell() {
+        let cell = VarId::new();
+        let harness = Harness::new(&[cell]);
+        let mut body = Body::new(&harness.runner, cell);
+        let (entered, resume) = body.pause_at(PauseAt::Delivery);
+        let mut run = Box::pin(harness.runner.run(&mut body));
+        tokio::select! {
+            result = &mut run => panic!("finished before pause: {result:?}"),
+            result = entered.recv_async() => result.unwrap(),
+        }
+        let mut following = Body::new(&harness.runner, cell);
+        let (result, stats) = harness.runner.run(&mut following).await;
+        result.unwrap();
+        assert_eq!(stats.admission.acquisitions, 1);
+        resume.send(()).unwrap();
+        run.await.0.unwrap();
+        assert_eq!(
+            harness.finish().await.read(cell),
+            Some(WorldValue::ref_of(4.into()))
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn switching_conflict_cells_releases_the_previous_turn_before_waiting() {
+        let cells = [VarId::new(), VarId::new()];
+        let harness = Harness::new(&cells);
+        let held = harness.runner.admission.acquire(cells[1]).await.unwrap();
+        let mut body = Body::new(&harness.runner, cells[0]);
+        body.invalidate = cells.to_vec();
+        body.timeout = 10;
+        let (entered, resume) = body.pause_at(PauseAt::RetryReply);
+        let mut run = Box::pin(harness.runner.run(&mut body));
+        tokio::select! {
+            result = &mut run => panic!("finished before pause: {result:?}"),
+            result = entered.recv_async() => result.unwrap(),
+        }
+        resume.send(()).unwrap();
+        assert!(poll(run.as_mut()).is_pending());
+        let mut previous = Box::pin(harness.runner.admission.acquire(cells[0]));
+        let Poll::Ready(turn) = poll(previous.as_mut()) else {
+            panic!("held the old turn while waiting for the new cell");
+        };
+        drop(turn.unwrap());
+        drop(previous);
+        let (result, stats) = run.await;
+        assert!(result.is_err());
+        assert_eq!(stats.attempts, 2);
+        assert_eq!(stats.conflicts, 2);
+        assert_eq!(stats.admission.acquisitions, 1);
+        assert_eq!(stats.admission.timeouts, 1);
+        assert!(
+            matches!(stats.last_conflict, Some(Conflict::ReadInvalidated { cell, .. }) if cell == cells[1])
+        );
+        drop(harness.runner.admission.acquire(cells[0]).await.unwrap());
+        drop(held);
+        harness.finish().await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn non_read_backoff_uses_the_total_of_both_kinds_of_conflicts() {
+        struct Mixed(Body);
+
+        #[async_trait::async_trait]
+        impl AttemptBody for Mixed {
+            async fn begin_attempt(
+                &mut self,
+                tx: &flume::Sender<CommitProtocol>,
+            ) -> Result<Option<LiveSnapshot>> {
+                self.0.begin_attempt(tx).await
+            }
+
+            async fn commit_phase(
+                &mut self,
+                tx: &flume::Sender<CommitProtocol>,
+                live: LiveSnapshot,
+            ) -> Result<(std::result::Result<(), Conflict>, Vec<Effect>)> {
+                if self.0.begins == 7 {
+                    let mut changeset = Changeset::new(live.version());
+                    changeset.merge(
+                        self.0.inner.counter,
+                        crate::interpreter::stm::MergeOp::ArrayAppend(vec![1.into()]),
+                    );
+                    Ok((commit_changeset(tx, changeset).await?, vec![]))
+                } else {
+                    self.0.commit_phase(tx, live).await
+                }
+            }
+
+            async fn deliver(&mut self, effects: Vec<Effect>) -> Result<()> {
+                self.0.deliver(effects).await
+            }
+        }
+
+        let cell = VarId::new();
+        let harness = Harness::new(&[cell]);
+        let mut body = Body::new(&harness.runner, cell);
+        body.invalidate = vec![cell; 6];
+        let (result, stats) = harness.runner.run(&mut Mixed(body)).await;
+        result.unwrap();
+        assert_eq!(stats.attempts, 8);
+        assert_eq!(stats.conflicts, 7);
+        assert_eq!(stats.admission.acquisitions, 6);
+        assert!(stats.backoff.sleep_requested > Duration::ZERO);
+        assert!(matches!(
+            stats.last_conflict,
+            Some(Conflict::MergeMismatch { .. })
+        ));
+        assert_eq!(
+            harness.finish().await.read(cell),
+            Some(WorldValue::ref_of(7.into()))
+        );
     }
 }

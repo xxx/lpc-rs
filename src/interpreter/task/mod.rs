@@ -42,7 +42,7 @@ use crate::interpreter::{
     process::Process,
     stm::{
         AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, TxnHandle, VarId,
-        commit_changeset, flush_effects, run_attempts, start_txn,
+        commit_changeset, flush_effects, start_txn,
     },
     task_context::{Caller, TaskContext},
 };
@@ -403,10 +403,8 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
             let initializes = seed.initializes;
             self.timeout_ms = (timeout_ms != 0).then_some(timeout_ms);
             self.seed = Some(seed);
-            let tx = self.context.global_state.committer_tx.clone();
-            let telemetry = self.context.global_state.attempt_telemetry.clone();
-            let commit_watch = self.context.global_state.commit_watch.clone();
-            let (res, _) = run_attempts(&tx, &telemetry, Some(commit_watch), self).await;
+            let runner = self.context.global_state.attempt_runner.clone();
+            let (res, _) = runner.run(self).await;
             let value = self.result();
             if res.is_err() || value.is_some() || !initializes {
                 diagnostics::finished(
@@ -702,7 +700,7 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
     ) -> (Result<()>, RetryStats) {
         self.seed = Some(seed.clone());
         self.timeout_ms = None;
-        run_attempts(
+        crate::interpreter::stm::run_attempts(
             tx,
             &crate::interpreter::stm::AttemptTelemetry::default(),
             None,

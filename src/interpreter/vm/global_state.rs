@@ -55,11 +55,8 @@ pub struct GlobalState {
     /// Handle to the committer thread.
     committer_handle: Option<JoinHandle<Snapshot>>,
 
-    /// Attempt-loop totals, recorded by `run_attempts`.
-    pub(crate) attempt_telemetry: Arc<stm::AttemptTelemetry>,
-
-    /// Subscription to the committer's per-commit watermark.
-    pub(crate) commit_watch: tokio::sync::watch::Receiver<stm::Version>,
+    /// Shared execution and retry policy for every owning task.
+    pub(crate) attempt_runner: Arc<stm::AttemptRunner>,
 
     /// When this state was built; MSSP's `UPTIME`.
     pub booted_at: std::time::SystemTime,
@@ -76,6 +73,10 @@ impl GlobalState {
         let conf = config.into();
         let (committer_tx, commit_watch, committer_handle) = Self::spawn_committer();
 
+        let attempt_runner = Arc::new(stm::AttemptRunner::new(
+            committer_tx.clone(),
+            Some(commit_watch),
+        ));
         Self {
             object_space: Arc::new(ObjectSpace::new(conf.clone())),
             config: conf,
@@ -83,8 +84,7 @@ impl GlobalState {
             tx,
             committer_tx,
             committer_handle: Some(committer_handle),
-            attempt_telemetry: Arc::default(),
-            commit_watch,
+            attempt_runner,
             booted_at: std::time::SystemTime::now(),
             registry: Default::default(),
         }
@@ -119,7 +119,10 @@ impl GlobalState {
         let (committer_tx, rx) = flume::unbounded();
         let loop_tx = committer_tx.clone();
         let committer = Committer::new();
-        state.commit_watch = committer.commit_watch();
+        state.attempt_runner = Arc::new(stm::AttemptRunner::new(
+            committer_tx.clone(),
+            Some(committer.commit_watch()),
+        ));
         let handle =
             std::thread::spawn(move || committer.run_with_rejections(loop_tx, rx, rejections));
         state.committer_tx = committer_tx;
@@ -147,7 +150,7 @@ impl GlobalState {
     /// The attempt loop's lifetime totals; for bench measurement and
     /// tooling, not the hot path.
     pub fn attempt_telemetry(&self) -> stm::AttemptTelemetrySnapshot {
-        self.attempt_telemetry.snapshot()
+        self.attempt_runner.telemetry()
     }
 
     /// Resolve `ptr` for a call started outside any task (`call_out`,

@@ -447,12 +447,12 @@ mod tests {
         let vm = Vm::new(config);
         let (proc, template, timeout) = setup_on(&vm, &MOVE_CHURN).await;
 
-        let before = vm.global_state.attempt_telemetry.snapshot();
+        let before = vm.global_state.attempt_telemetry();
         fan_out_applies(
             &template, &proc, "shuttle", WORKERS, PER_WORKER, timeout, true,
         )
         .await;
-        let after = vm.global_state.attempt_telemetry.snapshot();
+        let after = vm.global_state.attempt_telemetry();
 
         assert_eq!(
             after.conflicts - before.conflicts,
@@ -475,7 +475,7 @@ mod tests {
         let vm = Vm::new(config);
         let (proc, template, timeout) = setup_on(&vm, &COUNTER_ATOMIC).await;
 
-        let before = vm.global_state.attempt_telemetry.snapshot();
+        let before = vm.global_state.attempt_telemetry();
         fan_out_applies(
             &template,
             &proc,
@@ -486,7 +486,7 @@ mod tests {
             false,
         )
         .await;
-        let after = vm.global_state.attempt_telemetry.snapshot();
+        let after = vm.global_state.attempt_telemetry();
 
         assert_eq!(
             after.conflicts - before.conflicts,
@@ -533,12 +533,12 @@ mod tests {
             .unwrap();
         let vm = Vm::new(config);
         let (proc, template, timeout) = setup_on(&vm, &SCAN_LOCALS).await;
-        let before = vm.global_state.attempt_telemetry.snapshot();
+        let before = vm.global_state.attempt_telemetry();
         fan_out_applies(
             &template, &proc, "scan", WORKERS, PER_WORKER, timeout, false,
         )
         .await;
-        let after = vm.global_state.attempt_telemetry.snapshot();
+        let after = vm.global_state.attempt_telemetry();
         assert_eq!(
             after.conflicts - before.conflicts,
             0,
@@ -557,12 +557,12 @@ mod tests {
             .unwrap();
         let vm = Vm::new(config);
         let (proc, template, timeout) = setup_on(&vm, &RESOLVE_SELF).await;
-        let before = vm.global_state.attempt_telemetry.snapshot();
+        let before = vm.global_state.attempt_telemetry();
         fan_out_applies(
             &template, &proc, "resolve", WORKERS, PER_WORKER, timeout, false,
         )
         .await;
-        let after = vm.global_state.attempt_telemetry.snapshot();
+        let after = vm.global_state.attempt_telemetry();
         assert_eq!(
             after.conflicts - before.conflicts,
             0,
@@ -581,12 +581,12 @@ mod tests {
             .unwrap();
         let vm = Vm::new(config);
         let (proc, template, timeout) = setup_on(&vm, &PARSE_STRING).await;
-        let before = vm.global_state.attempt_telemetry.snapshot();
+        let before = vm.global_state.attempt_telemetry();
         fan_out_applies(
             &template, &proc, "evaluate", WORKERS, PER_WORKER, timeout, false,
         )
         .await;
-        let after = vm.global_state.attempt_telemetry.snapshot();
+        let after = vm.global_state.attempt_telemetry();
         assert_eq!(
             after.conflicts - before.conflicts,
             0,
@@ -605,12 +605,12 @@ mod tests {
             .unwrap();
         let vm = Vm::new(config);
         let (proc, template, timeout) = setup_on(&vm, &PARSER_VERB).await;
-        let before = vm.global_state.attempt_telemetry.snapshot();
+        let before = vm.global_state.attempt_telemetry();
         fan_out_applies(
             &template, &proc, "poke", WORKERS, PER_WORKER, timeout, false,
         )
         .await;
-        let after = vm.global_state.attempt_telemetry.snapshot();
+        let after = vm.global_state.attempt_telemetry();
         assert_eq!(
             after.conflicts - before.conflicts,
             0,
@@ -651,7 +651,7 @@ mod tests {
             owners.push(task.context.process.clone());
         }
 
-        let before = vm.global_state.attempt_telemetry.snapshot();
+        let before = vm.global_state.attempt_telemetry();
         let mut set = JoinSet::new();
         for owner in &owners {
             let owner = owner.clone();
@@ -674,7 +674,7 @@ mod tests {
         while let Some(joined) = set.join_next().await {
             joined.expect("a worker panicked");
         }
-        let after = vm.global_state.attempt_telemetry.snapshot();
+        let after = vm.global_state.attempt_telemetry();
 
         assert_eq!(
             after.conflicts - before.conflicts,
@@ -740,7 +740,7 @@ mod tests {
         let template = TaskTemplate::from(vm.global_state.clone());
         let timeout = vm.global_state.config.max_execution_time;
 
-        let before = vm.global_state.attempt_telemetry.snapshot();
+        let before = vm.global_state.attempt_telemetry();
         let mut set = JoinSet::new();
         for _ in 0..READERS {
             let reader = reader.clone();
@@ -781,7 +781,7 @@ mod tests {
         while let Some(joined) = set.join_next().await {
             joined.expect("a worker panicked");
         }
-        let after = vm.global_state.attempt_telemetry.snapshot();
+        let after = vm.global_state.attempt_telemetry();
 
         assert_eq!(
             after.conflicts - before.conflicts,

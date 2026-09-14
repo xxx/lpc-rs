@@ -1,6 +1,6 @@
 //! Contention backoff: how a conflicted attempt staggers before re-running.
 //!
-//! One [`Backoff`] per attempt loop owns the loss count, the jitter RNG, and
+//! One [`Backoff`] per attempt loop owns the jitter RNG and
 //! the realized-time totals; the loop only calls [`Backoff::stagger`]. A
 //! watching ladder's sleep tier awaits the committer's watermark under the
 //! jittered cap.
@@ -74,11 +74,10 @@ pub(crate) struct BackoffSpent {
     pub(crate) cap_expiries: u64,
 }
 
-/// One attempt loop's contention backoff: counts losses, draws jitter,
+/// One attempt loop's contention backoff: draws jitter,
 /// executes the ladder, accumulates realized time.
 #[derive(Debug)]
 pub(crate) struct Backoff {
-    losses: u64,
     rng: u64,
     spent: BackoffSpent,
     commit_watch: Option<watch::Receiver<Version>>,
@@ -91,7 +90,7 @@ impl Default for Backoff {
 }
 
 impl Backoff {
-    /// A fresh ladder with zero losses and self-seeded jitter.
+    /// A fresh ladder with self-seeded jitter.
     pub(crate) fn new() -> Self {
         // Seeded per loop so concurrent losers draw different jitter; the
         // stack address varies per worker, the clock per run.
@@ -101,7 +100,6 @@ impl Backoff {
                 .elapsed()
                 .map_or(0, |d| u64::from(d.subsec_nanos()));
         Self {
-            losses: 0,
             rng,
             spent: BackoffSpent::default(),
             commit_watch: None,
@@ -117,21 +115,15 @@ impl Backoff {
         }
     }
 
-    /// Losses recorded so far, one per [`stagger`](Backoff::stagger) call.
-    pub(crate) fn losses(&self) -> u64 {
-        self.losses
-    }
-
     /// Realized totals so far.
     pub(crate) fn spent(&self) -> BackoffSpent {
         self.spent
     }
 
-    /// Record one loss and stagger the re-run accordingly. Realized time
+    /// Stagger the re-run after `losses` conflicts. Realized time
     /// reads tokio's clock, so paused-time tests observe the sleeps.
-    pub(crate) async fn stagger(&mut self) {
-        self.losses += 1;
-        match backoff_step(self.losses, |n| splitmix64(&mut self.rng) % n + 1) {
+    pub(crate) async fn stagger(&mut self, losses: u64) {
+        match backoff_step(losses, |n| splitmix64(&mut self.rng) % n + 1) {
             BackoffStep::None => {}
             BackoffStep::Yields(n) => {
                 let started = tokio::time::Instant::now();
@@ -223,8 +215,8 @@ mod tests {
     async fn a_commit_bump_wakes_the_sleep_tier_early() {
         let (bump, rx) = tokio::sync::watch::channel(crate::interpreter::stm::Version::new());
         let mut backoff = Backoff::watching(rx);
-        for _ in 0..MAX_YIELD_LOSSES {
-            backoff.stagger().await;
+        for losses in 1..=MAX_YIELD_LOSSES {
+            backoff.stagger(losses).await;
         }
         assert_eq!(
             backoff.spent().commit_wakes,
@@ -236,7 +228,7 @@ mod tests {
             tokio::time::sleep(Duration::from_micros(100)).await;
             bump.send_replace(crate::interpreter::stm::Version::new());
         });
-        backoff.stagger().await;
+        backoff.stagger(MAX_YIELD_LOSSES + 1).await;
 
         let spent = backoff.spent();
         assert_eq!(spent.commit_wakes, 1);
@@ -249,8 +241,8 @@ mod tests {
     async fn a_quiet_watch_runs_the_full_cap() {
         let (_bump, rx) = tokio::sync::watch::channel(crate::interpreter::stm::Version::new());
         let mut backoff = Backoff::watching(rx);
-        for _ in 0..7 {
-            backoff.stagger().await;
+        for losses in 1..=7 {
+            backoff.stagger(losses).await;
         }
 
         let spent = backoff.spent();
@@ -262,18 +254,16 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn the_first_loss_spends_nothing() {
         let mut backoff = Backoff::new();
-        backoff.stagger().await;
-        assert_eq!(backoff.losses(), 1);
+        backoff.stagger(1).await;
         assert_eq!(backoff.spent(), BackoffSpent::default());
     }
 
     #[tokio::test(start_paused = true)]
     async fn eight_losses_cross_into_the_sleep_tier_without_wall_time() {
         let mut backoff = Backoff::new();
-        for _ in 0..8 {
-            backoff.stagger().await;
+        for losses in 1..=8 {
+            backoff.stagger(losses).await;
         }
-        assert_eq!(backoff.losses(), 8);
 
         let spent = backoff.spent();
         // Losses 7 and 8 sleep under caps of 2ms and 4ms, each above the floor.

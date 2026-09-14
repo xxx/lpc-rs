@@ -14,6 +14,17 @@ pub async fn transaction_stats<const N: usize>(context: &mut EfunContext<'_, N>)
     let commits = state.committer_stats().await?;
     let attempts = state.attempt_telemetry();
     let fields = [
+        ("owning_tasks", counter(attempts.owning_tasks)),
+        ("owning_attempts", counter(attempts.owning_attempts)),
+        (
+            "admission_acquisitions",
+            counter(attempts.admission_acquisitions),
+        ),
+        (
+            "admission_wait_ns",
+            counter(attempts.admission_wait.as_nanos()),
+        ),
+        ("admission_timeouts", counter(attempts.admission_timeouts)),
         ("applies", counter(attempts.applies)),
         ("attempts", counter(attempts.attempts)),
         ("conflicts", counter(attempts.conflicts)),
@@ -145,7 +156,21 @@ mod tests {
         assert!(commits.read_only_commits > 0);
         assert!(attempts.backoff_sleep.as_nanos() > 0);
         assert!(attempts.backoff_yield.as_nanos() > 0);
-        assert_eq!(fields.len(), 22);
+        assert_eq!(get("owning_tasks"), counter(attempts.owning_tasks));
+        assert_eq!(get("owning_attempts"), counter(attempts.owning_attempts));
+        assert_eq!(
+            get("admission_acquisitions"),
+            counter(attempts.admission_acquisitions)
+        );
+        assert_eq!(
+            get("admission_wait_ns"),
+            counter(attempts.admission_wait.as_nanos())
+        );
+        assert_eq!(
+            get("admission_timeouts"),
+            counter(attempts.admission_timeouts)
+        );
+        assert_eq!(fields.len(), 27);
         assert!(
             fields
                 .values()
@@ -170,5 +195,45 @@ mod tests {
         "# })
         .await;
         assert_eq!(task.result().unwrap(), LpcRef::from(1));
+    }
+
+    #[tokio::test]
+    async fn owning_totals_exclude_nested_room_init_applies() {
+        let vm = crate::interpreter::vm::Vm::new(test_config());
+        vm.initialize_process_from_code("/stats_room.c", "void init() {}")
+            .await
+            .unwrap();
+        let task = vm
+            .initialize_process_from_code(
+                "/stats_actor.c",
+                indoc! { r#"
+            void create() { enable_commands(); }
+            int outer() { move_object("/stats_room"); return 42; }
+        "# },
+            )
+            .await
+            .unwrap();
+        let state = vm.global_state.clone();
+        let before = state.attempt_telemetry();
+        let result = applied_by_name(
+            "outer",
+            &[],
+            task.context.process.clone(),
+            TaskTemplate::from(state.clone()),
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(result.value(), &LpcRef::from(42));
+        let after = state.attempt_telemetry();
+        assert_eq!(after.owning_tasks - before.owning_tasks, 1);
+        assert_eq!(after.owning_attempts - before.owning_attempts, 1);
+        assert_eq!(after.applies - before.applies, 2);
+        assert_eq!(after.attempts - before.attempts, 2);
+        assert_eq!(
+            after.admission_acquisitions - before.admission_acquisitions,
+            0
+        );
     }
 }

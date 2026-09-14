@@ -5,7 +5,7 @@ RUST_LOG=info,lpc_rs::transactions=debug
 ```
 
 For measurements from LPC, [`transaction_stats()`](efun/transaction_stats.md)
-returns cumulative counters and current gauges for retries, backoff, committer
+returns cumulative counters and current gauges for retries, admission, backoff, committer
 load, and retained history.
 
 The summary identifies the owning object and entry point. A player command is labelled `command`; callback resolution and connection binding use `resolve_callback`, `attach`, or `detach`. It does not record argument values or command text. The competing writer's label identifies its owning entry point, which may have made the actual write in a nested apply.
@@ -18,10 +18,11 @@ The summary identifies the owning object and entry point. A player command is la
 | `compilation_ms` | Time inside transaction-triggered file compilation, including compiler policy applies; nested compilations count once and cancellation is included. |
 | `commit_phase_ms` | Commit preparation, submission, committer queue/service, and receiving the reply, combined. |
 | `backoff_yield_ms`, `backoff_sleep_ms` | Realized retry waits in each backoff tier. |
+| `admission_wait_ms` | Time acquiring retry turns after read invalidations, including waits that expired. |
 | `delivery_ms` | Delivery of the successful transaction's deferred effects. |
 | `last_conflict` | The last rejection encountered before completion or failure; `none` means no commit rejection was observed. |
 
-These are wall times, not CPU measurements. Compilation performed before a root task starts, such as bootstrap compilation, is outside these timings. Diagnostic formatting and object-name lookup are also outside them. Commit and effect delivery remain uncancelled after submission, and asynchronous evaluation limits can overshoot while waiting for the runtime to poll again.
+These are wall times, not CPU measurements. Compilation performed before a root task starts, such as bootstrap compilation, is outside these timings. Diagnostic formatting and object-name lookup are also outside them. Commit and effect delivery remain outside the evaluation timeout, and asynchronous evaluation limits can overshoot while waiting for the runtime to poll again.
 
 A read invalidation reports `cell`, `base`, `current`, `written_at`, and `writer`. `written_at` is the first newer commit encountered that invalidated a tracked read; it need not be the newest commit. Each rejection reports one conflicting cell, not the full intersection. The last rejection is evidence of a dependency, not necessarily the most frequent hotspot across the task's attempts.
 
@@ -35,4 +36,18 @@ Other rejection reasons are reported separately:
 
 Writer metadata contains names only and expires with the existing write history. Raw/internal commits without an entry label report an unknown writer. Successes without retries do not perform object or payload alias scans; a successful retry does so only when its debug summary is enabled.
 
-For a timeout with no conflicts, inspect compilation and evaluation time first. For a timeout with retries, use `field` and `writer` to identify the shared dependency, then compare discarded attempt work with commit and backoff time. These diagnostics do not change admission, validation, deadlines, or retry behavior.
+For a timeout with no conflicts, inspect compilation and evaluation time first. For a timeout with retries, use `field` and `writer` to identify the shared dependency, then compare discarded attempt work with commit, admission, and backoff time.
+
+After a read invalidation, the shared attempt runner admits one retry at a time
+per conflicting cell, in FIFO order. It acquires the turn before opening a fresh
+snapshot and releases it after the commit reply, before effect delivery. A
+rejected retry rejoins the tail of its newly reported cell's queue. Nested
+applies share their owner's transaction and turn. Queues disappear when their
+last participant leaves; no room configuration or mudlib hint is required.
+
+Admission waiting uses the original execution allowance. Expiration while
+queued records no new attempt or snapshot. Other conflict kinds retain backoff,
+and the committer still validates every attempt. First attempts run immediately
+and can invalidate an admitted retry; related work can also report different
+cells. Admission reduces repeated conflicts without guaranteeing completion or
+output order under continuing traffic.

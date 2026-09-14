@@ -4,6 +4,9 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
+#[cfg(test)]
+use crate::interpreter::stm::run_attempts;
+
 use dashmap::DashMap;
 use lpc_rs_errors::Result;
 use tracing::error;
@@ -14,7 +17,7 @@ use crate::{
         process::Process,
         stm::{
             AttemptBody, CommitProtocol, Effect, LiveSnapshot, Transaction, flush_effects,
-            run_attempts, start_txn,
+            start_txn,
         },
         vm::global_state::GlobalState,
     },
@@ -83,13 +86,7 @@ impl GlobalState {
             process,
             attempt: None,
         };
-        let (res, _) = run_attempts(
-            &self.committer_tx,
-            &self.attempt_telemetry,
-            Some(self.commit_watch.clone()),
-            &mut body,
-        )
-        .await;
+        let (res, _) = self.attempt_runner.run(&mut body).await;
         if let Err(e) = res {
             error!("attach: committer failed: {e}");
         }
@@ -115,13 +112,7 @@ impl GlobalState {
                     attempt: None,
                     held: false,
                 };
-                let (res, _) = run_attempts(
-                    &self.committer_tx,
-                    &self.attempt_telemetry,
-                    Some(self.commit_watch.clone()),
-                    &mut attempt,
-                )
-                .await;
+                let (res, _) = self.attempt_runner.run(&mut attempt).await;
                 match res {
                     Ok(_) => attempt.held.then_some(body),
                     Err(e) => {

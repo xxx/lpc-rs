@@ -11,7 +11,7 @@ use crate::{
         process::Process,
         stm::{
             AttemptBody, CommitProtocol, Conflict, Effect, LiveSnapshot, Transaction, TxnHandle,
-            commit_changeset, flush_effects, run_attempts, start_txn,
+            commit_changeset, flush_effects, start_txn,
         },
         task::task_template::TaskTemplate,
         task_context::TaskContext,
@@ -139,13 +139,7 @@ pub(crate) async fn run_command_line(
 ) -> Result<Outcome> {
     let mut task = CommandTask::new(template.clone(), actor, line);
     let global_state = template.global_state.clone();
-    let (result, _stats) = run_attempts(
-        &global_state.committer_tx,
-        &global_state.attempt_telemetry,
-        Some(global_state.commit_watch.clone()),
-        &mut task,
-    )
-    .await;
+    let (result, _stats) = global_state.attempt_runner.run(&mut task).await;
     result.map(|()| task.outcome)
 }
 
@@ -405,12 +399,7 @@ mod tests {
         let capture = crate::test_support::log_capture::LogCapture::default();
         let (result, stats) = tokio::time::timeout(
             Duration::from_secs(5),
-            run_attempts(
-                &vm.global_state.committer_tx,
-                &vm.global_state.attempt_telemetry,
-                Some(vm.global_state.commit_watch.clone()),
-                &mut command,
-            ),
+            vm.global_state.attempt_runner.run(&mut command),
         )
         .with_subscriber(capture.subscriber("lpc_rs::transactions=warn"))
         .await

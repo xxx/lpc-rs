@@ -11,11 +11,16 @@ its maximum positive value.
 
 | Key | Meaning |
 | --- | --- |
+| `owning_tasks` | Finished driver-started actions, excluding nested applies; includes failures |
+| `owning_attempts` | Started attempts recorded by those finished owning tasks |
+| `admission_acquisitions` | Retry turns acquired by those finished owning tasks |
+| `admission_wait_ns` | Time acquiring retry turns, including waits that expired |
+| `admission_timeouts` | Finished owning tasks whose admission wait exhausted their execution allowance |
 | `applies` | Finished attempt-runner invocations, including nested applies |
 | `attempts` | Execution attempts recorded by those finished invocations |
 | `conflicts` | Conflicts recorded by those finished invocations |
 | `errors` | Finished invocations that returned an error |
-| `total_ns` | Sum of elapsed invocation times, including retries, backoff, and delivery |
+| `total_ns` | Sum of elapsed invocation times, including retries, admission, backoff, and delivery |
 | `backoff_yield_ns` | Time spent in the yield backoff tier |
 | `backoff_sleep_ns` | Time spent in the sleep backoff tier |
 | `backoff_sleep_requested_ns` | Requested sleep time, before early wakes and timer rounding |
@@ -45,6 +50,13 @@ already finished are included, even if their outer transaction has not committed
 or ultimately retries. Consequently, `applies` is not a count of committed
 top-level commands, and `errors` may include errors caught by outer LPC code.
 `commit_conflicts` includes rejected commits whose retry loop has not yet finished.
+
+After a read conflict, owning tasks queue for one retry turn on the invalidated
+cell. Waiting consumes the task's original execution allowance and opens no
+snapshot. A task that expires while waiting records its conflict and wait, but
+does not count an attempt it never started. Nested applies share their owner's
+turn and contribute nothing to the five owning-task and admission counters.
+First attempts run immediately; other conflict kinds retain retry backoff.
 
 Elapsed times overlap across concurrent and nested invocations: `total_ns` is
 neither CPU time nor server uptime. `live_snapshots` counts pins, not players or
