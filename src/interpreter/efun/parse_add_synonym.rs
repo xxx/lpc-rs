@@ -3,7 +3,7 @@
 use lpc_rs_errors::Result;
 
 use crate::{
-    command::registry::{Rule, VerbRules},
+    command::registry::VerbRules,
     interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},
 };
 
@@ -29,26 +29,10 @@ pub fn parse_add_synonym<const N: usize>(context: &mut EfunContext<'_, N>) -> Re
     let this = context.process().clone();
     let old_verb = old_verb.to_str();
     let verb_rules = VerbRules::new(context.task_context());
-    let found: Vec<Rule> = verb_rules
-        .owned_by(&this)
-        .into_iter()
-        .filter(|r| r.verb.as_str() == old_verb)
-        .filter(|r| match rule_filter {
-            None => true,
-            Some(wanted) => r.protocol().is_some_and(|p| p.rule.as_str() == wanted),
-        })
-        .collect();
-    if found.is_empty() {
+    if !verb_rules.add_synonym(&this, new_verb.to_str().into(), old_verb, rule_filter) {
         return Err(context.runtime_error(format!(
             "parse_add_synonym: this_object() has no rules for '{old_verb}'"
         )));
-    }
-    for rule in &found {
-        verb_rules.append(Rule::new(
-            &this,
-            new_verb.to_str().into(),
-            rule.family.clone(),
-        ));
     }
     Ok(())
 }

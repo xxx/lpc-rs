@@ -6,12 +6,12 @@ use std::sync::Arc;
 use lpc_rs_errors::Result;
 
 use crate::{
-    command::scope::{self, Scope},
+    command::{registry::ActorRules, scope},
     interpreter::{
         INIT,
         apply::apply_hook,
         process::Process,
-        stm::{MergeOp, TxnHandle},
+        stm::TxnHandle,
         task_context::{Caller, Callers, TaskContext},
     },
 };
@@ -24,14 +24,14 @@ pub(crate) fn before_move(txn: &TxnHandle, mover: &Arc<Process>, new_env: &Arc<P
     forget_departure(txn, mover);
     if mover.commands_enabled(txn) {
         let keep = scope::after_move(txn, mover, new_env);
-        txn.with(|t| t.merge(mover.rules.id, MergeOp::RulesRetainOwners(keep)));
+        ActorRules::new(txn, mover).retain_owners(keep);
     }
 }
 
 /// The livings `object` leaves behind forget the rules it registered; its own
 /// contents keep theirs.
 pub(crate) fn forget_departure(txn: &TxnHandle, object: &Arc<Process>) {
-    forget(txn, object, &witnesses_left_behind(txn, object));
+    ActorRules::forget_owner(txn, object, &witnesses_left_behind(txn, object));
 }
 
 /// Every living holding `object`'s rules forgets them: those it leaves
@@ -44,7 +44,7 @@ pub(crate) fn forget_destruct(txn: &TxnHandle, object: &Arc<Process>) {
             .into_iter()
             .filter(|holder| holder.commands_enabled(txn)),
     );
-    forget(txn, object, &livings);
+    ActorRules::forget_owner(txn, object, &livings);
 }
 
 /// The livings around `object` that its rules can have reached; do not read
@@ -62,19 +62,6 @@ fn witnesses_left_behind(txn: &TxnHandle, object: &Arc<Process>) -> Vec<Arc<Proc
         livings.push(environment);
     }
     livings
-}
-
-/// Each of `livings` drops every rule `object` owns.
-fn forget(txn: &TxnHandle, object: &Arc<Process>, livings: &[Arc<Process>]) {
-    if livings.is_empty() {
-        return;
-    }
-    let gone = Scope::new([object.clone()]);
-    txn.with(|t| {
-        for living in livings {
-            t.merge(living.rules.id, MergeOp::RulesRemoveOwners(gone.clone()));
-        }
-    });
 }
 
 /// After a move: `init()` in MudOS order, with `this_player` the living

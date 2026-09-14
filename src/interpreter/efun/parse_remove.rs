@@ -14,19 +14,6 @@ pub fn parse_remove<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<
     let LpcRef::String(verb) = context.arg(0).clone() else {
         return Err(context.runtime_error("parse_remove: the verb must be a string"));
     };
-    let this = context.process().clone();
-    let verb = verb.to_str();
-    let verb_rules = VerbRules::new(context.task_context());
-    for rule in verb_rules.all().iter() {
-        if rule.owner().is_none() {
-            verb_rules.remove(rule.id);
-            continue;
-        }
-        let is_owned = rule.owned_by(&this);
-        let is_base_verb = rule.protocol().is_some_and(|p| p.verb.as_str() == verb);
-        if is_owned && is_base_verb {
-            verb_rules.remove(rule.id);
-        }
-    }
+    VerbRules::new(context.task_context()).remove_verb(context.process(), verb.to_str());
     Ok(())
 }

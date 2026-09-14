@@ -8,10 +8,7 @@ use std::sync::Arc;
 use lpc_rs_core::LpcIntInner;
 
 use crate::{
-    command::{
-        registry::{Rule, RuleId},
-        scope::Scope,
-    },
+    command::registry::RuleEdit,
     interpreter::{
         lpc_array::LpcArray, lpc_int::LpcInt, lpc_mapping::LpcMapping, lpc_ref::LpcRef,
         stm::WorldValue,
@@ -30,14 +27,8 @@ pub(crate) enum MergeOp {
     ArrayRemoveValue(LpcRef),
     /// Insert or overwrite one key; an absent cell is the empty mapping.
     MapInsert(LpcRef, LpcRef),
-    /// Append one rule; an absent cell is the empty list.
-    RulesAppend(Rule),
-    /// Remove the rule with this id.
-    RulesRemove(RuleId),
-    /// Remove every rule registered by an owner in the scope.
-    RulesRemoveOwners(Scope),
-    /// Keep only rules registered by an owner in the scope.
-    RulesRetainOwners(Scope),
+    /// Apply an ordered rule edit; an absent cell is the empty registry.
+    Rules(RuleEdit),
 }
 
 /// The committed value no longer has the type the op needs. The commit is
@@ -86,32 +77,7 @@ impl MergeOp {
             (MergeOp::MapInsert(key, value), WorldValue::Mapping(mapping)) => {
                 Arc::make_mut(mapping).insert(key.clone(), value.clone());
             }
-            (MergeOp::RulesAppend(rule), WorldValue::Rules(rules)) => {
-                let mut list = rules.to_vec();
-                list.push(rule.clone());
-                *rules = Arc::from(list);
-            }
-            (MergeOp::RulesRemove(id), WorldValue::Rules(rules)) => {
-                *rules = rules
-                    .iter()
-                    .filter(|rule| rule.id != *id)
-                    .cloned()
-                    .collect();
-            }
-            (MergeOp::RulesRemoveOwners(scope), WorldValue::Rules(rules)) => {
-                *rules = rules
-                    .iter()
-                    .filter(|rule| !scope.contains_weak(&rule.owner))
-                    .cloned()
-                    .collect();
-            }
-            (MergeOp::RulesRetainOwners(scope), WorldValue::Rules(rules)) => {
-                *rules = rules
-                    .iter()
-                    .filter(|rule| scope.contains_weak(&rule.owner))
-                    .cloned()
-                    .collect();
-            }
+            (MergeOp::Rules(edit), WorldValue::Rules(rules)) => edit.apply(rules),
             _ => return Err(MergeMismatch),
         }
         Ok(())
@@ -125,10 +91,7 @@ impl MergeOp {
                 WorldValue::Array(Arc::new(LpcArray::default()))
             }
             MergeOp::MapInsert(..) => WorldValue::Mapping(Arc::new(LpcMapping::default())),
-            MergeOp::RulesAppend(_)
-            | MergeOp::RulesRemove(_)
-            | MergeOp::RulesRemoveOwners(_)
-            | MergeOp::RulesRetainOwners(_) => WorldValue::Rules(Arc::from(Vec::new())),
+            MergeOp::Rules(_) => WorldValue::Rules(Default::default()),
         }
     }
 
@@ -144,6 +107,7 @@ impl MergeOp {
                 a.extend(b);
                 None
             }
+            (MergeOp::Rules(first), MergeOp::Rules(next)) => first.fold(next).map(MergeOp::Rules),
             (_, next) => Some(next),
         }
     }
@@ -154,18 +118,6 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::{
-        command::{registry::tests::rule, scope::Scope},
-        interpreter::process::Process,
-    };
-
-    fn rules_of(value: &WorldValue) -> Vec<&str> {
-        match value {
-            WorldValue::Rules(rules) => rules.iter().map(|r| r.verb.as_str()).collect(),
-            other => panic!("expected rules, got {other:?}"),
-        }
-    }
-
     #[test]
     fn apply_in_place_leaves_a_shared_payload_untouched() {
         let shared = Arc::new(LpcMapping::default());
@@ -180,76 +132,5 @@ mod tests {
         };
         assert!(!Arc::ptr_eq(&shared, &own));
         assert_eq!(own.get(&"a".into()), Some(&1.into()));
-    }
-
-    #[test]
-    fn append_onto_an_absent_cell_starts_the_list() {
-        let owner = Arc::new(Process::default());
-        let value = MergeOp::RulesAppend(rule(&owner, "look"))
-            .apply_to(None)
-            .unwrap();
-        assert_eq!(rules_of(&value), vec!["look"]);
-    }
-
-    #[test]
-    fn append_keeps_registration_order() {
-        let owner = Arc::new(Process::default());
-        let first = MergeOp::RulesAppend(rule(&owner, "a"))
-            .apply_to(None)
-            .unwrap();
-        let second = MergeOp::RulesAppend(rule(&owner, "b"))
-            .apply_to(Some(&first))
-            .unwrap();
-        assert_eq!(rules_of(&second), vec!["a", "b"]);
-    }
-
-    #[test]
-    fn remove_by_id_drops_only_that_rule() {
-        let owner = Arc::new(Process::default());
-        let a = rule(&owner, "a");
-        let b = rule(&owner, "b");
-        let value = WorldValue::Rules(Arc::from(vec![a.clone(), b.clone()]));
-        let after = MergeOp::RulesRemove(a.id).apply_to(Some(&value)).unwrap();
-        assert_eq!(rules_of(&after), vec!["b"]);
-    }
-
-    #[test]
-    fn remove_owners_drops_every_rule_of_those_owners() {
-        let room = Arc::new(Process::default());
-        let sign = Arc::new(Process::default());
-        let value = WorldValue::Rules(Arc::from(vec![rule(&room, "look"), rule(&sign, "read")]));
-        let after = MergeOp::RulesRemoveOwners(Scope::new([sign.clone()]))
-            .apply_to(Some(&value))
-            .unwrap();
-        assert_eq!(rules_of(&after), vec!["look"]);
-    }
-
-    #[test]
-    fn retain_owners_keeps_only_rules_in_scope() {
-        let room = Arc::new(Process::default());
-        let sign = Arc::new(Process::default());
-        let value = WorldValue::Rules(Arc::from(vec![rule(&room, "look"), rule(&sign, "read")]));
-        let after = MergeOp::RulesRetainOwners(Scope::new([sign.clone()]))
-            .apply_to(Some(&value))
-            .unwrap();
-        assert_eq!(rules_of(&after), vec!["read"]);
-    }
-
-    #[test]
-    fn a_rules_op_on_a_non_rules_cell_is_a_mismatch() {
-        let owner = Arc::new(Process::default());
-        let base = WorldValue::Ref(LpcRef::from(1));
-        assert_eq!(
-            MergeOp::RulesAppend(rule(&owner, "a")).apply_to(Some(&base)),
-            Err(MergeMismatch)
-        );
-    }
-
-    #[test]
-    fn rules_ops_do_not_fold() {
-        let owner = Arc::new(Process::default());
-        let mut first = MergeOp::RulesAppend(rule(&owner, "a"));
-        let next = MergeOp::RulesAppend(rule(&owner, "b"));
-        assert!(first.fold(next).is_some());
     }
 }

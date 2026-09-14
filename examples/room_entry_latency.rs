@@ -28,7 +28,8 @@ struct Scenario {
     separate: bool,
     living: bool,
     source: bool,
-    rules: bool,
+    rules: usize,
+    retained_snapshots: bool,
     shared_hook: bool,
     staggered: bool,
     background: bool,
@@ -58,7 +59,7 @@ fn hooks(vm: &Vm, rooms: &[Arc<Process>]) -> i64 {
 async fn measure(scenario: Scenario, sample: usize) {
     let config = ConfigBuilder::default()
         .lib_dir("./tests/fixtures/code")
-        .max_execution_time(300_u64)
+        .max_execution_time(3000_u64)
         .build()
         .unwrap();
     let vm = Vm::new(config);
@@ -78,11 +79,7 @@ async fn measure(scenario: Scenario, sample: usize) {
         } else {
             ""
         },
-        if scenario.rules {
-            "add_action(\"greet\", \"greet\");"
-        } else {
-            ""
-        },
+        "add_action(\"greet\", \"greet\");".repeat(scenario.rules),
         if scenario.shared_hook {
             "\"/latency_counter\"->bump();"
         } else {
@@ -146,6 +143,19 @@ async fn measure(scenario: Scenario, sample: usize) {
         .unwrap()
         .context
         .process;
+    let retained: Vec<_> = if scenario.retained_snapshots {
+        rooms
+            .iter()
+            .flat_map(|room| vm.global_state.committed_inventory(room))
+            .map(|npc| {
+                let rules = vm.global_state.committed_rules(&npc);
+                let entries: Vec<_> = rules.iter().map(|rule| (rule.id, rule.verb)).collect();
+                (rules, entries)
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     let hooks_before = hooks(&vm, &rooms);
     let stats_before = vm.global_state.committer_stats().await.unwrap();
     let background = if scenario.background {
@@ -250,18 +260,33 @@ async fn measure(scenario: Scenario, sample: usize) {
                 vm.global_state.committed_environment(npc).as_ref(),
                 Some(room)
             );
-            if scenario.rules {
+            if scenario.rules > 0 {
                 let rules = vm.global_state.committed_rules(npc);
-                assert_eq!(rules.len(), inventory.len() - 1);
+                assert_eq!(rules.len(), (inventory.len() - 1) * scenario.rules);
                 for other in &inventory {
                     if !Arc::ptr_eq(npc, other) {
-                        assert!(rules.iter().any(|rule| {
-                            rule.owner().is_some_and(|owner| Arc::ptr_eq(&owner, other))
-                        }));
+                        assert_eq!(
+                            rules
+                                .iter()
+                                .filter(|rule| {
+                                    rule.owner().is_some_and(|owner| Arc::ptr_eq(&owner, other))
+                                })
+                                .count(),
+                            scenario.rules
+                        );
                     }
                 }
             }
         }
+    }
+    for (rules, entries) in retained {
+        assert_eq!(
+            rules
+                .iter()
+                .map(|rule| (rule.id, rule.verb))
+                .collect::<Vec<_>>(),
+            entries
+        );
     }
     let committed = (scenario.roots - failed) * population.max(1);
     assert_eq!(members, committed);
@@ -301,7 +326,8 @@ async fn main() {
         separate: false,
         living: true,
         source: false,
-        rules: false,
+        rules: 0,
+        retained_snapshots: false,
         shared_hook: false,
         staggered: false,
         background: false,
@@ -358,7 +384,50 @@ async fn main() {
         },
         Scenario {
             name: "rules_64",
-            rules: true,
+            rules: 1,
+            ..shared
+        },
+        Scenario {
+            name: "rules1_16",
+            roots: 16,
+            rules: 1,
+            ..shared
+        },
+        Scenario {
+            name: "rules4_16",
+            roots: 16,
+            rules: 4,
+            ..shared
+        },
+        Scenario {
+            name: "rules16_16",
+            roots: 16,
+            rules: 16,
+            ..shared
+        },
+        Scenario {
+            name: "rules4_64",
+            roots: 64,
+            rules: 4,
+            ..shared
+        },
+        Scenario {
+            name: "rules16_64",
+            roots: 64,
+            rules: 16,
+            ..shared
+        },
+        Scenario {
+            name: "rules4_source_64",
+            rules: 4,
+            source: true,
+            retained_snapshots: true,
+            ..shared
+        },
+        Scenario {
+            name: "rules4_background_64",
+            rules: 4,
+            background: true,
             ..shared
         },
         Scenario {

@@ -7,12 +7,9 @@ use lpc_rs_errors::{Result, lpc_error};
 
 use crate::{
     command::{
-        frontend::{
-            add_action::{self, verb_matches},
-            native,
-        },
+        frontend::{add_action, native},
         parser::{self, Nickname, Verdict},
-        registry::{Family, Rule, VerbRules},
+        registry::{ActorRules, Family, Rule, VerbRules},
         resolve::{LpcVocabulary, Resolver},
         scope::neighbourhood,
     },
@@ -85,18 +82,8 @@ pub(crate) async fn run(
     line: &str,
     first_word: &str,
 ) -> Result<bool> {
-    let rules = actor.rules_of(ctx.txn());
     let scope = neighbourhood(ctx.txn(), actor);
-    let mut candidates: Vec<Rule> = rules
-        .iter()
-        .filter(|rule| {
-            rule.owner()
-                .is_some_and(|owner| owner.is_live(ctx.txn()) && scope.contains(&owner))
-        })
-        .filter(|rule| verb_matches(rule.verb.as_str(), rule.matching(), first_word))
-        .cloned()
-        .collect();
-    candidates.sort_by_key(|rule| std::cmp::Reverse(rule.id));
+    let candidates = ActorRules::new(ctx.txn(), actor).matching(first_word, &scope);
 
     let mut resolver = Resolver::new(
         LpcVocabulary::new(ctx, as_actor(ctx, actor), scope.members()),

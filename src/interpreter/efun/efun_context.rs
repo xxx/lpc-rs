@@ -13,7 +13,10 @@ use lpc_rs_function_support::program_function::ProgramFunction;
 use lpc_rs_utils::config::Config;
 use smallvec::SmallVec;
 
-use crate::command::{presence::forget_destruct, registry::VerbRules};
+use crate::command::{
+    presence::forget_destruct,
+    registry::{ActorRules, VerbRules},
+};
 use crate::interpreter::{
     call_frame::CallFrame,
     call_stack::CallStack,
@@ -498,6 +501,7 @@ impl<'task, const N: usize> EfunContext<'task, N> {
         if process.parser_ready.get().is_some() {
             VerbRules::new(self.task_context()).remove_owner(&process);
         }
+        ActorRules::new(self.txn(), &process).clear();
         self.txn().with(|t| {
             t.drop_var(var_id);
             if process.is_clone() {
@@ -506,7 +510,6 @@ impl<'task, const N: usize> EfunContext<'task, N> {
                     MergeOp::ArrayRemoveValue(LpcRef::from(Arc::downgrade(&process))),
                 );
             }
-            t.drop_var(process.rules.id);
             t.drop_var(process.position.livings.id);
             if is_living && let Some(env) = &environment {
                 Process::unmark_living(t, &process, env);

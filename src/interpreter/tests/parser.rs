@@ -1331,3 +1331,36 @@ async fn a_triple_quote_char_literal_is_the_apostrophe() {
     .await;
     assert_eq!(r, vec![LpcRef::from(1)]);
 }
+
+#[tokio::test]
+async fn parser_selection_sees_edits_from_a_declining_actor_handler() {
+    let result = run(
+        "",
+        &[],
+        indoc! { r#"
+        int phase; int seen;
+        mixed *create() {
+            enable_commands();
+            set_this_player(this_object());
+            parse_init();
+            add_action("decline", "look");
+            int added = command("look sword");
+            phase = 1;
+            int removed = command("look sword");
+            return ({ added, removed, seen });
+        }
+        int decline(string arg) {
+            if (phase) parse_remove("look");
+            else parse_add_rule("look", "WRD");
+            return 0;
+        }
+        int can_look_wrd(string arg) { return 1; }
+        void do_look_wrd(string arg) { seen++; }
+    "# },
+    )
+    .await;
+    assert_eq!(
+        result,
+        vec![LpcRef::from(1), LpcRef::from(0), LpcRef::from(1)]
+    );
+}

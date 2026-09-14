@@ -1,13 +1,10 @@
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use lpc_rs_errors::Result;
 
 use crate::{
-    command::registry::Rule,
-    interpreter::{
-        efun::efun_context::EfunContext, function_type::function_address::FunctionAddress,
-        lpc_ref::LpcRef, process::Process, stm::MergeOp,
-    },
+    command::registry::ActorRules,
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, process::Process},
 };
 
 /// `remove_action`, an efun that unregisters this object's rules for a verb:
@@ -43,28 +40,11 @@ pub fn remove_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result
         }
     };
 
-    let rules = target.rules_of(context.txn());
-    let doomed: HashSet<_> = rules
-        .iter()
-        .filter(|rule| rule.verb.as_str() == verb)
-        .filter(|rule| std::ptr::eq(rule.owner.as_ptr(), Arc::as_ptr(&this_object)))
-        .filter(|rule| {
-            function_name
-                .as_deref()
-                .is_none_or(|name| handles(rule, name))
-        })
-        .map(|rule| rule.id)
-        .collect();
-    // A native registration shares one id across every verb, so a doomed id can match several rules here.
-    let removed = rules
-        .iter()
-        .filter(|rule| doomed.contains(&rule.id))
-        .count();
-    context.txn().with(|t| {
-        for id in &doomed {
-            t.merge(target.rules.id, MergeOp::RulesRemove(*id));
-        }
-    });
+    let removed = ActorRules::new(context.txn(), &target).remove_actions(
+        &this_object,
+        &verb,
+        function_name.as_deref(),
+    );
     context.return_efun_result(LpcRef::from(removed as i64));
     Ok(())
 }
@@ -75,14 +55,6 @@ fn player<const N: usize>(context: &EfunContext<'_, N>) -> Result<Arc<Process>> 
         .this_player()
         .load_full()
         .ok_or_else(|| context.runtime_error("remove_action: no this_player()"))
-}
-
-/// Whether the rule's handler is this object's function named `name`.
-fn handles(rule: &Rule, name: &str) -> bool {
-    let Some(pointer) = rule.pointer() else {
-        return false;
-    };
-    matches!(&pointer.address, FunctionAddress::Local(_, f) if f.prototype.name.as_ref() == name)
 }
 
 #[cfg(test)]

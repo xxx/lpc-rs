@@ -296,6 +296,66 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn gc_preserves_values_captured_only_by_command_rules() {
+        use crate::interpreter::stm::{Transaction, start_txn};
+
+        let vm = Vm::new(test_config());
+        let actor = vm
+            .initialize_process_from_code(
+                "/rule_capture.c",
+                r#"
+            void create() {
+                enable_commands();
+                set_this_player(this_object());
+                int *values = ({ 42 });
+                add_action((: values[0] :), "look");
+                add_rule("'peek'", (: values[0] :));
+            }
+            void clear() { disable_commands(); }
+        "#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let captures: std::collections::HashSet<_> = vm
+            .global_state
+            .committed_rules(&actor)
+            .iter()
+            .flat_map(|rule| rule.pointer().unwrap().upvalue_ptrs.iter().copied())
+            .collect();
+        assert!(!captures.is_empty());
+        vm.global_state.gc().await.unwrap().unwrap();
+        {
+            let live = start_txn(&vm.global_state.committer_tx).await.unwrap();
+            let mut txn = Transaction::new(live.inner.clone());
+            for cell in &captures {
+                let Some(LpcRef::Array(array)) = txn.read(*cell) else {
+                    panic!("the rule's captured array was reclaimed");
+                };
+                assert_eq!(
+                    txn.read_array(array.id).unwrap().array,
+                    vec![LpcRef::from(42)]
+                );
+            }
+        }
+        apply_function_by_name(
+            "clear",
+            &[],
+            actor,
+            TaskTemplate::from(vm.global_state.clone()),
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        vm.global_state.gc().await.unwrap().unwrap();
+        let live = start_txn(&vm.global_state.committer_tx).await.unwrap();
+        let mut txn = Transaction::new(live.inner.clone());
+        assert!(captures.iter().all(|cell| txn.read(*cell).is_none()));
+    }
+
     /// The cell of a closure that died with its frame is reclaimed.
     #[tokio::test]
     async fn gc_reclaims_the_cells_of_a_popped_frame() {

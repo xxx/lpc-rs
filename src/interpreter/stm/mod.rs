@@ -293,7 +293,7 @@ impl Transaction {
     pub(crate) fn read_rules(&mut self, var_id: VarId) -> RuleList {
         self.read_value(var_id)
             .and_then(WorldValue::into_rules)
-            .unwrap_or_else(|| Arc::from(Vec::new()))
+            .unwrap_or_default()
     }
 
     /// Copy-on-write the array cell `var_id`. The first write in an attempt

@@ -2,6 +2,13 @@
 //! on each living's `Process` for what it can command, one on `ObjectSpace`
 //! for the verb-attached rules — and changed only through merge ops.
 
+mod actor;
+mod payload;
+
+pub(crate) use actor::ActorRules;
+pub(crate) use payload::RuleEdit;
+pub use payload::RuleList;
+
 use std::sync::{
     Arc, Weak,
     atomic::{AtomicU64, Ordering},
@@ -209,9 +216,6 @@ impl PartialEq for Rule {
 
 impl Eq for Rule {}
 
-/// A living's rule list; copy-on-write like an array payload.
-pub type RuleList = Arc<[Rule]>;
-
 /// The verb-attached rules — every verb object's, driver-wide — read and
 /// changed through one transaction.
 pub(crate) struct VerbRules<'a> {
@@ -252,30 +256,79 @@ impl<'a> VerbRules<'a> {
             .collect()
     }
 
-    /// Append `rule` without reading the cell, so parallel registrations
-    /// commute.
-    pub(crate) fn append(&self, rule: Rule) {
-        self.txn
-            .with(|t| t.merge(self.cell, MergeOp::RulesAppend(rule)));
+    /// Register a parser rule without reading the shared cell.
+    pub(crate) fn register(&self, owner: &Arc<Process>, parser: ParserRule) {
+        self.append(vec![Rule::new(
+            owner,
+            parser.verb,
+            Family::Parser(Arc::new(parser)),
+        )]);
     }
 
-    /// Remove the rule with `id`.
-    pub(crate) fn remove(&self, id: RuleId) {
-        self.txn
-            .with(|t| t.merge(self.cell, MergeOp::RulesRemove(id)));
+    /// Copy matching typed-verb registrations with fresh identities and the same base handlers.
+    pub(crate) fn add_synonym(
+        &self,
+        owner: &Arc<Process>,
+        new_verb: Ustr,
+        old_verb: &str,
+        rule_filter: Option<&str>,
+    ) -> bool {
+        let found: Vec<_> = self
+            .all()
+            .iter()
+            .filter(|rule| rule.owned_by(owner) && rule.verb.as_str() == old_verb)
+            .filter(|rule| {
+                rule_filter.is_none_or(|wanted| {
+                    rule.protocol().is_some_and(|parser| parser.rule == wanted)
+                })
+            })
+            .map(|rule| Rule::new(owner, new_verb, rule.family.clone()))
+            .collect();
+        let matched = !found.is_empty();
+        self.append(found);
+        matched
     }
 
-    /// Remove every rule `owner` registered.
+    /// Remove an owner's base verb and its synonyms, also purging dropped owners.
+    pub(crate) fn remove_verb(&self, owner: &Arc<Process>, verb: &str) {
+        let rules = self.all();
+        let edit = RuleEdit::remove_ids(
+            rules
+                .iter()
+                .filter(|rule| {
+                    rule.owner().is_none()
+                        || (rule.owned_by(owner)
+                            && rule
+                                .protocol()
+                                .is_some_and(|parser| parser.verb.as_str() == verb))
+                })
+                .map(|rule| rule.id),
+        );
+        drop(rules);
+        if let Some(edit) = edit {
+            self.edit(edit);
+        }
+    }
+
+    /// Remove every rule `owner` registered without reading the shared cell.
     pub(crate) fn remove_owner(&self, owner: &Arc<Process>) {
-        let gone = Scope::new([owner.clone()]);
-        self.txn
-            .with(|t| t.merge(self.cell, MergeOp::RulesRemoveOwners(gone)));
+        self.edit(RuleEdit::remove_owners(Scope::new([owner.clone()])));
+    }
+
+    fn append(&self, rules: Vec<Rule>) {
+        if !rules.is_empty() {
+            self.edit(RuleEdit::append(rules));
+        }
+    }
+
+    fn edit(&self, edit: RuleEdit) {
+        self.txn.with(|t| t.merge(self.cell, MergeOp::Rules(edit)));
     }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use std::sync::Arc;
+    use std::{collections::HashSet, sync::Arc};
 
     use super::*;
     use crate::interpreter::{
@@ -406,5 +459,226 @@ pub(crate) mod tests {
         assert!(r.owner().is_some());
         drop(owner);
         assert!(r.owner().is_none());
+    }
+
+    struct World {
+        committer: crate::interpreter::stm::Committer,
+        tx: flume::Sender<crate::interpreter::stm::CommitProtocol>,
+        _rx: flume::Receiver<crate::interpreter::stm::CommitProtocol>,
+    }
+
+    impl World {
+        fn new() -> Self {
+            let (tx, rx) = flume::unbounded();
+            Self {
+                committer: crate::interpreter::stm::Committer::new(),
+                tx,
+                _rx: rx,
+            }
+        }
+
+        fn begin(&mut self) -> (crate::interpreter::stm::LiveSnapshot, TxnHandle) {
+            let (reply, rx) = flume::bounded(1);
+            self.committer.process(
+                crate::interpreter::stm::CommitProtocol::Start { reply },
+                &self.tx,
+            );
+            let live = rx.recv().unwrap();
+            let txn = TxnHandle::new(crate::interpreter::stm::Transaction::new(
+                live.inner.clone(),
+            ));
+            (live, txn)
+        }
+
+        fn commit(&mut self, txn: &TxnHandle) -> Result<(), crate::interpreter::stm::Conflict> {
+            use crate::interpreter::stm::CommitProtocol;
+            let (reply, rx) = flume::bounded(1);
+            self.committer.process(
+                CommitProtocol::Commit {
+                    changeset: txn.with(|t| t.take_changeset()),
+                    releases_base: false,
+                    reply,
+                },
+                &self.tx,
+            );
+            rx.recv().unwrap()
+        }
+    }
+
+    fn register(actions: &ActorRules<'_>, owner: &Arc<Process>, verb: &str) {
+        actions.register_actions(
+            owner,
+            vec![verb.into()],
+            VerbMatch::Exact,
+            rule(owner, verb).pointer().unwrap().clone(),
+        );
+    }
+
+    fn verbs(rules: &RuleList) -> Vec<&str> {
+        rules.iter().map(|rule| rule.verb.as_str()).collect()
+    }
+
+    #[test]
+    fn actor_edits_preserve_snapshots_and_registration_groups() {
+        let mut world = World::new();
+        let actor = Arc::new(Process::default());
+        let other = Arc::new(Process::default());
+        let (_live, txn) = world.begin();
+        let actions = ActorRules::new(&txn, &actor);
+        let compiled = crate::command::frontend::native::compile("'give' / 'hand' %w").unwrap();
+        let id = actions
+            .register_native(
+                &actor,
+                compiled,
+                rule(&actor, "give").pointer().unwrap().clone(),
+            )
+            .unwrap();
+        register(&actions, &other, "look");
+        let first = actions.all();
+        assert_eq!(verbs(&first), ["give", "hand", "look"]);
+        assert_eq!(first[0].id, first[1].id);
+        assert!(!actions.remove(&other, RuleId(id as u64)));
+        assert_eq!(actions.remove_actions(&actor, "give", None), 2);
+        register(&actions, &actor, "wave");
+        actions.retain_owners(Scope::new([actor.clone()]));
+        register(&actions, &other, "return");
+        assert_eq!(verbs(&actions.all()), ["wave", "return"]);
+        assert_eq!(verbs(&first), ["give", "hand", "look"]);
+        world.commit(&txn).unwrap();
+
+        let (_live, txn) = world.begin();
+        let actions = ActorRules::new(&txn, &actor);
+        let committed = actions.all();
+        ActorRules::forget_owner(&txn, &other, std::slice::from_ref(&actor));
+        register(&actions, &other, "again");
+        assert_eq!(verbs(&actions.all()), ["wave", "again"]);
+        actions.clear();
+        register(&actions, &actor, "after_clear");
+        world.commit(&txn).unwrap();
+        assert_eq!(verbs(&committed), ["wave", "return"]);
+        let (_live, txn) = world.begin();
+        assert_eq!(verbs(&ActorRules::new(&txn, &actor).all()), ["after_clear"]);
+    }
+
+    #[test]
+    fn a_removal_does_not_consume_a_later_sibling_with_the_same_identity() {
+        use crate::interpreter::stm::WorldValue;
+        let owner = Arc::new(Process::default());
+        let first = rule(&owner, "give");
+        let sibling = first.sibling("hand".into());
+        let edits = [
+            MergeOp::Rules(RuleEdit::append(vec![first.clone()])),
+            MergeOp::Rules(RuleEdit::remove_id(first.id)),
+            MergeOp::Rules(RuleEdit::append(vec![sibling])),
+        ];
+        let value = MergeOp::fold_onto(None, &edits)
+            .unwrap()
+            .unwrap()
+            .into_rules()
+            .unwrap();
+        assert_eq!(verbs(&value), ["hand"]);
+        assert_eq!(value[0].id, first.id);
+        assert!(edits[0].apply_to(Some(&WorldValue::Ref(1.into()))).is_err());
+    }
+
+    #[test]
+    fn concurrent_registrations_keep_actor_precedence_and_parser_commit_order() {
+        let mut world = World::new();
+        let actor = Arc::new(Process::default());
+        let cell = VarId::new();
+        let (_older_live, older) = world.begin();
+        let (_newer_live, newer) = world.begin();
+        for txn in [&older, &newer] {
+            register(&ActorRules::new(txn, &actor), &actor, "look");
+            let parser = parser_rule(&actor, "look", "WRD")
+                .protocol()
+                .unwrap()
+                .as_ref()
+                .clone();
+            VerbRules { txn, cell }.register(&actor, parser);
+        }
+        world.commit(&newer).unwrap();
+        world.commit(&older).unwrap();
+        let (_live, txn) = world.begin();
+        let actions = ActorRules::new(&txn, &actor);
+        let inspected = actions.all();
+        assert_eq!(inspected.len(), 2);
+        assert!(inspected[0].id > inspected[1].id);
+        let selected = actions.matching("look", &Scope::new([actor.clone()]));
+        assert_eq!(
+            selected.iter().map(|rule| rule.id).collect::<Vec<_>>(),
+            inspected.iter().map(|rule| rule.id).collect::<Vec<_>>()
+        );
+        let parsers = VerbRules { txn: &txn, cell }.for_verb("look");
+        assert_eq!(parsers.len(), 2);
+        assert!(parsers[0].id > parsers[1].id);
+    }
+
+    #[test]
+    fn observed_removal_conflicts_and_an_abandoned_edit_never_commits() {
+        let mut world = World::new();
+        let actor = Arc::new(Process::default());
+        let (_reader_live, reader) = world.begin();
+        let (_writer_live, writer) = world.begin();
+        assert_eq!(
+            ActorRules::new(&reader, &actor).remove_actions(&actor, "look", None),
+            0
+        );
+        register(&ActorRules::new(&reader, &actor), &actor, "rejected");
+        register(&ActorRules::new(&writer, &actor), &actor, "look");
+        world.commit(&writer).unwrap();
+        assert!(world.commit(&reader).is_err());
+        {
+            let (_live, txn) = world.begin();
+            ActorRules::new(&txn, &actor).clear();
+            register(&ActorRules::new(&txn, &actor), &actor, "abandoned");
+        }
+        let (_live, txn) = world.begin();
+        assert_eq!(verbs(&ActorRules::new(&txn, &actor).all()), ["look"]);
+    }
+
+    #[test]
+    fn parser_synonyms_keep_base_handlers_and_removal_preserves_other_owners() {
+        let mut world = World::new();
+        let owner = Arc::new(Process::default());
+        let other = Arc::new(Process::default());
+        let cell = VarId::new();
+        let (_live, txn) = world.begin();
+        let parsers = VerbRules { txn: &txn, cell };
+        for process in [&owner, &other] {
+            let parser = parser_rule(process, "look", "WRD")
+                .protocol()
+                .unwrap()
+                .as_ref()
+                .clone();
+            parsers.register(process, parser);
+        }
+        assert!(parsers.add_synonym(&owner, "peek".into(), "look", Some("WRD")));
+        assert!(parsers.add_synonym(&owner, "glance".into(), "peek", None));
+        assert!(!parsers.add_synonym(&owner, "missing".into(), "look", Some("OBJ")));
+        let snapshot = parsers.all();
+        assert_eq!(verbs(&snapshot), ["look", "look", "peek", "glance"]);
+        assert_eq!(
+            snapshot
+                .iter()
+                .map(|rule| rule.id)
+                .collect::<HashSet<_>>()
+                .len(),
+            4
+        );
+        assert!(
+            snapshot
+                .iter()
+                .all(|rule| rule.protocol().unwrap().verb.as_str() == "look")
+        );
+        parsers.remove_verb(&owner, "peek");
+        assert_eq!(parsers.all().len(), 4);
+        parsers.remove_verb(&owner, "look");
+        assert_eq!(parsers.all().len(), 1);
+        assert!(parsers.all()[0].owned_by(&other));
+        parsers.remove_owner(&other);
+        assert!(parsers.all().is_empty());
+        assert_eq!(snapshot.len(), 4);
+        world.commit(&txn).unwrap();
     }
 }

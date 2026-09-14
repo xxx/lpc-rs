@@ -420,11 +420,6 @@ impl Process {
         txn.with(|t| t.read(self.commands_enabled.id).is_some())
     }
 
-    /// This object's rule list as seen through `txn` (a tracked read).
-    pub(crate) fn rules_of(&self, txn: &TxnHandle) -> RuleList {
-        txn.with(|t| t.read_rules(self.rules.id))
-    }
-
     /// The committer-world identity of a global slot.
     pub(crate) fn var_id(&self, reg: RegisterSize) -> VarId {
         self.globals[reg as usize].id

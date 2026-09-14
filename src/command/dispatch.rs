@@ -7,7 +7,7 @@ use lpc_rs_errors::Result;
 use lpc_rs_utils::lpc_string::LpcString;
 
 use crate::{
-    command::trial,
+    command::{registry::ActorRules, trial},
     interpreter::{
         COMMAND_NOT_FOUND, MODIFY_COMMAND, PROCESS_INPUT,
         apply::{apply_hook, apply_pointer, as_actor, deliver},
@@ -226,7 +226,7 @@ fn default_message(ctx: &TaskContext, actor: &Arc<Process>) -> String {
         .unmangled_functions
         .get(PROCESS_INPUT)
         .is_none()
-        && actor.rules_of(ctx.txn()).is_empty();
+        && ActorRules::new(ctx.txn(), actor).all().is_empty();
     if bare {
         NOT_IMPLEMENTED_HINT.to_owned()
     } else {

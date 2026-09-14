@@ -3,7 +3,7 @@ use std::sync::Arc;
 use lpc_rs_errors::Result;
 
 use crate::{
-    command::registry::Family,
+    command::registry::{ActorRules, Family},
     interpreter::{
         efun,
         efun::efun_context::EfunContext,
@@ -20,7 +20,7 @@ pub async fn commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Resul
     let Some(process) = efun::arg_or_this_object(context.arg(0), context).await? else {
         return Err(context.runtime_error("commands: the argument must be an object"));
     };
-    let rules = process.rules_of(context.txn());
+    let rules = ActorRules::new(context.txn(), &process).all();
     let rows: Vec<LpcRef> = rules
         .iter()
         .map(|rule| {

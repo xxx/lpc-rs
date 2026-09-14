@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use lpc_rs_errors::Result;
 
-use crate::interpreter::{efun::efun_context::EfunContext, process::Process};
+use crate::{
+    command::registry::ActorRules,
+    interpreter::{efun::efun_context::EfunContext, process::Process},
+};
 
 /// `disable_commands`, an efun that disables an object from being able to
 /// interact with the game world; when it was `this_player()`, nobody is
@@ -12,9 +15,9 @@ pub fn disable_commands<const N: usize>(context: &mut EfunContext<'_, N>) -> Res
     let was_enabled = proc.commands_enabled(context.txn());
     let environment = Process::environment_of(context.txn(), proc);
 
+    ActorRules::new(context.txn(), proc).clear();
     context.txn().with(|t| {
         t.drop_var(proc.commands_enabled.id);
-        t.drop_var(proc.rules.id);
         if was_enabled && let Some(env) = environment {
             Process::unmark_living(t, proc, &env);
         }

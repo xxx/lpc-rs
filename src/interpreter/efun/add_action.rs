@@ -4,7 +4,7 @@ use lpc_rs_errors::Result;
 use ustr::Ustr;
 
 use crate::{
-    command::registry::{Family, Rule, VerbMatch},
+    command::registry::{ActorRules, VerbMatch},
     interpreter::{
         efun::efun_context::EfunContext,
         function_type::{
@@ -12,7 +12,6 @@ use crate::{
             function_ptr::{FunctionPtr, FunctionPtrBuilder},
         },
         lpc_ref::LpcRef,
-        stm::MergeOp,
     },
 };
 
@@ -62,25 +61,12 @@ pub fn add_action<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()
         return Err(context.runtime_error(format!("add_action: unknown flag {flag}")));
     };
 
-    let owner = context.process();
-    let rules: Vec<Rule> = verbs
-        .into_iter()
-        .map(|verb| {
-            Rule::new(
-                owner,
-                verb,
-                Family::AddAction {
-                    matching,
-                    pointer: handler.clone(),
-                },
-            )
-        })
-        .collect();
-    context.txn().with(|t| {
-        for rule in rules {
-            t.merge(player.rules.id, MergeOp::RulesAppend(rule));
-        }
-    });
+    ActorRules::new(context.txn(), &player).register_actions(
+        context.process(),
+        verbs,
+        matching,
+        handler,
+    );
 
     Ok(())
 }

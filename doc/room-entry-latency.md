@@ -21,16 +21,24 @@ cargo run --release --example room_entry_latency -- 20 shared_64
 The optional second argument filters scenario names by substring. The example
 prints CSV. Each sample creates a fresh VM, warms room and NPC programs, and
 finishes fixture setup before timing. It uses eight Tokio workers and the same
-300 ms execution allowance in every scenario. A barrier releases the independent
+300 ms execution allowance for timed arrivals in every scenario; fixture
+initialization has a separate 3,000 ms allowance. A barrier releases the independent
 owning tasks together. Per-task latency starts immediately before its apply;
 burst wall time also includes scheduling from barrier release to completion.
 
 Every sample checks committed destination inventory, each occupant's environment,
-and exact committed init-hook totals. The command-rule scenario also checks
-that every occupant has the other occupants' rules. Failed tasks, timeouts,
+and exact committed init-hook totals. The command-rule scenarios also check
+that every occupant has exactly the expected number of each neighbour's rules. Failed tasks, timeouts,
 requested movements, and committed movements are reported separately. The
 population scenario has eight owners, each cloning and moving sixteen NPCs;
 other scenarios have one movement per owner.
+
+Rule scenarios vary registrations per hook (1, 4, 16) and simultaneous arrivals
+(16, 64). `rules4_source_64` moves actors from another populated room while
+retaining their previous rule snapshots, checking both cleanup and snapshot
+immutability. `rules4_background_64` also runs independent counter applies.
+The rule storage design and a registration/removal microbenchmark are described
+in [command rules](command-rules.md).
 
 The staggered scenarios release half the owners immediately and schedule the
 rest at 200 microsecond intervals, subject to timer rounding. Background

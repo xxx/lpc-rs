@@ -456,4 +456,37 @@ mod tests {
             LpcRef::from(2)
         );
     }
+
+    #[tokio::test]
+    async fn a_handled_actor_command_commits_across_a_parser_registration() {
+        use crate::interpreter::task::apply_function::apply_function_by_name;
+        let vm = Vm::new(test_config());
+        let actor = vm.initialize_process_from_code("/actor.c", r#"
+            void create() { enable_commands(); set_this_player(this_object()); add_action("look", "look"); }
+            int look(string arg) { return 1; }
+        "#).await.unwrap().context.process;
+        let verbs = vm
+            .initialize_process_from_code(
+                "/verbs.c",
+                r#"
+            void create() { parse_init(); }
+            void register() { parse_add_rule("look", "WRD"); }
+        "#,
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let template = TaskTemplate::from(vm.global_state.clone());
+        let mut task = CommandTask::new(template.clone(), actor, "look here".to_owned());
+        let tx = &vm.global_state.committer_tx;
+        let live = task.begin_attempt(tx).await.unwrap().unwrap();
+        apply_function_by_name("register", &[], verbs, template, None)
+            .await
+            .unwrap()
+            .unwrap();
+        let (committed, _) = task.commit_phase(tx, live).await.unwrap();
+        assert!(committed.is_ok());
+        assert_eq!(task.outcome, Outcome::Handled);
+    }
 }

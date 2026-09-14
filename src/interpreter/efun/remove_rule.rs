@@ -1,8 +1,8 @@
 use lpc_rs_errors::Result;
 
 use crate::{
-    command::registry::RuleId,
-    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef, stm::MergeOp},
+    command::registry::{ActorRules, RuleId},
+    interpreter::{efun::efun_context::EfunContext, lpc_ref::LpcRef},
 };
 
 /// `remove_rule`, an efun that unregisters the calling object's rule with
@@ -18,17 +18,7 @@ pub fn remove_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<(
         context.return_efun_result(LpcRef::from(0));
         return Ok(());
     };
-    let id = RuleId(id);
-    let this_object = context.process();
-    let held = player
-        .rules_of(context.txn())
-        .iter()
-        .any(|rule| rule.id == id && rule.owned_by(this_object));
-    if held {
-        context
-            .txn()
-            .with(|t| t.merge(player.rules.id, MergeOp::RulesRemove(id)));
-    }
+    let held = ActorRules::new(context.txn(), &player).remove(context.process(), RuleId(id));
     context.return_efun_result(LpcRef::from(held));
     Ok(())
 }

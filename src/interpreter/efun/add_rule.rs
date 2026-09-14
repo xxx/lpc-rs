@@ -1,14 +1,10 @@
 use lpc_rs_errors::Result;
 
 use crate::{
-    command::{
-        frontend::native::compile,
-        registry::{Family, Rule},
-    },
+    command::{frontend::native::compile, registry::ActorRules},
     interpreter::{
         efun::{add_action::handler_from, efun_context::EfunContext},
         lpc_ref::LpcRef,
-        stm::MergeOp,
     },
 };
 
@@ -29,29 +25,9 @@ pub fn add_rule<const N: usize>(context: &mut EfunContext<'_, N>) -> Result<()> 
         compile(pattern.to_str()).map_err(|e| context.runtime_error(format!("add_rule: {e}")))?;
     let handler = handler_from(context, context.arg(1).clone(), "add_rule")?;
 
-    let Some((first_verb, other_verbs)) = compiled.verbs.split_first() else {
-        return Err(context.runtime_bug("add_rule: a compiled pattern has no verb"));
-    };
-    let first = Rule::new(
-        context.process(),
-        *first_verb,
-        Family::Native {
-            compiled: compiled.clone(),
-            pointer: handler,
-        },
-    );
-    let id = i64::try_from(first.id.0)
-        .map_err(|_| context.runtime_bug("add_rule: rule ids exceeded the int range"))?;
-    let siblings: Vec<Rule> = other_verbs
-        .iter()
-        .map(|verb| first.sibling(*verb))
-        .collect();
-    context.txn().with(|t| {
-        t.merge(player.rules.id, MergeOp::RulesAppend(first));
-        for rule in siblings {
-            t.merge(player.rules.id, MergeOp::RulesAppend(rule));
-        }
-    });
+    let id = ActorRules::new(context.txn(), &player)
+        .register_native(context.process(), compiled, handler)
+        .map_err(|error| context.runtime_bug(format!("add_rule: {error}")))?;
     context.return_efun_result(LpcRef::from(id));
     Ok(())
 }
