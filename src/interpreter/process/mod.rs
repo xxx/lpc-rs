@@ -485,6 +485,8 @@ impl Process {
                 self.position.inventory.id,
                 self.position.livings.id,
                 self.connection.id,
+                self.shadow.shadows.id,
+                self.shadow.shadowing.id,
                 self.program.clones.id,
             ])
             .collect()

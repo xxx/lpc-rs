@@ -92,6 +92,59 @@ async fn the_query_walks_the_chain_inner_to_outer() {
 }
 
 #[tokio::test]
+async fn garbage_collection_preserves_shadow_chains() {
+    for lookup in ["find_object", "clone_object"] {
+        let vm = Vm::new(crate::test_support::test_config());
+        for (path, code) in [
+            ("/secure/master.c", ALLOWING),
+            ("/t.c", T),
+            ("/s1.c", S),
+            ("/s2.c", S),
+        ] {
+            vm.initialize_process_from_code(path, code).await.unwrap();
+        }
+        let main = vm
+            .initialize_process_from_code(
+                "/main.c",
+                format!(
+                    r#"
+                    object t, s1, s2;
+                    void create() {{
+                        t = {lookup}("/t");
+                        s1 = {lookup}("/s1");
+                        s2 = {lookup}("/s2");
+                        s1->go(t);
+                        s2->go(t);
+                    }}
+                    int intact() {{
+                        return shadow(t, 0) == s1 && shadow(s1, 0) == s2 &&
+                            !shadow(s2, 0) && t->f() == "s.f";
+                    }}
+                "#
+                ),
+            )
+            .await
+            .unwrap()
+            .context
+            .process;
+        let template = TaskTemplate::from(vm.global_state.clone());
+        let before = apply_function_by_name("intact", &[], main.clone(), template.clone(), None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(before, LpcRef::from(1));
+
+        vm.global_state.gc().await.unwrap().unwrap();
+
+        let after = apply_function_by_name("intact", &[], main, template, None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after, LpcRef::from(1), "{lookup}");
+    }
+}
+
+#[tokio::test]
 async fn the_master_hears_the_shadow_as_previous_object() {
     let main = indoc! { r#"
         mixed *create() {
