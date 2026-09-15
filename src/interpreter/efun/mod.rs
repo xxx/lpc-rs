@@ -8,6 +8,7 @@ pub(crate) mod all_inventory;
 pub(crate) mod allocate;
 pub(crate) mod bits;
 pub(crate) mod bytes;
+pub(crate) mod call_inherited;
 pub(crate) mod call_out;
 pub(crate) mod callback;
 pub(crate) mod calling;
@@ -1173,6 +1174,11 @@ efuns! {
         arity: (2, 2),
         args: [LpcType::Object(false) | LpcType::String(false), LpcType::Int(false)],
     },
+    call_inherited => {
+        returns: LpcType::Mixed(false),
+        arity: (1, 0, ellipsis),
+        args: [LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1520,6 +1526,7 @@ mod tests {
                 "deep_inherit_list",
                 "source_cache_stats",
                 "functions",
+                "call_inherited",
             ]
         );
     }

@@ -1,8 +1,10 @@
 pub mod code_pool;
 mod function;
+mod function_scope;
 pub(crate) mod linker;
 
 pub use function::Function;
+pub use function_scope::FunctionScope;
 pub use linker::InheritedProgram;
 
 use std::{
@@ -131,6 +133,12 @@ pub struct Program {
     /// function with a given unmangled name is referenced here.
     pub unmangled_functions: Box<IndexMap<String, Function, ahash::RandomState>>,
 
+    /// Function lookup in this program's own source scope.
+    pub function_scope: Arc<FunctionScope>,
+
+    /// Source scopes retained for qualified lookup by inherited code.
+    pub inherited_function_scopes: Box<HashMap<Arc<LpcPath>, Arc<FunctionScope>>>,
+
     /// The function that is called when the program is first loaded,
     /// which initializes the global variables. This function is
     /// the combined initializer of all of the inherited programs.
@@ -199,6 +207,21 @@ impl Program {
         self.unmangled_functions.get(function_name).or_else(|| {
             existing_ustr(function_name).and_then(|mangled| self.functions.get(&mangled))
         })
+    }
+
+    /// Resolve an inherited function in `scope`, before checking caller visibility.
+    pub(crate) fn lookup_inherited_function(
+        &self,
+        scope: &LpcPath,
+        namespace: &str,
+        name: &str,
+    ) -> Option<&Function> {
+        let scope = if scope == self.filename.as_ref() {
+            &self.function_scope
+        } else {
+            self.inherited_function_scopes.get(scope)?
+        };
+        self.function(scope.inherited_function(namespace, name)?)
     }
 
     /// Whether [`Self::lookup_function`] would find `name`.

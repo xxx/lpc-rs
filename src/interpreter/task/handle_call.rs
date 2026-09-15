@@ -83,6 +83,44 @@ impl<const STACKSIZE: usize> Task<STACKSIZE> {
         self.push_call_frame(process, func, list, CallEntry::Direct)
     }
 
+    /// A resolved `call_inherited` with value arguments and local-call history.
+    pub(super) fn push_inherited_frame(
+        &mut self,
+        process: Arc<Process>,
+        function: Function,
+        args: impl ExactSizeIterator<Item = LpcRef>,
+    ) -> lpc_rs_errors::Result<()> {
+        if let Some(i) = function.prototype.first_ref_param() {
+            return Err(self.runtime_error(format!(
+                "call_inherited: `{}` takes argument {} by reference; call it directly",
+                function.name(),
+                i + 1
+            )));
+        }
+        let num_args = self.checked_register_count(args.len(), &function)?;
+        if !function.prototype.accepts_arg_count(usize::from(num_args)) {
+            return Err(self.runtime_error(format!(
+                "incorrect argument count in call to `{}`: expected: {}, received: {}",
+                function.name(),
+                function.arity().num_args,
+                num_args
+            )));
+        }
+        let mut frame = CallFrame::new(process, function, num_args, None::<&[VarId]>);
+        for (i, arg) in args.enumerate() {
+            let prototype = &frame.function.prototype;
+            check_arg_type(
+                &self.context.txn,
+                &arg,
+                prototype.arg_types.get(i),
+                prototype.arg_spans.get(i),
+                &prototype.name,
+            )?;
+            frame.push_arg(&self.context.txn, i, arg)?;
+        }
+        self.stack.push(frame)
+    }
+
     /// Push a frame for a call to `func` on `process`, its arguments read
     /// from the current frame's `list`.
     #[instrument(level = "debug", skip_all)]

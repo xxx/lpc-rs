@@ -76,7 +76,7 @@ use crate::{
     },
     interpreter::{
         efun::{CALL_OTHER, CATCH, EFUN_PROTOTYPES, SIZEOF},
-        program::{GlobalVariable, Program, Region, dispatch_table},
+        program::{FunctionScope, GlobalVariable, Program, Region, dispatch_table},
     },
 };
 
@@ -370,11 +370,21 @@ impl CodegenWalker {
 
         let inherits = std::mem::take(&mut self.context.inherits);
         let direct_inherits = inherits.iter().map(|p| p.filename.clone()).collect();
+        let parent_scopes = inherits.iter().map(|p| p.function_scope.clone()).collect();
+        let mut inherited_function_scopes = HashMap::new();
         let mut linker = ProgramLinker::new(num_globals);
         let mut functions: IndexMap<ustr::Ustr, Function, ahash::RandomState> = IndexMap::default();
         let mut global_variable_info = Vec::new();
         let mut global_variables: HashMap<String, Symbol> = HashMap::new();
         for parent in inherits {
+            inherited_function_scopes.extend(
+                parent
+                    .inherited_function_scopes
+                    .iter()
+                    .map(|(path, scope)| (path.clone(), scope.clone())),
+            );
+            inherited_function_scopes
+                .insert(parent.filename.clone(), parent.function_scope.clone());
             functions.extend(parent.functions(&mut linker)?);
             global_variable_info.extend(parent.global_variable_info.into_vec());
             for (name, symbol) in *parent.global_variables {
@@ -416,12 +426,19 @@ impl CodegenWalker {
             .map(|f| (f.prototype.name.to_string(), f.clone()))
             .collect::<IndexMap<_, _, ahash::RandomState>>();
         let dispatch = dispatch_table(&functions);
+        let function_scope = Arc::new(FunctionScope::new(
+            &functions,
+            parent_scopes,
+            std::mem::take(&mut self.context.inherit_names),
+        ));
         Ok(Program {
             filename,
             functions: Box::new(functions),
             dispatch: Box::new(dispatch),
             initializer,
             unmangled_functions: Box::new(unmangled_functions),
+            function_scope,
+            inherited_function_scopes: Box::new(inherited_function_scopes),
             global_variables: Box::new(global_variables),
             global_variable_info: global_variable_info.into_boxed_slice(),
             direct_inherits,

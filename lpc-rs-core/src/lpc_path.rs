@@ -15,10 +15,10 @@ mod root;
 pub use root::{LibRoot, PathError, ResolvedPath, SourceName};
 
 /// A path input whose host or in-game origin survives compilation.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct LpcPath(PathKind);
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 enum PathKind {
     Server(PathBuf),
     InGame(PathBuf),

@@ -49,6 +49,12 @@ pub(crate) enum Callee {
         function: Function,
         args: SmallVec<[LpcRef; 4]>,
     },
+    /// An inherited definition on the current object, entered as a local call.
+    Inherited {
+        process: Arc<Process>,
+        function: Function,
+        args: SmallVec<[LpcRef; 4]>,
+    },
 }
 
 /// An efun's walk over its callbacks, on the frame that called the efun.

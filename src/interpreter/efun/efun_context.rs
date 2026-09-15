@@ -27,6 +27,7 @@ use crate::interpreter::{
     lpc_ref::{LpcRef, NULL},
     object_space::ObjectSpace,
     process::Process,
+    program::Function,
     stm::{Effect, MergeOp, PendingFileOp, TxnHandle},
     task_context::{Caller, Loader, ObjectLookup, TaskContext},
 };
@@ -610,20 +611,31 @@ impl<'task, const N: usize> EfunContext<'task, N> {
     /// caller's file, not this one.
     pub(crate) fn calling_program(&self) -> LpcRef {
         let root = self.config().paths();
-        let origin = self
-            .fired
+        self.calling_program_path().map_or(NULL, |path| {
+            LpcRef::from(root.source_name(path).to_string())
+        })
+    }
+
+    /// The source identity behind [`Self::calling_program`], before display formatting.
+    pub(crate) fn calling_program_path(&self) -> Option<&LpcPath> {
+        self.fired
             .as_ref()
-            .and_then(|fired| fired.origin.as_deref());
-        match origin {
-            Some(origin) => LpcRef::from(root.source_name(origin).to_string()),
-            None => match self.caller_frame() {
-                Some(frame) => {
-                    let path = &frame.function.prototype.filename;
-                    LpcRef::from(root.source_name(path).to_string())
-                }
-                None => NULL,
-            },
-        }
+            .and_then(|fired| fired.origin.as_deref())
+            .or_else(|| {
+                self.caller_frame()
+                    .map(|frame| frame.function.prototype.filename.as_ref())
+            })
+    }
+
+    /// An accessible inherited definition in the source scope that invoked this efun.
+    pub(crate) fn lookup_inherited_function(&self, name: &str) -> Option<&Function> {
+        let (namespace, name) = name.split_once("::").unwrap_or(("", name));
+        let program = &self.process().program;
+        let scope = self.calling_program_path().unwrap_or(&program.filename);
+        let scope = self.config().paths().program_path(scope);
+        program
+            .lookup_inherited_function(&scope, namespace, name)
+            .filter(|function| !function.prototype.flags.private())
     }
 
     /// Get a reference to `this_player` from the context
