@@ -8,10 +8,8 @@ use lpc_rs_errors::{LpcError, Result};
 
 use crate::interpreter::{
     apply::valid_apply,
-    efun::{
-        efun_context::EfunContext,
-        file_view::{self, Seen},
-    },
+    efun::efun_context::EfunContext,
+    file_view::{self, Seen},
     lpc_ref::LpcRef,
     stm::Effect,
 };
@@ -45,7 +43,7 @@ impl FileAccess {
 
     /// The path's contents after this task's earlier file effects.
     pub(crate) async fn read<const N: usize>(&self, context: &EfunContext<'_, N>) -> Result<Seen> {
-        file_view::read_through(context, self.path.server())
+        file_view::read_through(context.txn(), self.path.server())
             .await
             .map_err(|e| self.error(context, e))
     }
@@ -66,7 +64,8 @@ impl FileAccess {
         &self,
         context: &EfunContext<'_, N>,
     ) -> Option<String> {
-        let Ok(Seen::File(bytes)) = file_view::read_through(context, self.path.server()).await
+        let Ok(Seen::File(bytes)) =
+            file_view::read_through(context.txn(), self.path.server()).await
         else {
             return None;
         };

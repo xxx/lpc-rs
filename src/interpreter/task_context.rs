@@ -1,5 +1,7 @@
 use std::{
+    future::Future,
     path::{Path, PathBuf},
+    pin::Pin,
     sync::Arc,
 };
 
@@ -14,11 +16,13 @@ use tokio::sync::mpsc::Sender;
 
 use crate::compile_time_config::{MAX_CALL_STACK_SIZE, MAX_TASK_CHAIN};
 use crate::{
+    compiler::source_reader::{SourceKind, SourceReader},
     interpreter::{
-        COMPILE_OBJECT, VALID_LOAD,
+        COMPILE_OBJECT, VALID_LOAD, VALID_WRITE,
         apply::{master_apply, report_warnings, valid_apply},
         call_frame::CallFrame,
         compile_gate::MasterGate,
+        file_view::TransactionSourceReader,
         lpc_ref::LpcRef,
         object_space::ObjectSpace,
         process::Process,
@@ -28,7 +32,10 @@ use crate::{
         task::Task,
         vm::{global_state::GlobalState, vm_op::VmOp},
     },
-    util::{get_simul_efuns, process_builder::compile_process_from_path},
+    util::{
+        get_simul_efuns,
+        process_builder::{compile_process_from_code, compile_process_from_path},
+    },
 };
 
 /// The command a task is running: what `query_verb`, `query_command`, and
@@ -94,9 +101,8 @@ impl Default for TaskResult {
 
 /// The outcome of a transactional object lookup.
 ///
-/// `create-on-miss` (re-compiling and inserting) is only legal on
-/// `NotCreated`: on `Removed` it would resurrect an object this attempt
-/// destructed.
+/// Implicit loading creates only on `NotCreated`; explicit `load_object`
+/// and `compile_string` requests may recreate a `Removed` name.
 #[derive(Debug)]
 pub enum ObjectLookup {
     /// Live for this attempt — its cell holds it, or the physical map does
@@ -321,7 +327,7 @@ impl TaskContext {
         confine_object_path(self.config(), arg, cwd, func)
     }
 
-    /// The one LPC-triggered compile. `path` is confined already. When its
+    /// Compile an object loaded by path. `path` is confined already. When its
     /// source, `<key>.c`, exists it is compiled after `valid_load` hears it;
     /// a path with no source is put to the master's `compile_object` instead
     /// and becomes the answered blueprint's program under `path`. Either
@@ -329,48 +335,75 @@ impl TaskContext {
     /// virtual.
     pub async fn compile_process(&self, path: &LpcPath, loader: &Loader) -> Result<Arc<Process>> {
         if path.is_clone() || self.source_exists(path).await {
-            return self.compile_file_process(path, loader).await;
+            return self.compile_source_process(path, loader, None).await;
         }
         self.instantiate_virtual(path, loader).await
     }
 
-    /// Whether `path`'s source is a regular file in the lib.
+    /// Whether `path`'s source is a file in this attempt's view of the lib.
     async fn source_exists(&self, path: &LpcPath) -> bool {
         let source = path.source_file();
-        tokio::fs::metadata(self.config().paths().source(&source).server())
+        TransactionSourceReader(self.txn().clone())
+            .kind(self.config().paths().source(&source).server())
             .await
-            .is_ok_and(|m| m.is_file())
+            .is_ok_and(|kind| kind == SourceKind::File)
     }
 
-    /// Compile `path`'s source, `<key>.c`, after `valid_load` hears it, with
-    /// the master's compile-time gate installed. Not inserted; the compile's
-    /// warnings go to `warning_handler`. A missing source is the compiler's
-    /// `Cannot read file` error.
-    async fn compile_file_process(&self, path: &LpcPath, loader: &Loader) -> Result<Arc<Process>> {
-        let source = self
-            .config()
-            .paths()
-            .source_name(&path.source_file())
-            .to_string();
-        let args = [
-            LpcRef::from(source),
-            LpcRef::from(loader.func.as_str()),
-            LpcRef::from(Arc::downgrade(loader.caller())),
-            loader.program.clone(),
-        ];
-        if !valid_apply(self, loader.callers(), VALID_LOAD, &args).await? {
-            return Err(LpcError::runtime(format!(
-                "{}: permission denied",
-                loader.func
-            )));
-        }
-        let gate = MasterGate::new(self, loader.callers());
-        let compiling = self.txn().time_compilation();
-        let (process, warnings) =
-            compile_process_from_path(self.object_space(), path, Some(gate)).await?;
-        drop(compiling);
-        report_warnings(self, loader.callers(), &process.program.filename, warnings).await?;
-        Ok(process)
+    /// Compile supplied text or the attempt's source file after authorization, without insertion.
+    pub(crate) fn compile_source_process<'a>(
+        &'a self,
+        path: &'a LpcPath,
+        loader: &'a Loader,
+        code: Option<&'a str>,
+    ) -> Pin<Box<dyn Future<Output = Result<Arc<Process>>> + Send + 'a>> {
+        Box::pin(async move {
+            let source = self
+                .config()
+                .paths()
+                .source_name(&path.source_file())
+                .to_string();
+            let args = [
+                LpcRef::from(source),
+                LpcRef::from(loader.func.as_str()),
+                LpcRef::from(Arc::downgrade(loader.caller())),
+                loader.program.clone(),
+            ];
+            if code.is_some() && !valid_apply(self, loader.callers(), VALID_WRITE, &args).await? {
+                return Err(LpcError::runtime(format!(
+                    "{}: permission denied",
+                    loader.func
+                )));
+            }
+            if !valid_apply(self, loader.callers(), VALID_LOAD, &args).await? {
+                return Err(LpcError::runtime(format!(
+                    "{}: permission denied",
+                    loader.func
+                )));
+            }
+            let gate = MasterGate::new(self, loader.callers());
+            let compiling = self.txn().time_compilation();
+            let reader: Arc<dyn SourceReader> =
+                Arc::new(TransactionSourceReader(self.txn().clone()));
+            let (process, warnings) = match code {
+                Some(code) => {
+                    compile_process_from_code(
+                        self.object_space(),
+                        path.source_file(),
+                        code,
+                        Some(gate),
+                        Some(reader),
+                    )
+                    .await?
+                }
+                None => {
+                    compile_process_from_path(self.object_space(), path, Some(gate), Some(reader))
+                        .await?
+                }
+            };
+            drop(compiling);
+            report_warnings(self, loader.callers(), &process.program.filename, warnings).await?;
+            Ok(process)
+        })
     }
 
     /// `path` resident, else its file compiled for `loader`, inserted and
@@ -385,7 +418,7 @@ impl TaskContext {
                 AsRef::<str>::as_ref(path)
             ))),
             ObjectLookup::NotCreated => {
-                let process = self.compile_file_process(path, loader).await?;
+                let process = self.compile_source_process(path, loader, None).await?;
                 self.insert_and_initialize(loader.callers(), &process)
                     .await?;
                 Ok(process)
@@ -408,12 +441,12 @@ impl TaskContext {
         ];
         let Some(answer) = master_apply(self, loader.callers(), COMPILE_OBJECT, &args).await?
         else {
-            return self.compile_file_process(path, loader).await;
+            return self.compile_source_process(path, loader, None).await;
         };
         let blueprint = match answer.as_str() {
             Some(name) => name.to_owned(),
             None if !answer.is_truthy(self.txn()) => {
-                return self.compile_file_process(path, loader).await;
+                return self.compile_source_process(path, loader, None).await;
             }
             None => {
                 return Err(LpcError::runtime(format!(

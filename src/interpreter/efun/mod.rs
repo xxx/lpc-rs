@@ -17,6 +17,7 @@ pub(crate) mod chars;
 pub(crate) mod clone_object;
 pub(crate) mod command;
 pub(crate) mod commands;
+pub(crate) mod compile_string;
 pub(crate) mod compose;
 pub(crate) mod conversions;
 pub(crate) mod crypt;
@@ -34,7 +35,6 @@ pub(crate) mod file_access;
 pub(crate) mod file_name;
 pub(crate) mod file_size;
 pub(crate) mod file_time;
-pub(crate) mod file_view;
 pub(crate) mod filter;
 pub(crate) mod filter_map;
 pub(crate) mod find_object;
@@ -1179,6 +1179,11 @@ efuns! {
         arity: (1, 0, ellipsis),
         args: [LpcType::String(false)],
     },
+    compile_string [async] => {
+        returns: LpcType::Object(false),
+        arity: 2,
+        args: [LpcType::String(false), LpcType::String(false)],
+    },
 }
 
 /// A cache of [`ProgramFunction`]s for all efuns, since they are cloned to each frame.
@@ -1527,6 +1532,7 @@ mod tests {
                 "source_cache_stats",
                 "functions",
                 "call_inherited",
+                "compile_string",
             ]
         );
     }

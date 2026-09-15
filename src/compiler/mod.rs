@@ -19,9 +19,10 @@ use lpc_rs_errors::{
     self, LpcError, Result, lpc_error,
     span::{HasSpan, Span},
 };
-use lpc_rs_utils::{config::Config, read_lpc_file};
+use lpc_rs_utils::{LpcSource, config::Config};
 use preprocessor::Preprocessor;
 use source::CompilerSource;
+use source_reader::{DiskSourceReader, SourceReader};
 use tracing::instrument;
 use ustr::ustr;
 
@@ -42,6 +43,7 @@ pub mod parser;
 pub mod preprocessor;
 pub mod semantic;
 pub mod source;
+pub mod source_reader;
 
 #[derive(Educe, Default, Builder)]
 #[educe(Debug)]
@@ -65,6 +67,10 @@ pub struct Compiler {
     /// The master's say over inherits and includes; `None` reads freely.
     #[builder(default)]
     gate: Option<Arc<dyn CompileGate>>,
+
+    /// Source reads and probes; `None` uses the host filesystem.
+    #[builder(default)]
+    source_reader: Option<Arc<dyn SourceReader>>,
 }
 
 /// One program's own compile warnings.
@@ -127,7 +133,8 @@ impl Compiler {
             let name = identity.name();
             let absolute = identity.resolved().server();
 
-            let source = match read_lpc_file(absolute).await {
+            let reader = self.source_reader.as_deref().unwrap_or(&DiskSourceReader);
+            let source = match reader.read(absolute).await.map(LpcSource::from_bytes) {
                 Ok(source) => source,
                 Err(e) => {
                     return match e.kind() {
@@ -226,6 +233,7 @@ impl Compiler {
             .inherit_depth(self.inherit_depth)
             .simul_efuns(self.simul_efuns.clone())
             .gate(self.gate.clone())
+            .source_reader(self.source_reader.clone())
             .build()?;
 
         let mut preprocessor = Preprocessor::new(context);

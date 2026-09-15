@@ -21,6 +21,15 @@ resident.
 Loading joins the caller's transaction, so the object is immediately
 visible to `find_object` and is committed with the caller's changes.
 
+Source lookup and compilation see the caller's pending file changes,
+including newly written or removed source files, headers, and inherited
+programs. A `write_file` followed by a load can compile the new contents
+before the file is written to disk. An already-loaded object is still reused;
+destruct it and explicitly call `load_object` to load a changed source file.
+A string-based call does not recreate an object destructed in that transaction.
+This view adds the caller's pending changes to disk contents; it does not make
+external filesystem edits part of the STM snapshot.
+
 ### See also
 
-`find_object`, `clone_object`, `valid_load`, `compile_object`
+`find_object`, `clone_object`, `compile_string`, `valid_load`, `compile_object`

@@ -23,6 +23,7 @@ use crate::{
         lexer::{LexWrapper, Token, logos_token::StringToken},
         preprocessor::preprocessor_node::PreprocessorNode,
         source::CompilerSource,
+        source_reader::DiskSourceReader,
     },
 };
 use conditional::Conditionals;
@@ -464,6 +465,7 @@ impl Preprocessor {
     ) -> Result<()> {
         let config = self.context.config.clone();
         let gate = self.context.gate.clone();
+        let reader = self.context.source_reader.clone();
         let Some(opened) = self
             .includes
             .open(
@@ -471,6 +473,7 @@ impl Preprocessor {
                 span,
                 &config,
                 gate.as_deref(),
+                reader.as_deref().unwrap_or(&DiskSourceReader),
                 &mut self.context.diagnostics,
             )
             .await?

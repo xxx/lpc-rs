@@ -72,7 +72,8 @@ impl GlobalState {
         self: &Arc<Self>,
         path: &LpcPath,
     ) -> Result<task::Task<MAX_CALL_STACK_SIZE>> {
-        let (process, warnings) = compile_process_from_path(&self.object_space, path, None).await?;
+        let (process, warnings) =
+            compile_process_from_path(&self.object_space, path, None, None).await?;
         log_warnings(&self.config, warnings).await;
         process_insert_and_initialize_program(process, TaskTemplate::from(self.clone())).await
     }
@@ -80,7 +81,7 @@ impl GlobalState {
     /// Compile the in-game file at `path` without initializing it: the
     /// warnings are logged, nothing enters the object space, no `create()` runs.
     pub async fn compile_from_path(&self, path: &LpcPath) -> Result<()> {
-        let (_, warnings) = compile_process_from_path(&self.object_space, path, None).await?;
+        let (_, warnings) = compile_process_from_path(&self.object_space, path, None, None).await?;
         log_warnings(&self.config, warnings).await;
         Ok(())
     }
@@ -97,7 +98,7 @@ impl GlobalState {
         S: AsRef<str> + Send + Sync,
     {
         let (process, warnings) =
-            compile_process_from_code(&self.object_space, filename, code, None).await?;
+            compile_process_from_code(&self.object_space, filename, code, None, None).await?;
         log_warnings(&self.config, warnings).await;
         process_insert_and_initialize_program(process, TaskTemplate::from(self.clone())).await
     }

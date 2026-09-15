@@ -113,7 +113,8 @@ impl ObjectSpace {
         P: Into<LpcPath> + Send + Sync,
         S: AsRef<str> + Send + Sync,
     {
-        let (process, warnings) = compile_process_from_code(self, filename, code, None).await?;
+        let (process, warnings) =
+            compile_process_from_code(self, filename, code, None, None).await?;
         log_warnings(&self.config, warnings).await;
         Self::insert_process_physical(self, process.clone());
         Ok(process)

@@ -6,6 +6,7 @@ pub mod call_stack;
 pub(crate) mod compile_gate;
 pub(crate) mod continuation;
 pub mod efun;
+pub(crate) mod file_view;
 pub mod function_type;
 pub(crate) mod json;
 pub(crate) mod save_format;

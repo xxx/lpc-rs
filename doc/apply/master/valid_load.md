@@ -40,6 +40,10 @@ Once compiled, the new program's own `inherit`s and `#include`s are put to
 `valid_inherit` and `valid_read` for the file being compiled, not for the
 loader: the loader's permission ends at the load.
 
+`compile_string` also asks this apply, after `valid_write` approves supplying
+source under the requested name. Its `func` is `"compile_string"`; the source
+need not exist on disk. Includes and inherits keep the same checks.
+
 The apply runs inside the loading task: `this_object` is the master, and an
 error thrown here is the caller's error. For a `call_out` or `input_to`
 pointer it runs in the attempt that resolves the receiver, before the

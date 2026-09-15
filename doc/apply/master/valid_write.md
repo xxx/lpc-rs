@@ -19,6 +19,11 @@ master that never defines it has a read-only lib. The apply runs inside the
 caller's task; an error thrown here is the caller's error. The change itself
 lands when the caller's task commits.
 
+`compile_string` asks this apply to authorize supplied source under an object
+identity, even though it writes no file. It passes the canonical `.c` name
+and `func` `"compile_string"`, then separately asks `valid_load`. This prevents
+load permission alone from granting permission to supply code for that name.
+
 ### Examples
 
 ```c

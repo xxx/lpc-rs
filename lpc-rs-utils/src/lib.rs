@@ -10,7 +10,7 @@ pub mod lpc_bytes;
 pub mod lpc_string;
 pub mod string;
 
-/// A source file's text, read from disk with a trailing newline appended
+/// A source file's text, decoded with a trailing newline appended
 /// if one wasn't there.
 pub struct LpcSource {
     /// The file's text.
@@ -19,23 +19,29 @@ pub struct LpcSource {
     pub latin1: bool,
 }
 
+impl LpcSource {
+    /// Decode UTF-8 or Latin-1 bytes and ensure a trailing newline.
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        let (mut text, latin1) = match String::from_utf8(bytes) {
+            Ok(text) => (text, false),
+            Err(e) => (
+                e.into_bytes().into_iter().map(|b| b as char).collect(),
+                true,
+            ),
+        };
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        Self { text, latin1 }
+    }
+}
+
 /// Read a source file as UTF-8, or as Latin-1 (each byte its own code point) when it is not; a trailing newline is appended.
 pub async fn read_lpc_file<P>(path: P) -> std::io::Result<LpcSource>
 where
     P: AsRef<Path>,
 {
-    let bytes = fs::read(path.as_ref()).await?;
-    let (mut text, latin1) = match String::from_utf8(bytes) {
-        Ok(text) => (text, false),
-        Err(e) => (
-            e.into_bytes().into_iter().map(|b| b as char).collect(),
-            true,
-        ),
-    };
-    if !text.ends_with('\n') {
-        text.push('\n');
-    }
-    Ok(LpcSource { text, latin1 })
+    fs::read(path.as_ref()).await.map(LpcSource::from_bytes)
 }
 
 #[cfg(test)]

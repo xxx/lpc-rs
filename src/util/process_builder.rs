@@ -5,7 +5,9 @@ use lpc_rs_errors::{LpcError, Result};
 use lpc_rs_utils::config::Config;
 
 use crate::{
-    compiler::{Compiled, Compiler, CompilerBuilder, compile_gate::CompileGate},
+    compiler::{
+        Compiled, Compiler, CompilerBuilder, compile_gate::CompileGate, source_reader::SourceReader,
+    },
     interpreter::{
         object_space::ObjectSpace,
         process::Process,
@@ -21,6 +23,7 @@ use crate::{
 async fn compile_to_process<F, Fut>(
     object_space: &ObjectSpace,
     gate: Option<Arc<dyn CompileGate>>,
+    source_reader: Option<Arc<dyn SourceReader>>,
     compile: F,
 ) -> Result<(Arc<Process>, Vec<LpcError>)>
 where
@@ -33,6 +36,7 @@ where
         .code_pool(object_space.code_pool.clone())
         .simul_efuns(get_simul_efuns(config, object_space))
         .gate(gate)
+        .source_reader(source_reader)
         .build()?;
     let Compiled { program, warnings } = compile(compiler)
         .await
@@ -56,8 +60,9 @@ pub(crate) async fn compile_process_from_path(
     object_space: &ObjectSpace,
     path: &LpcPath,
     gate: Option<Arc<dyn CompileGate>>,
+    source_reader: Option<Arc<dyn SourceReader>>,
 ) -> Result<(Arc<Process>, Vec<LpcError>)> {
-    compile_to_process(object_space, gate, |compiler| async move {
+    compile_to_process(object_space, gate, source_reader, |compiler| async move {
         compiler.compile_in_game_file(path, None).await
     })
     .await
@@ -71,12 +76,13 @@ pub(crate) async fn compile_process_from_code<P, S>(
     filename: P,
     code: S,
     gate: Option<Arc<dyn CompileGate>>,
+    source_reader: Option<Arc<dyn SourceReader>>,
 ) -> Result<(Arc<Process>, Vec<LpcError>)>
 where
     P: Into<LpcPath> + Send + Sync,
     S: AsRef<str> + Send + Sync,
 {
-    compile_to_process(object_space, gate, |compiler| async move {
+    compile_to_process(object_space, gate, source_reader, |compiler| async move {
         compiler.compile_string(filename, code).await
     })
     .await

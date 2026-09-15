@@ -375,6 +375,7 @@ mod tests {
             "/dynamic_receiver.c",
             "void foo() {}",
             None,
+            None,
         )
         .await
         .unwrap()
@@ -647,6 +648,7 @@ mod tests {
             "/target.c",
             "int i = 123; int get() { return i; }",
             None,
+            None,
         )
         .await
         .unwrap();
@@ -657,6 +659,7 @@ mod tests {
             &gs.object_space,
             "/caller.c",
             r#"int r = "/target"->get();"#,
+            None,
             None,
         )
         .await

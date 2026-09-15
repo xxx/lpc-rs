@@ -13,13 +13,14 @@ use lpc_rs_errors::{
     source_map::{FileId, SOURCE_MAP},
     span::Span,
 };
-use lpc_rs_utils::{config::Config, read_lpc_file};
+use lpc_rs_utils::{LpcSource, config::Config};
 use tracing::instrument;
 
 use crate::compiler::{
     compile_gate::CompileGate,
     diagnostics::{Diagnostics, latin1_warning},
     source::CompilerSource,
+    source_reader::{SourceKind, SourceReader},
 };
 
 /// Deepest `#include` nesting allowed, the root file included.
@@ -102,13 +103,14 @@ impl IncludeWalk {
     /// the `#pragma once` skip; the caller scans `Some` and then
     /// [`close`](Self::close)s. `gate` is asked for every directive but a
     /// configured one, before anything is read.
-    #[instrument(skip(self, config, gate, diagnostics))]
+    #[instrument(skip(self, config, gate, reader, diagnostics))]
     pub async fn open(
         &mut self,
         source: IncludeSource<'_>,
         span: Option<Span>,
         config: &Config,
         gate: Option<&dyn CompileGate>,
+        reader: &dyn SourceReader,
         diagnostics: &mut Diagnostics,
     ) -> Result<Option<Opened>> {
         let configured = matches!(source, IncludeSource::Configured(_));
@@ -119,7 +121,7 @@ impl IncludeWalk {
             IncludeSource::Configured(path) => config.paths().source_name(path).to_string(),
         };
 
-        let input = self.resolve(source, config).await;
+        let input = self.resolve(source, config, reader).await;
         let path = config.paths().confine(&input).map_err(|_| {
             lpc_error!(
                 span,
@@ -158,10 +160,7 @@ impl IncludeWalk {
         let (file_id, content) = match self.memo.get(&canon) {
             Some((file_id, content)) => (*file_id, content.clone()),
             None => {
-                let is_dir = tokio::fs::metadata(&canon)
-                    .await
-                    .map(|m| m.is_dir())
-                    .unwrap_or(false);
+                let is_dir = reader.kind(&canon).await.ok() == Some(SourceKind::Directory);
                 if is_dir {
                     return Err(lpc_error!(
                         span,
@@ -169,7 +168,7 @@ impl IncludeWalk {
                         path
                     ));
                 }
-                let source = match read_lpc_file(&canon).await {
+                let source = match reader.read(&canon).await.map(LpcSource::from_bytes) {
                     Ok(source) => source,
                     Err(e) => {
                         return Err(lpc_error!(
@@ -221,38 +220,47 @@ impl IncludeWalk {
 
     /// Turn a directive's path into an [`LpcPath`], relative to the
     /// including file — the active frame.
-    async fn resolve(&self, source: IncludeSource<'_>, config: &Config) -> LpcPath {
+    async fn resolve(
+        &self,
+        source: IncludeSource<'_>,
+        config: &Config,
+        reader: &dyn SourceReader,
+    ) -> LpcPath {
         match source {
             IncludeSource::Configured(path) => path.clone(),
             IncludeSource::Local { path } => {
                 let local = LpcPath::new_in_game(path, self.cwd(), &*config.lib_dir);
-                if Self::exists(&local, config).await {
+                if reader
+                    .kind(config.paths().source(&local).server())
+                    .await
+                    .is_ok()
+                {
                     return local;
                 }
-                self.in_system_dirs(path, config).await.unwrap_or(local)
+                self.in_system_dirs(path, config, reader)
+                    .await
+                    .unwrap_or(local)
             }
             IncludeSource::System { path } => self
-                .in_system_dirs(path, config)
+                .in_system_dirs(path, config, reader)
                 .await
                 .unwrap_or_else(|| LpcPath::new_in_game(path, self.cwd(), &*config.lib_dir)),
         }
     }
 
-    /// Whether `path` exists on disk, at its server path.
-    async fn exists(path: &LpcPath, config: &Config) -> bool {
-        tokio::fs::metadata(config.paths().source(path).server())
-            .await
-            .is_ok()
-    }
-
     /// The first configured system dir holding `path`, in order.
-    async fn in_system_dirs(&self, path: &str, config: &Config) -> Option<LpcPath> {
+    async fn in_system_dirs(
+        &self,
+        path: &str,
+        config: &Config,
+        reader: &dyn SourceReader,
+    ) -> Option<LpcPath> {
         let root = config.paths();
         for dir in &config.system_include_dirs {
             let Ok(candidate) = root.resolve(path, dir.as_str()) else {
                 continue;
             };
-            if tokio::fs::metadata(candidate.server()).await.is_ok() {
+            if reader.kind(candidate.server()).await.is_ok() {
                 return Some(candidate.input().clone());
             }
         }
@@ -291,6 +299,7 @@ mod tests {
     use std::path::Path;
 
     use super::*;
+    use crate::compiler::source_reader::DiskSourceReader;
     use crate::test_support::TempLib;
 
     fn config_at(root: &Path) -> Config {
@@ -331,6 +340,7 @@ mod tests {
                 None,
                 &config,
                 None,
+                &DiskSourceReader,
                 &mut Diagnostics::default(),
             )
             .await
@@ -359,6 +369,7 @@ mod tests {
                 None,
                 &config,
                 None,
+                &DiskSourceReader,
                 &mut Diagnostics::default(),
             )
             .await
@@ -383,6 +394,7 @@ mod tests {
                 None,
                 &config,
                 None,
+                &DiskSourceReader,
                 &mut Diagnostics::default(),
             )
             .await
@@ -395,6 +407,7 @@ mod tests {
                 None,
                 &config,
                 None,
+                &DiskSourceReader,
                 &mut Diagnostics::default(),
             )
             .await
@@ -417,6 +430,7 @@ mod tests {
             None,
             &config,
             None,
+            &DiskSourceReader,
             &mut Diagnostics::default(),
         )
         .await
@@ -427,6 +441,7 @@ mod tests {
                 None,
                 &config,
                 None,
+                &DiskSourceReader,
                 &mut Diagnostics::default(),
             )
             .await
@@ -449,6 +464,7 @@ mod tests {
             None,
             &config,
             None,
+            &DiskSourceReader,
             &mut Diagnostics::default(),
         )
         .await
@@ -462,6 +478,7 @@ mod tests {
                 None,
                 &config,
                 None,
+                &DiskSourceReader,
                 &mut Diagnostics::default(),
             )
             .await
@@ -484,6 +501,7 @@ mod tests {
                 None,
                 &config,
                 None,
+                &DiskSourceReader,
                 &mut Diagnostics::default(),
             )
             .await
@@ -509,6 +527,7 @@ mod tests {
                     None,
                     &config,
                     None,
+                    &DiskSourceReader,
                     &mut Diagnostics::default(),
                 )
                 .await
@@ -536,6 +555,7 @@ mod tests {
                 None,
                 &config,
                 None,
+                &DiskSourceReader,
                 &mut Diagnostics::default(),
             )
             .await
@@ -567,6 +587,7 @@ mod tests {
             None,
             &config,
             None,
+            &DiskSourceReader,
             &mut Diagnostics::default(),
         )
         .await

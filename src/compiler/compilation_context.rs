@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::compiler::{
     ProgramWarnings, callee::Callee, compile_gate::CompileGate, diagnostics::Diagnostics,
-    source::CompilerSource,
+    source::CompilerSource, source_reader::SourceReader,
 };
 use derive_builder::Builder;
 use lpc_rs_core::{
@@ -88,6 +88,9 @@ pub struct CompilationContext {
 
     /// The master's say over inherits and includes; `None` reads freely.
     pub gate: Option<Arc<dyn CompileGate>>,
+
+    /// Source reads and probes shared with inherited compilers.
+    pub source_reader: Option<Arc<dyn SourceReader>>,
 
     /// The count of closures that have been defined, so we can give them unique
     /// names.
@@ -295,6 +298,7 @@ impl Default for CompilationContext {
             inherited_warnings: vec![],
             simul_efuns: None,
             gate: None,
+            source_reader: None,
             closure_count: 0,
             lvalue_temp_count: 0,
         }

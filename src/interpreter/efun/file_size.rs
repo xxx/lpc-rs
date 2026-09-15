@@ -3,7 +3,8 @@ use lpc_rs_errors::Result;
 
 use crate::interpreter::{
     VALID_READ,
-    efun::{efun_context::EfunContext, file_access::authorize_or_deny, file_view::Seen},
+    efun::{efun_context::EfunContext, file_access::authorize_or_deny},
+    file_view::Seen,
     lpc_ref::LpcRef,
 };
 

@@ -161,6 +161,7 @@ impl TreeWalker for InheritanceWalker {
             .code_pool(self.context.code_pool.clone())
             .inherit_depth(depth + 1)
             .gate(self.context.gate.clone())
+            .source_reader(self.context.source_reader.clone())
             .simul_efuns(self.context.simul_efuns.clone())
             .build()?;
 
